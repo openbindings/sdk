@@ -1,14 +1,14 @@
 //! Fixed normative schema checks, compiled once without external acquisition.
-use crate::JsonValue;
+use crate::{JsonRef, JsonValue};
 use jsonschema::{Draft, Retrieve, Validator};
 use openbindings_internal_json::{
-    backend::{FlatJson, view},
+    backend::{FlatJson, pointer_size, view},
     numeric,
 };
 use serde_json::Value;
 use std::{
     borrow::Cow,
-    collections::BTreeMap,
+    collections::{BTreeMap, HashSet},
     sync::{Arc, OnceLock},
 };
 
@@ -25,15 +25,21 @@ impl Retrieve for LocalResources {
             .ok_or_else(|| format!("fixed resource unavailable: {uri}").into())
     }
 }
-pub(crate) struct Problems {
-    pub entries: Vec<Problem>,
+pub(crate) struct Problems<'a> {
+    pub entries: Vec<Problem<'a>>,
+    pub violated: bool,
     pub truncated: bool,
 }
-pub(crate) struct Problem {
-    pub path: String,
+pub(crate) struct Problem<'a> {
+    pub at: JsonRef<'a>,
     pub message: Cow<'static, str>,
 }
 const GENERIC_MESSAGE: &str = "value violates the fixed normative schema";
+const UNEXPECTED_MEMBER_MESSAGE: &str =
+    "this member is not permitted here; extension member names begin with x-";
+// Additional-property expansion must not multiply a large ancestor key by every
+// retained child. This budget applies only to the new expanded source pointers.
+const MAX_EXPANDED_POINTER_BYTES: usize = 8 * 1024 * 1024;
 const MAX_MESSAGE_BYTES: usize = 512;
 const MAX_REQUIRED_NAME_BYTES: usize = 64;
 
@@ -163,25 +169,69 @@ pub(crate) fn check(
     value: &JsonValue,
     is_meta: bool,
     max_problems: usize,
-) -> Result<Problems, String> {
+) -> Result<Problems<'_>, String> {
     let validator = (if is_meta { meta() } else { document() })
         .as_ref()
         .map_err(Clone::clone)?;
     jsonschema::ob_work::bounded(2_000_000, 1024, || {
         jsonschema::ob_ecma::top_level(2_000_000, || {
             let mut entries = Vec::new();
+            let mut violated = false;
             let mut truncated = false;
-            for error in validator.iter_errors(view(value)) {
-                if entries.len() >= max_problems.max(1) {
+            let mut pointer_bytes = MAX_EXPANDED_POINTER_BYTES;
+            'errors: for error in validator.iter_errors(view(value)) {
+                violated = true;
+                if entries.len() >= max_problems {
                     truncated = true;
                     break;
                 }
+                let at = value
+                    .at(error.instance_path().as_str())
+                    .unwrap_or(value.view());
+                if !is_meta
+                    && let jsonschema::error::ValidationErrorKind::AdditionalProperties {
+                        unexpected,
+                    } = error.kind()
+                    && let Some(members) = at.members()
+                {
+                    let names: HashSet<_> = unexpected.iter().map(String::as_str).collect();
+                    let mut matched = false;
+                    for member in members {
+                        if member
+                            .name
+                            .as_str()
+                            .is_some_and(|name| names.contains(name))
+                        {
+                            matched = true;
+                            if entries.len() >= max_problems {
+                                truncated = true;
+                                break 'errors;
+                            }
+                            let Some(size) = pointer_size(member.name, pointer_bytes) else {
+                                truncated = true;
+                                break 'errors;
+                            };
+                            pointer_bytes -= size;
+                            entries.push(Problem {
+                                at: member.name,
+                                message: UNEXPECTED_MEMBER_MESSAGE.into(),
+                            });
+                        }
+                    }
+                    if matched {
+                        continue;
+                    }
+                }
                 entries.push(Problem {
-                    path: error.instance_path().as_str().to_owned(),
+                    at,
                     message: diagnostic_message(error.kind()),
                 });
             }
-            Problems { entries, truncated }
+            Problems {
+                entries,
+                violated,
+                truncated,
+            }
         })
     })
     .map_err(|e| format!("fixed validation work limit: {e:?}"))?
@@ -236,14 +286,38 @@ mod tests {
         assert!(!all.truncated);
         for capacity in [0, 1, 2, 3] {
             let bounded = check(&value, false, capacity).unwrap();
-            let retained = capacity.max(1);
+            let retained = capacity;
             assert_eq!(bounded.entries.len(), retained);
+            assert!(bounded.violated);
             assert_eq!(bounded.truncated, capacity < 3);
             for (actual, expected) in bounded.entries.iter().zip(&all.entries) {
-                assert_eq!(actual.path, expected.path);
+                assert_eq!(actual.at.location(), expected.at.location());
                 assert_eq!(actual.message, expected.message);
             }
         }
+    }
+
+    #[test]
+    fn expanded_problems_preserve_violation_when_no_slots_remain() {
+        let value =
+            JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{},"z":0,"a":0}"#).unwrap();
+        for capacity in [0, 1, 2, 3] {
+            let problems = check(&value, false, capacity).unwrap();
+            assert!(problems.violated);
+            assert_eq!(problems.entries.len(), capacity.min(2));
+            assert_eq!(problems.truncated, capacity < 2);
+            let paths: Vec<_> = problems
+                .entries
+                .iter()
+                .map(|p| p.at.location().pointer.unwrap())
+                .collect();
+            assert_eq!(paths, ["/z", "/a"][..capacity.min(2)]);
+        }
+        let healthy = JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{}}"#).unwrap();
+        let problems = check(&healthy, false, 0).unwrap();
+        assert!(!problems.violated);
+        assert!(!problems.truncated);
+        assert!(problems.entries.is_empty());
     }
 
     #[test]

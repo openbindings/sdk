@@ -87,7 +87,11 @@ with a flag when larger). Display and Debug omit arbitrary custom prose.
 draft pointers containing `additional_fields`; original `source_location()` is a
 separate domain. See the [migration notes](https://github.com/openbindings/sdk/blob/main/docs/migration.md).
 
-Fixed-schema conformance findings explain direct expected types and missing fields
-without echoing rejected values. Required-field locations identify the original
-containing object. Complex failures retain a general explanation. Message wording
-is guidance; use rule/code/evidence and original locations for program logic.
+Fixed-schema conformance findings explain direct expected types, missing fields,
+unexpected normative members and identifier grammar without echoing rejected
+values. Unexpected-member findings identify the original key token; required-field
+locations identify the containing object. Quote or escape displayed pointers and
+label UTF-8 byte coordinates explicitly. Complex failures retain a general
+explanation. Message wording is guidance; use rule/code/evidence and original
+locations for program logic. The [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
+shows source correction through conformance proof and contract setup.

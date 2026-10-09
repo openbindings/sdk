@@ -378,6 +378,91 @@ pub fn view(value: &crate::JsonValue) -> View<'_> {
 pub fn pointer(value: &crate::JsonValue) -> Option<String> {
     value.owner.pointer(value.id)
 }
+/// Measure an escaped source pointer before allocating it. `None` means that
+/// the pointer is unavailable or would exceed the caller's remaining byte budget.
+pub fn pointer_size(value: crate::JsonRef<'_>, limit: usize) -> Option<usize> {
+    use crate::raw::Edge;
+    let mut size = 0usize;
+    let mut current = value.id;
+    while let Some((parent, edge)) = value.owner.nodes[current].parent {
+        let remaining = limit.checked_sub(size)?.checked_sub(1)?;
+        let segment = match edge {
+            Edge::Index(index) => {
+                if index == 0 {
+                    1
+                } else {
+                    index.ilog10() as usize + 1
+                }
+            }
+            Edge::Key(key) => {
+                let name = value.owner.string(key)?;
+                if name.len() > remaining {
+                    return None;
+                }
+                name.len() + name.bytes().filter(|c| matches!(c, b'~' | b'/')).count()
+            }
+        };
+        if segment > remaining {
+            return None;
+        }
+        size += 1 + segment;
+        current = parent;
+    }
+    Some(size)
+}
+
+/// Locate a bounded diagnostic batch while scanning each arena's source prefix
+/// once. Sorting is assessment-local; healthy documents build no line index.
+/// Output order matches input order, including repeated nodes and mixed arenas.
+pub fn locations(values: &[crate::JsonRef<'_>]) -> Vec<crate::SourceLocation> {
+    locations_with_work(values).0
+}
+fn locations_with_work(values: &[crate::JsonRef<'_>]) -> (Vec<crate::SourceLocation>, usize) {
+    let mut order: Vec<_> = (0..values.len()).collect();
+    order.sort_unstable_by_key(|&index| {
+        let value = values[index];
+        (
+            std::sync::Arc::as_ptr(value.owner),
+            value.owner.nodes[value.id].span.start,
+        )
+    });
+    let mut result = vec![None; values.len()];
+    let mut previous: Option<&Arena> = None;
+    let (mut cursor, mut line, mut line_start, mut scanned) = (0, 1, 0, 0);
+    for index in order {
+        let value = values[index];
+        let arena = value.owner.as_ref();
+        if !previous.is_some_and(|old| std::ptr::eq(old, arena)) {
+            (cursor, line, line_start) = (0, 1, 0);
+            previous = Some(arena);
+        }
+        let byte_offset = arena.nodes[value.id].span.start;
+        for (relative, &byte) in arena.source().as_bytes()[cursor..byte_offset]
+            .iter()
+            .enumerate()
+        {
+            if byte == b'\n' {
+                line += 1;
+                line_start = cursor + relative + 1;
+            }
+        }
+        scanned += byte_offset - cursor;
+        cursor = byte_offset;
+        result[index] = Some(crate::SourceLocation {
+            pointer: arena.pointer(value.id),
+            byte_offset,
+            line,
+            byte_column: byte_offset - line_start + 1,
+        });
+    }
+    (
+        result
+            .into_iter()
+            .map(|at| at.expect("each input index is visited once"))
+            .collect(),
+        scanned,
+    )
+}
 pub fn has_unpaired(value: &crate::JsonValue) -> bool {
     let span = &value.owner.nodes[value.id].span;
     value.owner.unpaired.iter().any(|id| {
@@ -486,6 +571,48 @@ pub fn live_arenas() -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn batched_locations_match_original_coordinates_with_linear_source_scans() {
+        let first = crate::JsonValue::parse(" {\r\n\"é/~\\n\":[1,\n2],\"z\":false}").unwrap();
+        let second = crate::JsonValue::parse(" \n[true, false]").unwrap();
+        let members: Vec<_> = first.view().members().unwrap().collect();
+        let values = [
+            members[1].value,
+            second.view(),
+            members[0].name,
+            first.at("/é~1~0\n/1").unwrap(),
+            members[1].name,
+            members[1].value,
+            second.at("/1").unwrap(),
+        ];
+        let (locations, scanned) = locations_with_work(&values);
+        assert_eq!(
+            locations,
+            values.iter().map(|v| v.location()).collect::<Vec<_>>()
+        );
+        let max_first = values
+            .iter()
+            .filter(|v| std::sync::Arc::ptr_eq(v.owner, &first.owner))
+            .map(|v| v.owner.nodes[v.id].span.start)
+            .max()
+            .unwrap();
+        let max_second = values
+            .iter()
+            .filter(|v| std::sync::Arc::ptr_eq(v.owner, &second.owner))
+            .map(|v| v.owner.nodes[v.id].span.start)
+            .max()
+            .unwrap();
+        assert_eq!(scanned, max_first + max_second);
+        assert!(locations_with_work(&[]).0.is_empty());
+        for value in values {
+            let size = value.location().pointer.unwrap().len();
+            assert_eq!(pointer_size(value, size), Some(size));
+            if size > 0 {
+                assert_eq!(pointer_size(value, size - 1), None);
+            }
+        }
+    }
+
     #[test]
     fn uniqueness_is_exact_and_stack_safe() {
         let validator = jsonschema::options_for::<FlatJson>()

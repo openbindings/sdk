@@ -560,7 +560,10 @@ impl Checks {
         code: &'static str,
         message: impl Into<String>,
     ) {
-        self.mark(rule, Evidence::Violated, code, Some(at.location()), message);
+        // Evidence is still marked after the finding cap, without constructing an
+        // unretainable source location (which may have a large source prefix).
+        let location = (self.findings.len() < 4096).then(|| at.location());
+        self.mark(rule, Evidence::Violated, code, location, message);
     }
     fn not_applicable_after_json(&mut self) {
         self.evidence[1..].fill(Evidence::NotApplicable);
@@ -591,9 +594,19 @@ impl Checks {
         ) {
             Ok(problems) => {
                 self.truncated |= problems.truncated;
-                for problem in problems.entries {
-                    let at = value.at(&problem.path).unwrap_or(value.view());
-                    self.violation(rule, at, "schema-mismatch", problem.message);
+                if problems.violated {
+                    self.evidence[rule] = Evidence::Violated;
+                }
+                let nodes: Vec<_> = problems.entries.iter().map(|problem| problem.at).collect();
+                let locations = backend::locations(&nodes);
+                for (problem, location) in problems.entries.into_iter().zip(locations) {
+                    self.mark(
+                        rule,
+                        Evidence::Violated,
+                        "schema-mismatch",
+                        Some(location),
+                        problem.message,
+                    );
                 }
             }
             Err(reason) => self.mark(
@@ -606,6 +619,7 @@ impl Checks {
         }
     }
 }
+const NAME_GRAMMAR_MESSAGE: &str = "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens";
 pub fn valid_name(name: &str) -> bool {
     !name.is_empty()
         && name.bytes().enumerate().all(|(i, c)| {
@@ -671,12 +685,7 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
         if let Some(entries) = value.get(map).and_then(|v| v.members()) {
             for entry in entries {
                 if !entry.name.as_str().is_some_and(valid_name) {
-                    c.violation(
-                        3,
-                        entry.name,
-                        "name-grammar",
-                        "name violates the core identifier grammar",
-                    );
+                    c.violation(3, entry.name, "name-grammar", NAME_GRAMMAR_MESSAGE);
                 }
             }
         }
@@ -702,12 +711,7 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
                         continue;
                     };
                     if !valid_name(name) {
-                        c.violation(
-                            3,
-                            alias,
-                            "name-grammar",
-                            "alias violates the core identifier grammar",
-                        );
+                        c.violation(3, alias, "name-grammar", NAME_GRAMMAR_MESSAGE);
                     }
                     if names.insert(name.into(), alias.to_owned()).is_some() {
                         c.violation(
@@ -722,12 +726,7 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
             if let Some(examples) = entry.value.get("examples").and_then(|v| v.members()) {
                 for example in examples {
                     if !example.name.as_str().is_some_and(valid_name) {
-                        c.violation(
-                            3,
-                            example.name,
-                            "name-grammar",
-                            "example name violates the core identifier grammar",
-                        );
+                        c.violation(3, example.name, "name-grammar", NAME_GRAMMAR_MESSAGE);
                     }
                 }
             }
