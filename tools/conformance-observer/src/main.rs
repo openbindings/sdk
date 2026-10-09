@@ -27,12 +27,14 @@ fn observe(request: &Value) -> Value {
                 .resolve_operation(given["name"].as_str().unwrap())
                 .unwrap()
             {
-                Some(op) => {
+                OperationSelection::Found(op) => {
                     out["outcome"] = json!("resolved");
-                    out["bindingKeys"] = json!(doc.operation_bindings(&op.key).unwrap());
-                    out["operationKey"] = json!(op.key);
+                    out["bindingKeys"] = json!(op.bindings().unwrap());
+                    out["operationKey"] = json!(op.key());
                 }
-                None => out["outcome"] = json!("not-found"),
+                OperationSelection::Missing | OperationSelection::Ambiguous { .. } => {
+                    out["outcome"] = json!("not-found")
+                }
             }
         }
         "check-dependency-kind" => {
@@ -95,22 +97,26 @@ fn observe(request: &Value) -> Value {
                         .as_array()
                         .unwrap()
                         .iter()
-                        .map(|v| prepared.validate(&JsonValue::parse(v.as_str().unwrap()).unwrap()))
+                        .map(|v| observe_value(
+                            &prepared,
+                            &JsonValue::parse(v.as_str().unwrap()).unwrap()
+                        ))
                         .collect::<Vec<_>>()
                 );
             } else {
-                let op = doc.resolve_operation(operation).unwrap().unwrap();
+                let OperationSelection::Found(op) = doc.resolve_operation(operation).unwrap()
+                else {
+                    panic!("fixture operation must resolve")
+                };
                 let mut results = Vec::new();
-                if let Some(examples) = op.value.get("examples").and_then(|v| v.members()) {
+                if let Some(examples) = op.value().get("examples").and_then(|v| v.members()) {
                     for example in examples {
                         for side in [Side::Input, Side::Output] {
                             if let Some(value) = example.value.get(side.as_str()) {
-                                let mut result = serde_json::to_value(
-                                    contracts
-                                        .prepare(operation, side)
-                                        .validate(&value.to_owned()),
-                                )
-                                .unwrap();
+                                let mut result = observe_value(
+                                    &contracts.prepare(operation, side),
+                                    &value.to_owned(),
+                                );
                                 result["example"] = json!(example.name.as_str().unwrap());
                                 result["side"] = json!(side.as_str());
                                 results.push(result);
@@ -132,5 +138,21 @@ fn main() {
     for line in io::stdin().lock().lines() {
         let request: Value = serde_json::from_str(&line.unwrap()).unwrap();
         println!("{}", observe(&request));
+    }
+}
+
+// Corpus observation format predates setup/value separation. Preserve its wire
+// categories explicitly without manufacturing a compiled contract or value verdict.
+fn observe_value(preparation: &ContractPreparation, value: &JsonValue) -> Value {
+    match preparation {
+        ContractPreparation::Ready(contract) => {
+            serde_json::to_value(contract.validate(value)).unwrap()
+        }
+        ContractPreparation::NoContract => json!({"outcome":"no-contract"}),
+        ContractPreparation::OperationMissing => json!({"outcome":"operation-missing"}),
+        ContractPreparation::OperationAmbiguous { .. } => json!({"outcome":"operation-missing"}),
+        ContractPreparation::NoVerdict { detail } => {
+            json!({"outcome":"no-verdict","detail":detail})
+        }
     }
 }

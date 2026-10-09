@@ -7,3 +7,6 @@ mod raw;
 pub use json::*;
 
 pub mod numeric;
+
+mod conversion;
+pub use conversion::{ValueConversionError, ValueConversionErrorKind};

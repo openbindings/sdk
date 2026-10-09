@@ -4,6 +4,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { chromium, webkit } from "playwright-core";
+import { firstUsePage, firstUseLoadingFailures } from "./first-use-browser.mjs";
 const packageRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -22,13 +23,23 @@ const requests = JSON.parse(
 const files = new Map();
 for (const name of [
   "index.js",
+  "internal.js",
+  "http-discovery.js",
   "wasm/openbindings_wasm.js",
   "wasm/openbindings_wasm_bg.wasm",
-])
+]) {
+  const bytes = await fs.readFile(path.join(packageRoot, "dist", name));
+  files.set("/dist/" + name, bytes); // match the installed package layout
+}
+for (const name of ["first-use.html", "first-use.mjs"])
   files.set(
-    "/" + name,
-    await fs.readFile(path.join(packageRoot, "dist", name)),
+    "/examples/" + name,
+    await fs.readFile(path.join(packageRoot, "examples", name)),
   );
+files.set(
+  "/fixed-diagnostic-cases.mjs",
+  await fs.readFile(path.join(packageRoot, "test/fixed-diagnostic-cases.mjs")),
+);
 files.set(
   "/observer.mjs",
   await fs.readFile(
@@ -42,7 +53,11 @@ const server = http.createServer((req, res) => {
   } else if (files.has(req.url)) {
     res.setHeader(
       "Content-Type",
-      req.url.endsWith(".wasm") ? "application/wasm" : "text/javascript",
+      req.url.endsWith(".wasm")
+        ? "application/wasm"
+        : req.url.endsWith(".html")
+          ? "text/html"
+          : "text/javascript",
     );
     res.end(files.get(req.url));
   } else {
@@ -66,8 +81,9 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   if ((await page.title()) !== id) throw Error("fresh host identity");
   const result = await page.evaluate(async (requests) => {
-    const sdk = await import("/index.js"),
-      { observe } = await import("/observer.mjs");
+    const sdk = await import("/dist/index.js"),
+      { observe } = await import("/observer.mjs"),
+      { fixedDiagnosticCases } = await import("/fixed-diagnostic-cases.mjs");
     await sdk.initialize();
     const run = (list) =>
       list.map((request) => {
@@ -77,8 +93,27 @@ try {
           return { id: request.id, executed: false, error: String(error) };
         }
       });
-    return { core: run(requests.core), suite: run(requests.suite) };
+    return {
+      core: run(requests.core),
+      suite: run(requests.suite),
+      fixedDiagnostics: fixedDiagnosticCases(sdk),
+    };
   }, requests);
+  const exampleUrl = `http://127.0.0.1:${server.address().port}/examples/first-use.html`;
+  const firstUse = await firstUsePage(browser, exampleUrl);
+  const loadingFailures = await firstUseLoadingFailures(browser, exampleUrl);
+  await fs.writeFile(
+    path.join(output, "first-use.json"),
+    JSON.stringify(
+      {
+        ...firstUse,
+        fixedDiagnostics: result.fixedDiagnostics,
+        loadingFailures,
+      },
+      null,
+      2,
+    ),
+  );
   await fs.writeFile(
     path.join(output, "core.json"),
     JSON.stringify(result.core, null, 2),

@@ -1,12 +1,10 @@
-// Serve this file beside the package's dist directory, or resolve its import
-// with your bundler. The owner may terminate the worker to interrupt sync work.
+// The Worker owns every Wasm handle. Only input bytes and plain results cross realms.
 import {
   initialize,
   assessDocument,
   parseDocument,
   parseJson,
-} from "../dist/index.js";
-const initialized = initialize();
+} from "@openbindings/sdk";
 self.onmessage = async ({ data }) => {
   const {
     id,
@@ -17,7 +15,11 @@ self.onmessage = async ({ data }) => {
   } = data;
   let document, context, prepared, input;
   try {
-    await initialized;
+    await initialize(); // retryable if a previous attempt failed
+    if (data.kind === "initialize") {
+      self.postMessage({ id, status: "ready" });
+      return;
+    }
     self.postMessage({ id, status: "started" });
     if (value === undefined) {
       self.postMessage({
@@ -40,7 +42,12 @@ self.onmessage = async ({ data }) => {
     }
     input = parsedValue.value;
     context = document.contracts();
-    prepared = context.prepare(operation, side);
+    const setup = context.prepare(operation, side);
+    if (setup.status !== "ready") {
+      self.postMessage({ id, status: "preparation", preparation: setup });
+      return;
+    }
+    prepared = setup.contract;
     self.postMessage({
       id,
       status: "evaluated",
@@ -53,6 +60,7 @@ self.onmessage = async ({ data }) => {
       error: {
         code: error?.code ?? "worker-error",
         message: String(error?.message ?? error),
+        location: error?.location,
       },
     });
   } finally {

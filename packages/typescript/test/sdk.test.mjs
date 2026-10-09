@@ -8,6 +8,11 @@ await sdk.initialize(
     new URL("../dist/wasm/openbindings_wasm_bg.wasm", import.meta.url),
   ),
 );
+const ready = (context, operation, side) => {
+  const result = context.prepare(operation, side);
+  assert.equal(result.status, "ready");
+  return result.contract;
+};
 const text =
   ' {"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"},"aliases":["execute"]}}} ';
 const parsed = (input) => {
@@ -129,7 +134,7 @@ test("ordinary conversion rejects lossy/side-effecting values and exact handles 
 test("retained contracts and metadata support repeated native-feeling caller use", () => {
   const warmDocument = parsed(text),
     warmContext = warmDocument.contracts(),
-    warmContract = warmContext.prepare("run", "input");
+    warmContract = ready(warmContext, "run", "input");
   warmContract.dispose();
   warmContext.dispose();
   warmDocument.dispose();
@@ -138,12 +143,14 @@ test("retained contracts and metadata support repeated native-feeling caller use
     const document = parsed(text);
     assert.equal(document.operations, document.operations);
     assert.ok(Object.isFrozen(document.operations));
-    const op = document.resolveOperation("execute");
+    const selection = document.resolveOperation("execute");
+    assert.equal(selection.status, "found");
+    const op = selection.operation;
     assert.equal(op.key, "run");
     assert.deepEqual(op.bindings, []);
     op.dispose();
     const context = document.contracts();
-    const input = context.prepare("run", "input");
+    const input = ready(context, "run", "input");
     const output = context.prepare("run", "output");
     context.dispose();
     document.dispose();
@@ -153,11 +160,10 @@ test("retained contracts and metadata support repeated native-feeling caller use
     const mismatch = input.validate(bad);
     assert.equal(mismatch.outcome, "mismatch");
     assert.ok(!JSON.stringify(mismatch).includes("private-value"));
-    assert.equal(output.validate(bad).outcome, "no-contract");
+    assert.equal(output.status, "no-contract");
     good.dispose();
     bad.dispose();
     input.dispose();
-    output.dispose();
   }
   assert.equal(sdk.liveStorageOwners(), before);
 });
@@ -349,9 +355,9 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
     signal: control.signal,
   });
   const value = sdk.ExactJson.from(7);
-  assert.equal(cancelled.validate(value).detail.reason, "cancelled");
-  cancelled.dispose();
-  const healthy = contracts.prepare("run", "input");
+  assert.equal(cancelled.status, "no-verdict");
+  assert.equal(cancelled.detail.reason, "cancelled");
+  const healthy = ready(contracts, "run", "input");
   assert.equal(healthy.validate(value).outcome, "satisfies");
   assert.equal(
     healthy.validate(value, { signal: control.signal }).detail.reason,
@@ -362,8 +368,10 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
       resources,
       limits: { evaluationSteps: 0 },
     }),
-    input = limited.prepare("run", "input");
+    input = ready(limited, "run", "input");
+  assert.equal(input.validate(value).outcome, "no-verdict");
   assert.equal(input.validate(value).detail.reason, "limit-exceeded");
+  input.dispose();
   const partial = document.references({ resources, signal: control.signal });
   assert.equal(partial.complete, false);
   assert.equal(partial.limitation.reason, "cancelled");
@@ -376,7 +384,6 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
     (e) => e.code === "invalid-evaluator-limits",
   );
   assert.equal("raw" in document, false);
-  input.dispose();
   limited.dispose();
   healthy.dispose();
   value.dispose();

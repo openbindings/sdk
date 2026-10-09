@@ -12,8 +12,21 @@ use std::{
 };
 
 /// Cooperative cancellation shared by synchronous work and asynchronous I/O.
+/// Clones share one cancellation state. Cancellation is permanent for that state;
+/// use a fresh control for an independent retry. Work checks it at cooperative
+/// boundaries, so this is not a preemptive deadline. Application code owns scheduling.
 /// Synchronous Wasm cannot observe a same-thread AbortSignal until it yields;
 /// a worker is required for externally interruptible synchronous work.
+///
+/// ```
+/// use openbindings::{NoVerdictReason, WorkControl};
+/// let attempt = WorkControl::new();
+/// let cancellation = attempt.clone();
+/// cancellation.cancel();
+/// assert_eq!(attempt.check().unwrap_err().reason, NoVerdictReason::Cancelled);
+/// let retry = WorkControl::new();
+/// assert!(retry.check().is_ok());
+/// ```
 #[derive(Clone, Default)]
 pub struct WorkControl {
     state: Arc<State>,
@@ -25,9 +38,11 @@ struct State {
     waiters: Mutex<HashMap<usize, Waker>>,
 }
 impl WorkControl {
+    /// Create a fresh, uncancelled state.
     pub fn new() -> Self {
         Self::default()
     }
+    /// Permanently cancel this state and its clones, waking registered waiters.
     pub fn cancel(&self) {
         let waiters = {
             let mut waiters = self.state.waiters.lock().unwrap();

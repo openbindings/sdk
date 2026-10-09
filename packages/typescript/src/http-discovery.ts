@@ -5,11 +5,11 @@ export {
   discoveryPolicy,
   DiscoveryPublication,
   SdkError,
-} from "./index.js";
+} from "./internal.js";
 export type {
   DiscoveryFetch,
   DiscoveryOptions,
   DiscoveryMetadata,
   DiscoveryResult,
   DiscoveryPolicy,
-} from "./index.js";
+} from "./internal.js";

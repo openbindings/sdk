@@ -7,6 +7,7 @@ use openbindings_internal_json::{
 };
 use serde_json::Value;
 use std::{
+    borrow::Cow,
     collections::BTreeMap,
     sync::{Arc, OnceLock},
 };
@@ -25,8 +26,58 @@ impl Retrieve for LocalResources {
     }
 }
 pub(crate) struct Problems {
-    pub paths: Vec<String>,
+    pub entries: Vec<Problem>,
     pub truncated: bool,
+}
+pub(crate) struct Problem {
+    pub path: String,
+    pub message: Cow<'static, str>,
+}
+const GENERIC_MESSAGE: &str = "value violates the fixed normative schema";
+const MAX_MESSAGE_BYTES: usize = 512;
+const MAX_REQUIRED_NAME_BYTES: usize = 64;
+
+// Called only for validators compiled from the embedded document/meta schemas.
+// In particular, Required.property comes from those trusted schemas, never the
+// rejected instance. Do not format a vendor error or descend into union branches.
+fn diagnostic_message(kind: &jsonschema::error::ValidationErrorKind) -> Cow<'static, str> {
+    use jsonschema::error::{TypeKind, ValidationErrorKind as Kind};
+    let message = match kind {
+        Kind::Type {
+            kind: TypeKind::Single(expected),
+        } => {
+            format!("expected JSON type: {}", expected.as_str())
+        }
+        Kind::Type {
+            kind: TypeKind::Multiple(expected),
+        } => {
+            // The type set contains at most the seven fixed JSON type names.
+            let names: Vec<_> = expected.iter().map(|kind| kind.as_str()).collect();
+            if names.is_empty() {
+                return GENERIC_MESSAGE.into();
+            }
+            format!("expected one of these JSON types: {}", names.join(", "))
+        }
+        Kind::Required { property } => {
+            let Some(name) = property
+                .as_str()
+                .filter(|name| name.len() <= MAX_REQUIRED_NAME_BYTES)
+            else {
+                return GENERIC_MESSAGE.into();
+            };
+            // Quoting keeps even a future embedded name's controls unambiguous.
+            let Ok(quoted) = serde_json::to_string(name) else {
+                return GENERIC_MESSAGE.into();
+            };
+            format!("object is missing required field {quoted}")
+        }
+        _ => return GENERIC_MESSAGE.into(),
+    };
+    if message.len() > MAX_MESSAGE_BYTES {
+        GENERIC_MESSAGE.into()
+    } else {
+        message.into()
+    }
 }
 type Compiled = Result<Validator<FlatJson>, String>;
 static DOCUMENT: OnceLock<Compiled> = OnceLock::new();
@@ -118,16 +169,19 @@ pub(crate) fn check(
         .map_err(Clone::clone)?;
     jsonschema::ob_work::bounded(2_000_000, 1024, || {
         jsonschema::ob_ecma::top_level(2_000_000, || {
-            let mut paths = Vec::new();
+            let mut entries = Vec::new();
             let mut truncated = false;
             for error in validator.iter_errors(view(value)) {
-                if paths.len() >= max_problems.max(1) {
+                if entries.len() >= max_problems.max(1) {
                     truncated = true;
                     break;
                 }
-                paths.push(error.instance_path().as_str().to_owned());
+                entries.push(Problem {
+                    path: error.instance_path().as_str().to_owned(),
+                    message: diagnostic_message(error.kind()),
+                });
             }
-            Problems { paths, truncated }
+            Problems { entries, truncated }
         })
     })
     .map_err(|e| format!("fixed validation work limit: {e:?}"))?
@@ -137,6 +191,61 @@ pub(crate) fn check(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn fixed_messages_are_bounded_and_do_not_guess_union_branches() {
+        use jsonschema::error::{TypeKind, ValidationErrorKind as Kind};
+        use jsonschema_value::types::JsonType;
+        let types = JsonType::Boolean | JsonType::Object;
+        assert_eq!(
+            diagnostic_message(&Kind::Type {
+                kind: TypeKind::Multiple(types)
+            }),
+            "expected one of these JSON types: boolean, object"
+        );
+        for kind in [
+            Kind::AnyOf { context: vec![] },
+            Kind::OneOfNotValid { context: vec![] },
+            Kind::OneOfMultipleValid { context: vec![] },
+            Kind::Required {
+                property: Value::String("x".repeat(MAX_REQUIRED_NAME_BYTES + 1)),
+            },
+            Kind::Required {
+                property: Value::Null,
+            },
+        ] {
+            assert_eq!(diagnostic_message(&kind), GENERIC_MESSAGE);
+        }
+        let message = diagnostic_message(&Kind::Required {
+            property: Value::String("\n".repeat(MAX_REQUIRED_NAME_BYTES)),
+        });
+        assert!(!message.contains('\n'));
+        assert!(message.len() <= MAX_MESSAGE_BYTES);
+        let longest_escaped = diagnostic_message(&Kind::Required {
+            property: Value::String("\u{0000}".repeat(MAX_REQUIRED_NAME_BYTES)),
+        });
+        assert!(longest_escaped.len() <= MAX_MESSAGE_BYTES);
+    }
+
+    #[test]
+    fn fixed_problem_count_paths_and_truncation_are_preserved() {
+        let value = JsonValue::parse(
+            r#"{"openbindings":"0.2.0","operations":{"a":{"description":1,"deprecated":2,"aliases":3}}}"#,
+        ).unwrap();
+        let all = check(&value, false, 100).unwrap();
+        assert_eq!(all.entries.len(), 3);
+        assert!(!all.truncated);
+        for capacity in [0, 1, 2, 3] {
+            let bounded = check(&value, false, capacity).unwrap();
+            let retained = capacity.max(1);
+            assert_eq!(bounded.entries.len(), retained);
+            assert_eq!(bounded.truncated, capacity < 3);
+            for (actual, expected) in bounded.entries.iter().zip(&all.entries) {
+                assert_eq!(actual.path, expected.path);
+                assert_eq!(actual.message, expected.message);
+            }
+        }
+    }
+
     #[test]
     fn localized_meta_matches_unmodified_meta_on_keyword_shapes() {
         let files = [
@@ -227,7 +336,7 @@ mod tests {
                 let mut stack = vec![value.clone()];
                 let mut actual = true;
                 while let Some(node) = stack.pop() {
-                    actual &= check(&node, true, 100).unwrap().paths.is_empty();
+                    actual &= check(&node, true, 100).unwrap().entries.is_empty();
                     stack.extend(
                         crate::schema_index::schema_children(node.view())
                             .into_iter()

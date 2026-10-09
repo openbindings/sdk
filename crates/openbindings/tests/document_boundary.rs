@@ -113,7 +113,10 @@ fn immutable_snapshot_is_independent_of_authoring_mutation() {
     let snapshot = builder.build().unwrap();
     builder.operations.clear();
     let valid = snapshot.assess().unwrap().validated().unwrap();
-    assert!(valid.parsed().resolve_operation("first").unwrap().is_some());
+    assert!(matches!(
+        valid.parsed().resolve_operation("first").unwrap(),
+        OperationSelection::Found(_)
+    ));
     fn send_sync<T: Send + Sync>() {}
     send_sync::<ParsedDocument>();
     send_sync::<ValidatedDocument>();

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import * as sdk from "../dist/index.js";
+import * as http from "../dist/http-discovery.js";
 import { runCases } from "./authoring-cases.mjs";
 await sdk.initialize(
   await readFile(
@@ -27,7 +28,7 @@ for (const id of [
   "X02",
 ]) {
   test(id, async () => {
-    const [row] = await runCases(sdk, [id]);
+    const [row] = await runCases(sdk, [id], http);
     assert.equal(row.status, "pass", JSON.stringify(row));
   });
 }

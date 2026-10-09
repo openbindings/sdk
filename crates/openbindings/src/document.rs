@@ -73,7 +73,7 @@ pub(crate) struct DocumentInner {
     pub schemas: OnceLock<SchemaIndex>,
     assessment: OnceLock<Result<Arc<ConformanceReport>, VersionRefusal>>,
     interpretation: OnceLock<Result<(), InterpretationError>>,
-    names: OnceLock<NameIndex>,
+    names: OnceLock<Result<NameIndex, InterpretationError>>,
 }
 impl fmt::Debug for ParsedDocument {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -97,15 +97,46 @@ pub enum InterpretationError {
     MalformedVersion,
     DuplicateMembers,
     UnpairedString,
+    InvalidField {
+        code: &'static str,
+        location: SourceLocation,
+    },
 }
 impl fmt::Display for InterpretationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "document cannot be interpreted: {self:?}")
+        write!(f, "document cannot be interpreted: {}", self.code())
     }
 }
 impl std::error::Error for InterpretationError {}
+impl InterpretationError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Version(_) => "unsupported-version",
+            Self::MalformedVersion => "malformed-version",
+            Self::DuplicateMembers => "duplicate-members",
+            Self::UnpairedString => "unpaired-string",
+            Self::InvalidField { code, .. } => code,
+        }
+    }
+    pub fn source_location(&self) -> Option<&SourceLocation> {
+        match self {
+            Self::InvalidField { location, .. } => Some(location),
+            _ => None,
+        }
+    }
+    fn invalid(code: &'static str, value: JsonRef<'_>) -> Self {
+        Self::InvalidField {
+            code,
+            location: value.location(),
+        }
+    }
+}
 
 impl ParsedDocument {
+    /// Parse and retain exact bytes and source locations without establishing conformance.
+    /// Use [`Self::assess`] before treating this as a conformant document. See the
+    /// [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
+    /// for the progression from parsing to a prepared input contract.
     pub fn parse(input: impl AsRef<[u8]>) -> Result<Self, InputError> {
         JsonValue::parse(input).map(Self::from_json)
     }
@@ -130,6 +161,11 @@ impl ParsedDocument {
     pub fn to_authoring(&self) -> Result<DocumentBuilder, AuthoringError> {
         DocumentBuilder::from_json(self.value())
     }
+    /// Assess every document rule, retaining findings at original source locations.
+    /// A supported version can still be nonconformant or undetermined; only
+    /// [`DocumentAssessment::validated`] yields a conformance proof. An unsupported
+    /// declared version is a separate refusal. Explanatory finding messages are
+    /// human-readable guidance; use rule/code/evidence fields for program logic.
     pub fn assess(&self) -> Result<DocumentAssessment, VersionRefusal> {
         let report = self
             .inner
@@ -172,47 +208,65 @@ impl ParsedDocument {
         }
         Ok(())
     }
-    fn names(&self) -> &NameIndex {
+    fn names(&self) -> Result<&NameIndex, InterpretationError> {
         self.inner
             .names
             .get_or_init(|| NameIndex::build(self.value()))
+            .as_ref()
+            .map_err(Clone::clone)
     }
-    /// Exact names and aliases form one namespace. Ambiguous matches are unresolved.
-    /// The immutable index is built once; repeated lookup does not scan the document.
-    pub fn resolve_operation(
-        &self,
-        name: &str,
-    ) -> Result<Option<OperationView>, InterpretationError> {
+    /// Exact keys and aliases share one namespace. Every repeated occurrence is
+    /// unresolved; candidate primary keys are distinct and lexically ordered.
+    pub fn resolve_operation(&self, name: &str) -> Result<OperationSelection, InterpretationError> {
         self.interpretable()?;
-        let index = self.names();
-        Ok(index
-            .names
-            .get(name)
-            .and_then(Option::as_ref)
-            .and_then(|key| {
-                index.operations.get(key).map(|value| OperationView {
-                    key: key.clone(),
-                    value: value.clone(),
-                })
-            }))
+        let index = self.names()?;
+        let Some(matches) = index.names.get(name) else {
+            return Ok(OperationSelection::Missing);
+        };
+        if matches.len() > 1 {
+            let candidates = matches
+                .iter()
+                .cloned()
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .collect();
+            return Ok(OperationSelection::Ambiguous { candidates });
+        }
+        let key = &matches[0];
+        self.operation_view(key, &index.operations[key])
+            .map(OperationSelection::Found)
     }
-    /// Primary operation entries in lexical key order. This does not resolve aliases.
+    fn operation_view(
+        &self,
+        key: &str,
+        value: &JsonValue,
+    ) -> Result<OperationView, InterpretationError> {
+        if value.kind() != JsonKind::Object {
+            return Err(InterpretationError::invalid(
+                "invalid-operation-object",
+                value.view(),
+            ));
+        }
+        Ok(OperationView {
+            document: self.clone(),
+            key: key.into(),
+            value: value.clone(),
+        })
+    }
+    /// Primary operation objects in lexical key order. Malformed entries refuse
+    /// typed enumeration; `value()` remains available for exact inspection.
     pub fn operations(&self) -> Result<Vec<OperationView>, InterpretationError> {
         self.interpretable()?;
-        Ok(self
-            .names()
+        self.names()?
             .operations
             .iter()
-            .map(|(key, value)| OperationView {
-                key: key.clone(),
-                value: value.clone(),
-            })
-            .collect())
+            .map(|(key, value)| self.operation_view(key, value))
+            .collect()
     }
     /// Lexical presentation order; this does not select or rank bindings.
     pub fn operation_bindings(&self, key: &str) -> Result<Vec<String>, InterpretationError> {
         self.interpretable()?;
-        let index = self.names();
+        let index = self.names()?;
         if !index.operations.contains_key(key) {
             return Ok(Vec::new());
         }
@@ -242,22 +296,34 @@ impl ParsedDocument {
 #[derive(Default)]
 struct NameIndex {
     operations: BTreeMap<String, JsonValue>,
-    names: HashMap<String, Option<String>>,
+    names: HashMap<String, Vec<String>>,
     bindings: HashMap<String, Vec<String>>,
 }
 impl NameIndex {
-    fn build(value: &JsonValue) -> Self {
+    fn build(value: &JsonValue) -> Result<Self, InterpretationError> {
         let mut index = Self::default();
-        if let Some(operations) = value.get("operations").and_then(|v| v.members()) {
+        let operations = value
+            .get("operations")
+            .ok_or_else(|| InterpretationError::invalid("missing-operations", value.view()))?;
+        let operations = operations
+            .members()
+            .ok_or_else(|| InterpretationError::invalid("invalid-operations-object", operations))?;
+        {
             for member in operations {
                 let Some(key) = member.name.as_str() else {
                     continue;
                 };
                 index.operations.insert(key.into(), member.value.to_owned());
                 index.add_name(key, key);
-                if let Some(aliases) = member.value.get("aliases").and_then(|v| v.elements()) {
-                    for alias in aliases.filter_map(|v| v.as_str()) {
-                        index.add_name(alias, key);
+                if let Some(aliases) = member.value.get("aliases") {
+                    let values = aliases.elements().ok_or_else(|| {
+                        InterpretationError::invalid("invalid-operation-aliases", aliases)
+                    })?;
+                    for alias in values {
+                        let name = alias.as_str().ok_or_else(|| {
+                            InterpretationError::invalid("invalid-operation-alias", alias)
+                        })?;
+                        index.add_name(name, key);
                     }
                 }
             }
@@ -279,23 +345,80 @@ impl NameIndex {
         for names in index.bindings.values_mut() {
             names.sort();
         }
-        index
+        Ok(index)
     }
     fn add_name(&mut self, name: &str, key: &str) {
-        self.names
-            .entry(name.into())
-            .and_modify(|found| {
-                if found.as_deref() != Some(key) {
-                    *found = None;
-                }
-            })
-            .or_insert_with(|| Some(key.into()));
+        self.names.entry(name.into()).or_default().push(key.into());
     }
 }
 #[derive(Clone, Debug)]
+pub enum OperationSelection {
+    Found(OperationView),
+    Missing,
+    Ambiguous { candidates: Vec<String> },
+}
+/// Immutable retained operation object. Its exact value is not conformance proof.
+#[derive(Clone, Debug)]
 pub struct OperationView {
-    pub key: String,
-    pub value: JsonValue,
+    document: ParsedDocument,
+    key: String,
+    value: JsonValue,
+}
+impl OperationView {
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+    pub fn value(&self) -> JsonRef<'_> {
+        self.value.view()
+    }
+    /// The exact input field, without interpreting or preparing its schema.
+    /// `None` means absence; JSON null and false remain present exact values.
+    /// Use [`crate::ValueContracts::prepare`] to establish contract readiness.
+    pub fn input(&self) -> Option<JsonRef<'_>> {
+        self.value.get("input")
+    }
+    /// The exact output field, with the same absence/interpretation distinction
+    /// as [`Self::input`]. A present value is not proof of a supported contract.
+    pub fn output(&self) -> Option<JsonRef<'_>> {
+        self.value.get("output")
+    }
+    /// Interpret an optional string description. Unlike exact [`Self::input`]
+    /// access, this can refuse a malformed field with its original location.
+    pub fn description(&self) -> Result<Option<&str>, InterpretationError> {
+        self.value
+            .get("description")
+            .map(|v| {
+                v.as_str()
+                    .ok_or_else(|| InterpretationError::invalid("invalid-operation-description", v))
+            })
+            .transpose()
+    }
+    /// Interpret optional string aliases, preserving absence separately from an
+    /// empty array. A malformed array or item is a located interpretation error.
+    pub fn aliases(
+        &self,
+    ) -> Result<Option<impl ExactSizeIterator<Item = &str>>, InterpretationError> {
+        self.value
+            .get("aliases")
+            .map(|v| {
+                let values = v
+                    .elements()
+                    .ok_or_else(|| InterpretationError::invalid("invalid-operation-aliases", v))?;
+                for alias in v.elements().expect("checked array") {
+                    if alias.as_str().is_none() {
+                        return Err(InterpretationError::invalid(
+                            "invalid-operation-alias",
+                            alias,
+                        ));
+                    }
+                }
+                Ok(values.map(|v| v.as_str().expect("checked alias")))
+            })
+            .transpose()
+    }
+    pub fn bindings(&self) -> Result<Vec<String>, InterpretationError> {
+        self.document.operation_bindings(&self.key)
+    }
 }
 impl DocumentAssessment {
     pub fn report(&self) -> &ConformanceReport {
@@ -468,14 +591,9 @@ impl Checks {
         ) {
             Ok(problems) => {
                 self.truncated |= problems.truncated;
-                for path in problems.paths {
-                    let at = value.at(&path).unwrap_or(value.view());
-                    self.violation(
-                        rule,
-                        at,
-                        "schema-mismatch",
-                        "value violates the fixed normative schema",
-                    );
+                for problem in problems.entries {
+                    let at = value.at(&problem.path).unwrap_or(value.view());
+                    self.violation(rule, at, "schema-mismatch", problem.message);
                 }
             }
             Err(reason) => self.mark(

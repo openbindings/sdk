@@ -89,11 +89,9 @@ pub enum ValueOutcome {
         problems: Vec<ValueProblem>,
         problems_complete: bool,
     },
-    NoContract,
     NoVerdict {
         detail: NoVerdict,
     },
-    OperationMissing,
 }
 
 #[derive(Clone, Debug)]
@@ -101,6 +99,8 @@ pub struct SchemaResource {
     pub uri: String,
     pub document: JsonValue,
 }
+/// Immutable caller-supplied resources. Separate contexts can use the same URI
+/// for different snapshots; this is not a process-wide registry or an acquirer.
 #[derive(Clone, Debug, Default)]
 pub struct ResourceSet {
     resources: Arc<Vec<SchemaResource>>,
@@ -221,6 +221,11 @@ pub trait PreparedSchema: Send + Sync {
     /// Return only established verdicts. Resource/capability/work failures are NoVerdict.
     fn validate(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome;
 }
+/// An immutable document/resource/evaluator context with bounded preparation reuse.
+/// Select a contract using [`Self::prepare`], then retain its ready owner for
+/// repeated validation. Replacing an application's active context does not
+/// mutate already prepared work. See the
+/// [Rust lifecycle guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md#retained-work-and-replacement).
 #[derive(Clone)]
 pub struct ValueContracts {
     inner: Arc<ContractsInner>,
@@ -269,44 +274,67 @@ impl PreparationCache {
 #[derive(Clone)]
 enum ContractState {
     Ready(Arc<dyn PreparedSchema>),
-    NoContract,
-    OperationMissing,
     NoVerdict(NoVerdict),
 }
+/// Setup result. Only Ready owns a successfully prepared contract.
+#[derive(Clone, Debug)]
+pub enum ContractPreparation {
+    Ready(PreparedContract),
+    NoContract,
+    OperationMissing,
+    OperationAmbiguous { candidates: Vec<String> },
+    NoVerdict { detail: NoVerdict },
+}
+/// A ready contract that retains its required compiled state independently of
+/// document/context lifetime and cache eviction. Cloning shares immutable state;
+/// dropping the final owner releases that owner, without promising lower RSS.
 #[derive(Clone)]
 pub struct PreparedContract {
-    state: ContractState,
+    schema: Arc<dyn PreparedSchema>,
+}
+impl fmt::Debug for PreparedContract {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PreparedContract { .. }")
+    }
 }
 impl PreparedContract {
+    /// Validate an admitted exact value, distinguishing satisfies, mismatch and
+    /// no-verdict. For ordinary Rust data first use [`JsonValue::from_serializable`];
+    /// for exact JSON text/bytes use [`JsonValue::parse`]. Admission failure is
+    /// separate from validation. Mismatch diagnostics can be incomplete; inspect
+    /// `problems_complete` rather than assuming every failed keyword is reported.
     pub fn validate(&self, value: &JsonValue) -> ValueOutcome {
         self.validate_with_control(value, &WorkControl::new())
     }
+    /// Validate with cooperative cancellation. Cancellation yields no-verdict,
+    /// not mismatch, and leaves this owner usable with a fresh healthy control.
+    /// This is not a preemptive wall-clock deadline; applications schedule work.
     pub fn validate_with_control(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
         if let Err(detail) = control.check() {
             return ValueOutcome::NoVerdict { detail };
         }
-        match &self.state {
-            ContractState::Ready(schema) => {
-                if value.has_duplicate_names() {
-                    return ValueOutcome::NoVerdict {
-                        detail: NoVerdict::new(
-                            NoVerdictReason::UnsupportedCapability,
-                            "duplicate-instance-members",
-                            "a value with repeated JSON member names has no unambiguous interpretation",
-                        ),
-                    };
-                }
-                schema.validate(value, control)
-            }
-            ContractState::NoContract => ValueOutcome::NoContract,
-            ContractState::OperationMissing => ValueOutcome::OperationMissing,
-            ContractState::NoVerdict(detail) => ValueOutcome::NoVerdict {
-                detail: detail.clone(),
-            },
+        if value.has_duplicate_names() {
+            return ValueOutcome::NoVerdict {
+                detail: NoVerdict::new(
+                    NoVerdictReason::UnsupportedCapability,
+                    "duplicate-instance-members",
+                    "a value with repeated JSON member names has no unambiguous interpretation",
+                ),
+            };
         }
+        self.schema.validate(value, control)
     }
 }
 impl ParsedDocument {
+    /// Create a context with an explicitly selected evaluator and immutable
+    /// resources. No resource acquisition occurs; URIs in other contexts cannot
+    /// change this one. This does not establish whole-document conformance: use
+    /// [`Self::assess`] if your application requires that before accepting a document.
+    ///
+    /// The default cache retains four most-recent preparation entries. Match
+    /// [`ContractPreparation`] after [`ValueContracts::prepare`]; only its ready
+    /// branch exposes validation. The optional `openbindings-json-schema-evaluator`
+    /// companion supplies `DefaultEvaluator` and runnable first-use examples.
     pub fn value_contracts(
         &self,
         evaluator: Arc<dyn SchemaEvaluator>,
@@ -314,6 +342,10 @@ impl ParsedDocument {
     ) -> Result<ValueContracts, InterpretationError> {
         self.value_contracts_with_options(evaluator, resources, ValueContractOptions::default())
     }
+    /// Create the same explicit context as [`Self::value_contracts`] with a chosen
+    /// cache entry capacity. Zero disables implicit retention. Eviction and context
+    /// drop release cache owners; caller-retained [`PreparedContract`] values stay
+    /// usable. The entry count is not a byte or process-memory limit.
     pub fn value_contracts_with_options(
         &self,
         evaluator: Arc<dyn SchemaEvaluator>,
@@ -335,34 +367,65 @@ impl ParsedDocument {
     }
 }
 impl ValueContracts {
-    pub fn prepare(&self, operation: &str, side: Side) -> PreparedContract {
+    /// Select a primary operation name or alias and prepare one side's contract.
+    /// Match every [`ContractPreparation`] branch: missing/ambiguous operation,
+    /// absent contract and preparation refusal are setup states, not mismatches.
+    /// Ready contracts can be retained beyond this context and validated repeatedly.
+    /// Deterministic preparations may be reused within the bounded context cache;
+    /// concurrent first requests may prepare more than once.
+    pub fn prepare(&self, operation: &str, side: Side) -> ContractPreparation {
         self.prepare_with_control(operation, side, &WorkControl::new())
     }
+    /// Prepare with cooperative cancellation. A cancelled attempt returns no ready
+    /// owner. Cancellation and transient evaluator failures do not poison healthy
+    /// retry on this context; use a fresh [`WorkControl`] after cancellation.
+    /// A no-verdict refusal does not prove semantic undefinedness. To change supplied
+    /// resources, build a new immutable context and decide when to replace active work.
     pub fn prepare_with_control(
         &self,
         operation: &str,
         side: Side,
         control: &WorkControl,
-    ) -> PreparedContract {
-        let state = self.prepare_state(operation, side, control);
-        PreparedContract { state }
-    }
-    fn prepare_state(&self, operation: &str, side: Side, control: &WorkControl) -> ContractState {
-        if let Err(reason) = control.check() {
-            return ContractState::NoVerdict(reason);
+    ) -> ContractPreparation {
+        if let Err(detail) = control.check() {
+            return ContractPreparation::NoVerdict { detail };
         }
-        let Ok(Some(op)) = self.inner.space.document.resolve_operation(operation) else {
-            return ContractState::OperationMissing;
+        let op = match self.inner.space.document.resolve_operation(operation) {
+            Ok(OperationSelection::Found(op)) => op,
+            Ok(OperationSelection::Missing) => return ContractPreparation::OperationMissing,
+            Ok(OperationSelection::Ambiguous { candidates }) => {
+                return ContractPreparation::OperationAmbiguous { candidates };
+            }
+            Err(error) => {
+                let mut detail = NoVerdict::new(
+                    NoVerdictReason::Undefined,
+                    "invalid-operation-structure",
+                    "the operation structure cannot establish a value contract",
+                );
+                if let Some(location) = error.source_location() {
+                    detail.location = Some(SchemaLocation {
+                        resource: None,
+                        pointer: location.pointer.clone().unwrap_or_default(),
+                    });
+                }
+                return ContractPreparation::NoVerdict { detail };
+            }
         };
-        let Some(schema) = op.value.get(side.as_str()) else {
-            return ContractState::NoContract;
+        let Some(schema) = op.value().get(side.as_str()) else {
+            return ContractPreparation::NoContract;
         };
         let Some(entry) = self.inner.space.document_node(&schema.to_owned()) else {
-            return ContractState::NoVerdict(NoVerdict::new(
-                NoVerdictReason::ConservativePreparation,
-                "non-schema-entry",
-                "the operation side is not a schema position",
-            ));
+            return ContractPreparation::NoVerdict {
+                detail: NoVerdict::new(
+                    NoVerdictReason::ConservativePreparation,
+                    "non-schema-entry",
+                    "the operation side is not a schema position",
+                )
+                .located(SchemaLocation {
+                    resource: None,
+                    pointer: schema.location().pointer.unwrap_or_default(),
+                }),
+            };
         };
         let cell = {
             let mut prepared = self
@@ -372,20 +435,29 @@ impl ValueContracts {
                 .unwrap_or_else(|e| e.into_inner());
             prepared.entry(entry)
         };
-        if let Some(state) = cell.get() {
-            return state.clone();
-        }
-        let request = SchemaRequest {
-            space: self.inner.space.clone(),
-            entry,
+        let state = if let Some(state) = cell.get() {
+            state.clone()
+        } else {
+            let request = SchemaRequest {
+                space: self.inner.space.clone(),
+                entry,
+            };
+            let state = match self.inner.evaluator.prepare(&request, control) {
+                Ok(schema) => ContractState::Ready(schema),
+                Err(detail) => ContractState::NoVerdict(detail),
+            };
+            if !matches!(&state, ContractState::NoVerdict(detail) if !detail.cacheable()) {
+                let _ = cell.set(state.clone());
+            }
+            state
         };
-        let state = match self.inner.evaluator.prepare(&request, control) {
-            Ok(prepared) => ContractState::Ready(prepared),
-            Err(reason) => ContractState::NoVerdict(reason),
-        };
-        if !matches!(&state,ContractState::NoVerdict(reason)if !reason.cacheable()) {
-            let _ = cell.set(state.clone());
+        // An evaluator may finish while the caller cancels; no ready owner is returned.
+        if let Err(detail) = control.check() {
+            return ContractPreparation::NoVerdict { detail };
         }
-        state
+        match state {
+            ContractState::Ready(schema) => ContractPreparation::Ready(PreparedContract { schema }),
+            ContractState::NoVerdict(detail) => ContractPreparation::NoVerdict { detail },
+        }
     }
 }

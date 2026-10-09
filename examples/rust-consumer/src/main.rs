@@ -91,8 +91,8 @@ fn contracts(document: &ParsedDocument) -> Result<(), Box<dyn std::error::Error>
         document: exact(r#"{"type":"integer","minimum":0}"#),
     }])?;
     let context = document.value_contracts(Arc::new(DefaultEvaluator::new()), resources)?;
-    let input = context.prepare("run", Side::Input);
-    let output = context.prepare("run", Side::Output);
+    let ContractPreparation::Ready(input) = context.prepare("run", Side::Input) else { return Err("input contract did not prepare".into()); };
+    let ContractPreparation::Ready(output) = context.prepare("run", Side::Output) else { return Err("output contract did not prepare".into()); };
     for text in ["7", "9007199254740993"] {
         assert!(matches!(
             input.validate(&exact(text)),
@@ -109,17 +109,15 @@ fn contracts(document: &ParsedDocument) -> Result<(), Box<dyn std::error::Error>
     ));
     assert!(matches!(
         context
-            .prepare("no_contract", Side::Input)
-            .validate(&JsonValue::null()),
-        ValueOutcome::NoContract
+            .prepare("no_contract", Side::Input),
+        ContractPreparation::NoContract
     ));
     let unavailable =
         document.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())?;
     assert!(matches!(
         unavailable
-            .prepare("run", Side::Input)
-            .validate(&exact("7")),
-        ValueOutcome::NoVerdict {
+            .prepare("run", Side::Input),
+        ContractPreparation::NoVerdict {
             detail: NoVerdict {
                 reason: NoVerdictReason::ResourceUnavailable,
                 ..
@@ -137,7 +135,8 @@ fn contracts(document: &ParsedDocument) -> Result<(), Box<dyn std::error::Error>
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (mut draft, document) = author()?;
     inspect()?;
-    assert_eq!(document.resolve_operation("execute")?.unwrap().key, "run");
+    let OperationSelection::Found(operation) = document.resolve_operation("execute")? else { return Err("execute did not resolve".into()); };
+    assert_eq!(operation.key(), "run");
     assert_eq!(document.operation_bindings("run")?, vec!["binding"]);
     assert_eq!(
         document.dependency_accepts_kind("dep", "https://example.invalid/raw")?,

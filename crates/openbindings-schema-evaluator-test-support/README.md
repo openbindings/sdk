@@ -12,7 +12,7 @@ assert!(report.is_success());
 
 The package carries 496 groups and 1,566 cases from pinned upstream JSON Schema and Go SDK adversarial inputs. `fixtures/provenance.json` records their identities, exact optional capability cases, and two intentional translations: exact identifier matching and non-exhaustive diagnostic multiplicity. The original licenses accompany the fixtures. No sibling checkout or network access is needed.
 
-The report records every observed outcome. Permitted refusals are counted separately from validity verdicts. Options name exact cases with their predeclared capability reason. Unknown, blank, stale or unused declarations fail; a wrong Boolean verdict can never be exempted. Diagnostic checks verify instance paths and original schema locations. The kit itself has injected wrong-verdict, bogus-path and misclassified-cancellation controls.
+The report records preparation refusals separately from optional value outcomes. A preparation refusal does not manufacture a value-validation result. Permitted refusals are counted separately from validity verdicts. Options name exact cases with their predeclared capability reason. Unknown, blank, stale or unused declarations fail; a wrong Boolean verdict can never be exempted. Diagnostic checks verify instance paths and original schema locations. The kit itself has injected wrong-verdict, bogus-path and misclassified-cancellation controls.
 
 `examples/boolean_evaluator.rs` is a small custom evaluator that consumes the original context and honestly declines non-boolean schemas. It demonstrates integration rather than claiming full capability. An integration test wraps the default evaluator with an original-context assertion and runs the complete suite.
 
