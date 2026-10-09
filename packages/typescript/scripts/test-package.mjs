@@ -4,6 +4,7 @@ import {
   copyFileSync,
   mkdtempSync,
   realpathSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -50,6 +51,64 @@ try {
     ],
     { cwd: temporary, stdio: "inherit" },
   );
+  // Compile the exact first-use block delivered in the installed README.
+  // Host initialization is intentionally outside this host-independent block.
+  const installed = join(temporary, "node_modules/@openbindings/sdk");
+  const section = readFileSync(join(installed, "README.md"), "utf8")
+    .split("## First useful result\n")[1]
+    ?.split("\n## Initialization\n")[0];
+  assert(section, "Installed README must retain its first-use section");
+  const snippets = [...section.matchAll(/^```ts\r?\n([\s\S]*?)^```\s*$/gm)];
+  assert.equal(
+    snippets.length,
+    1,
+    "Exactly one first-use TypeScript block is checked",
+  );
+  writeFileSync(join(temporary, "readme.ts"), snippets[0][1]);
+  execFileSync(
+    process.execPath,
+    [
+      join(root, "node_modules/typescript/bin/tsc"),
+      "--strict",
+      "--target",
+      "ES2022",
+      "--module",
+      "NodeNext",
+      "--moduleResolution",
+      "NodeNext",
+      "--lib",
+      "ES2022,DOM,ESNext.Disposable",
+      "--outDir",
+      join(temporary, "readme-build"),
+      join(temporary, "readme.ts"),
+    ],
+    { cwd: temporary, stdio: "inherit" },
+  );
+  writeFileSync(
+    join(temporary, "readme-runner.mjs"),
+    `
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { initialize } from "@openbindings/sdk";
+await initialize(await readFile(new URL(import.meta.resolve("@openbindings/sdk/openbindings.wasm"))));
+const results = [];
+const log = console.log;
+try {
+  console.log = (result) => results.push(result);
+  await import("./readme-build/readme.js");
+} finally {
+  console.log = log;
+}
+assert.equal(results.length, 2);
+assert.equal(results[0].result.outcome, "satisfies");
+assert.equal(results[1].result.outcome, "mismatch");
+console.log("Installed README TypeScript first-use block compiled and ran verbatim.");
+`,
+  );
+  execFileSync(process.execPath, [join(temporary, "readme-runner.mjs")], {
+    cwd: temporary,
+    stdio: "inherit",
+  });
   copyFileSync(
     join(root, "test/api-quality-cases.mjs"),
     join(temporary, "api-quality-cases.mjs"),
@@ -107,6 +166,8 @@ console.log(JSON.stringify({ installedPackage: true, ...await apiQualityCases(sd
   );
   assert.equal(lifecycle.outcomes.inFlight.outcome, "satisfies");
   assert.equal(lifecycle.outcomes.current.outcome, "satisfies");
+  assert.equal(lifecycle.outcomes.cancelled.detail.reason, "cancelled");
+  assert.equal(lifecycle.outcomes.sameOwnerRecovery.outcome, "satisfies");
   assert.equal(lifecycle.arenas.released, lifecycle.arenas.warmed);
   console.log("Installed first-use and service lifecycle examples passed.");
 } finally {

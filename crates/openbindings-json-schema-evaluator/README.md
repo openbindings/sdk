@@ -12,37 +12,39 @@ use openbindings::{ContractPreparation, JsonValue, ParsedDocument, ResourceSet, 
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::sync::Arc;
 
-let document = ParsedDocument::parse(
-    br#"{"openbindings":"0.2.0","operations":{"lookup":{"input":{"type":"string"}}}}"#,
-)?;
-let assessment = document.assess()?;
-if assessment.validated().is_none() {
-    return Err(format!("document conformance: {:?}; findings: {:?}",
-        assessment.report().conclusion, assessment.report().findings).into());
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let document = ParsedDocument::parse(
+        br#"{"openbindings":"0.2.0","operations":{"lookup":{"input":{"type":"string"}}}}"#,
+    )?;
+    let assessment = document.assess()?;
+    if assessment.validated().is_none() {
+        return Err(format!("document conformance: {:?}; findings: {:?}",
+            assessment.report().conclusion, assessment.report().findings).into());
+    }
+    let context = document.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())?;
+    let input = match context.prepare("lookup", Side::Input) {
+        ContractPreparation::Ready(input) => input,
+        ContractPreparation::NoContract => return Err("lookup has no input contract".into()),
+        ContractPreparation::OperationMissing => return Err("lookup is missing".into()),
+        ContractPreparation::OperationAmbiguous { candidates } => {
+            return Err(format!("lookup is ambiguous: {candidates:?}").into());
+        }
+        ContractPreparation::NoVerdict { detail } => {
+            return Err(format!("preparation refused ({:?}): {}", detail.reason, detail.message).into());
+        }
+    };
+    let ordinary = JsonValue::from_serializable("item")?;
+    match input.validate(&ordinary) {
+        ValueOutcome::Satisfies => println!("input satisfies the contract"),
+        ValueOutcome::Mismatch { problems, problems_complete } => {
+            println!("mismatch: {problems:?}; diagnostics complete: {problems_complete}");
+        }
+        ValueOutcome::NoVerdict { detail } => {
+            println!("no verdict ({:?}): {}", detail.reason, detail.message);
+        }
+    }
+    Ok(())
 }
-let context = document.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())?;
-let input = match context.prepare("lookup", Side::Input) {
-    ContractPreparation::Ready(input) => input,
-    ContractPreparation::NoContract => return Err("lookup has no input contract".into()),
-    ContractPreparation::OperationMissing => return Err("lookup is missing".into()),
-    ContractPreparation::OperationAmbiguous { candidates } => {
-        return Err(format!("lookup is ambiguous: {candidates:?}").into());
-    }
-    ContractPreparation::NoVerdict { detail } => {
-        return Err(format!("preparation refused ({:?}): {}", detail.reason, detail.message).into());
-    }
-};
-let ordinary = JsonValue::from_serializable("item")?;
-match input.validate(&ordinary) {
-    ValueOutcome::Satisfies => println!("input satisfies the contract"),
-    ValueOutcome::Mismatch { problems, problems_complete } => {
-        println!("mismatch: {problems:?}; diagnostics complete: {problems_complete}");
-    }
-    ValueOutcome::NoVerdict { detail } => {
-        println!("no verdict ({:?}): {}", detail.reason, detail.message);
-    }
-}
-# Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
 The shipped [first-use example](examples/first_use.rs) adds metadata, alias selection,

@@ -17,6 +17,10 @@
 
 ### Changed
 
+- Made first-use Rust Markdown examples directly runnable, added routine example
+  and installed README checks, and demonstrated same-owner cancellation recovery.
+- Browser first-use examples display module-loading errors; browser checks cover
+  missing modules and report loading failures directly.
 - Fixed-schema diagnostics explain direct type and missing-required-field failures
   while preserving their codes, original locations and conformance results; other
   cases retain a generic explanation without exposing rejected values.

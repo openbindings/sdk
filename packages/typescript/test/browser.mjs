@@ -2,9 +2,9 @@ import fs from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import crypto from "node:crypto";
-import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { chromium, webkit } from "playwright-core";
+import { firstUsePage, firstUseLoadingFailures } from "./first-use-browser.mjs";
 const packageRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -99,42 +99,16 @@ try {
       fixedDiagnostics: fixedDiagnosticCases(sdk),
     };
   }, requests);
-  const examplePage = await browser.newPage();
-  const exampleErrors = [];
-  examplePage.on("pageerror", (error) => exampleErrors.push(error.message));
-  examplePage.on("requestfailed", (request) =>
-    exampleErrors.push(request.url()),
-  );
-  examplePage.on("response", (response) => {
-    if (response.status() >= 400)
-      exampleErrors.push(`${response.status()} ${response.url()}`);
-  });
-  await examplePage.goto(
-    `http://127.0.0.1:${server.address().port}/examples/first-use.html`,
-  );
-  await examplePage.waitForFunction(() => {
-    const output = document.querySelector("#result");
-    return output && output.textContent !== "Loading…";
-  });
-  assert.deepEqual(
-    exampleErrors,
-    [],
-    "First-use example must load without errors",
-  );
-  const firstUse = JSON.parse(
-    await examplePage.locator("#result").textContent(),
-  );
-  assert.equal(firstUse.accepted.result.outcome, "satisfies");
-  assert.equal(firstUse.accepted.operations[0].key, "lookup");
-  assert.equal(firstUse.mismatch.result.outcome, "mismatch");
-  assert.equal(firstUse.invalidInput.result.outcome, "input-error");
+  const exampleUrl = `http://127.0.0.1:${server.address().port}/examples/first-use.html`;
+  const firstUse = await firstUsePage(browser, exampleUrl);
+  const loadingFailures = await firstUseLoadingFailures(browser, exampleUrl);
   await fs.writeFile(
     path.join(output, "first-use.json"),
     JSON.stringify(
       {
-        firstUse,
+        ...firstUse,
         fixedDiagnostics: result.fixedDiagnostics,
-        errors: exampleErrors,
+        loadingFailures,
       },
       null,
       2,

@@ -49,17 +49,19 @@ For example, this malformed description parses, but assessment reports a type fa
 ```rust
 use openbindings::ParsedDocument;
 
-let text = r#"{"openbindings":"0.2.0","operations":{"lookup":{"description":7}}}"#;
-let document = ParsedDocument::parse(text)?;
-let assessment = document.assess()?;
-for finding in &assessment.report().findings {
-    println!("{} {} at {:?}: {}", finding.rule, finding.code, finding.location, finding.message);
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let text = r#"{"openbindings":"0.2.0","operations":{"lookup":{"description":7}}}"#;
+    let document = ParsedDocument::parse(text)?;
+    let assessment = document.assess()?;
+    for finding in &assessment.report().findings {
+        println!("{} {} at {:?}: {}", finding.rule, finding.code, finding.location, finding.message);
+    }
+    // Correct the original field, then parse and assess the replacement snapshot.
+    let corrected = text.replace("\"description\":7", "\"description\":\"Find an item\"");
+    let corrected = ParsedDocument::parse(corrected)?;
+    assert!(corrected.assess()?.validated().is_some());
+    Ok(())
 }
-// Correct the original field, then parse and assess the replacement snapshot.
-let corrected = text.replace("\"description\":7", "\"description\":\"Find an item\"");
-let corrected = ParsedDocument::parse(corrected)?;
-assert!(corrected.assess()?.validated().is_some());
-# Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
 The `OBI-02` / `schema-mismatch` finding points to `/operations/lookup/description` and explains that a string is expected. Direct missing-field messages name the field from the fixed schema and point to its containing object; there is no source byte offset for a nonexistent property. Complex schema failures keep a general explanation instead of presenting one alternative as the only repair. Messages are bounded guidance, not stable machine identifiers; use rule, code, evidence and location fields for logic. These fixed-schema messages do not echo rejected values.

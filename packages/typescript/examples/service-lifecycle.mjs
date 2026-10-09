@@ -84,6 +84,8 @@ try {
   });
   assert.equal(outcomes.cancelled.outcome, "no-verdict");
   assert.equal(outcomes.cancelled.detail.reason, "cancelled");
+  outcomes.sameOwnerRecovery = service.check("after cancellation");
+  assert.equal(outcomes.sameOwnerRecovery.outcome, "satisfies");
   outcomes.recovery = replace(service, '{"type":"integer"}');
   outcomes.ordinary = service.check(7);
   outcomes.exact = await service.checkBytes(
