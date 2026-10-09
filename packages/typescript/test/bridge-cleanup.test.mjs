@@ -84,3 +84,42 @@ test("owned selection and preparation wrappers release untaken children on decod
     document.dispose();
   }
 });
+
+test("ordinary admission maps only known engine limits and preserves unexpected exceptions", () => {
+  const document = sdk.parseDocument(
+    '{"openbindings":"0.2.0","operations":{"run":{"input":true}}}',
+  ).value;
+  const context = document.contracts();
+  const setup = context.prepare("run", "input");
+  assert.equal(setup.status, "ready");
+  const prepared = setup.contract;
+  const parse = bridge.WasmJson.parseText;
+  try {
+    const before = sdk.liveStorageOwners();
+    bridge.WasmJson.parseText = () => {
+      throw '{"kind":"limit","message":"fixture admission limit"}';
+    };
+    assert.deepEqual(prepared.validate(7), {
+      outcome: "input-error",
+      error: {
+        code: "input-limit",
+        instancePointer: null,
+        message: "The ordinary value exceeds the admitted JSON limits.",
+      },
+    });
+    const unexpected = new Error("unexpected engine error");
+    bridge.WasmJson.parseText = () => {
+      throw unexpected;
+    };
+    assert.throws(
+      () => prepared.validate(7),
+      (error) => error === unexpected,
+    );
+    assert.equal(sdk.liveStorageOwners(), before);
+  } finally {
+    bridge.WasmJson.parseText = parse;
+    prepared.dispose();
+    context.dispose();
+    document.dispose();
+  }
+});

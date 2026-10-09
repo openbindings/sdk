@@ -108,3 +108,24 @@ parsedOnly.operations[0].key = "changed";
 ValidatedDocument.fromParsed(parsedOnly);
 // @ts-expect-error root no longer exports the HTTP companion
 import { discover as rootDiscovery } from "../dist/index.js";
+
+declare const preparedContract: import("../dist/index.js").PreparedContract;
+declare const exactInput: ExactJson;
+const exactOutcome: ValueOutcome = preparedContract.validate(exactInput);
+const ordinaryOutcome: import("../dist/index.js").ValueCheck =
+  preparedContract.validate({ nested: exactInput });
+// @ts-expect-error ordinary admission may return input-error
+const incompleteOutcome: ValueOutcome = preparedContract.validate(7);
+if (ordinaryOutcome.outcome === "input-error") {
+  ordinaryOutcome.error.instancePointer satisfies string | null;
+}
+const selection = parsedOnly.resolveOperation("run");
+if (selection.status === "ambiguous") {
+  // @ts-expect-error ambiguity candidates are immutable
+  selection.candidates.push("another");
+}
+using batchResources = new SchemaResources([
+  ["https://schema.test", exactInput] as const,
+]);
+void exactOutcome;
+void incompleteOutcome;
