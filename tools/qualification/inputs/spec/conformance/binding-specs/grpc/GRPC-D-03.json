@@ -1,0 +1,227 @@
+{
+  "rule": "GRPC-D-03",
+  "bindingSpec": "openbindings.grpc@1",
+  "section": "7",
+  "description": "`selector` is present and is `<fully-qualified-service>/<method>`: the service's protobuf fully-qualified name (package-qualified, or bare when its file declares no package), one `/`, and the unqualified RPC name, matched byte-exactly against the schema's declared services.",
+  "notes": "Resolution-dependent tests always embed the schema as content, so the verdict is offline-decidable; checking them requires a protobuf compiler, and a validator without one reports those tests inconclusive rather than passing or failing them. For a location-only source, resolution is checkable only against the live reflection listing and is fixtured here only as a grammar-valid positive.",
+  "tests": [
+    {
+      "description": "package-qualified service and method resolving byte-exactly in the embedded schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": { "getMenu": {} },
+        "sources": {
+          "shop": {
+            "bindingSpec": "openbindings.grpc@1",
+            "location": "api.example.com:443",
+            "content": "syntax = \"proto3\";\npackage blend;\nservice CoffeeShop {\n  rpc GetMenu(MenuRequest) returns (Menu);\n}\nmessage MenuRequest {}\nmessage Menu {\n  repeated string items = 1;\n}\n"
+          }
+        },
+        "bindings": {
+          "getMenu.shop": {
+            "operation": "getMenu",
+            "source": "shop",
+            "selector": "blend.CoffeeShop/GetMenu"
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "bare service name for a schema whose file declares no package",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": { "getMenu": {} },
+        "sources": {
+          "shop": {
+            "bindingSpec": "openbindings.grpc@1",
+            "location": "api.example.com:443",
+            "content": "syntax = \"proto3\";\nservice CoffeeShop {\n  rpc GetMenu(MenuRequest) returns (Menu);\n}\nmessage MenuRequest {}\nmessage Menu {\n  repeated string items = 1;\n}\n"
+          }
+        },
+        "bindings": {
+          "getMenu.shop": {
+            "operation": "getMenu",
+            "source": "shop",
+            "selector": "CoffeeShop/GetMenu"
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "grammar-valid selector on a location-only source: resolution against live reflection is inconclusive offline, and the selector gives a validator nothing to refuse",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": { "getMenu": {} },
+        "sources": {
+          "shop": {
+            "bindingSpec": "openbindings.grpc@1",
+            "location": "api.example.com:443"
+          }
+        },
+        "bindings": {
+          "getMenu.shop": {
+            "operation": "getMenu",
+            "source": "shop",
+            "selector": "blend.CoffeeShop/GetMenu"
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "selector is required: this family defines no whole-artifact invocation",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": { "getMenu": {} },
+        "sources": {
+          "shop": {
+            "bindingSpec": "openbindings.grpc@1",
+            "location": "api.example.com:443"
+          }
+        },
+        "bindings": {
+          "getMenu.shop": { "operation": "getMenu", "source": "shop" }
+        }
+      },
+      "valid": false,
+      "violates": ["GRPC-D-03"]
+    },
+    {
+      "description": "selector without the service/method separator",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": { "getMenu": {} },
+        "sources": {
+          "shop": {
+            "bindingSpec": "openbindings.grpc@1",
+            "location": "api.example.com:443"
+          }
+        },
+        "bindings": {
+          "getMenu.shop": {
+            "operation": "getMenu",
+            "source": "shop",
+            "selector": "blend.CoffeeShop"
+          }
+        }
+      },
+      "valid": false,
+      "violates": ["GRPC-D-03"]
+    },
+    {
+      "description": "empty method segment",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": { "getMenu": {} },
+        "sources": {
+          "shop": {
+            "bindingSpec": "openbindings.grpc@1",
+            "location": "api.example.com:443"
+          }
+        },
+        "bindings": {
+          "getMenu.shop": {
+            "operation": "getMenu",
+            "source": "shop",
+            "selector": "blend.CoffeeShop/"
+          }
+        }
+      },
+      "valid": false,
+      "violates": ["GRPC-D-03"]
+    },
+    {
+      "description": "empty service segment",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": { "getMenu": {} },
+        "sources": {
+          "shop": {
+            "bindingSpec": "openbindings.grpc@1",
+            "location": "api.example.com:443"
+          }
+        },
+        "bindings": {
+          "getMenu.shop": {
+            "operation": "getMenu",
+            "source": "shop",
+            "selector": "/GetMenu"
+          }
+        }
+      },
+      "valid": false,
+      "violates": ["GRPC-D-03"]
+    },
+    {
+      "description": "slash inside the service segment: a protobuf fully-qualified name is dot-separated, and the form carries exactly one /",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": { "getMenu": {} },
+        "sources": {
+          "shop": {
+            "bindingSpec": "openbindings.grpc@1",
+            "location": "api.example.com:443",
+            "content": "syntax = \"proto3\";\npackage blend;\nservice CoffeeShop {\n  rpc GetMenu(MenuRequest) returns (Menu);\n}\nmessage MenuRequest {}\nmessage Menu {\n  repeated string items = 1;\n}\n"
+          }
+        },
+        "bindings": {
+          "getMenu.shop": {
+            "operation": "getMenu",
+            "source": "shop",
+            "selector": "blend/CoffeeShop/GetMenu"
+          }
+        }
+      },
+      "valid": false,
+      "violates": ["GRPC-D-03"]
+    },
+    {
+      "description": "matching is byte-exact, no case folding: getMenu does not match the declared GetMenu",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": { "getMenu": {} },
+        "sources": {
+          "shop": {
+            "bindingSpec": "openbindings.grpc@1",
+            "location": "api.example.com:443",
+            "content": "syntax = \"proto3\";\npackage blend;\nservice CoffeeShop {\n  rpc GetMenu(MenuRequest) returns (Menu);\n}\nmessage MenuRequest {}\nmessage Menu {\n  repeated string items = 1;\n}\n"
+          }
+        },
+        "bindings": {
+          "getMenu.shop": {
+            "operation": "getMenu",
+            "source": "shop",
+            "selector": "blend.CoffeeShop/getMenu"
+          }
+        }
+      },
+      "valid": false,
+      "violates": ["GRPC-D-03"]
+    },
+    {
+      "description": "selector matching no method in the embedded schema makes the binding unresolvable",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": { "listOrders": {} },
+        "sources": {
+          "shop": {
+            "bindingSpec": "openbindings.grpc@1",
+            "location": "api.example.com:443",
+            "content": "syntax = \"proto3\";\npackage blend;\nservice CoffeeShop {\n  rpc GetMenu(MenuRequest) returns (Menu);\n}\nmessage MenuRequest {}\nmessage Menu {\n  repeated string items = 1;\n}\n"
+          }
+        },
+        "bindings": {
+          "listOrders.shop": {
+            "operation": "listOrders",
+            "source": "shop",
+            "selector": "blend.CoffeeShop/ListOrders"
+          }
+        }
+      },
+      "valid": false,
+      "violates": ["GRPC-D-03"]
+    }
+  ]
+}

@@ -1,0 +1,742 @@
+//! Immutable document snapshots and complete conformance evidence.
+use crate::{
+    fixed_schema,
+    schema_index::{DIALECT, SameDocument, SchemaIndex},
+    *,
+};
+use openbindings_internal_json::backend;
+use serde::Serialize;
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    fmt,
+    sync::{Arc, OnceLock},
+};
+
+pub const DOCUMENT_RULES: [&str; 13] = [
+    "OBI-01", "OBI-02", "OBI-03", "OBI-04", "OBI-05", "OBI-06", "OBI-07", "OBI-08", "OBI-09",
+    "OBI-10", "OBI-11", "OBI-12", "OBI-13",
+];
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Evidence {
+    Satisfied,
+    Violated,
+    Inconclusive,
+    NotApplicable,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Conformance {
+    Conformant,
+    NonConformant,
+    Undetermined,
+}
+#[derive(Clone, Debug, Serialize)]
+pub struct Finding {
+    pub rule: &'static str,
+    pub status: Evidence,
+    pub code: &'static str,
+    pub location: Option<SourceLocation>,
+    pub message: String,
+}
+#[derive(Clone, Debug, Serialize)]
+pub struct ConformanceReport {
+    pub release: &'static str,
+    pub revision: &'static str,
+    pub policy: &'static str,
+    pub conclusion: Conformance,
+    pub evidence: BTreeMap<&'static str, Evidence>,
+    pub findings: Vec<Finding>,
+    pub findings_truncated: bool,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct VersionRefusal {
+    pub declared: String,
+    pub supported: &'static str,
+}
+impl fmt::Display for VersionRefusal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "declared version {} is outside {}",
+            self.declared, self.supported
+        )
+    }
+}
+impl std::error::Error for VersionRefusal {}
+#[derive(Clone)]
+pub struct ParsedDocument {
+    pub(crate) inner: Arc<DocumentInner>,
+}
+pub(crate) struct DocumentInner {
+    pub value: JsonValue,
+    pub schemas: OnceLock<SchemaIndex>,
+    assessment: OnceLock<Result<Arc<ConformanceReport>, VersionRefusal>>,
+    interpretation: OnceLock<Result<(), InterpretationError>>,
+    names: OnceLock<NameIndex>,
+}
+impl fmt::Debug for ParsedDocument {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ParsedDocument")
+            .field("value", &self.inner.value)
+            .finish()
+    }
+}
+#[derive(Clone, Debug)]
+pub struct DocumentAssessment {
+    document: Option<ParsedDocument>,
+    report: Arc<ConformanceReport>,
+}
+#[derive(Clone, Debug)]
+pub struct ValidatedDocument {
+    document: ParsedDocument,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum InterpretationError {
+    Version(VersionRefusal),
+    MalformedVersion,
+    DuplicateMembers,
+    UnpairedString,
+}
+impl fmt::Display for InterpretationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "document cannot be interpreted: {self:?}")
+    }
+}
+impl std::error::Error for InterpretationError {}
+
+impl ParsedDocument {
+    pub fn parse(input: impl AsRef<[u8]>) -> Result<Self, InputError> {
+        JsonValue::parse(input).map(Self::from_json)
+    }
+    pub fn from_json(value: JsonValue) -> Self {
+        let value = backend::standalone(value);
+        Self {
+            inner: Arc::new(DocumentInner {
+                value,
+                schemas: OnceLock::new(),
+                assessment: OnceLock::new(),
+                interpretation: OnceLock::new(),
+                names: OnceLock::new(),
+            }),
+        }
+    }
+    pub fn value(&self) -> &JsonValue {
+        &self.inner.value
+    }
+    pub fn original_bytes(&self) -> &[u8] {
+        self.value().original_source()
+    }
+    pub fn to_authoring(&self) -> Result<DocumentBuilder, AuthoringError> {
+        DocumentBuilder::from_json(self.value())
+    }
+    pub fn assess(&self) -> Result<DocumentAssessment, VersionRefusal> {
+        let report = self
+            .inner
+            .assessment
+            .get_or_init(|| assess_value(self).map(Arc::new))
+            .clone()?;
+        Ok(DocumentAssessment {
+            document: Some(self.clone()),
+            report,
+        })
+    }
+    pub(crate) fn schemas(&self) -> &SchemaIndex {
+        self.inner
+            .schemas
+            .get_or_init(|| SchemaIndex::build(self.value()))
+    }
+    pub(crate) fn interpretable(&self) -> Result<(), InterpretationError> {
+        self.inner
+            .interpretation
+            .get_or_init(|| self.check_interpretation())
+            .clone()
+    }
+    fn check_interpretation(&self) -> Result<(), InterpretationError> {
+        if let Some(refusal) = version_refusal(self.value()) {
+            return Err(InterpretationError::Version(refusal));
+        }
+        if self.value().has_duplicate_names() {
+            return Err(InterpretationError::DuplicateMembers);
+        }
+        if backend::has_unpaired(self.value()) {
+            return Err(InterpretationError::UnpairedString);
+        }
+        if self
+            .value()
+            .get("openbindings")
+            .and_then(|v| v.as_str())
+            .is_none_or(|s| check_version(s) != VersionDecision::Supported)
+        {
+            return Err(InterpretationError::MalformedVersion);
+        }
+        Ok(())
+    }
+    fn names(&self) -> &NameIndex {
+        self.inner
+            .names
+            .get_or_init(|| NameIndex::build(self.value()))
+    }
+    /// Exact names and aliases form one namespace. Ambiguous matches are unresolved.
+    /// The immutable index is built once; repeated lookup does not scan the document.
+    pub fn resolve_operation(
+        &self,
+        name: &str,
+    ) -> Result<Option<OperationView>, InterpretationError> {
+        self.interpretable()?;
+        let index = self.names();
+        Ok(index
+            .names
+            .get(name)
+            .and_then(Option::as_ref)
+            .and_then(|key| {
+                index.operations.get(key).map(|value| OperationView {
+                    key: key.clone(),
+                    value: value.clone(),
+                })
+            }))
+    }
+    /// Primary operation entries in lexical key order. This does not resolve aliases.
+    pub fn operations(&self) -> Result<Vec<OperationView>, InterpretationError> {
+        self.interpretable()?;
+        Ok(self
+            .names()
+            .operations
+            .iter()
+            .map(|(key, value)| OperationView {
+                key: key.clone(),
+                value: value.clone(),
+            })
+            .collect())
+    }
+    /// Lexical presentation order; this does not select or rank bindings.
+    pub fn operation_bindings(&self, key: &str) -> Result<Vec<String>, InterpretationError> {
+        self.interpretable()?;
+        let index = self.names();
+        if !index.operations.contains_key(key) {
+            return Ok(Vec::new());
+        }
+        Ok(index.bindings.get(key).cloned().unwrap_or_default())
+    }
+    pub fn dependency_accepts_kind(
+        &self,
+        dependency: &str,
+        kind: &str,
+    ) -> Result<Option<bool>, InterpretationError> {
+        self.interpretable()?;
+        let Some(value) = self
+            .value()
+            .get("dependencies")
+            .and_then(|v| v.get(dependency))
+        else {
+            return Ok(None);
+        };
+        Ok(Some(match value.get("kinds") {
+            None => true,
+            Some(kinds) => kinds
+                .elements()
+                .is_some_and(|mut a| a.any(|v| v.as_str() == Some(kind))),
+        }))
+    }
+}
+#[derive(Default)]
+struct NameIndex {
+    operations: BTreeMap<String, JsonValue>,
+    names: HashMap<String, Option<String>>,
+    bindings: HashMap<String, Vec<String>>,
+}
+impl NameIndex {
+    fn build(value: &JsonValue) -> Self {
+        let mut index = Self::default();
+        if let Some(operations) = value.get("operations").and_then(|v| v.members()) {
+            for member in operations {
+                let Some(key) = member.name.as_str() else {
+                    continue;
+                };
+                index.operations.insert(key.into(), member.value.to_owned());
+                index.add_name(key, key);
+                if let Some(aliases) = member.value.get("aliases").and_then(|v| v.elements()) {
+                    for alias in aliases.filter_map(|v| v.as_str()) {
+                        index.add_name(alias, key);
+                    }
+                }
+            }
+        }
+        if let Some(bindings) = value.get("bindings").and_then(|v| v.members()) {
+            for member in bindings {
+                if let (Some(name), Some(operation)) = (
+                    member.name.as_str(),
+                    member.value.get("operation").and_then(|v| v.as_str()),
+                ) {
+                    index
+                        .bindings
+                        .entry(operation.into())
+                        .or_default()
+                        .push(name.into());
+                }
+            }
+        }
+        for names in index.bindings.values_mut() {
+            names.sort();
+        }
+        index
+    }
+    fn add_name(&mut self, name: &str, key: &str) {
+        self.names
+            .entry(name.into())
+            .and_modify(|found| {
+                if found.as_deref() != Some(key) {
+                    *found = None;
+                }
+            })
+            .or_insert_with(|| Some(key.into()));
+    }
+}
+#[derive(Clone, Debug)]
+pub struct OperationView {
+    pub key: String,
+    pub value: JsonValue,
+}
+impl DocumentAssessment {
+    pub fn report(&self) -> &ConformanceReport {
+        &self.report
+    }
+    pub fn parsed(&self) -> Option<&ParsedDocument> {
+        self.document.as_ref()
+    }
+    pub fn validated(&self) -> Option<ValidatedDocument> {
+        if self.report.conclusion == Conformance::Conformant {
+            self.document
+                .clone()
+                .map(|document| ValidatedDocument { document })
+        } else {
+            None
+        }
+    }
+}
+impl ValidatedDocument {
+    pub fn parsed(&self) -> &ParsedDocument {
+        &self.document
+    }
+    pub fn original_bytes(&self) -> &[u8] {
+        self.document.original_bytes()
+    }
+}
+impl DocumentBuilder {
+    pub fn build(&self) -> Result<ParsedDocument, AuthoringError> {
+        self.to_json().map(ParsedDocument::from_json)
+    }
+}
+
+/// Assess bytes even when parsing fails. A version refusal is never conformance evidence.
+pub fn assess_document(input: impl AsRef<[u8]>) -> Result<DocumentAssessment, VersionRefusal> {
+    let bytes = input.as_ref();
+    // Flat storage permits a grammar scan past the public carriage-depth boundary,
+    // while byte/node admission still bounds memory. This preserves version priority.
+    match JsonValue::parse_with_limits(
+        bytes,
+        JsonLimits {
+            max_depth: usize::MAX,
+            ..Default::default()
+        },
+    ) {
+        Ok(value) => ParsedDocument::from_json(value).assess(),
+        Err(error) => {
+            let mut checks = Checks::new();
+            let limit = error.kind == InputErrorKind::Limit;
+            if limit {
+                for rule in 0..13 {
+                    checks.mark(
+                        rule,
+                        Evidence::Inconclusive,
+                        "input-limit",
+                        None,
+                        error.to_string(),
+                    );
+                }
+            } else {
+                let offset = error.byte_offset.min(bytes.len());
+                let prefix = &bytes[..offset];
+                let line = 1 + prefix.iter().filter(|&&b| b == b'\n').count();
+                let byte_column = 1 + prefix.iter().rev().take_while(|&&b| b != b'\n').count();
+                checks.mark(
+                    0,
+                    Evidence::Violated,
+                    error.code,
+                    Some(SourceLocation {
+                        pointer: None,
+                        byte_offset: offset,
+                        line,
+                        byte_column,
+                    }),
+                    error.to_string(),
+                );
+                checks.not_applicable_after_json();
+            }
+            Ok(DocumentAssessment {
+                document: None,
+                report: Arc::new(checks.finish()),
+            })
+        }
+    }
+}
+fn version_refusal(value: &JsonValue) -> Option<VersionRefusal> {
+    let mut declarations = value
+        .view()
+        .members()?
+        .filter(|m| m.name.as_str() == Some("openbindings"));
+    let declared = declarations.next()?.value.as_str()?;
+    if declarations.next().is_some() {
+        return None;
+    }
+    (check_version(declared) == VersionDecision::Unsupported).then(|| VersionRefusal {
+        declared: declared.into(),
+        supported: SUPPORTED_VERSIONS,
+    })
+}
+struct Checks {
+    evidence: [Evidence; 13],
+    findings: Vec<Finding>,
+    truncated: bool,
+}
+impl Checks {
+    fn new() -> Self {
+        Self {
+            evidence: [Evidence::Satisfied; 13],
+            findings: Vec::new(),
+            truncated: false,
+        }
+    }
+    fn mark(
+        &mut self,
+        rule: usize,
+        status: Evidence,
+        code: &'static str,
+        location: Option<SourceLocation>,
+        message: impl Into<String>,
+    ) {
+        if status == Evidence::Violated || self.evidence[rule] != Evidence::Violated {
+            self.evidence[rule] = status;
+        }
+        if self.findings.len() < 4096 {
+            self.findings.push(Finding {
+                rule: DOCUMENT_RULES[rule],
+                status,
+                code,
+                location,
+                message: message.into(),
+            });
+        } else {
+            self.truncated = true;
+        }
+    }
+    fn violation(
+        &mut self,
+        rule: usize,
+        at: JsonRef<'_>,
+        code: &'static str,
+        message: impl Into<String>,
+    ) {
+        self.mark(rule, Evidence::Violated, code, Some(at.location()), message);
+    }
+    fn not_applicable_after_json(&mut self) {
+        self.evidence[1..].fill(Evidence::NotApplicable);
+    }
+    fn finish(self) -> ConformanceReport {
+        let conclusion = if self.evidence.contains(&Evidence::Violated) {
+            Conformance::NonConformant
+        } else if self.evidence.contains(&Evidence::Inconclusive) {
+            Conformance::Undetermined
+        } else {
+            Conformance::Conformant
+        };
+        ConformanceReport {
+            release: APPLIED_SPEC_RELEASE,
+            revision: APPLIED_SPEC_REVISION,
+            policy: "openbindings-rust/0.2.0-alpha.1",
+            conclusion,
+            evidence: DOCUMENT_RULES.into_iter().zip(self.evidence).collect(),
+            findings: self.findings,
+            findings_truncated: self.truncated,
+        }
+    }
+    fn fixed(&mut self, value: &JsonValue, rule: usize, is_meta: bool) {
+        match fixed_schema::check(
+            value,
+            is_meta,
+            4096usize.saturating_sub(self.findings.len()),
+        ) {
+            Ok(problems) => {
+                self.truncated |= problems.truncated;
+                for path in problems.paths {
+                    let at = value.at(&path).unwrap_or(value.view());
+                    self.violation(
+                        rule,
+                        at,
+                        "schema-mismatch",
+                        "value violates the fixed normative schema",
+                    );
+                }
+            }
+            Err(reason) => self.mark(
+                rule,
+                Evidence::Inconclusive,
+                "fixed-schema-limit-or-failure",
+                Some(value.location()),
+                reason,
+            ),
+        }
+    }
+}
+pub fn valid_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.bytes().enumerate().all(|(i, c)| {
+            c.is_ascii_alphanumeric() || c == b'_' || (i > 0 && (c == b'-' || c == b'.'))
+        })
+}
+fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionRefusal> {
+    let value = document.value();
+    if let Some(refusal) = version_refusal(value) {
+        return Err(refusal);
+    }
+    let mut c = Checks::new();
+    let duplicates = backend::duplicate_locations(value);
+    if !duplicates.is_empty() {
+        for at in duplicates {
+            c.mark(
+                0,
+                Evidence::Violated,
+                "duplicate-member",
+                Some(at),
+                "object repeats a decoded member name",
+            );
+        }
+        c.not_applicable_after_json();
+        return Ok(c.finish());
+    }
+    match value.get("openbindings") {
+        Some(v)
+            if v.as_str()
+                .is_some_and(|s| check_version(s) != VersionDecision::Malformed) => {}
+        Some(v) => c.violation(2, v, "semver", "openbindings must be a SemVer 2.0.0 string"),
+        None => c.violation(
+            2,
+            value.view(),
+            "missing-version",
+            "required openbindings member is absent",
+        ),
+    }
+    if backend::has_unpaired(value) || backend::depth(value) > 10_000 {
+        for rule in 1..13 {
+            if rule != 2 {
+                c.mark(
+                    rule,
+                    Evidence::Inconclusive,
+                    "representation-limit",
+                    Some(value.location()),
+                    "interpretation requires supported strings and document nesting",
+                );
+            }
+        }
+        return Ok(c.finish());
+    }
+    c.fixed(value, 1, false);
+    let operations = value.get("operations");
+    let sources = value.get("sources");
+    for map in [
+        "schemas",
+        "operations",
+        "dependencies",
+        "sources",
+        "bindings",
+    ] {
+        if let Some(entries) = value.get(map).and_then(|v| v.members()) {
+            for entry in entries {
+                if !entry.name.as_str().is_some_and(valid_name) {
+                    c.violation(
+                        3,
+                        entry.name,
+                        "name-grammar",
+                        "name violates the core identifier grammar",
+                    );
+                }
+            }
+        }
+    }
+    let mut names: HashMap<String, JsonValue> = HashMap::new();
+    if let Some(entries) = operations.and_then(|v| v.members()) {
+        let entries: Vec<_> = entries.collect();
+        for entry in &entries {
+            if let Some(name) = entry.name.as_str() {
+                names.insert(name.into(), entry.name.to_owned());
+            }
+        }
+        for entry in entries {
+            if let Some(aliases) = entry.value.get("aliases").and_then(|v| v.elements()) {
+                for alias in aliases {
+                    let Some(name) = alias.as_str() else {
+                        c.violation(
+                            3,
+                            alias,
+                            "name-grammar",
+                            "an alias must be a core name string",
+                        );
+                        continue;
+                    };
+                    if !valid_name(name) {
+                        c.violation(
+                            3,
+                            alias,
+                            "name-grammar",
+                            "alias violates the core identifier grammar",
+                        );
+                    }
+                    if names.insert(name.into(), alias.to_owned()).is_some() {
+                        c.violation(
+                            4,
+                            alias,
+                            "duplicate-operation-name",
+                            "operation keys and aliases must be distinct",
+                        );
+                    }
+                }
+            }
+            if let Some(examples) = entry.value.get("examples").and_then(|v| v.members()) {
+                for example in examples {
+                    if !example.name.as_str().is_some_and(valid_name) {
+                        c.violation(
+                            3,
+                            example.name,
+                            "name-grammar",
+                            "example name violates the core identifier grammar",
+                        );
+                    }
+                }
+            }
+        }
+    }
+    for (map, field, targets, rule) in [
+        ("bindings", "operation", operations, 5),
+        ("bindings", "source", sources, 6),
+        ("dependencies", "operation", operations, 7),
+    ] {
+        if let Some(entries) = value.get(map).and_then(|v| v.members()) {
+            for entry in entries {
+                if let Some(reference) = entry.value.get(field)
+                    && reference
+                        .as_str()
+                        .and_then(|name| targets.and_then(|v| v.get(name)))
+                        .is_none()
+                {
+                    c.violation(
+                        rule,
+                        reference,
+                        "missing-target",
+                        "reference must name an existing primary map key",
+                    );
+                }
+            }
+        }
+    }
+    let schemas = document.schemas();
+    let mut meta_seen = HashSet::new();
+    for node in &schemas.nodes {
+        let schema = node.value.view();
+        if node.depth > 256 {
+            c.mark(
+                9,
+                Evidence::Inconclusive,
+                "schema-depth-limit",
+                Some(schema.location()),
+                "schema depth exceeds 256",
+            );
+        } else if meta_seen.insert(node.value.text()) {
+            c.fixed(&node.value, 9, true);
+        }
+        if let Some(dialect) = schema.get("$schema")
+            && !matches!(
+                dialect.as_str(),
+                Some(DIALECT) | Some("https://json-schema.org/draft/2020-12/schema#")
+            )
+        {
+            c.violation(
+                8,
+                dialect,
+                "schema-dialect",
+                "contained schemas must name the 2020-12 dialect",
+            );
+        }
+        if node.obi_position {
+            if let Some(id) = schema.get("$id") {
+                if !id.as_str().is_some_and(uri::absolute) {
+                    c.violation(
+                        10,
+                        id,
+                        "absolute-schema-id",
+                        "a document-resource $id must be an absolute URI",
+                    );
+                }
+                continue;
+            }
+            for keyword in ["$ref", "$dynamicRef"] {
+                if let Some(reference) = schema.get(keyword) {
+                    let Some(text) = reference.as_str() else {
+                        c.violation(
+                            10,
+                            reference,
+                            "reference-type",
+                            "schema reference must be a URI-reference string",
+                        );
+                        continue;
+                    };
+                    if !uri::valid(text)
+                        || (!uri::absolute(text) && !text.is_empty() && !text.starts_with('#'))
+                    {
+                        c.violation(
+                            10,
+                            reference,
+                            "reference-form",
+                            "document-resource references must be absolute or same-document",
+                        );
+                        continue;
+                    }
+                    if (text.is_empty() || text.starts_with('#'))
+                        && matches!(schemas.same_document(value, text), SameDocument::Missing)
+                    {
+                        c.violation(
+                            11,
+                            reference,
+                            "reference-target",
+                            "same-document reference identifies no schema at an OBI position",
+                        );
+                    }
+                }
+            }
+        }
+    }
+    for ((resource, _), declarations) in &schemas.anchors {
+        if *resource == 0 && declarations.len() > 1 {
+            for (value, keyword) in declarations {
+                c.violation(
+                    12,
+                    value.get(keyword).unwrap(),
+                    "duplicate-anchor",
+                    "plain name is declared more than once in the document resource",
+                );
+            }
+        }
+    }
+    for declarations in schemas.identifiers.values() {
+        if declarations.len() > 1 {
+            for value in declarations {
+                c.violation(
+                    12,
+                    value.get("$id").unwrap(),
+                    "duplicate-schema-id",
+                    "schemas declare the same compared identifier",
+                );
+            }
+        }
+    }
+    Ok(c.finish())
+}

@@ -1,0 +1,172 @@
+{
+  "section": "5",
+  "description": "Some of what a document says is its author's claim, namely: an operation's examples (section 5.1); a binding's claim to realize its operation, and its idempotent claim (section 5.3); a dependency's claim to consume its operation within its value contracts (section 5.5); correspondence (section 5.1). This specification defines what each asserts; whether it is true is outside conformance.",
+  "notes": "All tests are positive (valid: true). Each document carries an author claim that a plausibility heuristic would doubt; whether the claim is true is outside conformance, so the document conforms. The fixtures concern only the document: whether a claim holds against a real target, consuming component, or shared contract is outside any document fixture.",
+  "tests": [
+    {
+      "description": "a write-shaped binding claims idempotent: true; plausibility has no bearing on conformance",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.openapi@1"
+          }
+        },
+        "bindings": {
+          "createTask.api": {
+            "operation": "createTask",
+            "source": "api",
+            "idempotent": true
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a read-shaped binding claims idempotent: false, an apparent inaccuracy in the other direction",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "listTasks": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.openapi@1"
+          }
+        },
+        "bindings": {
+          "listTasks.api": {
+            "operation": "listTasks",
+            "source": "api",
+            "idempotent": false
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a mass-delete operation's binding claims idempotent: true, bait for a method-name heuristic, though section 5.3 itself notes repeated deletion can be idempotent; either way the claim stands",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "deleteAllRecords": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.openapi@1"
+          }
+        },
+        "bindings": {
+          "deleteAllRecords.api": {
+            "operation": "deleteAllRecords",
+            "source": "api",
+            "idempotent": true
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "an example whose input does not satisfy the input schema is a false claim, not a rule violation",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "type": "string"
+            },
+            "examples": {
+              "bad": {
+                "input": 42
+              }
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "an explicitly null example output against a string output is a false claim, not a violation",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "output": {
+              "type": "string"
+            },
+            "examples": {
+              "nil": {
+                "output": null
+              }
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a binding whose opaque content looks, to a heuristic, like another operation's target is an unverified realization claim",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "deleteTask": {
+            "description": "Delete a task."
+          }
+        },
+        "sources": {
+          "api": {
+            "kind": "example.openapi@1"
+          }
+        },
+        "bindings": {
+          "deleteTask.api": {
+            "operation": "deleteTask",
+            "source": "api",
+            "content": {
+              "target": "#/paths/~1tasks/post"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a dependency on an operation whose description its consumption seems to contradict is an unverified claim",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "notify": {
+            "input": {
+              "type": "integer"
+            }
+          }
+        },
+        "dependencies": {
+          "alerts": {
+            "operation": "notify",
+            "description": "Sends free-form text messages."
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "an alias adopting a published name the description seems to contradict is an unverified correspondence claim",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "description": "Create a task.",
+            "aliases": [
+              "acme.tasks.deleteTask"
+            ]
+          }
+        }
+      },
+      "valid": true
+    }
+  ]
+}

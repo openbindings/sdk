@@ -1,0 +1,18 @@
+/target/
+/node_modules/
+/dist/
+/packages/typescript/dist/
+*.tgz
+.DS_Store
+
+/packages/typescript/src/wasm/
+/packages/typescript/wasm/
+/packages/typescript/node_modules/
+
+# Qualification and standalone public caller builds
+/tools/qualification/corpus/
+/tools/qualification/hosts/
+**/__pycache__/
+/examples/rust-consumer/target/
+/examples/rust-consumer/Cargo.lock
+/tools/conformance-observer/target/

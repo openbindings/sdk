@@ -1,0 +1,172 @@
+{
+  "baseline_commit": "ed2bf08718e7995a06d26b1a3534c326eb8bacc7",
+  "historical_failures": 17,
+  "fresh_upstream_run": false,
+  "records": [
+    {
+      "test": "keywords::format::tests::draft4_pattern_with_escaped_dash::test_case_1_regex_engine",
+      "disposition": "Draft 4 non-Unicode pattern behavior is outside the SDK 2020-12/ECMA u contract.",
+      "support_kind": "scope-exclusion",
+      "support": [
+        "CAPABILITIES.md#evaluation"
+      ],
+      "claim": "Draft4/non-u contract is excluded. No direct execution of these escaped-dash examples is attributed to the public witness."
+    },
+    {
+      "test": "keywords::format::tests::draft4_pattern_with_escaped_dash::test_case_2_fancy_regex_engine",
+      "disposition": "Draft 4 non-Unicode pattern behavior is outside the SDK 2020-12/ECMA u contract.",
+      "support_kind": "scope-exclusion",
+      "support": [
+        "CAPABILITIES.md#evaluation"
+      ],
+      "claim": "Draft4/non-u contract is excluded. No direct execution of these escaped-dash examples is attributed to the public witness."
+    },
+    {
+      "test": "keywords::items::tests::arbitrary_precision::items_integer_huge_draft7::test_case_10_infinity_positive",
+      "disposition": "These finite JSON decimal exponents remain mathematical integers; upstream expects a floating-point range refusal. Exact SDK type checks intentionally accept them.",
+      "support_kind": "shared-source-reasoning",
+      "support": [
+        "crates/openbindings-json-schema-evaluator/tests/contracts.rs::upstream_test_dispositions_use_the_supported_exact_ecma_u_path",
+        "crates/openbindings-internal-json/src/numeric.rs",
+        "vendor/openbindings-internal-jsonschema-value/src/types.rs"
+      ],
+      "claim": "Root integer +/-1e1000001 is directly tested. The raw items-array wrapper is not; it uses the same exact numeric predicate in the supported evaluator."
+    },
+    {
+      "test": "keywords::items::tests::arbitrary_precision::items_integer_huge_draft7::test_case_11_infinity_negative",
+      "disposition": "These finite JSON decimal exponents remain mathematical integers; upstream expects a floating-point range refusal. Exact SDK type checks intentionally accept them.",
+      "support_kind": "shared-source-reasoning",
+      "support": [
+        "crates/openbindings-json-schema-evaluator/tests/contracts.rs::upstream_test_dispositions_use_the_supported_exact_ecma_u_path",
+        "crates/openbindings-internal-json/src/numeric.rs",
+        "vendor/openbindings-internal-jsonschema-value/src/types.rs"
+      ],
+      "claim": "Root integer +/-1e1000001 is directly tested. The raw items-array wrapper is not; it uses the same exact numeric predicate in the supported evaluator."
+    },
+    {
+      "test": "keywords::pattern::tests::class_set_syntax::test_case_3_word_class_escape_before_doubled_hyphen",
+      "disposition": "The tested legacy non-u character-class form is invalid in ECMAScript u mode; preparation refusal is intentional.",
+      "support_kind": "direct-case-witness",
+      "support": [
+        "crates/openbindings-json-schema-evaluator/tests/contracts.rs::upstream_test_dispositions_use_the_supported_exact_ecma_u_path"
+      ],
+      "claim": "The named witness directly asserts the corresponding exact-number, legacy-class, empty-match or whitespace vector through the supported SDK. It does not promise raw upstream backend/dialect equivalence."
+    },
+    {
+      "test": "keywords::pattern::tests::class_set_syntax::test_case_6_nested_class_opener_is_literal",
+      "disposition": "The tested legacy non-u character-class form is invalid in ECMAScript u mode; preparation refusal is intentional.",
+      "support_kind": "direct-case-witness",
+      "support": [
+        "crates/openbindings-json-schema-evaluator/tests/contracts.rs::upstream_test_dispositions_use_the_supported_exact_ecma_u_path"
+      ],
+      "claim": "The named witness directly asserts the corresponding exact-number, legacy-class, empty-match or whitespace vector through the supported SDK. It does not promise raw upstream backend/dialect equivalence."
+    },
+    {
+      "test": "keywords::pattern::tests::class_set_syntax::test_case_4_digit_class_escape_before_doubled_hyphen",
+      "disposition": "The tested legacy non-u character-class form is invalid in ECMAScript u mode; preparation refusal is intentional.",
+      "support_kind": "direct-case-witness",
+      "support": [
+        "crates/openbindings-json-schema-evaluator/tests/contracts.rs::upstream_test_dispositions_use_the_supported_exact_ecma_u_path"
+      ],
+      "claim": "The named witness directly asserts the corresponding exact-number, legacy-class, empty-match or whitespace vector through the supported SDK. It does not promise raw upstream backend/dialect equivalence."
+    },
+    {
+      "test": "keywords::pattern::tests::empty_string_with_large_bounded_quantifier_fancy_regex",
+      "disposition": "The upstream test expects its previous regex engine to fail on an empty string; the pattern mathematically accepts it and the SDK does.",
+      "support_kind": "direct-case-witness",
+      "support": [
+        "crates/openbindings-json-schema-evaluator/tests/contracts.rs::upstream_test_dispositions_use_the_supported_exact_ecma_u_path"
+      ],
+      "claim": "The named witness directly asserts the corresponding exact-number, legacy-class, empty-match or whitespace vector through the supported SDK. It does not promise raw upstream backend/dialect equivalence."
+    },
+    {
+      "test": "keywords::pattern::tests::space_class_unicode::test_case_10_non_space_next_line",
+      "disposition": "The raw dependency test includes its alternative Rust-regex backend; the SDK exclusively selects the ECMA adapter. Public SDK U+0085 controls give the ECMAScript results.",
+      "support_kind": "direct-case-witness",
+      "support": [
+        "crates/openbindings-json-schema-evaluator/tests/contracts.rs::upstream_test_dispositions_use_the_supported_exact_ecma_u_path"
+      ],
+      "claim": "The named witness directly asserts the corresponding exact-number, legacy-class, empty-match or whitespace vector through the supported SDK. It does not promise raw upstream backend/dialect equivalence."
+    },
+    {
+      "test": "keywords::pattern::tests::space_class_unicode::test_case_13_negated_set_next_line",
+      "disposition": "The raw dependency test includes its alternative Rust-regex backend; the SDK exclusively selects the ECMA adapter. Public SDK U+0085 controls give the ECMAScript results.",
+      "support_kind": "direct-case-witness",
+      "support": [
+        "crates/openbindings-json-schema-evaluator/tests/contracts.rs::upstream_test_dispositions_use_the_supported_exact_ecma_u_path"
+      ],
+      "claim": "The named witness directly asserts the corresponding exact-number, legacy-class, empty-match or whitespace vector through the supported SDK. It does not promise raw upstream backend/dialect equivalence."
+    },
+    {
+      "test": "keywords::pattern::tests::space_class_unicode::test_case_7_space_next_line_rejected",
+      "disposition": "The raw dependency test includes its alternative Rust-regex backend; the SDK exclusively selects the ECMA adapter. Public SDK U+0085 controls give the ECMAScript results.",
+      "support_kind": "direct-case-witness",
+      "support": [
+        "crates/openbindings-json-schema-evaluator/tests/contracts.rs::upstream_test_dispositions_use_the_supported_exact_ecma_u_path"
+      ],
+      "claim": "The named witness directly asserts the corresponding exact-number, legacy-class, empty-match or whitespace vector through the supported SDK. It does not promise raw upstream backend/dialect equivalence."
+    },
+    {
+      "test": "keywords::type_::tests::arbitrary_precision::huge_number_integer_validation::test_case_19_infinity_negative",
+      "disposition": "These finite JSON decimal exponents remain mathematical integers; upstream expects a floating-point range refusal. Exact SDK type checks intentionally accept them.",
+      "support_kind": "direct-case-witness",
+      "support": [
+        "crates/openbindings-json-schema-evaluator/tests/contracts.rs::upstream_test_dispositions_use_the_supported_exact_ecma_u_path"
+      ],
+      "claim": "The named witness directly asserts the corresponding exact-number, legacy-class, empty-match or whitespace vector through the supported SDK. It does not promise raw upstream backend/dialect equivalence."
+    },
+    {
+      "test": "keywords::type_::tests::arbitrary_precision::huge_number_integer_validation::test_case_18_infinity_positive",
+      "disposition": "These finite JSON decimal exponents remain mathematical integers; upstream expects a floating-point range refusal. Exact SDK type checks intentionally accept them.",
+      "support_kind": "direct-case-witness",
+      "support": [
+        "crates/openbindings-json-schema-evaluator/tests/contracts.rs::upstream_test_dispositions_use_the_supported_exact_ecma_u_path"
+      ],
+      "claim": "The named witness directly asserts the corresponding exact-number, legacy-class, empty-match or whitespace vector through the supported SDK. It does not promise raw upstream backend/dialect equivalence."
+    },
+    {
+      "test": "keywords::unevaluated_properties::tests::pattern_properties_use_the_configured_size_limit::test_case_1_true_direct_expects",
+      "disposition": "The raw dependency API omits the SDK enclosing unsupported-property guard. SDK returns exact declared unsupported-capability, never the raw false validity.",
+      "support_kind": "direct-case-witness",
+      "support": [
+        "crates/openbindings-json-schema-evaluator/tests/contracts.rs::upstream_test_dispositions_use_the_supported_exact_ecma_u_path",
+        "crates/openbindings-json-schema-evaluator/src/lib.rs::Compiled::validate",
+        "vendor/openbindings-internal-jsonschema/src/ob_ecma.rs::Regex::is_match/top_level"
+      ],
+      "claim": "Matched direct shape and explicit UnsupportedCapability are directly asserted; the raw test also contains an unmatched branch that is not asserted here."
+    },
+    {
+      "test": "keywords::unevaluated_properties::tests::pattern_properties_use_the_configured_size_limit::test_case_3_true_ref_expects",
+      "disposition": "The raw dependency API omits the SDK enclosing unsupported-property guard. SDK returns exact declared unsupported-capability, never the raw false validity.",
+      "support_kind": "shared-source-reasoning",
+      "support": [
+        "crates/openbindings-json-schema-evaluator/tests/contracts.rs::upstream_test_dispositions_use_the_supported_exact_ecma_u_path",
+        "crates/openbindings-json-schema-evaluator/src/lib.rs::Compiled::validate",
+        "vendor/openbindings-internal-jsonschema/src/ob_ecma.rs::Regex::is_match/top_level"
+      ],
+      "claim": "No separate public execution of this wrapper is claimed. The enclosing evaluator guard propagates a selected property-match marker through nested evaluation and returns UnsupportedCapability; the direct shape is the executable representative."
+    },
+    {
+      "test": "keywords::unevaluated_properties::tests::pattern_properties_use_the_configured_size_limit::test_case_2_true_allof_expects",
+      "disposition": "The raw dependency API omits the SDK enclosing unsupported-property guard. SDK returns exact declared unsupported-capability, never the raw false validity.",
+      "support_kind": "shared-source-reasoning",
+      "support": [
+        "crates/openbindings-json-schema-evaluator/tests/contracts.rs::upstream_test_dispositions_use_the_supported_exact_ecma_u_path",
+        "crates/openbindings-json-schema-evaluator/src/lib.rs::Compiled::validate",
+        "vendor/openbindings-internal-jsonschema/src/ob_ecma.rs::Regex::is_match/top_level"
+      ],
+      "claim": "No separate public execution of this wrapper is claimed. The enclosing evaluator guard propagates a selected property-match marker through nested evaluation and returns UnsupportedCapability; the direct shape is the executable representative."
+    },
+    {
+      "test": "keywords::unevaluated_properties::tests::pattern_properties_use_the_configured_size_limit::test_case_4_true_then_expects",
+      "disposition": "The raw dependency API omits the SDK enclosing unsupported-property guard. SDK returns exact declared unsupported-capability, never the raw false validity.",
+      "support_kind": "shared-source-reasoning",
+      "support": [
+        "crates/openbindings-json-schema-evaluator/tests/contracts.rs::upstream_test_dispositions_use_the_supported_exact_ecma_u_path",
+        "crates/openbindings-json-schema-evaluator/src/lib.rs::Compiled::validate",
+        "vendor/openbindings-internal-jsonschema/src/ob_ecma.rs::Regex::is_match/top_level"
+      ],
+      "claim": "No separate public execution of this wrapper is claimed. The enclosing evaluator guard propagates a selected property-match marker through nested evaluation and returns UnsupportedCapability; the direct shape is the executable representative."
+    }
+  ]
+}

@@ -1,0 +1,538 @@
+{
+  "rule": "OBI-11",
+  "section": "10",
+  "description": "Has every schema $ref and $dynamicRef in the document resource (§3) an absolute URI or a same-document reference, and every schema $id at an OBI position an absolute URI. All of them are also well-formed URI-references per RFC 3986 §4.1 (§7.1).",
+  "notes": "Nothing within a source's or binding's content is an OBI-defined reference, whatever its spelling: a relative address or a member named $ref there is read under the source's kind, and the positives below pin that no core rule governs it.",
+  "tests": [
+    {
+      "description": "a relative address inside a source's content is read under the source's kind (outside OBI-11)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "httpApi": {
+            "kind": "example.test@1",
+            "content": {
+              "location": "openapi.json"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a member named $ref inside a source's or binding's content is not a schema reference (outside OBI-11)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "httpApi": {
+            "kind": "example.test@1",
+            "content": {
+              "$ref": "other.json#Task"
+            }
+          }
+        },
+        "bindings": {
+          "createTask.http": {
+            "operation": "createTask",
+            "source": "httpApi",
+            "content": {
+              "$ref": "#Task"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "fragment-only $ref in inline schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object"
+          }
+        },
+        "operations": {
+          "createTask": {
+            "output": {
+              "$ref": "#/schemas/Task"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "relative URI reference in schema $ref",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "output": {
+              "$ref": "./schemas.json#/Task"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-11"
+      ]
+    },
+    {
+      "description": "URI containing a backtick in schema $ref",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object"
+          }
+        },
+        "operations": {
+          "createTask": {
+            "output": {
+              "$ref": "#/schemas/`Task`"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-11"
+      ]
+    },
+    {
+      "description": "a percent-encoded same-document fragment identifies the same schema after URI-fragment decoding and JSON Pointer evaluation",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "#/schemas/T%61sk"
+            }
+          }
+        },
+        "schemas": {
+          "Task": {
+            "type": "object"
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "same-document JSON Pointer fragment $ref",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "#/schemas/Task"
+            }
+          }
+        },
+        "schemas": {
+          "Task": {
+            "type": "object"
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a same-document plain-name fragment at an OBI position is a same-document reference; the name belongs to the document's resource",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "#task"
+            }
+          }
+        },
+        "schemas": {
+          "Task": {
+            "$anchor": "task",
+            "type": "object"
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a plain-name fragment inside an embedded $id-declaring schema resolves against that resource (the form constraints apply at OBI positions)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "https://example.com/task.schema.json"
+            }
+          }
+        },
+        "schemas": {
+          "Task": {
+            "$id": "https://example.com/task.schema.json",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "$ref": "#kindAnchor"
+              }
+            },
+            "$defs": {
+              "kind": {
+                "$anchor": "kindAnchor",
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a same-document $dynamicRef at an OBI position (JSON Schema 2020-12 resolves it; its form is all this rule concerns)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getTask": {
+            "output": {
+              "$dynamicRef": "#node"
+            }
+          }
+        },
+        "schemas": {
+          "Node": {
+            "$dynamicAnchor": "node",
+            "type": "object"
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a $dynamicAnchor at an OBI position is JSON Schema's to resolve",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "#/schemas/Task"
+            }
+          }
+        },
+        "schemas": {
+          "Task": {
+            "$dynamicAnchor": "task",
+            "type": "object"
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "dynamic pair inside an embedded $id-declaring schema resolves against that resource (full 2020-12 semantics, e.g. recursive extension)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "https://example.com/tree.schema.json"
+            }
+          }
+        },
+        "schemas": {
+          "Tree": {
+            "$id": "https://example.com/tree.schema.json",
+            "$dynamicAnchor": "node",
+            "type": "object",
+            "properties": {
+              "children": {
+                "type": "array",
+                "items": {
+                  "$dynamicRef": "#node"
+                }
+              }
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a nested relative $id inside an embedded $id-declaring schema resolves against the resource base per 2020-12 (the form constraints apply at OBI positions)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "https://example.com/task.schema.json"
+            }
+          }
+        },
+        "schemas": {
+          "Task": {
+            "$id": "https://example.com/task.schema.json",
+            "type": "object",
+            "$defs": {
+              "kind": {
+                "$id": "kind.schema.json",
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a property NAMED $dynamicRef under properties is data, not a keyword (keyword-position guard)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getTask": {
+            "output": {
+              "type": "object",
+              "properties": {
+                "$dynamicRef": {
+                  "type": "string"
+                },
+                "$dynamicAnchor": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "an absolute-URI $ref with a plain-name fragment addresses an external schema and is allowed at an OBI position",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "input": {
+              "$ref": "https://schemas.example.invalid/task.json#Task"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a relative $ref on the schema object that declares an $id resolves against that $id: the declaring object's own keywords are resource-internal",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "$id": "https://example.com/task.schema.json",
+            "$ref": "base.schema.json"
+          }
+        },
+        "operations": {
+          "createTask": {
+            "input": {
+              "$ref": "https://example.com/task.schema.json"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a relative $dynamicRef at an OBI position would resolve against the retrieval URI",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getTree": {
+            "output": {
+              "$dynamicRef": "tree.schema.json#node"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-11"
+      ]
+    },
+    {
+      "description": "an absolute $ref to an external schema carries whatever fragment its target defines",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "https://schemas.example.invalid/task.json#1task"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a relative $id at an OBI position would resolve against the location the document was obtained from",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "$id": "task.schema.json",
+            "type": "object"
+          }
+        },
+        "operations": {
+          "f": {}
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-11"
+      ]
+    },
+    {
+      "description": "a plain-name fragment alone is a same-document reference in a permitted form",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "$anchor": "task",
+            "type": "object"
+          }
+        },
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#task"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a relative $ref under the legacy definitions keyword is at an OBI position, since the 2020-12 meta-schema validates it as a schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "f": {
+            "input": {
+              "definitions": {
+                "X": {
+                  "$ref": "relative.json"
+                }
+              }
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-11"
+      ]
+    },
+    {
+      "description": "a string that is not a well-formed URI-reference (a raw space) is not a reference of any form: it violates OBI-11, and OBI-12 does not govern it (section 7.1)",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "properties": {
+              "my type": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/Task/properties/my type"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-11"
+      ],
+      "notViolated": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a fragment with a broken percent escape (#%ZZ) is not a well-formed URI-reference, so OBI-12 does not govern it (section 7.1)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#%ZZ"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-11"
+      ],
+      "notViolated": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a relative $id on a subschema under properties is at an OBI position, since the walk enters the properties of a schema that declares no $id",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "f": {}
+        },
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$id": "id.json",
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-11"
+      ]
+    },
+    {
+      "description": "two schemas at OBI positions declaring the same relative $id violate OBI-11 only: a relative $id at an OBI position has no enclosing $id to resolve against, so OBI-13 leaves it out of the comparison (section 10)",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "$id": "a.json"
+          },
+          "B": {
+            "$id": "a.json"
+          }
+        },
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-11"
+      ],
+      "notViolated": [
+        "OBI-13"
+      ]
+    }
+  ]
+}

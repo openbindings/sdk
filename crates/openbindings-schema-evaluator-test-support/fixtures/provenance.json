@@ -1,0 +1,44 @@
+{
+  "go_commit": "c5c6076fcf6bcf30a428c70c00bb4f3cbf6447df",
+  "suite_commit": "5b0ee1613e45fcc2bddac00e07c19cd49b00d8a8",
+  "export_sha256": "c7c56d3c379ccf62ebce1e414a50edc868bde5ebf2395b283c7de5c0ab1caaeb",
+  "fixture_sha256": "de2b34abd3e8e8591e49ab55ab9ce0b2007ef01647abe398380667555b549a53",
+  "groups": 496,
+  "cases": 1566,
+  "resources": 86,
+  "intentional_translations": [
+    {
+      "case": "adversarial/scope-wrappers/1",
+      "change": "also accept the original-location nested member diagnostic alone",
+      "authority": "Aligned ARCHITECTURE outcome/diagnostic minimum explicitly permits differing multiplicity; no exhaustive-problems mode is shipped"
+    },
+    {
+      "case": "adversarial/case-variant-collision/0",
+      "change": "exact identifier resolves to integer schema; string mismatches",
+      "authority": "OBI 7.4 exact identifier comparison; removes Go normalization-collision conservative policy"
+    }
+  ],
+  "optional_capability_cases": {
+    "suite/draft2020-12/optional/ecmascript-regex.json#10/0 patterns always use unicode semantics with pattern/ascii character in json string": "unicode-property-matching",
+    "suite/draft2020-12/optional/ecmascript-regex.json#10/1 patterns always use unicode semantics with pattern/literal unicode character in json string": "unicode-property-matching",
+    "suite/draft2020-12/optional/ecmascript-regex.json#10/2 patterns always use unicode semantics with pattern/unicode character in hex format in string": "unicode-property-matching",
+    "suite/draft2020-12/optional/ecmascript-regex.json#10/3 patterns always use unicode semantics with pattern/unicode matching is case-sensitive": "unicode-property-matching",
+    "suite/draft2020-12/optional/ecmascript-regex.json#14/0 pattern with non-ASCII digits/ascii digits": "unicode-property-matching",
+    "suite/draft2020-12/optional/ecmascript-regex.json#14/1 pattern with non-ASCII digits/ascii non-digits": "unicode-property-matching",
+    "suite/draft2020-12/optional/ecmascript-regex.json#14/2 pattern with non-ASCII digits/non-ascii digits (BENGALI DIGIT FOUR, BENGALI DIGIT TWO)": "unicode-property-matching",
+    "suite/draft2020-12/optional/ecmascript-regex.json#15/0 patterns always use unicode semantics with patternProperties/ascii character in json string": "unicode-property-matching",
+    "suite/draft2020-12/optional/ecmascript-regex.json#15/1 patterns always use unicode semantics with patternProperties/literal unicode character in json string": "unicode-property-matching",
+    "suite/draft2020-12/optional/ecmascript-regex.json#15/2 patterns always use unicode semantics with patternProperties/unicode character in hex format in string": "unicode-property-matching",
+    "suite/draft2020-12/optional/ecmascript-regex.json#15/3 patterns always use unicode semantics with patternProperties/unicode matching is case-sensitive": "unicode-property-matching",
+    "suite/draft2020-12/optional/ecmascript-regex.json#19/0 patternProperties with non-ASCII digits/ascii digits": "unicode-property-matching",
+    "suite/draft2020-12/optional/ecmascript-regex.json#19/1 patternProperties with non-ASCII digits/ascii non-digits": "unicode-property-matching",
+    "suite/draft2020-12/optional/ecmascript-regex.json#19/2 patternProperties with non-ASCII digits/non-ascii digits (BENGALI DIGIT FOUR, BENGALI DIGIT TWO)": "unicode-property-matching",
+    "suite/draft2020-12/pattern.json#2/0 pattern with Unicode property escape requires unicode mode/ASCII letters match": "unicode-property-matching",
+    "suite/draft2020-12/pattern.json#2/1 pattern with Unicode property escape requires unicode mode/Non-ASCII letters match": "unicode-property-matching",
+    "suite/draft2020-12/pattern.json#2/2 pattern with Unicode property escape requires unicode mode/Digits do not match": "unicode-property-matching",
+    "suite/draft2020-12/patternProperties.json#5/0 patternProperties with Unicode property escape/Unicode letter property name matches": "unicode-property-matching",
+    "suite/draft2020-12/patternProperties.json#5/1 patternProperties with Unicode property escape/Non-letter property name does not match pattern": "unicode-property-matching",
+    "adversarial/lazy-property-escape-not/1": "unicode-property-matching",
+    "adversarial/lazy-pattern-properties/2": "unicode-property-matching"
+  }
+}

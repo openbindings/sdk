@@ -1,0 +1,17 @@
+OpenBindings Rust SDK
+Copyright 2026 The OpenBindings Authors
+
+Applies the OpenBindings 0.2 specification working draft at
+2f7d754dc2da374058cd517064c17e50f7d95d99.
+The optional HTTP discovery companion is version 0.1.0 at that revision.
+The implementation was informed by the Apache-2.0 Go SDK at
+c5c6076fcf6bcf30a428c70c00bb4f3cbf6447df; it is not a source-identical port.
+
+Third-party runtime/build dependency licenses and notices are reproduced in
+THIRD-PARTY-NOTICES.txt and catalogued in DEPENDENCIES.json. The TypeScript
+archive also includes the Rust standard library's attribution under licenses/.
+The embedded JSON Schema 2020-12 meta-schema copies came from
+https://github.com/santhosh-tekuri/jsonschema/tree/v6.0.3
+and retain that package's Apache-2.0 license under schemas/ or licenses/.
+The evaluator test-support fixture package preserves its JSON Schema Test Suite
+MIT notice and Go SDK license beside the imported fixtures.

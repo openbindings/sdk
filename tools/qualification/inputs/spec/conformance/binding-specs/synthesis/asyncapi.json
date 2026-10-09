@@ -1,0 +1,2602 @@
+{
+  "format": "openbindings.binding-spec-synthesis-scenarios@4",
+  "bindingSpec": "openbindings.asyncapi@1",
+  "family": "asyncapi",
+  "description": "AsyncAPI operation, message, reply-message, and protocol-cell accounting.",
+  "scenarios": [
+    {
+      "id": "ASYNC-SS-01",
+      "description": "A publish target remains represented while every governing message, reply message, and effective server/protocol cell receives a disposition. Under the routed-envelope ruling (2026-08-14) a message alternative declaring headers is REPRESENTED: declared headers are application data riding the envelope beside the payload, no longer an asyncapi.message_headers exclusion, so this cell is fully represented.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "Events",
+            "version": "1"
+          },
+          "servers": {
+            "http": {
+              "host": "api.example",
+              "protocol": "https"
+            },
+            "ws": {
+              "host": "api.example",
+              "protocol": "wss"
+            },
+            "broker": {
+              "host": "api.example",
+              "protocol": "mqtt"
+            }
+          },
+          "channels": {
+            "events": {
+              "address": "/events",
+              "messages": {
+                "good": {
+                  "payload": {
+                    "type": "object"
+                  }
+                },
+                "headers": {
+                  "headers": {
+                    "type": "object"
+                  },
+                  "payload": {
+                    "type": "object"
+                  }
+                }
+              }
+            },
+            "replies": {
+              "messages": {
+                "reply": {
+                  "payload": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "publish": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/events"
+              },
+              "bindings": {
+                "http": {
+                  "method": "POST"
+                }
+              },
+              "reply": {
+                "channel": {
+                  "$ref": "#/channels/replies"
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publish"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publish",
+            "bindingSelector": "#/operations/publish"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publish#message[0]=#/channels/events/messages/good",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publish",
+              "bindingSelector": "#/operations/publish",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publish#message[1]=#/channels/events/messages/headers",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publish",
+              "bindingSelector": "#/operations/publish",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publish#reply-message[0]=#/channels/replies/messages/reply",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publish",
+              "bindingSelector": "#/operations/publish",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publish#server[0]=broker",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publish",
+              "bindingSelector": "#/operations/publish",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publish#server[1]=http",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publish",
+              "bindingSelector": "#/operations/publish",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publish#server[2]=ws",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publish",
+              "bindingSelector": "#/operations/publish",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publish",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publish",
+              "bindingSelector": "#/operations/publish",
+              "requirements": [
+                "configuration.message",
+                "configuration.server"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-02",
+      "description": "An unincorporated AsyncAPI edition is refused rather than accepted by major-line inference.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.1",
+          "info": {
+            "title": "Future patch",
+            "version": "1"
+          },
+          "channels": {},
+          "operations": {}
+        }
+      },
+      "expected": {
+        "outcome": "refused",
+        "rules": [
+          "ASYNC-P-01"
+        ]
+      }
+    },
+    {
+      "id": "ASYNC-SS-03",
+      "description": "A reply-bearing send synthesizes both application directions independently of installed driver capability.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "Reply-bearing send",
+            "version": "1"
+          },
+          "servers": {
+            "ws": {
+              "host": "events.example",
+              "protocol": "wss"
+            }
+          },
+          "channels": {
+            "events": {
+              "address": "/events",
+              "messages": {
+                "event": {
+                  "payload": {
+                    "type": "object"
+                  }
+                }
+              }
+            },
+            "commands": {
+              "address": "/commands",
+              "messages": {
+                "command": {
+                  "payload": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "subscribe": {
+              "action": "send",
+              "channel": {
+                "$ref": "#/channels/events"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/events/messages/event"
+                }
+              ],
+              "reply": {
+                "messages": [
+                  {
+                    "$ref": "#/channels/commands/messages/command"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "subscribe"
+        ],
+        "bindings": [
+          {
+            "operationKey": "subscribe",
+            "bindingSelector": "#/operations/subscribe"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/subscribe",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "subscribe",
+              "bindingSelector": "#/operations/subscribe",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/subscribe#message[0]=#/channels/events/messages/event",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "subscribe",
+              "bindingSelector": "#/operations/subscribe",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/subscribe#reply-message[0]=#/channels/commands/messages/command",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "subscribe",
+              "bindingSelector": "#/operations/subscribe",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/subscribe#server[0]=ws",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "subscribe",
+              "bindingSelector": "#/operations/subscribe",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-04",
+      "description": "A reply declared as a Reference Object into components.replies synthesizes identically to the inline reply form, including the declared reply-message identity.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "Reply declared by reference",
+            "version": "1"
+          },
+          "servers": {
+            "ws": {
+              "host": "events.example",
+              "protocol": "wss"
+            }
+          },
+          "channels": {
+            "events": {
+              "address": "/events",
+              "messages": {
+                "event": {
+                  "payload": {
+                    "type": "object"
+                  }
+                }
+              }
+            },
+            "commands": {
+              "address": "/commands",
+              "messages": {
+                "command": {
+                  "payload": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "subscribe": {
+              "action": "send",
+              "channel": {
+                "$ref": "#/channels/events"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/events/messages/event"
+                }
+              ],
+              "reply": {
+                "$ref": "#/components/replies/commandReply"
+              }
+            }
+          },
+          "components": {
+            "replies": {
+              "commandReply": {
+                "messages": [
+                  {
+                    "$ref": "#/channels/commands/messages/command"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "subscribe"
+        ],
+        "bindings": [
+          {
+            "operationKey": "subscribe",
+            "bindingSelector": "#/operations/subscribe"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/subscribe",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "subscribe",
+              "bindingSelector": "#/operations/subscribe",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/subscribe#message[0]=#/channels/events/messages/event",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "subscribe",
+              "bindingSelector": "#/operations/subscribe",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/subscribe#reply-message[0]=#/channels/commands/messages/command",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "subscribe",
+              "bindingSelector": "#/operations/subscribe",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/subscribe#server[0]=ws",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "subscribe",
+              "bindingSelector": "#/operations/subscribe",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-05",
+      "description": "An artifact whose payload schemas use Draft-07 spellings the OBI dialect changed (tuple items, additionalItems, dependencies, a declared $schema) synthesizes fully represented: Schema Objects enter OBI positions under semantic-preserving dialect translation, never verbatim copy and never whole-artifact refusal.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "Draft-07 spellings",
+            "version": "1"
+          },
+          "servers": {
+            "ws": {
+              "host": "events.example",
+              "protocol": "wss"
+            }
+          },
+          "channels": {
+            "events": {
+              "address": "/events",
+              "messages": {
+                "event": {
+                  "payload": {
+                    "$schema": "http://json-schema.org/draft-07/schema#",
+                    "type": "object",
+                    "properties": {
+                      "pair": {
+                        "type": "array",
+                        "items": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "integer"
+                          }
+                        ],
+                        "additionalItems": {
+                          "type": "boolean"
+                        }
+                      },
+                      "card": {
+                        "type": "string"
+                      }
+                    },
+                    "dependencies": {
+                      "card": [
+                        "cvv"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "publishEvent": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/events"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/events/messages/event"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publishEvent"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publishEvent",
+            "bindingSelector": "#/operations/publishEvent"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent#message[0]=#/channels/events/messages/event",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent#server[0]=ws",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-06",
+      "description": "Declared binary media (application/octet-stream) is invocable through the artifact-authorized byte rule (ruled 2026-08-13): exact octets cross the boundary as the canonical Base64 string. This artifact's author declared exactly the boundary schema ({type: string, contentEncoding: base64}), so nothing is lost and the artifact is fully represented. Consumer codec hooks are the enrichment path to logical values; a declared contract that differs from the boundary schema accounts lossy instead (ASYNC-SS-19).",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "Foreign representation",
+            "version": "1"
+          },
+          "servers": {
+            "broker": {
+              "host": "broker.example:9092",
+              "protocol": "kafka"
+            }
+          },
+          "channels": {
+            "records": {
+              "address": "records.v1",
+              "messages": {
+                "record": {
+                  "contentType": "application/octet-stream",
+                  "payload": {
+                    "type": "string",
+                    "contentEncoding": "base64"
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "publishRecord": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/records"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/records/messages/record"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publishRecord"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publishRecord",
+            "bindingSelector": "#/operations/publishRecord"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishRecord",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publishRecord",
+              "bindingSelector": "#/operations/publishRecord",
+              "requirements": [
+                "configuration.server"
+              ]
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishRecord#message[0]=#/channels/records/messages/record",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishRecord",
+              "bindingSelector": "#/operations/publishRecord",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishRecord#server[0]=broker",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishRecord",
+              "bindingSelector": "#/operations/publishRecord",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-07",
+      "description": "An AsyncAPI 3 Multi Format Schema Object declaring the Avro schema format crosses the boundary as logical application values under the named Avro correspondence (ruled 2026-08-14): the direction's schema derives from the Avro schema as the JSON Schema of its Avro-JSON-encoded data, and the artifact is fully represented \u2014 no longer lossy. (Formerly this cell pinned the pre-correspondence lossy accounting.)",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "Foreign schema language",
+            "version": "1"
+          },
+          "servers": {
+            "broker": {
+              "host": "broker.example:9092",
+              "protocol": "kafka"
+            }
+          },
+          "channels": {
+            "records": {
+              "address": "records.v1",
+              "messages": {
+                "record": {
+                  "payload": {
+                    "schemaFormat": "application/vnd.apache.avro;version=1.9.0",
+                    "schema": {
+                      "type": "record",
+                      "name": "Record",
+                      "fields": [
+                        {
+                          "name": "id",
+                          "type": "long"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "publishRecord": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/records"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/records/messages/record"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publishRecord"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publishRecord",
+            "bindingSelector": "#/operations/publishRecord"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishRecord",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publishRecord",
+              "bindingSelector": "#/operations/publishRecord",
+              "requirements": [
+                "configuration.server"
+              ]
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishRecord#message[0]=#/channels/records/messages/record",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishRecord",
+              "bindingSelector": "#/operations/publishRecord",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishRecord#server[0]=broker",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishRecord",
+              "bindingSelector": "#/operations/publishRecord",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-08",
+      "description": "An AsyncAPI 3 Multi Format Schema Object declaring the official JSON Schema Draft-07 media type unwraps to its schema member, which enters the OBI under dialect translation: the wrapper is never emitted as the schema (its schemaFormat/schema members are not 2020-12 vocabulary and would bury the real contract while validating as unconstrained), and the artifact is fully represented.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "Multi-format Draft-07",
+            "version": "1"
+          },
+          "servers": {
+            "broker": {
+              "host": "broker.example:9092",
+              "protocol": "kafka"
+            }
+          },
+          "channels": {
+            "records": {
+              "address": "records.v1",
+              "messages": {
+                "record": {
+                  "payload": {
+                    "schemaFormat": "application/schema+json;version=draft-07",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "pair": {
+                          "type": "array",
+                          "items": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "integer"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "pair"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "publishRecord": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/records"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/records/messages/record"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publishRecord"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publishRecord",
+            "bindingSelector": "#/operations/publishRecord"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishRecord",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publishRecord",
+              "bindingSelector": "#/operations/publishRecord",
+              "requirements": [
+                "configuration.server"
+              ]
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishRecord#message[0]=#/channels/records/messages/record",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishRecord",
+              "bindingSelector": "#/operations/publishRecord",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishRecord#server[0]=broker",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishRecord",
+              "bindingSelector": "#/operations/publishRecord",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-09",
+      "description": "An operation declared in components.operations and referenced from the operations map synthesizes identically to the inline form: the operations-map entry resolves through the reference before the operation-object test, and the binding selector remains the operations-map pointer.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "t",
+            "version": "1"
+          },
+          "servers": {
+            "ws": {
+              "host": "x.example",
+              "protocol": "wss"
+            }
+          },
+          "channels": {
+            "events": {
+              "address": "/events",
+              "messages": {
+                "event": {
+                  "payload": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "publishEvent": {
+              "$ref": "#/components/operations/realPublish"
+            }
+          },
+          "components": {
+            "operations": {
+              "realPublish": {
+                "action": "receive",
+                "channel": {
+                  "$ref": "#/channels/events"
+                },
+                "messages": [
+                  {
+                    "$ref": "#/channels/events/messages/event"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publishEvent"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publishEvent",
+            "bindingSelector": "#/operations/publishEvent"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent#message[0]=#/channels/events/messages/event",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent#server[0]=ws",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-10",
+      "description": "A channels-map entry declared as a Reference Object into components.channels synthesizes identically to the inline channel: message inventory, server effectivity, and coverage identity survive the spelling.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "t",
+            "version": "1"
+          },
+          "servers": {
+            "ws": {
+              "host": "x.example",
+              "protocol": "wss"
+            }
+          },
+          "channels": {
+            "events": {
+              "$ref": "#/components/channels/eventsChannel"
+            }
+          },
+          "operations": {
+            "publishEvent": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/events"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/events/messages/event"
+                }
+              ]
+            }
+          },
+          "components": {
+            "channels": {
+              "eventsChannel": {
+                "address": "/events",
+                "messages": {
+                  "event": {
+                    "payload": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publishEvent"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publishEvent",
+            "bindingSelector": "#/operations/publishEvent"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent#message[0]=#/channels/events/messages/event",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent#server[0]=ws",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-11",
+      "description": "A channel message declared as a Reference Object into components.messages synthesizes identically to the inline message, and coverage retains the artifact's deepest declared message address.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "t",
+            "version": "1"
+          },
+          "servers": {
+            "ws": {
+              "host": "x.example",
+              "protocol": "wss"
+            }
+          },
+          "channels": {
+            "events": {
+              "address": "/events",
+              "messages": {
+                "event": {
+                  "$ref": "#/components/messages/event"
+                }
+              }
+            }
+          },
+          "operations": {
+            "publishEvent": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/events"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/events/messages/event"
+                }
+              ]
+            }
+          },
+          "components": {
+            "messages": {
+              "event": {
+                "payload": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publishEvent"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publishEvent",
+            "bindingSelector": "#/operations/publishEvent"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent#message[0]=#/channels/events/messages/event",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent#server[0]=ws",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-12",
+      "description": "A channel's servers subset (Reference Objects into the servers map) restricts the effective servers: only the referenced member appears as a server alternative, and a single effective server needs no configuration choice.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "t",
+            "version": "1"
+          },
+          "servers": {
+            "ws": {
+              "host": "x.example",
+              "protocol": "wss"
+            },
+            "broker": {
+              "host": "b.example:9092",
+              "protocol": "kafka"
+            }
+          },
+          "channels": {
+            "events": {
+              "address": "/events",
+              "servers": [
+                {
+                  "$ref": "#/servers/ws"
+                }
+              ],
+              "messages": {
+                "event": {
+                  "payload": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "publishEvent": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/events"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/events/messages/event"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publishEvent"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publishEvent",
+            "bindingSelector": "#/operations/publishEvent"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent#message[0]=#/channels/events/messages/event",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent#server[0]=ws",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-13",
+      "description": "A message payload declared as a reference into components.schemas resolves before schema copy: the OBI carries the resolved, translated schema, never a dangling pointer.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "t",
+            "version": "1"
+          },
+          "servers": {
+            "ws": {
+              "host": "x.example",
+              "protocol": "wss"
+            }
+          },
+          "channels": {
+            "events": {
+              "address": "/events",
+              "messages": {
+                "event": {
+                  "payload": {
+                    "$ref": "#/components/schemas/Event"
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "publishEvent": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/events"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/events/messages/event"
+                }
+              ]
+            }
+          },
+          "components": {
+            "schemas": {
+              "Event": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publishEvent"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publishEvent",
+            "bindingSelector": "#/operations/publishEvent"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent#message[0]=#/channels/events/messages/event",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent#server[0]=ws",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-14",
+      "description": "A message trait supplying contentType merges before carriage evaluation: the trait-declared JSON content type keeps the direction fully represented rather than floored.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "t",
+            "version": "1"
+          },
+          "servers": {
+            "ws": {
+              "host": "x.example",
+              "protocol": "wss"
+            }
+          },
+          "channels": {
+            "events": {
+              "address": "/events",
+              "messages": {
+                "event": {
+                  "traits": [
+                    {
+                      "$ref": "#/components/messageTraits/jsonish"
+                    }
+                  ],
+                  "payload": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "publishEvent": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/events"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/events/messages/event"
+                }
+              ]
+            }
+          },
+          "components": {
+            "messageTraits": {
+              "jsonish": {
+                "contentType": "application/json"
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publishEvent"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publishEvent",
+            "bindingSelector": "#/operations/publishEvent"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent#message[0]=#/channels/events/messages/event",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent#server[0]=ws",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-15",
+      "description": "A payload referencing a self-recursive components schema synthesizes with the cycle hoisted into the operation schema's $defs and every surviving reference rewritten to point there: the recursion the artifact declared survives the projection, the emitted interface is valid and its references resolve, and the artifact is fully represented \u2014 never a whole-artifact refusal.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "Recursive schema",
+            "version": "1"
+          },
+          "servers": {
+            "broker": {
+              "host": "broker.example:9092",
+              "protocol": "kafka"
+            }
+          },
+          "channels": {
+            "trees": {
+              "address": "trees.v1",
+              "messages": {
+                "node": {
+                  "payload": {
+                    "$ref": "#/components/schemas/TreeNode"
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "publishNode": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/trees"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/trees/messages/node"
+                }
+              ]
+            }
+          },
+          "components": {
+            "schemas": {
+              "TreeNode": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "children": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/TreeNode"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publishNode"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publishNode",
+            "bindingSelector": "#/operations/publishNode"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishNode",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publishNode",
+              "bindingSelector": "#/operations/publishNode",
+              "requirements": [
+                "configuration.server"
+              ]
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishNode#message[0]=#/channels/trees/messages/node",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishNode",
+              "bindingSelector": "#/operations/publishNode",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishNode#server[0]=broker",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishNode",
+              "bindingSelector": "#/operations/publishNode",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-16",
+      "description": "A payload declaration invalid under its own declared dialect (minimum: true is ill-formed in every accepted edition's Schema Object) is the artifact's defect, confined to exactly the affected operation (ASYNC-P-05): that target is invalid with asyncapi.payload_schema_invalid, its alternatives cascade, and the sibling operation synthesizes untouched \u2014 never a whole-artifact refusal.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "Confined schema defect",
+            "version": "1"
+          },
+          "servers": {
+            "broker": {
+              "host": "broker.example:9092",
+              "protocol": "kafka"
+            }
+          },
+          "channels": {
+            "bad": {
+              "address": "bad.v1",
+              "messages": {
+                "m": {
+                  "payload": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "integer",
+                        "minimum": true
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "good": {
+              "address": "good.v1",
+              "messages": {
+                "m": {
+                  "payload": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "publishBad": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/bad"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/bad/messages/m"
+                }
+              ]
+            },
+            "publishGood": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/good"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/good/messages/m"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publishGood"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publishGood",
+            "bindingSelector": "#/operations/publishGood"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": false,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishBad",
+              "scope": "target",
+              "status": "invalid",
+              "reasonCode": "asyncapi.payload_schema_invalid",
+              "rule": "ASYNC-P-05",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishBad#message[0]=#/channels/bad/messages/m",
+              "scope": "alternative",
+              "status": "excluded",
+              "reasonCode": "asyncapi.parent_target_excluded",
+              "rule": "ASYNC-P-05",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishBad#server[0]=broker",
+              "scope": "alternative",
+              "status": "excluded",
+              "reasonCode": "asyncapi.parent_target_excluded",
+              "rule": "ASYNC-P-02",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishGood",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publishGood",
+              "bindingSelector": "#/operations/publishGood",
+              "requirements": [
+                "configuration.server"
+              ]
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishGood#message[0]=#/channels/good/messages/m",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishGood",
+              "bindingSelector": "#/operations/publishGood",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishGood#server[0]=broker",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishGood",
+              "bindingSelector": "#/operations/publishGood",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-17",
+      "description": "prefixItems is not vocabulary in any accepted edition's default Schema Object, so the author's dialect ignored it; an empty array carried verbatim into 2020-12 would turn that inert annotation into an ill-formed keyword. Translation drops the empty spelling (preserving the declared no-op semantics exactly) and the artifact stays fully represented.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "Empty tuple annotation",
+            "version": "1"
+          },
+          "servers": {
+            "broker": {
+              "host": "broker.example:9092",
+              "protocol": "kafka"
+            }
+          },
+          "channels": {
+            "pings": {
+              "address": "pings.v1",
+              "messages": {
+                "ping": {
+                  "payload": {
+                    "type": "array",
+                    "prefixItems": [],
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "publishPing": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/pings"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/pings/messages/ping"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publishPing"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publishPing",
+            "bindingSelector": "#/operations/publishPing"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishPing",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publishPing",
+              "bindingSelector": "#/operations/publishPing",
+              "requirements": [
+                "configuration.server"
+              ]
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishPing#message[0]=#/channels/pings/messages/ping",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishPing",
+              "bindingSelector": "#/operations/publishPing",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishPing#server[0]=broker",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishPing",
+              "bindingSelector": "#/operations/publishPing",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-18",
+      "description": "An artifact that declares no server at all still names a complete operation target (ASYNC-P-04, ruled 2026-08-13): a server is reachability, not identity. The operation synthesizes with a configuration.server requirement \u2014 never a synthesis exclusion \u2014 and invocation obtains the connection target through the CONTEXT_REQUIRED context negotiation before any observable dispatch.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "Serverless contract",
+            "version": "1"
+          },
+          "channels": {
+            "events": {
+              "address": "events.v1",
+              "messages": {
+                "event": {
+                  "payload": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "publishEvent": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/events"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/events/messages/event"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publishEvent"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publishEvent",
+            "bindingSelector": "#/operations/publishEvent"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": [
+                "configuration.server"
+              ]
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishEvent#message[0]=#/channels/events/messages/event",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishEvent",
+              "bindingSelector": "#/operations/publishEvent",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-19",
+      "description": "Binary media with a declared Avro contract crosses the boundary as logical application values under the named Avro correspondence (ruled 2026-08-14): the schema derives from the Avro schema, the wire carries the Avro binary encoding through the qualified codec, and the artifact is fully represented. (Formerly this cell pinned the byte-boundary lossy accounting the correspondence supersedes.)",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "Avro over the byte boundary",
+            "version": "1"
+          },
+          "servers": {
+            "broker": {
+              "host": "broker.example:9092",
+              "protocol": "kafka"
+            }
+          },
+          "channels": {
+            "records": {
+              "address": "records.v1",
+              "messages": {
+                "record": {
+                  "contentType": "application/avro",
+                  "payload": {
+                    "schemaFormat": "application/vnd.apache.avro;version=1.9.0",
+                    "schema": {
+                      "type": "record",
+                      "name": "Record",
+                      "fields": [
+                        {
+                          "name": "id",
+                          "type": "long"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "publishRecord": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/records"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/records/messages/record"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publishRecord"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publishRecord",
+            "bindingSelector": "#/operations/publishRecord"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishRecord",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publishRecord",
+              "bindingSelector": "#/operations/publishRecord",
+              "requirements": [
+                "configuration.server"
+              ]
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishRecord#message[0]=#/channels/records/messages/record",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishRecord",
+              "bindingSelector": "#/operations/publishRecord",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishRecord#server[0]=broker",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishRecord",
+              "bindingSelector": "#/operations/publishRecord",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-20",
+      "description": "Avro named-type reuse: a record declares an enum inline and later fields reference it by name. The derivation materializes the named type once under the operation schema's $defs and every reference -- including references inside $defs members, which ride beside the derived root's own $ref -- rebases onto the operation pointer. The operation is fully represented; a synthesizer that leaves any derivation ref unrebased emits a dangling pointer and wrongly excludes the operation.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "Reused named types",
+            "version": "1"
+          },
+          "servers": {
+            "broker": {
+              "host": "broker.example:9092",
+              "protocol": "kafka"
+            }
+          },
+          "channels": {
+            "records": {
+              "address": "records.v1",
+              "messages": {
+                "record": {
+                  "payload": {
+                    "schemaFormat": "application/vnd.apache.avro;version=1.9.0",
+                    "schema": {
+                      "type": "record",
+                      "name": "ParentRecord",
+                      "fields": [
+                        {
+                          "name": "first",
+                          "type": {
+                            "type": "enum",
+                            "name": "Suit",
+                            "symbols": [
+                              "SPADES",
+                              "HEARTS"
+                            ]
+                          }
+                        },
+                        {
+                          "name": "second",
+                          "type": "Suit"
+                        },
+                        {
+                          "name": "maybe",
+                          "type": [
+                            "null",
+                            "Suit"
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "publishRecord": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/records"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/records/messages/record"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publishRecord"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publishRecord",
+            "bindingSelector": "#/operations/publishRecord"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishRecord#message[0]=#/channels/records/messages/record",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishRecord",
+              "bindingSelector": "#/operations/publishRecord",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishRecord#server[0]=broker",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishRecord",
+              "bindingSelector": "#/operations/publishRecord",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishRecord",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publishRecord",
+              "bindingSelector": "#/operations/publishRecord",
+              "requirements": [
+                "configuration.server"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-21",
+      "description": "Channel parameters are operation input (ruled 2026-08-14, the amortization discriminator): a location-less parameter varies per invocation, so it rides the routed envelope as a caller-input field beside the payload, optional in the schema because configuration.address.parameters remains the amortized pre-fill. The receive operation's input is the envelope {payload (required), region}; the send (subscribe) operation gains a parameter-only input envelope -- addressing data is caller input even when no payload travels. Both targets are fully represented.",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "Parameterized channel",
+            "version": "1"
+          },
+          "servers": {
+            "broker": {
+              "host": "broker.example:9092",
+              "protocol": "kafka"
+            }
+          },
+          "channels": {
+            "orders": {
+              "address": "orders/{region}",
+              "parameters": {
+                "region": {
+                  "enum": [
+                    "emea",
+                    "amer"
+                  ],
+                  "description": "Deployment region"
+                }
+              },
+              "messages": {
+                "order": {
+                  "payload": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "placeOrder": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/orders"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/orders/messages/order"
+                }
+              ]
+            },
+            "watchOrders": {
+              "action": "send",
+              "channel": {
+                "$ref": "#/channels/orders"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/orders/messages/order"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "placeOrder",
+          "watchOrders"
+        ],
+        "bindings": [
+          {
+            "operationKey": "placeOrder",
+            "bindingSelector": "#/operations/placeOrder"
+          },
+          {
+            "operationKey": "watchOrders",
+            "bindingSelector": "#/operations/watchOrders"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/placeOrder#message[0]=#/channels/orders/messages/order",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "placeOrder",
+              "bindingSelector": "#/operations/placeOrder",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/placeOrder#server[0]=broker",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "placeOrder",
+              "bindingSelector": "#/operations/placeOrder",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/watchOrders#message[0]=#/channels/orders/messages/order",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "watchOrders",
+              "bindingSelector": "#/operations/watchOrders",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/watchOrders#server[0]=broker",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "watchOrders",
+              "bindingSelector": "#/operations/watchOrders",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/placeOrder",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "placeOrder",
+              "bindingSelector": "#/operations/placeOrder",
+              "requirements": [
+                "configuration.server"
+              ]
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/watchOrders",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "watchOrders",
+              "bindingSelector": "#/operations/watchOrders",
+              "requirements": [
+                "configuration.server"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-22",
+      "description": "AsyncAPI 2.x Reference Object position admission: the 2.x Operation Object admits no Reference Object (publish/subscribe must be Operation Objects in every accepted 2.x edition), and the whole servers field is a Servers Object map, never a Reference Object. A document writing $ref at either position has no interpretation under its own declared edition and is refused whole-artifact BEFORE reference composition -- tolerating it and synthesizing a degraded OBI is the parser-tolerance divergence class the refusal converges (MC5 seal-1 finding F-V3-1).",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "2.4.0",
+          "info": {
+            "title": "Ref at operation position",
+            "version": "1"
+          },
+          "servers": {
+            "$ref": "./servers.yml"
+          },
+          "channels": {
+            "events": {
+              "publish": {
+                "$ref": "#/components/operations/publishEvents"
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "refused",
+        "rules": [
+          "ASYNC-P-01"
+        ]
+      }
+    },
+    {
+      "id": "ASYNC-SS-23",
+      "description": "AsyncAPI 2.x Reference Object position admission at a string-typed field: Channel Item description is typed `string` in every accepted 2.x edition, so a Reference Object there is not admitted and the document is refused whole-artifact before composition (the string-position cell of MC5 seal-1 finding F-V3-1).",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "2.4.0",
+          "info": {
+            "title": "Ref at string position",
+            "version": "1"
+          },
+          "channels": {
+            "events": {
+              "description": {
+                "$ref": "#/components/x-descriptions/events"
+              },
+              "subscribe": {
+                "message": {
+                  "payload": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "refused",
+        "rules": [
+          "ASYNC-P-01"
+        ]
+      }
+    },
+    {
+      "id": "ASYNC-SS-24",
+      "description": "A top-level Avro union: the Avro specification admits a JSON ARRAY as a complete schema, and the Multi Format Schema Object's schema member is untyped, so a union declared at the top level derives under the named Avro correspondence exactly like an interior union -- oneOf of the JSON Encoding's branches, null branch as the null schema, named branch under its single-key wrapper. The operation is fully represented; an implementation that demands an object schema at this position wrongly floors the direction as an inexpressible contract (the derivation cell of MC5 seal-1 finding F-V3-2).",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "Top-level Avro union",
+            "version": "1"
+          },
+          "servers": {
+            "broker": {
+              "host": "broker.example:9092",
+              "protocol": "kafka"
+            }
+          },
+          "channels": {
+            "files": {
+              "address": "files.v1",
+              "messages": {
+                "file": {
+                  "payload": {
+                    "schemaFormat": "application/vnd.apache.avro;version=1.9.0",
+                    "schema": [
+                      "null",
+                      {
+                        "type": "record",
+                        "name": "File",
+                        "fields": [
+                          {
+                            "name": "path",
+                            "type": "string"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "publishFile": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/files"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/files/messages/file"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "publishFile"
+        ],
+        "bindings": [
+          {
+            "operationKey": "publishFile",
+            "bindingSelector": "#/operations/publishFile"
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": true,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishFile",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "publishFile",
+              "bindingSelector": "#/operations/publishFile",
+              "requirements": [
+                "configuration.server"
+              ]
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishFile#message[0]=#/channels/files/messages/file",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishFile",
+              "bindingSelector": "#/operations/publishFile",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/publishFile#server[0]=broker",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "publishFile",
+              "bindingSelector": "#/operations/publishFile",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ASYNC-SS-25",
+      "description": "A payload declared under an ON-LIST foreign schema format that is not a valid schema of that language is the artifact's defect under its own declared dialect, not a conversion loss. The Avro specification's resolution scope is the single JSON parse tree \u2014 it defines no cross-document import, and its Names rule requires that \"a name must be defined before it is used\" \u2014 so an Avro record whose field names the type Item, which the schema does not define, is invalid under Avro 1.9.0 itself. On JSON-family carriage the affected direction is therefore invalid with asyncapi.payload_schema_invalid, never lossy with asyncapi.schema_format_not_convertible (whose adjudicated scope Avro left when the correspondence was incorporated) and never represented by an unconstrained schema asserting that any JSON value satisfies a contract the artifact got wrong. Confinement is exactly ASYNC-P-05's: the sibling operation, whose Avro schema is self-contained, derives and synthesizes untouched, and the artifact is not refused. The byte-carriage half of the same declaration is unchanged and stays lossy (ASYNC-SS-19).",
+      "source": {
+        "bindingSpec": "openbindings.asyncapi@1",
+        "content": {
+          "asyncapi": "3.0.0",
+          "info": {
+            "title": "On-list foreign schema, invalid under its own language",
+            "version": "1"
+          },
+          "defaultContentType": "application/json",
+          "servers": {
+            "broker": {
+              "host": "broker.example:9092",
+              "protocol": "kafka"
+            }
+          },
+          "channels": {
+            "added": {
+              "address": "cart.item.added.v1",
+              "messages": {
+                "m": {
+                  "payload": {
+                    "schemaFormat": "application/vnd.apache.avro;version=1.9.0",
+                    "schema": {
+                      "type": "record",
+                      "name": "ItemAdded",
+                      "namespace": "example.cart",
+                      "fields": [
+                        {
+                          "name": "cartId",
+                          "type": "string"
+                        },
+                        {
+                          "name": "item",
+                          "type": "Item"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "created": {
+              "address": "cart.created.v1",
+              "messages": {
+                "m": {
+                  "payload": {
+                    "schemaFormat": "application/vnd.apache.avro;version=1.9.0",
+                    "schema": {
+                      "type": "record",
+                      "name": "CartCreated",
+                      "namespace": "example.cart",
+                      "fields": [
+                        {
+                          "name": "cartId",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "operations": {
+            "onCartCreated": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/created"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/created/messages/m"
+                }
+              ]
+            },
+            "onItemAdded": {
+              "action": "receive",
+              "channel": {
+                "$ref": "#/channels/added"
+              },
+              "messages": [
+                {
+                  "$ref": "#/channels/added/messages/m"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "synthesized",
+        "operations": [
+          "onCartCreated"
+        ],
+        "bindings": [
+          {
+            "operationKey": "onCartCreated",
+            "bindingSelector": "#/operations/onCartCreated"
+          }
+        ],
+        "assertions": [
+          {
+            "path": "/operations/onItemAdded",
+            "absent": true
+          }
+        ],
+        "coverage": {
+          "exhaustive": true,
+          "fullyRepresented": false,
+          "entries": [
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/onCartCreated",
+              "scope": "target",
+              "status": "represented",
+              "operationKey": "onCartCreated",
+              "bindingSelector": "#/operations/onCartCreated",
+              "requirements": [
+                "configuration.server"
+              ]
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/onCartCreated#message[0]=#/channels/created/messages/m",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "onCartCreated",
+              "bindingSelector": "#/operations/onCartCreated",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/onCartCreated#server[0]=broker",
+              "scope": "alternative",
+              "status": "represented",
+              "operationKey": "onCartCreated",
+              "bindingSelector": "#/operations/onCartCreated",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/onItemAdded",
+              "scope": "target",
+              "status": "invalid",
+              "reasonCode": "asyncapi.payload_schema_invalid",
+              "rule": "ASYNC-P-05",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/onItemAdded#message[0]=#/channels/added/messages/m",
+              "scope": "alternative",
+              "status": "excluded",
+              "reasonCode": "asyncapi.parent_target_excluded",
+              "rule": "ASYNC-P-05",
+              "requirements": []
+            },
+            {
+              "sourceIndex": 0,
+              "sourceRef": "#/operations/onItemAdded#server[0]=broker",
+              "scope": "alternative",
+              "status": "excluded",
+              "reasonCode": "asyncapi.parent_target_excluded",
+              "rule": "ASYNC-P-02",
+              "requirements": []
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

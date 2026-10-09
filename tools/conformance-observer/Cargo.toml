@@ -1,0 +1,10 @@
+[package]
+name = "sdk-production-observer"
+version = "0.0.0"
+edition = "2024"
+[workspace]
+[dependencies]
+openbindings = { path = "../../crates/openbindings" }
+serde_json = { version = "=1.0.151", features = ["arbitrary_precision"] }
+base64 = "=0.22.1"
+openbindings-json-schema-evaluator = { path = "../../crates/openbindings-json-schema-evaluator" }

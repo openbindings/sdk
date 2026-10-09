@@ -1,0 +1,51 @@
+{
+  "name": "@openbindings/sdk",
+  "version": "0.2.0-alpha.1",
+  "type": "module",
+  "description": "Exact OpenBindings documents, contracts and optional HTTP discovery powered by Rust and WebAssembly",
+  "license": "Apache-2.0",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "examples",
+    "THIRD-PARTY-NOTICES.txt",
+    "DEPENDENCIES.json",
+    "licenses"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./http-discovery": {
+      "types": "./dist/http-discovery.d.ts",
+      "import": "./dist/http-discovery.js"
+    },
+    "./openbindings.wasm": {
+      "types": "./dist/wasm-module.d.ts",
+      "default": "./dist/wasm/openbindings_wasm_bg.wasm"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-wasm.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:types": "tsc -p tsconfig.types.json",
+    "format:check": "prettier --check src/*.ts test/* examples/* scripts/* *.json",
+    "build:wasm": "node scripts/build-wasm.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "1.64.0",
+    "prettier": "3.6.2",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openbindings/sdk.git",
+    "directory": "packages/typescript"
+  }
+}

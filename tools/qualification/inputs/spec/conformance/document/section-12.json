@@ -1,0 +1,96 @@
+{
+  "section": "12",
+  "description": "A field (section 3) whose name begins with x- is an extension; OBI documents MAY include extensions in any OBI-defined object. An extension never changes the meaning of a core field; its own meaning, if any, is defined outside this specification.",
+  "notes": "A document carrying x- fields means what the same document without them means, so the positives conform; a member beginning X- is not an extension, so the negative violates OBI-02. The scenarios observe that an extension changes no core field's meaning: an operation's identifiers and a binding's operation (5.1-names.json), a value contract (5.2-value-contracts.json), a kinds constraint (6-kinds.json), and the version a text declares (10-conformance.json).",
+  "tests": [
+    {
+      "description": "document with x- extension at the root level",
+      "document": {
+        "openbindings": "0.2.0",
+        "x-vendor-metadata": {
+          "owner": "platform-team",
+          "tags": [
+            "internal"
+          ]
+        },
+        "operations": {
+          "createTask": {}
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "document with x- extensions on operation, binding, and source",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "x-rate-limit-per-minute": 100
+          }
+        },
+        "sources": {
+          "httpApi": {
+            "kind": "example.openapi@1",
+            "x-cache-ttl-seconds": 300
+          }
+        },
+        "bindings": {
+          "createTask.http": {
+            "operation": "createTask",
+            "source": "httpApi",
+            "x-retry-policy": "exponential"
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "an x- member named like a core field (x-operations) is an extension, so the document stays conformant",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "x-operations": {
+          "spurious": "should be ignored as extension, not interpreted as the operations map"
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "x- extension nested deeply inside an operation",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "input": {
+              "type": "object"
+            },
+            "examples": {
+              "happy": {
+                "x-source": "production-traffic-sample",
+                "input": {}
+              }
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a member beginning X- is not an extension: names compare exactly, so it is a field the operation's table does not list (section 5)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "f": {
+            "X-note": "uppercase prefix"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,166 @@
+{
+  "format": "openbindings.invocation-fidelity-scenarios@1",
+  "bindingSpec": "openbindings.connect@1",
+  "family": "connect",
+  "description": "Connect fidelity scenarios with separate abstract and lower-layer assertions. Successful message values and partial-output/completion behavior form the operation proof; HTTP and END_STREAM objects, bytes, and metadata are lower-layer binding evidence.",
+  "scenarios": [
+    {
+      "id": "CONN-FI-01",
+      "rules": [
+        "CONN-P-02",
+        "CONN-P-05",
+        "CONN-P-06"
+      ],
+      "section": "9.3",
+      "description": "An error-shaped protobuf application value returned by a successful unary RPC remains an ordinary output through synthesis and operation invocation.",
+      "given": {
+        "source": {
+          "location": "https://api.example",
+          "content": "syntax = \"proto3\"; package demo; service Service { rpc Get (Request) returns (Reply); } message Request {} message Error { string code = 1; } message Reply { Error error = 1; }"
+        },
+        "binding": {
+          "selector": "demo.Service/Get"
+        },
+        "invocation": {
+          "inputPresent": true,
+          "input": {}
+        },
+        "peer": {
+          "status": 200,
+          "contentType": "application/json",
+          "bodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiUkVKRUNURUQifX0="
+        }
+      },
+      "expected": [
+        {
+          "disposition": "complete",
+          "phase": "completion",
+          "assertions": [
+            {
+              "path": "/outputs",
+              "equals": [
+                {
+                  "error": {
+                    "code": "REJECTED"
+                  }
+                }
+              ]
+            },
+            {
+              "path": "/error",
+              "absent": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CONN-FI-02",
+      "rules": [
+        "CONN-P-06"
+      ],
+      "section": "9.5",
+      "description": "A unary Connect error preserves its parsed error object and exact HTTP response bytes instead of reducing the response to a portable code.",
+      "given": {
+        "source": {
+          "location": "https://api.example",
+          "content": "syntax = \"proto3\"; package demo; service Service { rpc Get (Request) returns (Reply); } message Request {} message Error { string code = 1; } message Reply { Error error = 1; }"
+        },
+        "binding": {
+          "selector": "demo.Service/Get"
+        },
+        "invocation": {
+          "inputPresent": true,
+          "input": {}
+        },
+        "peer": {
+          "status": 401,
+          "contentType": "application/json",
+          "headers": {
+            "X-Request-Id": "req-401"
+          },
+          "bodyBase64": "eyJjb2RlIjoidW5hdXRoZW50aWNhdGVkIiwibWVzc2FnZSI6InRva2VuIGV4cGlyZWQiLCJkZXRhaWxzIjpbeyJ0eXBlIjoiZGVtby5BdXRoIiwidmFsdWUiOiJBUCtBUVE9PSJ9XX0="
+        }
+      },
+      "expected": [
+        {
+          "disposition": "error",
+          "phase": "response",
+          "assertions": [
+            {
+              "path": "/outputs",
+              "equals": []
+            },
+            {
+              "path": "/error/code",
+              "equals": "ERR_EXECUTION_FAILED"
+            },
+            {
+              "path": "/error/data",
+              "absent": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CONN-FI-03",
+      "rules": [
+        "CONN-P-04",
+        "CONN-P-05",
+        "CONN-P-06"
+      ],
+      "section": "9.5",
+      "description": "A streaming END_STREAM error retains partial outputs, the complete native error object, exact envelope payload, and trailing metadata.",
+      "given": {
+        "source": {
+          "location": "https://api.example",
+          "content": "syntax = \"proto3\"; package demo; service Service { rpc List (Request) returns (stream Reply); } message Request {} message Reply { string value = 1; }"
+        },
+        "binding": {
+          "selector": "demo.Service/List"
+        },
+        "invocation": {
+          "inputPresent": false
+        },
+        "peer": {
+          "status": 200,
+          "envelopes": [
+            {
+              "message": {
+                "value": "first"
+              }
+            },
+            {
+              "endStreamBase64": "eyJlcnJvciI6eyJjb2RlIjoicmVzb3VyY2VfZXhoYXVzdGVkIiwibWVzc2FnZSI6InF1b3RhIGV4Y2VlZGVkIiwiZGV0YWlscyI6W3sidHlwZSI6ImRlbW8uUXVvdGEiLCJ2YWx1ZSI6IkFRSUQifV19LCJtZXRhZGF0YSI6eyJ0cmFjZS1iaW4iOlsiQVArQVFRPT0iXSwieC1hdHRlbXB0IjpbIjIiLCIzIl19fQ=="
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "disposition": "error",
+          "phase": "completion",
+          "assertions": [
+            {
+              "path": "/outputs",
+              "equals": [
+                {
+                  "value": "first"
+                }
+              ]
+            },
+            {
+              "path": "/error/code",
+              "equals": "ERR_EXECUTION_FAILED"
+            },
+            {
+              "path": "/error/data",
+              "absent": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

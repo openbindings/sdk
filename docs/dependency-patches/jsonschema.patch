@@ -1,0 +1,1701 @@
+--- a/.cargo_vcs_info.json
++++ b/.cargo_vcs_info.json
+@@ -1,6 +0,0 @@
+-{
+-  "git": {
+-    "sha1": "55ac1664384793c5d3b20745d3f9c169dfe2c06f"
+-  },
+-  "path_in_vcs": "crates/jsonschema"
+-}--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -10,10 +10,11 @@
+ # See Cargo.toml.orig for the original contents.
+ 
+ [package]
++publish = false
+ edition = "2021"
+ rust-version = "1.85.0"
+-name = "jsonschema"
+-version = "0.58.6"
++name = "openbindings-internal-jsonschema"
++version = "0.58.6-ob.1"
+ authors = ["Dmitry Dygalo <dmitry@dygalo.dev>"]
+ build = false
+ autolib = false
+@@ -250,7 +251,9 @@
+ version = "0.58.6"
+ 
+ [dependencies.jsonschema-value]
+-version = "0.58.6"
++package = "openbindings-internal-jsonschema-value"
++path = "../openbindings-internal-jsonschema-value"
++version = "=0.58.6-ob.1"
+ 
+ [dependencies.magnus]
+ version = "0.9"
+@@ -398,3 +401,9 @@
+ [lints.rust]
+ unreachable_pub = "warn"
+ unsafe_code = "warn"
++
++[dependencies.regress]
++package = "openbindings-internal-regress"
++version = "=0.12.0-ob.1"
++path = "../openbindings-internal-regress"
++features = ["utf16", "prohibit-unsafe"]
+--- a/Cargo.toml.orig
++++ b/Cargo.toml.orig
+@@ -1,173 +0,0 @@
+-[package]
+-name = "jsonschema"
+-version = "0.58.6"
+-description = "JSON schema validaton library"
+-keywords = ["jsonschema", "validation"]
+-categories = ["web-programming"]
+-readme = "../../README.md"
+-license.workspace = true
+-repository.workspace = true
+-rust-version.workspace = true
+-edition.workspace = true
+-authors.workspace = true
+-
+-[features]
+-# Conformance checks for custom JSON representations (`json` module).
+-conformance = ["jsonschema-value/conformance"]
+-default = ["resolve-http", "resolve-file", "tls-aws-lc-rs", "idna"]
+-resolve-http = ["reqwest", "dep:rustls"]
+-resolve-file = []
+-resolve-async = [
+-    "referencing/retrieve-async",
+-    "reqwest",
+-    "dep:async-trait",
+-    "dep:tokio",
+-]
+-# `idn-hostname` and `idn-email` format validation.
+-idna = ["dep:idna"]
+-# Default TLS provider for HTTP resolution.
+-tls-aws-lc-rs = ["rustls/aws-lc-rs"]
+-# Use ring instead of aws-lc-rs for TLS.
+-tls-ring = ["rustls/ring"]
+-# Support for arbitrarily large integers and exact decimal values when parsing JSON from strings.
+-arbitrary-precision = ["serde_json/arbitrary_precision", "dep:num-bigint", "jsonschema-macros?/arbitrary-precision", "jsonschema-value/arbitrary-precision"]
+-# The `#[jsonschema::validator]` compile-time validator macro.
+-# `float-roundtrip` keeps the macro's schema parsing bit-identical to the runtime's.
+-macros = ["dep:jsonschema-macros", "jsonschema-macros/float-roundtrip", "jsonschema-value/macros"]
+-# The `json::Magnus` instance representation used by the Ruby bindings.
+-magnus = ["jsonschema-value/magnus", "dep:magnus"]
+-# The `json::Pyo3` instance representation used by the Python bindings.
+-pyo3 = ["jsonschema-value/pyo3", "dep:pyo3"]
+-# The `json::Jsonb` instance representation for Postgres `jsonb` values.
+-jsonb = ["jsonschema-value/jsonb"]
+-
+-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+-# Use rustls-no-provider to allow manual selection of crypto backend
+-reqwest = { version = "0.13", default-features = false, features = [
+-  "blocking",
+-  "json",
+-  "http2",
+-  "rustls-no-provider",
+-], optional = true }
+-# Crypto provider for TLS: aws-lc-rs by default, or ring when tls-ring feature is enabled
+-rustls = { version = "0.23", default-features = false, features = ["std", "tls12"], optional = true }
+-
+-[target.'cfg(target_arch = "wasm32")'.dependencies]
+-getrandom = { version = "0.3.4", features = ["wasm_js"] }
+-
+-# Mirror reqwest's wasm cfg; other wasm targets get native deps that don't build.
+-[target.'cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))'.dependencies]
+-reqwest = { version = "0.13", features = ["json"], default-features = false, optional = true }
+-
+-[dependencies]
+-ahash.workspace = true
+-jsonschema-macros = { version = "0.58.6", path = "../jsonschema-macros", optional = true }
+-jsonschema-regex = { version = "0.58.6", path = "../jsonschema-regex" }
+-jsonschema-value = { version = "0.58.6", path = "../jsonschema-value" }
+-async-trait = { version = "0.1.86", optional = true }
+-bytecount = { version = "0.6", features = ["runtime-dispatch-simd"] }
+-data-encoding = "2.9"
+-email_address = "0.2.9"
+-fancy-regex = "0.19"
+-fraction = { version = "0.17", default-features = false, features = [
+-  "with-bigint",
+-] }
+-idna = { version = "1.0.2", optional = true }
+-itoa = "1"
+-num-bigint = { version = "0.4", optional = true }
+-num-cmp = "0.1"
+-num-traits = "0.2.19"
+-percent-encoding = "2.3"
+-magnus = { version = "0.9", optional = true, features = ["rb-sys"] }
+-pyo3 = { version = "0.29", optional = true }
+-referencing = { version = "0.58.6", path = "../jsonschema-referencing" }
+-regex = "1.11.1"
+-serde.workspace = true
+-# `float_roundtrip`: canonical JSON serialization round-trips floats through re-parses downstream.
+-serde_json = { workspace = true, features = ["float_roundtrip"] }
+-strum = { version = "0.28.0", features = ["derive"] }
+-tokio = { version = "1", default-features = false, features = ["rt"], optional = true }
+-unicode-general-category = "1.1"
+-uuid-simd = { version = "0.8", default-features = false, features = ["std", "detect"] }
+-
+-[dev-dependencies]
+-test-case = "3"
+-futures = { version = "0.3", default-features = false, features = ["std"] }
+-testsuite = { package = "jsonschema-testsuite", path = "../jsonschema-testsuite" }
+-
+-[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dev-dependencies]
+-wasm-bindgen-test = "0.3.55"
+-
+-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+-benchmark = { path = "../benchmark/" }
+-jsonschema-value = { path = "../jsonschema-value", features = ["jsonb-testkit"] }
+-hegeltest = { version = "0.48", features = ["serde_json"] }
+-codspeed-criterion-compat = { version = "5.0", default-features = false }
+-criterion = { version = "0.8", default-features = false }
+-tempfile = "3.13.0"
+-test-case = "3"
+-tokio = { version = "1", features = ["macros", "rt"] }
+-
+-[package.metadata.docs.rs]
+-all-features = true
+-
+-[lints]
+-workspace = true
+-
+-[[test]]
+-name = "codegen"
+-required-features = ["macros"]
+-
+-[[test]]
+-name = "suite"
+-required-features = ["macros"]
+-
+-[[bench]]
+-harness = false
+-name = "jsonschema"
+-required-features = ["macros"]
+-
+-[[bench]]
+-harness = false
+-name = "codegen"
+-required-features = ["macros"]
+-
+-[[bench]]
+-harness = false
+-name = "keywords"
+-
+-[[bench]]
+-harness = false
+-name = "errors"
+-
+-[[bench]]
+-harness = false
+-name = "location"
+-
+-[[bench]]
+-harness = false
+-name = "unevaluated_properties"
+-
+-[[bench]]
+-harness = false
+-name = "unevaluated_items"
+-
+-[[bench]]
+-harness = false
+-name = "metaschema"
+-required-features = ["macros"]
+-
+-[[bench]]
+-harness = false
+-name = "canonicalize"
+-required-features = ["macros"]
+-
+-[[bench]]
+-harness = false
+-name = "canonicalize_many"
+-required-features = ["macros"]
+-
+-[[bench]]
+-harness = false
+-name = "jsonb"
+-required-features = ["jsonb"]
+--- a/OPENBINDINGS-PATCH.md
++++ b/OPENBINDINGS-PATCH.md
+@@ -0,0 +1,11 @@
++# Internal dependency fork
++
++Based on `jsonschema-0.58.6`; upstream license and notices are retained.
++This distinct package name prevents unpatched transitive dependency resolution.
++Changes are documented in the task foundation patch manifest; production changes
++and regression tests must be recorded in the root dependency maintenance ledger.
++This package is an implementation detail, not a supported SDK extension API.
++
++The repository maintenance contract is DEPENDENCY-MAINTENANCE.md. Original
++upstream identity and manifest are retained as UPSTREAM-VCS.json and
++UPSTREAM-Cargo.toml; these names avoid Cargo-reserved packaging metadata.
+--- a/UPSTREAM-Cargo.toml
++++ b/UPSTREAM-Cargo.toml
+@@ -0,0 +1,173 @@
++[package]
++name = "jsonschema"
++version = "0.58.6"
++description = "JSON schema validaton library"
++keywords = ["jsonschema", "validation"]
++categories = ["web-programming"]
++readme = "../../README.md"
++license.workspace = true
++repository.workspace = true
++rust-version.workspace = true
++edition.workspace = true
++authors.workspace = true
++
++[features]
++# Conformance checks for custom JSON representations (`json` module).
++conformance = ["jsonschema-value/conformance"]
++default = ["resolve-http", "resolve-file", "tls-aws-lc-rs", "idna"]
++resolve-http = ["reqwest", "dep:rustls"]
++resolve-file = []
++resolve-async = [
++    "referencing/retrieve-async",
++    "reqwest",
++    "dep:async-trait",
++    "dep:tokio",
++]
++# `idn-hostname` and `idn-email` format validation.
++idna = ["dep:idna"]
++# Default TLS provider for HTTP resolution.
++tls-aws-lc-rs = ["rustls/aws-lc-rs"]
++# Use ring instead of aws-lc-rs for TLS.
++tls-ring = ["rustls/ring"]
++# Support for arbitrarily large integers and exact decimal values when parsing JSON from strings.
++arbitrary-precision = ["serde_json/arbitrary_precision", "dep:num-bigint", "jsonschema-macros?/arbitrary-precision", "jsonschema-value/arbitrary-precision"]
++# The `#[jsonschema::validator]` compile-time validator macro.
++# `float-roundtrip` keeps the macro's schema parsing bit-identical to the runtime's.
++macros = ["dep:jsonschema-macros", "jsonschema-macros/float-roundtrip", "jsonschema-value/macros"]
++# The `json::Magnus` instance representation used by the Ruby bindings.
++magnus = ["jsonschema-value/magnus", "dep:magnus"]
++# The `json::Pyo3` instance representation used by the Python bindings.
++pyo3 = ["jsonschema-value/pyo3", "dep:pyo3"]
++# The `json::Jsonb` instance representation for Postgres `jsonb` values.
++jsonb = ["jsonschema-value/jsonb"]
++
++[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
++# Use rustls-no-provider to allow manual selection of crypto backend
++reqwest = { version = "0.13", default-features = false, features = [
++  "blocking",
++  "json",
++  "http2",
++  "rustls-no-provider",
++], optional = true }
++# Crypto provider for TLS: aws-lc-rs by default, or ring when tls-ring feature is enabled
++rustls = { version = "0.23", default-features = false, features = ["std", "tls12"], optional = true }
++
++[target.'cfg(target_arch = "wasm32")'.dependencies]
++getrandom = { version = "0.3.4", features = ["wasm_js"] }
++
++# Mirror reqwest's wasm cfg; other wasm targets get native deps that don't build.
++[target.'cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))'.dependencies]
++reqwest = { version = "0.13", features = ["json"], default-features = false, optional = true }
++
++[dependencies]
++ahash.workspace = true
++jsonschema-macros = { version = "0.58.6", path = "../jsonschema-macros", optional = true }
++jsonschema-regex = { version = "0.58.6", path = "../jsonschema-regex" }
++jsonschema-value = { version = "0.58.6", path = "../jsonschema-value" }
++async-trait = { version = "0.1.86", optional = true }
++bytecount = { version = "0.6", features = ["runtime-dispatch-simd"] }
++data-encoding = "2.9"
++email_address = "0.2.9"
++fancy-regex = "0.19"
++fraction = { version = "0.17", default-features = false, features = [
++  "with-bigint",
++] }
++idna = { version = "1.0.2", optional = true }
++itoa = "1"
++num-bigint = { version = "0.4", optional = true }
++num-cmp = "0.1"
++num-traits = "0.2.19"
++percent-encoding = "2.3"
++magnus = { version = "0.9", optional = true, features = ["rb-sys"] }
++pyo3 = { version = "0.29", optional = true }
++referencing = { version = "0.58.6", path = "../jsonschema-referencing" }
++regex = "1.11.1"
++serde.workspace = true
++# `float_roundtrip`: canonical JSON serialization round-trips floats through re-parses downstream.
++serde_json = { workspace = true, features = ["float_roundtrip"] }
++strum = { version = "0.28.0", features = ["derive"] }
++tokio = { version = "1", default-features = false, features = ["rt"], optional = true }
++unicode-general-category = "1.1"
++uuid-simd = { version = "0.8", default-features = false, features = ["std", "detect"] }
++
++[dev-dependencies]
++test-case = "3"
++futures = { version = "0.3", default-features = false, features = ["std"] }
++testsuite = { package = "jsonschema-testsuite", path = "../jsonschema-testsuite" }
++
++[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dev-dependencies]
++wasm-bindgen-test = "0.3.55"
++
++[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
++benchmark = { path = "../benchmark/" }
++jsonschema-value = { path = "../jsonschema-value", features = ["jsonb-testkit"] }
++hegeltest = { version = "0.48", features = ["serde_json"] }
++codspeed-criterion-compat = { version = "5.0", default-features = false }
++criterion = { version = "0.8", default-features = false }
++tempfile = "3.13.0"
++test-case = "3"
++tokio = { version = "1", features = ["macros", "rt"] }
++
++[package.metadata.docs.rs]
++all-features = true
++
++[lints]
++workspace = true
++
++[[test]]
++name = "codegen"
++required-features = ["macros"]
++
++[[test]]
++name = "suite"
++required-features = ["macros"]
++
++[[bench]]
++harness = false
++name = "jsonschema"
++required-features = ["macros"]
++
++[[bench]]
++harness = false
++name = "codegen"
++required-features = ["macros"]
++
++[[bench]]
++harness = false
++name = "keywords"
++
++[[bench]]
++harness = false
++name = "errors"
++
++[[bench]]
++harness = false
++name = "location"
++
++[[bench]]
++harness = false
++name = "unevaluated_properties"
++
++[[bench]]
++harness = false
++name = "unevaluated_items"
++
++[[bench]]
++harness = false
++name = "metaschema"
++required-features = ["macros"]
++
++[[bench]]
++harness = false
++name = "canonicalize"
++required-features = ["macros"]
++
++[[bench]]
++harness = false
++name = "canonicalize_many"
++required-features = ["macros"]
++
++[[bench]]
++harness = false
++name = "jsonb"
++required-features = ["jsonb"]
+--- a/UPSTREAM-VCS.json
++++ b/UPSTREAM-VCS.json
+@@ -0,0 +1,6 @@
++{
++  "git": {
++    "sha1": "55ac1664384793c5d3b20745d3f9c169dfe2c06f"
++  },
++  "path_in_vcs": "crates/jsonschema"
++}--- a/src/canonical/context.rs
++++ b/src/canonical/context.rs
+@@ -26,7 +26,7 @@
+ 
+ pub(crate) enum CompiledMatcher {
+     Regex(regex::Regex),
+-    FancyRegex(fancy_regex::Regex),
++    FancyRegex(crate::ob_ecma::Regex),
+ }
+ 
+ impl CompiledMatcher {
+@@ -380,7 +380,7 @@
+ }
+ 
+ fn compile(options: PatternEngineOptions, pattern: &str) -> Option<CompiledMatcher> {
+-    let translated = jsonschema_regex::to_rust_regex(pattern).ok()?;
++    let translated = pattern;
+     match options {
+         PatternEngineOptions::Regex {
+             size_limit,
+--- a/src/compiler.rs
++++ b/src/compiler.rs
+@@ -312,7 +312,7 @@
+ #[derive(Debug, Clone)]
+ struct PatternCacheEntry {
+     translated: Arc<str>,
+-    fancy: Option<Arc<fancy_regex::Regex>>,
++    fancy: Option<Arc<crate::ob_ecma::Regex>>,
+     standard: Option<Arc<regex::Regex>>,
+ }
+ 
+@@ -514,7 +514,7 @@
+         if let Some(entry) = self.shared.pattern_cache.borrow().get(pattern) {
+             return Ok(Arc::clone(&entry.translated));
+         }
+-        let translated = Arc::<str>::from(jsonschema_regex::to_rust_regex(pattern)?);
++        let translated = Arc::<str>::from(pattern);
+         self.shared.pattern_cache.borrow_mut().insert(
+             Arc::from(pattern),
+             PatternCacheEntry {
+@@ -847,7 +847,7 @@
+     pub(crate) fn get_or_compile_regex(
+         &self,
+         pattern: &str,
+-    ) -> Result<Arc<fancy_regex::Regex>, ()> {
++    ) -> Result<Arc<crate::ob_ecma::Regex>, ()> {
+         let translated = self.translated_pattern(pattern)?;
+         {
+             let cache = self.shared.pattern_cache.borrow();
+--- a/src/error.rs
++++ b/src/error.rs
+@@ -330,7 +330,10 @@
+     /// When the input value doesn't match one or multiple required types.
+     Type { kind: TypeKind },
+     /// Unexpected items.
+-    UnevaluatedItems { unexpected: Vec<String> },
++    UnevaluatedItems {
++        unexpected: Vec<String>,
++        indexes: Vec<usize>,
++    },
+     /// Unexpected properties.
+     UnevaluatedProperties { unexpected: Vec<String> },
+     /// When the input array has non-unique elements.
+@@ -405,6 +408,16 @@
+ 
+ /// Shortcuts for creation of specific error kinds.
+ impl<'a> ValidationError<'a> {
++    pub(crate) fn with_unevaluated_indexes(mut self, indexes: Vec<usize>) -> Self {
++        if let ValidationErrorKind::UnevaluatedItems {
++            indexes: target, ..
++        } = &mut self.repr.kind
++        {
++            *target = indexes;
++        }
++        self
++    }
++
+     /// Creates a new validation error from parts.
+     #[inline]
+     #[must_use]
+@@ -1192,7 +1205,10 @@
+     ) -> ValidationError<'a> {
+         Self::borrowed(
+             instance,
+-            ValidationErrorKind::UnevaluatedItems { unexpected },
++            ValidationErrorKind::UnevaluatedItems {
++                unexpected,
++                indexes: Vec::new(),
++            },
+             instance_path,
+             schema_path,
+             tracker,
+@@ -1280,7 +1296,7 @@
+     /// so evaluation path equals schema path.
+     pub(crate) fn with_context<'i>(
+         self,
+-        instance: &'i Value,
++        instance: LazyInstance<'i>,
+         instance_path: &LazyLocation,
+         schema_path: &Location,
+         keyword: &str,
+@@ -1293,7 +1309,7 @@
+             other => other,
+         };
+         ValidationError::new(
+-            LazyInstance::Ready(Cow::Borrowed(instance)),
++            instance,
+             kind,
+             instance_path.into(),
+             schema_path.clone(),
+@@ -1622,7 +1638,7 @@
+                     multiple_of
+                 )
+             }
+-            ValidationErrorKind::UnevaluatedItems { unexpected } => {
++            ValidationErrorKind::UnevaluatedItems { unexpected, .. } => {
+                 f.write_str("Unevaluated items are not allowed (")?;
+                 write_quoted_list(f, unexpected)?;
+                 write_unexpected_suffix(f, unexpected.len())
+@@ -1817,7 +1833,7 @@
+                     self.placeholder, multiple_of
+                 )
+             }
+-            ValidationErrorKind::UnevaluatedItems { unexpected } => {
++            ValidationErrorKind::UnevaluatedItems { unexpected, .. } => {
+                 f.write_str("Unevaluated items are not allowed (")?;
+                 write_item_count(f, unexpected.len())
+             }
+--- a/src/keywords/additional_properties.rs
++++ b/src/keywords/additional_properties.rs
+@@ -284,17 +284,19 @@
+             if let Some((name, node)) = self.properties.get_key_validator(property.as_ref()) {
+                 node.collect_errors(&value, &location.push(name), tracker, ctx, errors);
+             } else {
+-                unexpected.push(property.as_ref().to_owned());
++                crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
+             }
+         }
+         if !unexpected.is_empty() {
+-            errors.push(ValidationError::additional_properties(
+-                self.location.clone(),
+-                crate::paths::capture_evaluation_path(tracker, &self.location),
+-                location.into(),
+-                instance.lazy_value(),
+-                unexpected,
+-            ));
++            crate::ob_work::push_error(errors, || {
++                ValidationError::additional_properties(
++                    self.location.clone(),
++                    crate::paths::capture_evaluation_path(tracker, &self.location),
++                    location.into(),
++                    instance.lazy_value(),
++                    unexpected,
++                )
++            });
+         }
+     }
+ 
+@@ -318,7 +320,7 @@
+                     );
+                     children.push(&mut ctx.arena, child);
+                 } else {
+-                    unexpected.push(property.as_ref().to_owned());
++                    crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
+                 }
+             }
+             let mut result = EvaluationResult::from_children(children);
+@@ -503,20 +505,24 @@
+                     found_required = true;
+                 }
+             } else {
+-                unexpected.push(property.as_ref().to_owned());
++                crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
+             }
+         }
+         if !unexpected.is_empty() {
+-            errors.push(ValidationError::additional_properties(
+-                self.location.clone(),
+-                crate::paths::capture_evaluation_path(tracker, &self.location),
+-                location.into(),
+-                instance.lazy_value(),
+-                unexpected,
+-            ));
++            crate::ob_work::push_error(errors, || {
++                ValidationError::additional_properties(
++                    self.location.clone(),
++                    crate::paths::capture_evaluation_path(tracker, &self.location),
++                    location.into(),
++                    instance.lazy_value(),
++                    unexpected,
++                )
++            });
+         }
+         if !found_required {
+-            errors.push(self.missing_required::<F>(instance, location, tracker));
++            crate::ob_work::push_error(errors, || {
++                self.missing_required::<F>(instance, location, tracker)
++            });
+         }
+     }
+ 
+@@ -544,7 +550,7 @@
+                         found_required = true;
+                     }
+                 } else {
+-                    unexpected.push(property.as_ref().to_owned());
++                    crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
+                 }
+             }
+             let mut result = EvaluationResult::from_children(children);
+@@ -1016,17 +1022,19 @@
+                 }
+             }
+             if !has_match {
+-                unexpected.push(property.as_ref().to_owned());
++                crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
+             }
+         }
+         if !unexpected.is_empty() {
+-            errors.push(ValidationError::additional_properties(
+-                self.location.clone(),
+-                crate::paths::capture_evaluation_path(tracker, &self.location),
+-                location.into(),
+-                instance.lazy_value(),
+-                unexpected,
+-            ));
++            crate::ob_work::push_error(errors, || {
++                ValidationError::additional_properties(
++                    self.location.clone(),
++                    crate::paths::capture_evaluation_path(tracker, &self.location),
++                    location.into(),
++                    instance.lazy_value(),
++                    unexpected,
++                )
++            });
+         }
+     }
+ 
+@@ -1053,7 +1061,7 @@
+                     }
+                 }
+                 if !has_match {
+-                    unexpected.push(property.as_ref().to_owned());
++                    crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
+                 }
+             }
+             if !pattern_matched_props.is_empty() {
+@@ -1490,18 +1498,20 @@
+                     }
+                 }
+                 if !has_match {
+-                    unexpected.push(property.as_ref().to_owned());
++                    crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
+                 }
+             }
+         }
+         if !unexpected.is_empty() {
+-            errors.push(ValidationError::additional_properties(
+-                self.location.clone(),
+-                crate::paths::capture_evaluation_path(tracker, &self.location),
+-                location.into(),
+-                instance.lazy_value(),
+-                unexpected,
+-            ));
++            crate::ob_work::push_error(errors, || {
++                ValidationError::additional_properties(
++                    self.location.clone(),
++                    crate::paths::capture_evaluation_path(tracker, &self.location),
++                    location.into(),
++                    instance.lazy_value(),
++                    unexpected,
++                )
++            });
+         }
+     }
+ 
+@@ -1542,7 +1552,9 @@
+                         }
+                     }
+                     if !has_match {
+-                        unexpected.push(property.as_ref().to_owned());
++                        crate::ob_work::push_error(&mut unexpected, || {
++                            property.as_ref().to_owned()
++                        });
+                     }
+                 }
+             }
+@@ -1683,7 +1695,7 @@
+                             if let Some(properties) = properties {
+                                 if let Value::Object(map) = properties {
+                                     compile_pattern_non_empty_false::<
+-                                        CompiledPattern<fancy_regex::Regex>,
++                                        CompiledPattern<crate::ob_ecma::Regex>,
+                                         F,
+                                     >(ctx, map, patterns)
+                                 } else {
+@@ -1715,7 +1727,7 @@
+                             if let Some(properties) = properties {
+                                 if let Value::Object(map) = properties {
+                                     compile_pattern_non_empty::<
+-                                        CompiledPattern<fancy_regex::Regex>,
++                                        CompiledPattern<crate::ob_ecma::Regex>,
+                                         F,
+                                     >(ctx, map, patterns, schema)
+                                 } else {
+--- a/src/keywords/any_of.rs
++++ b/src/keywords/any_of.rs
+@@ -115,13 +115,15 @@
+             schema.collect_errors(instance, location, tracker, ctx, &mut branch);
+             branches.push(branch);
+         }
+-        errors.push(ValidationError::any_of(
+-            self.location.clone(),
+-            crate::paths::capture_evaluation_path(tracker, &self.location),
+-            location.into(),
+-            instance.lazy_value(),
+-            branches,
+-        ));
++        crate::ob_work::push_error(errors, || {
++            ValidationError::any_of(
++                self.location.clone(),
++                crate::paths::capture_evaluation_path(tracker, &self.location),
++                location.into(),
++                instance.lazy_value(),
++                branches,
++            )
++        });
+     }
+ 
+     fn evaluate(
+@@ -244,13 +246,15 @@
+         let mut branch = Vec::new();
+         self.node
+             .collect_errors(instance, location, tracker, ctx, &mut branch);
+-        errors.push(ValidationError::any_of(
+-            self.location.clone(),
+-            crate::paths::capture_evaluation_path(tracker, &self.location),
+-            location.into(),
+-            instance.lazy_value(),
+-            vec![branch],
+-        ));
++        crate::ob_work::push_error(errors, || {
++            ValidationError::any_of(
++                self.location.clone(),
++                crate::paths::capture_evaluation_path(tracker, &self.location),
++                location.into(),
++                instance.lazy_value(),
++                vec![branch],
++            )
++        });
+     }
+ 
+     fn evaluate(
+--- a/src/keywords/custom.rs
++++ b/src/keywords/custom.rs
+@@ -34,9 +34,12 @@
+         _ctx: &mut ValidationContext,
+     ) -> Result<(), ValidationError<'i>> {
+         self.inner.validate(instance.clone()).map_err(|err| {
+-            let value = instance.to_value();
+-            err.with_context(&value, instance_path, &self.location, &self.keyword)
+-                .to_owned()
++            err.with_context(
++                instance.lazy_value(),
++                instance_path,
++                &self.location,
++                &self.keyword,
++            )
+         })
+     }
+ 
+@@ -56,11 +59,17 @@
+         if inner_errors.peek().is_none() {
+             return;
+         }
+-        let value = instance.to_value();
+-        errors.extend(inner_errors.map(|err| {
+-            err.with_context(&value, instance_path, &self.location, &self.keyword)
+-                .to_owned()
+-        }));
++        for err in inner_errors {
++            if !crate::ob_work::diagnostic_admit() {
++                break;
++            }
++            errors.push(err.with_context(
++                instance.lazy_value(),
++                instance_path,
++                &self.location,
++                &self.keyword,
++            ));
++        }
+     }
+ }
+ 
+--- a/src/keywords/helpers.rs
++++ b/src/keywords/helpers.rs
+@@ -16,6 +16,13 @@
+ /// `None` for anything that is not a non-negative integer under this draft; the caller turns that
+ /// into a compilation error.
+ pub(crate) fn size_limit<F: Json>(ctx: &compiler::Context<F>, schema: &Value) -> Option<u64> {
++    #[cfg(feature = "arbitrary-precision")]
++    if ctx.supports_integer_valued_numbers() {
++        return schema.as_number().and_then(|n| {
++            jsonschema_value::ob_decimal::Decimal::parse(n.as_str())
++                .nonnegative_integer_u64_saturating()
++        });
++    }
+     if let Some(limit) = schema.as_u64() {
+         return Some(limit);
+     }
+--- a/src/keywords/items.rs
++++ b/src/keywords/items.rs
+@@ -904,21 +904,23 @@
+         errors: &mut Vec<ValidationError<'i>>,
+     ) {
+         let Some(array) = instance.as_array() else {
+-            errors.push(self.absorbed.type_error::<F>(instance, location, tracker));
++            crate::ob_work::push_error(errors, || {
++                self.absorbed.type_error::<F>(instance, location, tracker)
++            });
+             return;
+         };
+         let count = array.len() as u64;
+         if count < self.min_items {
+-            errors.push(
++            crate::ob_work::push_error(errors, || {
+                 self.absorbed
+-                    .min_items_error::<F>(instance, location, tracker),
+-            );
++                    .min_items_error::<F>(instance, location, tracker)
++            });
+         }
+         if count > self.max_items {
+-            errors.push(
++            crate::ob_work::push_error(errors, || {
+                 self.absorbed
+-                    .max_items_error::<F>(instance, location, tracker),
+-            );
++                    .max_items_error::<F>(instance, location, tracker)
++            });
+         }
+         match &self.items {
+             FusedItems::Generic(node) => {
+--- a/src/keywords/min_length.rs
++++ b/src/keywords/min_length.rs
+@@ -144,10 +144,14 @@
+         if let Some(length) = instance.string_length() {
+             // `minLength` above `maxLength` fails both at once, as two validators would
+             if length < self.minimum {
+-                errors.push(self.min_error::<F>(instance, location, tracker));
++                crate::ob_work::push_error(errors, || {
++                    self.min_error::<F>(instance, location, tracker)
++                });
+             }
+             if length > self.maximum {
+-                errors.push(self.max_error::<F>(instance, location, tracker));
++                crate::ob_work::push_error(errors, || {
++                    self.max_error::<F>(instance, location, tracker)
++                });
+             }
+         }
+     }
+--- a/src/keywords/properties.rs
++++ b/src/keywords/properties.rs
+@@ -396,10 +396,14 @@
+         {
+             // Check required
+             if object.get(&self.first_key).is_none() {
+-                errors.push(self.missing(&self.first, instance, location, tracker));
++                crate::ob_work::push_error(errors, || {
++                    self.missing(&self.first, instance, location, tracker)
++                });
+             }
+             if object.get(&self.second_key).is_none() {
+-                errors.push(self.missing(&self.second, instance, location, tracker));
++                crate::ob_work::push_error(errors, || {
++                    self.missing(&self.second, instance, location, tracker)
++                });
+             }
+             if object.len() <= self.properties.len() {
+                 for (name, value) in object.members() {
+--- a/src/keywords/property_names.rs
++++ b/src/keywords/property_names.rs
+@@ -95,13 +95,15 @@
+             });
+             for error in name_errors.drain(..) {
+                 let schema_path = error.schema_path().clone();
+-                errors.push(ValidationError::property_names(
+-                    schema_path.clone(),
+-                    crate::paths::capture_evaluation_path(tracker, &schema_path),
+-                    location.into(),
+-                    instance.lazy_value(),
+-                    error,
+-                ));
++                crate::ob_work::push_error(errors, || {
++                    ValidationError::property_names(
++                        schema_path.clone(),
++                        crate::paths::capture_evaluation_path(tracker, &schema_path),
++                        location.into(),
++                        instance.lazy_value(),
++                        error,
++                    )
++                });
+             }
+         }
+     }
+--- a/src/keywords/required.rs
++++ b/src/keywords/required.rs
+@@ -160,13 +160,15 @@
+                     None => object.get(key).is_some(),
+                 };
+                 if !present {
+-                    errors.push(ValidationError::required(
+-                        self.location.clone(),
+-                        eval_path.clone(),
+-                        location.into(),
+-                        instance.lazy_value(),
+-                        Value::String(property_name.as_str().to_owned()),
+-                    ));
++                    crate::ob_work::push_error(errors, || {
++                        ValidationError::required(
++                            self.location.clone(),
++                            eval_path.clone(),
++                            location.into(),
++                            instance.lazy_value(),
++                            Value::String(property_name.as_str().to_owned()),
++                        )
++                    });
+                 }
+             }
+         }
+@@ -302,22 +304,26 @@
+         if let Some(object) = instance.as_object() {
+             let eval_path = crate::paths::capture_evaluation_path(tracker, &self.location);
+             if object.get(&self.first_key).is_none() {
+-                errors.push(ValidationError::required(
+-                    self.location.clone(),
+-                    eval_path.clone(),
+-                    location.into(),
+-                    instance.lazy_value(),
+-                    Value::String(self.first.as_str().to_owned()),
+-                ));
++                crate::ob_work::push_error(errors, || {
++                    ValidationError::required(
++                        self.location.clone(),
++                        eval_path.clone(),
++                        location.into(),
++                        instance.lazy_value(),
++                        Value::String(self.first.as_str().to_owned()),
++                    )
++                });
+             }
+             if object.get(&self.second_key).is_none() {
+-                errors.push(ValidationError::required(
+-                    self.location.clone(),
+-                    eval_path,
+-                    location.into(),
+-                    instance.lazy_value(),
+-                    Value::String(self.second.as_str().to_owned()),
+-                ));
++                crate::ob_work::push_error(errors, || {
++                    ValidationError::required(
++                        self.location.clone(),
++                        eval_path,
++                        location.into(),
++                        instance.lazy_value(),
++                        Value::String(self.second.as_str().to_owned()),
++                    )
++                });
+             }
+         }
+     }
+@@ -442,31 +448,37 @@
+             let eval_path = crate::paths::capture_evaluation_path(tracker, &self.location);
+             let found = self.found(&object);
+             if found & 0b001 == 0 {
+-                errors.push(ValidationError::required(
+-                    self.location.clone(),
+-                    eval_path.clone(),
+-                    location.into(),
+-                    instance.lazy_value(),
+-                    Value::String(self.first.as_str().to_owned()),
+-                ));
++                crate::ob_work::push_error(errors, || {
++                    ValidationError::required(
++                        self.location.clone(),
++                        eval_path.clone(),
++                        location.into(),
++                        instance.lazy_value(),
++                        Value::String(self.first.as_str().to_owned()),
++                    )
++                });
+             }
+             if found & 0b010 == 0 {
+-                errors.push(ValidationError::required(
+-                    self.location.clone(),
+-                    eval_path.clone(),
+-                    location.into(),
+-                    instance.lazy_value(),
+-                    Value::String(self.second.as_str().to_owned()),
+-                ));
++                crate::ob_work::push_error(errors, || {
++                    ValidationError::required(
++                        self.location.clone(),
++                        eval_path.clone(),
++                        location.into(),
++                        instance.lazy_value(),
++                        Value::String(self.second.as_str().to_owned()),
++                    )
++                });
+             }
+             if found & 0b100 == 0 {
+-                errors.push(ValidationError::required(
+-                    self.location.clone(),
+-                    eval_path,
+-                    location.into(),
+-                    instance.lazy_value(),
+-                    Value::String(self.third.as_str().to_owned()),
+-                ));
++                crate::ob_work::push_error(errors, || {
++                    ValidationError::required(
++                        self.location.clone(),
++                        eval_path,
++                        location.into(),
++                        instance.lazy_value(),
++                        Value::String(self.third.as_str().to_owned()),
++                    )
++                });
+             }
+         }
+     }
+--- a/src/keywords/unevaluated_items.rs
++++ b/src/keywords/unevaluated_items.rs
+@@ -779,8 +779,9 @@
+             self.validators
+                 .mark_evaluated_indexes(instance, &mut indexes, ctx);
+             let mut unevaluated = vec![];
+-
+-            for (item, is_evaluated) in array.elements().zip(indexes) {
++            let mut invalid_indexes = vec![];
++
++            for (index, (item, is_evaluated)) in array.elements().zip(indexes).enumerate() {
+                 if !is_evaluated {
+                     let is_valid = if let Some(validator) = &self.validators.unevaluated {
+                         validator.is_valid(&item, ctx)
+@@ -789,7 +790,10 @@
+                     };
+ 
+                     if !is_valid {
+-                        unevaluated.push(item.to_value().to_string());
++                        if crate::ob_work::diagnostic_admit() {
++                            unevaluated.push(item.diagnostic_text());
++                            invalid_indexes.push(index);
++                        }
+                     }
+                 }
+             }
+@@ -801,7 +805,8 @@
+                     location.into(),
+                     instance.lazy_value(),
+                     unevaluated,
+-                ));
++                )
++                .with_unevaluated_indexes(invalid_indexes));
+             }
+         }
+         Ok(())
+@@ -831,12 +836,12 @@
+                         validator.evaluate_instance_below(&item, &location.push(idx), tracker, ctx);
+                     if !child.valid {
+                         invalid = true;
+-                        unevaluated.push(item.to_value().to_string());
++                        unevaluated.push(item.diagnostic_text());
+                     }
+                     children.push(&mut ctx.arena, child);
+                 } else {
+                     invalid = true;
+-                    unevaluated.push(item.to_value().to_string());
++                    unevaluated.push(item.diagnostic_text());
+                 }
+             }
+ 
+--- a/src/keywords/unevaluated_properties.rs
++++ b/src/keywords/unevaluated_properties.rs
+@@ -52,7 +52,7 @@
+ /// One list per engine keeps the engine choice out of the per-pattern loop.
+ #[derive(Clone, Default)]
+ struct Patterns {
+-    fancy: Vec<Arc<fancy_regex::Regex>>,
++    fancy: Vec<Arc<crate::ob_ecma::Regex>>,
+     standard: Vec<Arc<regex::Regex>>,
+ }
+ 
+@@ -887,7 +887,9 @@
+                     }
+                     match &self.validators.unevaluated {
+                         Some(schema) if schema.is_valid(&value, ctx) => {}
+-                        _ => unevaluated.push(property.as_ref().to_owned()),
++                        _ => crate::ob_work::push_error(&mut unevaluated, || {
++                            property.as_ref().to_owned()
++                        }),
+                     }
+                 }
+                 if unevaluated.is_empty() {
+@@ -921,11 +923,13 @@
+                 // Check against unevaluatedProperties schema
+                 if let Some(unevaluated_schema) = &self.validators.unevaluated {
+                     if !unevaluated_schema.is_valid(&value, ctx) {
+-                        unevaluated.push(property.as_ref().to_owned());
++                        crate::ob_work::push_error(&mut unevaluated, || {
++                            property.as_ref().to_owned()
++                        });
+                     }
+                 } else {
+                     // No unevaluatedProperties schema means false (reject all)
+-                    unevaluated.push(property.as_ref().to_owned());
++                    crate::ob_work::push_error(&mut unevaluated, || property.as_ref().to_owned());
+                 }
+             }
+ 
+@@ -1012,12 +1016,14 @@
+                     );
+                     if !child.valid {
+                         invalid = true;
+-                        unevaluated.push(property.as_ref().to_owned());
++                        crate::ob_work::push_error(&mut unevaluated, || {
++                            property.as_ref().to_owned()
++                        });
+                     }
+                     children.push(&mut ctx.arena, child);
+                 } else {
+                     invalid = true;
+-                    unevaluated.push(property.as_ref().to_owned());
++                    crate::ob_work::push_error(&mut unevaluated, || property.as_ref().to_owned());
+                 }
+             }
+ 
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -7276,3 +7276,8 @@
+         })));
+     }
+ }
++
++#[doc(hidden)]
++pub mod ob_ecma;
++
++pub mod ob_work;
+--- a/src/node.rs
++++ b/src/node.rs
+@@ -233,6 +233,9 @@
+ /// whose guard stops re-entry.
+ impl<F: Json> Validate<F> for PendingSchemaNode<F> {
+     fn is_valid(&self, instance: &F::Node<'_>, ctx: &mut ValidationContext) -> bool {
++        let Some(_budget_frame) = crate::ob_work::enter() else {
++            return true;
++        };
+         let target = match self.target() {
+             PendingTarget::Strong(node) => return node.is_valid(instance, ctx),
+             PendingTarget::Weak(target) => target,
+@@ -242,7 +245,8 @@
+         // The cycle guard comes first: while this node sits on the stack the cycle answer is the
+         // one the other modes reach, and a cached value would override it here alone.
+         if ctx.enter(node_id, identity) {
+-            return true; // Cycle detected
++            crate::ob_work::cycle();
++            return true; // Cycle detected, outward verdict refused by bounded adapter
+         }
+         // Check memoization cache (only for arrays/objects)
+         let container_identity = instance.container_identity();
+@@ -265,12 +269,16 @@
+         tracker: Option<&RefTracker>,
+         ctx: &mut ValidationContext,
+     ) -> Result<(), ValidationError<'i>> {
++        let Some(_budget_frame) = crate::ob_work::enter() else {
++            return Ok(());
++        };
+         let target = match self.target() {
+             PendingTarget::Strong(node) => return node.validate(instance, location, tracker, ctx),
+             PendingTarget::Weak(target) => target,
+         };
+         let identity = instance.identity();
+         if ctx.enter(target.node_id(), identity) {
++            crate::ob_work::cycle();
+             return Ok(());
+         }
+         let result = target
+@@ -288,6 +296,9 @@
+         ctx: &mut ValidationContext,
+         errors: &mut Vec<ValidationError<'i>>,
+     ) {
++        let Some(_budget_frame) = crate::ob_work::enter() else {
++            return;
++        };
+         let target = match self.target() {
+             PendingTarget::Strong(node) => {
+                 return node.collect_errors(instance, location, tracker, ctx, errors)
+@@ -296,6 +307,7 @@
+         };
+         let identity = instance.identity();
+         if ctx.enter(target.node_id(), identity) {
++            crate::ob_work::cycle();
+             return;
+         }
+         target
+@@ -311,6 +323,9 @@
+         tracker: Option<&RefTracker>,
+         ctx: &mut ValidationContext,
+     ) -> EvaluationResult {
++        let Some(_budget_frame) = crate::ob_work::enter() else {
++            return EvaluationResult::valid_empty();
++        };
+         self.evaluate_with_location(instance, location, &location.into(), tracker, ctx)
+     }
+ 
+@@ -322,6 +337,9 @@
+         tracker: Option<&RefTracker>,
+         ctx: &mut ValidationContext,
+     ) -> EvaluationResult {
++        let Some(_budget_frame) = crate::ob_work::enter() else {
++            return EvaluationResult::valid_empty();
++        };
+         let target = match self.target() {
+             PendingTarget::Strong(node) => {
+                 return node.evaluate_with_location(
+@@ -336,6 +354,7 @@
+         };
+         let identity = instance.identity();
+         if ctx.enter(target.node_id(), identity) {
++            crate::ob_work::cycle();
+             return EvaluationResult::valid_empty();
+         }
+         let result = target.materialize().evaluate_with_location(
+@@ -428,9 +447,9 @@
+         let absolute_path = ctx.absolute_location(&location);
+         let validators = validators
+             .into_iter()
+-            .enumerate()
+-            .map(|(index, validator)| {
+-                let location = ctx.location().join(index);
++            .map(|validator| {
++                // This is a validator list, not an array in the source schema.
++                let location = ctx.location().clone();
+                 let absolute_location = ctx.absolute_location(&location);
+                 ArrayValidatorEntry {
+                     validator,
+@@ -744,6 +763,9 @@
+ impl<F: Json> Validate<F> for SchemaNode<F> {
+     #[inline]
+     fn is_valid(&self, instance: &F::Node<'_>, ctx: &mut ValidationContext) -> bool {
++        let Some(_budget_frame) = crate::ob_work::enter() else {
++            return true;
++        };
+         match &self.inner.validators {
+             // Single validator fast path
+             NodeValidators::Keyword(kvs) if kvs.validators.len() == 1 => {
+@@ -774,6 +796,9 @@
+         tracker: Option<&RefTracker>,
+         ctx: &mut ValidationContext,
+     ) -> Result<(), ValidationError<'i>> {
++        let Some(_budget_frame) = crate::ob_work::enter() else {
++            return Ok(());
++        };
+         match &self.inner.validators {
+             NodeValidators::Keyword(kvs) if kvs.validators.len() == 1 => {
+                 let entry = &kvs.validators[0];
+@@ -829,6 +854,9 @@
+         ctx: &mut ValidationContext,
+         errors: &mut Vec<ValidationError<'i>>,
+     ) {
++        let Some(_budget_frame) = crate::ob_work::enter() else {
++            return;
++        };
+         match &self.inner.validators {
+             NodeValidators::Keyword(kvs) => {
+                 for entry in &kvs.validators {
+@@ -871,6 +899,9 @@
+         tracker: Option<&RefTracker>,
+         ctx: &mut ValidationContext,
+     ) -> EvaluationResult {
++        let Some(_budget_frame) = crate::ob_work::enter() else {
++            return EvaluationResult::valid_empty();
++        };
+         self.evaluate_at(instance, location, &location.into(), tracker, ctx)
+     }
+ 
+@@ -882,6 +913,9 @@
+         tracker: Option<&RefTracker>,
+         ctx: &mut ValidationContext,
+     ) -> EvaluationResult {
++        let Some(_budget_frame) = crate::ob_work::enter() else {
++            return EvaluationResult::valid_empty();
++        };
+         self.evaluate_at(instance, location, instance_location, tracker, ctx)
+     }
+ }
+@@ -896,6 +930,9 @@
+         tracker: Option<&RefTracker>,
+         ctx: &mut ValidationContext,
+     ) -> EvaluationResult {
++        let Some(_budget_frame) = crate::ob_work::enter() else {
++            return EvaluationResult::valid_empty();
++        };
+         match &self.inner.validators {
+             NodeValidators::Array { ref validators } => Self::evaluate_subschemas(
+                 instance,
+--- a/src/ob_ecma.rs
++++ b/src/ob_ecma.rs
+@@ -0,0 +1,117 @@
++//! Internal ECMA-262 11th-edition and bounded-work adapter.
++use std::cell::Cell;
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum Exhausted {
++    Work,
++    UnsupportedProperty,
++}
++#[derive(Clone, Copy)]
++struct State {
++    active: bool,
++    unsupported: bool,
++}
++thread_local! {static STATE:Cell<State>=const{Cell::new(State{active:false,unsupported:false})};}
++struct Scope(State);
++impl Drop for Scope {
++    fn drop(&mut self) {
++        let after = STATE.get();
++        let mut before = self.0;
++        if before.active {
++            before.unsupported |= after.unsupported;
++        }
++        STATE.set(before);
++    }
++}
++pub fn top_level<T>(limit: usize, f: impl FnOnce() -> T) -> Result<T, Exhausted> {
++    let previous = STATE.replace(State {
++        active: true,
++        unsupported: false,
++    });
++    let _scope = Scope(previous);
++    let result = regress::ob_budget::top_level(limit, f);
++    if STATE.get().unsupported {
++        Err(Exhausted::UnsupportedProperty)
++    } else {
++        result.map_err(|_| Exhausted::Work)
++    }
++}
++
++#[derive(Debug, Clone)]
++pub struct Regex {
++    compiled: regress::Regex,
++    source: String,
++    limit: usize,
++    unsupported_property: bool,
++}
++impl Regex {
++    pub fn new(pattern: &str) -> Result<Self, ()> {
++        RegexBuilder::new(pattern).build()
++    }
++    pub fn as_str(&self) -> &str {
++        &self.source
++    }
++    pub fn is_match(&self, value: &str) -> Result<bool, fancy_regex::Error> {
++        if self.unsupported_property {
++            let mut state = STATE.get();
++            state.unsupported = true;
++            STATE.set(state);
++            return Err(fancy_regex::Error::RuntimeError(
++                fancy_regex::RuntimeError::BacktrackLimitExceeded,
++            ));
++        }
++        regress::ob_budget::run(self.limit, || self.compiled.find(value).is_some()).map_err(|_| {
++            fancy_regex::Error::RuntimeError(fancy_regex::RuntimeError::BacktrackLimitExceeded)
++        })
++    }
++}
++pub struct RegexBuilder<'a> {
++    source: &'a str,
++    limit: usize,
++}
++impl<'a> RegexBuilder<'a> {
++    pub fn new(source: &'a str) -> Self {
++        Self {
++            source,
++            limit: 1_000_000,
++        }
++    }
++    pub fn backtrack_limit(&mut self, limit: usize) -> &mut Self {
++        self.limit = limit;
++        self
++    }
++    pub fn delegate_size_limit(&mut self, _limit: usize) -> &mut Self {
++        self
++    }
++    pub fn delegate_dfa_size_limit(&mut self, _limit: usize) -> &mut Self {
++        self
++    }
++    pub fn build(&self) -> Result<Regex, ()> {
++        regress::Regex::with_flags(
++            self.source,
++            regress::Flags {
++                unicode: true,
++                es2020: true,
++                ..Default::default()
++            },
++        )
++        .map(|compiled| Regex {
++            compiled,
++            source: self.source.to_owned(),
++            limit: self.limit,
++            unsupported_property: has_property_escape(self.source),
++        })
++        .map_err(|_| ())
++    }
++}
++
++fn has_property_escape(pattern: &str) -> bool {
++    let mut bytes = pattern.bytes();
++    while let Some(byte) = bytes.next() {
++        if byte == b'\\' {
++            if matches!(bytes.next(), Some(b'p' | b'P')) {
++                return true;
++            }
++        }
++    }
++    false
++}
+--- a/src/ob_work.rs
++++ b/src/ob_work.rs
+@@ -0,0 +1,189 @@
++//! OpenBindings qualification patch: evaluator entry work/depth accounting.
++//! A bounded call must check its outcome before exposing any engine verdict.
++use std::cell::Cell;
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum Stop {
++    Work,
++    Depth,
++    Cycle,
++    Diagnostics,
++    Arithmetic,
++}
++#[derive(Clone, Copy)]
++struct State {
++    active: bool,
++    remaining: usize,
++    depth: usize,
++    max_depth: usize,
++    stop: Option<Stop>,
++}
++const IDLE: State = State {
++    active: false,
++    remaining: usize::MAX,
++    depth: 0,
++    max_depth: usize::MAX,
++    stop: None,
++};
++thread_local! {static STATE:Cell<State>=const{Cell::new(IDLE)};}
++struct Scope {
++    previous: State,
++    initial: usize,
++}
++impl Drop for Scope {
++    fn drop(&mut self) {
++        let after = STATE.get();
++        let mut previous = self.previous;
++        if previous.active {
++            previous.remaining = previous
++                .remaining
++                .saturating_sub(self.initial.saturating_sub(after.remaining));
++            if previous.stop.is_none() {
++                previous.stop = after.stop;
++            }
++        }
++        STATE.set(previous);
++    }
++}
++pub fn bounded<T>(steps: usize, max_depth: usize, f: impl FnOnce() -> T) -> Result<T, Stop> {
++    let prior = STATE.get();
++    let initial = steps.min(prior.remaining);
++    let _scope = Scope {
++        previous: prior,
++        initial,
++    };
++    STATE.set(State {
++        active: true,
++        remaining: initial,
++        depth: prior.depth,
++        max_depth: max_depth.min(prior.max_depth),
++        stop: prior.stop,
++    });
++    let value = f();
++    let after = STATE.get();
++    match after.stop {
++        Some(reason) => Err(reason),
++        None => Ok(value),
++    }
++}
++pub(crate) struct Frame;
++impl Drop for Frame {
++    fn drop(&mut self) {
++        let mut s = STATE.get();
++        s.depth = s.depth.saturating_sub(1);
++        STATE.set(s);
++    }
++}
++pub(crate) fn enter() -> Option<Frame> {
++    let mut s = STATE.get();
++    if !s.active {
++        return Some(Frame);
++    }
++    if s.stop.is_none() {
++        if s.remaining == 0 {
++            s.stop = Some(Stop::Work);
++        } else if s.depth >= s.max_depth {
++            s.stop = Some(Stop::Depth);
++        }
++    }
++    if s.stop.is_some() {
++        STATE.set(s);
++        return None;
++    }
++    s.remaining -= 1;
++    s.depth += 1;
++    STATE.set(s);
++    Some(Frame)
++}
++pub(crate) fn cycle() {
++    let mut s = STATE.get();
++    if s.active {
++        s.stop.get_or_insert(Stop::Cycle);
++    }
++    STATE.set(s);
++}
++
++/// Charge owned adapter work within the current scope. The enclosing caller must inspect `bounded`.
++pub fn charge(amount: usize) -> bool {
++    let mut s = STATE.get();
++    if !s.active {
++        return true;
++    }
++    if amount > s.remaining {
++        s.stop.get_or_insert(Stop::Work);
++        s.remaining = 0;
++    } else {
++        s.remaining -= amount;
++    }
++    let keep = s.stop.is_none();
++    STATE.set(s);
++    keep
++}
++/// A selected arithmetic primitive exceeded its finite admission domain.
++pub fn arithmetic_limit() {
++    let mut state = STATE.get();
++    if state.active {
++        state.stop.get_or_insert(Stop::Arithmetic);
++    }
++    STATE.set(state);
++}
++
++// A separate allocation admission counter for the eager dependency diagnostic pass.
++#[derive(Clone, Copy)]
++struct DiagnosticState {
++    active: bool,
++    remaining: usize,
++    exhausted: bool,
++}
++thread_local! {static DIAGNOSTICS:Cell<DiagnosticState>=const{Cell::new(DiagnosticState{active:false,remaining:usize::MAX,exhausted:false})};}
++struct DiagnosticScope {
++    prior: DiagnosticState,
++    initial: usize,
++}
++impl Drop for DiagnosticScope {
++    fn drop(&mut self) {
++        let after = DIAGNOSTICS.get();
++        let mut prior = self.prior;
++        if prior.active {
++            prior.remaining = prior
++                .remaining
++                .saturating_sub(self.initial.saturating_sub(after.remaining));
++            prior.exhausted |= after.exhausted;
++        }
++        DIAGNOSTICS.set(prior);
++    }
++}
++pub fn diagnostics<T>(maximum: usize, call: impl FnOnce() -> T) -> Result<T, Stop> {
++    let prior = DIAGNOSTICS.get();
++    let initial = maximum.min(prior.remaining);
++    let _scope = DiagnosticScope { prior, initial };
++    DIAGNOSTICS.set(DiagnosticState {
++        active: true,
++        remaining: initial,
++        exhausted: prior.exhausted,
++    });
++    let value = call();
++    if DIAGNOSTICS.get().exhausted {
++        Err(Stop::Diagnostics)
++    } else {
++        Ok(value)
++    }
++}
++/// Delay diagnostic construction until allocation admission succeeds.
++pub(crate) fn push_error<T>(errors: &mut Vec<T>, make: impl FnOnce() -> T) {
++    if diagnostic_admit() {
++        errors.push(make());
++    }
++}
++pub(crate) fn diagnostic_admit() -> bool {
++    let mut state = DIAGNOSTICS.get();
++    if state.active {
++        if state.remaining == 0 {
++            state.exhausted = true;
++            DIAGNOSTICS.set(state);
++            return false;
++        }
++        state.remaining -= 1;
++        DIAGNOSTICS.set(state);
++    }
++    true
++}
+--- a/src/properties.rs
++++ b/src/properties.rs
+@@ -45,7 +45,7 @@
+ }
+ 
+ pub(crate) type FancyRegexValidators<F = SerdeJson> =
+-    Vec<(CompiledPattern<fancy_regex::Regex>, SchemaNode<F>)>;
++    Vec<(CompiledPattern<crate::ob_ecma::Regex>, SchemaNode<F>)>;
+ pub(crate) type RegexValidators<F = SerdeJson> =
+     Vec<(CompiledPattern<regex::Regex>, SchemaNode<F>)>;
+ 
+--- a/src/regex.rs
++++ b/src/regex.rs
+@@ -32,13 +32,13 @@
+     }
+ }
+ 
+-impl RegexEngine for fancy_regex::Regex {
++impl RegexEngine for crate::ob_ecma::Regex {
+     type Error = FancyRegexError;
+ 
+     fn is_match(&self, text: &str) -> Result<bool, Self::Error> {
+         // `regex-automata` 0.4 panics on some patterns (https://github.com/rust-lang/regex/issues/1344); catch to surface a regular error instead of aborting the host process.
+         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+-            fancy_regex::Regex::is_match(self, text)
++            crate::ob_ecma::Regex::is_match(self, text)
+         })) {
+             Ok(Ok(matched)) => Ok(matched),
+             Ok(Err(e)) => Err(FancyRegexError::Engine(e)),
+@@ -132,8 +132,8 @@
+     backtrack_limit: Option<usize>,
+     size_limit: Option<usize>,
+     dfa_size_limit: Option<usize>,
+-) -> Result<fancy_regex::Regex, ()> {
+-    let mut builder = fancy_regex::RegexBuilder::new(translated);
++) -> Result<crate::ob_ecma::Regex, ()> {
++    let mut builder = crate::ob_ecma::RegexBuilder::new(translated);
+     if let Some(limit) = backtrack_limit {
+         builder.backtrack_limit(limit);
+     }
+--- a/src/validator.rs
++++ b/src/validator.rs
+@@ -250,7 +250,7 @@
+         errors: &mut Vec<ValidationError<'i>>,
+     ) {
+         if let Err(error) = self.validate(instance, location, tracker, ctx) {
+-            errors.push(error);
++            crate::ob_work::push_error(errors, || error);
+         }
+     }
+ 
+@@ -654,11 +654,11 @@
+ 
+ #[cfg(test)]
+ mod tests {
++    use crate::ob_ecma::Regex;
+     use crate::{
+         error::ValidationError, keywords::custom::Keyword, paths::Location, Draft, Validator,
+         ValidatorMap,
+     };
+-    use fancy_regex::Regex;
+     use num_cmp::NumCmp;
+     use serde_json::{json, Map, Value};
+     use std::sync::LazyLock;

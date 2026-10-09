@@ -1,0 +1,357 @@
+{
+  "format": "openbindings.operation-graph@1",
+  "kind": "validation",
+  "description": "Pre-kind candidate fixtures for operation-graph source rules OG-D-01 through OG-D-03: accepted content representations, location form, and selector addressing. Tests carry the earlier draft's document shape. Validity labels judge the named family rule only; these documents are not current Core-conformance examples.",
+  "notes": "OG-D-01/OG-D-03 judgments need embedded content, so every resolution-dependent test embeds it; a location-only source leaves resolution inconclusive in this candidate and is not fixtured. The OG-D-02 negative cases use relative addresses under its earlier source shape. content: null is a present member per core §5.4 presence semantics, and null is neither of this family's two accepted representations. The candidate's location and selector fields no longer exist in current Core.",
+  "rules": [
+    {
+      "rule": "OG-D-01",
+      "title": "content, when present, is the parsed source document as an object or its JSON source text as a string.",
+      "schemaEnforced": false,
+      "tests": [
+        {
+          "description": "object content: the parsed source document",
+          "valid": true,
+          "document": {
+            "openbindings": "0.2.0",
+            "operations": { "wrapped": {} },
+            "sources": {
+              "graphs": {
+                "bindingSpec": "openbindings.operation-graph@1",
+                "content": {
+                  "graphs": {
+                    "main": {
+                      "openbindings.operation-graph": "0.2.0",
+                      "nodes": { "in": { "type": "input" }, "out": { "type": "output" } },
+                      "edges": [{ "from": "in", "to": "out" }]
+                    }
+                  }
+                }
+              }
+            },
+            "bindings": {
+              "wrapped.graph": { "operation": "wrapped", "source": "graphs", "selector": "#/graphs/main" }
+            }
+          }
+        },
+        {
+          "description": "string content: the document's JSON source text, parsed per RFC 8259",
+          "valid": true,
+          "document": {
+            "openbindings": "0.2.0",
+            "operations": { "wrapped": {} },
+            "sources": {
+              "graphs": {
+                "bindingSpec": "openbindings.operation-graph@1",
+                "content": "{\"graphs\":{\"main\":{\"openbindings.operation-graph\":\"0.2.0\",\"nodes\":{\"in\":{\"type\":\"input\"},\"out\":{\"type\":\"output\"}},\"edges\":[{\"from\":\"in\",\"to\":\"out\"}]}}}"
+              }
+            },
+            "bindings": {
+              "wrapped.graph": { "operation": "wrapped", "source": "graphs", "selector": "#/graphs/main" }
+            }
+          }
+        },
+        {
+          "description": "a number is not an accepted content representation for this family",
+          "valid": false,
+          "document": {
+            "openbindings": "0.2.0",
+            "operations": { "wrapped": {} },
+            "sources": {
+              "graphs": {
+                "bindingSpec": "openbindings.operation-graph@1",
+                "content": 42
+              }
+            },
+            "bindings": {
+              "wrapped.graph": { "operation": "wrapped", "source": "graphs", "selector": "#" }
+            }
+          }
+        },
+        {
+          "description": "an array is not an accepted content representation for this family (neither parsed-object nor source-text form)",
+          "valid": false,
+          "document": {
+            "openbindings": "0.2.0",
+            "operations": { "wrapped": {} },
+            "sources": {
+              "graphs": {
+                "bindingSpec": "openbindings.operation-graph@1",
+                "content": [
+                  {
+                    "openbindings.operation-graph": "0.2.0",
+                    "nodes": { "in": { "type": "input" }, "out": { "type": "output" } },
+                    "edges": [{ "from": "in", "to": "out" }]
+                  }
+                ]
+              }
+            },
+            "bindings": {
+              "wrapped.graph": { "operation": "wrapped", "source": "graphs", "selector": "#/0" }
+            }
+          }
+        },
+        {
+          "description": "content: null is a present member (core §5.4) and null is neither object nor string",
+          "valid": false,
+          "document": {
+            "openbindings": "0.2.0",
+            "operations": { "wrapped": {} },
+            "sources": {
+              "graphs": {
+                "bindingSpec": "openbindings.operation-graph@1",
+                "location": "https://example.com/graphs.json",
+                "content": null
+              }
+            },
+            "bindings": {
+              "wrapped.graph": { "operation": "wrapped", "source": "graphs", "selector": "#/graphs/main" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "rule": "OG-D-02",
+      "title": "location, when present, is an absolute URI addressing the source document.",
+      "schemaEnforced": false,
+      "tests": [
+        {
+          "description": "https absolute URI addressing the source document",
+          "valid": true,
+          "document": {
+            "openbindings": "0.2.0",
+            "operations": { "wrapped": {} },
+            "sources": {
+              "graphs": {
+                "bindingSpec": "openbindings.operation-graph@1",
+                "location": "https://example.com/graphs.json"
+              }
+            },
+            "bindings": {
+              "wrapped.graph": { "operation": "wrapped", "source": "graphs", "selector": "#/graphs/main" }
+            }
+          }
+        },
+        {
+          "description": "file scheme absolute URI addressing the source document",
+          "valid": true,
+          "document": {
+            "openbindings": "0.2.0",
+            "operations": { "wrapped": {} },
+            "sources": {
+              "graphs": {
+                "bindingSpec": "openbindings.operation-graph@1",
+                "location": "file:///srv/graphs.json"
+              }
+            },
+            "bindings": {
+              "wrapped.graph": { "operation": "wrapped", "source": "graphs", "selector": "#/graphs/main" }
+            }
+          }
+        },
+        {
+          "description": "a dot-relative path is a relative reference in form, not an absolute URI",
+          "valid": false,
+          "document": {
+            "openbindings": "0.2.0",
+            "operations": { "wrapped": {} },
+            "sources": {
+              "graphs": {
+                "bindingSpec": "openbindings.operation-graph@1",
+                "location": "./graphs.json"
+              }
+            },
+            "bindings": {
+              "wrapped.graph": { "operation": "wrapped", "source": "graphs", "selector": "#/graphs/main" }
+            }
+          }
+        },
+        {
+          "description": "a bare filesystem path is a relative reference in form, not an absolute URI",
+          "valid": false,
+          "document": {
+            "openbindings": "0.2.0",
+            "operations": { "wrapped": {} },
+            "sources": {
+              "graphs": {
+                "bindingSpec": "openbindings.operation-graph@1",
+                "location": "graphs/all.json"
+              }
+            },
+            "bindings": {
+              "wrapped.graph": { "operation": "wrapped", "source": "graphs", "selector": "#/graphs/main" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "rule": "OG-D-03",
+      "title": "selector is present and is an RFC 6901 JSON Pointer fragment resolving to a graph definition (\"#\" addressing a root-level graph).",
+      "schemaEnforced": false,
+      "tests": [
+        {
+          "description": "pointer fragment resolving to a graph definition inside object content",
+          "valid": true,
+          "document": {
+            "openbindings": "0.2.0",
+            "operations": { "wrapped": {} },
+            "sources": {
+              "graphs": {
+                "bindingSpec": "openbindings.operation-graph@1",
+                "content": {
+                  "graphs": {
+                    "main": {
+                      "openbindings.operation-graph": "0.2.0",
+                      "nodes": { "in": { "type": "input" }, "out": { "type": "output" } },
+                      "edges": [{ "from": "in", "to": "out" }]
+                    }
+                  }
+                }
+              }
+            },
+            "bindings": {
+              "wrapped.graph": { "operation": "wrapped", "source": "graphs", "selector": "#/graphs/main" }
+            }
+          }
+        },
+        {
+          "description": "the fragment \"#\" (empty JSON Pointer) addresses a document whose root is itself a graph definition",
+          "valid": true,
+          "document": {
+            "openbindings": "0.2.0",
+            "operations": { "wrapped": {} },
+            "sources": {
+              "graphs": {
+                "bindingSpec": "openbindings.operation-graph@1",
+                "content": {
+                  "openbindings.operation-graph": "0.2.0",
+                  "nodes": { "in": { "type": "input" }, "out": { "type": "output" } },
+                  "edges": [{ "from": "in", "to": "out" }]
+                }
+              }
+            },
+            "bindings": {
+              "wrapped.graph": { "operation": "wrapped", "source": "graphs", "selector": "#" }
+            }
+          }
+        },
+        {
+          "description": "pointer fragment resolving within string content after an RFC 8259 parse",
+          "valid": true,
+          "document": {
+            "openbindings": "0.2.0",
+            "operations": { "wrapped": {} },
+            "sources": {
+              "graphs": {
+                "bindingSpec": "openbindings.operation-graph@1",
+                "content": "{\"graphs\":{\"main\":{\"openbindings.operation-graph\":\"0.2.0\",\"nodes\":{\"in\":{\"type\":\"input\"},\"out\":{\"type\":\"output\"}},\"edges\":[{\"from\":\"in\",\"to\":\"out\"}]}}}"
+              }
+            },
+            "bindings": {
+              "wrapped.graph": { "operation": "wrapped", "source": "graphs", "selector": "#/graphs/main" }
+            }
+          }
+        },
+        {
+          "description": "selector absent: this specification defines no whole-document interpretation for an absent selector",
+          "valid": false,
+          "document": {
+            "openbindings": "0.2.0",
+            "operations": { "wrapped": {} },
+            "sources": {
+              "graphs": {
+                "bindingSpec": "openbindings.operation-graph@1",
+                "content": {
+                  "openbindings.operation-graph": "0.2.0",
+                  "nodes": { "in": { "type": "input" }, "out": { "type": "output" } },
+                  "edges": [{ "from": "in", "to": "out" }]
+                }
+              }
+            },
+            "bindings": {
+              "wrapped.graph": { "operation": "wrapped", "source": "graphs" }
+            }
+          }
+        },
+        {
+          "description": "a bare graph key is not a JSON Pointer fragment (the leading # is part of the syntax)",
+          "valid": false,
+          "document": {
+            "openbindings": "0.2.0",
+            "operations": { "wrapped": {} },
+            "sources": {
+              "graphs": {
+                "bindingSpec": "openbindings.operation-graph@1",
+                "content": {
+                  "graphs": {
+                    "main": {
+                      "openbindings.operation-graph": "0.2.0",
+                      "nodes": { "in": { "type": "input" }, "out": { "type": "output" } },
+                      "edges": [{ "from": "in", "to": "out" }]
+                    }
+                  }
+                }
+              }
+            },
+            "bindings": {
+              "wrapped.graph": { "operation": "wrapped", "source": "graphs", "selector": "main" }
+            }
+          }
+        },
+        {
+          "description": "a pointer fragment that does not resolve in the source document is a binding error",
+          "valid": false,
+          "document": {
+            "openbindings": "0.2.0",
+            "operations": { "wrapped": {} },
+            "sources": {
+              "graphs": {
+                "bindingSpec": "openbindings.operation-graph@1",
+                "content": {
+                  "graphs": {
+                    "main": {
+                      "openbindings.operation-graph": "0.2.0",
+                      "nodes": { "in": { "type": "input" }, "out": { "type": "output" } },
+                      "edges": [{ "from": "in", "to": "out" }]
+                    }
+                  }
+                }
+              }
+            },
+            "bindings": {
+              "wrapped.graph": { "operation": "wrapped", "source": "graphs", "selector": "#/graphs/missing" }
+            }
+          }
+        },
+        {
+          "description": "a pointer fragment resolving to a value that is not a graph definition is a binding error",
+          "valid": false,
+          "document": {
+            "openbindings": "0.2.0",
+            "operations": { "wrapped": {} },
+            "sources": {
+              "graphs": {
+                "bindingSpec": "openbindings.operation-graph@1",
+                "content": {
+                  "notes": "not a graph",
+                  "graphs": {
+                    "main": {
+                      "openbindings.operation-graph": "0.2.0",
+                      "nodes": { "in": { "type": "input" }, "out": { "type": "output" } },
+                      "edges": [{ "from": "in", "to": "out" }]
+                    }
+                  }
+                }
+              }
+            },
+            "bindings": {
+              "wrapped.graph": { "operation": "wrapped", "source": "graphs", "selector": "#/notes" }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

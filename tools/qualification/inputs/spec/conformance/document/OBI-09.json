@@ -1,0 +1,246 @@
+{
+  "rule": "OBI-09",
+  "section": "10",
+  "description": "Has every $schema keyword in a schema the document contains (§3) equal to https://json-schema.org/draft/2020-12/schema or https://json-schema.org/draft/2020-12/schema#.",
+  "tests": [
+    {
+      "description": "schema with explicit 2020-12 $schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "$id": "https://example.com/task.schema.json",
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object"
+          }
+        },
+        "operations": { "createTask": {} }
+      },
+      "valid": true
+    },
+    {
+      "description": "a 2020-12 $schema on an input that declares no $id, where JSON Schema does not permit $schema, meets the rule (section 5.2)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "string" }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "schema without $schema (omission permitted)",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": { "Task": { "type": "object" } },
+        "operations": { "createTask": {} }
+      },
+      "valid": true
+    },
+    {
+      "description": "schema with 2019-09 $schema value",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "$id": "https://example.com/task.schema.json",
+            "$schema": "https://json-schema.org/draft/2019-09/schema",
+            "type": "object"
+          }
+        },
+        "operations": { "createTask": {} }
+      },
+      "valid": false,
+      "violates": ["OBI-09"]
+    },
+    {
+      "description": "schema with draft-07 $schema value",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "$id": "https://example.com/task.schema.json",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object"
+          }
+        },
+        "operations": { "createTask": {} }
+      },
+      "valid": false,
+      "violates": ["OBI-09"]
+    },
+    {
+      "description": "operation input schema with wrong $schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "input": {
+              "$id": "https://example.com/create-task.schema.json",
+              "$schema": "https://json-schema.org/draft/2019-09/schema",
+              "type": "object"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": ["OBI-09"]
+    },
+    {
+      "description": "a $schema member inside an example value or a source's content is data, not a schema keyword",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "lint": {
+            "input": {
+              "type": "object"
+            },
+            "examples": {
+              "e": {
+                "input": {
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                }
+              }
+            }
+          }
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1",
+            "content": {
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a wrong $schema on a nested schema that declares $id",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "$defs": {
+              "Inner": {
+                "$id": "https://example.com/inner.schema.json",
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "createTask": {}
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-09"
+      ]
+    },
+    {
+      "description": "$schema naming the 2020-12 meta-schema with an empty fragment identifies the same meta-schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "$id": "https://example.com/task.schema.json",
+            "$schema": "https://json-schema.org/draft/2020-12/schema#",
+            "type": "object"
+          }
+        },
+        "operations": {
+          "createTask": {
+            "input": {
+              "$ref": "https://example.com/task.schema.json"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a draft-07 $schema under the legacy definitions keyword is in a schema the document contains",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "definitions": {
+              "B": {
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "f": {}
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-09"
+      ]
+    },
+    {
+      "description": "a $schema naming the 2020-12 meta-schema with the http scheme is neither permitted value; nested, it is OBI-09's alone, since the derived schema checks $schema only at the top of each schema position (section 10)",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "$defs": {
+              "Inner": {
+                "$id": "https://example.com/inner.schema.json",
+                "$schema": "http://json-schema.org/draft/2020-12/schema",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "createTask": {}
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-09"
+      ],
+      "notViolated": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "a $schema naming the 2020-12 meta-schema with a trailing slash is neither permitted value; nested, it is OBI-09's alone, since the derived schema checks $schema only at the top of each schema position (section 10)",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "$defs": {
+              "Inner": {
+                "$id": "https://example.com/inner.schema.json",
+                "$schema": "https://json-schema.org/draft/2020-12/schema/",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "createTask": {}
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-09"
+      ],
+      "notViolated": [
+        "OBI-02"
+      ]
+    }
+  ]
+}
