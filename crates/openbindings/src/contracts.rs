@@ -89,11 +89,9 @@ pub enum ValueOutcome {
         problems: Vec<ValueProblem>,
         problems_complete: bool,
     },
-    NoContract,
     NoVerdict {
         detail: NoVerdict,
     },
-    OperationMissing,
 }
 
 #[derive(Clone, Debug)]
@@ -269,13 +267,25 @@ impl PreparationCache {
 #[derive(Clone)]
 enum ContractState {
     Ready(Arc<dyn PreparedSchema>),
+    NoVerdict(NoVerdict),
+}
+/// Setup result. Only Ready owns a successfully prepared contract.
+#[derive(Clone, Debug)]
+pub enum ContractPreparation {
+    Ready(PreparedContract),
     NoContract,
     OperationMissing,
-    NoVerdict(NoVerdict),
+    OperationAmbiguous { candidates: Vec<String> },
+    NoVerdict { detail: NoVerdict },
 }
 #[derive(Clone)]
 pub struct PreparedContract {
-    state: ContractState,
+    schema: Arc<dyn PreparedSchema>,
+}
+impl fmt::Debug for PreparedContract {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PreparedContract { .. }")
+    }
 }
 impl PreparedContract {
     pub fn validate(&self, value: &JsonValue) -> ValueOutcome {
@@ -285,25 +295,16 @@ impl PreparedContract {
         if let Err(detail) = control.check() {
             return ValueOutcome::NoVerdict { detail };
         }
-        match &self.state {
-            ContractState::Ready(schema) => {
-                if value.has_duplicate_names() {
-                    return ValueOutcome::NoVerdict {
-                        detail: NoVerdict::new(
-                            NoVerdictReason::UnsupportedCapability,
-                            "duplicate-instance-members",
-                            "a value with repeated JSON member names has no unambiguous interpretation",
-                        ),
-                    };
-                }
-                schema.validate(value, control)
-            }
-            ContractState::NoContract => ValueOutcome::NoContract,
-            ContractState::OperationMissing => ValueOutcome::OperationMissing,
-            ContractState::NoVerdict(detail) => ValueOutcome::NoVerdict {
-                detail: detail.clone(),
-            },
+        if value.has_duplicate_names() {
+            return ValueOutcome::NoVerdict {
+                detail: NoVerdict::new(
+                    NoVerdictReason::UnsupportedCapability,
+                    "duplicate-instance-members",
+                    "a value with repeated JSON member names has no unambiguous interpretation",
+                ),
+            };
         }
+        self.schema.validate(value, control)
     }
 }
 impl ParsedDocument {
@@ -335,7 +336,7 @@ impl ParsedDocument {
     }
 }
 impl ValueContracts {
-    pub fn prepare(&self, operation: &str, side: Side) -> PreparedContract {
+    pub fn prepare(&self, operation: &str, side: Side) -> ContractPreparation {
         self.prepare_with_control(operation, side, &WorkControl::new())
     }
     pub fn prepare_with_control(
@@ -343,26 +344,46 @@ impl ValueContracts {
         operation: &str,
         side: Side,
         control: &WorkControl,
-    ) -> PreparedContract {
-        let state = self.prepare_state(operation, side, control);
-        PreparedContract { state }
-    }
-    fn prepare_state(&self, operation: &str, side: Side, control: &WorkControl) -> ContractState {
-        if let Err(reason) = control.check() {
-            return ContractState::NoVerdict(reason);
+    ) -> ContractPreparation {
+        if let Err(detail) = control.check() {
+            return ContractPreparation::NoVerdict { detail };
         }
-        let Ok(Some(op)) = self.inner.space.document.resolve_operation(operation) else {
-            return ContractState::OperationMissing;
+        let op = match self.inner.space.document.resolve_operation(operation) {
+            Ok(OperationSelection::Found(op)) => op,
+            Ok(OperationSelection::Missing) => return ContractPreparation::OperationMissing,
+            Ok(OperationSelection::Ambiguous { candidates }) => {
+                return ContractPreparation::OperationAmbiguous { candidates };
+            }
+            Err(error) => {
+                let mut detail = NoVerdict::new(
+                    NoVerdictReason::Undefined,
+                    "invalid-operation-structure",
+                    "the operation structure cannot establish a value contract",
+                );
+                if let Some(location) = error.source_location() {
+                    detail.location = Some(SchemaLocation {
+                        resource: None,
+                        pointer: location.pointer.clone().unwrap_or_default(),
+                    });
+                }
+                return ContractPreparation::NoVerdict { detail };
+            }
         };
-        let Some(schema) = op.value.get(side.as_str()) else {
-            return ContractState::NoContract;
+        let Some(schema) = op.value().get(side.as_str()) else {
+            return ContractPreparation::NoContract;
         };
         let Some(entry) = self.inner.space.document_node(&schema.to_owned()) else {
-            return ContractState::NoVerdict(NoVerdict::new(
-                NoVerdictReason::ConservativePreparation,
-                "non-schema-entry",
-                "the operation side is not a schema position",
-            ));
+            return ContractPreparation::NoVerdict {
+                detail: NoVerdict::new(
+                    NoVerdictReason::ConservativePreparation,
+                    "non-schema-entry",
+                    "the operation side is not a schema position",
+                )
+                .located(SchemaLocation {
+                    resource: None,
+                    pointer: schema.location().pointer.unwrap_or_default(),
+                }),
+            };
         };
         let cell = {
             let mut prepared = self
@@ -372,20 +393,29 @@ impl ValueContracts {
                 .unwrap_or_else(|e| e.into_inner());
             prepared.entry(entry)
         };
-        if let Some(state) = cell.get() {
-            return state.clone();
-        }
-        let request = SchemaRequest {
-            space: self.inner.space.clone(),
-            entry,
+        let state = if let Some(state) = cell.get() {
+            state.clone()
+        } else {
+            let request = SchemaRequest {
+                space: self.inner.space.clone(),
+                entry,
+            };
+            let state = match self.inner.evaluator.prepare(&request, control) {
+                Ok(schema) => ContractState::Ready(schema),
+                Err(detail) => ContractState::NoVerdict(detail),
+            };
+            if !matches!(&state, ContractState::NoVerdict(detail) if !detail.cacheable()) {
+                let _ = cell.set(state.clone());
+            }
+            state
         };
-        let state = match self.inner.evaluator.prepare(&request, control) {
-            Ok(prepared) => ContractState::Ready(prepared),
-            Err(reason) => ContractState::NoVerdict(reason),
-        };
-        if !matches!(&state,ContractState::NoVerdict(reason)if !reason.cacheable()) {
-            let _ = cell.set(state.clone());
+        // An evaluator may finish while the caller cancels; no ready owner is returned.
+        if let Err(detail) = control.check() {
+            return ContractPreparation::NoVerdict { detail };
         }
-        state
+        match state {
+            ContractState::Ready(schema) => ContractPreparation::Ready(PreparedContract { schema }),
+            ContractState::NoVerdict(detail) => ContractPreparation::NoVerdict { detail },
+        }
     }
 }

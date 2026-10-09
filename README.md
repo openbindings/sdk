@@ -36,8 +36,10 @@ assert!(validated.original_bytes().starts_with(b"{"));
 
 Parsing preserves evidence; validation establishes conformance separately. For
 operation values, select `openbindings-json-schema-evaluator` explicitly and pass
-an immutable `ResourceSet`. `ValueOutcome` distinguishes satisfies, mismatch,
-no-contract, missing operation and no-verdict. Core never acquires references.
+an immutable `ResourceSet`. `ContractPreparation` distinguishes ready, absent
+contract, missing or ambiguous operation, and preparation refusal. Only a ready
+contract validates values; `ValueOutcome` distinguishes satisfies, mismatch and
+no-verdict. Core never acquires references.
 The complete six-workflow public caller is [examples/rust-consumer](examples/rust-consumer/src/main.rs).
 
 ## TypeScript

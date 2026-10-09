@@ -8,7 +8,7 @@
 //! let assessment = snapshot.assess()?;
 //! assert_eq!(assessment.report().conclusion, Conformance::Conformant);
 //! let validated = assessment.validated().expect("conformance was established");
-//! assert!(validated.parsed().resolve_operation("lookup")?.is_some());
+//! assert!(matches!(validated.parsed().resolve_operation("lookup")?, openbindings::OperationSelection::Found(_)));
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 #![forbid(unsafe_code)]
@@ -16,7 +16,7 @@ mod uri;
 mod version;
 pub use openbindings_internal_json::{
     InputError, InputErrorKind, JsonKind, JsonLimits, JsonMember, JsonRef, JsonValue,
-    SourceLocation,
+    SourceLocation, ValueConversionError, ValueConversionErrorKind,
 };
 pub use version::*;
 

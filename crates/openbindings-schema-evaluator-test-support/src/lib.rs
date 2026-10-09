@@ -74,7 +74,8 @@ impl Options {
 pub struct Observation {
     pub id: String,
     pub expected: String,
-    pub outcome: ValueOutcome,
+    pub preparation_refusal: Option<NoVerdict>,
+    pub outcome: Option<ValueOutcome>,
     pub failures: Vec<String>,
 }
 #[derive(Clone, Debug, Serialize)]
@@ -95,7 +96,7 @@ impl Report {
             .filter(|o| {
                 matches!(
                     o.outcome,
-                    ValueOutcome::Satisfies | ValueOutcome::Mismatch { .. }
+                    Some(ValueOutcome::Satisfies | ValueOutcome::Mismatch { .. })
                 )
             })
             .count()
@@ -103,7 +104,10 @@ impl Report {
     pub fn refusal_count(&self) -> usize {
         self.observations
             .iter()
-            .filter(|o| matches!(o.outcome, ValueOutcome::NoVerdict { .. }))
+            .filter(|o| {
+                o.preparation_refusal.is_some()
+                    || matches!(o.outcome, Some(ValueOutcome::NoVerdict { .. }))
+            })
             .count()
     }
 }
@@ -145,10 +149,29 @@ pub fn run(evaluator: Arc<dyn SchemaEvaluator>, options: &Options) -> Report {
             .value_contracts(evaluator.clone(), resources)
             .expect("packaged interpretable document");
         let prepared = context.prepare("op", Side::Input);
+        if !matches!(
+            prepared,
+            ContractPreparation::Ready(_) | ContractPreparation::NoVerdict { .. }
+        ) {
+            report.configuration_failures.push(format!(
+                "{}: expected a schema preparation, observed {prepared:?}",
+                group.id
+            ));
+            continue;
+        }
         for case in &group.cases {
             let value = JsonValue::parse(&case.value).expect("packaged instance JSON");
             let original = value.text().to_owned();
-            let outcome = prepared.validate(&value);
+            let (outcome, preparation_refusal) = match &prepared {
+                ContractPreparation::Ready(contract) => (contract.validate(&value), None),
+                ContractPreparation::NoVerdict { detail } => (
+                    ValueOutcome::NoVerdict {
+                        detail: detail.clone(),
+                    },
+                    Some(detail.clone()),
+                ),
+                _ => unreachable!("setup state checked above"),
+            };
             let allowed = options
                 .permitted_refusals
                 .get(&case.id)
@@ -198,7 +221,8 @@ pub fn run(evaluator: Arc<dyn SchemaEvaluator>, options: &Options) -> Report {
             report.observations.push(Observation {
                 id: case.id.clone(),
                 expected: case.expected.clone(),
-                outcome,
+                outcome: preparation_refusal.is_none().then_some(outcome),
+                preparation_refusal,
                 failures,
             });
         }
@@ -224,8 +248,6 @@ pub fn judge(
         ValueOutcome::Satisfies => "satisfies",
         ValueOutcome::Mismatch { .. } => "mismatch",
         ValueOutcome::NoVerdict { .. } => "no-verdict",
-        ValueOutcome::NoContract => "no-contract",
-        ValueOutcome::OperationMissing => "operation-missing",
     };
     let permitted_refusal = permitted_refusal
         && case.optional_capability.is_some()

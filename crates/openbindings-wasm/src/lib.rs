@@ -23,6 +23,11 @@ fn input_error(e: InputError) -> JsValue {
         json!({"code":e.code,"kind":format!("{:?}",e.kind),"byte_offset":e.byte_offset,"message":e.to_string()}),
     ))
 }
+fn interpretation_error(e: InterpretationError) -> JsValue {
+    JsValue::from_str(&encoded(
+        json!({"code":"interpretation", "message":e.to_string(), "interpretation_code":e.code(), "location":e.source_location()}),
+    ))
+}
 fn side(side: &str) -> Result<Side, JsValue> {
     match side {
         "input" => Ok(Side::Input),
@@ -131,26 +136,19 @@ impl WasmDocument {
     /// Small metadata is materialized once by TypeScript for repeated UI reads.
     pub fn operations(&self) -> Result<String, JsValue> {
         let mut result = Vec::new();
-        for operation in self
-            .document
-            .operations()
-            .map_err(|e| error("interpretation", e))?
-        {
-            result.push(json!({"key":operation.key,"description":operation.value.get("description").and_then(|v|v.as_str()),"aliases":operation.value.get("aliases").and_then(|v|v.elements()).map(|v|v.filter_map(|x|x.as_str()).collect::<Vec<_>>()),"has_input":operation.value.get("input").is_some(),"has_output":operation.value.get("output").is_some()}));
+        for operation in self.document.operations().map_err(interpretation_error)? {
+            result.push(json!({"key":operation.key(),"description":operation.description().map_err(interpretation_error)?,"aliases":operation.aliases().map_err(interpretation_error)?.map(|v|v.collect::<Vec<_>>()),"has_input":operation.input().is_some(),"has_output":operation.output().is_some()}));
         }
         Ok(encoded(result))
     }
     #[wasm_bindgen(js_name=resolveOperation)]
-    pub fn resolve_operation(&self, name: &str) -> Result<Option<WasmOperation>, JsValue> {
+    pub fn resolve_operation(&self, name: &str) -> Result<WasmOperationSelection, JsValue> {
         self.document
             .resolve_operation(name)
-            .map(|op| {
-                op.map(|op| WasmOperation {
-                    document: self.document.clone(),
-                    op,
-                })
+            .map(|selection| WasmOperationSelection {
+                selection: Some(selection),
             })
-            .map_err(|e| error("interpretation", e))
+            .map_err(interpretation_error)
     }
     #[wasm_bindgen(js_name=dependencyAcceptsKind)]
     pub fn dependency_accepts_kind(
@@ -160,7 +158,7 @@ impl WasmDocument {
     ) -> Result<Option<bool>, JsValue> {
         self.document
             .dependency_accepts_kind(dependency, kind)
-            .map_err(|e| error("interpretation", e))
+            .map_err(interpretation_error)
     }
     pub fn references(
         &self,
@@ -170,7 +168,7 @@ impl WasmDocument {
         self.document
             .references_with_resources(resources.resources.clone(), &control(cancelled))
             .map(encoded)
-            .map_err(|e| error("interpretation", e))
+            .map_err(interpretation_error)
     }
     pub fn contracts(
         &self,
@@ -190,29 +188,53 @@ impl WasmDocument {
                 },
             )
             .map(|contracts| WasmContracts { contracts })
-            .map_err(|e| error("interpretation", e))
+            .map_err(interpretation_error)
+    }
+}
+/// A private transfer wrapper. Dropping it drops an untaken operation owner.
+#[wasm_bindgen]
+pub struct WasmOperationSelection {
+    selection: Option<OperationSelection>,
+}
+#[wasm_bindgen]
+impl WasmOperationSelection {
+    pub fn result(&self) -> String {
+        match &self.selection {
+            Some(OperationSelection::Found(_)) => encoded(json!({"status":"found"})),
+            Some(OperationSelection::Missing) => encoded(json!({"status":"missing"})),
+            Some(OperationSelection::Ambiguous { candidates }) => {
+                encoded(json!({"status":"ambiguous","candidates":candidates}))
+            }
+            None => encoded(json!({"status":"consumed"})),
+        }
+    }
+    #[wasm_bindgen(js_name=takeOperation)]
+    pub fn take_operation(&mut self) -> Option<WasmOperation> {
+        match self.selection.take()? {
+            OperationSelection::Found(op) => Some(WasmOperation { op }),
+            _ => None,
+        }
     }
 }
 #[wasm_bindgen]
 pub struct WasmOperation {
-    document: ParsedDocument,
     op: OperationView,
 }
 #[wasm_bindgen]
 impl WasmOperation {
     pub fn key(&self) -> String {
-        self.op.key.clone()
+        self.op.key().to_owned()
     }
     pub fn value(&self) -> WasmJson {
         WasmJson {
-            value: self.op.value.clone(),
+            value: self.op.value().to_owned(),
         }
     }
     pub fn bindings(&self) -> Result<String, JsValue> {
-        self.document
-            .operation_bindings(&self.op.key)
+        self.op
+            .bindings()
             .map(encoded)
-            .map_err(|e| error("interpretation", e))
+            .map_err(interpretation_error)
     }
 }
 #[wasm_bindgen]
@@ -257,14 +279,45 @@ impl WasmContracts {
         operation: &str,
         side_name: &str,
         cancelled: bool,
-    ) -> Result<WasmPrepared, JsValue> {
-        Ok(WasmPrepared {
-            prepared: self.contracts.prepare_with_control(
+    ) -> Result<WasmPreparation, JsValue> {
+        Ok(WasmPreparation {
+            preparation: Some(self.contracts.prepare_with_control(
                 operation,
                 side(side_name)?,
                 &control(cancelled),
-            ),
+            )),
         })
+    }
+}
+/// A private transfer wrapper. Dropping it drops any untaken compiled contract.
+#[wasm_bindgen]
+pub struct WasmPreparation {
+    preparation: Option<ContractPreparation>,
+}
+#[wasm_bindgen]
+impl WasmPreparation {
+    pub fn result(&self) -> String {
+        match &self.preparation {
+            Some(ContractPreparation::Ready(_)) => encoded(json!({"status":"ready"})),
+            Some(ContractPreparation::NoContract) => encoded(json!({"status":"no-contract"})),
+            Some(ContractPreparation::OperationMissing) => {
+                encoded(json!({"status":"operation-missing"}))
+            }
+            Some(ContractPreparation::OperationAmbiguous { candidates }) => {
+                encoded(json!({"status":"operation-ambiguous","candidates":candidates}))
+            }
+            Some(ContractPreparation::NoVerdict { detail }) => {
+                encoded(json!({"status":"no-verdict","detail":detail}))
+            }
+            None => encoded(json!({"status":"consumed"})),
+        }
+    }
+    #[wasm_bindgen(js_name=takeContract)]
+    pub fn take_contract(&mut self) -> Option<WasmPrepared> {
+        match self.preparation.take()? {
+            ContractPreparation::Ready(prepared) => Some(WasmPrepared { prepared }),
+            _ => None,
+        }
     }
 }
 #[wasm_bindgen]

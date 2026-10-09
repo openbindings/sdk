@@ -46,12 +46,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     let context = document.value_contracts(Arc::new(BooleanEvaluator), ResourceSet::default())?;
     let value = JsonValue::null();
+    let ContractPreparation::Ready(input) = context.prepare("op", Side::Input) else {
+        panic!("boolean input should prepare")
+    };
+    let ContractPreparation::Ready(output) = context.prepare("op", Side::Output) else {
+        panic!("boolean output should prepare")
+    };
+    assert!(matches!(input.validate(&value), ValueOutcome::Satisfies));
     assert!(matches!(
-        context.prepare("op", Side::Input).validate(&value),
-        ValueOutcome::Satisfies
-    ));
-    assert!(matches!(
-        context.prepare("op", Side::Output).validate(&value),
+        output.validate(&value),
         ValueOutcome::Mismatch { .. }
     ));
     Ok(())

@@ -4,10 +4,50 @@ use jsonschema_value::ob_decimal::Decimal;
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use std::{collections::BTreeMap, fmt};
 
+/// Stable authoring failures, separate from document conformance findings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum AuthoringErrorKind {
+    FieldCollision,
+    InvalidField,
+    DuplicateMembers,
+    Serialization,
+    Limit,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AuthoringError {
-    pub location: Option<crate::SourceLocation>,
-    pub message: String,
+    kind: AuthoringErrorKind,
+    draft_pointer: Option<String>,
+    source_location: Option<crate::SourceLocation>,
+    message: String,
+    path_omitted_for_limit: bool,
+}
+impl AuthoringError {
+    pub fn kind(&self) -> AuthoringErrorKind {
+        self.kind
+    }
+    /// Logical native draft path, including `additional_fields`; not a source location.
+    pub fn draft_pointer(&self) -> Option<&str> {
+        self.draft_pointer.as_deref()
+    }
+    pub fn source_location(&self) -> Option<&crate::SourceLocation> {
+        self.source_location.as_ref()
+    }
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+    pub fn path_omitted_for_limit(&self) -> bool {
+        self.path_omitted_for_limit
+    }
+    fn plain(kind: AuthoringErrorKind, message: &str) -> Self {
+        Self {
+            kind,
+            draft_pointer: None,
+            source_location: None,
+            message: message.into(),
+            path_omitted_for_limit: false,
+        }
+    }
 }
 impl fmt::Display for AuthoringError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -17,9 +57,57 @@ impl fmt::Display for AuthoringError {
 impl std::error::Error for AuthoringError {}
 fn error(at: JsonRef<'_>, message: impl Into<String>) -> AuthoringError {
     AuthoringError {
-        location: Some(at.location()),
+        kind: AuthoringErrorKind::InvalidField,
+        draft_pointer: None,
+        source_location: Some(at.location()),
         message: message.into(),
+        path_omitted_for_limit: false,
     }
+}
+fn check_fields(
+    fields: &BTreeMap<String, JsonValue>,
+    reserved: &[&str],
+    path: &[&str],
+) -> Result<(), AuthoringError> {
+    for key in fields.keys() {
+        if !reserved.contains(&key.as_str()) {
+            continue;
+        }
+        let mut pointer = String::new();
+        let mut omitted = false;
+        'segments: for segment in path
+            .iter()
+            .copied()
+            .chain(["additional_fields", key.as_str()])
+        {
+            if pointer.len() == 4096 {
+                omitted = true;
+                break;
+            }
+            pointer.push('/');
+            for ch in segment.chars() {
+                let mut buf = [0; 4];
+                let text = match ch {
+                    '~' => "~0",
+                    '/' => "~1",
+                    _ => ch.encode_utf8(&mut buf),
+                };
+                if text.len() > 4096 - pointer.len() {
+                    omitted = true;
+                    break 'segments;
+                }
+                pointer.push_str(text);
+            }
+        }
+        return Err(AuthoringError {
+            kind: AuthoringErrorKind::FieldCollision,
+            draft_pointer: (!omitted).then_some(pointer),
+            source_location: None,
+            message: "additional field shadows a typed member".into(),
+            path_omitted_for_limit: omitted,
+        });
+    }
+    Ok(())
 }
 trait Read: Sized {
     fn read(value: JsonRef<'_>) -> Result<Self, AuthoringError>;
@@ -126,9 +214,9 @@ impl Serialize for DocumentBuilder {
         ];
         for key in self.additional_fields.keys() {
             if RESERVED.contains(&key.as_str()) {
-                return Err(serde::ser::Error::custom(format!(
-                    "additional field shadows typed member {key}"
-                )));
+                return Err(serde::ser::Error::custom(
+                    "additional field shadows a typed member",
+                ));
             }
         }
         let mut map = serializer.serialize_map(None)?;
@@ -242,9 +330,9 @@ impl Serialize for Operation {
         ];
         for key in self.additional_fields.keys() {
             if RESERVED.contains(&key.as_str()) {
-                return Err(serde::ser::Error::custom(format!(
-                    "additional field shadows typed member {key}"
-                )));
+                return Err(serde::ser::Error::custom(
+                    "additional field shadows a typed member",
+                ));
             }
         }
         let mut map = serializer.serialize_map(None)?;
@@ -325,9 +413,9 @@ impl Serialize for OperationExample {
         const RESERVED: &[&str] = &["description", "input", "output"];
         for key in self.additional_fields.keys() {
             if RESERVED.contains(&key.as_str()) {
-                return Err(serde::ser::Error::custom(format!(
-                    "additional field shadows typed member {key}"
-                )));
+                return Err(serde::ser::Error::custom(
+                    "additional field shadows a typed member",
+                ));
             }
         }
         let mut map = serializer.serialize_map(None)?;
@@ -380,9 +468,9 @@ impl Serialize for Dependency {
         const RESERVED: &[&str] = &["operation", "kinds", "description"];
         for key in self.additional_fields.keys() {
             if RESERVED.contains(&key.as_str()) {
-                return Err(serde::ser::Error::custom(format!(
-                    "additional field shadows typed member {key}"
-                )));
+                return Err(serde::ser::Error::custom(
+                    "additional field shadows a typed member",
+                ));
             }
         }
         let mut map = serializer.serialize_map(None)?;
@@ -437,9 +525,9 @@ impl Serialize for Source {
         const RESERVED: &[&str] = &["kind", "content", "description"];
         for key in self.additional_fields.keys() {
             if RESERVED.contains(&key.as_str()) {
-                return Err(serde::ser::Error::custom(format!(
-                    "additional field shadows typed member {key}"
-                )));
+                return Err(serde::ser::Error::custom(
+                    "additional field shadows a typed member",
+                ));
             }
         }
         let mut map = serializer.serialize_map(None)?;
@@ -502,9 +590,9 @@ impl Serialize for Binding {
         ];
         for key in self.additional_fields.keys() {
             if RESERVED.contains(&key.as_str()) {
-                return Err(serde::ser::Error::custom(format!(
-                    "additional field shadows typed member {key}"
-                )));
+                return Err(serde::ser::Error::custom(
+                    "additional field shadows a typed member",
+                ));
             }
         }
         let mut map = serializer.serialize_map(None)?;
@@ -591,22 +679,60 @@ impl DocumentBuilder {
     /// Reads only representable normative fields; assessment remains available for every parsed input.
     pub fn from_json(value: &JsonValue) -> Result<Self, AuthoringError> {
         if value.has_duplicate_names() {
-            return Err(error(
+            let mut error = error(
                 value.view(),
                 "duplicate member names prevent typed authoring",
-            ));
+            );
+            error.kind = AuthoringErrorKind::DuplicateMembers;
+            return Err(error);
         }
         Self::read(value.view())
     }
     /// Creates a new independent snapshot. This does not claim conformance.
     pub fn to_json(&self) -> Result<JsonValue, AuthoringError> {
-        let bytes = serde_json::to_vec(self).map_err(|e| AuthoringError {
-            location: None,
-            message: e.to_string(),
+        self.check_collisions()?;
+        struct BoundedOutput {
+            bytes: Vec<u8>,
+            max: usize,
+            exceeded: bool,
+        }
+        impl std::io::Write for BoundedOutput {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                if bytes.len() > self.max.saturating_sub(self.bytes.len()) {
+                    self.exceeded = true;
+                    return Err(std::io::Error::other("authoring byte limit exceeded"));
+                }
+                self.bytes.extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let mut output = BoundedOutput {
+            bytes: Vec::new(),
+            max: crate::JsonLimits::default().max_bytes,
+            exceeded: false,
+        };
+        serde_json::to_writer(&mut output, self).map_err(|_| {
+            AuthoringError::plain(
+                if output.exceeded {
+                    AuthoringErrorKind::Limit
+                } else {
+                    AuthoringErrorKind::Serialization
+                },
+                "draft could not be serialized within the supported JSON profile",
+            )
         })?;
-        JsonValue::parse(bytes).map_err(|e: InputError| AuthoringError {
-            location: None,
-            message: e.to_string(),
+        JsonValue::parse(output.bytes).map_err(|e: InputError| {
+            AuthoringError::plain(
+                if e.kind == crate::InputErrorKind::Limit {
+                    AuthoringErrorKind::Limit
+                } else {
+                    AuthoringErrorKind::Serialization
+                },
+                e.code,
+            )
         })
     }
 }
@@ -617,6 +743,86 @@ impl Dependency {
             .is_none_or(|kinds| kinds.iter().any(|k| k == kind))
     }
 }
+impl DocumentBuilder {
+    fn check_collisions(&self) -> Result<(), AuthoringError> {
+        check_fields(
+            &self.additional_fields,
+            &[
+                "openbindings",
+                "operations",
+                "name",
+                "version",
+                "description",
+                "schemas",
+                "dependencies",
+                "sources",
+                "bindings",
+            ],
+            &[],
+        )?;
+        for (key, operation) in &self.operations {
+            check_fields(
+                &operation.additional_fields,
+                &[
+                    "description",
+                    "deprecated",
+                    "tags",
+                    "aliases",
+                    "input",
+                    "output",
+                    "examples",
+                ],
+                &["operations", key],
+            )?;
+            if let Some(examples) = &operation.examples {
+                for (name, example) in examples {
+                    check_fields(
+                        &example.additional_fields,
+                        &["description", "input", "output"],
+                        &["operations", key, "examples", name],
+                    )?;
+                }
+            }
+        }
+        if let Some(entries) = &self.dependencies {
+            for (key, entry) in entries {
+                check_fields(
+                    &entry.additional_fields,
+                    &["operation", "kinds", "description"],
+                    &["dependencies", key],
+                )?;
+            }
+        }
+        if let Some(entries) = &self.sources {
+            for (key, entry) in entries {
+                check_fields(
+                    &entry.additional_fields,
+                    &["kind", "content", "description"],
+                    &["sources", key],
+                )?;
+            }
+        }
+        if let Some(entries) = &self.bindings {
+            for (key, entry) in entries {
+                check_fields(
+                    &entry.additional_fields,
+                    &[
+                        "operation",
+                        "source",
+                        "content",
+                        "idempotent",
+                        "preference",
+                        "description",
+                        "deprecated",
+                    ],
+                    &["bindings", key],
+                )?;
+            }
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

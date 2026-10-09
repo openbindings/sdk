@@ -393,9 +393,15 @@ impl fmt::Debug for JsonValue {
 }
 impl Serialize for JsonValue {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let raw = serde_json::value::RawValue::from_string(self.text().to_owned())
-            .map_err(serde::ser::Error::custom)?;
-        raw.serialize(serializer)
+        struct ExactText<'a>(&'a str);
+        impl Serialize for ExactText<'_> {
+            fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                let raw: &serde_json::value::RawValue =
+                    serde_json::from_str(self.0).map_err(serde::ser::Error::custom)?;
+                raw.serialize(serializer)
+            }
+        }
+        serializer.serialize_newtype_struct("$openbindings::exact", &ExactText(self.text()))
     }
 }
 impl<'de> Deserialize<'de> for JsonValue {

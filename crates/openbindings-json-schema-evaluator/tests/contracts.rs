@@ -4,6 +4,26 @@ use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
+// Existing evaluator cases compare semantic outcomes from either setup refusal or
+// value evaluation. New setup-state tests below assert the stage independently.
+trait EvaluateCase {
+    fn validate(&self, value: &JsonValue) -> ValueOutcome;
+    fn validate_with_control(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome;
+}
+impl EvaluateCase for ContractPreparation {
+    fn validate(&self, value: &JsonValue) -> ValueOutcome {
+        self.validate_with_control(value, &WorkControl::new())
+    }
+    fn validate_with_control(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
+        match self {
+            ContractPreparation::Ready(contract) => contract.validate_with_control(value, control),
+            ContractPreparation::NoVerdict { detail } => ValueOutcome::NoVerdict {
+                detail: detail.clone(),
+            },
+            other => panic!("unexpected setup state: {other:?}"),
+        }
+    }
+}
 fn doc(schema: &str) -> ParsedDocument {
     ParsedDocument::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
@@ -182,14 +202,12 @@ fn retained_contracts_outlive_documents_and_distinguish_absent_sides() {
     ));
     let context = contracts("true");
     assert!(matches!(
-        context.prepare("op", Side::Output).validate(&value("null")),
-        ValueOutcome::NoContract
+        context.prepare("op", Side::Output),
+        ContractPreparation::NoContract
     ));
     assert!(matches!(
-        context
-            .prepare("missing", Side::Input)
-            .validate(&value("null")),
-        ValueOutcome::OperationMissing
+        context.prepare("missing", Side::Input),
+        ContractPreparation::OperationMissing
     ));
 }
 #[test]
@@ -235,10 +253,8 @@ fn review_s11_same_uri_resources_are_isolated_and_precancellation_does_not_poiso
         let cancelled = WorkControl::new();
         cancelled.cancel();
         assert!(matches!(
-            context
-                .prepare_with_control("op", Side::Input, &cancelled)
-                .validate(&value("7")),
-            ValueOutcome::NoVerdict {
+            context.prepare_with_control("op", Side::Input, &cancelled),
+            ContractPreparation::NoVerdict {
                 detail: NoVerdict {
                     reason: NoVerdictReason::Cancelled,
                     ..
@@ -294,8 +310,8 @@ fn cancellation_during_preparation_is_not_cached() {
         .unwrap();
     let cancelled = context.prepare_with_control("op", Side::Input, &WorkControl::new());
     assert!(matches!(
-        cancelled.validate(&value("1")),
-        ValueOutcome::NoVerdict {
+        cancelled,
+        ContractPreparation::NoVerdict {
             detail: NoVerdict {
                 reason: NoVerdictReason::Cancelled,
                 ..
@@ -568,4 +584,97 @@ fn upstream_test_dispositions_use_the_supported_exact_ecma_u_path() {
             }
         }
     ));
+}
+
+#[test]
+fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
+    let d=ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"absent":{},"yes":{"input":true,"aliases":["shared"]},"no":{"input":false,"aliases":["shared"]},"null":{"input":null}}}"#).unwrap();
+    let c = d
+        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
+        .unwrap();
+    assert!(matches!(
+        c.prepare("absent", Side::Input),
+        ContractPreparation::NoContract
+    ));
+    assert!(matches!(
+        c.prepare("missing", Side::Input),
+        ContractPreparation::OperationMissing
+    ));
+    assert!(
+        matches!(c.prepare("shared",Side::Input),ContractPreparation::OperationAmbiguous{candidates} if candidates==["no","yes"])
+    );
+    assert!(matches!(
+        c.prepare("null", Side::Input),
+        ContractPreparation::NoVerdict { .. }
+    ));
+    let ContractPreparation::Ready(ready) = c.prepare("yes", Side::Input) else {
+        panic!()
+    };
+    let ContractPreparation::Ready(no) = c.prepare("no", Side::Input) else {
+        panic!()
+    };
+    let cancel = WorkControl::new();
+    cancel.cancel();
+    assert!(matches!(
+        ready.validate_with_control(&value("null"), &cancel),
+        ValueOutcome::NoVerdict {
+            detail: NoVerdict {
+                reason: NoVerdictReason::Cancelled,
+                ..
+            }
+        }
+    ));
+    drop(c);
+    drop(d);
+    assert!(matches!(
+        ready.validate(&value("null")),
+        ValueOutcome::Satisfies
+    ));
+    assert!(matches!(
+        no.validate(&value("null")),
+        ValueOutcome::Mismatch { .. }
+    ));
+    for (text, pointer) in [
+        (
+            r#"{"openbindings":"0.2.0","operations":{"op":null}}"#,
+            "/operations/op",
+        ),
+        (
+            r#"{"openbindings":"0.2.0","operations":null}"#,
+            "/operations",
+        ),
+        (r#"{"openbindings":"0.2.0"}"#, ""),
+        (
+            r#"{"openbindings":"0.2.0","operations":{"op":{"aliases":false}}}"#,
+            "/operations/op/aliases",
+        ),
+    ] {
+        let d = ParsedDocument::parse(text).unwrap();
+        let c = d
+            .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
+            .unwrap();
+        let ContractPreparation::NoVerdict { detail } = c.prepare("op", Side::Input) else {
+            panic!()
+        };
+        assert_eq!(detail.reason, NoVerdictReason::Undefined);
+        assert_eq!(detail.code, "invalid-operation-structure");
+        assert_eq!(detail.location.unwrap().pointer, pointer);
+    }
+}
+#[test]
+fn resources_reject_compared_uri_duplicates_even_for_equal_bytes() {
+    let schema = value("true");
+    assert!(
+        ResourceSet::new([
+            SchemaResource {
+                uri: "https://example.invalid/a/../b".into(),
+                document: schema.clone()
+            },
+            SchemaResource {
+                uri: "https://example.invalid/b#".into(),
+                document: schema
+            }
+        ])
+        .is_err()
+    );
 }

@@ -15,6 +15,20 @@
 
 ### Changed
 
+- Operation lookup now returns explicit found/missing/ambiguous selection; retained
+  operation views have typed accessors and located structural refusals.
+- Contract preparation now returns ready/no-contract/operation-missing/
+  operation-ambiguous/no-verdict. `ValueOutcome` contains only satisfies, mismatch
+  and no-verdict. The evaluator kit separates preparation and evaluation evidence.
+- Native authoring errors expose stable kinds and logical draft paths; checked
+  Serde conversion admits ordinary values with explicit profile/limits and owned,
+  bounded diagnostics. Exact parse/retain remains available.
+- TypeScript validation accepts ordinary values through `ValueCheck`, resources
+  accept atomic batches, interpretation errors carry locations, and metadata is
+  readonly. HTTP discovery exports move to `@openbindings/sdk/http-discovery`,
+  sharing one initialization/handle realm. Public `ValidatedDocument.fromParsed`
+  is removed; conformance assessment provides proof construction.
+
 - TypeScript authoring now returns structured expected-data failures with stable
   codes and escaped caller-draft pointers. These failures previously could throw
   generic TypeErrors; the error payload now describes drafts rather than byte input.
