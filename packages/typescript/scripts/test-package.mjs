@@ -24,6 +24,16 @@ try {
     }),
   );
   assert.equal(packed.length, 1);
+  for (const name of [
+    "first-use.mjs",
+    "first-use-node.mjs",
+    "first-use.html",
+    "service-lifecycle.mjs",
+  ])
+    assert(
+      packed[0].files.some((file) => file.path === "examples/" + name),
+      `Package must include the runnable ${name} example`,
+    );
   writeFileSync(
     join(temporary, "package.json"),
     JSON.stringify({ private: true, type: "module" }),
@@ -74,6 +84,26 @@ console.log(JSON.stringify({ installedPackage: true, ...await apiQualityCases(sd
     cwd: temporary,
     stdio: "inherit",
   });
+  const examples = join(temporary, "node_modules/@openbindings/sdk/examples");
+  const firstUse = JSON.parse(
+    execFileSync(process.execPath, [join(examples, "first-use-node.mjs")], {
+      cwd: temporary,
+      encoding: "utf8",
+    }),
+  );
+  assert.equal(firstUse.accepted.result.outcome, "satisfies");
+  assert.equal(firstUse.mismatch.result.outcome, "mismatch");
+  assert.equal(firstUse.invalidInput.result.outcome, "input-error");
+  const lifecycle = JSON.parse(
+    execFileSync(process.execPath, [join(examples, "service-lifecycle.mjs")], {
+      cwd: temporary,
+      encoding: "utf8",
+    }),
+  );
+  assert.equal(lifecycle.outcomes.inFlight.outcome, "satisfies");
+  assert.equal(lifecycle.outcomes.current.outcome, "satisfies");
+  assert.equal(lifecycle.arenas.released, lifecycle.arenas.warmed);
+  console.log("Installed first-use and service lifecycle examples passed.");
 } finally {
   rmSync(temporary, { recursive: true, force: true });
 }

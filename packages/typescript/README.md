@@ -5,6 +5,83 @@ TypeScript API. Document parsing, authoring, conformance, exact values, names,
 references, prepared contracts, and optional HTTP discovery are included.
 Invocation, binding adaptation, and synthesis are separate work.
 
+## First useful result
+
+Install a locally built archive of this unpublished candidate, then run its Node
+entry directly:
+
+```sh
+npm install ./openbindings-sdk-0.2.0-alpha.1.tgz
+node node_modules/@openbindings/sdk/examples/first-use-node.mjs
+```
+
+For a browser, serve the installed package directory over HTTP and open
+`examples/first-use.html`. Its import map resolves the package's JavaScript entry;
+the included Wasm asset loads relative to that module. Both entries run the same
+[small document-to-verdict example](examples/first-use.mjs) and print operation
+metadata plus a successful input, a mismatch and an ordinary-input admission error.
+Existing registry releases belong to the legacy API; they do not install this
+candidate.
+
+The progression is initialization, parsing, conformance, operation inspection,
+contract preparation, then value validation. After the host initialization below,
+the same progression in TypeScript is:
+
+```ts
+import { parseDocument, type JsonInput } from "@openbindings/sdk";
+
+const documentText = `{
+  "openbindings": "0.2.0",
+  "operations": {
+    "lookup": { "aliases": ["find"], "input": { "type": "integer" } }
+  }
+}`;
+
+function checkInput(input: JsonInput) {
+  const parsed = parseDocument(documentText);
+  if (parsed.status !== "parsed") return parsed;
+  using document = parsed.value;
+  const checked = document.validate();
+  if (checked.status !== "validated") return checked;
+  using proof = checked.document;
+  const operations = proof.operations;
+  using context = proof.contracts();
+  const setup = context.prepare("find", "input"); // primary name or alias
+  if (setup.status !== "ready") return setup;
+  using contract = setup.contract;
+  return { operations, result: contract.validate(input) };
+}
+
+console.log(checkInput(7));
+console.log(checkInput("seven"));
+```
+
+Parsing preserves a document even when a field is malformed. This application
+uses `validate()` to require conformance before exposing operations. A successful
+validation returns an independently owned `ValidatedDocument`; `assess()` instead
+returns the report without creating that owner. To diagnose a draft such as
+`"description": 42`, render its findings' messages and original locations, correct
+the field, then parse and validate again. Messages explain the problem; rule and
+code fields are the machine-readable classifications.
+
+Handle setup separately from a value's verdict:
+
+| Stage       | Result                                                    | Caller action                                                                                             |
+| ----------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Parse       | `input-error`                                             | Correct the JSON or its admission problem.                                                                |
+| Conformance | `version-refused` or `assessed`                           | Report the refused version or nonconformant/undetermined report.                                          |
+| Prepare     | `operation-missing`, `operation-ambiguous`, `no-contract` | Correct operation selection or explicitly decide how an absent contract fits the application.             |
+| Prepare     | `no-verdict`                                              | Inspect `detail`; for example, supply a missing schema resource before retrying.                          |
+| Validate    | `satisfies`                                               | The value satisfies this prepared contract.                                                               |
+| Validate    | `mismatch`                                                | Show the bounded problems and their original schema/instance locations.                                   |
+| Validate    | `input-error`                                             | Correct unsupported ordinary JavaScript input; it was not evaluated.                                      |
+| Validate    | `no-verdict`                                              | Report that evaluation could not establish a verdict; inspect the reason and retry only when appropriate. |
+
+The first-use function closes its owners after each demonstration. For repeated
+validation, prepare once and keep the ready contract. The [retained service](examples/service.mjs)
+does that; [replacement and recovery](examples/service-lifecycle.mjs) adds explicit
+resources and asynchronous request ownership after the initialization instructions.
+
 ## Initialization
 
 Initialization is asynchronous and explicit. Browser modules can load the Wasm
@@ -215,6 +292,36 @@ fallback, not a resource-lifetime contract. The fixed meta-schema snapshots live
 for the Wasm instance's lifetime; Wasm memory pages may retain allocator high-water
 marks even when live owners have been released.
 
+| Returned owner                                                     | Lifetime                                                                                                                           |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Parsed or validated document, selected operation, exact value/view | Dispose each returned handle; `retain()` creates an independent owner.                                                             |
+| Resource set or contract context                                   | Dispose after setup when only the prepared contract is needed. Supplied resource handles are borrowed and remain caller-owned.     |
+| Ready prepared contract                                            | Retain for repeated validation; it survives disposal of setup owners. Acquire a request's retained owner before its first `await`. |
+
+`liveStorageOwners()` counts live exact-JSON **storage arenas** in the initialized
+Wasm instance. Retained handles and views can share an arena, so this is not a total
+of facade handles. Fixed evaluator arenas may initialize lazily and remain for the
+instance's lifetime. Record that startup retention separately; for a cleanup check,
+warm the complete parse/prepare/validate job, release its application owners, then
+compare later release counts with that baseline. No particular baseline number is
+an API guarantee. The counter is not a byte measurement, and neither it nor disposal
+establishes allocator RSS or shrinking Wasm memory.
+
+Run the complete replacement example after installation:
+
+```sh
+node node_modules/@openbindings/sdk/examples/service-lifecycle.mjs
+```
+
+It supplies integer and string schemas under the same URI in separate immutable
+contexts. An old request retains its contract before awaiting its body; preparing
+and committing a replacement releases only the service's previous owner. New work
+uses the new context, while the old request still validates its original exact
+integer. A malformed replacement leaves the service unchanged. The example also
+shows pre-cancellation, healthy recovery and warmed arena-count cleanup. Its
+assertions check known fixtures; an application's setup refusals still need the
+result handling described above.
+
 Parsing, assessment, inspection, preparation and validation are synchronous.
 `AbortSignal` can prevent a cancelled call but cannot preempt synchronous Wasm on
 the same thread. Use [the Worker and owner examples](examples/worker-owner.mjs) for large CPU jobs.
@@ -247,6 +354,11 @@ credentialed CORS and preflight policy remain application responsibilities.
 
 ## Complete host examples
 
+- [First use: Node](examples/first-use-node.mjs) and
+  [browser](examples/first-use.html): the same complete metadata, alias and input
+  verdict path in [one shared caller](examples/first-use.mjs).
+- [Service lifecycle](examples/service-lifecycle.mjs): explicit same-URI resources,
+  retained requests, transactional replacement, cancellation/recovery and cleanup.
 - [Editor component](examples/editor.html): owned snapshots, recoverable drafts,
   conformance and teardown. Serve the installed package directory over HTTP.
 - [Worker owner](examples/worker-owner.mjs) and [Worker job](examples/worker.mjs):

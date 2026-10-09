@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>First OpenBindings result</title>
+  <script type="importmap">
+    { "imports": { "@openbindings/sdk": "../dist/index.js" } }
+  </script>
+  <main>
+    <h1>First OpenBindings result</h1>
+    <pre id="result" aria-live="polite">Loading…</pre>
+  </main>
+  <script type="module">
+    import { initialize } from "@openbindings/sdk";
+    import { firstUse } from "./first-use.mjs";
+    const output = document.querySelector("#result");
+    try {
+      await initialize();
+      output.textContent = JSON.stringify(
+        {
+          accepted: firstUse({ id: 7 }),
+          mismatch: firstUse({ id: 0 }),
+          invalidInput: firstUse({ id: NaN }),
+        },
+        null,
+        2,
+      );
+    } catch (error) {
+      output.textContent = `${error.code ?? error.name}: ${error.message}`;
+    }
+  </script>
+</html>
