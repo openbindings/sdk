@@ -170,7 +170,7 @@ fn all_closed_objects_are_diagnosed_without_entering_opaque_or_schema_values() {
 
 #[test]
 fn name_guidance_describes_the_existing_grammar_for_every_name_position() {
-    let text = r#"{"openbindings":"0.2.0","operations":{"/private":{"aliases":[".private"],"examples":{"-private":{}}}}}"#;
+    let text = r#"{"openbindings":"0.2.0","operations":{"/private":{"aliases":[".private",false],"examples":{"-private":{}}}}}"#;
     let assessment = assess_document(text).unwrap();
     let names: Vec<_> = assessment
         .report()
@@ -178,7 +178,7 @@ fn name_guidance_describes_the_existing_grammar_for_every_name_position() {
         .iter()
         .filter(|f| f.code == "name-grammar")
         .collect();
-    assert_eq!(names.len(), 3);
+    assert_eq!(names.len(), 4);
     for finding in names {
         assert!(finding.message.contains("nonempty ASCII string"));
         assert!(
@@ -224,6 +224,20 @@ fn expansion_saturation_preserves_all_rule_evidence_and_truthful_truncation() {
         assert_eq!(assessment.report().findings.len(), 4096);
         assert!(assessment.report().findings_truncated);
         assert_eq!(assessment.report().evidence["OBI-10"], Evidence::Violated);
+        if count == 4096 {
+            let deep = format!("{}true{}", "{\"not\":".repeat(300), "}".repeat(300));
+            let source = text.replace(
+                "\"operations\":{}",
+                &format!("\"operations\":{{}},\"schemas\":{{\"s\":{deep}}}"),
+            );
+            let assessment = assess_document(source).unwrap();
+            assert_eq!(assessment.report().findings.len(), 4096);
+            assert!(assessment.report().findings_truncated);
+            assert_eq!(
+                assessment.report().evidence["OBI-10"],
+                Evidence::Inconclusive
+            );
+        }
     }
 }
 
@@ -234,15 +248,32 @@ fn expansion_pointer_budget_prevents_large_ancestor_amplification() {
         .map(|i| format!("\"bad{i}\":0"))
         .collect::<Vec<_>>()
         .join(",");
-    let text = format!("{{\"openbindings\":\"0.2.0\",\"operations\":{{\"{name}\":{{{fields}}}}}}}");
+    let text = format!(
+        "{{\"openbindings\":\"0.2.0\",\"operations\":{{\"{name}\":{{{fields}}},\"y\":{{\"bad\":0}},\"z\":{{\"description\":42}}}}}}"
+    );
     let assessment = assess_document(text).unwrap();
     let report = assessment.report();
     assert_eq!(report.conclusion, Conformance::NonConformant);
     assert!(report.findings_truncated);
     assert!(report.findings.len() < 4096);
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|f| f.message == "expected JSON type: string"
+                && f.location.as_ref().unwrap().pointer.as_deref()
+                    == Some("/operations/z/description"))
+    );
+    assert!(
+        !report
+            .findings
+            .iter()
+            .any(|f| f.location.as_ref().unwrap().pointer.as_deref() == Some("/operations/y/bad"))
+    );
     let bytes: usize = report
         .findings
         .iter()
+        .filter(|f| f.message == UNEXPECTED)
         .map(|f| f.location.as_ref().unwrap().pointer.as_ref().unwrap().len())
         .sum();
     assert!(bytes <= 8 * 1024 * 1024);

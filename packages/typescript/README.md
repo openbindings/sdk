@@ -65,6 +65,10 @@ corrects the original source to `input`, validates it, then prepares and checks 
 input. Unexpected-member findings point to the original key token. Quote pointers
 and render them as text, including `findingsTruncated` when true. Lines and byte
 columns refer to UTF-8 source bytes, not JavaScript UTF-16 selection offsets.
+Reports retain at most 4,096 findings; expanded unexpected-field pointers also
+share an 8 MiB byte budget. Omitted findings set `findingsTruncated`; all 13 rule
+evidence states remain available. Expanded findings can displace later ones at
+the count cap.
 Messages explain the problem; rule and code fields are the machine-readable
 classifications. The separate [authoring recovery lesson](examples/authoring-recovery.mjs)
 uses pointers into a caller's typed draft, which have no source byte coordinates.

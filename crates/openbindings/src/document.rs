@@ -553,9 +553,10 @@ impl Checks {
             self.truncated = true;
         }
     }
-    fn violation(
+    fn mark_at(
         &mut self,
         rule: usize,
+        status: Evidence,
         at: JsonRef<'_>,
         code: &'static str,
         message: impl Into<String>,
@@ -563,7 +564,16 @@ impl Checks {
         // Evidence is still marked after the finding cap, without constructing an
         // unretainable source location (which may have a large source prefix).
         let location = (self.findings.len() < 4096).then(|| at.location());
-        self.mark(rule, Evidence::Violated, code, location, message);
+        self.mark(rule, status, code, location, message);
+    }
+    fn violation(
+        &mut self,
+        rule: usize,
+        at: JsonRef<'_>,
+        code: &'static str,
+        message: impl Into<String>,
+    ) {
+        self.mark_at(rule, Evidence::Violated, at, code, message);
     }
     fn not_applicable_after_json(&mut self) {
         self.evidence[1..].fill(Evidence::NotApplicable);
@@ -609,11 +619,11 @@ impl Checks {
                     );
                 }
             }
-            Err(reason) => self.mark(
+            Err(reason) => self.mark_at(
                 rule,
                 Evidence::Inconclusive,
+                value.view(),
                 "fixed-schema-limit-or-failure",
-                Some(value.location()),
                 reason,
             ),
         }
@@ -661,11 +671,11 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
     if backend::has_unpaired(value) || backend::depth(value) > 10_000 {
         for rule in 1..13 {
             if rule != 2 {
-                c.mark(
+                c.mark_at(
                     rule,
                     Evidence::Inconclusive,
+                    value.view(),
                     "representation-limit",
-                    Some(value.location()),
                     "interpretation requires supported strings and document nesting",
                 );
             }
@@ -702,12 +712,7 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
             if let Some(aliases) = entry.value.get("aliases").and_then(|v| v.elements()) {
                 for alias in aliases {
                     let Some(name) = alias.as_str() else {
-                        c.violation(
-                            3,
-                            alias,
-                            "name-grammar",
-                            "an alias must be a core name string",
-                        );
+                        c.violation(3, alias, "name-grammar", NAME_GRAMMAR_MESSAGE);
                         continue;
                     };
                     if !valid_name(name) {
@@ -760,11 +765,11 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
     for node in &schemas.nodes {
         let schema = node.value.view();
         if node.depth > 256 {
-            c.mark(
+            c.mark_at(
                 9,
                 Evidence::Inconclusive,
+                schema,
                 "schema-depth-limit",
-                Some(schema.location()),
                 "schema depth exceeds 256",
             );
         } else if meta_seen.insert(node.value.text()) {

@@ -48,7 +48,13 @@ proof of semantic undefinedness. `openbindings-schema-evaluator-test-support`
 qualifies custom adapters; `openbindings-http-discovery` supplies optional HTTP policy.
 
 Source locations use original JSON Pointers, zero-based UTF-8 byte offsets and
-one-based lines/byte columns. Bounded diagnostic output declares truncation.
+one-based lines/byte columns. Unexpected normative fields identify original key
+tokens and explain the `x-` extension convention. Reports retain at most 4,096
+findings; expanded unexpected-field pointers also share an 8 MiB byte budget.
+Omitted findings set `findings_truncated`; all 13 rule evidence states remain
+available. Expanded findings can displace later ones at the count cap. Messages
+are advisory; use rule/code fields for classification and quote pointers when
+rendering caller-controlled text.
 Resources are immutable and caller supplied; acquisition URLs do not change schema
 bases. Anonymous document and dynamic scope remain part of interpretation.
 

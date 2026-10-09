@@ -179,11 +179,24 @@ pub(crate) fn check(
             let mut violated = false;
             let mut truncated = false;
             let mut pointer_bytes = MAX_EXPANDED_POINTER_BYTES;
+            let mut expansion_exhausted = false;
             'errors: for error in validator.iter_errors(view(value)) {
                 violated = true;
                 if entries.len() >= max_problems {
                     truncated = true;
                     break;
+                }
+                // Do not resolve a path for expansion we already know is omitted.
+                // Keep ordinary type/required errors eligible for remaining slots.
+                if !is_meta
+                    && expansion_exhausted
+                    && matches!(
+                        error.kind(),
+                        jsonschema::error::ValidationErrorKind::AdditionalProperties { .. }
+                    )
+                {
+                    truncated = true;
+                    continue;
                 }
                 let at = value
                     .at(error.instance_path().as_str())
@@ -209,7 +222,8 @@ pub(crate) fn check(
                             }
                             let Some(size) = pointer_size(member.name, pointer_bytes) else {
                                 truncated = true;
-                                break 'errors;
+                                expansion_exhausted = true;
+                                continue 'errors;
                             };
                             pointer_bytes -= size;
                             entries.push(Problem {
