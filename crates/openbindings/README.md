@@ -75,4 +75,4 @@ with truncation flags, and a complete emitted JSON pointer (4 KiB maximum, omitt
 with a flag when larger). Display and Debug omit arbitrary custom prose.
 `AuthoringError` distinguishes field collisions from conformance and exposes native
 draft pointers containing `additional_fields`; original `source_location()` is a
-separate domain. See the [migration notes](../../docs/migration.md).
+separate domain. See the [migration notes](https://github.com/openbindings/sdk/blob/main/docs/migration.md).

@@ -76,5 +76,6 @@ TypeScript callers match the analogous tagged selection and preparation unions,
 check ordinary-value admission results, and dispose only actual found/ready owners.
 Use `SchemaResources` entries for atomic batches. Import HTTP helpers from
 `@openbindings/sdk/http-discovery`; it shares the root's initialization and handle
-realm. Construct validated documents through assessment. The package guide gives
+realm. Construct TypeScript validated documents through `parsed.validate()` and narrow
+`status === "validated"`; that branch is the sole public proof-construction route. The package guide gives
 complete before/after examples and nested exact-value ownership rules.

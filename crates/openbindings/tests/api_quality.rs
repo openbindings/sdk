@@ -518,3 +518,49 @@ fn serde_json_numbers_preserve_tokens_and_protocol_cannot_inject_json() {
         ValueConversionErrorKind::UnsupportedRepresentation
     );
 }
+
+#[test]
+fn batched_strings_preserve_utf8_escaping_and_every_byte_limit_boundary() {
+    for value in [
+        "plain",
+        "é☃😀",
+        "quote\"slash\\",
+        "\u{0000}\n\r\t\u{001f}",
+        "é\"☃\\😀\nend",
+    ] {
+        let admitted = JsonValue::from_serializable(value).unwrap();
+        let expected = JsonValue::parse(serde_json::to_vec(value).unwrap()).unwrap();
+        assert_eq!(admitted.semantic_eq(&expected), Some(true));
+        for max_bytes in 0..=admitted.bytes().len() {
+            let result = JsonValue::from_serializable_with_limits(
+                value,
+                JsonLimits {
+                    max_bytes,
+                    ..Default::default()
+                },
+            );
+            if max_bytes == admitted.bytes().len() {
+                assert_eq!(result.unwrap().bytes(), admitted.bytes());
+            } else {
+                assert_eq!(result.unwrap_err().kind(), ValueConversionErrorKind::Limit);
+            }
+        }
+    }
+    // A successfully encoded member can have an omitted path; that omission must
+    // not leak into a later sibling's refusal when the shared path buffer resets.
+    let values = BTreeMap::from([("a".repeat(5000), 1.0), ("z~/é".into(), f64::NAN)]);
+    let error = JsonValue::from_serializable(&values).unwrap_err();
+    assert_eq!(error.pointer(), Some("/z~0~1é"));
+    assert!(!error.path_omitted_for_limit());
+    #[derive(Serialize)]
+    enum Branch {
+        First(Vec<u8>),
+        Second { bad: f64 },
+    }
+    let error = JsonValue::from_serializable(&[
+        Branch::First(vec![1, 2]),
+        Branch::Second { bad: f64::INFINITY },
+    ])
+    .unwrap_err();
+    assert_eq!(error.pointer(), Some("/1/Second/bad"));
+}

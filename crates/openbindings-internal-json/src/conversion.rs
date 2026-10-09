@@ -141,7 +141,8 @@ struct State {
     limits: JsonLimits,
     nodes: usize,
     depth: usize,
-    path: Option<String>,
+    path: String,
+    path_omitted: bool,
     first: Option<ValueConversionError>,
 }
 impl State {
@@ -157,8 +158,8 @@ impl State {
     }
     fn locate(&self, mut error: ValueConversionError) -> ValueConversionError {
         if error.pointer.is_none() && !error.path_omitted_for_limit {
-            error.pointer = self.path.clone();
-            error.path_omitted_for_limit = self.path.is_none();
+            error.pointer = (!self.path_omitted).then(|| self.path.clone());
+            error.path_omitted_for_limit = self.path_omitted;
         }
         error
     }
@@ -182,30 +183,76 @@ impl State {
         Ok(())
     }
     fn string(&mut self, value: &str) -> Result<(), ValueConversionError> {
+        self.guard()?;
+        // Encoding never shrinks a string. Refuse an oversized span before
+        // scanning it; individual escaped spans still receive exact checks.
+        if value.len()
+            > self
+                .limits
+                .max_bytes
+                .saturating_sub(self.bytes.len())
+                .saturating_sub(2)
+        {
+            return Err(self.fail(ValueConversionErrorKind::Limit, "byte limit exceeded"));
+        }
         self.write(b"\"")?;
-        for ch in value.chars() {
-            match ch {
-                '"' => self.write(b"\\\"")?,
-                '\\' => self.write(b"\\\\")?,
-                ch if ch <= '\u{1f}' => {
-                    let n = ch as u8;
+        let bytes = value.as_bytes();
+        let mut start = 0;
+        // Quote/control bytes are ASCII boundaries, so whole unescaped UTF-8
+        // spans can be admitted/copied once without splitting a scalar value.
+        for (index, &byte) in bytes.iter().enumerate() {
+            if byte >= 0x20 && byte != b'"' && byte != b'\\' {
+                continue;
+            }
+            self.write(&bytes[start..index])?;
+            match byte {
+                b'"' => self.write(b"\\\"")?,
+                b'\\' => self.write(b"\\\\")?,
+                byte => {
                     let hex = b"0123456789abcdef";
                     self.write(&[
                         b'\\',
                         b'u',
                         b'0',
                         b'0',
-                        hex[(n >> 4) as usize],
-                        hex[(n & 15) as usize],
+                        hex[(byte >> 4) as usize],
+                        hex[(byte & 15) as usize],
                     ])?;
                 }
-                ch => {
-                    let mut buf = [0; 4];
-                    self.write(ch.encode_utf8(&mut buf).as_bytes())?;
-                }
             }
+            start = index + 1;
         }
+        self.write(&bytes[start..])?;
         self.write(b"\"")
+    }
+    fn push_path(&mut self, key: &str) -> (usize, bool) {
+        let restore = (self.path.len(), self.path_omitted);
+        if self.path_omitted {
+            return restore;
+        }
+        if self.path.len() == DIAGNOSTIC_LIMIT {
+            self.path_omitted = true;
+            return restore;
+        }
+        self.path.push('/');
+        for ch in key.chars() {
+            let mut buffer = [0; 4];
+            let text = match ch {
+                '~' => "~0",
+                '/' => "~1",
+                _ => ch.encode_utf8(&mut buffer),
+            };
+            if text.len() > DIAGNOSTIC_LIMIT - self.path.len() {
+                self.path_omitted = true;
+                break;
+            }
+            self.path.push_str(text);
+        }
+        restore
+    }
+    fn restore_path(&mut self, restore: (usize, bool)) {
+        self.path.truncate(restore.0);
+        self.path_omitted = restore.1;
     }
     fn child<T: Serialize + ?Sized>(
         &mut self,
@@ -213,13 +260,12 @@ impl State {
         value: &T,
     ) -> Result<(), ValueConversionError> {
         self.guard()?;
-        let parent = self.path.take();
-        self.path = parent.as_deref().and_then(|p| pointer_child(p, key));
+        let parent = self.push_path(key);
         let result = value.serialize(&mut *self).map_err(|e| self.locate(e));
         if let Err(e) = &result {
             self.first.get_or_insert_with(|| e.clone());
         }
-        self.path = parent;
+        self.restore_path(parent);
         result
     }
     fn begin(&mut self, object: bool) -> Result<(), ValueConversionError> {
@@ -233,33 +279,6 @@ impl State {
         self.depth += 1;
         self.write(if object { b"{" } else { b"[" })
     }
-}
-fn pointer_child(parent: &str, key: &str) -> Option<String> {
-    let mut result = String::with_capacity(
-        parent
-            .len()
-            .saturating_add(key.len())
-            .saturating_add(1)
-            .min(DIAGNOSTIC_LIMIT),
-    );
-    result.push_str(parent);
-    if result.len() == DIAGNOSTIC_LIMIT {
-        return None;
-    }
-    result.push('/');
-    for ch in key.chars() {
-        let mut buffer = [0; 4];
-        let encoded = match ch {
-            '~' => "~0",
-            '/' => "~1",
-            _ => ch.encode_utf8(&mut buffer),
-        };
-        if encoded.len() > DIAGNOSTIC_LIMIT - result.len() {
-            return None;
-        }
-        result.push_str(encoded);
-    }
-    Some(result)
 }
 impl JsonValue {
     /// Checked Serde profile: finite numbers (including exact i128/u128), string
@@ -287,7 +306,8 @@ impl JsonValue {
             limits,
             nodes: 0,
             depth: 0,
-            path: Some(String::new()),
+            path: String::new(),
+            path_omitted: false,
             first: None,
         };
         let result = value.serialize(&mut state).map_err(|e| state.locate(e));
@@ -310,7 +330,7 @@ struct Compound<'a> {
     index: usize,
     key: Option<String>,
     seen: HashSet<String>,
-    variant_parent: Option<Option<String>>,
+    variant_parent: Option<(usize, bool)>,
 }
 impl Compound<'_> {
     fn prefix(&mut self) -> Result<(), ValueConversionError> {
@@ -322,7 +342,8 @@ impl Compound<'_> {
     }
     fn element<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), ValueConversionError> {
         self.prefix()?;
-        self.state.child(&self.index.to_string(), value)?;
+        self.state
+            .child(IntegerText::new(self.index).as_str(), value)?;
         self.index += 1;
         Ok(())
     }
@@ -348,20 +369,18 @@ impl Compound<'_> {
                 e
             })?;
         if self.seen.contains(&key) {
-            let parent = self.state.path.take();
-            self.state.path = parent.as_deref().and_then(|p| pointer_child(p, &key));
+            let parent = self.state.push_path(&key);
             let e = self.state.fail(
                 ValueConversionErrorKind::DuplicateKey,
                 "duplicate emitted member",
             );
-            self.state.path = parent;
+            self.state.restore_path(parent);
             return Err(e);
         }
         self.prefix()?;
         self.state.node()?;
         self.state.string(&key)?;
         self.state.write(b":")?;
-        self.seen.insert(key.clone());
         self.key = Some(key);
         Ok(())
     }
@@ -372,6 +391,7 @@ impl Compound<'_> {
                 .fail(ValueConversionErrorKind::Serialization, "map key missing")
         })?;
         self.state.child(&key, value)?;
+        self.seen.insert(key);
         self.index += 1;
         Ok(())
     }
@@ -455,7 +475,7 @@ impl Compound<'_> {
         if let Some(parent) = self.variant_parent {
             self.state.write(b"}")?;
             self.state.depth -= 1;
-            self.state.path = parent;
+            self.state.restore_path(parent);
         }
         Ok(())
     }
@@ -472,7 +492,38 @@ fn compound(state: &mut State, object: bool) -> Result<Compound<'_>, ValueConver
         variant_parent: None,
     })
 }
-macro_rules! integer { ($($name:ident:$ty:ty),*)=>{$(fn $name(self,v:$ty)->Result<(),Self::Error>{self.node()?;self.write(v.to_string().as_bytes())})*}; }
+// Primitive integer formatting uses bounded stack storage, including i128/u128
+// and array indices. No ordinary successful scalar needs an allocated string.
+struct IntegerText {
+    bytes: [u8; 40],
+    len: usize,
+}
+impl fmt::Write for IntegerText {
+    fn write_str(&mut self, text: &str) -> fmt::Result {
+        let target = self
+            .bytes
+            .get_mut(self.len..self.len + text.len())
+            .ok_or(fmt::Error)?;
+        target.copy_from_slice(text.as_bytes());
+        self.len += text.len();
+        Ok(())
+    }
+}
+impl IntegerText {
+    fn new(value: impl fmt::Display) -> Self {
+        use fmt::Write;
+        let mut result = Self {
+            bytes: [0; 40],
+            len: 0,
+        };
+        write!(&mut result, "{value}").expect("primitive integer fits forty ASCII bytes");
+        result
+    }
+    fn as_str(&self) -> &str {
+        std::str::from_utf8(&self.bytes[..self.len]).expect("integer is ASCII")
+    }
+}
+macro_rules! integer { ($($name:ident:$ty:ty),*)=>{$(fn $name(self,v:$ty)->Result<(),Self::Error>{self.node()?;self.write(IntegerText::new(v).as_str().as_bytes())})*}; }
 impl<'a> Serializer for &'a mut State {
     type Ok = ();
     type Error = ValueConversionError;
@@ -644,8 +695,7 @@ fn variant<'a>(
     state.node()?;
     state.string(key)?;
     state.write(b":")?;
-    let parent = state.path.take();
-    state.path = parent.as_deref().and_then(|p| pointer_child(p, key));
+    let parent = state.push_path(key);
     let mut c = compound(state, object)?;
     c.variant_parent = Some(parent);
     Ok(c)
@@ -875,7 +925,8 @@ mod tests {
             },
             nodes: 0,
             depth: 0,
-            path: Some(String::new()),
+            path: String::new(),
+            path_omitted: false,
             first: None,
         };
         let mut map = compound(&mut state, true).unwrap();
