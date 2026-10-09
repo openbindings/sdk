@@ -133,6 +133,10 @@ impl InterpretationError {
 }
 
 impl ParsedDocument {
+    /// Parse and retain exact bytes and source locations without establishing conformance.
+    /// Use [`Self::assess`] before treating this as a conformant document. See the
+    /// [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
+    /// for the progression from parsing to a prepared input contract.
     pub fn parse(input: impl AsRef<[u8]>) -> Result<Self, InputError> {
         JsonValue::parse(input).map(Self::from_json)
     }
@@ -157,6 +161,11 @@ impl ParsedDocument {
     pub fn to_authoring(&self) -> Result<DocumentBuilder, AuthoringError> {
         DocumentBuilder::from_json(self.value())
     }
+    /// Assess every document rule, retaining findings at original source locations.
+    /// A supported version can still be nonconformant or undetermined; only
+    /// [`DocumentAssessment::validated`] yields a conformance proof. An unsupported
+    /// declared version is a separate refusal. Explanatory finding messages are
+    /// human-readable guidance; use rule/code/evidence fields for program logic.
     pub fn assess(&self) -> Result<DocumentAssessment, VersionRefusal> {
         let report = self
             .inner
@@ -362,12 +371,19 @@ impl OperationView {
     pub fn value(&self) -> JsonRef<'_> {
         self.value.view()
     }
+    /// The exact input field, without interpreting or preparing its schema.
+    /// `None` means absence; JSON null and false remain present exact values.
+    /// Use [`crate::ValueContracts::prepare`] to establish contract readiness.
     pub fn input(&self) -> Option<JsonRef<'_>> {
         self.value.get("input")
     }
+    /// The exact output field, with the same absence/interpretation distinction
+    /// as [`Self::input`]. A present value is not proof of a supported contract.
     pub fn output(&self) -> Option<JsonRef<'_>> {
         self.value.get("output")
     }
+    /// Interpret an optional string description. Unlike exact [`Self::input`]
+    /// access, this can refuse a malformed field with its original location.
     pub fn description(&self) -> Result<Option<&str>, InterpretationError> {
         self.value
             .get("description")
@@ -377,6 +393,8 @@ impl OperationView {
             })
             .transpose()
     }
+    /// Interpret optional string aliases, preserving absence separately from an
+    /// empty array. A malformed array or item is a located interpretation error.
     pub fn aliases(
         &self,
     ) -> Result<Option<impl ExactSizeIterator<Item = &str>>, InterpretationError> {
@@ -573,14 +591,9 @@ impl Checks {
         ) {
             Ok(problems) => {
                 self.truncated |= problems.truncated;
-                for path in problems.paths {
-                    let at = value.at(&path).unwrap_or(value.view());
-                    self.violation(
-                        rule,
-                        at,
-                        "schema-mismatch",
-                        "value violates the fixed normative schema",
-                    );
+                for problem in problems.entries {
+                    let at = value.at(&problem.path).unwrap_or(value.view());
+                    self.violation(rule, at, "schema-mismatch", problem.message);
                 }
             }
             Err(reason) => self.mark(

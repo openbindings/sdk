@@ -99,6 +99,8 @@ pub struct SchemaResource {
     pub uri: String,
     pub document: JsonValue,
 }
+/// Immutable caller-supplied resources. Separate contexts can use the same URI
+/// for different snapshots; this is not a process-wide registry or an acquirer.
 #[derive(Clone, Debug, Default)]
 pub struct ResourceSet {
     resources: Arc<Vec<SchemaResource>>,
@@ -219,6 +221,11 @@ pub trait PreparedSchema: Send + Sync {
     /// Return only established verdicts. Resource/capability/work failures are NoVerdict.
     fn validate(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome;
 }
+/// An immutable document/resource/evaluator context with bounded preparation reuse.
+/// Select a contract using [`Self::prepare`], then retain its ready owner for
+/// repeated validation. Replacing an application's active context does not
+/// mutate already prepared work. See the
+/// [Rust lifecycle guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md#retained-work-and-replacement).
 #[derive(Clone)]
 pub struct ValueContracts {
     inner: Arc<ContractsInner>,
@@ -278,6 +285,9 @@ pub enum ContractPreparation {
     OperationAmbiguous { candidates: Vec<String> },
     NoVerdict { detail: NoVerdict },
 }
+/// A ready contract that retains its required compiled state independently of
+/// document/context lifetime and cache eviction. Cloning shares immutable state;
+/// dropping the final owner releases that owner, without promising lower RSS.
 #[derive(Clone)]
 pub struct PreparedContract {
     schema: Arc<dyn PreparedSchema>,
@@ -288,9 +298,17 @@ impl fmt::Debug for PreparedContract {
     }
 }
 impl PreparedContract {
+    /// Validate an admitted exact value, distinguishing satisfies, mismatch and
+    /// no-verdict. For ordinary Rust data first use [`JsonValue::from_serializable`];
+    /// for exact JSON text/bytes use [`JsonValue::parse`]. Admission failure is
+    /// separate from validation. Mismatch diagnostics can be incomplete; inspect
+    /// `problems_complete` rather than assuming every failed keyword is reported.
     pub fn validate(&self, value: &JsonValue) -> ValueOutcome {
         self.validate_with_control(value, &WorkControl::new())
     }
+    /// Validate with cooperative cancellation. Cancellation yields no-verdict,
+    /// not mismatch, and leaves this owner usable with a fresh healthy control.
+    /// This is not a preemptive wall-clock deadline; applications schedule work.
     pub fn validate_with_control(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
         if let Err(detail) = control.check() {
             return ValueOutcome::NoVerdict { detail };
@@ -308,6 +326,15 @@ impl PreparedContract {
     }
 }
 impl ParsedDocument {
+    /// Create a context with an explicitly selected evaluator and immutable
+    /// resources. No resource acquisition occurs; URIs in other contexts cannot
+    /// change this one. This does not establish whole-document conformance: use
+    /// [`Self::assess`] if your application requires that before accepting a document.
+    ///
+    /// The default cache retains four most-recent preparation entries. Match
+    /// [`ContractPreparation`] after [`ValueContracts::prepare`]; only its ready
+    /// branch exposes validation. The optional `openbindings-json-schema-evaluator`
+    /// companion supplies `DefaultEvaluator` and runnable first-use examples.
     pub fn value_contracts(
         &self,
         evaluator: Arc<dyn SchemaEvaluator>,
@@ -315,6 +342,10 @@ impl ParsedDocument {
     ) -> Result<ValueContracts, InterpretationError> {
         self.value_contracts_with_options(evaluator, resources, ValueContractOptions::default())
     }
+    /// Create the same explicit context as [`Self::value_contracts`] with a chosen
+    /// cache entry capacity. Zero disables implicit retention. Eviction and context
+    /// drop release cache owners; caller-retained [`PreparedContract`] values stay
+    /// usable. The entry count is not a byte or process-memory limit.
     pub fn value_contracts_with_options(
         &self,
         evaluator: Arc<dyn SchemaEvaluator>,
@@ -336,9 +367,20 @@ impl ParsedDocument {
     }
 }
 impl ValueContracts {
+    /// Select a primary operation name or alias and prepare one side's contract.
+    /// Match every [`ContractPreparation`] branch: missing/ambiguous operation,
+    /// absent contract and preparation refusal are setup states, not mismatches.
+    /// Ready contracts can be retained beyond this context and validated repeatedly.
+    /// Deterministic preparations may be reused within the bounded context cache;
+    /// concurrent first requests may prepare more than once.
     pub fn prepare(&self, operation: &str, side: Side) -> ContractPreparation {
         self.prepare_with_control(operation, side, &WorkControl::new())
     }
+    /// Prepare with cooperative cancellation. A cancelled attempt returns no ready
+    /// owner. Cancellation and transient evaluator failures do not poison healthy
+    /// retry on this context; use a fresh [`WorkControl`] after cancellation.
+    /// A no-verdict refusal does not prove semantic undefinedness. To change supplied
+    /// resources, build a new immutable context and decide when to replace active work.
     pub fn prepare_with_control(
         &self,
         operation: &str,

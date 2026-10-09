@@ -15,6 +15,16 @@ assert!(matches!(round_trip.resolve_operation("lookup")?, openbindings::Operatio
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
+For the complete document-to-input flow, select the optional
+[`openbindings-json-schema-evaluator`](https://github.com/openbindings/sdk/tree/main/crates/openbindings-json-schema-evaluator)
+companion. Its package ships `examples/first_use.rs` and `examples/replacement.rs`;
+they cover metadata, aliases, ordinary/exact input, readiness, retained work and
+failed replacement without an HTTP client or async runtime. Start with the
+[Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md).
+Rust has no runtime initialization step. The example above uses only core and
+establishes document conformance; evaluating operation values requires that explicit
+companion or your own evaluator.
+
 `ParsedDocument` preserves input and duplicate evidence. `DocumentAssessment`
 reports all 13 rules; only established conformance produces `ValidatedDocument`.
 Names/aliases are indexed. Inspection does not perform preference selection.
@@ -76,3 +86,8 @@ with a flag when larger). Display and Debug omit arbitrary custom prose.
 `AuthoringError` distinguishes field collisions from conformance and exposes native
 draft pointers containing `additional_fields`; original `source_location()` is a
 separate domain. See the [migration notes](https://github.com/openbindings/sdk/blob/main/docs/migration.md).
+
+Fixed-schema conformance findings explain direct expected types and missing fields
+without echoing rejected values. Required-field locations identify the original
+containing object. Complex failures retain a general explanation. Message wording
+is guidance; use rule/code/evidence and original locations for program logic.
