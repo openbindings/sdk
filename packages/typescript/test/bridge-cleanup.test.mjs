@@ -97,7 +97,7 @@ test("ordinary admission maps only known engine limits and preserves unexpected 
   try {
     const before = sdk.liveStorageOwners();
     bridge.WasmJson.parseText = () => {
-      throw '{"kind":"limit","message":"fixture admission limit"}';
+      throw '{"kind":"Limit","message":"fixture admission limit"}';
     };
     assert.deepEqual(prepared.validate(7), {
       outcome: "input-error",

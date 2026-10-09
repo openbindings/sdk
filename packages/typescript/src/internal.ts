@@ -832,7 +832,7 @@ export class PreparedContract extends Managed {
             /* unexpected engine exception */
           }
         }
-        if (info?.kind !== "limit") throw error;
+        if (info?.kind !== "Limit") throw error;
         return {
           outcome: "input-error",
           error: {
@@ -1385,7 +1385,7 @@ function bridgeDraftFailure(error: unknown): never {
         null,
         "Draft fields do not satisfy the typed authoring model.",
       );
-    if (info?.kind === "limit")
+    if (info?.kind === "Limit")
       throw new DraftFailure(
         "authoring-limit",
         null,

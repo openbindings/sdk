@@ -290,6 +290,39 @@ export async function apiQualityCases(sdk, http) {
       sdk.liveStorageOwners() === beforeValue,
       "post admission cancellation cleanup",
     );
+    // The bridge's actual pinned input-error kind is "Limit" (capital L).
+    // A large exact fragment is admitted by itself; embedding it can exceed the
+    // aggregate parse limit even though the ordinary encoder borrows its tokens.
+    const deep = exact("[".repeat(10000) + "0" + "]".repeat(10000));
+    const beforeDepthRefusal = sdk.liveStorageOwners();
+    const depthRefusal = input.validate({ nested: deep });
+    check(
+      depthRefusal.outcome === "input-error",
+      "real aggregate admission limit",
+    );
+    check(
+      depthRefusal.error.code === "input-limit" &&
+        depthRefusal.error.instancePointer === null,
+      "aggregate limit truthful unknown pointer",
+    );
+    const draftLimit = sdk.authorDocument({
+      operations: { run: {} },
+      additionalFields: { "x-deep": deep },
+    });
+    check(
+      draftLimit.status === "authoring-error" &&
+        draftLimit.error.code === "authoring-limit" &&
+        draftLimit.error.draftPointer === null,
+      "real encoded draft limit",
+    );
+    check(
+      deep.text.length === 20001,
+      "supplied exact owner survives aggregate limit",
+    );
+    check(
+      sdk.liveStorageOwners() === beforeDepthRefusal,
+      "aggregate limit cleanup",
+    );
     check(input.validate(8).outcome === "satisfies", "healthy reuse");
     const intSchema = exact('{"type":"integer"}');
     const stringSchema = exact('{"type":"string"}');
