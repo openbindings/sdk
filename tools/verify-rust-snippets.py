@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,12 +16,34 @@ CRATES = ['openbindings', 'openbindings_json_schema_evaluator']
 
 
 def read_snippet(path):
-    markdown = path.read_bytes()
-    openings = re.findall(rb'^```rust[^\r\n]*\r?$', markdown, re.M)
-    snippets = re.findall(rb'^```rust\r?\n(.*?)^```[ \t]*\r?$', markdown, re.M | re.S)
-    if len(openings) != 1 or len(snippets) != 1:
-        raise ValueError(f'{path}: expected exactly one complete Rust fence, '
-                         f'found {len(openings)} openings and {len(snippets)} complete fences')
+    # These two documents use top-level fences. Track every language's fence so
+    # a Rust-looking line inside another block cannot become an executable example.
+    snippets = []
+    fence = None
+    body = []
+    for number, line in enumerate(path.read_bytes().splitlines(keepends=True), 1):
+        marker = re.fullmatch(rb' {0,3}(`{3,}|~{3,})([^\r\n]*)', line.rstrip(b'\r\n'))
+        if fence is None:
+            if marker is None:
+                continue
+            delimiter, info = marker.groups()
+            if delimiter[:1] == b'`' and b'`' in info:
+                raise ValueError(f'{path}:{number}: malformed backtick fence')
+            fence = (delimiter, info.strip(b' \t') == b'rust', number)
+            body = []
+        else:
+            delimiter, rust, opening = fence
+            if (marker is not None and marker[1][:1] == delimiter[:1]
+                    and len(marker[1]) >= len(delimiter) and not marker[2].strip(b' \t')):
+                if rust:
+                    snippets.append(b''.join(body))
+                fence = None
+            else:
+                body.append(line)
+    if fence is not None:
+        raise ValueError(f'{path}:{fence[2]}: unclosed fence')
+    if len(snippets) != 1:
+        raise ValueError(f'{path}: expected exactly one complete Rust fence, found {len(snippets)}')
     return snippets[0]
 
 
@@ -58,8 +81,12 @@ def main():
             for crate, library in libraries.items():
                 args += ['--extern', f'{crate}={library}', '-L', f'dependency={library.parent}']
             run(args)
-            run([executable])
+            result = run([executable], stdout=subprocess.PIPE, text=True)
+            print(result.stdout, end='')
+            if name == 'evaluator_readme' and result.stdout != 'input satisfies the contract\n':
+                raise AssertionError('Evaluator README example must demonstrate a satisfied input')
 
 
 if __name__ == '__main__':
+    run([sys.executable, ROOT / 'tools/test-rust-snippets.py'])
     main()

@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { firstUseSnippet } from "./readme-snippet.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const temporary = realpathSync(
@@ -54,17 +55,10 @@ try {
   // Compile the exact first-use block delivered in the installed README.
   // Host initialization is intentionally outside this host-independent block.
   const installed = join(temporary, "node_modules/@openbindings/sdk");
-  const section = readFileSync(join(installed, "README.md"), "utf8")
-    .split("## First useful result\n")[1]
-    ?.split("\n## Initialization\n")[0];
-  assert(section, "Installed README must retain its first-use section");
-  const snippets = [...section.matchAll(/^```ts\r?\n([\s\S]*?)^```\s*$/gm)];
-  assert.equal(
-    snippets.length,
-    1,
-    "Exactly one first-use TypeScript block is checked",
+  const snippet = firstUseSnippet(
+    readFileSync(join(installed, "README.md"), "utf8"),
   );
-  writeFileSync(join(temporary, "readme.ts"), snippets[0][1]);
+  writeFileSync(join(temporary, "readme.ts"), snippet);
   execFileSync(
     process.execPath,
     [

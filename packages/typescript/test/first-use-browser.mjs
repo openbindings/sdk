@@ -27,11 +27,13 @@ export async function firstUsePage(browser, url, configure = async () => {}) {
           const output = document.querySelector("#result");
           return output && output.dataset.state !== "loading";
         });
+        const text = await page.locator("#result").textContent();
         assert.equal(
           await page.locator("#result").getAttribute("data-state"),
           "ready",
+          `First-use example failed to load: ${text}`,
         );
-        return JSON.parse(await page.locator("#result").textContent());
+        return JSON.parse(text);
       })(),
       loadingFailed,
     ]);
@@ -40,7 +42,7 @@ export async function firstUsePage(browser, url, configure = async () => {}) {
     assert.equal(result.accepted.operations[0].key, "lookup");
     assert.equal(result.mismatch.result.outcome, "mismatch");
     assert.equal(result.invalidInput.result.outcome, "input-error");
-    return { firstUse: result, errors };
+    return { firstUse: result, errors: [...errors] };
   } finally {
     await page.close();
   }
@@ -82,10 +84,37 @@ export async function firstUseLoadingFailures(browser, url) {
       error.message.startsWith("First-use example failed to load:") &&
       error.message.includes(missingModule),
   );
+  // A caught module-evaluation failure can have successful HTTP responses and
+  // no pageerror. Its displayed cause must still reach the test failure.
+  const exampleModule = new URL("./first-use.mjs", url).href;
+  const evaluationError = "Controlled first-use module evaluation failure";
+  let evaluationResponses = 0;
+  await assert.rejects(
+    firstUsePage(browser, url, async (page) => {
+      page.on("response", (response) => {
+        if (response.url() === exampleModule && response.status() === 200)
+          evaluationResponses++;
+      });
+      await page.route(exampleModule, (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "text/javascript",
+          body: `throw new Error(${JSON.stringify(evaluationError)});`,
+        }),
+      );
+    }),
+    (error) => error.message.includes(evaluationError),
+  );
+  assert(
+    evaluationResponses > 0,
+    "Control must load the failing module with HTTP 200",
+  );
   return {
     missingModule,
     missingResponses,
     displayedError,
     harnessRejectedLoadFailure: true,
+    evaluationResponses,
+    harnessReportedEvaluationFailure: true,
   };
 }
