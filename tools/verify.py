@@ -10,6 +10,7 @@ env.setdefault('CARGO_TARGET_DIR', str(root / 'target'))
 def run(args, cwd=root):
     print('+ ' + ' '.join(map(str, args)), flush=True)
     subprocess.run(list(map(str, args)), cwd=cwd, env=env, check=True)
+run(['cargo', 'check', '--locked', '-p', 'openbindings', '--no-default-features'])
 run(['cargo', 'fmt', '--all', '--check'])
 run(['cargo', 'clippy', '--locked', '--workspace', '--all-targets', '--features', 'openbindings-http-discovery/native', '--', '-D', 'warnings'])
 run(['cargo', 'test', '--locked', '--workspace', '--features', 'openbindings-http-discovery/native'])
@@ -21,7 +22,7 @@ if a.browser:
     package = root / 'packages/typescript'
     npm = 'npm.cmd' if os.name == 'nt' else 'npm'
     run([npm, 'ci', '--ignore-scripts'], package)
-    for command in ['build:wasm', 'build', 'test', 'test:types', 'format:check']:
+    for command in ['build:wasm', 'build', 'test', 'test:types', 'format:check', 'test:package']:
         run([npm, 'run', command], package)
     run([sys.executable, 'tools/qualification/replay/prepare-browser-fixtures.py'])
     for engine in ['chromium', 'webkit']:

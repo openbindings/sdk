@@ -92,6 +92,14 @@ builds the npm facade and runs the full core/evaluator corpus in Chromium and
 WebKit. Install their host dependencies first as described in [replay](docs/REPLAY.md).
 Tests use task-local loopback listeners and no external application services.
 
+The verifier also compiles core independently with no default features. After
+building the facade, `npm run test:package` in `packages/typescript` packs and
+installs it into a temporary consumer, then imports its public API and packaged
+Wasm to parse and validate a document. CI compares the frozen spec inputs with
+the exact applied revision below using `node tools/verify-spec.mjs . <spec-checkout>
+<applied-sha>`; the checkout must be at that SHA. Full multi-crate Cargo archive
+qualification remains a separate prerelease/package-change check.
+
 CI definitions cover Linux, macOS and Windows; definitions are not evidence of
 execution. Migration qualification was conducted on the recorded macOS arm64 host
 and actual Chromium/WebKit, Node ESM and local workerd. The accompanying delivery
