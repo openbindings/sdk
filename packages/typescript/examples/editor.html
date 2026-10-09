@@ -47,8 +47,9 @@
     <p>
       Locations refer to the original JSON: lines and UTF-8 byte columns start
       at one; byte offsets start at zero. These are not JavaScript UTF-16
-      selection offsets. Pointers are quoted so escaped or control characters
-      stay visible.
+      selection offsets. Pointers are JSON-quoted, making newlines, tabs, quotes
+      and backslashes visible; other Unicode formatting characters are not
+      escaped.
     </p>
     <output aria-live="polite"></output>
   </main>

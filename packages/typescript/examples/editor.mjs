@@ -55,7 +55,7 @@ export class DocumentEditor {
 
 function sourceLocation(location) {
   if (!location) return "location unavailable";
-  // JSON quoting keeps control characters visible; pointers retain their ~0/~1 escapes.
+  // JSON quoting escapes newlines, tabs, quotes and backslashes; pointers retain ~0/~1.
   return `pointer ${JSON.stringify(location.pointer)}, line ${location.line}, UTF-8 byte column ${location.byteColumn}, byte offset ${location.byteOffset}`;
 }
 
