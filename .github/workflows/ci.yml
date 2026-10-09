@@ -14,9 +14,10 @@ concurrency:
 
 jobs:
   native:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
-      - run: exit 1 # temporary required-helper failure control
+      - run: exit 0 # temporary required-helper skip control
   browser:
     if: ${{ false }}
     runs-on: ubuntu-latest
