@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import crypto from "node:crypto";
+import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { chromium, webkit } from "playwright-core";
 const packageRoot = path.resolve(
@@ -26,11 +27,20 @@ for (const name of [
   "http-discovery.js",
   "wasm/openbindings_wasm.js",
   "wasm/openbindings_wasm_bg.wasm",
-])
+]) {
+  const bytes = await fs.readFile(path.join(packageRoot, "dist", name));
+  files.set("/" + name, bytes);
+  files.set("/dist/" + name, bytes); // installed example's unchanged relative URLs
+}
+for (const name of ["first-use.html", "first-use.mjs"])
   files.set(
-    "/" + name,
-    await fs.readFile(path.join(packageRoot, "dist", name)),
+    "/examples/" + name,
+    await fs.readFile(path.join(packageRoot, "examples", name)),
   );
+files.set(
+  "/fixed-diagnostic-cases.mjs",
+  await fs.readFile(path.join(packageRoot, "test/fixed-diagnostic-cases.mjs")),
+);
 files.set(
   "/observer.mjs",
   await fs.readFile(
@@ -44,7 +54,11 @@ const server = http.createServer((req, res) => {
   } else if (files.has(req.url)) {
     res.setHeader(
       "Content-Type",
-      req.url.endsWith(".wasm") ? "application/wasm" : "text/javascript",
+      req.url.endsWith(".wasm")
+        ? "application/wasm"
+        : req.url.endsWith(".html")
+          ? "text/html"
+          : "text/javascript",
     );
     res.end(files.get(req.url));
   } else {
@@ -69,7 +83,8 @@ try {
   if ((await page.title()) !== id) throw Error("fresh host identity");
   const result = await page.evaluate(async (requests) => {
     const sdk = await import("/index.js"),
-      { observe } = await import("/observer.mjs");
+      { observe } = await import("/observer.mjs"),
+      { fixedDiagnosticCases } = await import("/fixed-diagnostic-cases.mjs");
     await sdk.initialize();
     const run = (list) =>
       list.map((request) => {
@@ -79,8 +94,53 @@ try {
           return { id: request.id, executed: false, error: String(error) };
         }
       });
-    return { core: run(requests.core), suite: run(requests.suite) };
+    return {
+      core: run(requests.core),
+      suite: run(requests.suite),
+      fixedDiagnostics: fixedDiagnosticCases(sdk),
+    };
   }, requests);
+  const examplePage = await browser.newPage();
+  const exampleErrors = [];
+  examplePage.on("pageerror", (error) => exampleErrors.push(error.message));
+  examplePage.on("requestfailed", (request) =>
+    exampleErrors.push(request.url()),
+  );
+  examplePage.on("response", (response) => {
+    if (response.status() >= 400)
+      exampleErrors.push(`${response.status()} ${response.url()}`);
+  });
+  await examplePage.goto(
+    `http://127.0.0.1:${server.address().port}/examples/first-use.html`,
+  );
+  await examplePage.waitForFunction(() => {
+    const output = document.querySelector("#result");
+    return output && output.textContent !== "Loading…";
+  });
+  assert.deepEqual(
+    exampleErrors,
+    [],
+    "First-use example must load without errors",
+  );
+  const firstUse = JSON.parse(
+    await examplePage.locator("#result").textContent(),
+  );
+  assert.equal(firstUse.accepted.result.outcome, "satisfies");
+  assert.equal(firstUse.accepted.operations[0].key, "lookup");
+  assert.equal(firstUse.mismatch.result.outcome, "mismatch");
+  assert.equal(firstUse.invalidInput.result.outcome, "input-error");
+  await fs.writeFile(
+    path.join(output, "first-use.json"),
+    JSON.stringify(
+      {
+        firstUse,
+        fixedDiagnostics: result.fixedDiagnostics,
+        errors: exampleErrors,
+      },
+      null,
+      2,
+    ),
+  );
   await fs.writeFile(
     path.join(output, "core.json"),
     JSON.stringify(result.core, null, 2),

@@ -54,6 +54,10 @@ try {
     join(root, "test/api-quality-cases.mjs"),
     join(temporary, "api-quality-cases.mjs"),
   );
+  copyFileSync(
+    join(root, "test/fixed-diagnostic-cases.mjs"),
+    join(temporary, "fixed-diagnostic-cases.mjs"),
+  );
   writeFileSync(
     join(temporary, "consumer.mjs"),
     `
@@ -63,6 +67,7 @@ import { fileURLToPath } from "node:url";
 import * as sdk from "@openbindings/sdk";
 import * as http from "@openbindings/sdk/http-discovery";
 import { apiQualityCases } from "./api-quality-cases.mjs";
+import { fixedDiagnosticCases } from "./fixed-diagnostic-cases.mjs";
 const { initialize, parseDocument } = sdk;
 const resolved = fileURLToPath(import.meta.resolve("@openbindings/sdk"));
 assert.equal(await realpath(resolved), resolved, "Package must not resolve through a workspace symlink");
@@ -77,7 +82,7 @@ try {
 } finally {
   parsed.value.dispose();
 }
-console.log(JSON.stringify({ installedPackage: true, ...await apiQualityCases(sdk, http) }));
+console.log(JSON.stringify({ installedPackage: true, ...await apiQualityCases(sdk, http), fixedDiagnostics: fixedDiagnosticCases(sdk) }));
 `,
   );
   execFileSync(process.execPath, [join(temporary, "consumer.mjs")], {

@@ -285,8 +285,8 @@ redundant possible failure. Truncation is explicit.
 ## Ownership and scheduling
 
 Each returned handle owns its required storage. Use `using` or idempotent
-`dispose()`; `retain()` creates another independently disposable owner. Retained
-values and contracts survive disposal of their source handles. Using a disposed
+`dispose()`; where available, `retain()` creates another independently disposable
+owner. Retained values and contracts survive disposal of their source handles. Using a disposed
 handle throws `SdkError` with code `disposed-handle`. Garbage collection is a
 fallback, not a resource-lifetime contract. The fixed meta-schema snapshots live
 for the Wasm instance's lifetime; Wasm memory pages may retain allocator high-water
@@ -294,7 +294,8 @@ marks even when live owners have been released.
 
 | Returned owner                                                     | Lifetime                                                                                                                           |
 | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Parsed or validated document, selected operation, exact value/view | Dispose each returned handle; `retain()` creates an independent owner.                                                             |
+| Parsed or validated document, exact value/view | Dispose each returned handle; `retain()` creates an independent owner.                                                             |
+| Selected operation (`OperationView`) | Dispose the independently returned selection. It has no `retain()` method; its `value` getter returns a separate owned `ExactJson`. |
 | Resource set or contract context                                   | Dispose after setup when only the prepared contract is needed. Supplied resource handles are borrowed and remain caller-owned.     |
 | Ready prepared contract                                            | Retain for repeated validation; it survives disposal of setup owners. Acquire a request's retained owner before its first `await`. |
 
