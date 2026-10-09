@@ -59,10 +59,19 @@ console.log(checkInput("seven"));
 Parsing preserves a document even when a field is malformed. This application
 uses `validate()` to require conformance before exposing operations. A successful
 validation returns an independently owned `ValidatedDocument`; `assess()` instead
-returns the report without creating that owner. To diagnose a draft such as
-`"description": 42`, render its findings' messages and original locations, correct
-the field, then parse and validate again. Messages explain the problem; rule and
-code fields are the machine-readable classifications.
+returns the report without creating that owner. The [source editor](examples/editor.html)
+starts with a mistaken `inputSchema` operation member, renders its actual findings,
+corrects the original source to `input`, validates it, then prepares and checks an
+input. Unexpected-member findings point to the original key token. Quote pointers
+and render them as text, including `findingsTruncated` when true. Lines and byte
+columns refer to UTF-8 source bytes, not JavaScript UTF-16 selection offsets.
+Reports retain at most 4,096 findings; expanded unexpected-field pointers also
+share an 8 MiB byte budget. Omitted findings set `findingsTruncated`; all 13 rule
+evidence states remain available. Expanded findings can displace later ones at
+the count cap.
+Messages explain the problem; rule and code fields are the machine-readable
+classifications. The separate [authoring recovery lesson](examples/authoring-recovery.mjs)
+uses pointers into a caller's typed draft, which have no source byte coordinates.
 
 Handle setup separately from a value's verdict:
 
@@ -360,8 +369,9 @@ credentialed CORS and preflight policy remain application responsibilities.
   verdict path in [one shared caller](examples/first-use.mjs).
 - [Service lifecycle](examples/service-lifecycle.mjs): explicit same-URI resources,
   retained requests, transactional replacement, cancellation/recovery and cleanup.
-- [Editor component](examples/editor.html): owned snapshots, recoverable drafts,
-  conformance and teardown. Serve the installed package directory over HTTP.
+- [Editor component](examples/editor.html): a mistaken source member, quoted
+  diagnostics, correction, conformance proof, contract setup and owned snapshots.
+  Serve the installed package directory over HTTP.
 - [Worker owner](examples/worker-owner.mjs) and [Worker job](examples/worker.mjs):
   initialization, transferred input bytes, plain results, termination and recovery.
   [Component rendering](examples/worker-view.mjs) suppresses results from older edits.

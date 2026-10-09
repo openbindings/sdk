@@ -553,6 +553,19 @@ impl Checks {
             self.truncated = true;
         }
     }
+    fn mark_at(
+        &mut self,
+        rule: usize,
+        status: Evidence,
+        at: JsonRef<'_>,
+        code: &'static str,
+        message: impl Into<String>,
+    ) {
+        // Evidence is still marked after the finding cap, without constructing an
+        // unretainable source location (which may have a large source prefix).
+        let location = (self.findings.len() < 4096).then(|| at.location());
+        self.mark(rule, status, code, location, message);
+    }
     fn violation(
         &mut self,
         rule: usize,
@@ -560,7 +573,7 @@ impl Checks {
         code: &'static str,
         message: impl Into<String>,
     ) {
-        self.mark(rule, Evidence::Violated, code, Some(at.location()), message);
+        self.mark_at(rule, Evidence::Violated, at, code, message);
     }
     fn not_applicable_after_json(&mut self) {
         self.evidence[1..].fill(Evidence::NotApplicable);
@@ -591,21 +604,32 @@ impl Checks {
         ) {
             Ok(problems) => {
                 self.truncated |= problems.truncated;
-                for problem in problems.entries {
-                    let at = value.at(&problem.path).unwrap_or(value.view());
-                    self.violation(rule, at, "schema-mismatch", problem.message);
+                if problems.violated {
+                    self.evidence[rule] = Evidence::Violated;
+                }
+                let nodes: Vec<_> = problems.entries.iter().map(|problem| problem.at).collect();
+                let locations = backend::locations(&nodes);
+                for (problem, location) in problems.entries.into_iter().zip(locations) {
+                    self.mark(
+                        rule,
+                        Evidence::Violated,
+                        "schema-mismatch",
+                        Some(location),
+                        problem.message,
+                    );
                 }
             }
-            Err(reason) => self.mark(
+            Err(reason) => self.mark_at(
                 rule,
                 Evidence::Inconclusive,
+                value.view(),
                 "fixed-schema-limit-or-failure",
-                Some(value.location()),
                 reason,
             ),
         }
     }
 }
+const NAME_GRAMMAR_MESSAGE: &str = "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens";
 pub fn valid_name(name: &str) -> bool {
     !name.is_empty()
         && name.bytes().enumerate().all(|(i, c)| {
@@ -647,11 +671,11 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
     if backend::has_unpaired(value) || backend::depth(value) > 10_000 {
         for rule in 1..13 {
             if rule != 2 {
-                c.mark(
+                c.mark_at(
                     rule,
                     Evidence::Inconclusive,
+                    value.view(),
                     "representation-limit",
-                    Some(value.location()),
                     "interpretation requires supported strings and document nesting",
                 );
             }
@@ -671,12 +695,7 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
         if let Some(entries) = value.get(map).and_then(|v| v.members()) {
             for entry in entries {
                 if !entry.name.as_str().is_some_and(valid_name) {
-                    c.violation(
-                        3,
-                        entry.name,
-                        "name-grammar",
-                        "name violates the core identifier grammar",
-                    );
+                    c.violation(3, entry.name, "name-grammar", NAME_GRAMMAR_MESSAGE);
                 }
             }
         }
@@ -693,21 +712,11 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
             if let Some(aliases) = entry.value.get("aliases").and_then(|v| v.elements()) {
                 for alias in aliases {
                     let Some(name) = alias.as_str() else {
-                        c.violation(
-                            3,
-                            alias,
-                            "name-grammar",
-                            "an alias must be a core name string",
-                        );
+                        c.violation(3, alias, "name-grammar", NAME_GRAMMAR_MESSAGE);
                         continue;
                     };
                     if !valid_name(name) {
-                        c.violation(
-                            3,
-                            alias,
-                            "name-grammar",
-                            "alias violates the core identifier grammar",
-                        );
+                        c.violation(3, alias, "name-grammar", NAME_GRAMMAR_MESSAGE);
                     }
                     if names.insert(name.into(), alias.to_owned()).is_some() {
                         c.violation(
@@ -722,12 +731,7 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
             if let Some(examples) = entry.value.get("examples").and_then(|v| v.members()) {
                 for example in examples {
                     if !example.name.as_str().is_some_and(valid_name) {
-                        c.violation(
-                            3,
-                            example.name,
-                            "name-grammar",
-                            "example name violates the core identifier grammar",
-                        );
+                        c.violation(3, example.name, "name-grammar", NAME_GRAMMAR_MESSAGE);
                     }
                 }
             }
@@ -761,11 +765,11 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
     for node in &schemas.nodes {
         let schema = node.value.view();
         if node.depth > 256 {
-            c.mark(
+            c.mark_at(
                 9,
                 Evidence::Inconclusive,
+                schema,
                 "schema-depth-limit",
-                Some(schema.location()),
                 "schema depth exceeds 256",
             );
         } else if meta_seen.insert(node.value.text()) {

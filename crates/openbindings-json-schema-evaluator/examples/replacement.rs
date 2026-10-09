@@ -49,24 +49,18 @@ fn candidate(
 ) -> Result<PreparedContract, LoadFailure> {
     let document = ParsedDocument::parse(text).map_err(LoadFailure::Parse)?;
     let assessment = document.assess().map_err(LoadFailure::Version)?;
-    if assessment.validated().is_none() {
+    let Some(proof) = assessment.validated() else {
         return Err(LoadFailure::Conformance(assessment.report().clone()));
-    }
-    let context = document
-        .value_contracts_with_options(
-            Arc::new(DefaultEvaluator::new()),
-            resources,
-            ValueContractOptions { cache_capacity: 1 },
-        )
+    };
+    let context = proof
+        .parsed()
+        .value_contracts(Arc::new(DefaultEvaluator::new()), resources)
         .map_err(LoadFailure::Interpretation)?;
     let input = match context.prepare_with_control("find", Side::Input, control) {
         ContractPreparation::Ready(input) => input,
         // Retain the distinct no-contract, missing, ambiguous or no-verdict state.
         other => return Err(LoadFailure::Preparation(other)),
     };
-    // Demonstrate that evicting input from this one-entry cache does not invalidate it.
-    let output = context.prepare("lookup", Side::Output);
-    assert!(matches!(output, ContractPreparation::Ready(_))); // known fixture
     Ok(input) // document/context/cache owners end; the returned owner remains usable.
 }
 
@@ -84,6 +78,34 @@ fn main() -> Result<(), Box<dyn Error>> {
     let healthy = WorkControl::new();
     let old_value = JsonValue::parse("9007199254740993")?;
     let new_value = JsonValue::from_serializable(&9_007_199_254_740_994_u64)?;
+    // Fixture-only cache demonstration: reusable candidate loading requires no output.
+    {
+        let document = ParsedDocument::parse(DOCUMENT)?;
+        let assessment = document.assess()?;
+        let proof = assessment.validated().ok_or("fixture must be conformant")?;
+        let context = proof.parsed().value_contracts_with_options(
+            Arc::new(DefaultEvaluator::new()),
+            resources(r#"{"const":9007199254740993}"#)?,
+            ValueContractOptions { cache_capacity: 1 },
+        )?;
+        let ContractPreparation::Ready(retained) = context.prepare("find", Side::Input) else {
+            panic!("fixture must have a ready input");
+        };
+        assert!(matches!(
+            context.prepare("lookup", Side::Output),
+            ContractPreparation::Ready(_)
+        )); // preparing output evicts the input's cached owner
+        drop(context);
+        satisfies(&retained, &old_value); // explicit owner survives eviction and context drop
+    }
+    // A caller can also load an input-only operation through the reusable helper.
+    let input_only = candidate(
+        &DOCUMENT.replace(",\"output\":true", ""),
+        resources(r#"{"const":9007199254740993}"#)?,
+        &healthy,
+    )?;
+    satisfies(&input_only, &old_value);
+    drop(input_only);
     let mut active = candidate(
         DOCUMENT,
         resources(r#"{"const":9007199254740993}"#)?,

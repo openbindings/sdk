@@ -48,7 +48,13 @@ proof of semantic undefinedness. `openbindings-schema-evaluator-test-support`
 qualifies custom adapters; `openbindings-http-discovery` supplies optional HTTP policy.
 
 Source locations use original JSON Pointers, zero-based UTF-8 byte offsets and
-one-based lines/byte columns. Bounded diagnostic output declares truncation.
+one-based lines/byte columns. Unexpected normative fields identify original key
+tokens and explain the `x-` extension convention. Reports retain at most 4,096
+findings; expanded unexpected-field pointers also share an 8 MiB byte budget.
+Omitted findings set `findings_truncated`; all 13 rule evidence states remain
+available. Expanded findings can displace later ones at the count cap. Messages
+are advisory; use rule/code fields for classification and quote pointers when
+rendering caller-controlled text.
 Resources are immutable and caller supplied; acquisition URLs do not change schema
 bases. Anonymous document and dynamic scope remain part of interpretation.
 
@@ -87,7 +93,11 @@ with a flag when larger). Display and Debug omit arbitrary custom prose.
 draft pointers containing `additional_fields`; original `source_location()` is a
 separate domain. See the [migration notes](https://github.com/openbindings/sdk/blob/main/docs/migration.md).
 
-Fixed-schema conformance findings explain direct expected types and missing fields
-without echoing rejected values. Required-field locations identify the original
-containing object. Complex failures retain a general explanation. Message wording
-is guidance; use rule/code/evidence and original locations for program logic.
+Fixed-schema conformance findings explain direct expected types, missing fields,
+unexpected normative members and identifier grammar without echoing rejected
+values. Unexpected-member findings identify the original key token; required-field
+locations identify the containing object. Quote or escape displayed pointers and
+label UTF-8 byte coordinates explicitly. Complex failures retain a general
+explanation. Message wording is guidance; use rule/code/evidence and original
+locations for program logic. The [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
+shows source correction through conformance proof and contract setup.

@@ -1,6 +1,6 @@
 # First useful result in Rust
 
-Start with the optional evaluator companion's [first-use example](../crates/openbindings-json-schema-evaluator/examples/first_use.rs). It loads a document, checks conformance, reads operation metadata, resolves an alias, prepares input, and handles validation outcomes. The separate [replacement example](../crates/openbindings-json-schema-evaluator/examples/replacement.rs) adds explicit resources and retained work.
+Start with the optional evaluator companion's [first-use example](../crates/openbindings-json-schema-evaluator/examples/first_use.rs). It diagnoses a mistaken document member, corrects the original source, establishes conformance, reads operation metadata, resolves an alias, prepares input, and handles validation outcomes. The separate [replacement example](../crates/openbindings-json-schema-evaluator/examples/replacement.rs) adds explicit resources and retained work.
 
 These packages are unpublished. Use an exact checkout or locally built archives as described in [source replay](REPLAY.md); the package version is independent of the document's `openbindings` version. Rust requires no runtime initialization. A consuming package selects its evaluator explicitly:
 
@@ -28,7 +28,7 @@ The first-use example requires conformance before continuing and prints findings
 
 There is a deliberate difference between typed metadata and exact schema access. `description()` and `aliases()` interpret strings and can return located errors. `input()` and `output()` return `Option<JsonRef>` with no `?`: absence is `None`, while a present null or false stays an exact value. A present field has not yet been established as a supported contract.
 
-Select `DefaultEvaluator` from the optional companion, then call `document.value_contracts(Arc::new(DefaultEvaluator::new()), resources)`. `ResourceSet::default()` supplies no external resources. The SDK never fetches a missing reference.
+Keep the returned conformance proof, select `DefaultEvaluator` from the optional companion, then call `proof.parsed().value_contracts(Arc::new(DefaultEvaluator::new()), resources)`. `ResourceSet::default()` supplies no external resources. The SDK never fetches a missing reference.
 
 `context.prepare(name, Side::Input)` has these setup outcomes:
 
@@ -44,29 +44,45 @@ Preparation refusal is not an input mismatch and does not prove that the schema 
 
 ## Diagnose and correct a document
 
-For example, this malformed description parses, but assessment reports a type failure:
+For example, this editor draft uses `inputSchema` where the normative operation member is `input`. Parsing succeeds; assessment locates the unexpected member:
 
 ```rust
-use openbindings::ParsedDocument;
+use openbindings::{ContractPreparation, ParsedDocument, ResourceSet, Side};
+use openbindings_json_schema_evaluator::DefaultEvaluator;
+use std::sync::Arc;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let text = r#"{"openbindings":"0.2.0","operations":{"lookup":{"description":7}}}"#;
+    let text = r#"{"openbindings":"0.2.0","operations":{"lookup":{"inputSchema":{"type":"integer"}}}}"#;
     let document = ParsedDocument::parse(text)?;
     let assessment = document.assess()?;
     for finding in &assessment.report().findings {
-        println!("{} {} at {:?}: {}", finding.rule, finding.code, finding.location, finding.message);
+        // Debug quotes and escapes the pointer, including any control characters.
+        println!("{}/{} ({:?}) at {:?}: {}",
+            finding.rule, finding.code, finding.status, finding.location, finding.message);
     }
-    // Correct the original field, then parse and assess the replacement snapshot.
-    let corrected = text.replace("\"description\":7", "\"description\":\"Find an item\"");
+    if assessment.report().findings_truncated {
+        println!("More findings were omitted; rule evidence remains available.");
+    }
+    // Correct this known fixture's original source, not a normalized JSON value.
+    let corrected = text.replace("\"inputSchema\":", "\"input\":");
     let corrected = ParsedDocument::parse(corrected)?;
-    assert!(corrected.assess()?.validated().is_some());
+    let assessment = corrected.assess()?;
+    let Some(proof) = assessment.validated() else {
+        return Err(format!("document conformance: {:?}", assessment.report().conclusion).into());
+    };
+    let context = proof.parsed().value_contracts(
+        Arc::new(DefaultEvaluator::new()), ResourceSet::default())?;
+    match context.prepare("lookup", Side::Input) {
+        ContractPreparation::Ready(_input) => { /* retain input for value validation */ }
+        other => return Err(format!("input setup was refused: {other:?}").into()),
+    }
     Ok(())
 }
 ```
 
-The `OBI-02` / `schema-mismatch` finding points to `/operations/lookup/description` and explains that a string is expected. Direct missing-field messages name the field from the fixed schema and point to its containing object; there is no source byte offset for a nonexistent property. Complex schema failures keep a general explanation instead of presenting one alternative as the only repair. Messages are bounded guidance, not stable machine identifiers; use rule, code, evidence and location fields for logic. These fixed-schema messages do not echo rejected values.
+The `OBI-02` / `schema-mismatch` finding points to `/operations/lookup/inputSchema` at the original key token and says `this member is not permitted here; extension member names begin with x-`. The caller chooses the intended correction; the SDK does not guess a replacement name. Direct type failures explain the expected type. Missing-field messages identify the fixed-schema field and locate its containing object; no source byte offset is invented for a nonexistent property. A `name-grammar` finding explains the permitted ASCII spelling and first character. Complex schema failures keep a general explanation instead of presenting one alternative as the only repair. Messages are bounded guidance, not stable machine identifiers; use rule, code, evidence and location fields for logic. These fixed-schema messages do not echo rejected values or unexpected member names.
 
-Locations use original JSON Pointers, zero-based UTF-8 byte offsets, and one-based lines and byte columns. Preserve the original document bytes when presenting them. Correcting text creates a new snapshot; it does not mutate retained views of the old one.
+Locations use original JSON Pointers, zero-based UTF-8 byte offsets, and one-based lines and byte columns. Preserve the original document bytes when presenting them. These are not character indexes or JavaScript UTF-16 editor selection offsets: an editor must convert coordinates against the same source bytes before selecting text. Quote or escape pointers when displaying them, and render them as text rather than HTML. Correcting text creates a new snapshot; it does not mutate retained views of the old one. A truncated findings list still accompanies the complete rule evidence map.
 
 ## Admit a value and interpret the result
 
@@ -88,7 +104,7 @@ The replacement example owns an `active: PreparedContract` slot. Its `candidate`
 
 The old job clones the ready owner before the application changes the slot. It can still use its original document/resource context after replacement, even when the new context supplies a different schema at exactly the same URI. A channel makes the example's scheduling deterministic; it does not claim to interrupt an evaluation already executing. Applications can use their own threads, queues or other scheduling policy.
 
-Contexts retain four most-recent preparation entries by default. `ValueContractOptions { cache_capacity: 1 }` makes the example's second preparation evict its first cache entry; zero disables caching. Explicitly retained owners survive eviction and context drop. Cache capacity limits entries, not bytes. Use Rust scopes and `drop` to release obsolete owners; a released owner does not imply lower allocator RSS.
+Contexts retain four most-recent preparation entries by default. A separate fixture block in `main` uses `ValueContractOptions { cache_capacity: 1 }` to make its second preparation evict its first cache entry; zero disables caching. The reusable `candidate` helper uses the conformance proof and requires only the requested input contract, with no assumption that an output is present. Explicitly retained owners survive eviction and context drop. Cache capacity limits entries, not bytes. Use Rust scopes and `drop` to release obsolete owners; a released owner does not imply lower allocator RSS.
 
 `prepare_with_control` and `validate_with_control` accept `WorkControl`. Clones share a cancellation state, and cancellation is permanent for that state. Create a fresh control for an independent retry. Cancelled preparation returns no ready owner; cancellation and transient evaluator failure do not poison healthy subsequent preparation on the context. A cancelled validation yields no-verdict and leaves the ready contract usable.
 

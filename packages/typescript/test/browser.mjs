@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { chromium, webkit } from "playwright-core";
 import { firstUsePage, firstUseLoadingFailures } from "./first-use-browser.mjs";
+import { editorPage } from "./editor-browser.mjs";
 const packageRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -31,7 +32,12 @@ for (const name of [
   const bytes = await fs.readFile(path.join(packageRoot, "dist", name));
   files.set("/dist/" + name, bytes); // match the installed package layout
 }
-for (const name of ["first-use.html", "first-use.mjs"])
+for (const name of [
+  "first-use.html",
+  "first-use.mjs",
+  "editor.html",
+  "editor.mjs",
+])
   files.set(
     "/examples/" + name,
     await fs.readFile(path.join(packageRoot, "examples", name)),
@@ -102,6 +108,14 @@ try {
   const exampleUrl = `http://127.0.0.1:${server.address().port}/examples/first-use.html`;
   const firstUse = await firstUsePage(browser, exampleUrl);
   const loadingFailures = await firstUseLoadingFailures(browser, exampleUrl);
+  const editor = await editorPage(
+    browser,
+    new URL("./editor.html", exampleUrl).href,
+  );
+  await fs.writeFile(
+    path.join(output, "editor.json"),
+    JSON.stringify(editor, null, 2),
+  );
   await fs.writeFile(
     path.join(output, "first-use.json"),
     JSON.stringify(

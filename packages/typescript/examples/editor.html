@@ -4,12 +4,53 @@
   <script type="importmap">
     { "imports": { "@openbindings/sdk": "../dist/index.js" } }
   </script>
+  <style>
+    body {
+      font:
+        1rem/1.5 system-ui,
+        sans-serif;
+      margin: 2rem auto;
+      max-width: 64rem;
+      padding: 0 1rem;
+    }
+    textarea {
+      display: block;
+      box-sizing: border-box;
+      width: 100%;
+      font: 0.9rem/1.4 monospace;
+    }
+    button {
+      margin: 1rem 0.5rem 1rem 0;
+      padding: 0.5rem 0.75rem;
+    }
+    output {
+      display: block;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+  </style>
   <main>
     <h1>Document editor</h1>
+    <p>
+      This draft uses <code>inputSchema</code> where the operation member is
+      <code>input</code>. Check its diagnostics, then correct the original
+      source and prepare the input contract. Changes are local to this page.
+    </p>
     <form>
-      <label>Operation name <input value="lookup" required /></label
-      ><button>Update</button>
+      <label for="source">Document JSON</label>
+      <textarea id="source" rows="17" spellcheck="false" required></textarea>
+      <button type="submit">Check draft</button>
+      <button type="button" data-action="correct">
+        Rename inputSchema to input
+      </button>
     </form>
+    <p>
+      Locations refer to the original JSON: lines and UTF-8 byte columns start
+      at one; byte offsets start at zero. These are not JavaScript UTF-16
+      selection offsets. Pointers are JSON-quoted, making newlines, tabs, quotes
+      and backslashes visible; other Unicode formatting characters are not
+      escaped.
+    </p>
     <output aria-live="polite"></output>
   </main>
   <script type="module">

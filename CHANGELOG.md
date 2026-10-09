@@ -17,6 +17,15 @@
 
 ### Changed
 
+- Unexpected normative document fields now identify their original key tokens and
+  explain the `x-` extension convention. One aggregate finding can become several;
+  source order within each object is preserved. Expansion shares the 4,096-finding
+  cap and has an 8 MiB pointer budget. Omitted findings set `findings_truncated`
+  (`findingsTruncated` in TypeScript); all rule evidence is still computed. More
+  precise findings can displace later retained findings under these bounds.
+- Name diagnostics explain the existing ASCII grammar. Conformance rules, diagnostic
+  codes and public result/API shapes are unchanged. Diagnostic text is advisory.
+
 - Made first-use Rust Markdown examples directly runnable, added routine example
   and installed README checks, and demonstrated same-owner cancellation recovery.
 - Browser first-use examples display module-loading errors; browser checks cover

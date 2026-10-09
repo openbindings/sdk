@@ -5,7 +5,16 @@ export function fixedDiagnosticCases(sdk) {
     if (!condition) throw new Error(message);
   };
   const byteLength = (text) => new TextEncoder().encode(text).length;
+  const unexpectedMessage =
+    "this member is not permitted here; extension member names begin with x-";
   const cases = [
+    {
+      name: "unexpected member identifies escaped original key after multibyte prefix",
+      text: '{"openbindings":"0.2.0","name":"é 😀","operations":{"x":{"inputs/~\\n":0}}}',
+      pointer: "/operations/x/inputs~1~0\n",
+      token: '"inputs/',
+      unexpected: true,
+    },
     {
       name: "description type and original UTF-8 coordinates",
       text: '{\n "openbindings":"0.2.0","name":"é", "operations":{"x":{"description":{"s":"REJECTED_SENTINEL"}}}}',
@@ -123,6 +132,11 @@ export function fixedDiagnosticCases(sdk) {
             byteLength(preceding.slice(preceding.lastIndexOf("\n") + 1)) + 1,
           `${fixture.name}: original byte column`,
         );
+        if (fixture.unexpected)
+          check(
+            finding.message === unexpectedMessage,
+            `${fixture.name}: disallowed member explained`,
+          );
         if (fixture.expectedType)
           check(
             finding.message.includes(fixture.expectedType),
@@ -153,5 +167,90 @@ export function fixedDiagnosticCases(sdk) {
       `${fixture.name}: released document storage`,
     );
   }
+  for (const count of [4096, 4097]) {
+    const fields = Array.from({ length: count }, (_, i) => `,"bad${i}":0`).join(
+      "",
+    );
+    const text = `{"openbindings":"0.2.0","operations":{}${fields}}`;
+    for (const invalidSchema of [false, true]) {
+      const source = invalidSchema
+        ? text.replace(
+            '"operations":{}',
+            '"operations":{},"schemas":{"s":{"type":7}}',
+          )
+        : text;
+      const parsed = sdk.parseDocument(source);
+      check(parsed.status === "parsed", "saturated document parses");
+      try {
+        const assessment = parsed.value.assess();
+        check(
+          assessment.status === "assessed",
+          "saturated assessment completes",
+        );
+        const report = assessment.report;
+        check(
+          report.conclusion === "non-conformant",
+          "saturated conformance remains refused",
+        );
+        check(report.findings.length === 4096, "finding count remains bounded");
+        check(
+          report.findingsTruncated === (invalidSchema || count > 4096),
+          "truthful truncation",
+        );
+        check(
+          report.evidence["OBI-02"] === "violated",
+          "document evidence preserved",
+        );
+        check(
+          Object.keys(report.evidence).length === 13,
+          "all rule evidence retained",
+        );
+        if (invalidSchema)
+          check(
+            report.evidence["OBI-10"] === "violated",
+            "later evidence survives finding saturation",
+          );
+        else
+          check(
+            report.findings.at(-1).location.pointer === "/bad4095",
+            "original member order retained",
+          );
+      } finally {
+        parsed.value.dispose();
+      }
+    }
+    results.push({
+      name: `bounded ${count} unexpected members`,
+      conclusion: "non-conformant",
+    });
+  }
+  const invalidName = sdk.parseDocument(
+    '{"openbindings":"0.2.0","operations":{"/private":{"aliases":[".private"],"examples":{"-private":{}}}}}',
+  );
+  check(invalidName.status === "parsed", "invalid names parse");
+  try {
+    const assessed = invalidName.value.assess();
+    check(assessed.status === "assessed", "invalid names assess");
+    const names = assessed.report.findings.filter(
+      (f) => f.code === "name-grammar",
+    );
+    check(
+      names.length === 3,
+      "name guidance covers keys, aliases and example names",
+    );
+    for (const f of names)
+      check(
+        f.message.includes("start with a letter, digit or underscore") &&
+          f.message.includes("dots or hyphens") &&
+          !f.message.includes("private"),
+        "grammar is useful and does not echo rejected names",
+      );
+  } finally {
+    invalidName.value.dispose();
+  }
+  check(
+    sdk.liveStorageOwners() === arenas,
+    "all expanded diagnostic storage released",
+  );
   return results;
 }
