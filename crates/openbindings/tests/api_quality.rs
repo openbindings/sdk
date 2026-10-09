@@ -563,4 +563,72 @@ fn batched_strings_preserve_utf8_escaping_and_every_byte_limit_boundary() {
     ])
     .unwrap_err();
     assert_eq!(error.pointer(), Some("/1/Second/bad"));
+    // Exactly 4 KiB of an escaped UTF-8 pointer is truthful and retained; one
+    // additional byte omits the whole pointer instead of returning a prefix.
+    let key = format!("{}aaa", "é/~".repeat(682));
+    let expected = format!("/{}aaa", "é~1~0".repeat(682));
+    assert_eq!(expected.len(), 4096);
+    let error =
+        JsonValue::from_serializable(&BTreeMap::from([(key.clone(), f64::NAN)])).unwrap_err();
+    assert_eq!(error.pointer(), Some(expected.as_str()));
+    assert!(!error.path_omitted_for_limit());
+    let error = JsonValue::from_serializable(&BTreeMap::from([(key + "b", f64::NAN)])).unwrap_err();
+    assert_eq!(error.pointer(), None);
+    assert!(error.path_omitted_for_limit());
+}
+
+#[test]
+fn static_struct_fields_keep_duplicate_and_fused_admission_checks() {
+    use serde::ser::{SerializeStruct, SerializeStructVariant};
+    struct Repeated {
+        variant: bool,
+    }
+    impl Serialize for Repeated {
+        fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            if self.variant {
+                let mut object = s.serialize_struct_variant("E", 0, "V", 2)?;
+                object.serialize_field("a~/é", &true)?;
+                object.serialize_field("a~/é", &false)?;
+                object.end()
+            } else {
+                let mut object = s.serialize_struct("Repeated", 2)?;
+                object.serialize_field("a~/é", &true)?;
+                object.serialize_field("a~/é", &false)?;
+                object.end()
+            }
+        }
+    }
+    for (variant, path) in [(false, "/a~0~1é"), (true, "/V/a~0~1é")] {
+        let error = JsonValue::from_serializable(&Repeated { variant }).unwrap_err();
+        assert_eq!(error.kind(), ValueConversionErrorKind::DuplicateKey);
+        assert_eq!(error.pointer(), Some(path));
+    }
+    struct KeepGoing<'a>(&'a std::cell::Cell<usize>);
+    struct Value<'a>(&'a std::cell::Cell<usize>);
+    impl Serialize for Value<'_> {
+        fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            self.0.set(self.0.get() + 1);
+            s.serialize_bool(true)
+        }
+    }
+    impl Serialize for KeepGoing<'_> {
+        fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            let mut object = s.serialize_struct("KeepGoing", usize::MAX)?;
+            for key in ["one", "two", "three"].into_iter().cycle().take(10_000) {
+                let _ = object.serialize_field(key, &Value(self.0));
+            }
+            object.end()
+        }
+    }
+    let calls = std::cell::Cell::new(0);
+    let error = JsonValue::from_serializable_with_limits(
+        &KeepGoing(&calls),
+        JsonLimits {
+            max_bytes: 2,
+            ..Default::default()
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.kind(), ValueConversionErrorKind::Limit);
+    assert_eq!(calls.get(), 0);
 }

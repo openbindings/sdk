@@ -4,7 +4,7 @@ use serde::{
     Serialize, Serializer,
     ser::{self, SerializeMap, SerializeSeq},
 };
-use std::{collections::HashSet, fmt};
+use std::{borrow::Cow, collections::HashSet, fmt};
 const DIAGNOSTIC_LIMIT: usize = 4096;
 const SERDE_MAX_DEPTH: usize = 128;
 // Qualified against the pinned serde_json arbitrary_precision Number protocol.
@@ -230,23 +230,34 @@ impl State {
         if self.path_omitted {
             return restore;
         }
-        if self.path.len() == DIAGNOSTIC_LIMIT {
+        let remaining = DIAGNOSTIC_LIMIT
+            .saturating_sub(self.path.len())
+            .saturating_sub(1);
+        if self.path.len() == DIAGNOSTIC_LIMIT || key.len() > remaining {
+            self.path_omitted = true;
+            return restore;
+        }
+        let escapes = key.bytes().filter(|b| matches!(b, b'~' | b'/')).count();
+        if escapes > remaining - key.len() {
             self.path_omitted = true;
             return restore;
         }
         self.path.push('/');
-        for ch in key.chars() {
-            let mut buffer = [0; 4];
-            let text = match ch {
-                '~' => "~0",
-                '/' => "~1",
-                _ => ch.encode_utf8(&mut buffer),
-            };
-            if text.len() > DIAGNOSTIC_LIMIT - self.path.len() {
-                self.path_omitted = true;
-                break;
+        if escapes == 0 {
+            self.path.push_str(key);
+        } else {
+            let mut start = 0;
+            for (index, byte) in key.bytes().enumerate() {
+                let escaped = match byte {
+                    b'~' => "~0",
+                    b'/' => "~1",
+                    _ => continue,
+                };
+                self.path.push_str(&key[start..index]);
+                self.path.push_str(escaped);
+                start = index + 1;
             }
-            self.path.push_str(text);
+            self.path.push_str(&key[start..]);
         }
         restore
     }
@@ -328,8 +339,8 @@ struct Compound<'a> {
     object: bool,
     number_token: bool,
     index: usize,
-    key: Option<String>,
-    seen: HashSet<String>,
+    key: Option<Cow<'static, str>>,
+    seen: HashSet<Cow<'static, str>>,
     variant_parent: Option<(usize, bool)>,
 }
 impl Compound<'_> {
@@ -368,6 +379,29 @@ impl Compound<'_> {
                 self.state.first.get_or_insert_with(|| e.clone());
                 e
             })?;
+        self.admit_key(Cow::Owned(key))
+    }
+    // Serde supplies struct field names with a static lifetime. Borrow those
+    // names while keeping dynamically serialized map keys owned.
+    fn admit_key(&mut self, key: Cow<'static, str>) -> Result<(), ValueConversionError> {
+        self.state.guard()?;
+        if self.key.is_some() {
+            return Err(self
+                .state
+                .fail(ValueConversionErrorKind::Serialization, "map value missing"));
+        }
+        if key.len()
+            > self
+                .state
+                .limits
+                .max_bytes
+                .saturating_sub(self.state.bytes.len())
+        {
+            return Err(self.state.fail(
+                ValueConversionErrorKind::Limit,
+                "map key exceeds byte limit",
+            ));
+        }
         if self.seen.contains(&key) {
             let parent = self.state.push_path(&key);
             let e = self.state.fail(
@@ -617,7 +651,8 @@ impl<'a> Serializer for &'a mut State {
         v: &T,
     ) -> Result<(), Self::Error> {
         let mut map = self.serialize_map(Some(1))?;
-        map.serialize_entry(k, v)?;
+        map.admit_key(Cow::Borrowed(k))?;
+        map.value(v)?;
         SerializeMap::end(map)
     }
     fn serialize_seq(self, _: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
@@ -764,7 +799,7 @@ impl ser::SerializeStruct for Compound<'_> {
         if self.number_token {
             self.number(k, v)
         } else {
-            self.key(k)?;
+            self.admit_key(Cow::Borrowed(k))?;
             self.value(v)
         }
     }
@@ -780,7 +815,7 @@ impl ser::SerializeStructVariant for Compound<'_> {
         k: &'static str,
         v: &T,
     ) -> Result<(), Self::Error> {
-        self.key(k)?;
+        self.admit_key(Cow::Borrowed(k))?;
         self.value(v)
     }
     fn end(self) -> Result<(), Self::Error> {
@@ -934,6 +969,7 @@ mod tests {
         let before = (map.seen.len(), map.state.bytes.len(), map.state.nodes);
         for n in 0..10000 {
             assert!(map.key(&n.to_string()).is_err());
+            assert!(map.admit_key(Cow::Borrowed("static-field")).is_err());
         }
         assert_eq!(
             (map.seen.len(), map.state.bytes.len(), map.state.nodes),
