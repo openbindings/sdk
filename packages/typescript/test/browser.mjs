@@ -29,8 +29,7 @@ for (const name of [
   "wasm/openbindings_wasm_bg.wasm",
 ]) {
   const bytes = await fs.readFile(path.join(packageRoot, "dist", name));
-  files.set("/" + name, bytes);
-  files.set("/dist/" + name, bytes); // installed example's unchanged relative URLs
+  files.set("/dist/" + name, bytes); // match the installed package layout
 }
 for (const name of ["first-use.html", "first-use.mjs"])
   files.set(
@@ -82,7 +81,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   if ((await page.title()) !== id) throw Error("fresh host identity");
   const result = await page.evaluate(async (requests) => {
-    const sdk = await import("/index.js"),
+    const sdk = await import("/dist/index.js"),
       { observe } = await import("/observer.mjs"),
       { fixedDiagnosticCases } = await import("/fixed-diagnostic-cases.mjs");
     await sdk.initialize();
