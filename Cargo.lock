@@ -1013,6 +1013,7 @@ dependencies = [
 name = "openbindings-internal-json"
 version = "0.2.0-alpha.1"
 dependencies = [
+ "itoa",
  "openbindings-internal-jsonschema",
  "openbindings-internal-jsonschema-value",
  "serde",

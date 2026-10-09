@@ -353,8 +353,8 @@ impl Compound<'_> {
     }
     fn element<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), ValueConversionError> {
         self.prefix()?;
-        self.state
-            .child(IntegerText::new(self.index).as_str(), value)?;
+        let mut index = itoa::Buffer::new();
+        self.state.child(index.format(self.index), value)?;
         self.index += 1;
         Ok(())
     }
@@ -526,38 +526,9 @@ fn compound(state: &mut State, object: bool) -> Result<Compound<'_>, ValueConver
         variant_parent: None,
     })
 }
-// Primitive integer formatting uses bounded stack storage, including i128/u128
-// and array indices. No ordinary successful scalar needs an allocated string.
-struct IntegerText {
-    bytes: [u8; 40],
-    len: usize,
-}
-impl fmt::Write for IntegerText {
-    fn write_str(&mut self, text: &str) -> fmt::Result {
-        let target = self
-            .bytes
-            .get_mut(self.len..self.len + text.len())
-            .ok_or(fmt::Error)?;
-        target.copy_from_slice(text.as_bytes());
-        self.len += text.len();
-        Ok(())
-    }
-}
-impl IntegerText {
-    fn new(value: impl fmt::Display) -> Self {
-        use fmt::Write;
-        let mut result = Self {
-            bytes: [0; 40],
-            len: 0,
-        };
-        write!(&mut result, "{value}").expect("primitive integer fits forty ASCII bytes");
-        result
-    }
-    fn as_str(&self) -> &str {
-        std::str::from_utf8(&self.bytes[..self.len]).expect("integer is ASCII")
-    }
-}
-macro_rules! integer { ($($name:ident:$ty:ty),*)=>{$(fn $name(self,v:$ty)->Result<(),Self::Error>{self.node()?;self.write(IntegerText::new(v).as_str().as_bytes())})*}; }
+// The already-pinned JSON integer formatter uses bounded stack storage for all
+// primitive integer widths; it also avoids general Display machinery for paths.
+macro_rules! integer { ($($name:ident:$ty:ty),*)=>{$(fn $name(self,v:$ty)->Result<(),Self::Error>{self.node()?;let mut buffer=itoa::Buffer::new();self.write(buffer.format(v).as_bytes())})*}; }
 impl<'a> Serializer for &'a mut State {
     type Ok = ();
     type Error = ValueConversionError;

@@ -12,6 +12,7 @@ repository = "https://github.com/openbindings/sdk"
 publish = false
 
 [workspace.dependencies]
+itoa = "=1.0.18"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.151", features = ["arbitrary_precision", "raw_value", "unbounded_depth"] }
 fluent-uri = "=0.4.1"
