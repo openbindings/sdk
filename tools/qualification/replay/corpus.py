@@ -52,7 +52,7 @@ def load():
         for case in data['scenarios']: cases.append(dict(case,file=file['path']))
     actual=sorted(c['id'] for c in cases); expected=read(OUT/'inputs/blueprint/case-inventory.json')['ids']
     if actual!=expected or len(set(actual))!=len(actual): raise ValueError('Frozen case inventory mismatch')
-    disk={str(p.relative_to(CORPUS)) for d in ('document','scenarios') for p in (CORPUS/d).glob('*.json')}
+    disk={p.relative_to(CORPUS).as_posix() for d in ('document','scenarios') for p in (CORPUS/d).glob('*.json')}
     if disk!=set(counted): raise ValueError('Uncounted fixture file')
     return cases
 
