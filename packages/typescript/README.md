@@ -154,11 +154,38 @@ supplied resources, configuration and prepared state:
 
 ```ts
 using contracts = document.contracts({ resources, limits: { maxProblems: 16 } });
-using input = contracts.prepare('lookup', 'input');
-using value = ExactJson.from(7);
-const result = input.validate(value);
-// satisfies | mismatch | no-contract | operation-missing | no-verdict
+const setup = contracts.prepare('lookup', 'input');
+if (setup.status === 'ready') {
+  using input = setup.contract;
+  const ordinary = input.validate(7); // ValueCheck: semantic outcome or input-error
+  using value = ExactJson.from(7);
+  const exact = input.validate(value); // ValueOutcome: satisfies | mismatch | no-verdict
+}
+// Other setup states: no-contract | operation-missing | operation-ambiguous | no-verdict
 ```
+
+`resolveOperation(name)` returns `found` with an independently owned operation,
+`missing`, or `ambiguous` with lexically ordered primary keys. The returned
+metadata and candidate lists are readonly. Invalid interpreted document
+structures throw `SdkError` with `code === 'interpretation'` and the original
+`location` when available; raw exact evidence remains accessible. Unknown names
+and absent contracts remain setup outcomes, so value validation never silently
+stands for missing setup.
+
+Ordinary validation treats a string as a JSON string value. Nonfinite numbers,
+undefined, cycles, sparse arrays and unsupported property representations return
+`input-error` with a stable `error.code`, explanatory `message` and
+`instancePointer` into the caller's value. The root pointer is `''`; `null` means
+no trustworthy input location is available. Admission does not invoke getters or
+`toJSON`. Caller Proxy exceptions propagate. Nested `ExactJson` owners preserve
+their tokens and remain caller-owned; temporaries are released on every result.
+Disposed nested owners are misuse and throw when traversal reaches them.
+
+An initialized SDK, live prepared handle, live exact root handle, and valid work
+options are checked before cancellation. A pre-cancelled call returns
+`no-verdict/cancelled` before ordinary traversal. A second check after admission
+releases its temporary before returning cancellation. Work options contain only
+an optional genuine `AbortSignal`. Exact overloads never return `input-error`.
 
 A context caches the four most recently prepared contracts by default. Set
 `cacheCapacity` to another nonnegative integer; zero disables context caching.
@@ -166,8 +193,11 @@ Eviction releases only the context's owner: a retained contract stays valid and
 validates without recompilation. The entry count bounds implicit retention, not
 total bytes; retain only the handles the application needs.
 
-`SchemaResources` is immutable: `with(uri, exactDocument)` returns a new owned
-set. Dispose each set when no longer needed. Resources are explicit; core never
+`new SchemaResources([[uri, exactDocument], ...])` constructs an immutable batch.
+Input handles are borrowed. Duplicate normalized URIs are rejected, even for equal
+bytes. An invalid entry or throwing iterator releases the partial set; supplied
+handles remain yours. `with(uri, exactDocument)` returns another owned set.
+Dispose each set when no longer needed. Resources are explicit; core never
 retrieves HTTP or files. `evaluatorLimits()` describes defaults. No-verdict reasons
 distinguish unsupported capability, resource absence, conservative preparation,
 limits, cancellation, evaluator failure and established undefinedness.
@@ -187,14 +217,17 @@ marks even when live owners have been released.
 
 Parsing, assessment, inspection, preparation and validation are synchronous.
 `AbortSignal` can prevent a cancelled call but cannot preempt synchronous Wasm on
-the same thread. Use the included repository `examples/worker.mjs` pattern for
-large CPU jobs; the owner can terminate its worker. Discovery I/O is asynchronous
+the same thread. Use [the Worker and owner examples](examples/worker-owner.mjs) for large CPU jobs.
+The owner terminates its Worker to interrupt work, rejects pending jobs, ignores
+stale IDs, and creates a fresh Worker for recovery. Live SDK handles never cross
+Worker realms. A bundler resolves bare imports in the module Worker. Discovery I/O is asynchronous
 and observes cancellation during a pending response read.
 
 ## HTTP discovery
 
 Import `discover`, `DiscoveryPublication`, and `discoveryPolicy` from
-`@openbindings/sdk/http-discovery` or the package root. `discover(origin, options)`
+`@openbindings/sdk/http-discovery`. Both entry points share initialization,
+`SdkError` identity and managed-handle ownership. `discover(origin, options)`
 uses Fetch or a supplied local async callback. The default decoded body limit is
 1 MiB, zero selects that default, and negative values are rejected. The facade
 retains only bounded body bytes; Fetch controls its own stream chunk buffering.
@@ -211,6 +244,26 @@ schema base URI.
 exact approved bytes. Its `respond(request)` method returns a standard Response
 for a Node or Worker adapter: GET, HEAD, 405/Allow, and 404 routing. Authentication,
 credentialed CORS and preflight policy remain application responsibilities.
+
+## Complete host examples
+
+- [Editor component](examples/editor.html): owned snapshots, recoverable drafts,
+  conformance and teardown. Serve the installed package directory over HTTP.
+- [Worker owner](examples/worker-owner.mjs) and [Worker job](examples/worker.mjs):
+  initialization, transferred input bytes, plain results, termination and recovery.
+  [Component rendering](examples/worker-view.mjs) suppresses results from older edits.
+- [Retained service](examples/service.mjs): setup returns a contract owner; each
+  request retains before awaiting its body, and replacement releases only the
+  service owner. The [Node adapter](examples/node-service.mjs) reads the exported
+  Wasm; the [local workerd adapter](examples/workerd-service.mjs) initializes in
+  request context. `DELETE` tears down the example service. No deployment needed.
+
+When migrating from this candidate's earlier facade, import HTTP discovery from
+its companion path, replace `ValidatedDocument.fromParsed(parsed)` with
+`parsed.validate()`, and narrow selection/preparation before accessing their
+owned result. Handle absent or ambiguous setup once; validate ordinary and exact
+values through the same prepared contract. There is no implicit fetch of schema
+resources and no deterministic garbage-collection promise.
 
 ## Building this repository
 

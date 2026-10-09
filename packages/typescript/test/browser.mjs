@@ -22,6 +22,8 @@ const requests = JSON.parse(
 const files = new Map();
 for (const name of [
   "index.js",
+  "internal.js",
+  "http-discovery.js",
   "wasm/openbindings_wasm.js",
   "wasm/openbindings_wasm_bg.wasm",
 ])

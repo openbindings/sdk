@@ -1,5 +1,5 @@
 /** Public owner regression vectors, usable unchanged in Node/browser/workerd. */
-export async function runCases(sdk, ids) {
+export async function runCases(sdk, ids, http) {
   const rows = [];
   for (const id of ids) {
     const assertions = [];
@@ -329,7 +329,7 @@ export async function runCases(sdk, ids) {
           const retained = v.document.retain();
           v.document.dispose();
           const expected = Array.from(retained.originalBytes);
-          const publication = new sdk.DiscoveryPublication(retained);
+          const publication = new http.DiscoveryPublication(retained);
           const changed = retained.originalBytes;
           changed.fill(0);
           draft.operations = {};
@@ -352,7 +352,7 @@ export async function runCases(sdk, ids) {
           equal("unsafe route parses", d.status, "parsed");
           let code;
           try {
-            new sdk.DiscoveryPublication(d.value).dispose();
+            new http.DiscoveryPublication(d.value).dispose();
           } catch (error) {
             equal(
               "structured runtime rejection",

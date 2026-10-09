@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><title>OpenBindings document editor</title>
+  <script type="importmap">
+    { "imports": { "@openbindings/sdk": "../dist/index.js" } }
+  </script>
+  <main>
+    <h1>Document editor</h1>
+    <form>
+      <label>Operation name <input value="lookup" required /></label
+      ><button>Update</button>
+    </form>
+    <output aria-live="polite"></output>
+  </main>
+  <script type="module">
+    import { mountEditor } from "./editor.mjs";
+    const unmount = await mountEditor(document.querySelector("main"));
+    addEventListener("pagehide", unmount, { once: true });
+  </script>
+</html>

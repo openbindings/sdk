@@ -6,12 +6,11 @@ import {
   ExactJson,
   ValidatedDocument,
   type ParsedDocument,
-  DiscoveryPublication,
-  discover,
   initialize,
   type JsonOutput,
   type ValueOutcome,
 } from "../dist/index.js";
+import { DiscoveryPublication, discover } from "../dist/http-discovery.js";
 
 async function caller(
   bytes: Uint8Array,
@@ -53,9 +52,11 @@ async function caller(
       resources,
       limits: { maxProblems: 4 },
     });
-    using input = contracts.prepare("run", "input", {
+    const prepared = contracts.prepare("run", "input", {
       signal: new AbortController().signal,
     });
+    if (prepared.status !== "ready") return undefined;
+    using input = prepared.contract;
     using value = ExactJson.from(7);
     const result: ValueOutcome = input.validate(value);
     if (result.outcome === "mismatch") {
@@ -100,3 +101,10 @@ if (invalidDraft.status === "authoring-error") {
   invalidDraft.error.code satisfies string;
   invalidDraft.error.draftPointer satisfies string | null;
 }
+
+// @ts-expect-error metadata fields match the immutable runtime snapshot
+parsedOnly.operations[0].key = "changed";
+// @ts-expect-error proof construction has one public method
+ValidatedDocument.fromParsed(parsedOnly);
+// @ts-expect-error root no longer exports the HTTP companion
+import { discover as rootDiscovery } from "../dist/index.js";

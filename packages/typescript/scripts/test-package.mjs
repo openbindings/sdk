@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,13 +40,20 @@ try {
     ],
     { cwd: temporary, stdio: "inherit" },
   );
+  copyFileSync(
+    join(root, "test/api-quality-cases.mjs"),
+    join(temporary, "api-quality-cases.mjs"),
+  );
   writeFileSync(
     join(temporary, "consumer.mjs"),
     `
 import assert from "node:assert/strict";
 import { readFile, realpath } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { initialize, parseDocument } from "@openbindings/sdk";
+import * as sdk from "@openbindings/sdk";
+import * as http from "@openbindings/sdk/http-discovery";
+import { apiQualityCases } from "./api-quality-cases.mjs";
+const { initialize, parseDocument } = sdk;
 const resolved = fileURLToPath(import.meta.resolve("@openbindings/sdk"));
 assert.equal(await realpath(resolved), resolved, "Package must not resolve through a workspace symlink");
 assert(resolved.startsWith(${JSON.stringify(join(temporary, "node_modules") + sep)}));
@@ -54,7 +67,7 @@ try {
 } finally {
   parsed.value.dispose();
 }
-console.log("Installed SDK package: public import, packaged Wasm, parse and validation passed.");
+console.log(JSON.stringify({ installedPackage: true, ...await apiQualityCases(sdk, http) }));
 `,
   );
   execFileSync(process.execPath, [join(temporary, "consumer.mjs")], {
