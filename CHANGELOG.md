@@ -4,6 +4,8 @@
 
 ### Added
 
+- Focused Rust and TypeScript first-use and retained-replacement guides with
+  runnable packaged examples and explicit host initialization.
 - Exact Rust document model, typed authoring, all 13 document rules, indexed
   operation names/aliases, opaque kind checks and original-resource references.
 - Explicit resources, retained input/output contracts, optional default 2020-12
@@ -15,6 +17,11 @@
 
 ### Changed
 
+- Fixed-schema diagnostics explain direct type and missing-required-field failures
+  while preserving their codes, original locations and conformance results; other
+  cases retain a generic explanation without exposing rejected values.
+- Documented the TypeScript storage counter as shared exact-JSON arenas, including
+  lazy fixed evaluator storage and the distinction from handles or memory bytes.
 - Operation lookup now returns explicit found/missing/ambiguous selection; retained
   operation views have typed accessors and located structural refusals.
 - Contract preparation now returns ready/no-contract/operation-missing/

@@ -22,6 +22,13 @@ See [the migration boundaries](docs/migration.md) before moving an existing call
 
 ## Rust
 
+Start with [Rust first use and replacement](docs/rust-first-use.md) for a complete
+document-to-verdict caller, explicit evaluator selection, diagnostics and retained
+contracts. The companion ships separate runnable
+[first-use](crates/openbindings-json-schema-evaluator/examples/first_use.rs) and
+[replacement](crates/openbindings-json-schema-evaluator/examples/replacement.rs)
+examples. Core authoring by itself needs no evaluator:
+
 ```rust
 use openbindings::{DocumentBuilder, Operation};
 
@@ -40,25 +47,34 @@ an immutable `ResourceSet`. `ContractPreparation` distinguishes ready, absent
 contract, missing or ambiguous operation, and preparation refusal. Only a ready
 contract validates values; `ValueOutcome` distinguishes satisfies, mismatch and
 no-verdict. Core never acquires references.
-The complete six-workflow public caller is [examples/rust-consumer](examples/rust-consumer/src/main.rs).
+The broader [six-workflow caller](examples/rust-consumer/src/main.rs) additionally
+covers HTTP discovery and evaluator qualification.
 
 ## TypeScript
 
 The npm package exposes typed objects and discriminated outcomes over the same
 Rust semantics. It includes the Wasm binary; callers do not need Rust or Go.
 
+Begin with the complete [TypeScript first-use guide](packages/typescript/README.md),
+the runnable [Node entry](packages/typescript/examples/first-use-node.mjs), or the
+[browser page](packages/typescript/examples/first-use.html). Node reads the exported
+Wasm asset; workerd passes a compiled module inside an allowed request context.
+This smaller initialization and inspection example is for a browser:
+
 ```ts
 import { initialize, parseDocument } from '@openbindings/sdk';
 await initialize();
-const result = parseDocument(documentBytes);
+const result = parseDocument('{"openbindings":"0.2.0","operations":{"ping":{}}}');
 if (result.status === 'parsed') {
   using document = result.value;
-  const assessment = document.assess();
+  console.log(document.operations);
 }
 ```
 
 See the [TypeScript guide](packages/typescript/README.md) for browser/Node/workerd
-initialization, exact JSON, disposal, Fetch discovery and worker scheduling.
+initialization, exact JSON, disposal, Fetch discovery and Worker scheduling. The
+[service lifecycle example](packages/typescript/examples/service-lifecycle.mjs)
+shows retained in-flight work and a replacement that is installed only when ready.
 
 ## Packages and boundaries
 
