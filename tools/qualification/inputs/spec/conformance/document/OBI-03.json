@@ -1,0 +1,215 @@
+{
+  "rule": "OBI-03",
+  "section": "10",
+  "description": "Has an openbindings field whose value is a valid Semantic Versioning 2.0.0 string.",
+  "notes": "Prerelease openbindings values are not exercised as positive cases here: a document declaring a prerelease means what that draft's text says, not this line's (section 8.1), so these rules do not govern it. The leading-zero prerelease case below is a negative SemVer test and is unaffected. Every positive here declares a version on the 0.2 line, the only line whose text this corpus has: a text declaring another line is governed by that line's text (section 10). A text that declares no version is governed by these rules (section 8.1, Version declaration), including one whose openbindings value looks like another line's.",
+  "tests": [
+    {
+      "description": "current released spec version",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {}
+      },
+      "valid": true
+    },
+    {
+      "description": "release version whose patch number exceeds 64 bits: SemVer 2.0.0 sets no bound on a numeric identifier, and the patch number carries no meaning (section 8.1)",
+      "document": {
+        "openbindings": "0.2.99999999999999999999",
+        "operations": {}
+      },
+      "valid": true
+    },
+    {
+      "description": "version with build metadata",
+      "document": {
+        "openbindings": "0.2.0+build.123",
+        "operations": {}
+      },
+      "valid": true
+    },
+    {
+      "description": "two-component version is not SemVer 2.0.0",
+      "document": {
+        "openbindings": "0.2",
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-03"
+      ]
+    },
+    {
+      "description": "four-component version is not SemVer 2.0.0",
+      "document": {
+        "openbindings": "0.2.0.0",
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-03"
+      ]
+    },
+    {
+      "description": "non-numeric version label",
+      "document": {
+        "openbindings": "latest",
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-03"
+      ]
+    },
+    {
+      "description": "version with v prefix",
+      "document": {
+        "openbindings": "v0.2.0",
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-03"
+      ]
+    },
+    {
+      "description": "empty string",
+      "document": {
+        "openbindings": "",
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-03"
+      ]
+    },
+    {
+      "description": "openbindings value is a number, not a string",
+      "document": {
+        "openbindings": 0.2,
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-03"
+      ]
+    },
+    {
+      "description": "openbindings value is null",
+      "document": {
+        "openbindings": null,
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-03"
+      ]
+    },
+    {
+      "description": "leading-zero pre-release identifier (forbidden by SemVer 2.0.0 §9)",
+      "document": {
+        "openbindings": "1.0.0-01",
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-03"
+      ]
+    },
+    {
+      "description": "minor version with a leading zero is not SemVer 2.0.0, whose X.Y.Z numbers carry no leading zeros",
+      "document": {
+        "openbindings": "0.02.0",
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-03"
+      ]
+    },
+    {
+      "description": "version followed by a newline is not a SemVer 2.0.0 string",
+      "document": {
+        "openbindings": "0.2.0\n",
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-03"
+      ]
+    },
+    {
+      "description": "a hyphen with no prerelease identifiers after it is not SemVer 2.0.0, whose pre-release is one or more identifiers",
+      "document": {
+        "openbindings": "0.2.0-",
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-03"
+      ]
+    },
+    {
+      "description": "a value that is not SemVer declares no version, so these rules govern the text, though the value looks like another line's",
+      "document": {
+        "openbindings": "999.0",
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-03"
+      ]
+    },
+    {
+      "description": "a non-string openbindings value declares no version",
+      "document": {
+        "openbindings": 2,
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-03"
+      ]
+    },
+    {
+      "description": "a text with no openbindings member declares no version",
+      "document": {
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-03"
+      ]
+    },
+    {
+      "description": "only the root object's openbindings member declares a version; a nested one does not",
+      "document": {
+        "operations": {},
+        "x-meta": {
+          "openbindings": "999.0.0"
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-03"
+      ]
+    },
+    {
+      "description": "a text that is not an object declares no version",
+      "document": [
+        "openbindings",
+        "999.0.0"
+      ],
+      "valid": false,
+      "violates": [
+        "OBI-02",
+        "OBI-03"
+      ]
+    },
+    {
+      "description": "a member name written with an escape, \\u006fpenbindings, is the openbindings member once unescaped, so the text declares 0.2.0 (section 8.1, Version declaration; section 5, Strings and numbers)",
+      "documentText": "{\"\\u006fpenbindings\":\"0.2.0\",\"operations\":{}}",
+      "valid": true
+    }
+  ]
+}

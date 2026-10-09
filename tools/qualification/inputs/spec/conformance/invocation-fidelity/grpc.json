@@ -1,0 +1,184 @@
+{
+  "format": "openbindings.invocation-fidelity-scenarios@1",
+  "bindingSpec": "openbindings.grpc@1",
+  "family": "grpc",
+  "description": "gRPC fidelity scenarios with separate abstract and lower-layer assertions. Response messages, partial outputs, and completion behavior form the operation proof; native status, rich details, and trailing metadata are lower-layer binding evidence.",
+  "scenarios": [
+    {
+      "id": "GRPC-FI-01",
+      "rules": [
+        "GRPC-P-06",
+        "GRPC-P-07"
+      ],
+      "section": "9.4",
+      "description": "A server-streaming RPC emits an application value before unsuccessful completion; lower-layer assertions separately retain the INTERNAL status, rich detail, and multivalued trailing metadata.",
+      "given": {
+        "source": {
+          "location": "grpcs://api.example:443",
+          "content": "syntax = \"proto3\"; package demo; service Service { rpc List (Request) returns (stream Reply); } message Request {} message Reply { string value = 1; }"
+        },
+        "binding": {
+          "selector": "demo.Service/List"
+        },
+        "invocation": {
+          "inputPresent": false
+        },
+        "peer": {
+          "responseMessages": [
+            {
+              "value": "first"
+            }
+          ],
+          "finalStatus": "INTERNAL",
+          "statusMessage": "ledger corrupt",
+          "statusDetails": [
+            {
+              "typeUrl": "type.googleapis.com/demo.Failure",
+              "valueBase64": "AP+AQQ=="
+            }
+          ],
+          "trailingMetadata": {
+            "trace-bin": [
+              "AP+AQQ=="
+            ],
+            "x-attempt": [
+              "2",
+              "3"
+            ]
+          }
+        }
+      },
+      "expected": [
+        {
+          "disposition": "error",
+          "phase": "completion",
+          "assertions": [
+            {
+              "path": "/outputs",
+              "equals": [
+                {
+                  "value": "first"
+                }
+              ]
+            },
+            {
+              "path": "/error/code",
+              "equals": "ERR_EXECUTION_FAILED"
+            },
+            {
+              "path": "/error/data",
+              "absent": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "GRPC-FI-02",
+      "rules": [
+        "GRPC-P-06"
+      ],
+      "section": "9.4",
+      "description": "RESOURCE_EXHAUSTED causes unsuccessful completion while.",
+      "given": {
+        "source": {
+          "location": "grpcs://api.example:443",
+          "content": "syntax = \"proto3\"; package demo; service Service { rpc Get (Request) returns (Reply); } message Request {} message Reply {}"
+        },
+        "binding": {
+          "selector": "demo.Service/Get"
+        },
+        "invocation": {
+          "inputPresent": false
+        },
+        "peer": {
+          "finalStatus": "RESOURCE_EXHAUSTED",
+          "statusMessage": "quota exceeded"
+        }
+      },
+      "expected": [
+        {
+          "disposition": "error",
+          "phase": "completion",
+          "assertions": [
+            {
+              "path": "/outputs",
+              "equals": []
+            },
+            {
+              "path": "/error/code",
+              "equals": "ERR_EXECUTION_FAILED"
+            },
+            {
+              "path": "/error/data",
+              "absent": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "GRPC-FI-03",
+      "rules": [
+        "GRPC-P-03",
+        "GRPC-P-04"
+      ],
+      "section": "9.1",
+      "description": "A local ProtoJSON validation failure is terminal but does not invent source-native gRPC status evidence; earlier bidirectional outputs remain visible.",
+      "given": {
+        "source": {
+          "location": "grpcs://api.example:443",
+          "content": "syntax = \"proto3\"; package demo; service Service { rpc Chat (stream Request) returns (stream Reply); } message Request { string value = 1; } message Reply { string ack = 1; }"
+        },
+        "binding": {
+          "selector": "demo.Service/Chat"
+        },
+        "invocation": {
+          "inputPresent": false,
+          "writes": [
+            {
+              "value": "valid"
+            },
+            {
+              "unknown": true
+            }
+          ]
+        },
+        "peer": {
+          "afterWrite": {
+            "index": 0,
+            "responses": [
+              {
+                "ack": "valid"
+              }
+            ]
+          }
+        }
+      },
+      "expected": [
+        {
+          "disposition": "error",
+          "phase": "dispatch",
+          "assertions": [
+            {
+              "path": "/outputs",
+              "equals": [
+                {
+                  "ack": "valid"
+                }
+              ]
+            },
+            {
+              "path": "/error/code",
+              "equals": "ERR_OPERATION_VALIDATION_FAILED"
+            },
+            {
+              "path": "/dispatch/cancelled",
+              "equals": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

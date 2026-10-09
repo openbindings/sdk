@@ -1,0 +1,1415 @@
+{
+  "rule": "OBI-02",
+  "section": "10",
+  "description": "Is valid against the derived JSON Schema published with this text (openbindings.schema.json, $id https://openbindings.com/schema/openbindings-0.2.json), its pattern values read as ECMA-262 regular expressions. Where the schema and the prose disagree, the schema governs this rule until a patch release corrects the erratum. A patch release that corrects the schema republishes it under the same $id.",
+  "notes": "OBI-02 covers structural failures (missing required fields, wrong value types, malformed sub-objects) that the schema expresses but no more specific rule names. Violations the schema expresses that DO have a specific rule (e.g., OBI-04 name pattern, OBI-03 SemVer) are listed under that rule, not OBI-02. A reference outside the name grammar lists OBI-02 beside the rule the reference concerns: the schema expresses the name syntax of the references OBI-06, OBI-07, and OBI-08 concern, and those rules require only that the reference names a key (section 10). Every constraint of the derived schema has a negative that breaks it alone, here or, for the name patterns, in OBI-04's file, so a validator that drops any single constraint fails a case; removing additionalProperties: true from the schema object form changes nothing, since true is JSON Schema's default.",
+  "tests": [
+    {
+      "description": "minimal valid document",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {}
+      },
+      "valid": true
+    },
+    {
+      "description": "missing required `operations` field",
+      "document": {
+        "openbindings": "0.2.0"
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "missing required `openbindings` field",
+      "document": {
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "operation aliases is a string instead of array",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "aliases": "create"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "binding missing required `operation` field",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "httpApi": {
+            "kind": "example.openapi@1"
+          }
+        },
+        "bindings": {
+          "createTask.http": {
+            "source": "httpApi"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ],
+      "notViolated": [
+        "OBI-06"
+      ]
+    },
+    {
+      "description": "source missing required `kind` field",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "httpApi": {
+            "description": "Task API"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "source `kind` is an empty string (violates minLength: 1)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "httpApi": {
+            "kind": ""
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "source with only `kind` (content is optional; the core does not require kind-specific behavior)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "httpApi": {
+            "kind": "example.openapi@1"
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "source `content` is any JSON value, and `content: null` is a present member",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "objectContent": {
+            "kind": "example.test@1",
+            "content": {
+              "location": "tasks.json"
+            }
+          },
+          "stringContent": {
+            "kind": "example.test@1",
+            "content": "openapi: 3.1.0"
+          },
+          "arrayContent": {
+            "kind": "example.test@1",
+            "content": [
+              1,
+              "two",
+              {
+                "three": 3
+              }
+            ]
+          },
+          "numberContent": {
+            "kind": "example.test@1",
+            "content": 7
+          },
+          "booleanContent": {
+            "kind": "example.test@1",
+            "content": false
+          },
+          "nullContent": {
+            "kind": "example.test@1",
+            "content": null
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "binding `content` is any JSON value, and `content: null` is a present member",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "createTask.string": {
+            "operation": "createTask",
+            "source": "s",
+            "content": "tasks.create"
+          },
+          "createTask.object": {
+            "operation": "createTask",
+            "source": "s",
+            "content": {
+              "path": "/tasks",
+              "method": "post"
+            }
+          },
+          "createTask.array": {
+            "operation": "createTask",
+            "source": "s",
+            "content": [
+              "tasks",
+              "create"
+            ]
+          },
+          "createTask.number": {
+            "operation": "createTask",
+            "source": "s",
+            "content": 3
+          },
+          "createTask.boolean": {
+            "operation": "createTask",
+            "source": "s",
+            "content": true
+          },
+          "createTask.null": {
+            "operation": "createTask",
+            "source": "s",
+            "content": null
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "operation deprecated flag is a string instead of boolean",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "deprecated": "yes"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "dependency with one exact kind",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "deliverEvent": {}
+        },
+        "dependencies": {
+          "delivery": {
+            "operation": "deliverEvent",
+            "kinds": [
+              "example.openapi@1"
+            ]
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "dependency with a description",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "deliverEvent": {}
+        },
+        "dependencies": {
+          "delivery": {
+            "operation": "deliverEvent",
+            "description": "Where completed events are delivered."
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "dependency description is not a string",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "deliverEvent": {}
+        },
+        "dependencies": {
+          "delivery": {
+            "operation": "deliverEvent",
+            "description": 7
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "dependencies is an array instead of an object map",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "dependencies": []
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "dependency entry is a string instead of an object",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "deliverEvent": {}
+        },
+        "dependencies": {
+          "delivery": "deliverEvent"
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "dependency missing required operation field",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "deliverEvent": {}
+        },
+        "dependencies": {
+          "delivery": {
+            "kinds": [
+              "example.openapi@1"
+            ]
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ],
+      "notViolated": [
+        "OBI-08"
+      ]
+    },
+    {
+      "description": "dependency operation is not a string",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "deliverEvent": {}
+        },
+        "dependencies": {
+          "delivery": {
+            "operation": 42
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "dependency kinds is not an array",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "deliverEvent": {}
+        },
+        "dependencies": {
+          "delivery": {
+            "operation": "deliverEvent",
+            "kinds": "example.openapi@1"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "dependency kinds is empty",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "deliverEvent": {}
+        },
+        "dependencies": {
+          "delivery": {
+            "operation": "deliverEvent",
+            "kinds": []
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "dependency kinds differing by case or Unicode normalization are distinct strings",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "deliverEvent": {}
+        },
+        "dependencies": {
+          "delivery": {
+            "operation": "deliverEvent",
+            "kinds": [
+              "Example.openapi@1",
+              "example.openapi@1",
+              "café",
+              "café"
+            ]
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "dependency kinds contains a duplicate kind",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "deliverEvent": {}
+        },
+        "dependencies": {
+          "delivery": {
+            "operation": "deliverEvent",
+            "kinds": [
+              "example.openapi@1",
+              "example.openapi@1"
+            ]
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "dependency kinds contains an empty kind",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "deliverEvent": {}
+        },
+        "dependencies": {
+          "delivery": {
+            "operation": "deliverEvent",
+            "kinds": [
+              ""
+            ]
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "dependency kinds contains a non-string kind",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "deliverEvent": {}
+        },
+        "dependencies": {
+          "delivery": {
+            "operation": "deliverEvent",
+            "kinds": [
+              1
+            ]
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "an operation member the specification does not define and that lacks the x- prefix (outpt beside input)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "input": {
+              "type": "object"
+            },
+            "outpt": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "a case variant of a defined member is not that member (Content on a binding)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "createTask",
+            "source": "s",
+            "Content": "x"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "a 0.1 member left on a source (location)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1",
+            "location": "https://example.com/openapi.json"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "the former source member bindingSpec is not a kind",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "s": {
+            "kind": "example.test@1",
+            "bindingSpec": "example.test@1"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "the former dependency member bindingSpecs is not a kinds constraint",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {}
+        },
+        "dependencies": {
+          "d": {
+            "operation": "op",
+            "bindingSpecs": [
+              "example.test@1"
+            ]
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "an undefined root member",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "info": {
+          "title": "Tasks"
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "a member this version removed from the root (transforms)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "transforms": {
+          "t": "$"
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "members this version removed from a binding (selector, inputTransform, outputTransform)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b.selector": {
+            "operation": "createTask",
+            "source": "s",
+            "selector": "#/paths/~1tasks/post"
+          },
+          "b.input": {
+            "operation": "createTask",
+            "source": "s",
+            "inputTransform": "$"
+          },
+          "b.output": {
+            "operation": "createTask",
+            "source": "s",
+            "outputTransform": {
+              "$ref": "#/transforms/t"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "x- members are extensions on every OBI-defined object, including examples and dependencies",
+      "document": {
+        "openbindings": "0.2.0",
+        "x-owner": "tasks-team",
+        "operations": {
+          "createTask": {
+            "x-note": 1,
+            "examples": {
+              "e": {
+                "x-note": 1
+              }
+            }
+          }
+        },
+        "dependencies": {
+          "d": {
+            "operation": "createTask",
+            "x-note": 1
+          }
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1",
+            "x-note": 1
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "createTask",
+            "source": "s",
+            "x-note": 1
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "document declares an unknown kind",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "exotic": {
+            "kind": "totally-fictional-format@9.9.9"
+          }
+        },
+        "bindings": {
+          "createTask.exotic": {
+            "operation": "createTask",
+            "source": "exotic"
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "document mixes familiar and unfamiliar kinds without a core validity defect",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "http": {
+            "kind": "example.openapi@1"
+          },
+          "exotic": {
+            "kind": "totally-fictional-format@9.9.9"
+          }
+        },
+        "bindings": {
+          "createTask.http": {
+            "operation": "createTask",
+            "source": "http",
+            "content": {
+              "target": "#/paths/~1tasks/post"
+            }
+          },
+          "createTask.exotic": {
+            "operation": "createTask",
+            "source": "exotic"
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "dependency lists only an unknown kind without making the document invalid",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "deliverEvent": {}
+        },
+        "dependencies": {
+          "delivery": {
+            "operation": "deliverEvent",
+            "kinds": [
+              "totally-fictional-format@9.9.9"
+            ]
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "optional members of the root, an operation, an example, a source, and a binding, including a binding's preference, idempotent, description, and deprecated",
+      "document": {
+        "openbindings": "0.2.0",
+        "name": "Tasks",
+        "version": "2.1",
+        "description": "Task management.",
+        "operations": {
+          "createTask": {
+            "description": "Create a task.",
+            "tags": [
+              "tasks"
+            ],
+            "examples": {
+              "basic": {
+                "description": "A minimal task.",
+                "input": {},
+                "output": {}
+              }
+            }
+          }
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1",
+            "description": "Task API."
+          }
+        },
+        "bindings": {
+          "createTask.s": {
+            "operation": "createTask",
+            "source": "s",
+            "preference": 10,
+            "idempotent": false,
+            "description": "Creates a task through the API.",
+            "deprecated": true
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "binding preference takes any integer from -9007199254740991 through 9007199254740991, and 1.0 is the integer 1 (section 5.3)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "createTask.one": {
+            "operation": "createTask",
+            "source": "s",
+            "preference": 1.0
+          },
+          "createTask.max": {
+            "operation": "createTask",
+            "source": "s",
+            "preference": 9007199254740991
+          },
+          "createTask.min": {
+            "operation": "createTask",
+            "source": "s",
+            "preference": -9007199254740991
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "root name is not a string",
+      "document": {
+        "openbindings": "0.2.0",
+        "name": 5,
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "root version is not a string",
+      "document": {
+        "openbindings": "0.2.0",
+        "version": 2,
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "root version is an empty string (section 8.2: a non-empty string)",
+      "document": {
+        "openbindings": "0.2.0",
+        "version": "",
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "root description is not a string",
+      "document": {
+        "openbindings": "0.2.0",
+        "description": 5,
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "schemas is an array instead of an object map",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": [],
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "operations is an array instead of an object map",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": []
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "sources is an array instead of an object map",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": []
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "bindings is an array instead of an object map",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "bindings": []
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "operation entry is a string instead of an object",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": "Create a task."
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "operation description is not a string",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "description": 5
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "operation tags is a string instead of an array",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "tags": "tasks"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "operation tags contains a non-string entry",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "tags": [
+              "tasks",
+              1
+            ]
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "operation examples is an array instead of an object map",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "examples": []
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "example entry is a number instead of an object",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "examples": {
+              "basic": 5
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "an example member the specification does not define (value) and that lacks the x- prefix",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "examples": {
+              "basic": {
+                "value": 1
+              }
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "example description is not a string",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "examples": {
+              "basic": {
+                "description": 5
+              }
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "source entry is a string instead of an object",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": "example.test@1"
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "source kind is not a string",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": 5
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "source description is not a string",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1",
+            "description": 5
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "binding entry is a string instead of an object",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": "createTask"
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "binding operation is not a string",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": 5,
+            "source": "s"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "binding operation value outside the name grammar fails the derived schema, which carries the name syntax OBI-06 checks, and names no operation key",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "create task",
+            "source": "s"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02",
+        "OBI-06"
+      ]
+    },
+    {
+      "description": "binding source is not a string",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "createTask",
+            "source": 5
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "binding source value outside the name grammar fails the derived schema, which carries the name syntax OBI-07 checks, and names no source key",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "createTask",
+            "source": "task api"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02",
+        "OBI-07"
+      ]
+    },
+    {
+      "description": "dependency operation value outside the name grammar fails the derived schema, which carries the name syntax OBI-08 checks, and names no operation key",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "deliverEvent": {}
+        },
+        "dependencies": {
+          "delivery": {
+            "operation": "deliver event"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02",
+        "OBI-08"
+      ]
+    },
+    {
+      "description": "binding idempotent is a string instead of a boolean",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "createTask",
+            "source": "s",
+            "idempotent": "yes"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "binding preference with a fractional part is not an integer (section 5.3)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "createTask",
+            "source": "s",
+            "preference": 1.5
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "binding preference above 9007199254740991 is outside the interoperable range (section 5.3)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "createTask",
+            "source": "s",
+            "preference": 9007199254740992
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "binding preference below -9007199254740991 is outside the interoperable range (section 5.3)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "createTask",
+            "source": "s",
+            "preference": -9007199254740992
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "binding description is not a string",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "createTask",
+            "source": "s",
+            "description": 5
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "binding deprecated is a string instead of a boolean",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "createTask",
+            "source": "s",
+            "deprecated": "yes"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "a root member beginning with X- is not an extension: extension names begin with x- (section 12)",
+      "document": {
+        "openbindings": "0.2.0",
+        "X-owner": "tasks-team",
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    }
+  ]
+}

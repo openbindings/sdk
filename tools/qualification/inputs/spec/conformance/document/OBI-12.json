@@ -1,0 +1,1137 @@
+{
+  "rule": "OBI-12",
+  "section": "10",
+  "description": "Has every same-document schema $ref and $dynamicRef in the document resource identifying a schema at an OBI position (§7.3).",
+  "notes": "# and an empty reference name the OBI document itself. Locations that hold no schema (operation objects, maps, strings, extension values, source content, example values) and locations inside a schema that declares $id are not schemas at OBI positions. A plain name qualifies only when a schema in the document's own resource declares it; a name declared only inside a schema that declares $id belongs to that resource. References within a schema resource that declares $id and absolute URIs are outside the rule; positives pin that.",
+  "tests": [
+    {
+      "description": "a same-document pointer to a schemas entry",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "#/schemas/Task"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a same-document pointer to another operation's input schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "input": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "updateTask": {
+            "input": {
+              "$ref": "#/operations/createTask/input"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a same-document pointer to a subschema below a schemas entry",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "getId": {
+            "output": {
+              "$ref": "#/schemas/Task/properties/id"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a percent-encoded pointer reaches the same schema after decoding (#/schemas/T%61sk names Task)",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "#/schemas/T%61sk"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a pointer may land on a schemas entry that declares $id",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "$id": "https://example.com/task.schema.json",
+            "type": "object"
+          }
+        },
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "#/schemas/Task"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a pointer to a boolean schema lands on a schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Anything": true
+        },
+        "operations": {
+          "echo": {
+            "input": {
+              "$ref": "#/schemas/Anything"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a pointer into the legacy definitions keyword lands on a schema at an OBI position",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "definitions": {
+              "Id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "getId": {
+            "output": {
+              "$ref": "#/schemas/Task/definitions/Id"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a recursive pointer back to its own schemas entry",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Node": {
+            "type": "object",
+            "properties": {
+              "children": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/schemas/Node"
+                }
+              }
+            }
+          }
+        },
+        "operations": {
+          "getTree": {
+            "output": {
+              "$ref": "#/schemas/Node"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "an absolute reference is outside this rule, even when its fragment is a JSON Pointer",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "https://schemas.example.invalid/task.json#/properties/id"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a pointer within a schema resource that declares $id resolves against that resource and is outside this rule",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "$id": "https://example.com/task.schema.json",
+            "type": "object",
+            "properties": {
+              "parent": {
+                "$ref": "#/$defs/missing"
+              }
+            }
+          }
+        },
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "https://example.com/task.schema.json"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a plain name declared with $anchor by a schemas entry",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "$anchor": "task",
+            "type": "object"
+          }
+        },
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "#task"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a plain name declared with $anchor below a schemas entry",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$anchor": "taskId",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "getTaskId": {
+            "output": {
+              "$ref": "#taskId"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a plain name declared by an operation's input schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "a": {
+            "input": {
+              "$anchor": "shared",
+              "type": "string"
+            }
+          },
+          "b": {
+            "input": {
+              "$ref": "#shared"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a $dynamicRef naming a plain name declared with $dynamicAnchor in the document's resource",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Node": {
+            "$dynamicAnchor": "node",
+            "type": "object",
+            "properties": {
+              "children": {
+                "type": "array",
+                "items": {
+                  "$dynamicRef": "#node"
+                }
+              }
+            }
+          }
+        },
+        "operations": {
+          "getTree": {
+            "output": {
+              "$ref": "#/schemas/Node"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a percent-encoded plain name matches the declared name after decoding (#t%61sk names task)",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "$anchor": "task",
+            "type": "object"
+          }
+        },
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "#t%61sk"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a pointer to a property whose name needs encoding is written percent-encoded and decoded once (#/schemas/Task/properties/my%20type)",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "properties": {
+              "my type": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "#/schemas/Task/properties/my%20type"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a fragment is percent-decoded before it is classified, so an encoded leading slash makes a JSON Pointer (#%2Fschemas%2FTask names Task)",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "properties": {
+              "my type": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "#%2Fschemas%2FTask"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a schema value of the legacy dependencies keyword is at an OBI position",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "dependencies": {
+              "a": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "#/schemas/Task/dependencies/a"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a plain-name reference within a schema resource that declares $id resolves against that resource and is outside this rule",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "$id": "https://example.com/task.schema.json",
+            "type": "object",
+            "properties": {
+              "parent": {
+                "$ref": "#missing"
+              }
+            }
+          }
+        },
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "https://example.com/task.schema.json"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a plain name that no schema declares",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#undeclared"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a typo: the pointer reaches no location",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "#/schemas/Taks"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "# names the OBI document itself, which is not a schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getTree": {
+            "output": {
+              "type": "object",
+              "properties": {
+                "children": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "an empty $ref names the OBI document itself, which is not a schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": ""
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a pointer to an operation object, which is not a schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#/operations/g"
+            }
+          },
+          "g": {}
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a pointer to the schemas map itself, which is not a schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#/schemas"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a pointer to a string in the document",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "f": {
+            "description": "Echo.",
+            "input": {
+              "$ref": "#/operations/f/description"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a pointer into an extension's value (section 12), even when the value there is schema-shaped",
+      "document": {
+        "openbindings": "0.2.0",
+        "x-shapes": {
+          "Task": {
+            "type": "object"
+          }
+        },
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#/x-shapes/Task"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a pointer into a source's content, which is read under the source's kind",
+      "document": {
+        "openbindings": "0.2.0",
+        "sources": {
+          "s": {
+            "kind": "example.test@1",
+            "content": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#/sources/s/content/schema"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a pointer into an example value",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#/operations/f/examples/e/input"
+            },
+            "examples": {
+              "e": {
+                "input": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a pointer inside a schema that declares $id, which is reached through that $id",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "$id": "https://example.com/task.schema.json",
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "getId": {
+            "output": {
+              "$ref": "#/schemas/Task/properties/id"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a $dynamicRef with a JSON Pointer fragment that reaches no location",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "f": {
+            "input": {
+              "$dynamicRef": "#/schemas/Missing"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a dangling pointer nested deep in a schema at an OBI position",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "properties": {
+              "tags": {
+                "type": "array",
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "#/schemas/Tag"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "#/schemas/Task"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a plain name declared only inside a schema that declares $id belongs to that schema's resource",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "$id": "https://example.com/task.schema.json",
+            "$defs": {
+              "id": {
+                "$anchor": "taskId",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "getTaskId": {
+            "output": {
+              "$ref": "#taskId"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a plain name declared only in an extension's value, which holds no schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#hidden"
+            },
+            "x-notes": {
+              "$anchor": "hidden",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a $dynamicRef with a plain name that no schema declares",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Node": {
+            "type": "object",
+            "properties": {
+              "children": {
+                "type": "array",
+                "items": {
+                  "$dynamicRef": "#node"
+                }
+              }
+            }
+          }
+        },
+        "operations": {
+          "getTree": {
+            "output": {
+              "$ref": "#/schemas/Node"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a JSON Pointer with an invalid escape (~2) identifies no location",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "properties": {
+              "a~2": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#/schemas/Task/properties/a~2"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a pointer into a binding's content, which is read under the source's kind",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#/bindings/b/content/schema"
+            }
+          }
+        },
+        "sources": {
+          "s": {
+            "kind": "example.k@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "f",
+            "source": "s",
+            "content": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a fragment whose percent-decoding is not valid UTF-8 identifies nothing",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object"
+          }
+        },
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#/schemas/%FF"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a fragment is percent-decoded once, so %2520 decodes to %20 and names a property that does not exist",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "properties": {
+              "my type": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "#/schemas/Task/properties/my%2520type"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "an array value of the legacy dependencies keyword is not a schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "dependencies": {
+              "a": [
+                "b"
+              ]
+            }
+          }
+        },
+        "operations": {
+          "getTask": {
+            "output": {
+              "$ref": "#/schemas/Task/dependencies/a"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "an $anchor whose value is outside the JSON Schema Core section 8.2.2 grammar declares no plain name, so #bad/name identifies nothing (section 7.3)",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "$anchor": "bad/name",
+            "type": "string"
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#bad/name"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-10",
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a pointer to an operation input holding null reaches no schema: only an object or a boolean at an OBI position is a schema (section 7)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "a": {
+            "input": null
+          },
+          "b": {
+            "input": {
+              "$ref": "#/operations/a/input"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a pointer to a properties map, which holds schemas but is not one",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#/schemas/Task/properties"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a pointer to a const value, which is data even when it is shaped like a schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "const": {
+              "type": "string"
+            }
+          }
+        },
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#/schemas/Task/const"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "a pointer to an allOf entry lands on a schema at an OBI position",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "allOf": [
+              {
+                "type": "object"
+              }
+            ]
+          }
+        },
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#/schemas/Task/allOf/0"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a pointer with the ~1 escape reaches a property whose name contains a slash (RFC 6901 section 4)",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "properties": {
+              "a/b": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#/schemas/Task/properties/a~1b"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a $ref may name a plain name declared only with $dynamicAnchor: either keyword declares it",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Node": {
+            "$dynamicAnchor": "node",
+            "type": "object"
+          }
+        },
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#node"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a $dynamicRef may name a plain name declared only with $anchor: either keyword declares it",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Node": {
+            "$anchor": "node",
+            "type": "object"
+          }
+        },
+        "operations": {
+          "f": {
+            "input": {
+              "$dynamicRef": "#node"
+            }
+          }
+        }
+      },
+      "valid": true
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+exclude = ["vendor/openbindings-internal-jsonschema", "vendor/openbindings-internal-jsonschema-value", "vendor/openbindings-internal-regress"]
+
+[workspace.package]
+version = "0.2.0-alpha.1"
+edition = "2024"
+rust-version = "1.99"
+license = "Apache-2.0"
+repository = "https://github.com/openbindings/sdk"
+publish = false
+
+[workspace.dependencies]
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151", features = ["arbitrary_precision", "raw_value", "unbounded_depth"] }
+fluent-uri = "=0.4.1"
+jsonschema = { package = "openbindings-internal-jsonschema", version = "=0.58.6-ob.1", path = "vendor/openbindings-internal-jsonschema", default-features = false, features = ["arbitrary-precision"] }
+jsonschema-value = { package = "openbindings-internal-jsonschema-value", version = "=0.58.6-ob.1", path = "vendor/openbindings-internal-jsonschema-value", default-features = false, features = ["serde_json", "arbitrary-precision"] }
+wasm-bindgen = "=0.2.129"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

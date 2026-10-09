@@ -1,0 +1,22 @@
+[package]
+name = "openbindings-json-schema-evaluator"
+description = "Optional bounded JSON Schema 2020-12 evaluator for OpenBindings"
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+openbindings = { version = "=0.2.0-alpha.1", path = "../openbindings" }
+serde_json.workspace = true
+jsonschema.workspace = true
+jsonschema-value.workspace = true
+
+openbindings-internal-json = { version = "=0.2.0-alpha.1", path = "../openbindings-internal-json" }
+serde.workspace = true

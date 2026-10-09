@@ -1,5 +1,112 @@
 # OpenBindings SDK
 
-The canonical home for the OpenBindings reference SDK. The reviewed Rust workspace and TypeScript facade are being imported through the first implementation pull request.
+Rust document semantics and a first-class TypeScript/Wasm API for the OpenBindings
+0.2 specification line. This repository maintains the reference SDK. Its Rust libraries and TypeScript/Wasm
+facade are currently unpublished prerelease packages. Package
+version `0.2.0-alpha.1` is independent of the specification version.
 
-Package publication is separate from source landing. The OpenBindings specification remains the authority for document semantics.
+Core parses and preserves exact JSON, supports typed authoring, assesses all 13
+document rules, indexes operation names and aliases, inspects kinds and references,
+and creates value-contract contexts with explicit resources and evaluators. Optional
+companions provide a default evaluator, an evaluator qualification kit, and HTTP
+discovery. Invocation, synthesis, binding adaptation and application migration are
+outside this delivery.
+
+## Installation status
+
+The Rust and TypeScript packages in this repository have not been published.
+Existing registry releases of `@openbindings/sdk` belong to the legacy TypeScript
+implementation and do not install this Rust-backed API. Build from an exact source
+revision or install a locally built archive as described in [source replay](docs/REPLAY.md).
+See [the migration boundaries](docs/migration.md) before moving an existing caller.
+
+## Rust
+
+```rust
+use openbindings::{DocumentBuilder, Operation};
+
+let mut draft = DocumentBuilder::new();
+draft.operations.insert("lookup".into(), Operation::default());
+let parsed = draft.build()?;
+let assessment = parsed.assess()?;
+let validated = assessment.validated().ok_or("document is not conformant")?;
+assert!(validated.original_bytes().starts_with(b"{"));
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+Parsing preserves evidence; validation establishes conformance separately. For
+operation values, select `openbindings-json-schema-evaluator` explicitly and pass
+an immutable `ResourceSet`. `ValueOutcome` distinguishes satisfies, mismatch,
+no-contract, missing operation and no-verdict. Core never acquires references.
+The complete six-workflow public caller is [examples/rust-consumer](examples/rust-consumer/src/main.rs).
+
+## TypeScript
+
+The npm package exposes typed objects and discriminated outcomes over the same
+Rust semantics. It includes the Wasm binary; callers do not need Rust or Go.
+
+```ts
+import { initialize, parseDocument } from '@openbindings/sdk';
+await initialize();
+const result = parseDocument(documentBytes);
+if (result.status === 'parsed') {
+  using document = result.value;
+  const assessment = document.assess();
+}
+```
+
+See the [TypeScript guide](packages/typescript/README.md) for browser/Node/workerd
+initialization, exact JSON, disposal, Fetch discovery and worker scheduling.
+
+## Packages and boundaries
+
+| Package | Responsibility |
+| --- | --- |
+| `openbindings` | Normative document semantics, authoring, inspection and evaluator contracts |
+| `openbindings-json-schema-evaluator` | Optional default JSON Schema 2020-12 value evaluator |
+| `openbindings-schema-evaluator-test-support` | Optional 1,566-case adapter qualification kit |
+| `openbindings-http-discovery` | Optional portable discovery policy/publication; native HTTP feature |
+| `openbindings-wasm` | Internal bridge used by the supported TypeScript facade |
+| `@openbindings/sdk` | First-class TypeScript API and included Wasm asset |
+
+`openbindings-internal-json` and three renamed dependency forks are implementation
+packages. Their upstream APIs are not SDK extension contracts. The core's private
+schema machinery checks the normative document schema; transport and operation
+value-evaluator policy remain outside core. See [architecture](docs/architecture.md),
+[capabilities](CAPABILITIES.md) and [dependency maintenance](DEPENDENCY-MAINTENANCE.md).
+
+## Build and verify
+
+Use Rust 1.99.0 (the declared MSRV), its `wasm32-unknown-unknown` target,
+wasm-bindgen-cli 0.2.129, Node 22.19.0/npm 10.9.3 and Python 3.13+. Dependency
+locks are tracked. Initial dependency/tool acquisition requires network access.
+
+```sh
+cargo test --locked --workspace --features openbindings-http-discovery/native
+python3 tools/verify.py
+```
+
+`tools/verify.py` runs formatting, Clippy, native tests/builds, independent corpus
+controls and all 435 native cases. `python3 tools/verify.py --browser` additionally
+builds the npm facade and runs the full core/evaluator corpus in Chromium and
+WebKit. Install their host dependencies first as described in [replay](docs/REPLAY.md).
+Tests use task-local loopback listeners and no external application services.
+
+CI definitions cover Linux, macOS and Windows; definitions are not evidence of
+execution. Migration qualification was conducted on the recorded macOS arm64 host
+and actual Chromium/WebKit, Node ESM and local workerd. The accompanying delivery
+reports identify final tested source/artifacts, results, limits and measurements.
+Do not infer publication or application cutover from this repository. Follow
+[RELEASING.md](RELEASING.md) for the separate release process.
+
+## Provenance and licenses
+
+Applied specification revision: `2f7d754dc2da374058cd517064c17e50f7d95d99`.
+Comparison Go revision: `c5c6076fcf6bcf30a428c70c00bb4f3cbf6447df`.
+The SDK is Apache-2.0; vendored dependencies retain their upstream licenses.
+[THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) and
+[DEPENDENCIES.json](DEPENDENCIES.json) describe native/Wasm dependency closures.
+The npm archive carries its own notices, Rust standard-library attribution and
+build metadata. Fixture sources carry separate provenance and licenses.
+
+Historical measurements and their exact setup/cache/value-parsing boundaries are explained in [performance boundaries](docs/performance-boundaries.md).

@@ -1,0 +1,22 @@
+[package]
+name = "openbindings"
+description = "Exact document semantics and authoring for OpenBindings 0.2"
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+fluent-uri.workspace = true
+jsonschema.workspace = true
+jsonschema-value.workspace = true
+
+openbindings-internal-json = { version = "=0.2.0-alpha.1", path = "../openbindings-internal-json" }

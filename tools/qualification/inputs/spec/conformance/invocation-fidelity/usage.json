@@ -1,0 +1,180 @@
+{
+  "format": "openbindings.invocation-fidelity-scenarios@1",
+  "bindingSpec": "openbindings.usage@1",
+  "family": "usage",
+  "description": "Usage fidelity scenarios with separate abstract and lower-layer assertions. Successful stdout values and completion behavior form the operation proof; exit, signal, byte, decode, and truncation evidence is a lower-layer process oracle.",
+  "scenarios": [
+    {
+      "id": "USAGE-FI-01",
+      "rules": [
+        "USAGE-P-05"
+      ],
+      "section": "9.3",
+      "description": "Error-shaped stdout from an exit-zero process remains an output.",
+      "given": {
+        "source": {
+          "content": "name \"tool\"\nbin \"tool\"\n"
+        },
+        "binding": {},
+        "invocation": {
+          "inputPresent": false
+        },
+        "peer": {
+          "processResult": {
+            "exitCode": 0,
+            "stdoutBase64": "ZXJyb3I6IGJ1c2luZXNzCg==",
+            "stderrBase64": "AP+AQQ=="
+          }
+        }
+      },
+      "expected": [
+        {
+          "disposition": "complete",
+          "phase": "completion",
+          "assertions": [
+            {
+              "path": "/outputs",
+              "equals": [
+                "error: business"
+              ]
+            },
+            {
+              "path": "/error",
+              "absent": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "USAGE-FI-02",
+      "rules": [
+        "USAGE-P-05"
+      ],
+      "section": "9.3",
+      "description": "A rejected non-zero exit preserves status and exact stdout/stderr bytes.",
+      "given": {
+        "source": {
+          "content": "name \"tool\"\nbin \"tool\"\n"
+        },
+        "binding": {},
+        "invocation": {
+          "inputPresent": false
+        },
+        "peer": {
+          "processResult": {
+            "exitCode": 7,
+            "stdoutBase64": "cGFydGlhbA==",
+            "stderrBase64": "AP+AQQ=="
+          }
+        }
+      },
+      "expected": [
+        {
+          "disposition": "error",
+          "phase": "completion",
+          "assertions": [
+            {
+              "path": "/outputs",
+              "equals": []
+            },
+            {
+              "path": "/error/code",
+              "equals": "ERR_EXECUTION_FAILED"
+            },
+            {
+              "path": "/error/data",
+              "absent": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "USAGE-FI-03",
+      "rules": [
+        "USAGE-P-05"
+      ],
+      "section": "9.3",
+      "description": "Signal termination remains distinguishable from an ordinary exit and retains partial bytes plus truncation facts.",
+      "given": {
+        "source": {
+          "content": "name \"tool\"\nbin \"tool\"\n"
+        },
+        "binding": {},
+        "invocation": {
+          "inputPresent": false
+        },
+        "peer": {
+          "processResult": {
+            "exitCode": -1,
+            "signal": "SIGTERM",
+            "stdoutBase64": "c2lnbmFsLXBhcnRpYWw=",
+            "stderrBase64": "",
+            "stdoutTruncated": true
+          }
+        }
+      },
+      "expected": [
+        {
+          "disposition": "error",
+          "phase": "completion",
+          "assertions": [
+            {
+              "path": "/error/code",
+              "equals": "ERR_EXECUTION_FAILED"
+            },
+            {
+              "path": "/error/data",
+              "absent": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "USAGE-FI-04",
+      "rules": [
+        "USAGE-P-05"
+      ],
+      "section": "9.3",
+      "description": "The default UTF-8 decode can fail loudly without losing the completed process's original stdout bytes.",
+      "given": {
+        "source": {
+          "content": "name \"tool\"\nbin \"tool\"\n"
+        },
+        "binding": {},
+        "invocation": {
+          "inputPresent": false
+        },
+        "peer": {
+          "processResult": {
+            "exitCode": 0,
+            "stdoutBase64": "AP+AQQ==",
+            "stderrBase64": ""
+          }
+        }
+      },
+      "expected": [
+        {
+          "disposition": "error",
+          "phase": "completion",
+          "assertions": [
+            {
+              "path": "/outputs",
+              "equals": []
+            },
+            {
+              "path": "/error/code",
+              "equals": "ERR_EXECUTION_FAILED"
+            },
+            {
+              "path": "/error/data",
+              "absent": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

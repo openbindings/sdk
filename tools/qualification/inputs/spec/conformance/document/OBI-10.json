@@ -1,0 +1,551 @@
+{
+  "rule": "OBI-10",
+  "section": "10",
+  "description": "Has every operation input and output and every entry in schemas valid against the JSON Schema 2020-12 meta-schemas, which validate its subschemas in turn (§5.2). The meta-schemas are the dialect meta-schema https://json-schema.org/draft/2020-12/schema and the vocabulary meta-schemas it references, as published with JSON Schema Core. They apply with format as an annotation, JSON Schema's default (JSON Schema Validation §7.2.1). They also apply with their pattern values read as ECMA-262 regular expressions, the regular-expression dialect JSON Schema names (JSON Schema Core §6.4).",
+  "notes": "Schema positions are operation input, operation output, and entries in the top-level schemas map; the meta-schemas validate subschemas recursively. 0.2.0 admits boolean schemas at every schema position (true accepts every value, false accepts none, {} is equivalent to true), so the positive cases exercise boolean form at top-level and nested positions alongside object form. The rule is meta-schema validity only: an unparseable pattern, an unresolvable reference, and in-place recursion pass, because what such a schema gives a value is for JSON Schema and section 5.2 to say, not a rule. Negative cases list OBI-10 alone even where the derived document schema would also reject the value structurally, per this corpus's OBI-02 suppression convention.",
+  "tests": [
+    {
+      "description": "object schemas with nested subschemas at operation input and output are valid schemas",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "input": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "title"
+              ]
+            },
+            "output": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "boolean schema true at operation input is a valid schema (contract specified, every value satisfies it)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "ping": {
+            "input": true
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "boolean schema false at operation output is a valid schema (contract specified, no value satisfies it)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "fireAndForget": {
+            "output": false
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "empty object schema {} at operation input is a valid schema (the equivalent spelling of true)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "ping": {
+            "input": {}
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "boolean schema as an entry in the top-level schemas map is a valid schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Anything": true
+        },
+        "operations": {
+          "echo": {
+            "input": {
+              "$ref": "#/schemas/Anything"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "boolean schemas at nested subschema positions (properties value, additionalProperties, items) are valid schemas",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "configure": {
+            "input": {
+              "type": "object",
+              "properties": {
+                "locked": false,
+                "values": {
+                  "type": "array",
+                  "items": true
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "unknown keywords are legitimate annotations, not meta-schema violations",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "input": {
+              "type": "object",
+              "x-internal": true,
+              "futureKeyword": {
+                "arbitrary": "annotation"
+              }
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "an unparseable pattern passes the meta-schemas: a value's result that depends on it is undefined (section 5.2), which no rule concerns",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "input": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "pattern": "([unclosed"
+                }
+              }
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "an unresolvable external $ref passes: meta-schema validity does not require resolving external resources",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "input": {
+              "$ref": "https://schemas.example.com/never-published/task.json"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "type keyword with a number value at operation input makes an invalid schema: the pinned meta-schemas reject it",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "input": {
+              "type": 42
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-10"
+      ]
+    },
+    {
+      "description": "type keyword naming an unknown simple type fails the meta-schemas",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "input": {
+              "type": "str"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-10"
+      ]
+    },
+    {
+      "description": "a string at operation output is neither object nor boolean form",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {
+            "output": "not-a-schema"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-10"
+      ]
+    },
+    {
+      "description": "a number as an entry in the top-level schemas map is neither object nor boolean form",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": 42
+        },
+        "operations": {
+          "createTask": {}
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-10"
+      ]
+    },
+    {
+      "description": "a keyword value of the wrong JSON type at a nested subschema position (minLength as a string) fails recursively",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "minLength": "3"
+              }
+            }
+          }
+        },
+        "operations": {
+          "createTask": {
+            "input": {
+              "$ref": "#/schemas/Task"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-10"
+      ]
+    },
+    {
+      "description": "required as a string instead of an array inside an items subschema at operation input",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTasks": {
+            "input": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": "title"
+              }
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-10"
+      ]
+    },
+    {
+      "description": "oneOf as an object instead of an array at operation output",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getTask": {
+            "output": {
+              "oneOf": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-10"
+      ]
+    },
+    {
+      "description": "a number as a subschema inside an anyOf array is neither object nor boolean form",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getTask": {
+            "output": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                42
+              ]
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-10"
+      ]
+    },
+    {
+      "description": "a schema that applies itself in place passes the meta-schemas: JSON Schema leaves such recursion undefined at evaluation (JSON Schema Core section 9.4.1), which no rule concerns",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "$ref": "#/schemas/A"
+          }
+        },
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "recursion that moves to another instance location, through properties and items, is a valid schema",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Tree": {
+            "type": "object",
+            "properties": {
+              "children": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/schemas/Tree"
+                }
+              }
+            }
+          }
+        },
+        "operations": {
+          "f": {
+            "input": {
+              "$ref": "#/schemas/Tree"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "a meta-schema pattern is an ECMA-262 regular expression, so an $anchor ending in a newline fails the anchor pattern",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "a": {
+            "input": {
+              "$anchor": "a\n"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-10"
+      ]
+    },
+    {
+      "description": "count keywords take a non-negative integer, compared at its exact value (section 5), so minLength 1.0 and maxProperties 0 are valid",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "type": "string",
+              "minLength": 1.0
+            },
+            "output": {
+              "type": "object",
+              "maxProperties": 0
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "an object at a schema position is a schema whether or not the meta-schemas accept it, so a pointer to one meets OBI-12 while the schema violates OBI-10 (section 7)",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "type": 42
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-10"
+      ],
+      "notViolated": [
+        "OBI-12"
+      ]
+    },
+    {
+      "description": "an $anchor value outside the JSON Schema Core section 8.2.2 grammar declares no plain name, so two of them declare nothing twice and OBI-13 holds (section 7.3)",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "$anchor": "bad/name"
+          },
+          "B": {
+            "$anchor": "bad/name"
+          }
+        },
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-10"
+      ],
+      "notViolated": [
+        "OBI-13"
+      ]
+    },
+    {
+      "description": "the array form of items (draft-07 and 2019-09) fails the 2020-12 meta-schema, which takes a single schema there (section 5.2)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "type": "array",
+              "items": [
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-10"
+      ]
+    },
+    {
+      "description": "an $anchor beginning with an underscore passes the 2020-12 meta-schema, whose anchor pattern admits it (the 2019-09 pattern requires a leading letter)",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "$anchor": "_task",
+            "type": "object"
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#_task"
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "the meta-schemas validate inside schemas that declare $id, nested ones included, so a type of 42 there fails (section 7.5)",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Task": {
+            "$id": "https://example.com/task.schema.json",
+            "type": "object",
+            "$defs": {
+              "Inner": {
+                "$id": "https://example.com/inner.schema.json",
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": 42
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operations": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-10"
+      ]
+    },
+    {
+      "description": "a count keyword with a fractional part is not a non-negative integer, so minLength 1.5 fails the meta-schemas",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "type": "string",
+              "minLength": 1.5
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-10"
+      ]
+    }
+  ]
+}

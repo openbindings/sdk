@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 1,
+  "family": "asyncapi",
+  "bindingSpec": "openbindings.asyncapi@1",
+  "method": "Direct inspection of immutable artifact bytes against the artifact's own declared AsyncAPI edition and the governing openbindings.asyncapi@1 candidate. Neither SDK's acceptance or rejection is used as the oracle. Every reason code observed in a corpus residual must appear here with exactly one classification (development-loop.md MC1).",
+  "classificationPolicy": {
+    "doctrine-refused": "Representing it would require an unwarranted or fidelity-damaging project convention. Permanent by design until that judgment changes. Carries a revisit trigger describing the evidence that would reopen it.",
+    "upstream-defective": "The artifact violates its own declared upstream specification. Not this project's gap; excluded from the supported-artifact denominator.",
+    "economically-deferred": "A faithful widening exists but measured prevalence is below the floor. Records the measured number and the revisit trigger.",
+    "implementation-debt": "NOT a valid terminal classification. Per MC2 an implementation loss can never be laundered by adjudication; entries carrying this classification are open work items and block measured-complete.",
+    "derivative": "Not independently adjudicable; the code is emitted as a consequence of another exclusion and shrinks when that one resolves.",
+    "resolved-widened": "Historical: the reason code no longer occurs because a ruled widening represented the class. The entry records the ruling and the corpus effect; it does not classify a live residual.",
+    "superseded-narrowing": "Historical: a ruled change removed the exclusion's constraint; the code narrows to a residual capability bound recorded in the entry. Not a live doctrine classification."
+  },
+  "measuredAgainst": {
+    "corpusArtifacts": 340,
+    "vintages": [
+      {
+        "id": "vintage-1",
+        "artifacts": 250,
+        "sealed": "2026-08-10",
+        "disclosed": true,
+        "disclosure": "informed WebSocket reply-loop rules"
+      },
+      {
+        "id": "vintage-2",
+        "artifacts": 90,
+        "cohortSha256": "29285cb823385159ce7254af60078f807fea917f47b0a635c33383bd03c98d75",
+        "sealed": "2026-08-13",
+        "disclosed": true,
+        "disclosure": "informed the three reply-by-reference-class fixes"
+      }
+    ],
+    "reportTag": "asyncapi-at1-lossy2"
+  },
+  "entries": [
+    {
+      "reasonCode": "asyncapi.message_headers",
+      "classification": "superseded-narrowing",
+      "measured": {
+        "coverageEntries": 0,
+        "artifacts": 0,
+        "reportTag": "asyncapi-at1-envelope"
+      },
+      "authority": "openbindings.asyncapi.md \u00a79.2: the first candidate defines no per-message payload-and-headers envelope; a target whose application contract requires headers at the OpenBindings boundary is an explicit synthesis exclusion.",
+      "rationale": "Admitting headers would require either an envelope in the operation schema (protocol recompilation, forbidden by ABSTRACTION-FIDELITY.md) or a generic headers member on the invocation frames (explicitly rejected). The exclusion is the faithful outcome.",
+      "revisitTrigger": "none \u2014 the residual per-cell bound retires per protocol as driver header mapping lands (Kafka record headers, HTTP headers, MQTT 5 user properties, AMQP application-properties).",
+      "status": "EXECUTED 2026-08-14 (envelope block): the reason code no longer occurs",
+      "note": "SUPERSEDED 2026-08-14 (headers-envelope corollary of the channel-parameters ruling): the exclusion's load-bearing constraint \u2014 no envelope in the operation schema \u2014 was removed when the routed one-tuple envelope entered the family for channel parameters. Message.headers is application data by AsyncAPI's own definition and varies per message (the amortization discriminator: per-invocation values are operation input/output); declared headers now ride the routed envelope beside the payload on both directions. The frames-level rejection stands untouched: the invoker wire contract never learns a headers member. The exclusion NARROWS to protocol cells without native header carriage (MQTT 3.1.1) \u2014 a per-cell capability bound like the driver matrix, not a doctrine. Execution folded into the parameters-envelope block, staged after the parameter lane proves the mechanism. EXECUTED 2026-08-14: the routed envelope landed in both SDKs (spec \u00a79.2, ASYNC-SS-01/SS-21, envelope.go/synthesize.ts) \u2014 declared headers ride the envelope's headers field per message, location-less channel parameters ride it as input fields, and every formerly excluded cell is represented (408 coverage entries \u2192 0 at corpus tag asyncapi-at1-envelope; fullyRepresented specimens 253 \u2192 293). The residual per-cell carriage bound is an INVOCATION capability only (HTTP-field carriage QUALIFIED 2026-08-14 in all three engines; KAFKA RECORD-HEADER carriage QUALIFIED same day \u2014 the driver seam gained a unit channel (payload + header pairs) with a HeaderCarriage capability declaration, and the Go Kafka driver rides it both directions; WS/SSE and non-declaring drivers (MQTT 3.1.1) refuse pre-dispatch with ERR_REFUSED \u2014 the ruled per-cell bound, now covering only genuinely carriage-less cells); synthesis never consults it."
+    },
+    {
+      "reasonCode": "asyncapi.no_effective_server",
+      "classification": "resolved-widened",
+      "measured": {
+        "coverageEntries": 0,
+        "artifacts": 0,
+        "reportTag": "asyncapi-at1-server",
+        "note": "753 represented targets now carry the configuration.server requirement (Go)"
+      },
+      "note": "RESOLVED 2026-08-13 (R1+R5 executed same day as ruled): the exclusion no longer exists. A server is reachability configuration, not target identity; server-less operations synthesize with a configuration.server requirement and invocation challenges CONTEXT_REQUIRED (config.value, point server, path /url \u2014 the url form supplies the whole connection URL) before dispatch. ASYNC-P-04 amended; ASYNC-SS-18 pins the cell; openapi \u00a79.3 received the same ruling for its select-or-refuse contradiction. Corpus effect: zero residual entries under this code, +201 operations, fullyRepresented 191\u2192252 (Go).",
+      "status": "RESOLVED 2026-08-13 (widened per R1+R5)"
+    },
+    {
+      "reasonCode": "asyncapi.parent_target_excluded",
+      "classification": "derivative",
+      "measured": {
+        "coverageEntries": 497,
+        "artifacts": 105
+      },
+      "rationale": "Emitted for message and server alternatives whose governing operation target was itself excluded. Never independently adjudicable; recompute after every widening that resolves a parent exclusion.",
+      "status": "SETTLED"
+    },
+    {
+      "reasonCode": "asyncapi.dangling_message_ref",
+      "classification": "PENDING",
+      "measured": {
+        "coverageEntries": 67,
+        "artifacts": 2
+      },
+      "note": "Verify against each artifact's own declared edition. A message $ref that does not resolve in the source is presumptively upstream-defective, but must be distinguished from a resolver gap of ours (cf. finding F2, where deep nested $refs were not resolved before schema copy).",
+      "status": "OPEN - Phase 1 classification"
+    },
+    {
+      "reasonCode": "asyncapi.no_resolved_messages",
+      "classification": "PENDING",
+      "measured": {
+        "coverageEntries": 14,
+        "artifacts": 2
+      },
+      "note": "Same verification as dangling_message_ref.",
+      "status": "OPEN - Phase 1 classification"
+    },
+    {
+      "reasonCode": "asyncapi.schema_format_not_convertible",
+      "classification": "doctrine-refused",
+      "note": "A declared foreign schema LANGUAGE (Avro, Protobuf, embedded OpenAPI Schema Objects) with no faithful JSON Schema 2020-12 conversion. The direction stays invocable through the unconstrained schema, so synthesis reports lossy, never a refusal. Single classification: doctrine-refused. Zero corpus instances after the 2026-08-13 detector correction (the earlier heuristic misclassified application/schema+json as foreign and swept in absent-payload messages); the cell is authority-derived (ASYNC-SS-07) per the anti-overfitting doctrine. NARROWED 2026-08-14 (correspondence ladder ruling, binding-specs README + \u00a79.2): Avro left this class \u2014 an on-list declared format now derives the direction's logical schema from the Avro specification's own JSON Encoding and is fully represented (ASYNC-SS-07/SS-19/SS-20 pin the cells). The class retains only off-list languages (Protobuf \u2014 named as the reserved next correspondence \u2014 embedded OpenAPI Schema Objects, unknown JSON Schema versions). A DEFECTIVE document in an on-list language is not this class either: it is asyncapi.payload_schema_invalid (upstream-defective), because the loss is the artifact's, not the conversion's (F-V4-1, 2026-08-17).",
+      "status": "ADJUDICATED 2026-08-13; NARROWED 2026-08-14 (Avro incorporated); SCOPE RESTATED 2026-08-17 (F-V4-1)",
+      "measured": {
+        "coverageEntries": 10,
+        "artifacts": 5,
+        "reportTag": "asyncapi-at1-envelope"
+      },
+      "revisitTrigger": "A faithful, authority-defined conversion into JSON Schema 2020-12 adopted by a binding-specification revision: for Avro/Protobuf an upstream-defined mapping; for embedded OpenAPI Schema Objects adoption of the project's existing OpenAPI dialect translator (formats/openapi translate.go) as a named conversion \u2014 the latter would re-open this entry as economically-deferred pending prevalence measurement."
+    },
+    {
+      "reasonCode": "asyncapi.payload_carriage_unsupported",
+      "classification": "resolved-widened",
+      "note": "RESOLVED 2026-08-13 (codec-seam ruling, same day as opened): the reason code no longer exists. Declared binary media now carries through the artifact-authorized byte rule (canonical RFC 4648 \u00a74 Base64 boundary, mirroring the OpenAPI siblings' raw-byte lane): the direction is invocable with the boundary schema {type: string, contentEncoding: base64}, and consumer Encode/Decode codec hooks enrich to logical values at invocation. Where a declared contract is not the boundary schema the direction accounts lossy under the new asyncapi.payload_byte_carriage code. The MC2 implementation-unsupported class this entry guarded is empty.",
+      "status": "RESOLVED 2026-08-13 (byte-boundary floor + codec hooks; ASYNC-SS-06/SS-19 pin the cells)",
+      "measured": {
+        "coverageEntries": 15,
+        "artifacts": 6,
+        "reportTag": "asyncapi-at1-lossy2"
+      }
+    },
+    {
+      "reasonCode": "asyncapi.payload_schema_invalid",
+      "classification": "upstream-defective",
+      "note": "The payload declaration is invalid under its own declared dialect (minimum: true, a non-schema properties member, Avro content referenced into a Schema Object position with no schemaFormat declared, or an on-list foreign schema \u2014 Avro \u2014 that is invalid under its own language, notably a used name the schema does not define) or carries a reference the artifact leaves dangling, so it projects to an ill-formed OBI schema. Per the ASYNC-P-05 confinement sentence this is the artifact's defect, confined to exactly the affected operation: the target is invalid, siblings and the artifact synthesize. Introduced 2026-08-13 when per-operation confinement replaced whole-artifact invalid-synthesis rejection (ASYNC-SS-16 pins the cell).",
+      "status": "ADJUDICATED 2026-08-13; SWEEP COMPLETE 2026-08-14 (all 13 entries classified upstream-defective); WIDENED 2026-08-17 (F-V4-1: on-list foreign schema invalid under its own dialect on value carriage)",
+      "measured": {
+        "coverageEntries": 13,
+        "artifacts": 6,
+        "reportTag": "asyncapi-at1-envelope",
+        "note": "Per-entry classification against artifact bytes, 2026-08-14: (1) ByteBardOrg/AsyncAPI.NET and LEGO/AsyncAPI.NET CompleteKafkaSpec.json (8 entries, one fixture twice) \u2014 \"minimum\"/\"maximum\" declared as JSON strings (\"0\", \"100\") in payload and headers schemas; the AsyncAPI 2.x Schema Object is a Draft-07 superset and Draft-07 \u00a76.2 requires numbers \u2014 invalid under its own declared dialect (a lenient .NET parser example fixture). (2) microcks/microcks-spectral-ruleset pastry-orders-asyncapi-bad.yml (1 entry) \u2014 schema-level \"examples\" declared as a named-example OBJECT (the Message Object examples style) inside a channel parameter schema, where the dialect requires an array; the file is a lint ruleset's deliberately-broken fixture, surfaced by the routed envelope carrying parameter schemas into the input. (3) The 4 pre-existing entries (Elhebert invalid-schema fixture, panproto, specmesh, rippled) stand as adjudicated 2026-08-13. No implementation defect found: the one implementation bug this class briefly absorbed (the derivation $defs anchor) was caught by the corpus and fixed in the envelope block, and its specimens (adeo, and the schema-valid portions of these fixtures) left the class."
+      },
+      "revisitTrigger": "none \u2014 invalid-under-own-dialect is the upstream's defect by definition; a future binding-specification revision adopting a named repair convention would re-open per-cause"
+    },
+    {
+      "reasonCode": "asyncapi.payload_byte_carriage",
+      "classification": "doctrine-refused",
+      "note": "Declared binary media carries exact octets through the byte boundary; a declared payload contract (an Avro schema, a structural JSON schema) is not expressible at that boundary, so the direction is lossy: represented by {type: string, contentEncoding: base64}, invocable, honestly accounted. Authoring a conversion from the declared language into JSON Schema, or decoding binary payloads into logical values, would require OB-authored codec conventions the deference order refuses; the invocation encode/decode hook seam is the consumer's enrichment path (ASYNC-SS-19 pins the cell). NARROWED 2026-08-14: the revisit trigger fired \u2014 the correspondence ladder ruling incorporated the Avro JSON Encoding as a named correspondence, so an Avro-declared payload no longer rides the byte boundary in any direction (its binary wire is a codec capability that refuses when unqualified, never a base64 fallback). The remaining class is media whose declared contract is under NO named correspondence.",
+      "status": "ADJUDICATED 2026-08-13; NARROWED 2026-08-14 (Avro leaves the class)",
+      "measured": {
+        "coverageEntries": 77,
+        "artifacts": 7,
+        "reportTag": "asyncapi-at1-envelope",
+        "note": "grew 16\u219277 at the envelope tag: operations the headers exclusion previously hid now synthesize and their binary-media payloads account honestly at the byte floor"
+      },
+      "revisitTrigger": "The next named correspondence adopted by a binding-specification revision (proto3 JSON Mapping is named-reserved in \u00a79.2), which would convert its affected directions to represented."
+    },
+    {
+      "reasonCode": "asyncapi.invalid_action",
+      "classification": "upstream-defective",
+      "measured": {
+        "coverageEntries": 0,
+        "artifacts": 0,
+        "note": "Zero dev-corpus instances. First observed in the MC5 seal-1 sealed cohort (vintage-3, finding F-V3-1): an AsyncAPI 2.4.0 artifact writing Reference Objects at positions its edition does not admit them, which the TypeScript composer then tolerated into 3.x-normalized operations whose action was erased by reference-sibling policy."
+      },
+      "authority": "AsyncAPI 3.0.0 Operation Object: the REQUIRED `action` field is \"send\" or \"receive\"; and the AsyncAPI 2.x edition texts' Reference Object position admissions (Operation Objects, whole servers/channels maps, and string-typed fields admit no Reference Object in any accepted 2.x edition).",
+      "rationale": "An operations-map entry whose action is neither send nor receive violates its own edition and is confined to exactly that target (invalid, ASYNC-D-03); siblings and the artifact synthesize. The 2.x tolerance path that produced the seal-1 instances is CLOSED: both SDKs now refuse a 2.x document carrying a Reference Object at a non-admitting position whole-artifact, before reference composition (the adjudicated consistent-loud-refusal convergence for the parser-tolerance class). The code remains reachable only for a 3.x artifact that authors an action other than send/receive, where both SDKs behave identically.",
+      "revisitTrigger": "none \u2014 an action outside the edition's closed enumeration is the upstream's defect by definition",
+      "status": "ADJUDICATED 2026-08-15 (ordinary-loop closure of MC5 seal-1 finding F-V3-1)"
+    }
+  ],
+  "loadFailureClassifications": {
+    "note": "Artifacts refused before synthesis. Per MC2, only upstream-invalid artifacts may fail loading; every other failure is open implementation work.",
+    "invalidSynthesizedInterface": {
+      "count": 7,
+      "finding": "F1/F2",
+      "classification": "implementation-debt",
+      "rootCauses": {
+        "A-foreign-schema-format": {
+          "artifacts": [
+            "danielgit0/spring-kafka-demo",
+            "specmesh/specmesh-build"
+          ],
+          "detail": "Avro payload schemas (contentType application/avro; $ref to .avsc) copied verbatim into an OBI 2020-12 schema position. Avro 'type' values such as 'record' and 'long' are not 2020-12 type values.",
+          "governingRule": "openbindings.asyncapi.md \u00a79.2 \u2014 a foreign schemaFormat does not authorize copying a non-JSON schema into an OBI JSON Schema position; the operation remains invocable and that direction is represented by an unconstrained JSON Schema unless a faithful conversion exists."
+        },
+        "B-dialect-draft07": {
+          "artifacts": [
+            "GamingAPI/definitions",
+            "murithigeo/ogc-edr-api",
+            "sswastioyono18/schema-registry-poc",
+            "indiealexh/quarkus-json-rpc-ws-next-example",
+            "jeffmikels/ProPresenter-API",
+            "superheromeZzh/pi-mono-java-design"
+          ],
+          "detail": "AsyncAPI 2.x Schema Objects are Draft-07-based. Copied verbatim they carry $schema: draft-07 (OBI-09) and draft tuple-form 'items' arrays (OBI-10, 2020-12 spells this prefixItems)."
+        },
+        "C-draft07-plain-name-id": {
+          "artifacts": [
+            "jonaslagoni/JMeter-template",
+            "Mrc0113/ep-design-workshop",
+            "Reya-Labs/reya-api-specs",
+            "ripple/rippled-api-spec"
+          ],
+          "detail": "Draft-07 plain-name and pointer-form $id values ('GeneralReply', '#MassCancelResponse', '#/properties/driver') copied into OBI positions, where OBI-11 requires an absolute URI. Note: the standalone Go client already carries an isDraft07PlainNameID grammar, so the knowledge exists but is not applied on the copy path."
+        },
+        "D-unresolved-nested-ref": {
+          "artifacts": [
+            "ivamuno/redoc-asyncapi",
+            "SENERGY-Platform/senergy-platform-connector",
+            "RobinTail/zod-sockets"
+          ],
+          "detail": "Schema $refs pointing into the AsyncAPI document's #/components/schemas were copied without being resolved or rewritten, so they dangle in the OBI and no tool can resolve them. Observed at deep nested positions (inside allOf, inside properties chains). Same class as the reply-by-reference defect: reference resolution incomplete at a position the resolver does not traverse. \u00a76 of the binding spec assigns $ref resolution to the artifact processor.",
+          "finding": "F2"
+        }
+      },
+      "upstreamInvalid": [
+        {
+          "artifact": "Elhebert/asyncapi-validation",
+          "path": "tests/fixtures/invalid-schema-3.0.0.json",
+          "detail": "Upstream test fixture authored to be an invalid schema (properties/id/minimum is a boolean). Correctly refused; belongs in the validity ledger, not the supported denominator.",
+          "classification": "upstream-defective"
+        }
+      ],
+      "resolution": "2026-08-13: classes A-D resolved by the dialect translator + position-aware reference traversal + composition alignment (openbindings-go 77048e4/aa19355, openbindings-ts 745f404, asyncapi-client 660b82f/21b0cfb); 17 whole-artifact rejections -> 7. Remaining 7: Elhebert (deliberate invalid fixture), panproto (properties value not a schema), RobinTail (empty prefixItems), specmesh (undeclared Avro = artifact defect under its declared dialect), APIs-guru (properties member named $ref holding a string - investigate), plus 3 cyclic-schema artifacts (ripple, jeffmikels, SENERGY) awaiting $defs hoisting. All still veto siblings pending per-operation refusal narrowing."
+    },
+    "typescriptOnly": {
+      "maximumCallStackSizeExceeded": {
+        "count": 3,
+        "classification": "implementation-debt",
+        "detail": "TypeScript-only stack overflow where Go completes. Presumptive unguarded recursion on cyclic schemas; OBI-T-06 requires cycle handling without infinite loops for tools that resolve $ref. Distinct from F1/F2 and TS-lane only.",
+        "finding": "F3"
+      }
+    }
+  },
+  "home": "spec/conformance/binding-specs/ (moved in-tree 2026-08-13; the corpus-lab copy is a mirror \u2014 this file is authoritative)"
+}

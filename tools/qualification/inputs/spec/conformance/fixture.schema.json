@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openbindings.com/conformance/fixture.schema.json",
+  "title": "OpenBindings Conformance Fixture",
+  "description": "JSON Schema describing the format of a conformance fixture file. A file cites either one rule of openbindings.md section 10 (rule, with section \"10\") or a section whose text answers its tests (section, with no rule). Each test gives a text and whether it conforms.",
+  "type": "object",
+  "required": [
+    "section",
+    "description",
+    "tests"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "rule": {
+      "type": "string",
+      "pattern": "^OBI-[0-9]{2}$",
+      "description": "The rule this file covers, as openbindings.md section 10 identifies it. A file that cites a rule has section \"10\"."
+    },
+    "section": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*(\\.[1-9][0-9]*)*$",
+      "description": "The number of the openbindings.md heading whose text answers the file's tests: \"10\" for a rule file, otherwise the section the file cites (for example \"12\")."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable description of the rule or section, ideally byte-faithful to the spec text."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Optional file-level rationale text about the file's coverage in this corpus, e.g. why some test cases are intentionally out of format. Informational; not consumed by harnesses."
+    },
+    "coverage": {
+      "type": "string",
+      "enum": [
+        "positive-only"
+      ],
+      "description": "If present, marks this fixture as providing partial coverage of its rule. 'positive-only' means the fixture has no discriminating negative cases (typically because negative cases cannot be expressed in the document-level fixture format without per-format harness logic). A fixture marked this way is counted separately in the manifest and does not contribute to a 'complete coverage' claim. Absence means complete coverage."
+    },
+    "tests": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Test cases for this rule or section. Each case bundles an OBI input with whether it conforms.",
+      "items": {
+        "type": "object",
+        "required": [
+          "description",
+          "valid"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Description of what this specific case tests."
+          },
+          "document": {
+            "description": "An OBI document embedded as a parsed JSON value, standing for its serialization as UTF-8 JSON text with no byte-order mark, each number at its exact value. Exactly one of document, documentText, or documentBase64 is present."
+          },
+          "documentText": {
+            "type": "string",
+            "description": "Exact Unicode text of the input. Preserves duplicate keys and malformed JSON that an embedded JSON value cannot carry. Exactly one input carriage is present."
+          },
+          "documentBase64": {
+            "type": "string",
+            "contentEncoding": "base64",
+            "description": "Base64 encoding of the exact bytes of the input. Carries malformed UTF-8 and byte-order marks. Exactly one input carriage is present."
+          },
+          "valid": {
+            "type": "boolean",
+            "description": "true if the text conforms to this specification (it meets every rule of section 10); false if it does not."
+          },
+          "violates": {
+            "type": "array",
+            "description": "When valid is false, the minimum set of rules the text violates: it violates at least these, and may violate others.",
+            "items": {
+              "type": "string",
+              "pattern": "^OBI-[0-9]{2}$"
+            }
+          },
+          "notViolated": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^OBI-[0-9]{2}$"
+            },
+            "description": "When valid is false, rules the text does not violate although it violates another: the rule holds, holds vacuously, or does not apply to the text. The mirror of violates, and disjoint from it."
+          }
+        },
+        "oneOf": [
+          {
+            "required": [
+              "document"
+            ]
+          },
+          {
+            "required": [
+              "documentText"
+            ]
+          },
+          {
+            "required": [
+              "documentBase64"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "if": {
+    "required": [
+      "rule"
+    ]
+  },
+  "then": {
+    "properties": {
+      "section": {
+        "const": "10"
+      }
+    }
+  }
+}
