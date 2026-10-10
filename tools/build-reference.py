@@ -3,18 +3,90 @@ from pathlib import Path
 import argparse
 import hashlib
 import html
+from html.parser import HTMLParser
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tomllib
+from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def run(arguments):
     return subprocess.check_output(list(map(str, arguments)), cwd=ROOT, text=True)
+
+
+def repair_inherited_links(output):
+    """Resolve known upstream tracing links emitted literally in blanket impls.
+
+    Only these exact hrefs on HTTP-discovery pages are rewritten. Keep the
+    dependency version explicit in the destinations and record each repair;
+    unrelated missing links remain failures rather than being silently removed.
+    """
+    lock = tomllib.loads((ROOT / "Cargo.lock").read_text())
+    versions = {p["version"] for p in lock["package"] if p["name"] == "tracing"}
+    if len(versions) != 1:
+        raise SystemExit("Resolve tracing reference links for the current dependency versions.")
+    base = f"https://docs.rs/tracing/{versions.pop()}/tracing/"
+    destinations = {
+        "dispatcher#setting-the-default-subscriber": "dispatcher/index.html#setting-the-default-subscriber",
+        "super::Span::current()": "struct.Span.html#method.current",
+        "crate::Span": "struct.Span.html",
+        "super::Subscriber": "trait.Subscriber.html",
+    }
+    repairs = []
+    for page in sorted((output / "rust/openbindings_http_discovery").rglob("*.html")):
+        original = current = page.read_text()
+        for source, target in destinations.items():
+            needle = f'href="{source}"'
+            count = current.count(needle)
+            if count:
+                current = current.replace(needle, f'href="{base + target}"')
+                repairs.append({"page": page.relative_to(output).as_posix(),
+                                "from": source, "to": base + target, "count": count})
+        if current != original:
+            page.write_text(current)
+    return repairs
+
+
+def verify_local_links(output):
+    """Check HTML anchor destinations, excluding external URLs and fragments."""
+    class Links(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.targets = []
+
+        def handle_starttag(self, tag, attrs):
+            if tag == "a":
+                self.targets.extend(value for name, value in attrs if name == "href" and value)
+
+    checked = 0
+    failures = []
+    for page in sorted(output.rglob("*.html")):
+        links = Links()
+        links.feed(page.read_text())
+        for href in links.targets:
+            # Rustdoc uses this exact no-op for navigation controls, not a URL.
+            if href == "javascript:void(0)":
+                continue
+            target = urlsplit(href)
+            if target.scheme or target.netloc:
+                if target.scheme and target.scheme not in {"http", "https", "mailto"}:
+                    failures.append(f"{page.relative_to(output)}: unexpected link {href}")
+                continue
+            if not target.path:
+                continue
+            path = (page.parent / unquote(target.path)).resolve()
+            checked += 1
+            if not path.is_relative_to(output.resolve()) or not path.exists():
+                failures.append(f"{page.relative_to(output)}: missing local target {href}")
+    if failures:
+        raise SystemExit("Reference links failed:\n" + "\n".join(failures))
+    return {"relativeTargetsChecked": checked,
+            "scope": "Local HTML anchor target files and URL schemes; no external availability or fragment check"}
 
 
 def main():
@@ -65,12 +137,25 @@ def main():
         f'<p><a href="https://github.com/openbindings/sdk/tree/{commit}">'
         'Source, installation status, guides, and capability limits</a>.</p>'
     )
+    rust_entries = "\n".join(
+        f'<li><a href="{url.removeprefix("rust/")}">{html.escape(label)}</a></li>'
+        for label, url in links if url.startswith("rust/")
+    )
+    # Rustdoc help/settings link to a crate index even with separate cargo rustdoc calls.
+    (output / "rust/index.html").write_text(
+        '<!doctype html><html lang="en"><meta charset="utf-8">'
+        '<title>OpenBindings Rust reference</title><h1>Rust API reference</h1>'
+        f'<ul>{rust_entries}</ul><p><a href="../index.html">SDK reference home</a>.</p>'
+    )
+    repairs = repair_inherited_links(output)
+    link_check = verify_local_links(output)
     files = {p.relative_to(output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
              for p in sorted(output.rglob("*")) if p.is_file()}
     if run(["git", "rev-parse", "HEAD"]).strip() != commit or run(["git", "status", "--porcelain"]).strip():
         raise SystemExit("Source changed during reference generation.")
     (output / "REFERENCE.json").write_text(json.dumps({
         "commit": commit, "version": version, "files": files,
+        "inheritedLinkRepairs": repairs, "localLinkCheck": link_check,
         "status": "local reference bundle; not deployed",
     }, indent=2) + "\n")
     print(f"Local reference: {output / 'index.html'}")

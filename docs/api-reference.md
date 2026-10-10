@@ -61,7 +61,8 @@ bounds are specified in the [evaluator guide](../crates/openbindings-json-schema
 `Limits::diagnostic_bytes` and TS `EvaluatorLimits.diagnosticBytes` are the only
 new evaluator limit. Adding a Rust `Limits` field is an intentional prerelease
 struct-literal source change; callers should use `..Limits::default()` for
-unspecified settings. `ValueProblem` and `ValueOutcome` construction is unchanged.
+unspecified settings. Existing Rust `ValueProblem` literals must also add
+`details: None`; `ValueOutcome` construction is unchanged.
 Custom evaluator authors can call `EvaluationProgram::original_location_bounded`
 and match `LocationBudgetExceeded` separately from an unmapped location; its
 point-of-definition Rustdoc demonstrates the complete match.
