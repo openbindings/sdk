@@ -135,6 +135,36 @@ The inventory is not an exact per-contract missing-resource list. The SDK never
 fetches references. Existing prepared owners retain their original snapshots; a
 new context with colliding or unsupported supplied resources can itself refuse.
 
+The bundled resolver selects a unique contained `$id` before caller-supplied
+schemas, with packaged standards last. Supplied retrieval names and declared IDs
+otherwise have equal priority. Another alias cannot bypass a conflict over a
+resource's canonical ID: preparation returns `no-verdict` with reason
+`conservative-preparation`. Unused conflicts do not block unrelated contracts.
+Diagnostic resource URIs retain their original retrieval provenance.
+
+## Browser resource management
+
+TypeScript's `using` needs both compiler support and the runtime `Symbol.dispose`
+symbol. Compile with `target: "ES2022"` and include `ESNext.Disposable` in `lib`;
+this transforms the syntax but does not supply the symbol. For browsers without
+that symbol, use a separate application bootstrap before loading any module that
+imports the SDK:
+
+```js
+if (Symbol.dispose === undefined) {
+  Object.defineProperty(Symbol, "dispose", { value: Symbol("Symbol.dispose") });
+}
+await import("./app.js");
+```
+
+Put your SDK imports and initialization in `app.js`. Static imports evaluate
+before the importing module's statements, so placing a static SDK import below
+the conditional in the same file is too late. Apply this setup separately in each
+Worker that uses `using`. Existing native symbols are preserved. The SDK does not
+modify global objects; explicit `dispose()` calls in `try`/`finally` also work
+without this setup. See the [TypeScript resource-management documentation](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-2.html#using-declarations-and-explicit-resource-management)
+for the distinction between compilation and runtime support.
+
 ## Initialization
 
 Initialization is asynchronous and explicit. Browser modules can load the Wasm

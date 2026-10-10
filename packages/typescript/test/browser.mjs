@@ -6,6 +6,10 @@ import { fileURLToPath } from "node:url";
 import { chromium, webkit } from "playwright-core";
 import { firstUsePage, firstUseLoadingFailures } from "./first-use-browser.mjs";
 import { editorPage } from "./editor-browser.mjs";
+import {
+  usingExampleFiles,
+  usingExamplesPage,
+} from "./using-examples-browser.mjs";
 const packageRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -22,6 +26,7 @@ const requests = JSON.parse(
   ),
 );
 const files = new Map();
+await usingExampleFiles(packageRoot, files);
 for (const name of [
   "index.js",
   "internal.js",
@@ -183,6 +188,10 @@ try {
     browser,
     new URL("./editor.html", exampleUrl).href,
   );
+  const usingExamples = await usingExamplesPage(
+    browser,
+    new URL("../using/index.html", exampleUrl).href,
+  );
   await fs.writeFile(
     path.join(output, "editor.json"),
     JSON.stringify(editor, null, 2),
@@ -198,6 +207,7 @@ try {
         diagnosticBudget: result.diagnosticBudget,
         diagnosticBudgetWorker: result.diagnosticBudgetWorker,
         loadingFailures,
+        usingExamples,
       },
       null,
       2,
