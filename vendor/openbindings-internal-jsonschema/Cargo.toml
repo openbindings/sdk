@@ -278,7 +278,9 @@ version = "0.29"
 optional = true
 
 [dependencies.referencing]
-version = "0.58.6"
+package = "openbindings-internal-referencing"
+path = "../openbindings-internal-referencing"
+version = "=0.58.6-ob.1"
 
 [dependencies.regex]
 version = "1.11.1"
@@ -288,7 +290,9 @@ version = "1.0"
 features = ["derive"]
 
 [dependencies.serde_json]
-version = "1"
+package = "openbindings-internal-serde-json"
+path = "../openbindings-internal-serde-json"
+version = "=1.0.151-ob.1"
 features = ["float_roundtrip"]
 
 [dependencies.strum]

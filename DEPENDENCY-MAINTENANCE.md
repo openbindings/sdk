@@ -1,12 +1,93 @@
 # Internal dependency maintenance contract
 
-The SDK carries three renamed internal packages. They are implementation details, not supported extension APIs. Their upstream versions and complete crate checksums are recorded by `tools/dependency-patches.py`; that script compares every file with the original downloaded crate archive and emits a full diff plus before/after digests. The original upstream Git identities are retained as `UPSTREAM-VCS.json`; original manifests are retained as `UPSTREAM-Cargo.toml`. Cargo-reserved generated filenames were renamed so the internal packages can themselves be archived. Cargo extraction completion stamps are removed. Original upstream lockfiles remain provenance; the SDK workspace lock is the development/build authority.
+The SDK carries five renamed internal dependency packages: three behaviorally modified forks and two mechanical package-identity forks. They are implementation details, not supported extension APIs. Their upstream versions and complete crate checksums are recorded by `tools/dependency-patches.py`; that script compares every file with the original downloaded crate archive and emits a full diff plus before/after digests. The original upstream Git identities are retained as `UPSTREAM-VCS.json`; original manifests are retained as `UPSTREAM-Cargo.toml`. Cargo-reserved generated filenames were renamed so the internal packages can themselves be archived. Cargo extraction completion stamps are removed. Retained upstream lockfiles are provenance; the SDK workspace lock is the development/build authority.
 
 | Upstream | Applied package | Upstream revision |
 | --- | --- | --- |
 | jsonschema 0.58.6 | openbindings-internal-jsonschema 0.58.6-ob.1 | 55ac1664384793c5d3b20745d3f9c169dfe2c06f |
 | jsonschema-value 0.58.6 | openbindings-internal-jsonschema-value 0.58.6-ob.1 | 55ac1664384793c5d3b20745d3f9c169dfe2c06f |
 | regress 0.12.0 | openbindings-internal-regress 0.12.0-ob.1 | See its retained upstream VCS record and archive checksum |
+| serde_json 1.0.151 | openbindings-internal-serde-json 1.0.151-ob.1 | See its retained upstream VCS record and archive checksum; Rust source unchanged |
+| referencing 0.58.6 | openbindings-internal-referencing 0.58.6-ob.1 | 55ac1664384793c5d3b20745d3f9c169dfe2c06f; Rust source unchanged |
+
+## Consumer dependency policy and isolation
+
+Adding the SDK must preserve ordinary `serde_json` numeric buffering behavior.
+Both mandatory validator packages require arbitrary precision. A Cargo alias or
+optional ordinary-value conversion cannot isolate that feature. The SDK therefore
+uses a distinct internal `serde_json` package throughout its validator graph.
+`referencing` must use that same identity because its registry, resources and
+retriever interfaces carry `serde_json::Value` into the compiler. Its own distinct
+package prevents an application's unrelated `referencing` dependency acquiring
+the private value identity. A shared `serde_json` feature bridge enables only
+`raw_value`, preserving the existing public `JsonValue` Serde protocol even when
+the consumer declares plain `serde_json`. It enables neither arbitrary precision,
+float roundtripping nor unbounded depth. Rust implementation code uses the private
+copy; the shared edge exists only to retain protocol recognition in consumers.
+
+The alternative of removing `Number` from the existing exact adapter requires
+changes to numeric schema projection, cold `Value`/`LazyInstance` materialization,
+`JsonNumber` interfaces and validator numeric/canonical paths. These paths admit
+values such as `1e400` that ordinary `serde_json::Number` cannot represent. A
+floating-point or placeholder substitution would lose the existing contract.
+The selected identity changes add upstream-update bookkeeping while preserving
+Rust source byte-for-byte in both added packages. They avoid adding numerical
+behavior to rebase. They can add a second JSON implementation to a native consumer
+that also uses upstream `serde_json`; source bytes do not establish executable
+size or startup cost. Only the internal JSON package is referenced by SDK Rust implementation code; the raw-value feature bridge is also present in the graph. Linked Wasm cost must be measured.
+
+Public SDK and evaluator APIs expose SDK values and shared Serde traits; the
+private JSON and registry types are not supported public extension types. The
+ordinary-value conversion still checks the emitted `$serde_json::private::Number`
+protocol as exactly one valid JSON number, with its existing budgets and error
+locations. Consumers explicitly enabling upstream arbitrary precision retain
+that upstream behavior, including its decimal flatten/untagged limitations. The
+SDK preserves emitted Number tokens and cannot restore digits already rounded
+by the consumer. Exact parsing and RawValue serialization retain source spelling.
+
+Shared direct runtime requirements use caret ranges from the tested floors:
+Serde 1.0.229, serde_json 1.0.151 (raw-value protocol only), itoa 1.0.18,
+fluent-uri 0.4.1, and, for native HTTP, reqwest 0.13.5,
+Tokio 1.53.2 and bytes 1.12.1. These are supported direct dependency floors, not
+a claim about the minimum version of every transitive dependency. Coupled SDK
+packages, internal forks and the Wasm binding generator remain exact. The
+workspace lock fixes CI. Contradictory exact consumer requirements need not
+resolve. The external regression witness currently qualifies upstream serde_json
+1.0.151; arbitrary precision is confined to the distinct internal identity.
+
+`tools/verify.py` runs the source-identity guard and seven external consumer
+configurations: baseline, explicit arbitrary precision, core with and without
+explicit arbitrary precision, evaluator, and native discovery with and without
+explicit arbitrary precision. The hook checks actual Cargo build feature trees;
+`cargo metadata` alone also reports weak optional macro feature edges and can
+overstate the activated graph. Checked Number shape/injection/limit cases and
+cross-package Number/RawValue cases are maintained in `tools/consumer-compat`.
+
+For a dependency update, additionally run `tools/verify-consumer-compat.py
+--resolution minimum` and `--resolution latest`, retaining `--output` receipts.
+The first selects the documented direct floors; the latter asks Cargo for the
+newest resolvable graph. Use `CARGO_NET_OFFLINE=true` only when intentionally
+qualifying the cached graph and label that limitation. The initial isolation
+qualification's minimum, locked and newest offline-resolvable shared versions
+coincide; it does not claim multiple versions were tested or a crates.io head run.
+
+## Mechanical serde_json and referencing updates
+
+Their Rust files, including build scripts and upstream tests, must match the
+downloaded upstream archives exactly. `docs/dependency-isolation.json` records
+archive checksums and every Rust source digest; `tools/verify-dependency-isolation.py`
+checks the entire file set and dependency wiring on every source replay. Pass
+`--upstream-dir <crate-archives>` to also verify those archive identities and
+their source digests. No Rust-source modification is approved by this policy.
+
+When updating either package: acquire and checksum the upstream crate; retain its
+licenses, original manifest and VCS record; rename package identity; apply only
+the exact sibling dependency pins; regenerate the source manifest from the
+archive, never from the modified checkout; compare the complete patch inventory;
+then run source identity, all consumer modes, D03/API-quality and exact evaluator
+tests, and applicable native/Wasm/package/browser qualification. Serde protocol
+changes require explicit cross-package checks. Follow the broader update gates
+below for behavioral dependency changes. Keep every `publish = false` guard.
 
 ## jsonschema
 

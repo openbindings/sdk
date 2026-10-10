@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
-exclude = ["vendor/openbindings-internal-jsonschema", "vendor/openbindings-internal-jsonschema-value", "vendor/openbindings-internal-regress"]
+exclude = ["vendor/openbindings-internal-jsonschema", "vendor/openbindings-internal-jsonschema-value", "vendor/openbindings-internal-regress", "vendor/openbindings-internal-serde-json", "vendor/openbindings-internal-referencing"]
 
 [workspace.package]
 version = "0.2.0-alpha.1"
@@ -12,10 +12,12 @@ repository = "https://github.com/openbindings/sdk"
 publish = false
 
 [workspace.dependencies]
-itoa = "=1.0.18"
-serde = { version = "=1.0.229", features = ["derive"] }
-serde_json = { version = "=1.0.151", features = ["arbitrary_precision", "raw_value", "unbounded_depth"] }
-fluent-uri = "=0.4.1"
+itoa = "1.0.18"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { package = "openbindings-internal-serde-json", path = "vendor/openbindings-internal-serde-json", version = "=1.0.151-ob.1", features = ["arbitrary_precision", "raw_value", "unbounded_depth"] }
+# Preserve JsonValue's public RawValue Serde protocol without sharing AP.
+serde_json_compat = { package = "serde_json", version = "1.0.151", features = ["raw_value"] }
+fluent-uri = "0.4.1"
 jsonschema = { package = "openbindings-internal-jsonschema", version = "=0.58.6-ob.1", path = "vendor/openbindings-internal-jsonschema", default-features = false, features = ["arbitrary-precision"] }
 jsonschema-value = { package = "openbindings-internal-jsonschema-value", version = "=0.58.6-ob.1", path = "vendor/openbindings-internal-jsonschema-value", default-features = false, features = ["serde_json", "arbitrary-precision"] }
 wasm-bindgen = "=0.2.129"

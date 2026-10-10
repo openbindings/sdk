@@ -114,7 +114,9 @@ version = "0.9"
 optional = true
 
 [dependencies.serde_json]
-version = "1"
+package = "openbindings-internal-serde-json"
+path = "../openbindings-internal-serde-json"
+version = "=1.0.151-ob.1"
 features = ["float_roundtrip"]
 
 [dependencies.zmij]

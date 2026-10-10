@@ -1,0 +1,26 @@
+[package]
+name = "openbindings-consumer-compat"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[features]
+default = []
+ap = ["serde_json/arbitrary_precision"]
+sdk = ["dep:openbindings", "dep:private_json"]
+evaluator = ["sdk", "dep:openbindings-json-schema-evaluator"]
+native = ["evaluator", "dep:openbindings-http-discovery", "openbindings-http-discovery/native", "dep:reqwest", "dep:tokio", "dep:bytes"]
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+openbindings = { path = "../../crates/openbindings", optional = true, default-features = false }
+openbindings-json-schema-evaluator = { path = "../../crates/openbindings-json-schema-evaluator", optional = true }
+openbindings-http-discovery = { path = "../../crates/openbindings-http-discovery", optional = true, default-features = false }
+# White-box interoperability witness only; private types are not supported SDK APIs.
+private_json = { package = "openbindings-internal-serde-json", path = "../../vendor/openbindings-internal-serde-json", optional = true, features = ["arbitrary_precision", "raw_value"] }
+reqwest = { version = "0.13.5", optional = true, default-features = false, features = ["rustls"] }
+tokio = { version = "1.53.2", optional = true, features = ["rt", "macros", "time"] }
+bytes = { version = "1.12.1", optional = true }

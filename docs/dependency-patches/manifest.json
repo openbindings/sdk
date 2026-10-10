@@ -20,7 +20,7 @@
         {
           "file": "Cargo.toml",
           "upstream_sha256": "a8318117cc87a9a88027d5820fc5507eda16cbf04e166cb35a26be5492a1f8d7",
-          "current_sha256": "9d46dd0fc5aa5817d71a93b37cdefd63070c6e8624979bad1e1cb07b033b8f4d"
+          "current_sha256": "b6354e7c8d86f8cb4c48a36ee5d544a5184953f5a11b7add95342738b0f1d78c"
         },
         {
           "file": "Cargo.toml.orig",
@@ -170,7 +170,7 @@
         {
           "file": "Cargo.toml",
           "upstream_sha256": "8270a39ed0531eaf4de5ff516df9e09d17d3c2a697b0b428b02673a661f37844",
-          "current_sha256": "68e040b394a1b68923d5c1ad9857592884ac6d7a421c25a749abd54cf0200251"
+          "current_sha256": "f0a69661a91623a51e04c1f9b20065fee701b6f34b966dd26f7b0aaa3420c45d"
         },
         {
           "file": "Cargo.toml.orig",
@@ -238,6 +238,11 @@
           "current_sha256": null
         },
         {
+          "file": "Cargo.lock",
+          "upstream_sha256": "7a87097e8999e1f0077324ce7a536f9371b421e490a89ba5dbf9205efd08d4fd",
+          "current_sha256": null
+        },
+        {
           "file": "Cargo.toml",
           "upstream_sha256": "f06441afb2bec691c9f3ca5dd4f2372a70f8fa0cd229da13d371bc40abf57dce",
           "current_sha256": "ea6917275abb8beb1d7617645f9d739fa19e282a90c945609a1f072a4d53ecad"
@@ -294,6 +299,96 @@
         }
       ],
       "patch": "regress.patch"
+    },
+    {
+      "upstream": "serde_json",
+      "version": "1.0.151",
+      "upstream_archive_sha256": "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14",
+      "vcs": {
+        "git": {
+          "sha1": "de8500740cdcabffb9734f503e4889def823cf10"
+        },
+        "path_in_vcs": ""
+      },
+      "modified_package": "openbindings-internal-serde-json",
+      "changes": [
+        {
+          "file": ".cargo_vcs_info.json",
+          "upstream_sha256": "5bfedd83df665d1746f17958cdf29a1e62743049730e95ffc64912a984336eb5",
+          "current_sha256": null
+        },
+        {
+          "file": "Cargo.toml",
+          "upstream_sha256": "00b920255c320a278bf25b962b491263a19d8c90e12e4a91c1d823db71eabb2f",
+          "current_sha256": "f0b97ae804a17411a31c78c92081e107de136f68d6443535d39de26fb93048ff"
+        },
+        {
+          "file": "Cargo.toml.orig",
+          "upstream_sha256": "ade7399c00ef7d8320fe5427e4c23f50686d6476584b2ea558a795cc9139f78a",
+          "current_sha256": null
+        },
+        {
+          "file": "OPENBINDINGS-PATCH.md",
+          "upstream_sha256": null,
+          "current_sha256": "b32284e2fd94c2cce8d5cf906480602025e07e64b961f5ad541defee4e3b50e0"
+        },
+        {
+          "file": "UPSTREAM-Cargo.toml",
+          "upstream_sha256": null,
+          "current_sha256": "ade7399c00ef7d8320fe5427e4c23f50686d6476584b2ea558a795cc9139f78a"
+        },
+        {
+          "file": "UPSTREAM-VCS.json",
+          "upstream_sha256": null,
+          "current_sha256": "5bfedd83df665d1746f17958cdf29a1e62743049730e95ffc64912a984336eb5"
+        }
+      ],
+      "patch": "serde_json.patch"
+    },
+    {
+      "upstream": "referencing",
+      "version": "0.58.6",
+      "upstream_archive_sha256": "558f3855529c0a7e78a48e409fa653456e55f1b167eab4109c16a255b7727e3f",
+      "vcs": {
+        "git": {
+          "sha1": "55ac1664384793c5d3b20745d3f9c169dfe2c06f"
+        },
+        "path_in_vcs": "crates/jsonschema-referencing"
+      },
+      "modified_package": "openbindings-internal-referencing",
+      "changes": [
+        {
+          "file": ".cargo_vcs_info.json",
+          "upstream_sha256": "34edc1152e075903e3833b3ec4b8ffaac81d5e718cfa61390340c34f0722b6d7",
+          "current_sha256": null
+        },
+        {
+          "file": "Cargo.toml",
+          "upstream_sha256": "b76476723bee5d0c68b8e970324254a5a4d75d7a264d6a31f1664f5abc1f87a4",
+          "current_sha256": "0125f266367aa2bb5a310791d41f649de8fd4c5de7afed6fef0b3b8557d07ce5"
+        },
+        {
+          "file": "Cargo.toml.orig",
+          "upstream_sha256": "67f56523e3bb341ee112a625cd236e84a03592285e95d96a7bf686d725d2f80b",
+          "current_sha256": null
+        },
+        {
+          "file": "OPENBINDINGS-PATCH.md",
+          "upstream_sha256": null,
+          "current_sha256": "0a06a27d61bd730249126a14fe24a2d88d3f7b7770b24938bf93cdfcb1474b66"
+        },
+        {
+          "file": "UPSTREAM-Cargo.toml",
+          "upstream_sha256": null,
+          "current_sha256": "67f56523e3bb341ee112a625cd236e84a03592285e95d96a7bf686d725d2f80b"
+        },
+        {
+          "file": "UPSTREAM-VCS.json",
+          "upstream_sha256": null,
+          "current_sha256": "34edc1152e075903e3833b3ec4b8ffaac81d5e718cfa61390340c34f0722b6d7"
+        }
+      ],
+      "patch": "referencing.patch"
     }
   ]
 }

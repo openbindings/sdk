@@ -14,6 +14,8 @@ run(['cargo', 'check', '--locked', '-p', 'openbindings', '--no-default-features'
 run(['cargo', 'fmt', '--all', '--check'])
 run(['cargo', 'clippy', '--locked', '--workspace', '--all-targets', '--features', 'openbindings-http-discovery/native', '--', '-D', 'warnings'])
 run(['cargo', 'test', '--locked', '--workspace', '--features', 'openbindings-http-discovery/native'])
+run([sys.executable, 'tools/verify-dependency-isolation.py'])
+run([sys.executable, 'tools/verify-consumer-compat.py'])
 for example in ['first_use', 'replacement']:
     run(['cargo', 'run', '--locked', '-p', 'openbindings-json-schema-evaluator', '--example', example])
 run([sys.executable, 'tools/verify-rust-snippets.py'])

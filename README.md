@@ -87,7 +87,7 @@ shows retained in-flight work and a replacement that is installed only when read
 | `openbindings-wasm` | Internal bridge used by the supported TypeScript facade |
 | `@openbindings/sdk` | First-class TypeScript API and included Wasm asset |
 
-`openbindings-internal-json` and three renamed dependency forks are implementation
+`openbindings-internal-json` and five renamed dependency packages are implementation
 packages. Their upstream APIs are not SDK extension contracts. The core's private
 schema machinery checks the normative document schema; transport and operation
 value-evaluator policy remain outside core. See [architecture](docs/architecture.md),
