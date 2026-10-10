@@ -1,0 +1,15 @@
+[package]
+name = "sdk-no-io"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+openbindings = { path = "../../crates/openbindings" }
+openbindings-json-schema-evaluator = { path = "../../crates/openbindings-json-schema-evaluator" }
+# Deliberately enable retrieval on the same private dependency used by the SDK.
+# These are white-box positive controls, not supported SDK extension APIs.
+jsonschema = { package = "openbindings-internal-jsonschema", path = "../../vendor/openbindings-internal-jsonschema", default-features = false, features = ["resolve-http", "resolve-file", "tls-ring", "arbitrary-precision"] }
+serde_json = { package = "openbindings-internal-serde-json", path = "../../vendor/openbindings-internal-serde-json", features = ["arbitrary_precision"] }

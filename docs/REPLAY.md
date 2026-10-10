@@ -41,8 +41,29 @@ Install the tarball in a fresh Node project; initialize using the documented
 included `.wasm` export. No Rust compiler is required for package consumption.
 
 Cargo siblings are unpublished, so `cargo package --no-verify` alone is insufficient.
-The migration delivery preserves all nine archives plus fresh consumers whose
-registry-version dependencies are patched only to extracted adjacent archives.
-Their normalized manifests have no checkout paths. The final consumer locks and
-commands demonstrate the actual installation/build path; do not remove those
-patches before the packages exist in an approved registry.
+The [candidate procedure](release-candidate.md) archives the workspace and internal
+dependencies, then runs fresh consumers whose registry-version dependencies are
+patched only to extracted archives. Normalized manifests have no checkout paths.
+Keep the recorded locks, commands, and temporary patches until the packages exist
+in an approved registry.
+
+For the active acquisition-boundary check on a POSIX host, allow temporary loopback
+listeners and named pipes and use a fresh output directory:
+
+```sh
+cargo build --locked --manifest-path tools/no-io/Cargo.toml
+python3 tools/verify-no-io.py --binary tools/no-io/target/debug/sdk-no-io \
+  --output target/no-io-receipt
+```
+
+If `CARGO_TARGET_DIR` is set, use its `debug/sdk-no-io` binary instead. This isolated
+consumer enables the private dependency's HTTP/file retrieval features. Direct
+dependency positive controls must hit both traps; SDK document, schema reference,
+and explicit-resource paths must not. Record the build command, source, feature
+graph, and binary hash together. This is a regression control for the named paths,
+not a universal proof of absence of I/O or a new public dependency API.
+
+The [controlled runtime harness](../tools/runtime-qualification/README.md) measures
+declared consumer jobs with frozen inputs and budgets. Its deterministic `check`
+mode is separate from exclusive-window timing; do not treat shared CI timings as
+qualification measurements.
