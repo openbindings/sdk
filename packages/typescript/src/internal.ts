@@ -111,7 +111,7 @@ export interface ValueProblem {
 export type ValueOutcome =
   | { outcome: "satisfies" }
   | {
-      outcome: "mismatch";
+      outcome: "fails";
       problems: readonly ValueProblem[];
       problemsComplete: boolean;
     }
@@ -228,6 +228,8 @@ export class SdkError extends Error {
     readonly code: string,
     message: string,
     readonly location?: Readonly<SourceLocation>,
+    /** Specific interpretation refusal; broad code remains "interpretation". */
+    readonly interpretationCode?: string,
   ) {
     super(message);
     if (location) this.location = Object.freeze({ ...location });
@@ -244,12 +246,16 @@ function sdkCall<T>(call: () => T): T {
           code: string;
           message: string;
           location?: SourceLocation | null;
+          interpretationCode?: string;
         }>(error);
         if (typeof info.code === "string" && typeof info.message === "string")
           throw new SdkError(
             info.code,
             info.message,
             info.location ?? undefined,
+            typeof info.interpretationCode === "string"
+              ? info.interpretationCode
+              : undefined,
           );
       } catch (decoded) {
         if (decoded instanceof SdkError) throw decoded;

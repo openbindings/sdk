@@ -53,9 +53,9 @@ struct NoRetrieval;
 impl jsonschema::Retrieve for NoRetrieval {
     fn retrieve(
         &self,
-        uri: &jsonschema::Uri<String>,
+        _uri: &jsonschema::Uri<String>,
     ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
-        Err(format!("resource is not in the prepared program: {uri}").into())
+        Err("resource is not in the prepared program".into())
     }
 }
 fn no_verdict(reason: NoVerdictReason, code: &str, message: impl Into<String>) -> NoVerdict {
@@ -77,33 +77,33 @@ impl SchemaEvaluator for DefaultEvaluator {
             let value = literals.resource(&resource.document, &self.limits, control)?;
             // Transfer each private projection into the registry. Holding a
             // second serde tree until compilation unnecessarily raises peak RSS.
-            registry = registry.add(&resource.uri, value).map_err(|e| {
+            registry = registry.add(&resource.uri, value).map_err(|_| {
                 no_verdict(
                     NoVerdictReason::EvaluatorFailure,
                     "program-resource",
-                    e.to_string(),
+                    "a projected resource could not be registered",
                 )
             })?;
         }
-        let registry = registry.prepare().map_err(|e| {
+        let registry = registry.prepare().map_err(|_| {
             no_verdict(
                 NoVerdictReason::ConservativePreparation,
                 "program-registry",
-                e.to_string(),
+                "the projected schema registry could not be prepared",
             )
         })?;
-        let entry_uri = jsonschema::Uri::parse(program.entry_uri.clone()).map_err(|e| {
+        let entry_uri = jsonschema::Uri::parse(program.entry_uri.clone()).map_err(|_| {
             no_verdict(
                 NoVerdictReason::EvaluatorFailure,
                 "program-entry-uri",
-                e.0.to_string(),
+                "the projected entry identifier is invalid",
             )
         })?;
-        let root = registry.resolver(entry_uri).lookup("").map_err(|e| {
+        let root = registry.resolver(entry_uri).lookup("").map_err(|_| {
             no_verdict(
                 NoVerdictReason::EvaluatorFailure,
                 "missing-program-entry",
-                e.to_string(),
+                "the projected schema entry could not be located",
             )
         })?;
         let validator = literals
@@ -116,11 +116,11 @@ impl SchemaEvaluator for DefaultEvaluator {
                 jsonschema::PatternOptions::fancy_regex().backtrack_limit(self.limits.regex_steps),
             )
             .build(root.contents())
-            .map_err(|e| {
+            .map_err(|_| {
                 no_verdict(
                     NoVerdictReason::ConservativePreparation,
                     "evaluator-preparation",
-                    e.to_string(),
+                    "the evaluator could not prepare the projected schema",
                 )
             })?;
         control.check()?;
@@ -184,19 +184,7 @@ impl PreparedSchema for Compiled {
             }
             Err(reason) => {
                 return ValueOutcome::NoVerdict {
-                    detail: no_verdict(
-                        if reason == jsonschema::ob_work::Stop::Cycle {
-                            NoVerdictReason::ConservativePreparation
-                        } else {
-                            NoVerdictReason::LimitExceeded
-                        },
-                        if reason == jsonschema::ob_work::Stop::Arithmetic {
-                            "numeric-arithmetic-limit"
-                        } else {
-                            "evaluation-work-limit"
-                        },
-                        format!("evaluation stopped: {reason:?}"),
-                    ),
+                    detail: evaluation_stop(reason),
                 };
             }
         };
@@ -234,7 +222,7 @@ impl PreparedSchema for Compiled {
                                         instance_pointer: path,
                                         schema_location: schema_location.clone(),
                                         code: error.kind().keyword().into(),
-                                        message: diagnostic_message(error.kind()).into(),
+                                        message: diagnostic_message(error.kind()),
                                     });
                                 }
                                 if control.is_cancelled() {
@@ -253,7 +241,7 @@ impl PreparedSchema for Compiled {
         if let Err(detail) = control.check() {
             return ValueOutcome::NoVerdict { detail };
         }
-        ValueOutcome::Mismatch {
+        ValueOutcome::Fails {
             problems,
             problems_complete: complete,
         }
@@ -336,10 +324,25 @@ fn diagnostic_paths(error: &jsonschema::ValidationError<'_>, value: &JsonValue) 
         _ => vec![root.into()],
     }
 }
-fn diagnostic_message(kind: &jsonschema::error::ValidationErrorKind) -> &'static str {
+fn diagnostic_message(kind: &jsonschema::error::ValidationErrorKind) -> String {
     use jsonschema::error::ValidationErrorKind as K;
-    match kind {
-        K::Type { .. } => "value has a type not allowed by this schema",
+    let message = match kind {
+        K::Type { kind } => {
+            // The engine type enum has seven fixed names. Never render the schema
+            // or rejected instance, including user-controlled enum/member values.
+            use jsonschema::error::TypeKind;
+            return match kind {
+                TypeKind::Single(expected) => format!("expected JSON type: {expected}"),
+                TypeKind::Multiple(expected) => format!(
+                    "expected one of JSON types: {}",
+                    expected
+                        .iter()
+                        .map(|ty| ty.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            };
+        }
         K::Required { .. } => {
             "object is missing a required member; inspect the required keyword at the schema location"
         }
@@ -358,5 +361,45 @@ fn diagnostic_message(kind: &jsonschema::error::ValidationErrorKind) -> &'static
         }
         K::UniqueItems => "array contains equal items where unique items are required",
         _ => "value does not satisfy the constraint at the schema location",
+    };
+    message.into()
+}
+
+fn evaluation_stop(stop: jsonschema::ob_work::Stop) -> NoVerdict {
+    use jsonschema::ob_work::Stop;
+    let (reason, code, message) = match stop {
+        Stop::Cycle => (
+            NoVerdictReason::ConservativePreparation,
+            "evaluation-cycle",
+            "evaluation encountered a potential cycle and could not establish a verdict",
+        ),
+        Stop::Arithmetic => (
+            NoVerdictReason::LimitExceeded,
+            "numeric-arithmetic-limit",
+            "numeric arithmetic exceeds the admitted evaluation limit",
+        ),
+        Stop::Work | Stop::Depth | Stop::Diagnostics => (
+            NoVerdictReason::LimitExceeded,
+            "evaluation-work-limit",
+            "evaluation work or depth limit reached",
+        ),
+    };
+    no_verdict(reason, code, message)
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+    #[test]
+    fn runtime_cycle_guard_has_a_truthful_conservative_code() {
+        use jsonschema::ob_work::Stop;
+        let cycle = evaluation_stop(Stop::Cycle);
+        assert_eq!(cycle.reason, NoVerdictReason::ConservativePreparation);
+        assert_eq!(cycle.code, "evaluation-cycle");
+        for stop in [Stop::Work, Stop::Depth, Stop::Diagnostics, Stop::Arithmetic] {
+            let stopped = evaluation_stop(stop);
+            assert_eq!(stopped.reason, NoVerdictReason::LimitExceeded);
+            assert_ne!(stopped.code, cycle.code);
+        }
     }
 }

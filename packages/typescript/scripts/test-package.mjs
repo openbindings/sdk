@@ -95,7 +95,7 @@ try {
 }
 assert.equal(results.length, 2);
 assert.equal(results[0].result.outcome, "satisfies");
-assert.equal(results[1].result.outcome, "mismatch");
+assert.equal(results[1].result.outcome, "fails");
 console.log("Installed README TypeScript first-use block compiled and ran verbatim.");
 `,
   );
@@ -111,6 +111,16 @@ console.log("Installed README TypeScript first-use block compiled and ran verbat
     join(root, "test/fixed-diagnostic-cases.mjs"),
     join(temporary, "fixed-diagnostic-cases.mjs"),
   );
+  copyFileSync(
+    join(root, "test/diagnostic-policy-cases.mjs"),
+    join(temporary, "diagnostic-policy-cases.mjs"),
+  );
+  const declaration = readFileSync(
+    join(installed, "dist/internal.d.ts"),
+    "utf8",
+  );
+  assert.match(declaration, /interpretationCode\?: string/);
+  assert.match(declaration, /Specific interpretation refusal/);
   writeFileSync(
     join(temporary, "consumer.mjs"),
     `
@@ -121,6 +131,7 @@ import * as sdk from "@openbindings/sdk";
 import * as http from "@openbindings/sdk/http-discovery";
 import { apiQualityCases } from "./api-quality-cases.mjs";
 import { fixedDiagnosticCases } from "./fixed-diagnostic-cases.mjs";
+import { diagnosticPolicyCases } from "./diagnostic-policy-cases.mjs";
 const { initialize, parseDocument } = sdk;
 const resolved = fileURLToPath(import.meta.resolve("@openbindings/sdk"));
 assert.equal(await realpath(resolved), resolved, "Package must not resolve through a workspace symlink");
@@ -135,7 +146,7 @@ try {
 } finally {
   parsed.value.dispose();
 }
-console.log(JSON.stringify({ installedPackage: true, ...await apiQualityCases(sdk, http), fixedDiagnostics: fixedDiagnosticCases(sdk) }));
+console.log(JSON.stringify({ installedPackage: true, ...await apiQualityCases(sdk, http), fixedDiagnostics: fixedDiagnosticCases(sdk), ...diagnosticPolicyCases(sdk) }));
 `,
   );
   execFileSync(process.execPath, [join(temporary, "consumer.mjs")], {
@@ -150,7 +161,7 @@ console.log(JSON.stringify({ installedPackage: true, ...await apiQualityCases(sd
     }),
   );
   assert.equal(firstUse.accepted.result.outcome, "satisfies");
-  assert.equal(firstUse.mismatch.result.outcome, "mismatch");
+  assert.equal(firstUse.fails.result.outcome, "fails");
   assert.equal(firstUse.invalidInput.result.outcome, "input-error");
   const lifecycle = JSON.parse(
     execFileSync(process.execPath, [join(examples, "service-lifecycle.mjs")], {

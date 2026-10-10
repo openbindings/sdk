@@ -17,6 +17,23 @@
 
 ### Changed
 
+- Rename the established value-failure outcome to Rust `ValueOutcome::Fails` and
+  TypeScript `outcome: "fails"`, including serialized results. The old `Mismatch` /
+  `"mismatch"` spellings are not aliases. This is a pre-stabilization API change.
+- Contract contexts and operation resolution now validate the complete operation
+  namespace before selection. Malformed operations or aliases, including unrelated
+  entries, return the specific `InterpretationError`; draft metadata evaluation
+  remains available without requiring whole-document conformance.
+- `NoVerdictReason` and `InterpretationError` are non-exhaustive cause families.
+  Semantic outcome partitions remain closed, and diagnostic structs remain
+  publicly constructible by custom evaluator implementations.
+- TypeScript `SdkError.interpretationCode` preserves specific interpretation
+  failures alongside the broad `code`, message and original source location.
+- Default reference/resource and evaluator preparation messages omit source
+  identifiers. Value type messages list only fixed JSON type names. Runtime cycle
+  guards report `evaluation-cycle` with a conservative reason, never a work-limit
+  code or an unsupported claim of semantic undefinedness.
+
 - Unexpected normative document fields now identify their original key tokens and
   explain the `x-` extension convention. One aggregate finding can become several;
   source order within each object is preserved. Expansion shares the 4,096-finding
@@ -38,7 +55,7 @@
 - Operation lookup now returns explicit found/missing/ambiguous selection; retained
   operation views have typed accessors and located structural refusals.
 - Contract preparation now returns ready/no-contract/operation-missing/
-  operation-ambiguous/no-verdict. `ValueOutcome` contains only satisfies, mismatch
+  operation-ambiguous/no-verdict. `ValueOutcome` contains only satisfies, fails
   and no-verdict. The evaluator kit separates preparation and evaluation evidence.
 - Native authoring errors expose stable kinds and logical draft paths; checked
   Serde conversion admits ordinary values with explicit profile/limits and owned,

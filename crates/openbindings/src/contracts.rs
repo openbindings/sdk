@@ -23,6 +23,7 @@ impl Side {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum NoVerdictReason {
     UnsupportedCapability,
     ConservativePreparation,
@@ -85,7 +86,7 @@ pub struct ValueProblem {
 #[serde(tag = "outcome", rename_all = "kebab-case")]
 pub enum ValueOutcome {
     Satisfies,
-    Mismatch {
+    Fails {
         problems: Vec<ValueProblem>,
         problems_complete: bool,
     },
@@ -112,7 +113,7 @@ pub struct ResourceError {
 }
 impl fmt::Display for ResourceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {}", self.uri, self.message)
+        f.write_str(&self.message)
     }
 }
 impl std::error::Error for ResourceError {}
@@ -298,16 +299,16 @@ impl fmt::Debug for PreparedContract {
     }
 }
 impl PreparedContract {
-    /// Validate an admitted exact value, distinguishing satisfies, mismatch and
+    /// Validate an admitted exact value, distinguishing satisfies, fails and
     /// no-verdict. For ordinary Rust data first use [`JsonValue::from_serializable`];
     /// for exact JSON text/bytes use [`JsonValue::parse`]. Admission failure is
-    /// separate from validation. Mismatch diagnostics can be incomplete; inspect
+    /// separate from validation. Failure diagnostics can be incomplete; inspect
     /// `problems_complete` rather than assuming every failed keyword is reported.
     pub fn validate(&self, value: &JsonValue) -> ValueOutcome {
         self.validate_with_control(value, &WorkControl::new())
     }
     /// Validate with cooperative cancellation. Cancellation yields no-verdict,
-    /// not mismatch, and leaves this owner usable with a fresh healthy control.
+    /// not failure, and leaves this owner usable with a fresh healthy control.
     /// This is not a preemptive wall-clock deadline; applications schedule work.
     pub fn validate_with_control(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
         if let Err(detail) = control.check() {
@@ -327,7 +328,9 @@ impl PreparedContract {
 }
 impl ParsedDocument {
     /// Create a context with an explicitly selected evaluator and immutable
-    /// resources. No resource acquisition occurs; URIs in other contexts cannot
+    /// resources. Malformed operation namespaces (including unrelated aliases)
+    /// return an [`InterpretationError`] here, before contract selection.
+    /// No resource acquisition occurs; URIs in other contexts cannot
     /// change this one. This does not establish whole-document conformance: use
     /// [`Self::assess`] if your application requires that before accepting a document.
     ///
@@ -353,6 +356,7 @@ impl ParsedDocument {
         options: ValueContractOptions,
     ) -> Result<ValueContracts, InterpretationError> {
         self.interpretable()?;
+        self.names()?;
         Ok(ValueContracts {
             inner: Arc::new(ContractsInner {
                 space: Arc::new(SchemaSpace::new(self.clone(), resources)),
@@ -369,7 +373,7 @@ impl ParsedDocument {
 impl ValueContracts {
     /// Select a primary operation name or alias and prepare one side's contract.
     /// Match every [`ContractPreparation`] branch: missing/ambiguous operation,
-    /// absent contract and preparation refusal are setup states, not mismatches.
+    /// absent contract and preparation refusal are setup states, not value failures.
     /// Ready contracts can be retained beyond this context and validated repeatedly.
     /// Deterministic preparations may be reused within the bounded context cache;
     /// concurrent first requests may prepare more than once.
@@ -398,9 +402,9 @@ impl ValueContracts {
             }
             Err(error) => {
                 let mut detail = NoVerdict::new(
-                    NoVerdictReason::Undefined,
-                    "invalid-operation-structure",
-                    "the operation structure cannot establish a value contract",
+                    NoVerdictReason::EvaluatorFailure,
+                    "operation-index-invariant",
+                    "the previously checked operation namespace could not be read",
                 );
                 if let Some(location) = error.source_location() {
                     detail.location = Some(SchemaLocation {

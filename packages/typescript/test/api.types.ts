@@ -59,7 +59,7 @@ async function caller(
     using input = prepared.contract;
     using value = ExactJson.from(7);
     const result: ValueOutcome = input.validate(value);
-    if (result.outcome === "mismatch") {
+    if (result.outcome === "fails") {
       result.problems[0].instancePointer satisfies string;
     }
     if (result.outcome === "no-verdict") result.detail.reason satisfies string;
@@ -129,3 +129,21 @@ using batchResources = new SchemaResources([
 ]);
 void exactOutcome;
 void incompleteOutcome;
+
+// Specific interpretation causes are optional; broad error categories remain stable.
+import { SdkError } from "../dist/index.js";
+const detailed = new SdkError(
+  "interpretation",
+  "invalid namespace",
+  undefined,
+  "invalid-operation-alias",
+);
+const specificCode: string | undefined = detailed.interpretationCode;
+void specificCode;
+const obsoleteOutcome: ValueOutcome = {
+  // @ts-expect-error old value verdict spelling is intentionally not a synonym
+  outcome: "mismatch",
+  problems: [],
+  problemsComplete: true,
+};
+void obsoleteOutcome;

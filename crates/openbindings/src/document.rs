@@ -92,6 +92,7 @@ pub struct ValidatedDocument {
     document: ParsedDocument,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum InterpretationError {
     Version(VersionRefusal),
     MalformedVersion,
@@ -208,7 +209,7 @@ impl ParsedDocument {
         }
         Ok(())
     }
-    fn names(&self) -> Result<&NameIndex, InterpretationError> {
+    pub(crate) fn names(&self) -> Result<&NameIndex, InterpretationError> {
         self.inner
             .names
             .get_or_init(|| NameIndex::build(self.value()))
@@ -294,7 +295,7 @@ impl ParsedDocument {
     }
 }
 #[derive(Default)]
-struct NameIndex {
+pub(crate) struct NameIndex {
     operations: BTreeMap<String, JsonValue>,
     names: HashMap<String, Vec<String>>,
     bindings: HashMap<String, Vec<String>>,
@@ -313,6 +314,12 @@ impl NameIndex {
                 let Some(key) = member.name.as_str() else {
                     continue;
                 };
+                if member.value.kind() != JsonKind::Object {
+                    return Err(InterpretationError::invalid(
+                        "invalid-operation-object",
+                        member.value,
+                    ));
+                }
                 index.operations.insert(key.into(), member.value.to_owned());
                 index.add_name(key, key);
                 if let Some(aliases) = member.value.get("aliases") {

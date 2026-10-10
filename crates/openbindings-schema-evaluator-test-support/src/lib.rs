@@ -44,8 +44,15 @@ pub struct Suite {
 pub fn suite() -> &'static Suite {
     static SUITE: OnceLock<Suite> = OnceLock::new();
     SUITE.get_or_init(|| {
-        serde_json::from_str(include_str!("../fixtures/cases.json"))
-            .expect("packaged fixture JSON is verified by build tests")
+        let mut suite: Suite = serde_json::from_str(include_str!("../fixtures/cases.json"))
+            .expect("packaged fixture JSON is verified by build tests");
+        // The frozen Go-derived inputs predate the specification-aligned Fails name.
+        for case in suite.groups.iter_mut().flat_map(|group| &mut group.cases) {
+            if case.expected == "mismatch" {
+                case.expected = "fails".into();
+            }
+        }
+        suite
     })
 }
 /// Exact optional case IDs. Unknown, blank and unused declarations fail the run.
@@ -96,7 +103,7 @@ impl Report {
             .filter(|o| {
                 matches!(
                     o.outcome,
-                    Some(ValueOutcome::Satisfies | ValueOutcome::Mismatch { .. })
+                    Some(ValueOutcome::Satisfies | ValueOutcome::Fails { .. })
                 )
             })
             .count()
@@ -184,7 +191,7 @@ pub fn run(evaluator: Arc<dyn SchemaEvaluator>, options: &Options) -> Report {
                 failures.push("evaluator changed an immutable input".into());
             }
             for problem in match &outcome {
-                ValueOutcome::Mismatch { problems, .. } => problems.as_slice(),
+                ValueOutcome::Fails { problems, .. } => problems.as_slice(),
                 _ => &[],
             } {
                 if let Some(location) = &problem.schema_location {
@@ -246,7 +253,7 @@ pub fn judge(
     let mut failures = Vec::new();
     let tag = match outcome {
         ValueOutcome::Satisfies => "satisfies",
-        ValueOutcome::Mismatch { .. } => "mismatch",
+        ValueOutcome::Fails { .. } => "fails",
         ValueOutcome::NoVerdict { .. } => "no-verdict",
     };
     let permitted_refusal = permitted_refusal
@@ -274,13 +281,13 @@ pub fn judge(
             failures.push("these finite fixtures do not authorize this refusal reason".into());
         }
     }
-    if let ValueOutcome::Mismatch {
+    if let ValueOutcome::Fails {
         problems,
         problems_complete,
     } = outcome
     {
         if problems.is_empty() {
-            failures.push("mismatch lacks an actual failing instance location".into());
+            failures.push("failure lacks an actual failing instance location".into());
         }
         if !problems_complete {
             failures

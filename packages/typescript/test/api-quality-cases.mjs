@@ -159,7 +159,7 @@ export async function apiQualityCases(sdk, http) {
     const input = ready(context, "run");
     const never = ready(context, "never");
     check(
-      never.validate(null).outcome === "mismatch",
+      never.validate(null).outcome === "fails",
       "false is present contract",
     );
     const nullDoc = parsed(
@@ -177,7 +177,7 @@ export async function apiQualityCases(sdk, http) {
     }
     check(input.validate(7).outcome === "satisfies", "ordinary validation");
     check(
-      input.validate("7").outcome === "mismatch",
+      input.validate("7").outcome === "fails",
       "ordinary string not JSON text",
     );
     check(
@@ -247,7 +247,7 @@ export async function apiQualityCases(sdk, http) {
     );
     check(large.text === "9007199254740993", "nested owner remains");
     check(
-      object.validate({ n: 9007199254740992 }).outcome === "mismatch",
+      object.validate({ n: 9007199254740992 }).outcome === "fails",
       "rounded ordinary differs",
     );
     check(
@@ -338,7 +338,7 @@ export async function apiQualityCases(sdk, http) {
       b = ready(second, "remote");
     check(
       a.validate(7).outcome === "satisfies" &&
-        b.validate(7).outcome === "mismatch",
+        b.validate(7).outcome === "fails",
       "same URI isolation",
     );
     const beforeBatch = sdk.liveStorageOwners();

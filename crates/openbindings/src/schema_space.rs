@@ -223,7 +223,7 @@ impl SchemaSpace {
         if !uri::valid(reference) {
             return Err(fail(
                 "invalid-reference",
-                format!("not a well-formed URI reference: {reference}"),
+                "reference is not a well-formed URI reference".into(),
             ));
         }
         if resource.anonymous && !uri::absolute(reference) {
@@ -291,14 +291,14 @@ impl SchemaSpace {
                     holder,
                     NoVerdictReason::ResourceUnavailable,
                     "resource-unavailable",
-                    format!("static preparation requires an unsupplied resource: {name}"),
+                    "static preparation requires a resource that was not supplied",
                 ));
             }
             [id] => &self.resources[*id],
             _ => {
                 return Err(fail(
                     "ambiguous-resource",
-                    format!("more than one resource carries the exact identifier {name}"),
+                    "more than one resource carries the referenced identifier".into(),
                 ));
             }
         };

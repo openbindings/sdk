@@ -68,7 +68,7 @@ function valueLines(result) {
   switch (result.outcome) {
     case "satisfies":
       return ["Example input { id: 7 } satisfies the input contract."];
-    case "mismatch":
+    case "fails":
       return [
         "Example input does not satisfy the input contract.",
         ...result.problems.map(

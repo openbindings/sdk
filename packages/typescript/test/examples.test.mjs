@@ -27,7 +27,7 @@ test("first-use caller keeps setup refusals separate and releases its owners", (
     firstUse({ id: 7 }, exampleDocument, "lookup").result.outcome,
     "satisfies",
   );
-  assert.equal(firstUse({ id: 0 }).result.outcome, "mismatch");
+  assert.equal(firstUse({ id: 0 }).result.outcome, "fails");
   const admission = firstUse({ id: NaN }).result;
   assert.equal(admission.outcome, "input-error");
   assert.equal(admission.error.instancePointer, "/id");
@@ -131,7 +131,7 @@ test("editor presentation quotes original pointers and reports diagnostic trunca
       status: "updated",
       operations: [{ key: "lookup" }],
       result: {
-        outcome: "mismatch",
+        outcome: "fails",
         problems: [
           {
             instancePointer: "/id",

@@ -68,10 +68,7 @@ fn satisfies(input: &PreparedContract, value: &JsonValue) {
     assert!(matches!(input.validate(value), ValueOutcome::Satisfies));
 }
 fn mismatch(input: &PreparedContract, value: &JsonValue) {
-    assert!(matches!(
-        input.validate(value),
-        ValueOutcome::Mismatch { .. }
-    ));
+    assert!(matches!(input.validate(value), ValueOutcome::Fails { .. }));
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

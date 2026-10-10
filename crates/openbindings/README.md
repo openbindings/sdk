@@ -43,7 +43,7 @@ or context drop. The default context cache has four entries, configurable throug
 `ValueContractOptions`; retained contracts survive eviction. Cancellation and
 transient failures are retryable. Handle every `ContractPreparation` branch: ready, no-contract, operation-missing,
 operation-ambiguous and no-verdict. Only ready contracts expose value validation;
-`ValueOutcome` is satisfies, mismatch or no-verdict. Preparation refusal is not
+`ValueOutcome` is satisfies, fails or no-verdict. Preparation refusal is not
 proof of semantic undefinedness. `openbindings-schema-evaluator-test-support`
 qualifies custom adapters; `openbindings-http-discovery` supplies optional HTTP policy.
 

@@ -38,7 +38,7 @@ fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {
     };
     assert!(!judge(case, &value, &refusal, true).is_empty());
     for path in ["/absent", "", "/a/absent"] {
-        let wrong = ValueOutcome::Mismatch {
+        let wrong = ValueOutcome::Fails {
             problems: vec![ValueProblem {
                 instance_pointer: path.into(),
                 schema_location: None,
@@ -49,7 +49,7 @@ fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {
         };
         assert!(!judge(case, &value, &wrong, false).is_empty());
     }
-    let valid = ValueOutcome::Mismatch {
+    let valid = ValueOutcome::Fails {
         problems: vec![ValueProblem {
             instance_pointer: "/a".into(),
             schema_location: None,
@@ -151,12 +151,12 @@ impl PreparedSchema for FaultyContract {
     fn validate(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
         let outcome = self.0.validate(value, control);
         match self.1 {
-            Fault::EmptyMismatch => ValueOutcome::Mismatch {
+            Fault::EmptyMismatch => ValueOutcome::Fails {
                 problems: vec![],
                 problems_complete: true,
             },
             Fault::UnknownSource => match outcome {
-                ValueOutcome::Mismatch {
+                ValueOutcome::Fails {
                     mut problems,
                     problems_complete,
                 } => {
@@ -168,7 +168,7 @@ impl PreparedSchema for FaultyContract {
                             pointer: String::new(),
                         });
                     }
-                    ValueOutcome::Mismatch {
+                    ValueOutcome::Fails {
                         problems,
                         problems_complete,
                     }

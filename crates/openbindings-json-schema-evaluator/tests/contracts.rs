@@ -74,7 +74,7 @@ fn numeric_arithmetic_admission_preserves_carriage_types_counts_and_bounds() {
     for token in ["7".repeat(4096), "1e10000".into(), "1e-10000".into()] {
         assert!(matches!(
             multiple.validate(&value(&token)),
-            ValueOutcome::Mismatch { .. }
+            ValueOutcome::Fails { .. }
         ));
     }
 }
@@ -95,7 +95,7 @@ fn deep_literal_and_opaque_data_do_not_inherit_compiler_tree_depth() {
                 "depth {depth}"
             );
             let result = prepared.validate(&value(&different));
-            let ValueOutcome::Mismatch {
+            let ValueOutcome::Fails {
                 problems,
                 problems_complete,
             } = result
@@ -198,7 +198,7 @@ fn retained_contracts_outlive_documents_and_distinguish_absent_sides() {
     ));
     assert!(matches!(
         prepared.validate(&value("9007199254740993")),
-        ValueOutcome::Mismatch { .. }
+        ValueOutcome::Fails { .. }
     ));
     let context = contracts("true");
     assert!(matches!(
@@ -222,7 +222,7 @@ fn review_s09_anonymous_scope_selects_outer_dynamic_anchor() {
         ValueOutcome::Satisfies
     ));
     let result = prepared.validate(&value(r#"["x"]"#));
-    let ValueOutcome::Mismatch { problems, .. } = result else {
+    let ValueOutcome::Fails { problems, .. } = result else {
         panic!("{result:?}");
     };
     assert_eq!(problems[0].instance_pointer, "/0");
@@ -268,7 +268,7 @@ fn review_s11_same_uri_resources_are_isolated_and_precancellation_does_not_poiso
     ));
     assert!(matches!(
         string.prepare("op", Side::Input).validate(&value("7")),
-        ValueOutcome::Mismatch { .. }
+        ValueOutcome::Fails { .. }
     ));
     std::thread::scope(|scope| {
         for _ in 0..8 {
@@ -359,7 +359,7 @@ fn review_f01_f06_conservative_preparation_is_not_semantic_undefinedness() {
     ));
     assert!(matches!(
         prepared.validate(&value(r#"{"x":7}"#)),
-        ValueOutcome::Mismatch { .. }
+        ValueOutcome::Fails { .. }
     ));
 }
 #[test]
@@ -379,7 +379,7 @@ fn review_f04_diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
     let prepared = context.prepare("op", Side::Input);
     for _ in 0..5 {
         let result = prepared.validate(&value("0"));
-        let ValueOutcome::Mismatch {
+        let ValueOutcome::Fails {
             problems,
             problems_complete,
         } = result
@@ -425,7 +425,7 @@ fn diagnostics_are_original_and_do_not_expose_instance_values() {
     assert!(!encoded.contains("789"));
     assert!(!encoded.contains("SYNTHETIC_SECRET_VALUE"));
     assert!(!encoded.contains("sdk-program"));
-    let ValueOutcome::Mismatch { problems, .. } = result else {
+    let ValueOutcome::Fails { problems, .. } = result else {
         panic!("{result:?}");
     };
     assert!(problems.iter().any(|p| p.instance_pointer == "/a~1b"));
@@ -476,7 +476,7 @@ fn diagnostic_allocation_admission_bounds_many_missing_names() {
         )
         .unwrap();
     let result = context.prepare("op", Side::Input).validate(&value("{}"));
-    let ValueOutcome::Mismatch {
+    let ValueOutcome::Fails {
         problems,
         problems_complete,
     } = result
@@ -542,7 +542,7 @@ fn upstream_test_dispositions_use_the_supported_exact_ecma_u_path() {
         );
         assert!(matches!(
             result,
-            ValueOutcome::Satisfies | ValueOutcome::Mismatch { .. }
+            ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
         ));
     }
     // These legacy non-Unicode class forms are invalid in the mandated u mode.
@@ -632,7 +632,7 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
     ));
     assert!(matches!(
         no.validate(&value("null")),
-        ValueOutcome::Mismatch { .. }
+        ValueOutcome::Fails { .. }
     ));
     for (text, pointer) in [
         (
@@ -650,15 +650,15 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
         ),
     ] {
         let d = ParsedDocument::parse(text).unwrap();
-        let c = d
-            .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
-            .unwrap();
-        let ContractPreparation::NoVerdict { detail } = c.prepare("op", Side::Input) else {
-            panic!()
-        };
-        assert_eq!(detail.reason, NoVerdictReason::Undefined);
-        assert_eq!(detail.code, "invalid-operation-structure");
-        assert_eq!(detail.location.unwrap().pointer, pointer);
+        let error =
+            match d.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default()) {
+                Err(error) => error,
+                Ok(_) => panic!("malformed namespace must fail before preparation"),
+            };
+        assert_eq!(
+            error.source_location().unwrap().pointer.as_deref(),
+            Some(pointer)
+        );
     }
 }
 #[test]

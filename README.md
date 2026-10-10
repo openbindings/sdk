@@ -45,7 +45,7 @@ Parsing preserves evidence; validation establishes conformance separately. For
 operation values, select `openbindings-json-schema-evaluator` explicitly and pass
 an immutable `ResourceSet`. `ContractPreparation` distinguishes ready, absent
 contract, missing or ambiguous operation, and preparation refusal. Only a ready
-contract validates values; `ValueOutcome` distinguishes satisfies, mismatch and
+contract validates values; `ValueOutcome` distinguishes satisfies, fails and
 no-verdict. Core never acquires references.
 The broader [six-workflow caller](examples/rust-consumer/src/main.rs) additionally
 covers HTTP discovery and evaluator qualification.

@@ -19,7 +19,7 @@ For a browser, serve the installed package directory over HTTP and open
 `examples/first-use.html`. Its import map resolves the package's JavaScript entry;
 the included Wasm asset loads relative to that module. Both entries run the same
 [small document-to-verdict example](examples/first-use.mjs) and print operation
-metadata plus a successful input, a mismatch and an ordinary-input admission error.
+metadata plus a successful input, a failure and an ordinary-input admission error.
 Existing registry releases belong to the legacy API; they do not install this
 candidate.
 
@@ -82,7 +82,7 @@ Handle setup separately from a value's verdict:
 | Prepare     | `operation-missing`, `operation-ambiguous`, `no-contract` | Correct operation selection or explicitly decide how an absent contract fits the application.             |
 | Prepare     | `no-verdict`                                              | Inspect `detail`; for example, supply a missing schema resource before retrying.                          |
 | Validate    | `satisfies`                                               | The value satisfies this prepared contract.                                                               |
-| Validate    | `mismatch`                                                | Show the bounded problems and their original schema/instance locations.                                   |
+| Validate    | `fails`                                                | Show the bounded problems and their original schema/instance locations.                                   |
 | Validate    | `input-error`                                             | Correct unsupported ordinary JavaScript input; it was not evaluated.                                      |
 | Validate    | `no-verdict`                                              | Report that evaluation could not establish a verdict; inspect the reason and retry only when appropriate. |
 
@@ -245,7 +245,7 @@ if (setup.status === 'ready') {
   using input = setup.contract;
   const ordinary = input.validate(7); // ValueCheck: semantic outcome or input-error
   using value = ExactJson.from(7);
-  const exact = input.validate(value); // ValueOutcome: satisfies | mismatch | no-verdict
+  const exact = input.validate(value); // ValueOutcome: satisfies | fails | no-verdict
 }
 // Other setup states: no-contract | operation-missing | operation-ambiguous | no-verdict
 ```
@@ -287,7 +287,7 @@ Dispose each set when no longer needed. Resources are explicit; core never
 retrieves HTTP or files. `evaluatorLimits()` describes defaults. No-verdict reasons
 distinguish unsupported capability, resource absence, conservative preparation,
 limits, cancellation, evaluator failure and established undefinedness.
-Mismatch problems identify original schema/instance locations and omit instance
+Failure problems identify original schema/instance locations and omit instance
 values. `problemsComplete` describes the selected diagnostic pass, not every
 redundant possible failure. Truncation is explicit.
 
@@ -397,3 +397,27 @@ The build checks that generated Wasm matches current Rust source and records its
 source/artifact identities. Consumers of a packed package need only its included
 JavaScript, declarations and Wasm asset. The accompanying migration delivery records final source-bound qualification.
 Dependency notices and compiler attribution are included; this candidate is not published.
+
+### Interpretation errors and diagnostic text
+
+`document.contracts()` and `document.resolveOperation()` check the complete
+operation namespace, including unrelated malformed operations or aliases. They
+throw `SdkError` with broad `code: "interpretation"`, an optional specific
+`interpretationCode` (such as `"invalid-operation-alias"`), and an original source
+`location` when available. Other error categories leave `interpretationCode`
+undefined. Unrelated metadata may remain nonconformant during draft evaluation;
+applications choose when to require whole-document conformance.
+
+The established value-failure tag is `"fails"`. Default messages omit reference
+identifiers, rejected instance data and user-schema enum/member strings. Type
+guidance uses fixed JSON type names. Structured locations and explicit reference
+spellings retain source information and need an application disclosure policy
+before logging. Messages are advisory; use tagged outcomes and codes for control
+flow.
+
+`NoVerdictReason` lists the reasons emitted by this version of the TypeScript
+facade and its bundled Wasm engine, which are distributed together. It is not
+widened to arbitrary strings. Rust's cause enums are non-exhaustive so adding a
+cause does not invalidate external wildcard matches. During pre-1.0 development,
+a new minor release may change source compatibility; review the changelog before
+upgrading. Neither language adds an `unknown` semantic outcome.

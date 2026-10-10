@@ -77,8 +77,8 @@ def judge_value(expected,actual,features,profile):
     if result=='no-verdict':
         reason=actual.get('detail',{}).get('reason')
         return reason in ('conservative-preparation','resource-unavailable','unsupported-capability') and (want in ('undefined','external') or form.get('orNoVerdict',False) or unsupported)
-    if result=='mismatch' and (not actual.get('problems') or actual.get('problems_complete',actual.get('problemsComplete')) is not True):return False
-    return result=={'satisfies':'satisfies','fails':'mismatch'}.get(want)
+    if result=='fails' and (not actual.get('problems') or actual.get('problems_complete',actual.get('problemsComplete')) is not True):return False
+    return result=={'satisfies':'satisfies','fails':'fails'}.get(want)
 
 def judge(case,actual,profile=PROFILE):
     if actual.get('id')!=case['id'] or actual.get('executed') is not True: return False
@@ -116,7 +116,7 @@ def controls():
             'reject_unexpected':bool(reconcile(cases,valid+[{'id':'fabricated','executed':True}])),
             'reject_unexecuted':bool(reconcile(cases,[dict(r,executed=False) if i==0 else r for i,r in enumerate(valid)])),
             'exact_integer':exact_text(read_text('{"n":9007199254740993}'))=='{"n":9007199254740993}',
-            'reject_wrong_verdict':not judge_value('satisfies',{'outcome':'mismatch'},[],PROFILE),
+            'reject_wrong_verdict':not judge_value('satisfies',{'outcome':'fails'},[],PROFILE),
             'reject_no_contract_for_undefined':not judge_value('undefined',{'outcome':'no-contract'},[],PROFILE),
             'reject_no_verdict_for_absence':not judge_value('no-contract',{'outcome':'no-verdict','detail':{'reason':'resource-unavailable'}},[],PROFILE),
             'reject_unsupported_misuse':not judge_value('satisfies',{'outcome':'no-verdict'},['exact-numbers'],PROFILE)}

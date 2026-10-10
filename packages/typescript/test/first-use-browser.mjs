@@ -40,7 +40,7 @@ export async function firstUsePage(browser, url, configure = async () => {}) {
     assert.deepEqual(errors, []);
     assert.equal(result.accepted.result.outcome, "satisfies");
     assert.equal(result.accepted.operations[0].key, "lookup");
-    assert.equal(result.mismatch.result.outcome, "mismatch");
+    assert.equal(result.fails.result.outcome, "fails");
     assert.equal(result.invalidInput.result.outcome, "input-error");
     return { firstUse: result, errors: [...errors] };
   } finally {
