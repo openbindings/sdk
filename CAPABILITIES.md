@@ -62,19 +62,28 @@ limits from wrong verdicts. The implementation does not promise a complete
 irrelevance decision procedure for `anyOf(true, problematic-schema)`.
 
 The default evaluator first tries complete-resource preparation. For missing
-static-reference carriers in a qualified positive fragment, it prepares lower/upper
+static-reference carriers in a qualified bounds fragment, it prepares lower/upper
 validity bounds. An absent optional property can satisfy, a known failed conjunct
 can fail despite an active unknown, and a known passing `anyOf` branch can satisfy.
 Dependent values return `ResourceUnavailable` at validation. Even a qualified bare
 missing `$ref` prepares ready; ready does not promise decidability. Hole influence
-through `not`, `oneOf`, effective conditionals or `contains` refuses; closed
+through `not`, effective conditionals or `contains` refuses; closed
 subgraphs remain supported. Evaluated `unevaluated*` and dynamic keywords reject
 partial bounds. Known invalid targets, dialects, patterns and cycles remain refusals.
+
+Hole-dependent `oneOf` uses finite lower/upper polarity definitions. It can decide
+zero possible winners, one certain sole winner, or multiple certain winners without
+supplying a missing resource. Correlated unknown branches can remain no-verdict.
+Failure summaries identify the original oneOf and make no branch-count claim.
 
 Partial admission adds 200,000 dependency edges, 100,000 missing edges and a
 64 MiB combined text allowance for both programs' serialized and owned decoded
 string text, URIs, entries, shared mapping and evidence. A separate 64 MiB
-resolver/full-pointer scratch guard applies. These are
+resolver/full-pointer scratch guard applies. Dependent-oneOf plans additionally
+admit 100,000 emitted schema-node and 200,000 reference/applicator-edge occurrences
+across both closed programs, including actual duplication and generated glue.
+These prospective limits are unmeasured. Memoized definitions do not cache runtime
+results; nested/recursive bounds can revisit predicates. These are
 not compiled-memory or RSS bounds. Upper/lower share one verdict work/regex budget;
 failure diagnostics retain a separate bounded pass. The
 [proof and adapter contract](docs/partial-resource-bounds.md) specifies exact

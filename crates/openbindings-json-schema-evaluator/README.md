@@ -79,8 +79,11 @@ A qualified bare missing `$ref` now prepares `Ready` and refuses every admitted
 value at validation. Ready promises a validator, not a decidable instance.
 
 Hole influence is allowed through static `$ref`, `allOf`, `anyOf`, object property
-applicators, `dependentSchemas`, `prefixItems` and `items`. Hole-dependent `not`,
-`oneOf`, conditionals and `contains` refuse; closed subgraphs using them remain
+applicators, `dependentSchemas`, `prefixItems` and `items`. Dependent `oneOf` uses
+memoized lower/upper variants and can decide zero possible, one certain sole, or
+multiple certain winners. It does not infer correlations between unknown branches.
+Hole-dependent `not`,
+conditionals and `contains` refuse; closed subgraphs using them remain
 intact. Evaluated `unevaluated*` and dynamic keywords reject partial bounds.
 Known malformed schemas, references, dialects and potential in-place cycles keep
 refusing. No I/O occurs. `ParsedDocument::references()` exposes document-wide
@@ -92,7 +95,14 @@ schema. Rust adapter authors may opt into `SchemaRequest::evaluation_bounds` and
 consume `(lower, upper, unavailable)` with `EvaluationBounds::into_parts`; custom
 evaluator dispatch and strict `evaluation_program()` are unchanged. Upper/lower
 share one verdict work/regex allowance. Only established upper failure produces
-known-source diagnostics, in the existing separate diagnostic scope. Partial plans
+original-source diagnostics, in the existing separate diagnostic scope. A complete
+upper oneOf failure produces a cardinality-neutral original `/oneOf` summary.
+Only outer `iter_errors` boundaries are used; generated contexts are not flattened,
+and unmapped errors are omitted with incomplete diagnostics. Adapters must preserve
+these boundaries; a structured backend output API can omit the unary summary event.
+Dependent-oneOf plans additionally cap both copies at 100,000 emitted schema nodes
+and 200,000 reference/applicator edges. Definition sharing is not runtime caching,
+and linear syntax makes no speed/compiled-memory promise. Partial plans
 admit 64 MiB combined retained text and explicit graph/scratch limits. See the
 [complete proof, API and admission contract](../../docs/partial-resource-bounds.md).
 There is no annotation-output or arbitrary-future-resource-readiness guarantee.

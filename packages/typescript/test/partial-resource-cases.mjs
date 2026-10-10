@@ -162,8 +162,9 @@ export function partialResourceCases(sdk) {
   run(
     { oneOf: [{ properties: { a: hole } }, { properties: { b: hole } }] },
     { a: 1, b: 2 },
-    "refuse",
+    "no-verdict",
   );
+  run({ oneOf: [true, hole] }, null, "no-verdict");
   run(
     { anyOf: [true, hole], unevaluatedProperties: false },
     { x: 1 },
@@ -182,7 +183,7 @@ export function partialResourceCases(sdk) {
   );
   for (const schema of [
     { not: hole },
-    { oneOf: [true, hole] },
+    { if: hole, then: false, else: true },
     { anyOf: [true, hole], unevaluatedItems: false },
   ]) {
     const parsed = sdk.parseDocument(

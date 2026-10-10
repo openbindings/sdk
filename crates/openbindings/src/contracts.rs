@@ -298,8 +298,10 @@ impl SchemaRequest {
 ///
 /// Hole influence is permitted through static `$ref`, `allOf`, `anyOf`,
 /// `properties`, `patternProperties`, `additionalProperties`, `propertyNames`,
-/// `dependentSchemas`, `prefixItems` and `items`. Closed `not`, `oneOf`, effective
-/// conditionals and `contains` are retained; holes beneath them refuse.
+/// `dependentSchemas`, `prefixItems` and `items`. Hole-dependent `oneOf` uses
+/// memoized dual-polarity bounds, not uniform false/true substitution. Closed
+/// `not`, effective conditionals and `contains` remain supported; holes beneath
+/// those operators refuse. Correlations between unknown predicates are not proved.
 /// Evaluated `unevaluated*`, `$dynamicRef` and `$dynamicAnchor` refuse this helper.
 /// Ignored/opaque positions remain ignored. Potential in-place cycles refuse;
 /// advancing recursion is bounded by the admitted finite instance.
@@ -308,8 +310,11 @@ impl SchemaRequest {
 /// holes), 100,000 holes, and 64 MiB combined retained UTF-8 text. Text includes
 /// both projected JSON resources' serialized text and separately owned decoded
 /// strings, their URI/entry strings, shared original maps once, and evidence
-/// strings. This is not a heap, allocator-capacity or
-/// compiled-memory bound. Reference-resolution scratch inputs and full original
+/// strings, including private exact/prefix/barrier mapping entries. Dependent
+/// oneOf additionally admits 100,000 emitted schema-node occurrences and 200,000
+/// reference/applicator-edge occurrences across both independently closed copies.
+/// Wrappers, ordinary bodies, constants and branch refs count. These are unmeasured
+/// admission choices, not heap, allocator-capacity, compiled-memory or runtime bounds. Reference-resolution scratch inputs and full original
 /// pointers also have a separate 64 MiB pre-copy guard. No I/O occurs. Later
 /// resource replacements require a new context; these bounds never change.
 #[derive(Debug)]
@@ -325,7 +330,13 @@ impl EvaluationBounds {
         &self.lower
     }
     /// Borrow the closed upper projection. Established failure proves failure
-    /// of the original, with diagnostics only from mapped known constraints.
+    /// of the original, with diagnostics only from mapped original constraints.
+    /// A mapped upper unary oneOf summary proves that authored keyword fails,
+    /// without reporting branch counts. Preserve outer error boundaries; never
+    /// flatten generated contexts or diagnose the lower/internal predicates.
+    /// Omit unmapped explanations and mark diagnostics incomplete. The default
+    /// backend iter_errors preserves the unary summary event; structured evaluate
+    /// APIs may omit it, and a source map cannot invent an omitted boundary.
     pub fn upper_program(&self) -> &EvaluationProgram {
         &self.upper
     }
@@ -358,7 +369,15 @@ pub struct EvaluationProgram {
     pub entry_uri: String,
     /// Owned projected schema resources sufficient for this program; an evaluator may release them after compilation retains its required state.
     pub resources: Vec<SchemaResource>,
-    pub(crate) locations: Arc<BTreeMap<String, SchemaLocation>>,
+    pub(crate) locations: Arc<BTreeMap<String, ProgramOrigin>>,
+}
+// Private provenance boundaries. An Exact ancestor is terminal: descendants
+// cannot inherit an invented original suffix. Synthetic nodes stop lookup too.
+#[derive(Clone, Debug)]
+pub(crate) enum ProgramOrigin {
+    Prefix(SchemaLocation),
+    Exact(SchemaLocation),
+    Synthetic,
 }
 /// Original schema location or URI-decoding scratch exceeds the caller's UTF-8
 /// byte allowance. No partial location is returned.
@@ -371,7 +390,10 @@ impl fmt::Display for LocationBudgetExceeded {
 }
 impl std::error::Error for LocationBudgetExceeded {}
 impl EvaluationProgram {
-    /// Map a generated absolute keyword URI back to original source, or return `None` if no mapping exists. Never invent coordinates for an unmapped diagnostic.
+    /// Map a generated absolute keyword URI to original source, including a proved
+    /// upper oneOf summary. Exact summary boundaries do not map their descendants.
+    /// Return `None` for synthetic/unmapped origins. This establishes no verdict:
+    /// only diagnose completed upper failure, preserving outer error boundaries.
     pub fn original_location(&self, generated_uri: &str) -> Option<SchemaLocation> {
         self.original_location_bounded(generated_uri, usize::MAX)
             .ok()
@@ -383,7 +405,8 @@ impl EvaluationProgram {
     /// separate logical UTF-8 allowance of `max_bytes`. Its encoded input length
     /// is a conservative preallocation bound; allocator capacity/reallocation is
     /// not measured. Percent escapes in the URI base are preserved verbatim.
-    /// `Ok(None)` means no mapping or an invalid percent-encoded fragment;
+    /// `Ok(None)` means a synthetic/unmapped origin, a descendant blocked by an
+    /// exact origin, or an invalid percent-encoded fragment;
     /// [`LocationBudgetExceeded`] means either allowance was insufficient.
     /// This helper establishes neither a verdict nor a total heap bound.
     ///
@@ -392,7 +415,7 @@ impl EvaluationProgram {
     /// # fn map(program: &EvaluationProgram, uri: &str) {
     /// match program.original_location_bounded(uri, 1024) {
     ///     Ok(Some(location)) => assert!(location.pointer.len() <= 1024),
-    ///     Ok(None) => {} // Preserve an absent location; never guess coordinates.
+    ///     Ok(None) => {} // Omit unproved explanations; mark diagnostics incomplete.
     ///     Err(LocationBudgetExceeded) => {} // Mark diagnostics incomplete.
     /// }
     /// # }
@@ -422,7 +445,12 @@ impl EvaluationProgram {
         let generated_uri = normalized.as_ref();
         let mut end = generated_uri.len();
         loop {
-            if let Some(location) = self.locations.get(&generated_uri[..end]) {
+            if let Some(origin) = self.locations.get(&generated_uri[..end]) {
+                let location = match origin {
+                    ProgramOrigin::Prefix(location) => location,
+                    ProgramOrigin::Exact(location) if end == generated_uri.len() => location,
+                    ProgramOrigin::Exact(_) | ProgramOrigin::Synthetic => return Ok(None),
+                };
                 let bytes = location
                     .resource
                     .as_ref()
@@ -817,7 +845,10 @@ mod location_budget_tests {
         let program = EvaluationProgram {
             entry_uri: uri.into(),
             resources: vec![],
-            locations: Arc::new(BTreeMap::from([(uri.into(), location.clone())])),
+            locations: Arc::new(BTreeMap::from([(
+                uri.into(),
+                ProgramOrigin::Prefix(location.clone()),
+            )])),
         };
         let generated = uri.to_owned() + "/type";
         let required = location.resource.as_ref().unwrap().len() + location.pointer.len() + 5;
@@ -876,7 +907,10 @@ mod location_budget_tests {
             let program = EvaluationProgram {
                 entry_uri: base.into(),
                 resources: vec![],
-                locations: Arc::new(BTreeMap::from([(base.into(), at.clone())])),
+                locations: Arc::new(BTreeMap::from([(
+                    base.into(),
+                    ProgramOrigin::Prefix(at.clone()),
+                )])),
             };
             assert_eq!(program.original_location(base), Some(at.clone()));
             assert_eq!(
@@ -897,7 +931,7 @@ mod location_budget_tests {
             resources: vec![],
             locations: Arc::new(BTreeMap::from([(
                 "https://example.test/%61#/type".into(),
-                at.clone(),
+                ProgramOrigin::Prefix(at.clone()),
             )])),
         };
         assert_eq!(

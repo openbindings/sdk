@@ -35,7 +35,8 @@ When optional bounds planning declines, the default evaluator restores its origi
 strict located ResourceUnavailable detail for exactly these reason/code pairs:
 ConservativePreparation with `partial-nonpositive-influence` or
 `partial-annotation-or-dynamic`, and LimitExceeded with `partial-program-byte-limit`,
-`partial-scratch-limit`, `schema-edge-limit` or `schema-hole-limit`. Known-closure
+`partial-scratch-limit`, `schema-edge-limit`, `schema-hole-limit`,
+`partial-generated-node-limit` or `partial-generated-edge-limit`. Known-closure
 defects, cancellation, shared schema-node/depth limits and compile failures preserve
 their actual causes. This is a finite fallback policy, not a broad error-category catch.
 The explicitly requested `evaluation_bounds()` utility retains its direct planner
@@ -63,8 +64,10 @@ promise that every future resource set is preparable. A refused completion must
 not silently invert a previously proved verdict. Old owners remain bound to their
 original resource snapshot, including its holes. The SDK performs no I/O.
 
-Only missing static-reference edges are replaced, using private constant targets:
-false in lower, true in upper. The original missing URI is never registered.
+Missing static-reference edges use private constant targets: false for a lower
+variant, true for an upper variant. Positive-only programs each need one polarity;
+dependent-oneOf programs may use both internally. The original missing URI is never
+registered.
 The existing resolver exposes missing carrier identities to the planner without
 copying them. Any occupied canonical private namespace segment is retained as an
 integer, and the planner chooses a free namespace before projection. All generated
@@ -87,8 +90,9 @@ outcomes. Correlations between invocations only reduce the admissible completion
 A finite typed dependency graph includes every potentially evaluated child and
 static reference, including advancing child edges. A reverse queue marks all nodes
 that can reach a hole. A nonpositive dependency is rejected when its target is
-marked. Shared aliases and advancing recursion participate in this same fixed
-point; paths are not enumerated. The separate in-place cycle check remains active.
+marked, except for the separately supported dual-polarity `oneOf` transform below.
+Shared aliases and advancing recursion participate in this same fixed point;
+paths are not enumerated. The separate in-place cycle check remains active.
 `$defs` containment and opaque annotations are not evaluation edges. Ignored
 `then`/`else` without `if`, legacy keywords and `contentSchema` remain ignored.
 
@@ -105,7 +109,7 @@ point; paths are not enumerated. The separate in-place cycle check remains activ
 | `dependentSchemas` | Trigger selection depends only on instance member presence; selected schema predicates conjoin. |
 | `prefixItems` | Original prefix positions select fixed indices. Selected predicates conjoin. |
 | `items` | In an otherwise passing prefix, indices start after the original prefix length. Prefix failure already fails the conjunction. Preserving every prefix slot gives monotone fixed selection. |
-| Closed `not`, `oneOf`, conditionals, `contains` | A hole-free subgraph is a fixed predicate and is kept intact. A hole influencing any of these contexts is refused, including a shared target reached by an indirect path. |
+| Closed `not`, conditionals, `contains` | A hole-free subgraph is a fixed predicate and is kept intact. A hole influencing any of these contexts is refused, including a shared target reached by an indirect path. |
 
 Known evaluated `unevaluatedProperties`, `unevaluatedItems`, `$dynamicRef` and
 `$dynamicAnchor` reject this helper globally. Unknown annotations could otherwise
@@ -119,12 +123,49 @@ Finite completion tests corroborate this argument; endpoint agreement without
 eligibility is not a proof (notably for mixed negation, oneOf, contains counts or
 unevaluated annotations).
 
+## Dependent oneOf
+
+For each child, let `Li <= Ai <= Ui` bound its validity at the current instance.
+Let `t` count certainly true children (`Li`) and `p` count potentially true children
+(`Ui`). The actual matching count lies between `t` and `p`. The lower oneOf bound
+is `t >= 1 && p == 1`; the upper bound is `p >= 1 && t <= 1`. We emit:
+
+- Lower: `anyOf(Li) AND oneOf(Ui)`.
+- Upper: `anyOf(Ui) AND oneOf([L0, ..., Ln, not(anyOf(Li))])`.
+
+The added upper branch is true exactly when no lower child is true, so its oneOf
+admits zero or one certain child. This proves the same bound inequality; oneOf is
+not monotone. Uniform endpoint agreement is insufficient: `oneOf(U,V)` may pass a
+mixed completion even though both uniform endpoints fail. Correlations are outside
+this interval abstraction: `oneOf(U,U)` can remain no-verdict even when predicate
+equality would prove failure.
+
+Known static identities resolve before polarity selection. Required definitions
+are memoized by original node and lower/upper polarity; closed nodes use one exact
+variant. A dependent oneOf keeps ordinary sibling assertions in a separate body,
+then conjoins the corresponding oneOf bound. Both closed registries contain the
+same required definition union and distinct true/false targets, with separate
+parsed arenas and different root references. No reference subtree is textually
+inlined. Both copies are counted. The strict and positive-only encodings are kept.
+Original in-place cycles still refuse. Generated helper references are also checked
+for in-place cycles; inline glue is an acyclic tree. Polarity switches follow
+original child edges, and advancing recursion retains finite-instance progress.
+
+Memoization shares schema definitions, not evaluation results. Nested/recursive
+oneOf can revisit the same lower/upper predicates, and there is no semantic result
+cache. Linear emitted syntax does not establish linear runtime, low compiled
+memory or acceptable latency. All visits use the same bounded verdict work/regex
+allowance; exhaustion returns no verdict. Capacity and cost need separate measurement.
+
 ## Passes and diagnostics
 
 The evaluator compiles upper first, checks cancellation, then compiles lower.
 Failure of either compilation produces no ready owner. Compilation uses the same
 exact literals/numbers, pattern limits and closed no-retrieval registry as the
-complete-resource path. Projection resource arenas are released after compilation.
+complete-resource path. Compilation clears the direct projection-resource owners.
+Exact `const` and `enum` constraints can retain subviews of those arenas, keeping
+the full projected text alive until the compiled owners are released, even with
+schema details disabled. Retained-memory measurements must include that lifetime.
 Backend compilation has cooperative checks at its existing boundaries; this adds
 no claim of preemptive cancellation inside a backend compile.
 
@@ -136,8 +177,23 @@ or unsupported pass never establishes a verdict. With no holes both programs are
 exact; disagreement is an evaluator failure, never fabricated missing evidence.
 
 After established upper failure, one separately bounded diagnostic pass uses only
-upper. Synthetic lower failures never escape. Known diagnostics map to original
-constraints, with optional details read only from original snapshots. Completeness
+upper. Synthetic lower/internal failures never escape. A unary
+`oneOf: [{"$ref": "private upper-oneOf predicate"}]` surrounds only the complete
+upper predicate of an authored oneOf, separate from ordinary sibling assertions.
+Its outer failure maps exactly to the original `/oneOf` and uses a fixed,
+cardinality-neutral message. It never claims which or how many authored branches
+matched. An unrelated failing sibling cannot create a oneOf summary.
+
+Private prefix, exact and synthetic-barrier entries serve the existing bounded
+original-location lookup. Descendants of an exact summary stop lookup instead of
+inheriting an invented original path. Offered errors without a proved origin are
+omitted and mark diagnostics incomplete. The default evaluator preserves outer
+`iter_errors` boundaries and does not flatten generated contexts. Adapters must
+preserve those boundaries too: a referenced target URI alone says nothing about
+its dynamic occurrence in an internal circuit. Some backend structured `evaluate`
+APIs drop unary wrapper events; a location map cannot reconstruct an omitted event.
+Known diagnostics map to original constraints, with optional details read only
+from original snapshots. Completeness
 means the selected diagnostic pass completed; it does not promise diagnostics
 about absent content. Zero diagnostic bytes preserves failure with empty,
 incomplete diagnostics. Diagnostic exhaustion never erases established failure.
@@ -149,6 +205,19 @@ The helper admits depth 256, 100,000 reached schema nodes, 200,000 dependency ed
 before graph append. Child iterators are borrowed; wide lists are not collected
 before edge admission. Influence marking visits each admitted vertex/edge a bounded
 number of times and uses no per-instance guard graph.
+
+Plans with dependent oneOf additionally admit **100,000 emitted schema-node
+occurrences and 200,000 reference/applicator-edge occurrences across both closed
+programs**. Each emitted schema object/boolean counts as a node, including the
+container, definitions, ordinary bodies, constants, inline glue, summaries and
+reference wrappers. Each `$ref` and each applicator-to-child selection counts as
+an edge: an applicator child `{"$ref": ...}` contributes one node and two edges.
+`$defs` containment is not an evaluation edge; opaque literal/annotation JSON is
+not generated schema. These units differ from source nodes and parsed JSON nodes.
+Admission uses checked arithmetic before occurrence/graph append and before any
+projected text or mapping-string copy. The same traversal counts and writes syntax;
+all duplicated occurrences across the two programs count. The extra caps apply
+only to this new fragment and are prospective, unmeasured admission choices.
 
 The combined plan admits **64 MiB logical retained UTF-8 text**: both projected JSON
 resources including generated wrappers and separately owned decoded strings,

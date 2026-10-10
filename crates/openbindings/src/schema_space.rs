@@ -619,7 +619,10 @@ impl SchemaSpace {
                     "schema projection exceeds 64 MiB",
                 ));
             }
-            locations.insert(address(id), self.location(id));
+            locations.insert(
+                address(id),
+                crate::contracts::ProgramOrigin::Prefix(self.location(id)),
+            );
             definitions
                 .entry(node.resource)
                 .or_default()

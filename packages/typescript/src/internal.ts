@@ -1376,7 +1376,7 @@ export class ValueContracts extends Managed {
   /** @internal */ constructor(raw: wasm.WasmContracts) {
     super(raw);
   }
-  /** Select the named operation/alias and requested side, then return the complete ContractPreparation partition. Ready transfers a new disposable contract independent of this context/cache and does not promise every value is decidable. The default evaluator can prepare qualified positive missing-resource contracts, including a bare missing $ref. Validation establishes a verdict when independent of missing content, or returns resource-unavailable when dependent. Known errors and unsupported partial contexts still refuse preparation. Supply resources in a new context to recover; existing prepared owners retain their original snapshot. Deterministic preparations can be reused; cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
+  /** Select the named operation/alias and requested side, then return the complete ContractPreparation partition. Ready transfers a new disposable contract independent of this context/cache and does not promise every value is decidable. The default evaluator can prepare qualified missing-resource contracts, including a bare missing $ref and dual-polarity oneOf bounds. Validation establishes a verdict when independent of missing content, or returns resource-unavailable when dependent. Known errors and unsupported partial contexts still refuse preparation. Supply resources in a new context to recover; existing prepared owners retain their original snapshot. Deterministic preparations can be reused; cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
   prepare(
     operation: string,
     side: Side,

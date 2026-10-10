@@ -14,6 +14,15 @@
 
 
 ### Added
+- Partial-resource bounds now support hole-dependent `oneOf` through finite
+  dual-polarity projections, with original-location, cardinality-neutral oneOf
+  failure summaries. Correlations between unknown predicates remain undecided.
+  This intentionally changes qualified oneOf setup refusal to ready; dependent
+  values still return ResourceUnavailable. Other influence exclusions remain.
+  Two new generated-plan admission limits count duplicated nodes/edges across
+  both closed programs and recover the original strict missing-resource evidence
+  when the default fallback declines. Direct adapter calls retain planner codes.
+
 
 - Rust adapter utility `SchemaRequest::evaluation_bounds` and opaque owned
   `EvaluationBounds`, with borrowed lower/upper/evidence access and consuming
@@ -68,7 +77,7 @@
   and known-source upper diagnostics. Qualified partial contracts, including a bare
   missing `$ref`, now prepare ready; dependent values return `ResourceUnavailable`
   at validation. This is an intentional phase change and decision-coverage expansion.
-  Hole-dependent nonpositive applicators and evaluated annotation/dynamic hazards
+  Other hole-dependent nonpositive applicators and evaluated annotation/dynamic hazards
   refuse. Partial text admission counts serialized resource text and separately
   owned decoded strings, including escaped member names and nested opaque values,
   before constructing either projection. Complete-resource preparation retains its

@@ -1,0 +1,354 @@
+{
+  "authority": "Independent owner analytic controls registered before oneOf implementation, corroborating frozen Astra/Sol proof; not fresh challenge roots.",
+  "cases": [
+    {
+      "id": "endpoint-agreement-is-not-proof",
+      "schema": {
+        "oneOf": [
+          {
+            "$ref": "https://bounds-control.invalid/U"
+          },
+          {
+            "$ref": "https://bounds-control.invalid/V"
+          }
+        ]
+      },
+      "valueText": "null",
+      "expected": "no-verdict",
+      "reason": "Mixed admissible completions can pass although both uniform endpoint substitutions fail."
+    },
+    {
+      "id": "known-winner-plus-unknown",
+      "schema": {
+        "oneOf": [
+          true,
+          {
+            "$ref": "https://bounds-control.invalid/U"
+          }
+        ]
+      },
+      "valueText": "null",
+      "expected": "no-verdict",
+      "reason": "Exactly-one depends on whether U also passes."
+    },
+    {
+      "id": "two-certain-winners",
+      "schema": {
+        "oneOf": [
+          true,
+          true,
+          {
+            "$ref": "https://bounds-control.invalid/U"
+          }
+        ]
+      },
+      "valueText": "null",
+      "expected": "fails",
+      "reason": "At least two branches pass for every completion.",
+      "summary": "/operations/probe/input/oneOf"
+    },
+    {
+      "id": "sole-unknown",
+      "schema": {
+        "oneOf": [
+          {
+            "$ref": "https://bounds-control.invalid/U"
+          }
+        ]
+      },
+      "valueText": "null",
+      "expected": "no-verdict",
+      "reason": "Unary oneOf has exactly the unknown predicate validity."
+    },
+    {
+      "id": "correlated-hole-conservative",
+      "schema": {
+        "oneOf": [
+          {
+            "$ref": "https://bounds-control.invalid/U"
+          },
+          {
+            "$ref": "https://bounds-control.invalid/U"
+          }
+        ]
+      },
+      "valueText": "null",
+      "expected": "no-verdict",
+      "reason": "Selected interval abstraction deliberately does not prove equality correlations; actual always-false is not promoted from an interval with uncertainty.",
+      "profileLimitation": true
+    },
+    {
+      "id": "optional-hole-one-winner",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "profile": {
+                "$ref": "https://bounds-control.invalid/U"
+              }
+            }
+          },
+          {
+            "type": "string"
+          }
+        ]
+      },
+      "valueText": "{}",
+      "expected": "satisfies",
+      "reason": "Object branch certainly passes with profile absent; string branch cannot pass."
+    },
+    {
+      "id": "optional-hole-active",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "profile": {
+                "$ref": "https://bounds-control.invalid/U"
+              }
+            }
+          },
+          {
+            "type": "string"
+          }
+        ]
+      },
+      "valueText": "{\"profile\":1}",
+      "expected": "no-verdict",
+      "reason": "Object branch depends on U, string branch fails."
+    },
+    {
+      "id": "zero-possible-winners",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "profile": {
+                "$ref": "https://bounds-control.invalid/U"
+              }
+            }
+          },
+          {
+            "type": "string"
+          }
+        ]
+      },
+      "valueText": "false",
+      "expected": "fails",
+      "reason": "Neither object nor string branch can pass.",
+      "summary": "/operations/probe/input/oneOf"
+    },
+    {
+      "id": "ordinary-sibling-only",
+      "schema": {
+        "type": "integer",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "profile": {
+                "$ref": "https://bounds-control.invalid/U"
+              }
+            }
+          },
+          {
+            "type": "string"
+          }
+        ]
+      },
+      "valueText": "\"word\"",
+      "expected": "fails",
+      "reason": "Exactly one string branch passes, but sibling type integer fails.",
+      "requiredCode": "type",
+      "forbiddenCode": "oneOf"
+    },
+    {
+      "id": "nested-oneof",
+      "schema": {
+        "oneOf": [
+          {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "profile": {
+                    "$ref": "https://bounds-control.invalid/U"
+                  }
+                }
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          false
+        ]
+      },
+      "valueText": "{}",
+      "expected": "satisfies",
+      "reason": "Inner oneOf has one certain winner; outer likewise."
+    },
+    {
+      "id": "nested-two-certain",
+      "schema": {
+        "oneOf": [
+          {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "profile": {
+                    "$ref": "https://bounds-control.invalid/U"
+                  }
+                }
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          true,
+          {
+            "$ref": "https://bounds-control.invalid/U"
+          }
+        ]
+      },
+      "valueText": "{}",
+      "expected": "fails",
+      "reason": "Inner oneOf and true both certainly pass.",
+      "summary": "/operations/probe/input/oneOf"
+    },
+    {
+      "id": "escaped-child-location",
+      "schema": {
+        "properties": {
+          "why/~雪": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "profile": {
+                    "$ref": "https://bounds-control.invalid/U"
+                  }
+                }
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        }
+      },
+      "valueText": "{\"why/~雪\":false}",
+      "expected": "fails",
+      "reason": "Selected property has no possible alternative.",
+      "summary": "/operations/probe/input/properties/why~1~0雪/oneOf",
+      "instancePointer": "/why~1~0雪"
+    },
+    {
+      "id": "supplied-resource-summary",
+      "schema": {
+        "$ref": "https://bounds-control.invalid/known"
+      },
+      "valueText": "false",
+      "expected": "fails",
+      "reason": "Known external schema has no possible alternative.",
+      "resources": {
+        "https://bounds-control.invalid/known": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "profile": {
+                  "$ref": "https://bounds-control.invalid/U"
+                }
+              }
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "summary": "/oneOf",
+      "summaryResource": "https://bounds-control.invalid/known"
+    },
+    {
+      "id": "closed-oneof-next-to-hole",
+      "schema": {
+        "properties": {
+          "known": {
+            "oneOf": [
+              true,
+              true
+            ]
+          },
+          "profile": {
+            "$ref": "https://bounds-control.invalid/U"
+          }
+        }
+      },
+      "valueText": "{\"known\":1}",
+      "expected": "fails",
+      "reason": "Closed authored oneOf fails with two certain alternatives; missing profile is not active.",
+      "summary": "/operations/probe/input/properties/known/oneOf",
+      "instancePointer": "/known"
+    },
+    {
+      "id": "same-missing-uri-different-values",
+      "schema": {
+        "oneOf": [
+          {
+            "properties": {
+              "a": {
+                "$ref": "https://bounds-control.invalid/U"
+              }
+            }
+          },
+          {
+            "properties": {
+              "b": {
+                "$ref": "https://bounds-control.invalid/U"
+              }
+            }
+          }
+        ]
+      },
+      "valueText": "{\"a\":1,\"b\":\"word\"}",
+      "expected": "no-verdict",
+      "reason": "The same schema can accept one distinct instance value and reject another; never cache a URI as one Boolean."
+    },
+    {
+      "id": "reference-sibling",
+      "schema": {
+        "$ref": "#/operations/probe/input/$defs/result",
+        "type": "object",
+        "$defs": {
+          "result": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "profile": {
+                    "$ref": "https://bounds-control.invalid/U"
+                  }
+                }
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        }
+      },
+      "valueText": "\"word\"",
+      "expected": "fails",
+      "reason": "Referenced oneOf passes, ordinary sibling rejects.",
+      "requiredCode": "type",
+      "forbiddenCode": "oneOf"
+    }
+  ]
+}

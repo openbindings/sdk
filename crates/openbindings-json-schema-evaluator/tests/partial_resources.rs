@@ -287,7 +287,6 @@ fn nonpositive_hole_influence_and_annotation_dynamic_hazards_refuse() {
     let hole = format!(r#"{{"$ref":"{U}"}}"#);
     for schema in [
         format!(r#"{{"not":{hole}}}"#),
-        format!(r#"{{"oneOf":[{hole},true]}}"#),
         format!(r#"{{"if":{hole},"then":false,"else":true}}"#),
         format!(r#"{{"if":true,"then":{hole}}}"#),
         format!(r#"{{"if":false,"else":{hole}}}"#),
@@ -297,12 +296,8 @@ fn nonpositive_hole_influence_and_annotation_dynamic_hazards_refuse() {
         format!(r#"{{"$dynamicAnchor":"node","properties":{{"x":{hole}}}}}"#),
         format!(r#"{{"properties":{{"x":{hole}}},"$dynamicRef":"{U}"}}"#),
         format!(
-            r##"{{"$id":"https://review.invalid/root","$defs":{{"shared":{hole}}},"properties":{{"x":{{"$ref":"#/$defs/shared"}},"y":{{"oneOf":[{{"$ref":"#/$defs/shared"}},true]}}}}}}"##
-        ),
-        format!(
             r#"{{"anyOf":[{{"properties":{{"a":{hole}}}}},{{"not":{{"properties":{{"b":{hole}}}}}}}]}}"#
         ),
-        format!(r#"{{"oneOf":[{{"properties":{{"a":{hole}}}}},{{"properties":{{"b":{hole}}}}}]}}"#),
     ] {
         assert_eq!(
             serde_json::to_value(refusal(&schema, ResourceSet::default())).unwrap(),
@@ -637,14 +632,19 @@ fn original_five_frozen_values_and_empty_resource_sets() {
     }
 }
 #[test]
-fn negative_alias_into_advancing_recursive_graph_is_hole_dependent() {
+fn oneof_alias_into_advancing_recursive_graph_retains_hole_dependence() {
     let schema = format!(
         r##"{{"$id":"https://review.invalid/root","$defs":{{"recursive":{{"type":"object","properties":{{"next":{{"$ref":"#/$defs/recursive"}},"external":{{"$ref":"{U}"}}}}}}}},"properties":{{"branch":{{"oneOf":[{{"$ref":"#/$defs/recursive"}},false]}}}}}}"##
     );
-    assert_eq!(
-        serde_json::to_value(refusal(&schema, ResourceSet::default())).unwrap(),
-        serde_json::to_value(strict_refusal(&schema)).unwrap()
-    );
+    let contract = ready(&schema);
+    for (value, expected) in [
+        ("{}", "satisfies"),
+        (r#"{"branch":{"next":{}}}"#, "satisfies"),
+        (r#"{"branch":{"external":1}}"#, "unavailable"),
+        (r#"{"branch":4}"#, "fails"),
+    ] {
+        assert_eq!(label(contract.validate(&json(value))), expected);
+    }
     // A closed negative keyword on the same object is a fixed conjunct.
     let sibling =
         format!(r#"{{"properties":{{"external":{{"$ref":"{U}"}}}},"not":{{"const":1}}}}"#);
@@ -717,4 +717,46 @@ fn partial_failure_survives_diagnostic_exhaustion_and_unsupported_known_evaluati
         matches!(contract.validate(&json(r#"{"name":"a"}"#)),ValueOutcome::NoVerdict {detail} if detail.reason == NoVerdictReason::UnsupportedCapability)
     );
     assert_eq!(label(contract.validate(&json("{}"))), "satisfies");
+}
+
+#[test]
+fn formerly_declined_oneof_cases_now_preserve_proved_and_dependent_results() {
+    let hole = format!(r#"{{"$ref":"{U}"}}"#);
+    for (schema, value, expected) in [
+        (
+            format!(r#"{{"oneOf":[{hole},true]}}"#),
+            "null",
+            "unavailable",
+        ),
+        (
+            format!(
+                r##"{{"$id":"https://review.invalid/root","$defs":{{"shared":{hole}}},"properties":{{"x":{{"$ref":"#/$defs/shared"}},"y":{{"oneOf":[{{"$ref":"#/$defs/shared"}},true]}}}}}}"##
+            ),
+            "{}",
+            "satisfies",
+        ),
+        (
+            format!(
+                r##"{{"$id":"https://review.invalid/root","$defs":{{"shared":{hole}}},"properties":{{"x":{{"$ref":"#/$defs/shared"}},"y":{{"oneOf":[{{"$ref":"#/$defs/shared"}},true]}}}}}}"##
+            ),
+            r#"{"y":1}"#,
+            "unavailable",
+        ),
+        (
+            format!(
+                r#"{{"oneOf":[{{"properties":{{"a":{hole}}}}},{{"properties":{{"b":{hole}}}}}]}}"#
+            ),
+            r#"{"a":1,"b":2}"#,
+            "unavailable",
+        ),
+        (
+            format!(
+                r#"{{"oneOf":[{{"properties":{{"a":{hole}}}}},{{"properties":{{"b":{hole}}}}}]}}"#
+            ),
+            "{}",
+            "fails",
+        ),
+    ] {
+        assert_eq!(label(ready(&schema).validate(&json(value))), expected);
+    }
 }

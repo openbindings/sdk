@@ -1,5 +1,7 @@
-//! Positive validity bounds. The strict projector remains a separate path.
+//! Compositional validity bounds. Strict and positive-only encodings stay separate.
+mod oneof;
 use super::*;
+use crate::contracts::ProgramOrigin;
 use openbindings_internal_json::backend::{decoded_string_size, pointer_size};
 use std::{
     fmt::{self, Write},
@@ -20,6 +22,8 @@ struct Admission {
     nodes: usize,
     edges: usize,
     holes: usize,
+    generated_nodes: usize,
+    generated_edges: usize,
 }
 impl Default for Admission {
     fn default() -> Self {
@@ -28,14 +32,22 @@ impl Default for Admission {
             nodes: NODE_LIMIT,
             edges: EDGE_LIMIT,
             holes: HOLE_LIMIT,
+            generated_nodes: 100_000,
+            generated_edges: 200_000,
         }
     }
+}
+#[derive(Clone, Copy, PartialEq)]
+enum Influence {
+    Positive,
+    OneOf,
+    Excluded,
 }
 #[derive(Clone, Copy)]
 struct Edge {
     from: usize,
     to: usize,
-    positive: bool,
+    influence: Influence,
 }
 #[derive(Default)]
 struct Plan {
@@ -47,6 +59,8 @@ struct Plan {
     // Numeric namespace segments only: original resolved identities remain borrowed.
     occupied_namespaces: HashSet<usize>,
     namespace: usize,
+    dependent: HashSet<usize>,
+    oneofs: HashSet<usize>,
 }
 #[derive(Clone, Copy)]
 enum Children {
@@ -58,27 +72,28 @@ enum Children {
 struct Policy {
     shape: Children,
     inplace: bool,
-    positive: bool,
+    influence: Influence,
 }
 // This is the only partial influence policy. $defs/annotations are not edges.
 fn policy(keyword: &str, has_if: bool) -> Option<Policy> {
     use Children::*;
-    let (shape, inplace, positive) = match keyword {
-        "properties" | "patternProperties" => (Map, false, true),
-        "dependentSchemas" => (Map, true, true),
-        "allOf" | "anyOf" => (List, true, true),
-        "prefixItems" => (List, false, true),
-        "additionalProperties" | "propertyNames" | "items" => (Single, false, true),
-        "oneOf" => (List, true, false),
-        "not" => (Single, true, false),
-        "if" | "then" | "else" if has_if => (Single, true, false),
-        "contains" => (Single, false, false),
+    use Influence::*;
+    let (shape, inplace, influence) = match keyword {
+        "properties" | "patternProperties" => (Map, false, Positive),
+        "dependentSchemas" => (Map, true, Positive),
+        "allOf" | "anyOf" => (List, true, Positive),
+        "prefixItems" => (List, false, Positive),
+        "additionalProperties" | "propertyNames" | "items" => (Single, false, Positive),
+        "oneOf" => (List, true, OneOf),
+        "not" => (Single, true, Excluded),
+        "if" | "then" | "else" if has_if => (Single, true, Excluded),
+        "contains" => (Single, false, Excluded),
         _ => return None,
     };
     Some(Policy {
         shape,
         inplace,
-        positive,
+        influence,
     })
 }
 fn limit(code: &str, message: &str) -> NoVerdict {
@@ -120,7 +135,7 @@ impl Plan {
         self.dependencies.push(Edge {
             from,
             to,
-            positive: policy.positive,
+            influence: policy.influence,
         });
         if policy.inplace {
             self.reach.edges.entry(from).or_default().push(to);
@@ -128,7 +143,7 @@ impl Plan {
         queue.push_back(to);
         Ok(())
     }
-    fn qualify(&self, control: &WorkControl) -> Result<(), NoVerdict> {
+    fn qualify(&mut self, control: &WorkControl) -> Result<(), NoVerdict> {
         let mut reverse: HashMap<usize, Vec<&Edge>> = HashMap::new();
         for edge in &self.dependencies {
             reverse.entry(edge.to).or_default().push(edge);
@@ -138,18 +153,22 @@ impl Plan {
         while let Some(id) = queue.pop_front() {
             control.check()?;
             for edge in reverse.get(&id).into_iter().flatten() {
-                if !edge.positive {
+                if edge.influence == Influence::Excluded {
                     return Err(NoVerdict::new(
                         NoVerdictReason::ConservativePreparation,
                         "partial-nonpositive-influence",
                         "an unavailable reference influences an unqualified applicator",
                     ));
                 }
+                if edge.influence == Influence::OneOf {
+                    self.oneofs.insert(edge.from);
+                }
                 if dependent.insert(edge.from) {
                     queue.push_back(edge.from);
                 }
             }
         }
+        self.dependent = dependent;
         Ok(())
     }
 }
@@ -232,7 +251,7 @@ impl SchemaSpace {
                                 Policy {
                                     shape: Children::Single,
                                     inplace: true,
-                                    positive: true,
+                                    influence: Influence::Positive,
                                 },
                                 &mut queue,
                                 cap,
@@ -326,6 +345,9 @@ impl SchemaSpace {
         cap: Admission,
     ) -> Result<EvaluationBounds, NoVerdict> {
         let plan = self.partial_reach(entry, control, cap)?;
+        if !plan.oneofs.is_empty() {
+            return self.oneof_bounds(entry, control, cap, &plan);
+        }
         let mut groups: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
         let mut nodes: Vec<_> = plan.reach.nodes.iter().copied().collect();
         nodes.sort_unstable();
@@ -379,7 +401,7 @@ impl SchemaSpace {
             control.check()?;
             let mut uri = String::new();
             address(&mut uri, plan.namespace, self.nodes[id].resource, id).expect("String writer");
-            locations.insert(uri, self.location(id));
+            locations.insert(uri, ProgramOrigin::Prefix(self.location(id)));
         }
         let locations = Arc::new(locations);
         let unavailable = plan.first_hole.map(|id| {
@@ -682,7 +704,7 @@ impl Write for Sink {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn space(schema: &str) -> (SchemaSpace, usize) {
+    pub(super) fn space(schema: &str) -> (SchemaSpace, usize) {
         let document = ParsedDocument::parse(format!(
             r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
         ))
@@ -700,7 +722,7 @@ mod tests {
             .unwrap();
         (space, entry)
     }
-    fn text_size(bounds: &EvaluationBounds) -> usize {
+    pub(super) fn text_size(bounds: &EvaluationBounds) -> usize {
         let mut size = 0;
         for program in [&bounds.lower, &bounds.upper] {
             size += program.entry_uri.len();
@@ -713,9 +735,11 @@ mod tests {
             &bounds.lower.locations,
             &bounds.upper.locations
         ));
-        for (generated, at) in bounds.lower.locations.iter() {
-            size +=
-                generated.len() + at.pointer.len() + at.resource.as_ref().map_or(0, String::len);
+        for (generated, origin) in bounds.lower.locations.iter() {
+            size += generated.len();
+            if let ProgramOrigin::Prefix(at) | ProgramOrigin::Exact(at) = origin {
+                size += at.pointer.len() + at.resource.as_ref().map_or(0, String::len);
+            }
         }
         if let Some(e) = &bounds.unavailable {
             size += e.code.len() + e.message.len();

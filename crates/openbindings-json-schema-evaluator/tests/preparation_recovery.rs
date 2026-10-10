@@ -167,7 +167,7 @@ impl SchemaEvaluator for Capture {
 }
 #[test]
 fn direct_bounds_keeps_planner_diagnostics_while_default_restores_strict_refusal() {
-    let schema = format!(r#"{{"oneOf":[true,{{"$ref":"{U}"}}]}}"#);
+    let schema = format!(r#"{{"not":{{"$ref":"{U}"}}}}"#);
     let doc = document(&schema);
     let capture = Arc::new(Capture(Mutex::new(None)));
     let _ = doc

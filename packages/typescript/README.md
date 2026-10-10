@@ -96,7 +96,7 @@ does that; [replacement and recovery](examples/service-lifecycle.mjs) adds expli
 resources and asynchronous request ownership after the initialization instructions.
 
 The default evaluator first tries complete-resource preparation. Missing static
-references in a qualified positive fragment can prepare `ready`: an absent optional
+references in a qualified bounds fragment can prepare `ready`: an absent optional
 property, independent known failure, or known passing `anyOf` branch can make a value
 decidable. Values that depend on missing content return `no-verdict` with reason
 `resource-unavailable` from validation. Even a bare missing `$ref` now prepares
@@ -114,13 +114,20 @@ When the default evaluator declines optional partial planning, it preserves the
 original located `resource-unavailable` refusal. Known-closure defects, cancellation,
 shared limits and compilation failures keep their actual classifications.
 
-Missing influence through `not`, `oneOf`, conditionals or `contains` refuses, while
+Hole-dependent `oneOf` uses both bound polarities: zero possible or multiple certain
+winners fail, and one certain sole winner satisfies. Correlated unknown branches can
+remain undecided. Sufficient-budget failure reports identify the original oneOf with
+a cardinality-neutral message, without claiming which branches matched.
+Missing influence through `not`, conditionals or `contains` refuses, while
 closed subgraphs remain supported. Evaluated `unevaluated*` and dynamic keywords
 reject partial bounds. Known invalid/unsupported schemas remain refusals. Both
 internal bounds share one verdict work/regex allowance; failures retain separately
 bounded known-source diagnostics. There is no new application validation mode.
 The [proof and limits](https://github.com/openbindings/sdk/blob/main/docs/partial-resource-bounds.md)
 include a 64 MiB combined projection-text cap and explicit graph/scratch guards.
+Dependent-oneOf plans additionally admit 100,000 emitted schema nodes and 200,000
+reference/applicator edges across both closed programs. These limits are unmeasured;
+nested predicates may be revisited under the shared work allowance.
 
 Inspect `document.references()` for document-wide spellings and locations, apply
 your application's acquisition policy, then supply resources in a new context.

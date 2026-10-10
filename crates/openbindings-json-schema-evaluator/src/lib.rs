@@ -164,6 +164,8 @@ fn recover_partial_decline(strict: NoVerdict, planner: NoVerdict) -> NoVerdict {
                 | "partial-scratch-limit"
                 | "schema-edge-limit"
                 | "schema-hole-limit"
+                | "partial-generated-node-limit"
+                | "partial-generated-edge-limit"
         )
     );
     if optional_decline { strict } else { planner }
@@ -224,8 +226,8 @@ impl DefaultEvaluator {
             .build(root.contents())
             .map_err(|error| preparation_error(error.kind()))?;
         control.check()?;
-        // Compilation owns the state it needs. Keep the original-location map,
-        // but release the intermediate source-backed projection arenas.
+        // Clear direct resource owners while keeping the original-location map.
+        // Compiled exact const/enum subviews can still retain projection arenas.
         program.resources.clear();
         Ok(Compiled {
             validator,
@@ -258,12 +260,17 @@ impl PreparedSchema for Compiled {
         }) {
             Err(detail) => ValueOutcome::NoVerdict { detail },
             Ok(true) => ValueOutcome::Satisfies,
-            Ok(false) => self.diagnostics(value, control),
+            Ok(false) => self.diagnostics(value, control, false),
         }
     }
 }
 impl Compiled {
-    fn diagnostics(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
+    fn diagnostics(
+        &self,
+        value: &JsonValue,
+        control: &WorkControl,
+        original_only: bool,
+    ) -> ValueOutcome {
         let mut problems = Vec::new();
         let mut complete = true;
         let mut remaining = self.limits.diagnostic_bytes;
@@ -296,7 +303,14 @@ impl Compiled {
                                             }
                                             // Messages use only fixed keyword/type metadata (<=192 bytes).
                                             // No source-controlled operand or rejected instance is rendered.
-                                            let message = diagnostic_message(error.kind());
+                                            let message = if original_only
+                                                && error.kind().keyword() == "oneOf"
+                                            {
+                                                "value does not satisfy exactly one alternative"
+                                                    .into()
+                                            } else {
+                                                diagnostic_message(error.kind())
+                                            };
                                             let code = error.kind().keyword();
                                             let reserve = if self.detail_source.is_some() {
                                                 details::TRUNCATED_BYTES
@@ -341,6 +355,12 @@ impl Compiled {
                                                             },
                                                             None => None,
                                                         };
+                                                    if original_only && location.is_none() {
+                                                        // Keep the offered outer error boundary. Never
+                                                        // flatten generated contexts to recover leaves.
+                                                        complete = false;
+                                                        return true;
+                                                    }
                                                     let location_bytes =
                                                         location.as_ref().map_or(0, |at| {
                                                             at.pointer.len().saturating_add(
@@ -460,7 +480,7 @@ impl PreparedSchema for PartialCompiled {
         });
         match result {
             Err(detail) => ValueOutcome::NoVerdict { detail },
-            Ok(Some(false)) => self.upper.diagnostics(value, control),
+            Ok(Some(false)) => self.upper.diagnostics(value, control, true),
             Ok(Some(true)) => ValueOutcome::Satisfies,
             Ok(None) => ValueOutcome::NoVerdict {
                 detail: self.unavailable.clone().unwrap_or_else(|| {
@@ -798,6 +818,14 @@ mod partial_budget_tests {
             (NoVerdictReason::LimitExceeded, "partial-scratch-limit"),
             (NoVerdictReason::LimitExceeded, "schema-edge-limit"),
             (NoVerdictReason::LimitExceeded, "schema-hole-limit"),
+            (
+                NoVerdictReason::LimitExceeded,
+                "partial-generated-node-limit",
+            ),
+            (
+                NoVerdictReason::LimitExceeded,
+                "partial-generated-edge-limit",
+            ),
         ] {
             let declined = no_verdict(reason, code, "irrelevant planner message");
             assert_eq!(
