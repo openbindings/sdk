@@ -144,6 +144,25 @@ The complete diff inventory is in `docs/dependency-patches/`. Reproduce it with
 `python3 tools/dependency-patches.py --upstream-dir <original-crate-archives> --output <new-directory>`;
 verify the original archives against the manifest checksums first.
 
+For an isolated rehearsal of the current `jsonschema` fork, use a new output
+directory and the original crate archive directory:
+
+```sh
+python3 tools/rehearse-dependency.py --package jsonschema \
+  --upstream-dir /path/to/original-crate-archives \
+  --output target/dependency-rehearsal
+```
+
+This checks the upstream checksum, extracts pristine sources, applies the
+maintained patch with the standard `patch` executable, and compares every
+reconstructed file to the current fork. Keep `RECONSTRUCTION.json` and the patch
+log. Independently regenerate the patch inventory with `dependency-patches.py`
+into another fresh directory and compare it with `docs/dependency-patches`.
+Then run the applicable source, consumer compatibility, evaluator and packaged
+artifact gates described above on the same committed candidate. Exact source
+reconstruction is a maintenance rehearsal; it neither upgrades the dependency
+nor establishes that a future upstream rebase will be straightforward.
+
 The upstream regress suite and jsonschema-value library/numeric suite pass in the
 SDK-relevant configuration. The jsonschema library suite has 17 exact dispositions:
 two Draft 4/non-u regex cases, four finite huge-number integer cases, three legacy
