@@ -1,0 +1,9 @@
+{
+  "description": "Unmodified frozen round-01 author documents and resources; the original five regression values use an empty ResourceSet. Supplied resources are used only for diagnostic comparison.",
+  "files": {
+    "B02.json": "327550a2989983bf42bba969394f93f12f7f67500f5dfe50ddbe427685213a44",
+    "C02.json": "b4824d900d7e4ff107b544ecf639128e26da9c2fec0d5c00084ab489f80cb70a",
+    "currency.json": "88c627d932ae0f823c7c0dd920cfef7a75cbd34467c5fcdc9b942db44f2a851c",
+    "list.json": "2fd7bab796b1dc92f16d1ec466aac035235fe3b327103dab54e2968b0cc2abb3"
+  }
+}

@@ -9,7 +9,9 @@ independent. Unsupported or malformed versions are explicit refusals.
 | Exact bytes, JSON text, duplicate evidence, original locations | Yes | Yes |
 | Typed authoring, all normative objects, unknown-member retention | Yes | Yes |
 | All 13 document rules; parsed/conformant states | Yes | Yes |
-| Names/aliases, bindings, dependency kinds, references | Yes | Yes; cached metadata |
+| Names/aliases, bindings, sources, dependencies, examples, references | Retained views and borrowed exact values | Cached metadata and retained views |
+| Exact object/array traversal | Borrowed iterators | Lazy disposable iterators |
+| Exact parsed-document editing | Owned typed draft | Scoped editable draft; opaque values stay exact |
 | Explicit schema resources; retained input/output contracts | Yes | Yes |
 | Custom evaluator interface and reusable qualification kit | Rust traits | Default evaluator; JS callbacks not exposed |
 | Default 2020-12 evaluator, format annotations | Yes | Same semantic engine |
@@ -20,7 +22,7 @@ independent. Unsupported or malformed versions are explicit refusals.
 
 The flat immutable JSON arena preserves numeric spellings, negative zero, duplicate
 object members and escaped UTF-16 code units. Parse does not establish document
-conformance. Default admission is 64 MiB, 10,000 JSON containers and 1,000,000 nodes.
+conformance. Default admission is 64 MiB, 10,000 levels of JSON container nesting and 1,000,000 nodes.
 Limits are observable errors, not silently truncated values. Structural/source
 locations use JSON Pointer, zero-based UTF-8 byte offsets and one-based lines/byte
 columns. Duplicate names remain available to document rules and diagnostics.
@@ -41,6 +43,17 @@ original resource/dynamic scope are preserved through a private evaluator
 projection. Diagnostic locations map back to original documents. Format remains
 annotation; unknown keywords are carried without inventing assertions.
 
+The bundled resolver gives unique contained declared IDs priority over supplied
+name associations, followed by packaged standards. Supplied aliases and declared
+IDs have equal priority; peers remain ambiguous. Every reached named carrier must
+own its canonical identity, including alias, pointer, direct-child and dynamic
+routes. Conflicting routes conservatively refuse; unused conflicts do not poison
+other contracts or independently named nested resources. Original supplied rows,
+bases, dialects and diagnostic retrieval provenance remain intact. Selection occurs
+before fragment lookup, with no schema equality or fragment fallback. URI comparison
+retains exact spelling after RFC resolution, literal-dot and empty-fragment removal;
+case/percent-encoding equivalence is not added. Trusted fixed assessment is separate.
+
 Default limits: 2,000,000 evaluation steps per verdict/diagnostic pass; evaluation
 depth 1,024; 2,000,000 regex steps; 256 selected problems; compiler JSON depth 512;
 pattern size 1 MiB; pattern nesting 256. Schema traversal admits depth 256, 100,000
@@ -52,12 +65,43 @@ blanket refused because of that arithmetic limit. The pinned Go 4,096-token /
 exponent ±10,000 arithmetic floor is qualified separately.
 
 Selected Unicode-property regex matching, external old/custom dialects and
-lone-surrogate interpretation are declared unsupported cases. Invalid patterns,
-missing external resources and some in-place recursion or dominating branches can
+lone-surrogate interpretation are declared unsupported cases. Invalid patterns
+and some in-place recursion or dominating branches can
 cause conservative no-verdict; preparation failure does not prove semantic
 undefinedness. Exact-case declarations and the full suite distinguish these
 limits from wrong verdicts. The implementation does not promise a complete
 irrelevance decision procedure for `anyOf(true, problematic-schema)`.
+
+The default evaluator first tries complete-resource preparation. For missing
+static-reference carriers in a qualified bounds fragment, it prepares lower/upper
+validity bounds. An absent optional property can satisfy, a known failed conjunct
+can fail despite an active unknown, and a known passing `anyOf` branch can satisfy.
+Dependent values return `ResourceUnavailable` at validation. Even a qualified bare
+missing `$ref` prepares ready; ready does not promise decidability. Hole influence
+through `not`, effective conditionals or `contains` refuses; closed
+subgraphs remain supported. Evaluated `unevaluated*` and dynamic keywords reject
+partial bounds. Known invalid targets, dialects, patterns and cycles remain refusals.
+
+Hole-dependent `oneOf` uses finite lower/upper polarity definitions. It can decide
+zero possible winners, one certain sole winner, or multiple certain winners without
+supplying a missing resource. Correlated unknown branches can remain no-verdict.
+Failure summaries identify the original oneOf and make no branch-count claim.
+
+Partial admission adds 200,000 dependency edges, 100,000 missing edges and a
+64 MiB combined text allowance for both programs' serialized and owned decoded
+string text, URIs, entries, shared mapping and evidence. A separate 64 MiB
+resolver/full-pointer scratch guard applies. Dependent-oneOf plans additionally
+admit 100,000 emitted schema-node and 200,000 reference/applicator-edge occurrences
+across both closed programs, including actual duplication and generated glue.
+These prospective limits are unmeasured. Memoized definitions do not cache runtime
+results; nested/recursive bounds can revisit predicates. These are
+not compiled-memory or RSS bounds. Upper/lower share one verdict work/regex budget;
+failure diagnostics retain a separate bounded pass. The
+[proof and adapter contract](docs/partial-resource-bounds.md) specifies exact
+eligibility, counting and limitations. Prepared owners expose evaluator-declared
+resource completeness, distinct from value decidability. Rust custom evaluators
+default to Undeclared. The SDK never fetches references. Supply
+resources in a new context to retry; old owners keep their original snapshots.
 
 Failure diagnostics are bounded, omit instance values and identify original
 schema/instance locations. `problems_complete`/`problemsComplete` describes the

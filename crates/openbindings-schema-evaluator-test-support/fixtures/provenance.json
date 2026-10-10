@@ -40,5 +40,23 @@
     "suite/draft2020-12/patternProperties.json#5/1 patternProperties with Unicode property escape/Non-letter property name does not match pattern": "unicode-property-matching",
     "adversarial/lazy-property-escape-not/1": "unicode-property-matching",
     "adversarial/lazy-pattern-properties/2": "unicode-property-matching"
-  }
+  },
+  "runtime_policy_translations": [
+    {
+      "case": "adversarial/resource-uri-names-another-id/0",
+      "from_expected": "no-verdict",
+      "from_refusal_kind": "conservative-preparation",
+      "to_expected": "satisfies",
+      "authority": "SDK resource identity policy: a unique contained declared ID selects the original contained schema before supplied associations; competing alternate carriers still conservatively refuse. Intentional admission change, not a normative defect in the former conservative refusal.",
+      "preservation": "Raw cases.json and its fixture_sha256 remain unchanged. The source/native and browser qualification loaders apply this explicit current-policy translation.",
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"https://ex.invalid/shared\"}}},\"schemas\":{\"S\":{\"$id\":\"https://ex.invalid/shared\",\"type\":\"integer\"}}}",
+      "original_value": "1",
+      "original_resources": [
+        {
+          "documentJson": "{\"type\":\"string\"}",
+          "uri": "https://ex.invalid/shared"
+        }
+      ]
+    }
+  ]
 }

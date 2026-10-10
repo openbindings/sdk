@@ -2,6 +2,13 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- The bundled resource resolver now gives unique contained declared IDs priority
+  over supplied name associations, with conservative refusal of competing canonical
+  carriers reached through aliases, pointers or direct applicators. This intentionally
+  expands contained-target admission and tightens competing-carrier routes. Supplied
+  catalog contents and original retrieval provenance remain intact; public API shapes
+  are unchanged. Previous conservative refusals are not reclassified as normative bugs.
+
 - Opt-in typed exact schema details through Rust `with_schema_details(true)` and
   TypeScript `includeSchemaDetails: true`, with atomic bounded truncation and
   explicit original-source retention. Default messages explain built-in keywords
@@ -14,7 +21,30 @@
 
 
 ### Added
+- Partial-resource bounds now support hole-dependent `oneOf` through finite
+  dual-polarity projections, with original-location, cardinality-neutral oneOf
+  failure summaries. Correlations between unknown predicates remain undecided.
+  This intentionally changes qualified oneOf setup refusal to ready; dependent
+  values still return ResourceUnavailable. Other influence exclusions remain.
+  Two new generated-plan admission limits count duplicated nodes/edges across
+  both closed programs and recover the original strict missing-resource evidence
+  when the default fallback declines. Direct adapter calls retain planner codes.
 
+
+- Rust adapter utility `SchemaRequest::evaluation_bounds` and opaque owned
+  `EvaluationBounds`, with borrowed lower/upper/evidence access and consuming
+  `into_parts()`. The two closed programs are validity bounds, not individually
+  equivalent schemas. Combined text/graph admission and immutable context ownership
+  are explicit; the strict projection helper and custom evaluator dispatch remain.
+
+- Rust binding, source, dependency and operation-example views, with retained
+  ownership, typed metadata and exact opaque content. The TypeScript facade adds
+  matching keyed views and frozen metadata inventories.
+- Lazy TypeScript exact object/array cursors and a scoped `ParsedDocument.toDraft()`
+  editing path. `OwnedDocumentDraft.value` exposes mutable `EditableDocumentDraft`
+  containers while preserving opaque exact values and readonly-friendly authoring
+  inputs. A shipped inspection/editing example is compiled and exercised from the
+  installed package.
 - Default value-diagnostic `diagnostic_bytes` / `diagnosticBytes` budget (1 MiB
   retained UTF-8 strings), bounded pre-copy diagnostic construction, whole-problem
   truncation and explicit zero semantics. This adds an intentional prerelease Rust
@@ -41,6 +71,56 @@
 
 ### Changed
 
+- Prepared contracts expose borrowed Rust `ResourceCompleteness` and a frozen,
+  cached TypeScript `resourceCompleteness` getter. Existing custom evaluators default
+  to Undeclared. Complete describes resources, not guaranteed value decidability.
+  Retained service/editor examples now require Complete before replacing a snapshot.
+- Declined optional partial planning again preserves the default evaluator's original
+  located ResourceUnavailable refusal. Direct `evaluation_bounds()` retains planner
+  errors; known defects, shared limits, cancellation and compilation keep their causes.
+
+- The default evaluator can decide values independently of missing static resources
+  within a qualified positive fragment, using shared-budget lower/upper evaluation
+  and known-source upper diagnostics. Qualified partial contracts, including a bare
+  missing `$ref`, now prepare ready; dependent values return `ResourceUnavailable`
+  at validation. This is an intentional phase change and decision-coverage expansion.
+  Other hole-dependent nonpositive applicators and evaluated annotation/dynamic hazards
+  refuse. Partial text admission counts serialized resource text and separately
+  owned decoded strings, including escaped member names and nested opaque values,
+  before constructing either projection. Complete-resource preparation retains its
+  existing path.
+
+- TypeScript operation inventories now interpret `tags` and `deprecated` along
+  with the other metadata. Malformed values, including those on an unrelated
+  operation, make the inventory throw an interpretation error; raw exact
+  document access remains available.
+- TypeScript authoring now accepts an unknown document member literally named
+  `additionalFields` through the draft's additional-field map. Collisions with
+  actual typed members are still refused.
+- Abandoning an undisposed TypeScript editing scope keeps reachable converted
+  exact leaves usable. Explicit scope disposal still releases every converted
+  leaf, including removed or replaced leaves; retain leaves that must survive it.
+- Exact object cursors use direct indexed access to each member, avoiding a
+  repeated prefix walk. This is a structural work bound, not a measured speedup.
+- Exact source coordinates share a lazy, bounded index within each retained
+  document arena. Repeated metadata reads no longer rescan the complete source
+  prefix; original byte offsets, lines, byte columns and pointers are unchanged.
+- Exact duplicate-name queries use the existing source-ordered evidence: scalar
+  queries are constant work and container queries use binary search, without a
+  new retained index or changes to duplicate diagnostic ordering.
+- Clarify that conformant dependency kind filters must be nonempty; this does not
+  change draft interpretation behavior.
+- Conformance diagnostics deduplicate repeated findings for the same original
+  occurrence before count and pointer-byte limits. Identical schema text at
+  different source positions remains distinct. Duplicate-member findings now
+  locate each offending key token instead of its enclosing object; pointer/byte
+  coordinates and retained counts under the existing limits can change.
+  Rule evidence and truthful truncation remain independent of retained findings.
+- TypeScript authoring failures add `invalid-field` and `duplicate-members`, plus
+  optional original-source coordinates for parsed-to-draft conversion. Exhaustive
+  switches over authoring failure codes need these cases.
+- Dependency kind checks now report malformed kind lists as interpretation errors
+  instead of silently treating them as absent or unmatched.
 - Isolate the exact-number engine's Serde JSON features under private package
   identities so ordinary consumer `serde_json` decimals keep their own feature
   behavior. Shared application dependencies now allow compatible updates; tightly

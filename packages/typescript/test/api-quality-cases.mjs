@@ -137,9 +137,15 @@ export async function apiQualityCases(sdk, http) {
     );
     const remote = context.prepare("remote", "input");
     check(
-      remote.status === "no-verdict" &&
-        remote.detail.reason === "resource-unavailable",
-      "unsupplied resource setup",
+      remote.status === "ready",
+      "qualified missing-resource contract prepares ready",
+    );
+    own(remote.contract);
+    const remoteResult = remote.contract.validate(null);
+    check(
+      remoteResult.outcome === "no-verdict" &&
+        remoteResult.detail.reason === "resource-unavailable",
+      "bare missing resource remains undecidable at validation",
     );
     const cancelled = new AbortController();
     cancelled.abort();

@@ -1,0 +1,15 @@
+{
+  "C22.json": {
+    "original": "authors/c/C22/document.json",
+    "sha256": "dfd8cd330b83f183445284ba97fcab626ee2edd6b0a689d50a5691554d79f03b"
+  },
+  "C22-cases.json": {
+    "source": "rounds/02/oracle/accepted/C22.json",
+    "selection": "operation == 2x.thumbnail, side == output, setup == none",
+    "expectedUnchanged": true
+  },
+  "owner-cases.json": {
+    "source": "rounds/02/design/oneof-acceptance/CASES02.json",
+    "sha256": "df3616520eeac68e0edc07b716f0e577c395b2f51cb7191d84475dec8fbcc2f9"
+  }
+}

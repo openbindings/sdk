@@ -69,7 +69,62 @@ or retained views directly instead of admitting them again through Serde.
 
 A prepared contract retains its resources after the document/context is dropped. Preparation reuses deterministic results within a context. The context retains four most-recent prepared entries by default; `ValueContractOptions.cache_capacity` controls this count, including zero to disable caching. Caller-retained contracts survive eviction; this is an entry cap, not a byte cap. Concurrent first calls may perform duplicate preparation before one result is retained. Cancellation and transient evaluator failures are not cached. Different contexts never share resource identities or compiled contracts.
 
-`NoVerdict` distinguishes unsupported capabilities, conservative preparation, missing resources, limits and cancellation. A missing reference or invalid pattern in a potentially visited branch may cause a conservative refusal even if another branch would establish validity. Such a refusal does not claim semantic undefinedness. Unicode property-escape *syntax* follows ECMA-262 edition 11; actual property matching is explicitly unsupported and declined only when applied. `format` remains an annotation. Custom/historical dialects are not interpreted as 2020-12.
+`NoVerdict` distinguishes unsupported capabilities, conservative preparation,
+missing resources, limits and cancellation. After complete-resource preparation
+finds a missing static-reference carrier, the evaluator can prepare positive
+lower/upper validity bounds. Missing optional content may be irrelevant to an
+instance; an independent known failure or passing disjunct can also decide it.
+Values that depend on missing content return `ResourceUnavailable` at validation.
+A qualified bare missing `$ref` now prepares `Ready` and refuses every admitted
+value at validation. Ready promises a validator, not a decidable instance.
+
+Hole influence is allowed through static `$ref`, `allOf`, `anyOf`, object property
+applicators, `dependentSchemas`, `prefixItems` and `items`. Dependent `oneOf` uses
+memoized lower/upper variants and can decide zero possible, one certain sole, or
+multiple certain winners. It does not infer correlations between unknown branches.
+Hole-dependent `not`,
+conditionals and `contains` refuse; closed subgraphs using them remain
+intact. Evaluated `unevaluated*` and dynamic keywords reject partial bounds.
+Known malformed schemas, references, dialects and potential in-place cycles keep
+refusing. No I/O occurs. `ParsedDocument::references()` exposes document-wide
+reference spellings and locations; new supplied resources require a new context.
+Existing prepared owners retain their original snapshots.
+
+Within that immutable context, a unique contained declared ID owns its name ahead
+of supplied resources and packaged standards. Supplied retrieval aliases and
+canonical IDs otherwise compete strictly. Reaching a competing canonical carrier
+through an alias, pointer or direct applicator returns `ConservativePreparation`
+with `resource-identity-conflict`; it is not a missing-resource hole or value failure.
+Unused conflicting resources remain isolated, while independently identified nested
+resources retain their own original base and dialect. A selected resource's missing
+fragment never falls through to another carrier. Original supplied rows and location
+provenance remain intact: a diagnostic source URI can differ from the selected
+lookup association for that URI. New identity-refusal locations are optional and
+measure source URI plus full pointer against 64 KiB before copying. Comparison
+retains exact spelling after RFC resolution, literal-dot removal and empty-fragment
+removal; this is not a claim of complete RFC URI equivalence. Fixed OBI and
+meta-schema assessment uses its separate trusted loader.
+
+Both bound programs are closed, but neither alone is equivalent to the partial
+schema. Rust adapter authors may opt into `SchemaRequest::evaluation_bounds` and
+consume `(lower, upper, unavailable)` with `EvaluationBounds::into_parts`; custom
+evaluator dispatch and strict `evaluation_program()` are unchanged. Upper/lower
+share one verdict work/regex allowance. Only established upper failure produces
+original-source diagnostics, in the existing separate diagnostic scope. A complete
+upper oneOf failure produces a cardinality-neutral original `/oneOf` summary.
+Only outer `iter_errors` boundaries are used; generated contexts are not flattened,
+and unmapped errors are omitted with incomplete diagnostics. Adapters must preserve
+these boundaries; a structured backend output API can omit the unary summary event.
+Dependent-oneOf plans additionally cap both copies at 100,000 emitted schema nodes
+and 200,000 reference/applicator edges. Definition sharing is not runtime caching,
+and linear syntax makes no speed/compiled-memory promise. Partial plans
+admit 64 MiB combined retained text and explicit graph/scratch limits. See the
+[complete proof, API and admission contract](../../docs/partial-resource-bounds.md).
+There is no annotation-output or arbitrary-future-resource-readiness guarantee.
+
+Unicode property-escape *syntax* follows ECMA-262 edition 11; actual property
+matching is explicitly unsupported and declined only when applied. `format`
+remains an annotation. Custom/historical dialects are not interpreted as 2020-12.
 
 Regex compilation refusals use `schema-pattern-compilation` with bounded guidance
 to inspect `pattern` and `patternProperties`. They do not echo patterns or resource
@@ -77,7 +132,7 @@ identifiers. A source location remains absent when the compiler cannot establish
 the original resource; other unclassified preparation failures retain the generic
 `evaluator-preparation` diagnostic.
 
-Failures report actual instance locations and original schema locations where available. They do not promise every possible failing keyword or Go's diagnostic multiplicity. `problems_complete` means the selected diagnostic pass completed without truncation, not exhaustive traversal of every semantically redundant failure. Diagnostic collection has its own work scope and allocation cap; a confirmed failure remains a failure when its diagnostics are truncated. Messages omit instance values.
+Failures report actual instance locations and original schema locations where available. They do not promise every possible failing keyword or Go's diagnostic multiplicity. `problems_complete` means the selected diagnostic pass completed without truncation, not exhaustive traversal of every semantically redundant failure. Diagnostic collection has its own work scope and allocation cap; a confirmed failure remains a failure when its diagnostics are truncated. Messages omit instance values. For partial schemas, completeness describes the selected upper diagnostic pass and makes no claim about unavailable content.
 
 
 Value failure diagnostics use `Limits::diagnostic_bytes` (TypeScript
@@ -171,3 +226,13 @@ is at least one byte, so at most `B` entries add at most `3*B` bytes of quotes a
 commas. The fixed envelope and base/detail field framing fit the remaining terms;
 type lists use a fixed seven-name vocabulary. This bounds serialization, not total
 heap, vector headers/capacity, the retained source snapshots, or transport copies.
+
+Prepared owners declare resource completeness through
+`PreparedContract::resource_completeness()`: Complete for strict preparation,
+Incomplete with borrowed missing-reference evidence for qualified partial preparation.
+Complete does not promise total decidability. Services may require Complete before
+replacement; partial previews may accept Incomplete. The evidence is one contract
+witness, not necessarily the reference activated by a particular value. Optional
+planner qualification/admission declines restore the original strict located
+ResourceUnavailable detail in this default evaluator. Explicit `evaluation_bounds()`
+callers receive the original planner cause. See the [recovery policy](../../docs/partial-resource-bounds.md).

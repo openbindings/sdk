@@ -24,6 +24,7 @@ export function prepareService(documentBytes, entries = []) {
 export class ValidationService {
   #active;
   constructor(contract) {
+    requireComplete(contract);
     this.#active = contract;
   } // ownership transfers in
   async checkBytes(body) {
@@ -44,6 +45,7 @@ export class ValidationService {
   }
   replace(contract) {
     this.#current();
+    requireComplete(contract);
     if (contract === this.#active)
       throw new TypeError("Replacement must be an independently owned handle.");
     if (contract.disposed) throw new TypeError("Replacement is disposed.");
@@ -59,4 +61,10 @@ export class ValidationService {
     this.#active?.dispose();
     this.#active = undefined;
   }
+}
+function requireComplete(contract) {
+  if (contract.resourceCompleteness.status !== "complete")
+    throw new TypeError(
+      "This service requires complete schema resources before replacement.",
+    );
 }

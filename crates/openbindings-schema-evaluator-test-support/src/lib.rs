@@ -61,6 +61,51 @@ pub struct Suite {
     /// Embedded meta-schema identities/text used to check original diagnostic locations.
     pub builtin_resources: BTreeMap<String, String>,
 }
+#[derive(Deserialize)]
+struct PolicyTranslation {
+    case: String,
+    from_expected: String,
+    from_refusal_kind: Option<String>,
+    to_expected: String,
+    original_document: String,
+    original_value: String,
+    original_resources: Vec<Resource>,
+}
+#[derive(Deserialize)]
+struct Provenance {
+    runtime_policy_translations: Vec<PolicyTranslation>,
+}
+fn translate_policy(suite: &mut Suite) {
+    let provenance: Provenance = serde_json::from_str(include_str!("../fixtures/provenance.json"))
+        .expect("packaged policy provenance");
+    for translation in provenance.runtime_policy_translations {
+        let group = suite
+            .groups
+            .iter()
+            .find(|group| group.cases.iter().any(|case| case.id == translation.case))
+            .expect("policy translation names an existing group");
+        assert_eq!(group.document, translation.original_document);
+        assert_eq!(group.resources.len(), translation.original_resources.len());
+        for (id, original) in group.resources.iter().zip(&translation.original_resources) {
+            let actual = &suite.resources[id];
+            assert_eq!(actual.uri, original.uri);
+            assert_eq!(actual.document, original.document);
+        }
+        let cases = suite.groups.iter_mut().flat_map(|group| &mut group.cases);
+        let mut selected = cases.filter(|case| case.id == translation.case);
+        let case = selected
+            .next()
+            .expect("policy translation names an existing case");
+        assert!(selected.next().is_none(), "policy translation is unique");
+        assert_eq!(case.value, translation.original_value);
+        assert_eq!(case.expected, translation.from_expected);
+        assert_eq!(case.refusal_kind, translation.from_refusal_kind);
+        assert_eq!(translation.to_expected, "satisfies");
+        case.expected = translation.to_expected;
+        case.refusal_kind = None;
+        case.refusal_reason.clear();
+    }
+}
 /// Frozen inputs. No network access, environment variables, or sibling checkout is needed.
 pub fn suite() -> &'static Suite {
     static SUITE: OnceLock<Suite> = OnceLock::new();
@@ -73,6 +118,9 @@ pub fn suite() -> &'static Suite {
                 case.expected = "fails".into();
             }
         }
+        // Preserve the raw historical fixture. Admission changes are explicit
+        // provenance shared with the independent browser qualification judge.
+        translate_policy(&mut suite);
         suite
     })
 }
@@ -221,6 +269,12 @@ pub fn run(evaluator: Arc<dyn SchemaEvaluator>, options: &Options) -> Report {
                 used.insert(case.id.clone());
             }
             let mut failures = judge(case, &value, &outcome, allowed.is_some());
+            if let ContractPreparation::Ready(contract) = &prepared
+                && let Some(failure) =
+                    judge_resource_declaration(contract.resource_completeness(), &outcome)
+            {
+                failures.push(failure.into());
+            }
             if value.text() != original {
                 failures.push("evaluator changed an immutable input".into());
             }
@@ -346,4 +400,138 @@ pub fn judge(
         }
     }
     failures
+}
+
+// Only explicit declarations impose these obligations. Undeclared custom evaluators
+// keep their existing verdict/refusal contract without inheriting default policy.
+fn judge_resource_declaration(
+    declaration: ResourceCompleteness<'_>,
+    outcome: &ValueOutcome,
+) -> Option<&'static str> {
+    match declaration {
+        ResourceCompleteness::Complete if matches!(outcome, ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::ResourceUnavailable) => {
+            Some("complete resource declaration returned ResourceUnavailable")
+        }
+        ResourceCompleteness::Incomplete { evidence, .. }
+            if evidence.reason != NoVerdictReason::ResourceUnavailable
+                || evidence.location.is_none() =>
+        {
+            Some("incomplete declaration requires located ResourceUnavailable evidence")
+        }
+        _ => None,
+    }
+}
+#[cfg(test)]
+mod resource_declaration_tests {
+    use super::*;
+    #[test]
+    fn declarations_are_checked_without_assigning_policy_to_undeclared_evaluators() {
+        let detail = NoVerdict::new(NoVerdictReason::ResourceUnavailable, "missing", "missing");
+        let missing = ValueOutcome::NoVerdict {
+            detail: detail.clone(),
+        };
+        assert!(judge_resource_declaration(ResourceCompleteness::Undeclared, &missing).is_none());
+        assert!(judge_resource_declaration(ResourceCompleteness::Complete, &missing).is_some());
+        assert!(
+            judge_resource_declaration(
+                ResourceCompleteness::incomplete(&detail),
+                &ValueOutcome::Satisfies
+            )
+            .is_some()
+        );
+        let mut located = detail;
+        located.location = Some(SchemaLocation {
+            resource: None,
+            pointer: "/input".into(),
+        });
+        assert!(
+            judge_resource_declaration(
+                ResourceCompleteness::incomplete(&located),
+                &ValueOutcome::Satisfies
+            )
+            .is_none()
+        );
+        assert!(
+            judge_resource_declaration(ResourceCompleteness::incomplete(&located), &missing)
+                .is_none()
+        );
+        let mut wrong = NoVerdict::new(NoVerdictReason::Cancelled, "cancelled", "cancelled");
+        wrong.location = Some(SchemaLocation {
+            resource: None,
+            pointer: "/input".into(),
+        });
+        assert!(
+            judge_resource_declaration(ResourceCompleteness::incomplete(&wrong), &missing)
+                .is_some()
+        );
+        assert!(
+            judge_resource_declaration(
+                ResourceCompleteness::Complete,
+                &ValueOutcome::NoVerdict { detail: wrong }
+            )
+            .is_none()
+        );
+    }
+}
+
+#[cfg(test)]
+mod policy_translation_tests {
+    use super::*;
+
+    #[test]
+    fn policy_translation_requires_exact_historical_inputs() {
+        let original: Suite = serde_json::from_str(include_str!("../fixtures/cases.json")).unwrap();
+        for field in [
+            "id",
+            "expected",
+            "refusal_kind",
+            "value",
+            "document",
+            "resource_uri",
+            "resource_document",
+        ] {
+            let mut altered = original.clone();
+            let group = altered
+                .groups
+                .iter_mut()
+                .find(|g| g.id == "adversarial/resource-uri-names-another-id")
+                .unwrap();
+            let case = &mut group.cases[0];
+            match field {
+                "id" => case.id = "changed".into(),
+                "expected" => case.expected = "satisfies".into(),
+                "refusal_kind" => case.refusal_kind = None,
+                "value" => case.value = "2".into(),
+                "document" => group.document = "{}".into(),
+                "resource_uri" => {
+                    altered.resources.get_mut(&group.resources[0]).unwrap().uri =
+                        "https://changed.invalid/".into()
+                }
+                "resource_document" => {
+                    altered
+                        .resources
+                        .get_mut(&group.resources[0])
+                        .unwrap()
+                        .document = "true".into()
+                }
+                _ => unreachable!(),
+            }
+            assert!(
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| translate_policy(
+                    &mut altered
+                )))
+                .is_err(),
+                "{field}"
+            );
+        }
+        let group = original
+            .groups
+            .iter()
+            .find(|g| g.id == "adversarial/resource-uri-names-another-id")
+            .unwrap();
+        assert_eq!(group.cases[0].expected, "no-verdict");
+        let translated = suite().groups.iter().find(|g| g.id == group.id).unwrap();
+        assert_eq!(translated.cases[0].expected, "satisfies");
+        assert!(translated.cases[0].refusal_kind.is_none());
+    }
 }

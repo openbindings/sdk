@@ -16,7 +16,8 @@ export const exampleDraft = `{
   }
 }`;
 
-// The component keeps its latest usable immutable snapshot. Results are plain data.
+// The component keeps its latest snapshot with complete contract resources.
+// A different preview policy can deliberately accept incomplete prepared contracts.
 export class DocumentEditor {
   #document;
   update(text, value = { id: 7 }, includeSchemaDetails = false) {
@@ -30,8 +31,18 @@ export class DocumentEditor {
       const operations = proof.operations;
       context = proof.contracts({ includeSchemaDetails });
       const setup = context.prepare("find", "input");
-      if (setup.status !== "ready") return setup;
+      if (setup.status !== "ready") {
+        if (
+          setup.status === "no-verdict" &&
+          setup.detail.reason === "resource-unavailable"
+        )
+          return { status: "resources-missing", evidence: setup.detail };
+        return setup;
+      }
       input = setup.contract;
+      const completeness = input.resourceCompleteness;
+      if (completeness.status !== "complete")
+        return { status: "resources-missing", evidence: completeness.evidence };
       const result = input.validate(value);
       const previous = this.#document;
       this.#document = proof; // transfer the validated owner after successful setup
@@ -139,6 +150,8 @@ export function formatEditorResult(result) {
       return 'Document is conformant; operation "find" has no input contract.';
     case "no-verdict":
       return `Document is conformant; input setup was refused (${result.detail.reason}, ${result.detail.code}); ${schemaLocation(result.detail.location)}: ${result.detail.message}`;
+    case "resources-missing":
+      return `Document is conformant; schema resources are missing. Previous complete snapshot kept. One missing reference: ${schemaLocation(result.evidence.location)}. Supply resources in a new context before replacement.`;
     case "updated":
       return [
         "Document is conformant; the input contract is ready.",

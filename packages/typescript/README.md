@@ -5,6 +5,10 @@ TypeScript API. Document parsing, authoring, conformance, exact values, names,
 references, prepared contracts, and optional HTTP discovery are included.
 Invocation, binding adaptation, and synthesis are separate work.
 
+The declarations and examples are qualified with TypeScript 5.9.3. Include
+`ESNext.Disposable` in your compiler `lib` configuration for disposable handles
+and `using`. An older compiler minimum has not been qualified.
+
 ## First useful result
 
 Install a locally built archive of this unpublished candidate, then run its Node
@@ -90,6 +94,76 @@ The first-use function closes its owners after each demonstration. For repeated
 validation, prepare once and keep the ready contract. The [retained service](examples/service.mjs)
 does that; [replacement and recovery](examples/service-lifecycle.mjs) adds explicit
 resources and asynchronous request ownership after the initialization instructions.
+
+The default evaluator first tries complete-resource preparation. Missing static
+references in a qualified bounds fragment can prepare `ready`: an absent optional
+property, independent known failure, or known passing `anyOf` branch can make a value
+decidable. Values that depend on missing content return `no-verdict` with reason
+`resource-unavailable` from validation. Even a bare missing `$ref` now prepares
+ready and returns no verdict for every admitted value. Keep handling both phases.
+Inspect `contract.resourceCompleteness`: its frozen, cached plain data is `complete`
+or `incomplete` with one missing-reference `evidence`. This is selected-contract
+preparation evidence, including transitive supplied-resource holes, not an exhaustive
+list or necessarily the reference activated by a value. Inspection creates no Wasm
+owner; access after disposal throws `disposed-handle`. Complete does not promise every
+value is decidable. The retained service/editor examples require complete resources
+before replacing an active snapshot; partial previews can deliberately keep incomplete
+contracts.
+
+When the default evaluator declines optional partial planning, it preserves the
+original located `resource-unavailable` refusal. Known-closure defects, cancellation,
+shared limits and compilation failures keep their actual classifications.
+
+Hole-dependent `oneOf` uses both bound polarities: zero possible or multiple certain
+winners fail, and one certain sole winner satisfies. Correlated unknown branches can
+remain undecided. Sufficient-budget failure reports identify the original oneOf with
+a cardinality-neutral message, without claiming which branches matched.
+Missing influence through `not`, conditionals or `contains` refuses, while
+closed subgraphs remain supported. Evaluated `unevaluated*` and dynamic keywords
+reject partial bounds. Known invalid/unsupported schemas remain refusals. Both
+internal bounds share one verdict work/regex allowance; failures retain separately
+bounded known-source diagnostics. There is no new application validation mode.
+The [proof and limits](https://github.com/openbindings/sdk/blob/main/docs/partial-resource-bounds.md)
+include a 64 MiB combined projection-text cap and explicit graph/scratch guards.
+Dependent-oneOf plans additionally admit 100,000 emitted schema nodes and 200,000
+reference/applicator edges across both closed programs. These limits are unmeasured;
+nested predicates may be revisited under the shared work allowance.
+
+Inspect `document.references()` for document-wide spellings and locations, apply
+your application's acquisition policy, then supply resources in a new context.
+The inventory is not an exact per-contract missing-resource list. The SDK never
+fetches references. Existing prepared owners retain their original snapshots; a
+new context with colliding or unsupported supplied resources can itself refuse.
+
+The bundled resolver selects a unique contained `$id` before caller-supplied
+schemas, with packaged standards last. Supplied retrieval names and declared IDs
+otherwise have equal priority. Another alias cannot bypass a conflict over a
+resource's canonical ID: preparation returns `no-verdict` with reason
+`conservative-preparation`. Unused conflicts do not block unrelated contracts.
+Diagnostic resource URIs retain their original retrieval provenance.
+
+## Browser resource management
+
+TypeScript's `using` needs both compiler support and the runtime `Symbol.dispose`
+symbol. Compile with `target: "ES2022"` and include `ESNext.Disposable` in `lib`;
+this transforms the syntax but does not supply the symbol. For browsers without
+that symbol, use a separate application bootstrap before loading any module that
+imports the SDK:
+
+```js
+if (Symbol.dispose === undefined) {
+  Object.defineProperty(Symbol, "dispose", { value: Symbol("Symbol.dispose") });
+}
+await import("./app.js");
+```
+
+Put your SDK imports and initialization in `app.js`. Static imports evaluate
+before the importing module's statements, so placing a static SDK import below
+the conditional in the same file is too late. Apply this setup separately in each
+Worker that uses `using`. Existing native symbols are preserved. The SDK does not
+modify global objects; explicit `dispose()` calls in `try`/`finally` also work
+without this setup. See the [TypeScript resource-management documentation](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-2.html#using-declarations-and-explicit-resource-management)
+for the distinction between compilation and runtime support.
 
 ## Initialization
 
@@ -177,6 +251,69 @@ additional fields cannot shadow typed members. Authoring establishes a parsed
 snapshot; `validate()` establishes conformance separately. `toValue()` either
 returns a checked ordinary JSON value or explicitly declines an inexact conversion.
 
+### Editing an existing document
+
+`document.toDraft()` returns `drafted` with one `OwnedDocumentDraft`, or a
+structured `authoring-error`. Its `value` is an `EditableDocumentDraft`: the
+normative maps and scalar lists are writable, and schemas, content, examples and
+additional fields retain exact values. Build with the same `authorDocument` used
+for handwritten drafts; building does not establish conformance.
+
+```ts
+const converted = document.toDraft();
+if (converted.status === 'drafted') {
+  using editing = converted.draft;
+  editing.value.description = 'Updated description';
+  const operation = editing.value.operations.lookup;
+  if (operation) (operation.tags ??= []).push('reviewed');
+  const built = authorDocument(editing.value);
+  if (built.status === 'authored') {
+    using revised = built.document;
+    console.log(revised.assess());
+  } else {
+    console.log(built.error);
+  }
+}
+```
+
+Exact leaves supplied by conversion belong to the editing scope. Removing or
+replacing a field does not leak its old leaf: the owner retains its acquisition
+registry until disposal. Narrow a leaf with `instanceof ExactJson`, then call
+`retain()` if it must survive explicit scope disposal. Abandoning an undisposed
+scope does not invalidate still-reachable leaf wrappers; unreachable leaves have
+their own best-effort finalizers. Use `using` or `dispose()` for timely cleanup.
+Caller-inserted exact values remain
+caller-owned and must be live through the build. The scoped draft root cannot be
+built after disposal. Keep editing scopes short; a retained leaf may keep its
+original source arena alive. Renaming operations never rewrites references.
+
+Typed fields are re-encoded according to their declared types: for example, an
+integer `preference` written as `1.0` or `1e0` becomes `1`, and `-0` becomes `0`.
+Opaque exact leaves retain their original numeric tokens.
+
+The [complete inspection/edit example](examples/inspect-edit.ts) uses a named
+`EditableDocumentDraft` helper, returns plain output, and disposes every acquired
+owner. Existing readonly inputs remain accepted by `authorDocument`; opaque
+interiors are not promised as mutable JavaScript graphs.
+
+To change a member **inside** an exact opaque object, the same example supplies
+`replaceExactObjectMember(object, key, replacement)` and an
+`editExtensionMember` caller. These are application recipes, not additional SDK
+exports. The helper traverses `members()`, borrows unchanged sibling values as
+`ExactJson`, and composes a new object with `ExactJson.from`. It converts member
+names only; it never decodes the sibling values through JavaScript numbers.
+Assign the result to the ordinary editable draft, then call `authorDocument`.
+The returned exact object is caller-owned and must remain live through that build;
+the example uses `using` for the result and all temporary owners.
+
+This recipe replaces one existing member. It refuses non-objects, absent members,
+duplicate names anywhere in the input subtree, and names that checked conversion
+cannot represent. It preserves untouched exact numeric tokens and decoded Unicode
+name distinctions, but may change formatting, name escaping and member order.
+Traversal visits every immediate member; composition encodes and parses the whole
+changed object. Building the document then encodes its full result. For large
+opaque objects, include both costs in the application's editing budget.
+
 ### Recovering invalid drafts
 
 `authorDocument` returns `authoring-error` for expected invalid draft data:
@@ -212,11 +349,14 @@ object. Messages omit opaque values.
 | `accessor-property`, `non-enumerable-property`, `symbol-key` | Unsupported property representation. |
 | `invalid-authoring-object` | A normative object or map is not a plain object. |
 | `authoring-limit` | Ordinary conversion or encoded JSON admission limit. |
-| `invalid-draft` | Rust rejects the typed draft model; its unchanged ABI does not expose a draft pointer. |
+| `invalid-draft` | Rust rejects an encoded handwritten draft; no logical draft pointer is available. |
+| `invalid-field`, `duplicate-members` | Parsed-to-draft conversion cannot represent a typed field or repeated member; inspect `sourceLocation` when available. |
 
 Known optional typed fields accept undefined as absence. Opaque fields do not.
 Rust model refusals and encoded-input admission limits can have null pointers;
-no serialized JSON offset is invented as a draft location. Accessors and `toJSON`
+no serialized JSON offset is invented as a draft location. Conversion errors use
+`sourceLocation` for original bytes, distinct from a handwritten `draftPointer`.
+Accessors and `toJSON`
 are never invoked on ordinary drafts. Proxy meta-object traps are outside that
 ordinary-data guarantee; their failures propagate rather than being misclassified.
 
@@ -231,7 +371,47 @@ on `status === 'validated'`. `retain()` on that handle preserves the validated
 type. Runtime publication still verifies conformance for JavaScript and unsafe
 casts; the brand is not a substitute for runtime checks.
 
+## Exact traversal
+
+`exact.members()` and `exact.elements()` return lazy disposable iterators, or
+`undefined` for the wrong container kind. Object members retain source order,
+duplicate occurrences and exact name tokens. Each yielded member/value is an
+owner; a member's `name` and `value` getters each acquire another owner.
+
+```ts
+using members = exact.members();
+if (members) {
+  for (using member of members) {
+    using name = member.name;
+    using value = member.value;
+    console.log(name.text, value.text);
+    break; // closes the cursor; the using scopes release the yielded owners
+  }
+}
+```
+
+Use `using` for both cursor and yielded items, including arrays. Exhaustion or
+`return()` closes a cursor and later `next()` stays done. Disposing a live cursor
+makes later `next()` throw `disposed-handle`; disposal never revives it. Manual
+`next()` callers must dispose yielded owners themselves. Retained children survive
+parent/cursor disposal, and an early prefix read need not materialize all children.
+The shipped [prefix preview](examples/inspect-edit.ts) handles cleanup explicitly.
+
 ## Inspection and contracts
+
+`document.operations`, `bindings`, `sources` and `dependencies` expose frozen
+ordinary metadata. Optional namespaces distinguish missing (`null`) from present
+empty arrays. Keyed `binding(key)`, `source(key)` and `dependency(key)` return an
+independent disposable view or `undefined`; a selected operation has `metadata`,
+`examples` and `example(key)`. Exact `value`, `content`, `input` and `output`
+getters acquire separate owners. Missing exact fields are `undefined`; present
+JSON null is an exact value. Keep each owner in its own `using` scope.
+
+A keyed view interprets its selected row's metadata when requested. A malformed
+unrelated row can make whole-namespace metadata fail while a valid selected row
+remains readable. Existing global version/duplicate/unpaired-string prerequisites
+still apply. A binding with a missing source remains readable; the source lookup
+returns `undefined`, and conformance assessment reports the broken reference.
 
 `document.operations` is a cached immutable metadata snapshot. Alias lookup,
 binding enumeration, dependency-kind comparison, and reference inspection do not
@@ -249,6 +429,18 @@ if (setup.status === 'ready') {
 }
 // Other setup states: no-contract | operation-missing | operation-ambiguous | no-verdict
 ```
+
+For an application-owned replacement candidate:
+
+```ts
+const completeness = candidate.resourceCompleteness;
+if (completeness.status === 'complete') service.replace(candidate);
+else {
+  candidate.dispose();
+  return { status: 'resources-missing', evidence: completeness.evidence };
+}
+```
+
 
 `resolveOperation(name)` returns `found` with an independently owned operation,
 `missing`, or `ambiguous` with lexically ordered primary keys. The returned
@@ -305,6 +497,9 @@ marks even when live owners have been released.
 | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
 | Parsed or validated document, exact value/view | Dispose each returned handle; `retain()` creates an independent owner.                                                             |
 | Selected operation (`OperationView`) | Dispose the independently returned selection. It has no `retain()` method; its `value` getter returns a separate owned `ExactJson`. |
+| Binding, source, dependency or example view | Dispose each acquired view. Metadata is plain data; exact getters acquire separate owners. `retain()` retains the view. |
+| Exact iterator/member | Dispose the cursor and every yielded owner. Early iteration closure releases the cursor only. |
+| Owned editable draft | Dispose after the edit/build transaction. Converted exact leaves belong to this scope; independently retain leaves that must outlive it. |
 | Resource set or contract context                                   | Dispose after setup when only the prepared contract is needed. Supplied resource handles are borrowed and remain caller-owned.     |
 | Ready prepared contract                                            | Retain for repeated validation; it survives disposal of setup owners. Acquire a request's retained owner before its first `await`. |
 
@@ -425,7 +620,7 @@ a new minor release may change source compatibility; review the changelog before
 upgrading. Neither language adds an `unknown` semantic outcome.
 
 Definition-level reference contracts, rendered documentation and maintained checks
-are described in the [API reference guide](../../docs/api-reference.md).
+are described in the [API reference guide](https://github.com/openbindings/sdk/blob/main/docs/api-reference.md).
 
 Value diagnostics default to an aggregate `diagnosticBytes` allowance of 1 MiB of
 retained UTF-8 strings (pointers, resource URIs, codes, messages and requested detail strings), alongside

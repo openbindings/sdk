@@ -16,6 +16,8 @@ enum LoadFailure {
     Conformance(ConformanceReport),
     Interpretation(InterpretationError),
     Preparation(ContractPreparation),
+    MissingResources(NoVerdict),
+    UndeclaredResources,
 }
 impl fmt::Display for LoadFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -29,6 +31,10 @@ impl fmt::Display for LoadFailure {
             ),
             Self::Interpretation(error) => write!(f, "document interpretation: {error}"),
             Self::Preparation(state) => write!(f, "input contract setup: {state:?}"),
+            Self::MissingResources(detail) => write!(f, "input contract resources: {detail:?}"),
+            Self::UndeclaredResources => {
+                f.write_str("evaluator did not declare resource completeness")
+            }
         }
     }
 }
@@ -41,7 +47,7 @@ fn resources(schema: &str) -> Result<ResourceSet, Box<dyn Error>> {
     }])?)
 }
 
-// This application requires both conformance and a ready input before replacement.
+// This application requires conformance and complete resources before replacement.
 fn candidate(
     text: &str,
     resources: ResourceSet,
@@ -58,10 +64,21 @@ fn candidate(
         .map_err(LoadFailure::Interpretation)?;
     let input = match context.prepare_with_control("find", Side::Input, control) {
         ContractPreparation::Ready(input) => input,
+        ContractPreparation::NoVerdict { detail }
+            if detail.reason == NoVerdictReason::ResourceUnavailable =>
+        {
+            return Err(LoadFailure::MissingResources(detail));
+        }
         // Retain the distinct no-contract, missing, ambiguous or no-verdict state.
         other => return Err(LoadFailure::Preparation(other)),
     };
-    Ok(input) // document/context/cache owners end; the returned owner remains usable.
+    match input.resource_completeness() {
+        ResourceCompleteness::Complete => Ok(input),
+        ResourceCompleteness::Incomplete { evidence, .. } => {
+            Err(LoadFailure::MissingResources(evidence.clone()))
+        }
+        _ => Err(LoadFailure::UndeclaredResources),
+    } // document/context/cache owners end; the returned owner remains usable.
 }
 
 fn satisfies(input: &PreparedContract, value: &JsonValue) {
@@ -144,12 +161,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         other => panic!("expected malformed-field rejection: {other:?}"),
     }
     satisfies(&active, &new_value); // failure never assigns to the active slot
+    // Preparation can succeed with partial resources; this application checks
+    // declared completeness before accepting the candidate, without a probe value.
     match candidate(DOCUMENT, ResourceSet::default(), &healthy) {
-        Err(LoadFailure::Preparation(ContractPreparation::NoVerdict { detail })) => {
-            assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
+        Err(LoadFailure::MissingResources(detail)) => {
+            assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable)
         }
-        other => panic!("expected missing resource: {other:?}"),
+        other => panic!("expected missing-resource rejection: {other:?}"),
     }
+    satisfies(&active, &new_value);
     let cancelled = WorkControl::new();
     cancelled.cancel();
     match candidate(DOCUMENT, resources(r#"{"const":7}"#)?, &cancelled) {

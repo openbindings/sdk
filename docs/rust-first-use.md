@@ -84,6 +84,33 @@ The `OBI-02` / `schema-mismatch` finding points to `/operations/lookup/inputSche
 
 Locations use original JSON Pointers, zero-based UTF-8 byte offsets, and one-based lines and byte columns. Preserve the original document bytes when presenting them. These are not character indexes or JavaScript UTF-16 editor selection offsets: an editor must convert coordinates against the same source bytes before selecting text. Quote or escape pointers when displaying them, and render them as text rather than HTML. Correcting text creates a new snapshot; it does not mutate retained views of the old one. A truncated findings list still accompanies the complete rule evidence map.
 
+## Edit a document while preserving exact opaque values
+
+`ParsedDocument::to_authoring()` returns an owned `DocumentBuilder`. Change its
+typed fields and call `build()` to obtain a new snapshot; assess that snapshot
+before treating it as conformant. Renaming an operation does not rewrite its
+references. Typed fields are re-encoded: an integer preference spelled `1.0` or
+`1e0` becomes `1`, and `-0` becomes `0`. Opaque exact values keep their numeric
+tokens. This authoring path preserves values, not whole-document source spelling.
+
+For a change inside an opaque object, see the runnable
+[`exact_edit` example](../crates/openbindings/examples/exact_edit.rs), also included
+in the `openbindings` Cargo package. It uses `JsonRef::members()` and retained
+`JsonValue` siblings to compose a replacement object. Serializing those exact
+values with `serde_json::to_vec` preserves their raw tokens; parsing the result
+creates an independent exact snapshot. This is the exact Serde lane, distinct
+from `JsonValue::from_serializable` for ordinary Rust data. No ordinary
+`serde_json::Value` or floating-point conversion is needed.
+
+The generic example replaces one existing member and then uses the same typed
+builder. It refuses non-objects, absent members, duplicate names anywhere in the
+input subtree, and names that are not representable as Rust UTF-8 strings. It
+retains untouched numeric tokens and decoded Unicode name distinctions; formatting,
+name escaping and order may change. It visits every immediate member and serializes
+and parses the whole changed object, followed by document serialization during
+`build()`. These allocations are part of the editing cost, not a constant-time edit
+or a general JSON Patch facility. Input owners may be dropped after the build.
+
 ## Admit a value and interpret the result
 
 For ordinary Rust data, use `JsonValue::from_serializable(&value)` and handle a possible conversion refusal before validation. Its checked Serde profile retains exact `u64`/`i128`/`u128` values, rejects non-finite floats and unsupported representations, and bounds emitted JSON. For exact text or bytes, use `JsonValue::parse`. Do not route already exact `JsonValue` or Serde `RawValue` wrappers through ordinary conversion. An ordinary float cannot recover digits already rounded by application code.
@@ -100,7 +127,15 @@ Failure problems identify instance pointers and original schema locations when a
 
 ## Retained work and replacement
 
-The replacement example owns an `active: PreparedContract` slot. Its `candidate` helper parses a prospective document, establishes conformance, constructs immutable resources, and requires a ready input. Only a successful result is assigned to `active`. The helper retains distinct parse, version, conformance, interpretation and preparation failures with their diagnostics.
+The replacement example owns an `active: PreparedContract` slot. Its `candidate` helper parses a prospective document, establishes conformance, constructs immutable resources, and requires a ready input declaring `ResourceCompleteness::Complete`. Only a successful result is assigned to `active`. The helper retains distinct parse, version, conformance, interpretation and preparation failures with their diagnostics.
+
+A qualified missing-resource contract can be ready and declare Incomplete. The
+example's candidate helper checks borrowed completeness evidence before accepting it,
+returns a distinct missing-resources error, and keeps the active owner. Undeclared
+custom evaluators require caller policy. A partial preview can deliberately retain
+an Incomplete owner instead. Complete does not guarantee decidability: budgets,
+cancellation and unsupported instances can still return no verdict. Recovery creates
+a new context; it cannot update an old owner's evidence.
 
 The old job clones the ready owner before the application changes the slot. It can still use its original document/resource context after replacement, even when the new context supplies a different schema at exactly the same URI. A channel makes the example's scheduling deterministic; it does not claim to interrupt an evaluation already executing. Applications can use their own threads, queues or other scheduling policy.
 

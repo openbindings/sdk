@@ -135,12 +135,15 @@ def main():
     (consumer / "Cargo.toml").write_text(
         '[package]\nname="sdk-release-consumer"\nversion="0.0.0"\nedition="2024"\n[workspace]\n[dependencies]\n'
         f'openbindings="={version}"\nopenbindings-json-schema-evaluator="={version}"\n'
-        'serde={version="1.0.229",features=["derive"]}\n' + patches)
+        'serde={version="1.0.229",features=["derive"]}\nserde_json="=1.0.151"\n' + patches)
     shutil.copyfile(ROOT / "Cargo.lock", consumer / "Cargo.lock")
     evaluator = Path(next(item["source"] for item in packages if item["name"] == "openbindings-json-schema-evaluator"))
     examples = ["first_use", "replacement"]
     for name in examples:
         shutil.copyfile(evaluator / "examples" / (name + ".rs"), consumer / "src/bin" / (name + ".rs"))
+    core = Path(next(item["source"] for item in packages if item["name"] == "openbindings"))
+    shutil.copyfile(core / "examples/exact_edit.rs", consumer / "src/bin/exact_edit.rs")
+    examples.append("exact_edit")
     snippets = re.findall(rb"^```rust\r?\n(.*?)^```[ \t]*\r?$", (evaluator / "README.md").read_bytes(), re.M | re.S)
     require(bool(snippets), "No executable evaluator README example found.")
     for i, snippet in enumerate(snippets):
@@ -149,6 +152,7 @@ def main():
         examples.append(name)
     for name in examples:
         run("archive-" + name, ["cargo", "run", *offline, "--bin", name], consumer)
+    run("archive-exact-edit-tests", ["cargo", "test", *offline, "--bin", "exact_edit"], consumer)
     compat = out / "compat-consumer"
     (compat / "src").mkdir(parents=True)
     versions = {item["name"]: item["version"] for item in packages}

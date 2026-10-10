@@ -148,7 +148,7 @@ export interface SchemaLocation {
   /** RFC 6901 pointer within that original source; empty string denotes root. */
   pointer: string;
 }
-/** Known refusal causes for this facade and its bundled engine. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. Undefined is reserved for proved semantic undefinedness; a potential cycle alone is conservative-preparation. Later package versions may add causes. For unavailable resources, ParsedDocument.references() exposes explicit reference spellings and original keyword locations; apply an application disclosure policy before logging them. */
+/** Known refusal causes for this facade and its bundled engine. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. Undefined is reserved for proved semantic undefinedness; a potential cycle alone is conservative-preparation. Later package versions may add causes. Qualified partial contracts can prepare ready; values whose result depends on missing content return resource-unavailable during validation. For unavailable resources, ParsedDocument.references() exposes document-wide reference spellings and original keyword locations, not an exact per-contract missing-resource list; apply an application disclosure policy before logging them. */
 export type NoVerdictReason =
   | "unsupported-capability"
   | "conservative-preparation"
@@ -255,7 +255,7 @@ export type OperationSelection =
       /** Distinct primary keys in lexical order; repeated occurrences can yield one key. */
       candidates: readonly string[];
     };
-/** Setup partition: ready transfers a disposable PreparedContract; no-contract means the selected side is absent; operation-missing/operation-ambiguous are selection outcomes; no-verdict is preparation refusal. Present false is a contract. None of these setup refusals judges an instance. */
+/** Setup partition: ready transfers a disposable PreparedContract; no-contract means the selected side is absent; operation-missing/operation-ambiguous are selection outcomes; no-verdict is preparation refusal. Present false is a contract. Ready can include qualified missing-resource contracts whose values may return no-verdict during validation. None of these setup refusals judges an instance. */
 export type ContractPreparation =
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
@@ -413,10 +413,71 @@ export interface OperationMetadata {
   readonly description: string | null;
   /** Frozen aliases preserving declaration order; null means absent. */
   readonly aliases: readonly string[] | null;
+  /** Frozen declared tags in order; null means absent. */
+  readonly tags: readonly string[] | null;
+  /** Declared deprecation annotation; null means absent. */
+  readonly deprecated: boolean | null;
   /** Whether an input member is present, without proving it is a supported schema. */
   readonly hasInput: boolean;
   /** Whether an output member is present, without proving it is a supported schema. */
   readonly hasOutput: boolean;
+}
+/** Frozen binding declaration metadata; annotations do not select or execute a realization. */
+export interface BindingMetadata {
+  /** Binding declaration key. */ readonly key: string;
+  /** Declared primary operation key. */ readonly operation: string;
+  /** Declared source key; its target may be missing. */ readonly source: string;
+  /** Declared description or null for absence. */ readonly description:
+    | string
+    | null;
+  /** Exact interoperable preference integer or null; no ranking is performed. */ readonly preference:
+    | number
+    | null;
+  /** Declared idempotence or null for absence. */ readonly idempotent:
+    | boolean
+    | null;
+  /** Declared deprecation or null for absence. */ readonly deprecated:
+    | boolean
+    | null;
+  /** Presence of content, including explicit JSON null. */ readonly hasContent: boolean;
+}
+/** Frozen source declaration metadata, excluding opaque content. */
+export interface SourceMetadata {
+  /** Source declaration key. */ readonly key: string;
+  /** Exact declared kind string; no normalization or execution. */ readonly kind: string;
+  /** Declared description or null for absence. */ readonly description:
+    | string
+    | null;
+  /** Presence of content, including explicit JSON null. */ readonly hasContent: boolean;
+}
+/** Frozen dependency declaration metadata; no provider is selected. */
+export interface DependencyMetadata {
+  /** Dependency declaration key. */ readonly key: string;
+  /** Declared operation key. */ readonly operation: string;
+  /** Declared description or null for absence. */ readonly description:
+    | string
+    | null;
+  /** Frozen declared kind strings; null accepts all. An empty list matches none but is nonconformant: a present kinds list must be nonempty. */ readonly kinds:
+    | readonly string[]
+    | null;
+}
+/** Frozen named-example metadata; values and their truth are separate. */
+export interface ExampleMetadata {
+  /** Example declaration key. */ readonly key: string;
+  /** Declared description or null for absence. */ readonly description:
+    | string
+    | null;
+  /** Presence of input, including explicit null. */ readonly hasInput: boolean;
+  /** Presence of output, including explicit null. */ readonly hasOutput: boolean;
+}
+function freezeMetadata<T extends object>(row: T): T {
+  for (const value of Object.values(row))
+    if (Array.isArray(value)) Object.freeze(value);
+  return Object.freeze(row);
+}
+function metadataRows<T extends object>(text: string): readonly T[] | null {
+  const rows = decode<T[] | null>(text);
+  return rows === null ? null : Object.freeze(rows.map(freezeMetadata));
 }
 function camel(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(camel);
@@ -517,9 +578,9 @@ const finalizer =
     ? undefined
     : new FinalizationRegistry<Raw>((raw) => raw.free());
 const handles = new WeakMap<object, Raw>();
-function registerHandle(owner: object, raw: Raw): void {
+function registerHandle(owner: object, raw: Raw, finalize: boolean): void {
   handles.set(owner, raw);
-  finalizer?.register(owner, raw, owner);
+  if (finalize) finalizer?.register(owner, raw, owner);
 }
 function handle<T extends Raw>(owner: Managed): T {
   const raw = handles.get(owner);
@@ -528,8 +589,10 @@ function handle<T extends Raw>(owner: Managed): T {
   return raw as T;
 }
 abstract class Managed {
-  protected constructor(raw: Raw) {
-    registerHandle(this, raw);
+  protected constructor(raw: Raw);
+  /** @internal */ protected constructor(raw: Raw, finalize: boolean);
+  protected constructor(raw: Raw, finalize = true) {
+    registerHandle(this, raw, finalize);
   }
   /** Whether this handle has been released. Safe to inspect after disposal. */
   get disposed(): boolean {
@@ -570,6 +633,95 @@ export type JsonOutput =
   | JsonPrimitive
   | JsonOutput[]
   | { [name: string]: JsonOutput };
+/** Lazy single-pass exact traversal. Every yielded value is an independent owner.
+ * Natural exhaustion or return makes later next return done; disposal/failure of a live cursor makes next throw disposed-handle.
+ * The first terminal reason wins. Use using on the cursor and on each yielded item.
+ */
+export interface ExactIterator<T>
+  extends IterableIterator<T, undefined>,
+    Disposable {
+  /** True after any terminal transition. */ readonly disposed: boolean;
+  /** Acquire the next independent owner, or report natural completion. */ next(): IteratorResult<
+    T,
+    undefined
+  >;
+  /** Close the cursor without releasing previously yielded owners; always returns done. */ return(): IteratorResult<
+    T,
+    undefined
+  >;
+  /** Return this single-pass iterator. */ [Symbol.iterator](): this;
+  /** Release the cursor; later next throws unless natural exhaustion/return happened first. */ dispose(): void;
+}
+function adopt<R extends Raw, T>(raw: R, construct: (raw: R) => T): T {
+  try {
+    return construct(raw);
+  } catch (error) {
+    raw.free();
+    throw error;
+  }
+}
+class ExactCursor<R extends Raw, C extends Raw, T>
+  extends Managed
+  implements ExactIterator<T>
+{
+  #terminal: "closed" | "disposed" | undefined;
+  constructor(
+    raw: R,
+    private readonly step: (raw: R) => C | undefined,
+    private readonly wrap: (raw: C) => T,
+  ) {
+    super(raw);
+  }
+  next(): IteratorResult<T, undefined> {
+    if (this.#terminal === "closed") return { done: true, value: undefined };
+    const raw = handle<R>(this);
+    try {
+      const child = this.step(raw);
+      if (!child) return this.return();
+      return { done: false, value: adopt(child, this.wrap) };
+    } catch (error) {
+      this.dispose();
+      throw error;
+    }
+  }
+  return(): IteratorResult<T, undefined> {
+    this.#terminal ??= "closed";
+    super.dispose();
+    return { done: true, value: undefined };
+  }
+  dispose(): void {
+    this.#terminal ??= "disposed";
+    super.dispose();
+  }
+  [Symbol.iterator](): this {
+    return this;
+  }
+}
+/** Independently owned object-member occurrence, including exact names and duplicate occurrences. */
+export class ExactMember extends Managed {
+  private constructor(raw: wasm.WasmMember) {
+    super(raw);
+  }
+  /** @internal */ static fromRaw(raw: wasm.WasmMember): ExactMember {
+    return new ExactMember(raw);
+  }
+  /** Zero-based occurrence position within its original object. */
+  get index(): number {
+    return handle<wasm.WasmMember>(this).index();
+  }
+  /** Acquire a NEW exact string owner, preserving escaped unpaired code units and original location. */
+  get name(): ExactJson {
+    return new ExactJson(handle<wasm.WasmMember>(this).name());
+  }
+  /** Acquire a NEW exact value owner, independent of this entry/source/cursor. */
+  get value(): ExactJson {
+    return new ExactJson(handle<wasm.WasmMember>(this).value());
+  }
+  /** Acquire another independently disposable owner for this occurrence. */
+  retain(): ExactMember {
+    return ExactMember.fromRaw(handle<wasm.WasmMember>(this).retain());
+  }
+}
 /** Immutable exact JSON owner retaining numeric token spelling and duplicate names. Dispose each owner deterministically (or use Symbol.dispose). Retained/subtree owners share storage and survive parent disposal; they may retain the whole source arena. Text/bytes stay available when ordinary conversion is inexact. */
 export class ExactJson extends Managed {
   /** @internal */ constructor(raw: wasm.WasmJson) {
@@ -615,6 +767,31 @@ export class ExactJson extends Managed {
     scalar(name);
     const found = handle<wasm.WasmJson>(this).get(name);
     return found ? new ExactJson(found) : undefined;
+  }
+  /** Lazily enumerate every member in source order, including duplicate and exact names. Wrong kind returns undefined; an empty object returns an empty cursor. Dispose cursor and each yielded entry independently. */
+  members(): ExactIterator<ExactMember> | undefined {
+    const raw = jsonRaw(this).members();
+    return raw
+      ? adopt(
+          raw,
+          (r) => new ExactCursor(r, (r) => r.next(), ExactMember.fromRaw),
+        )
+      : undefined;
+  }
+  /** Lazily enumerate independent exact element owners in array order. Wrong kind returns undefined; empty arrays return an empty cursor. No unvisited child handles are acquired. */
+  elements(): ExactIterator<ExactJson> | undefined {
+    const raw = jsonRaw(this).elements();
+    return raw
+      ? adopt(
+          raw,
+          (r) =>
+            new ExactCursor(
+              r,
+              (r) => r.next(),
+              (r) => new ExactJson(r),
+            ),
+        )
+      : undefined;
   }
   /** Compare exact mathematical JSON values without binary64 rounding. Returns undefined when duplicate names make equality ambiguous; borrows both owners. */
   equals(other: ExactJson): boolean | undefined {
@@ -737,6 +914,9 @@ export function liveStorageOwners(): number {
 /** Disposable immutable exact snapshot without normative proof. retain() creates an independent owner. Assessment may be cached in Rust; operations caches frozen plain metadata. Owner-producing properties create fresh handles on every access and require separate disposal. */
 export class ParsedDocument extends Managed {
   #operations?: readonly OperationMetadata[];
+  #bindings?: readonly BindingMetadata[] | null;
+  #sources?: readonly SourceMetadata[] | null;
+  #dependencies?: readonly DependencyMetadata[] | null;
   /** @internal */ constructor(raw: wasm.WasmDocument) {
     super(raw);
   }
@@ -770,9 +950,74 @@ export class ParsedDocument extends Managed {
         Object.freeze({
           ...op,
           aliases: op.aliases ? Object.freeze(op.aliases) : null,
+          tags: op.tags ? Object.freeze(op.tags) : null,
         }),
       ),
     ));
+  }
+  /** Convert through Rust's typed authoring model into a new registry-owned editable draft. Expected invalid typed data returns located authoring-error; no conformance proof is created. */
+  toDraft(): DraftResult {
+    let raw: wasm.WasmDraft;
+    try {
+      raw = documentRaw(this).toDraft();
+    } catch (error) {
+      if (typeof error === "string") {
+        let result: DraftResult | undefined;
+        try {
+          result = decode<DraftResult>(error);
+        } catch {
+          /* Unexpected engine failure. */
+        }
+        if (result?.status === "authoring-error") return result;
+      }
+      throw error;
+    }
+    return { status: "drafted", draft: OwnedDocumentDraft.fromRaw(raw) };
+  }
+  /** Cached frozen binding metadata in lexical key order; null means namespace absent. Checks all rows, never copies opaque payloads, and throws located interpretation errors. */
+  get bindings(): readonly BindingMetadata[] | null {
+    const raw = documentRaw(this);
+    if (this.#bindings === undefined)
+      this.#bindings = metadataRows<BindingMetadata>(
+        sdkCall(() => raw.bindings()),
+      );
+    return this.#bindings;
+  }
+  /** Acquire an independent binding view by declaration key, or undefined when missing. Checks selected shape without interpreting unrelated row metadata. */
+  binding(key: string): BindingView | undefined {
+    scalar(key);
+    const raw = sdkCall(() => documentRaw(this).binding(key));
+    return raw ? adopt(raw, BindingView.fromRaw) : undefined;
+  }
+  /** Cached frozen source metadata in lexical key order; null means namespace absent. Checks all rows, never copies opaque payloads, and throws located interpretation errors. */
+  get sources(): readonly SourceMetadata[] | null {
+    const raw = documentRaw(this);
+    if (this.#sources === undefined)
+      this.#sources = metadataRows<SourceMetadata>(
+        sdkCall(() => raw.sources()),
+      );
+    return this.#sources;
+  }
+  /** Acquire an independent source view by declaration key, or undefined when missing. Checks selected shape without interpreting unrelated row metadata. */
+  source(key: string): SourceView | undefined {
+    scalar(key);
+    const raw = sdkCall(() => documentRaw(this).source(key));
+    return raw ? adopt(raw, SourceView.fromRaw) : undefined;
+  }
+  /** Cached frozen dependency metadata in lexical key order; null means namespace absent. Checks all rows, never copies opaque payloads, and throws located interpretation errors. */
+  get dependencies(): readonly DependencyMetadata[] | null {
+    const raw = documentRaw(this);
+    if (this.#dependencies === undefined)
+      this.#dependencies = metadataRows<DependencyMetadata>(
+        sdkCall(() => raw.dependencies()),
+      );
+    return this.#dependencies;
+  }
+  /** Acquire an independent dependency view by declaration key, or undefined when missing. Checks selected shape without interpreting unrelated row metadata. */
+  dependency(key: string): DependencyView | undefined {
+    scalar(key);
+    const raw = sdkCall(() => documentRaw(this).dependency(key));
+    return raw ? adopt(raw, DependencyView.fromRaw) : undefined;
   }
   /** Resolve an exact primary key or alias; found transfers a new disposable view. Repeated occurrences remain ambiguous, including repeats within one operation. Invalid typed namespace throws SdkError. */
   resolveOperation(name: string): OperationSelection {
@@ -802,7 +1047,7 @@ export class ParsedDocument extends Managed {
     }
   }
 
-  /** Return undefined for absent dependency; otherwise test its kind filter. Absent kinds accepts all and empty accepts none. This helper does not establish normative conformance. */
+  /** Return undefined for absent dependency; otherwise test its kind filter. Absent kinds accepts all; an empty list matches none but is nonconformant. This helper does not establish normative conformance. */
   dependencyAcceptsKind(dependency: string, kind: string): boolean | undefined {
     scalar(dependency);
     scalar(kind);
@@ -915,6 +1160,8 @@ export class ValidatedDocument extends ParsedDocument {
 }
 /** Retained operation selected by primary key or alias. It survives parent disposal; dispose it independently. Exact value inspection is not normative proof or a prepared schema. */
 export class OperationView extends Managed {
+  #metadata?: OperationMetadata;
+  #examples?: readonly ExampleMetadata[] | null;
   /** @internal */ constructor(raw: wasm.WasmOperation) {
     super(raw);
   }
@@ -926,12 +1173,154 @@ export class OperationView extends Managed {
   get value(): ExactJson {
     return new ExactJson(handle<wasm.WasmOperation>(this).value());
   }
+  /** Cached frozen metadata for this selected operation only; no disposable owner is created. */
+  get metadata(): OperationMetadata {
+    const raw = handle<wasm.WasmOperation>(this);
+    return (this.#metadata ??= freezeMetadata(
+      decode<OperationMetadata>(sdkCall(() => raw.metadata())),
+    ));
+  }
+  /** Cached frozen example metadata in lexical key order; null means absent, empty means present-empty. Checks every example row but transports no values. */
+  get examples(): readonly ExampleMetadata[] | null {
+    const raw = handle<wasm.WasmOperation>(this);
+    if (this.#examples === undefined)
+      this.#examples = metadataRows<ExampleMetadata>(
+        sdkCall(() => raw.examples()),
+      );
+    return this.#examples;
+  }
+  /** Acquire a selected independent example view, or undefined for absence; unrelated row metadata is not interpreted. */
+  example(key: string): ExampleView | undefined {
+    scalar(key);
+    const raw = sdkCall(() => handle<wasm.WasmOperation>(this).example(key));
+    return raw ? adopt(raw, ExampleView.fromRaw) : undefined;
+  }
   /** Allocate a plain array of binding keys in lexical order. No owner disposal, ranking or invocation is involved. */
   get bindings(): readonly string[] {
     return decode(sdkCall(() => handle<wasm.WasmOperation>(this).bindings()));
   }
 }
 const resourceToken = Symbol("retained resource set");
+/** Retained binding declaration view. Metadata is plain; each exact getter acquires a separate owner. Neither reading nor retaining establishes conformance. */
+export class BindingView extends Managed {
+  #metadata?: BindingMetadata;
+  private constructor(raw: wasm.WasmBinding) {
+    super(raw);
+  }
+  /** @internal */ static fromRaw(raw: wasm.WasmBinding): BindingView {
+    return new BindingView(raw);
+  }
+  /** Acquire a separate owner sharing this immutable selected declaration. */
+  retain(): BindingView {
+    return BindingView.fromRaw(handle<wasm.WasmBinding>(this).retain());
+  }
+  /** Cached frozen metadata; checks this selected row and no unrelated row. */
+  get metadata(): BindingMetadata {
+    const raw = handle<wasm.WasmBinding>(this);
+    return (this.#metadata ??= freezeMetadata(
+      decode<BindingMetadata>(sdkCall(() => raw.metadata())),
+    ));
+  }
+  /** Acquire a NEW independent exact owner for the complete declaration, including unknown fields. */
+  get value(): ExactJson {
+    return new ExactJson(handle<wasm.WasmBinding>(this).value());
+  }
+  /** Acquire a NEW exact content owner; undefined means absent, while present null remains an exact value. */
+  get content(): ExactJson | undefined {
+    const raw = handle<wasm.WasmBinding>(this).content();
+    return raw ? new ExactJson(raw) : undefined;
+  }
+}
+/** Retained source declaration view. Metadata is plain; each exact getter acquires a separate owner. Neither reading nor retaining establishes conformance. */
+export class SourceView extends Managed {
+  #metadata?: SourceMetadata;
+  private constructor(raw: wasm.WasmSource) {
+    super(raw);
+  }
+  /** @internal */ static fromRaw(raw: wasm.WasmSource): SourceView {
+    return new SourceView(raw);
+  }
+  /** Acquire a separate owner sharing this immutable selected declaration. */
+  retain(): SourceView {
+    return SourceView.fromRaw(handle<wasm.WasmSource>(this).retain());
+  }
+  /** Cached frozen metadata; checks this selected row and no unrelated row. */
+  get metadata(): SourceMetadata {
+    const raw = handle<wasm.WasmSource>(this);
+    return (this.#metadata ??= freezeMetadata(
+      decode<SourceMetadata>(sdkCall(() => raw.metadata())),
+    ));
+  }
+  /** Acquire a NEW independent exact owner for the complete declaration, including unknown fields. */
+  get value(): ExactJson {
+    return new ExactJson(handle<wasm.WasmSource>(this).value());
+  }
+  /** Acquire a NEW exact content owner; undefined means absent, while present null remains an exact value. */
+  get content(): ExactJson | undefined {
+    const raw = handle<wasm.WasmSource>(this).content();
+    return raw ? new ExactJson(raw) : undefined;
+  }
+}
+/** Retained dependency declaration view. Metadata is plain; each exact getter acquires a separate owner. Neither reading nor retaining establishes conformance. */
+export class DependencyView extends Managed {
+  #metadata?: DependencyMetadata;
+  private constructor(raw: wasm.WasmDependency) {
+    super(raw);
+  }
+  /** @internal */ static fromRaw(raw: wasm.WasmDependency): DependencyView {
+    return new DependencyView(raw);
+  }
+  /** Acquire a separate owner sharing this immutable selected declaration. */
+  retain(): DependencyView {
+    return DependencyView.fromRaw(handle<wasm.WasmDependency>(this).retain());
+  }
+  /** Cached frozen metadata; checks this selected row and no unrelated row. */
+  get metadata(): DependencyMetadata {
+    const raw = handle<wasm.WasmDependency>(this);
+    return (this.#metadata ??= freezeMetadata(
+      decode<DependencyMetadata>(sdkCall(() => raw.metadata())),
+    ));
+  }
+  /** Acquire a NEW independent exact owner for the complete declaration, including unknown fields. */
+  get value(): ExactJson {
+    return new ExactJson(handle<wasm.WasmDependency>(this).value());
+  }
+}
+/** Retained example declaration view. Metadata is plain; each exact getter acquires a separate owner. Neither reading nor retaining establishes conformance. */
+export class ExampleView extends Managed {
+  #metadata?: ExampleMetadata;
+  private constructor(raw: wasm.WasmExample) {
+    super(raw);
+  }
+  /** @internal */ static fromRaw(raw: wasm.WasmExample): ExampleView {
+    return new ExampleView(raw);
+  }
+  /** Acquire a separate owner sharing this immutable selected declaration. */
+  retain(): ExampleView {
+    return ExampleView.fromRaw(handle<wasm.WasmExample>(this).retain());
+  }
+  /** Cached frozen metadata; checks this selected row and no unrelated row. */
+  get metadata(): ExampleMetadata {
+    const raw = handle<wasm.WasmExample>(this);
+    return (this.#metadata ??= freezeMetadata(
+      decode<ExampleMetadata>(sdkCall(() => raw.metadata())),
+    ));
+  }
+  /** Acquire a NEW independent exact owner for the complete declaration, including unknown fields. */
+  get value(): ExactJson {
+    return new ExactJson(handle<wasm.WasmExample>(this).value());
+  }
+  /** Acquire a NEW exact input owner; undefined means absent, while present null remains an exact value. */
+  get input(): ExactJson | undefined {
+    const raw = handle<wasm.WasmExample>(this).input();
+    return raw ? new ExactJson(raw) : undefined;
+  }
+  /** Acquire a NEW exact output owner; undefined means absent, while present null remains an exact value. */
+  get output(): ExactJson | undefined {
+    const raw = handle<wasm.WasmExample>(this).output();
+    return raw ? new ExactJson(raw) : undefined;
+  }
+}
 /** Immutable explicit resource set. URIs must be absolute without a nonempty fragment; normalized duplicate identities are refused even for equal bytes. Resources are retained, never fetched. Batch failure releases partial state and leaves supplied owners usable. Distinct contexts may associate the same URI with different snapshots. */
 export class SchemaResources extends Managed {
   /** Create an empty set or retain explicit [URI, exact document] pairs. Does not consume supplied owners. Invalid/duplicate URI or duplicate-member document throws SdkError; partial construction is released. */
@@ -987,7 +1376,7 @@ export class ValueContracts extends Managed {
   /** @internal */ constructor(raw: wasm.WasmContracts) {
     super(raw);
   }
-  /** Select the named operation/alias and requested side, then return the complete ContractPreparation partition. Ready transfers a new disposable contract independent of this context/cache. Deterministic preparations can be reused; cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
+  /** Select the named operation/alias and requested side, then return the complete ContractPreparation partition. Ready transfers a new disposable contract independent of this context/cache and does not promise every value is decidable. The default evaluator can prepare qualified missing-resource contracts, including a bare missing $ref and dual-polarity oneOf bounds. Validation establishes a verdict when independent of missing content, or returns resource-unavailable when dependent. Known errors and unsupported partial contexts still refuse preparation. Supply resources in a new context to recover; existing prepared owners retain their original snapshot. Deterministic preparations can be reused; cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
   prepare(
     operation: string,
     side: Side,
@@ -1080,10 +1469,41 @@ function cancelledValue(): ValueOutcome {
     },
   };
 }
+/** Immutable resource evidence from the bundled evaluator for a selected prepared contract. Complete is not a decidability promise. The evidence contains original schema identities but no instance data. */
+export type ResourceCompleteness =
+  | {
+      /** All resources reached by evaluation-relevant preparation were supplied. */
+      readonly status: "complete";
+    }
+  | {
+      /** Prepared without at least one evaluation-relevant resource. */
+      readonly status: "incomplete";
+      /** One missing reference of this contract; not an exhaustive list or necessarily the cause for a particular value. */
+      readonly evidence: Readonly<Omit<NoVerdict, "location">> & {
+        /** Frozen original schema coordinate; contains no instance data. */
+        readonly location: Readonly<SchemaLocation> | null;
+      };
+    };
 /** Disposable retained selected-schema validator, independent of document/context lifetime and cache eviction. Repeated validation borrows exact input; ordinary inputs are admitted and temporary owners released within the call. No verdict here proves whole-document conformance. */
 export class PreparedContract extends Managed {
+  #resourceCompleteness?: ResourceCompleteness;
   /** @internal */ constructor(raw: wasm.WasmPrepared) {
     super(raw);
+  }
+  /** Frozen cached resource evidence for this selected contract, with no new Wasm owner. Complete does not promise every value is decidable. Incomplete names one missing reference, not necessarily one activated by a value or an exhaustive list. Original locations require the same disclosure policy as diagnostics. Throws disposed-handle after disposal. */
+  get resourceCompleteness(): ResourceCompleteness {
+    const prepared = handle<wasm.WasmPrepared>(this);
+    if (!this.#resourceCompleteness) {
+      const result = decode<ResourceCompleteness>(
+        prepared.resource_completeness(),
+      );
+      if (result.status === "incomplete") {
+        if (result.evidence.location) Object.freeze(result.evidence.location);
+        Object.freeze(result.evidence);
+      }
+      this.#resourceCompleteness = Object.freeze(result);
+    }
+    return this.#resourceCompleteness;
   }
   /** Borrow an exact root; cancellation cannot preempt synchronous Wasm. */
   validate(value: ExactJson, options?: WorkOptions): ValueOutcome;
@@ -1147,7 +1567,11 @@ export class PreparedContract extends Managed {
 
   /** Return a NEW independently disposable owner sharing compiled state; it remains valid after the context or prior contract owner is disposed. */
   retain(): PreparedContract {
-    return new PreparedContract(handle<wasm.WasmPrepared>(this).retain());
+    const retained = new PreparedContract(
+      handle<wasm.WasmPrepared>(this).retain(),
+    );
+    retained.#resourceCompleteness = this.#resourceCompleteness;
+    return retained;
   }
 }
 /** Pinned HTTP discovery companion identity and wire defaults, independent of package/spec core versions. */
@@ -1698,11 +2122,11 @@ export interface BindingDraft {
   /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
-/** Dependency declaration with an optional exact source-kind filter; absent kinds accepts all and an empty array accepts none. */
+/** Dependency declaration with an optional exact source-kind filter. Absence accepts all; a conformant present filter must be nonempty. */
 export interface DependencyDraft {
   /** Referenced operation name. */
   operation: string;
-  /** Exact permitted source kinds; absence accepts all, empty array accepts none. */
+  /** Exact permitted source kinds; absence accepts all. An empty array is representable for draft inspection but fails normative assessment. */
   kinds?: readonly string[];
   /** Optional dependency explanation. */
   description?: string;
@@ -1732,8 +2156,110 @@ export interface DocumentDraft {
   /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
+/** Finite writable projection of normative draft containers and scalar lists. Stops at opaque JsonInput values and preserves optional fields and ExactJson ownership. */
+type EditableNormativeDraft<T> = {
+  -readonly [K in keyof T]: K extends "operations"
+    ? Record<string, EditableNormativeDraft<OperationDraft>>
+    : K extends "sources"
+      ? Record<string, EditableNormativeDraft<SourceDraft>>
+      : K extends "bindings"
+        ? Record<string, EditableNormativeDraft<BindingDraft>>
+        : K extends "dependencies"
+          ? Record<string, EditableNormativeDraft<DependencyDraft>>
+          : K extends "examples"
+            ? Record<string, EditableNormativeDraft<ExampleDraft>>
+            : K extends "schemas" | "additionalFields"
+              ? Record<string, JsonInput>
+              : K extends "tags" | "aliases" | "kinds"
+                ? string[]
+                : T[K];
+};
+/** Writable normative output from parsed conversion. Opaque JsonInput interiors and ExactJson ownership remain unchanged; readonly-friendly DocumentDraft inputs remain accepted. */
+export type EditableDocumentDraft = EditableNormativeDraft<DocumentDraft>;
+/** Parsed-to-draft conversion result; drafted transfers one aggregate owner, while authoring-error leaves the parsed source usable and owns nothing. */
+export type DraftResult =
+  | {
+      /** Successful typed conversion, not conformance. */ status: "drafted";
+      /** Caller-owned editing scope. */ draft: OwnedDocumentDraft;
+    }
+  | {
+      /** Expected source conversion refusal. */ status: "authoring-error";
+      /** Structured source error; never an invented draft coordinate. */ error: AuthoringFailure;
+    };
+const scopedDrafts = new WeakMap<object, OwnedDocumentDraft>();
+type DraftWire =
+  | { kind: "plain"; value: JsonPrimitive | string[] }
+  | { kind: "exact"; value: number }
+  | { kind: "object"; value: [string, DraftWire][] };
+/** Disposable scope owning the exact leaves created during native typed conversion, including leaves later removed or replaced. Caller-inserted external handles remain caller-owned. Retain a borrowed leaf before explicitly disposing this scope. Abandoning an undisposed scope does not invalidate reachable leaves; unreachable leaves have their own best-effort finalizers. */
+export class OwnedDocumentDraft extends Managed {
+  private constructor(
+    private readonly graph: EditableDocumentDraft,
+    registry: ExactJson[],
+  ) {
+    super(
+      {
+        free() {
+          for (const owner of registry.splice(0)) owner.dispose();
+        },
+      },
+      // This aggregate owns no native allocation. Its leaves have individual
+      // finalizers; a scope finalizer would revoke still-reachable leaf wrappers.
+      false,
+    );
+    scopedDrafts.set(graph, this);
+  }
+  /** @internal */ static fromRaw(raw: wasm.WasmDraft): OwnedDocumentDraft {
+    const registry: ExactJson[] = [];
+    try {
+      function materialize(node: DraftWire): unknown {
+        switch (node.kind) {
+          case "plain":
+            return node.value;
+          case "exact": {
+            const value = raw.takeExact(node.value);
+            if (!value)
+              throw new Error("Draft transfer invariant: exact leaf missing.");
+            const owner = adopt(value, (r) => new ExactJson(r));
+            registry.push(owner);
+            return owner;
+          }
+          case "object": {
+            const result: Record<string, unknown> = {};
+            for (const [key, value] of node.value)
+              Object.defineProperty(result, key, {
+                value: materialize(value),
+                writable: true,
+                enumerable: true,
+                configurable: true,
+              });
+            return result;
+          }
+          default:
+            throw new Error("Draft transfer invariant: invalid node kind.");
+        }
+      }
+      // This is a tagged typed-model transfer, never serialized opaque JSON.
+      // Do not camel-case application map keys or coerce opaque numeric values.
+      const graph = materialize(
+        JSON.parse(raw.shape()) as DraftWire,
+      ) as EditableDocumentDraft;
+      return new OwnedDocumentDraft(graph, registry);
+    } catch (error) {
+      for (const owner of registry) owner.dispose();
+      throw error;
+    } finally {
+      raw.free();
+    }
+  }
+  /** The same writable plain typed graph on every access; no ownership is acquired. Exact leaves made by conversion are borrowed from this scope. Throws after disposal. */
+  get value(): EditableDocumentDraft {
+    handle(this);
+    return this.graph;
+  }
+}
 /**
- * Extensible expected-invalid-draft codes. Messages explain; codes identify.
+ * Expected-invalid-draft codes for this package. This is a closed TypeScript union; later releases may add codes. Messages explain; codes identify.
  * - field-collision: additionalFields shadows a typed member.
  * - duplicate-field: a draft represents the same emitted field more than once.
  * - non-finite-number: NaN or infinity cannot enter JSON.
@@ -1746,6 +2272,7 @@ export interface DocumentDraft {
  * - invalid-authoring-object: a typed draft container or known field is not representable.
  * - authoring-limit: encoded output exceeds a finite character/byte/node/depth limit.
  * - invalid-draft: the checked Rust authoring boundary refuses the encoded draft.
+ * - invalid-field / duplicate-members: native parsed-to-draft conversion refuses a typed field or repeated member names, with original source coordinates.
  * A draftPointer addresses the caller's draft, including additionalFields, rather
  * than the emitted JSON. Initialization/owner misuse and unexpected exceptions throw.
  */
@@ -1763,9 +2290,13 @@ export type AuthoringErrorCode =
   | "symbol-key"
   | "invalid-authoring-object"
   | "authoring-limit"
-  | "invalid-draft";
+  | "invalid-draft"
+  | "invalid-field"
+  | "duplicate-members";
 /** Expected invalid-draft diagnostic. code supports branching, draftPointer locates the original caller draft (including additionalFields), and message is explanatory. No generated JSON byte location is substituted. */
 export interface AuthoringFailure {
+  /** Original parsed-source coordinates for conversion failures; absent/null for caller-created drafts. */
+  sourceLocation?: SourceLocation | null;
   /** Stable expected-draft failure category. */
   code: AuthoringErrorCode;
   /** JSON Pointer into the caller's draft; empty means root, null means unavailable. Never a byte offset. */
@@ -1838,6 +2369,8 @@ function bridgeDraftFailure(error: unknown): never {
  */
 export function authorDocument(draft: DocumentDraft): AuthoringResult {
   requireReady();
+  const scope = scopedDrafts.get(draft);
+  if (scope) handle(scope);
   let exact: ExactJson | undefined;
   try {
     const context: AuthorContext = { origins: new WeakMap() };
@@ -1968,7 +2501,7 @@ function authorObject(
       if (value === undefined) continue;
       for (const [name, content] of ownEntries(value, fieldPath)) {
         const contentPath = draftPath(fieldPath, name);
-        if (typedFields[kind].includes(name) || name === "additionalFields")
+        if (typedFields[kind].includes(name))
           throw new DraftFailure(
             "field-collision",
             contentPath,
@@ -1993,14 +2526,15 @@ function authorObject(
       continue;
     const child: AuthorKind | undefined =
       kind === "document"
-        ? (
-            {
-              operations: "operation",
-              sources: "source",
-              bindings: "binding",
-              dependencies: "dependency",
-            } as const
-          )[key as "operations"]
+        ? key === "operations"
+          ? "operation"
+          : key === "sources"
+            ? "source"
+            : key === "bindings"
+              ? "binding"
+              : key === "dependencies"
+                ? "dependency"
+                : undefined
         : kind === "operation" && key === "examples"
           ? "example"
           : undefined;

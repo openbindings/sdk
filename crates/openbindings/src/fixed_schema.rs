@@ -8,7 +8,7 @@ use openbindings_internal_json::{
 use serde_json::Value;
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::{Arc, OnceLock},
 };
 
@@ -165,37 +165,116 @@ fn meta() -> &'static Compiled {
         compile(&root, resources)
     })
 }
+// A token's source address identifies its original occurrence while the borrowed
+// arenas are live. Equal text/pointers at distinct spans remain distinct. No
+// pointer is dereferenced or exposed, and no source coordinates are materialized.
+pub(crate) fn occurrence(value: JsonRef<'_>) -> usize {
+    value.text().as_ptr() as usize
+}
+
+struct ProblemCollector<'a> {
+    entries: Vec<Problem<'a>>,
+    retained: HashMap<usize, Vec<usize>>,
+    max_problems: usize,
+    violated: bool,
+    truncated: bool,
+    pointer_bytes: usize,
+    expansion_exhausted: bool,
+}
+impl<'a> ProblemCollector<'a> {
+    fn new(max_problems: usize) -> Self {
+        Self {
+            entries: Vec::new(),
+            retained: HashMap::new(),
+            max_problems,
+            violated: false,
+            truncated: false,
+            pointer_bytes: MAX_EXPANDED_POINTER_BYTES,
+            expansion_exhausted: false,
+        }
+    }
+    // False means a distinct problem exceeded the count allowance; no later
+    // problem can be retained. Duplicates are checked first, even at exact capacity.
+    fn offer(
+        &mut self,
+        at: JsonRef<'a>,
+        message: Cow<'static, str>,
+        expanded: bool,
+        already_retained: &impl Fn(JsonRef<'a>, &str) -> bool,
+    ) -> bool {
+        self.violated = true;
+        let identity = occurrence(at);
+        if already_retained(at, &message)
+            || self.retained.get(&identity).is_some_and(|indices| {
+                indices
+                    .iter()
+                    .any(|&index| self.entries[index].message == message)
+            })
+        {
+            return true;
+        }
+        if self.entries.len() >= self.max_problems {
+            self.truncated = true;
+            return false;
+        }
+        if expanded {
+            if self.expansion_exhausted {
+                self.truncated = true;
+                return true;
+            }
+            let Some(size) = pointer_size(at, self.pointer_bytes) else {
+                self.truncated = true;
+                self.expansion_exhausted = true;
+                return true;
+            };
+            self.pointer_bytes -= size;
+        }
+        self.retained
+            .entry(identity)
+            .or_default()
+            .push(self.entries.len());
+        self.entries.push(Problem { at, message });
+        true
+    }
+    fn finish(self) -> Problems<'a> {
+        Problems {
+            entries: self.entries,
+            violated: self.violated,
+            truncated: self.truncated,
+        }
+    }
+}
+
 pub(crate) fn check(
     value: &JsonValue,
     is_meta: bool,
     max_problems: usize,
 ) -> Result<Problems<'_>, String> {
+    check_with_retained(value, is_meta, max_problems, |_, _| false)
+}
+pub(crate) fn check_with_retained<'a>(
+    value: &'a JsonValue,
+    is_meta: bool,
+    max_problems: usize,
+    already_retained: impl Fn(JsonRef<'a>, &str) -> bool,
+) -> Result<Problems<'a>, String> {
     let validator = (if is_meta { meta() } else { document() })
         .as_ref()
         .map_err(Clone::clone)?;
     jsonschema::ob_work::bounded(2_000_000, 1024, || {
         jsonschema::ob_ecma::top_level(2_000_000, || {
-            let mut entries = Vec::new();
-            let mut violated = false;
-            let mut truncated = false;
-            let mut pointer_bytes = MAX_EXPANDED_POINTER_BYTES;
-            let mut expansion_exhausted = false;
+            let mut collector = ProblemCollector::new(max_problems);
             'errors: for error in validator.iter_errors(view(value)) {
-                violated = true;
-                if entries.len() >= max_problems {
-                    truncated = true;
-                    break;
-                }
-                // Do not resolve a path for expansion we already know is omitted.
-                // Keep ordinary type/required errors eligible for remaining slots.
+                collector.violated = true;
+                // Once a distinct expanded pointer was omitted, the expansion
+                // allowance stays closed; ordinary errors remain eligible.
                 if !is_meta
-                    && expansion_exhausted
+                    && collector.expansion_exhausted
                     && matches!(
                         error.kind(),
                         jsonschema::error::ValidationErrorKind::AdditionalProperties { .. }
                     )
                 {
-                    truncated = true;
                     continue;
                 }
                 let at = value
@@ -216,36 +295,33 @@ pub(crate) fn check(
                             .is_some_and(|name| names.contains(name))
                         {
                             matched = true;
-                            if entries.len() >= max_problems {
-                                truncated = true;
+                            if !collector.offer(
+                                member.name,
+                                UNEXPECTED_MEMBER_MESSAGE.into(),
+                                true,
+                                &already_retained,
+                            ) {
                                 break 'errors;
                             }
-                            let Some(size) = pointer_size(member.name, pointer_bytes) else {
-                                truncated = true;
-                                expansion_exhausted = true;
+                            if collector.expansion_exhausted {
                                 continue 'errors;
-                            };
-                            pointer_bytes -= size;
-                            entries.push(Problem {
-                                at: member.name,
-                                message: UNEXPECTED_MEMBER_MESSAGE.into(),
-                            });
+                            }
                         }
                     }
                     if matched {
                         continue;
                     }
                 }
-                entries.push(Problem {
+                if !collector.offer(
                     at,
-                    message: diagnostic_message(error.kind()),
-                });
+                    diagnostic_message(error.kind()),
+                    false,
+                    &already_retained,
+                ) {
+                    break;
+                }
             }
-            Problems {
-                entries,
-                violated,
-                truncated,
-            }
+            collector.finish()
         })
     })
     .map_err(|e| format!("fixed validation work limit: {e:?}"))?
@@ -255,6 +331,74 @@ pub(crate) fn check(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn retained_problem_identity_precedes_both_allowances() {
+        let value = JsonValue::parse(r#"{"a":null,"b":null}"#).unwrap();
+        let a = value.get("a").unwrap();
+        let b = value.get("b").unwrap();
+        let mut collector = ProblemCollector::new(1);
+        collector.pointer_bytes = 2;
+        assert!(collector.offer(a, "first".into(), true, &|_, _| false));
+        assert_eq!(collector.pointer_bytes, 0);
+        for _ in 0..10 {
+            assert!(collector.offer(a, "first".into(), true, &|_, _| false));
+        }
+        assert!(!collector.truncated);
+        assert_eq!(collector.retained.len(), 1);
+        assert!(!collector.offer(b, "first".into(), true, &|_, _| false));
+        assert!(collector.truncated);
+        assert_eq!(collector.entries.len(), 1);
+        assert_eq!(collector.retained.len(), 1);
+
+        let mut collector = ProblemCollector::new(0);
+        assert!(collector.offer(a, "existing".into(), true, &|at, message| {
+            occurrence(at) == occurrence(a) && message == "existing"
+        }));
+        assert!(collector.violated);
+        assert!(!collector.truncated);
+        assert!(collector.retained.is_empty());
+    }
+
+    #[test]
+    fn same_source_with_different_message_and_distinct_source_are_retained() {
+        let value = JsonValue::parse(r#"[null,null]"#).unwrap();
+        let a = value.view().element(0).unwrap();
+        let b = value.view().element(1).unwrap();
+        assert_eq!(a.text(), b.text());
+        assert_ne!(occurrence(a), occurrence(b));
+        let mut collector = ProblemCollector::new(3);
+        for (at, message) in [(a, "first"), (a, "second"), (b, "first"), (a, "first")] {
+            assert!(collector.offer(at, message.into(), false, &|_, _| false));
+        }
+        assert_eq!(collector.entries.len(), 3);
+        assert!(!collector.truncated);
+    }
+
+    #[test]
+    fn repeated_meta_null_error_does_not_consume_capacity_or_claim_truncation() {
+        let value = JsonValue::parse("null").unwrap();
+        let all = check(&value, true, 100).unwrap();
+        let bounded = check(&value, true, all.entries.len()).unwrap();
+        assert!(bounded.violated);
+        assert!(!bounded.truncated);
+        assert_eq!(bounded.entries.len(), all.entries.len());
+        let identities: HashSet<_> = all
+            .entries
+            .iter()
+            .map(|p| (occurrence(p.at), p.message.as_ref()))
+            .collect();
+        assert_eq!(identities.len(), all.entries.len());
+        let already = check_with_retained(&value, true, 0, |at, message| {
+            all.entries
+                .iter()
+                .any(|p| occurrence(p.at) == occurrence(at) && p.message == message)
+        })
+        .unwrap();
+        assert!(already.violated);
+        assert!(!already.truncated);
+        assert!(already.entries.is_empty());
+    }
+
     #[test]
     fn fixed_messages_are_bounded_and_do_not_guess_union_branches() {
         use jsonschema::error::{TypeKind, ValidationErrorKind as Kind};

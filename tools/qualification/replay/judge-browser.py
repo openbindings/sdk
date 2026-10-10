@@ -5,6 +5,24 @@ from pathlib import Path
 import corpus
 
 
+def current_fixture(fixture):
+    """Apply recorded admission changes only to the exact historical inputs."""
+    provenance=Path(__file__).resolve().parents[3]/'crates/openbindings-schema-evaluator-test-support/fixtures/provenance.json'
+    translated=copy.deepcopy(fixture)
+    for change in json.loads(provenance.read_text())['runtime_policy_translations']:
+        selected=[(g,c) for g in translated['groups'] for c in g['cases'] if c['id']==change['case']]
+        assert len(selected)==1, 'policy translation must identify one existing case'
+        group,case=selected[0]
+        assert group['document']==change['original_document']
+        assert [translated['resources'][r] for r in group['resources']]==change['original_resources']
+        assert case['value']==change['original_value']
+        assert case['expected']==change['from_expected']
+        assert case['refusal_kind']==change['from_refusal_kind']
+        assert change['to_expected']=='satisfies'
+        case.update(expected=change['to_expected'],refusal_kind=None,refusal_reason='')
+    return translated
+
+
 def pointer_exists(value,pointer):
     if pointer=='':return True
     if not isinstance(pointer,str) or not pointer.startswith('/'):return False
@@ -79,14 +97,32 @@ def controls():
     assert not judge_evaluator(fixture,[group])[1]
     for mutation in [[],[group,group],[{**group,'id':'unknown'}],[{**group,'executed':False}],[{**group,'values':[]}],[{**group,'values':[valid,valid]}]]:
         assert judge_evaluator(fixture,mutation)[1]
-    return {'status':'pass','wrong_results_rejected':len(bad)+5,'accounting_mutations_rejected':6}
+    raw=json.loads((Path(__file__).resolve().parents[3]/'crates/openbindings-schema-evaluator-test-support/fixtures/cases.json').read_text())
+    changed=current_fixture(raw)
+    target='adversarial/resource-uri-names-another-id'
+    raw_group=next(g for g in raw['groups'] if g['id']==target)
+    new_case=next(g for g in changed['groups'] if g['id']==target)['cases'][0]
+    assert raw_group['cases'][0]['expected']=='no-verdict' and new_case['expected']=='satisfies'
+    assert not judge_value(new_case,{'outcome':'satisfies'}, {})
+    assert judge_value(new_case,{'outcome':'no-verdict','detail':{'reason':'conservative-preparation','code':'old','message':'old policy'}}, {})
+    for field in ['id','expected','refusal_kind','value','document','resource_uri','resource_document']:
+        altered=copy.deepcopy(raw)
+        g=next(g for g in altered['groups'] if g['id']==target)
+        if field=='document':g['document']='{}'
+        elif field.startswith('resource_'):
+            altered['resources'][g['resources'][0]]['uri' if field=='resource_uri' else 'documentJson']='changed'
+        else:g['cases'][0][field]='changed'
+        try:current_fixture(altered)
+        except AssertionError:pass
+        else:raise AssertionError('changed input inherited policy translation: '+field)
+    return {'status':'pass','wrong_results_rejected':len(bad)+6,'accounting_mutations_rejected':6,'policy_input_mutations_rejected':7}
 
 
 def main():
     if sys.argv[1]=='--controls':print(json.dumps(controls()));return
     folder=Path(sys.argv[1]);cases=corpus.load();actual=json.loads((folder/'core.json').read_text());by={x['id']:x for x in actual}
     failures=[c['id'] for c in cases if c['id'] not in by or not corpus.judge(c,by[c['id']])];accounting=corpus.reconcile(cases,actual)
-    fixture=json.loads((Path(__file__).resolve().parents[3]/'crates/openbindings-schema-evaluator-test-support/fixtures/cases.json').read_text())
+    fixture=current_fixture(json.loads((Path(__file__).resolve().parents[3]/'crates/openbindings-schema-evaluator-test-support/fixtures/cases.json').read_text()))
     observed=json.loads((folder/'evaluator.json').read_text());rows,other=judge_evaluator(fixture,observed);accounting+=other
     report={'core':len(cases),'core_passed':len(cases)-len(failures),'core_failures':failures,'evaluator_cases':len(rows),'evaluator_passed':sum(r['status']=='pass' for r in rows),'evaluator_failures':[r for r in rows if r['status']!='pass'],'reconciliation':accounting,'controls':controls()}
     (folder/'judged-evaluator.json').write_text(json.dumps(rows,indent=2)+'\n');(folder/'judgment.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2));raise SystemExit(bool(failures or accounting or report['evaluator_failures']))

@@ -1,0 +1,26 @@
+{
+  "kind": "Exact frozen B32 copies for maintained source regression; original expectations and failures preserved externally",
+  "files": [
+    {
+      "source": "design/sdk-maturity-loop-2026-10-10/rounds/03/authors/b/B32/document.json",
+      "file": "B32-original.json",
+      "sha256": "1ef7f79760b34a287a92c7b86df65ae6637f18fc7caa1e99b09d3d761a4ae9d4"
+    },
+    {
+      "source": "design/sdk-maturity-loop-2026-10-10/rounds/03/authors/b/B32/edits/embed-runner-result/result.json",
+      "file": "B32-edited.json",
+      "sha256": "b28fe6545a86f752b5ad2683d10a324648aa860a73d0474cbba9c4c7e4feec9b"
+    },
+    {
+      "source": "design/sdk-maturity-loop-2026-10-10/rounds/03/authors/b/B32/resources/runner-result.json",
+      "file": "B32-runner-result.json",
+      "sha256": "8cdc81323c8ddf244d7ee4b9d452d514da9f147d8916a28e1c38f3799f82d51a"
+    },
+    {
+      "source": "design/sdk-maturity-loop-2026-10-10/rounds/03/authors/b/B32/expectations.json",
+      "file": "B32-expectations.json",
+      "sha256": "646b884b0f470ef53e46376d6a3009ff09919082bd845bebdfd683ac90e943b7"
+    }
+  ],
+  "credit": "Source corroboration only; rebuilt-package replay and fresh consumers remain required"
+}
