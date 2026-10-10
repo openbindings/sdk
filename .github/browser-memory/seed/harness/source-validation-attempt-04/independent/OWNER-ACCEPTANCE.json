@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-10T23:01:43.664779+00:00",
+  "reviewFreezeSha256": "b5e24d7b5fa3d87080ffb4517ec45b4156720ceef293f429d96648c189426d85",
+  "disposition": "accept source repair A and runtime executable/verifier B for prospective measurement authorization; no qualification claim",
+  "sourceReview": "Root reviewed repair12 campaign.py/test_harness.py full diff and Sol independent report. No SDK source, isolation, schedule or budget change. Short scratch and truthful failure reporting resolve witnessed pre-SDK path failure.",
+  "independentReport": "REVIEW.md",
+  "freezeFilesVerified": 20,
+  "browserNext": "Refresh current source/seed/preparer chain and prepare one candidate11 bundle; no reuse of consumed activation. Final remote runtime/bundle identities require separate owner acceptance before activation.",
+  "runtimeNext": "Source/executable prerequisites accepted. Timing remains unexecuted pending exclusive quiet window and prospective one-attempt approval.",
+  "noGateWaiver": true
+}

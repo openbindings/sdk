@@ -5,12 +5,12 @@
     "worker.mjs": "b677e0abdaeeefcb0f52f00285e0d573c9b1849b8ac06cfa9288f66c42f42e89",
     "inspect-inputs.py": "063e684019dbc5f2b27e508d2e98b7bd04e4f7858bd5f9cfd4e79f6bfcfd2753",
     "kernel.py": "4e533197cd68d530e68931e017f64ef614a774ce5e9d253995554ddb8cde21ef",
-    "test_harness.py": "6bf47e755e6c55857454409d39985a698e3e80ca00a88d708d3d2434aba6cbb7",
+    "test_harness.py": "0dc8298309993fa2c783fe80d1c9cbc279ea3d5380f5c6637a2339431991db78",
     "OWNER-REVIEW.template.json": "2e6fd58d0d742b61dfb8d796788b40a71e9c0b94d2aeb964846305c612639871",
     "replacement-fixture.json": "d0b14ad47681fbfd0a7392aa5234b8168308054af13b39a76721b0cfac8e0984",
     "PROFILES.json": "bba960589fd23482611cf8523d53da72864c8578c88fd069c0e99c20d62e562f",
     "ubuntu-workflow.proposal.yml": "bc809149fcc247cbac96acc7632ddb51a3b22c803fd049f3e590febc7f5762c6",
-    "campaign.py": "87692d3ca6aca5db1f88faacfc2a6de0ad5f89a4db34d6982a8175eec4478a02",
+    "campaign.py": "8fc7d832254e37dc97078e0f456f56e215d9d93f2691c2cc4a50a6c0807dca74",
     "touch.py": "7be37b0ee7852449ff71c76a21555886dbd1769a2309699386a4158293366e3d",
     "enter.py": "0011de92825872669a483c063867ca00abcb3f5173957cf1b56402b344f3be1f",
     "identity.py": "3b7e56040417e3f5d8b9b0ea398133caa3f1b9a03f2df34ea227b12584495e86",
@@ -19,16 +19,31 @@
     "BINDINGS.template.json": "642002671626e14dab7eb433944bc41ad57dc6e2ff272aee32df7f7a87ac6e56"
   },
   "validationReceipt": {
-    "path": "source-validation-attempt-03/VALIDATION.json",
-    "sha256": "51f500fb3369205e929b7d35880c502bda65adda5470111f76a1fb8e9f41ab6e"
+    "path": "source-validation-attempt-04/VALIDATION.json",
+    "sha256": "6992ec50c22bc2ef04f0cf7f0d6f965913b483d7b36b87baedd51b61687ee3ec"
   },
   "remainingPrerequisites": [
-    "accepted final candidate",
-    "original baseline/source/archive chain normalization and independent review",
-    "Linux browser/runtime/host package identities",
-    "independent owner approval bound to source freeze and bindings",
-    "real Linux exited-child and actual Chromium/WebKit Worker controls",
-    "all42SDKtrials"
+    "One candidate11 preparation with repaired harness",
+    "Owner review of the new exact package/runtime/host bundle",
+    "New separately reviewed activation; prior claim remains consumed",
+    "Real repaired Linux exited-child and Chromium/WebKit controls",
+    "All 42 fixed SDK trials"
   ],
-  "noRealCampaignExecuted": true
+  "noRealCampaignExecuted": true,
+  "previousSourceFreezeSha256": "361ee880e6def05e826ecef1f800a4347b59de2e70ac954da7859cb0ff858825",
+  "sourceReviewStatus": "repair12 accepted by root after independent Sol review; real repaired host controls pending",
+  "acceptedAt": "2026-10-10T23:01:43.664779+00:00",
+  "rootAcceptance": {
+    "path": "source-validation-attempt-04/independent/OWNER-ACCEPTANCE.json",
+    "sha256": "aaca6ecb82477581dfbfcdef15327b6c735ab1fabfe97d018f22d793fd1d5060"
+  },
+  "independentReviewFreeze": {
+    "path": "source-validation-attempt-04/independent/REVIEW-FREEZE.json",
+    "sha256": "b5e24d7b5fa3d87080ffb4517ec45b4156720ceef293f429d96648c189426d85"
+  },
+  "repairFreeze": {
+    "path": "source-validation-attempt-04/REPAIR-SOURCE-FREEZE.json",
+    "sha256": "03f083eb899aaa9a9d1576aeef6c385fef754ebaaa52b2503fb7a3a71be9a744"
+  },
+  "executionScope": "This repaired source revision has not run a real campaign. Historical activation38092184913 failed controls before SDK ATTEMPT and remains preserved."
 }

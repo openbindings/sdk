@@ -10,7 +10,7 @@ import tarfile
 
 HERE = Path(__file__).resolve().parent
 CANONICAL = Path('/opt/ob-memory-inputs')
-HARNESS_FREEZE = '361ee880e6def05e826ecef1f800a4347b59de2e70ac954da7859cb0ff858825'
+HARNESS_FREEZE = '5239eb8a20ba7bb0f6265bfb0a8584f2c8f8c7b40cc7ccbcdf249c2af4892885'
 
 
 def require(value, message):
