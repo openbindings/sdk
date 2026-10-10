@@ -171,9 +171,8 @@ impl Preference {
     pub fn get(self) -> i64 {
         self.0
     }
-}
-impl Read for Preference {
-    fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
+    // Shared exact conversion for authoring and retained normative read views.
+    pub(crate) fn from_json_value(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
         let text = v
             .number_text()
             .ok_or_else(|| error(v, "expected a preference integer"))?;
@@ -194,6 +193,12 @@ impl Read for Preference {
             .parse::<f64>()
             .map_err(|_| error(v, "preference conversion failed"))? as i64;
         Ok(Self(n))
+    }
+}
+
+impl Read for Preference {
+    fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
+        Self::from_json_value(v)
     }
 }
 

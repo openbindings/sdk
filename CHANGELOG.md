@@ -15,6 +15,14 @@
 
 ### Added
 
+- Rust binding, source, dependency and operation-example views, with retained
+  ownership, typed metadata and exact opaque content. The TypeScript facade adds
+  matching keyed views and frozen metadata inventories.
+- Lazy TypeScript exact object/array cursors and a scoped `ParsedDocument.toDraft()`
+  editing path. `OwnedDocumentDraft.value` exposes mutable `EditableDocumentDraft`
+  containers while preserving opaque exact values and readonly-friendly authoring
+  inputs. A shipped inspection/editing example is compiled and exercised from the
+  installed package.
 - Default value-diagnostic `diagnostic_bytes` / `diagnosticBytes` budget (1 MiB
   retained UTF-8 strings), bounded pre-copy diagnostic construction, whole-problem
   truncation and explicit zero semantics. This adds an intentional prerelease Rust
@@ -41,6 +49,17 @@
 
 ### Changed
 
+- Conformance diagnostics deduplicate repeated findings for the same original
+  occurrence before count and pointer-byte limits. Identical schema text at
+  different source positions remains distinct. Duplicate-member findings now
+  locate each offending key token instead of its enclosing object; pointer/byte
+  coordinates and retained counts under the existing limits can change.
+  Rule evidence and truthful truncation remain independent of retained findings.
+- TypeScript authoring failures add `invalid-field` and `duplicate-members`, plus
+  optional original-source coordinates for parsed-to-draft conversion. Exhaustive
+  switches over authoring failure codes need these cases.
+- Dependency kind checks now report malformed kind lists as interpretation errors
+  instead of silently treating them as absent or unmatched.
 - Isolate the exact-number engine's Serde JSON features under private package
   identities so ordinary consumer `serde_json` decimals keep their own feature
   behavior. Shared application dependencies now allow compatible updates; tightly

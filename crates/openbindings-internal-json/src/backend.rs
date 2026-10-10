@@ -560,6 +560,22 @@ pub fn duplicate_nodes(
     })
 }
 
+/// Borrow each offending repeated member-name token in parse order. Distinct
+/// occurrences can share a JSON Pointer but retain distinct original byte spans.
+/// This exposes the parser's existing key identities without rescanning objects.
+pub fn duplicate_member_names(
+    value: &crate::JsonValue,
+) -> impl ExactSizeIterator<Item = crate::JsonRef<'_>> {
+    value
+        .owner
+        .duplicates
+        .iter()
+        .map(|(_, key)| crate::JsonRef {
+            owner: &value.owner,
+            id: *key,
+        })
+}
+
 pub fn depth(value: &crate::JsonValue) -> usize {
     let span = &value.owner.nodes[value.id].span;
     let end = value
@@ -590,6 +606,22 @@ pub fn live_arenas() -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn duplicate_member_names_keep_each_original_token_occurrence() {
+        let source = r#"{"a/~":{"k":0,"k":1,"k":2},"\ud800":{"j":0,"j":1}}"#;
+        let value = crate::JsonValue::parse(source).unwrap();
+        assert_eq!(duplicate_member_names(&value).len(), 3);
+        let nodes: Vec<_> = duplicate_member_names(&value).collect();
+        let at = locations(&nodes);
+        assert_eq!(at[0].pointer.as_deref(), Some("/a~1~0/k"));
+        assert_eq!(at[1].pointer, at[0].pointer);
+        assert_eq!(at[0].byte_offset, source.find("\"k\":1").unwrap());
+        assert_eq!(at[1].byte_offset, source.find("\"k\":2").unwrap());
+        assert_eq!(at[2].pointer, None);
+        assert_eq!(at[2].byte_offset, source.find("\"j\":1").unwrap());
+        assert_eq!(duplicate_member_names(&value).take(1).count(), 1);
+    }
+
     #[test]
     fn duplicate_locations_are_materialized_only_for_retained_nodes() {
         let source = format!(

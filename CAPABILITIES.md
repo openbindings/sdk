@@ -9,7 +9,9 @@ independent. Unsupported or malformed versions are explicit refusals.
 | Exact bytes, JSON text, duplicate evidence, original locations | Yes | Yes |
 | Typed authoring, all normative objects, unknown-member retention | Yes | Yes |
 | All 13 document rules; parsed/conformant states | Yes | Yes |
-| Names/aliases, bindings, dependency kinds, references | Yes | Yes; cached metadata |
+| Names/aliases, bindings, sources, dependencies, examples, references | Retained views and borrowed exact values | Cached metadata and retained views |
+| Exact object/array traversal | Borrowed iterators | Lazy disposable iterators |
+| Exact parsed-document editing | Owned typed draft | Scoped editable draft; opaque values stay exact |
 | Explicit schema resources; retained input/output contracts | Yes | Yes |
 | Custom evaluator interface and reusable qualification kit | Rust traits | Default evaluator; JS callbacks not exposed |
 | Default 2020-12 evaluator, format annotations | Yes | Same semantic engine |
@@ -20,7 +22,7 @@ independent. Unsupported or malformed versions are explicit refusals.
 
 The flat immutable JSON arena preserves numeric spellings, negative zero, duplicate
 object members and escaped UTF-16 code units. Parse does not establish document
-conformance. Default admission is 64 MiB, 10,000 JSON containers and 1,000,000 nodes.
+conformance. Default admission is 64 MiB, 10,000 levels of JSON container nesting and 1,000,000 nodes.
 Limits are observable errors, not silently truncated values. Structural/source
 locations use JSON Pointer, zero-based UTF-8 byte offsets and one-based lines/byte
 columns. Duplicate names remain available to document rules and diagnostics.

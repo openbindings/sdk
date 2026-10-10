@@ -6,6 +6,9 @@ use crate::{
 };
 use openbindings_internal_json::backend;
 use serde::Serialize;
+mod read_views;
+use read_views::NamespaceCache;
+pub use read_views::{BindingView, DependencyView, ExampleView, SourceView};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt,
@@ -102,6 +105,9 @@ pub(crate) struct DocumentInner {
     assessment: OnceLock<Result<Arc<ConformanceReport>, VersionRefusal>>,
     interpretation: OnceLock<Result<(), InterpretationError>>,
     names: OnceLock<Result<NameIndex, InterpretationError>>,
+    bindings: NamespaceCache,
+    sources: NamespaceCache,
+    dependencies: NamespaceCache,
 }
 impl fmt::Debug for ParsedDocument {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -191,6 +197,9 @@ impl ParsedDocument {
                 assessment: OnceLock::new(),
                 interpretation: OnceLock::new(),
                 names: OnceLock::new(),
+                bindings: OnceLock::new(),
+                sources: OnceLock::new(),
+                dependencies: OnceLock::new(),
             }),
         }
     }
@@ -287,9 +296,10 @@ impl ParsedDocument {
     }
     fn operation_view(
         &self,
-        key: &str,
-        value: &JsonValue,
+        key: &Arc<str>,
+        entry: &OperationEntry,
     ) -> Result<OperationView, InterpretationError> {
+        let value = &entry.value;
         if value.kind() != JsonKind::Object {
             return Err(InterpretationError::invalid(
                 "invalid-operation-object",
@@ -298,8 +308,9 @@ impl ParsedDocument {
         }
         Ok(OperationView {
             document: self.clone(),
-            key: key.into(),
+            key: key.clone(),
             value: value.clone(),
+            examples: entry.examples.clone(),
         })
     }
     /// Allocate retained operation views in lexical key order. Each view remains
@@ -328,29 +339,26 @@ impl ParsedDocument {
         dependency: &str,
         kind: &str,
     ) -> Result<Option<bool>, InterpretationError> {
-        self.interpretable()?;
-        let Some(value) = self
-            .value()
-            .get("dependencies")
-            .and_then(|v| v.get(dependency))
-        else {
+        let Some(view) = self.dependency(dependency)? else {
             return Ok(None);
         };
-        Ok(Some(match value.get("kinds") {
+        Ok(Some(match view.kinds()? {
             None => true,
-            Some(kinds) => kinds
-                .elements()
-                .is_some_and(|mut a| a.any(|v| v.as_str() == Some(kind))),
+            Some(mut kinds) => kinds.any(|candidate| candidate == kind),
         }))
     }
 }
 #[derive(Default)]
 pub(crate) struct NameIndex {
-    operations: BTreeMap<Arc<str>, JsonValue>,
+    operations: BTreeMap<Arc<str>, OperationEntry>,
     // Operation identities share primary bytes; alias occurrences store only indices.
     primary_keys: Vec<Arc<str>>,
     names: HashMap<String, Vec<usize>>,
     bindings: HashMap<String, Vec<String>>,
+}
+struct OperationEntry {
+    value: JsonValue,
+    examples: Arc<NamespaceCache>,
 }
 impl NameIndex {
     fn build(value: &JsonValue) -> Result<Self, InterpretationError> {
@@ -374,9 +382,13 @@ impl NameIndex {
                 }
                 let primary = Arc::<str>::from(key);
                 let id = index.primary_keys.len();
-                index
-                    .operations
-                    .insert(primary.clone(), member.value.to_owned());
+                index.operations.insert(
+                    primary.clone(),
+                    OperationEntry {
+                        value: member.value.to_owned(),
+                        examples: Arc::new(OnceLock::new()),
+                    },
+                );
                 index.primary_keys.push(primary);
                 index.add_name(key, id);
                 if let Some(aliases) = member.value.get("aliases") {
@@ -432,8 +444,9 @@ pub enum OperationSelection {
 #[derive(Clone, Debug)]
 pub struct OperationView {
     document: ParsedDocument,
-    key: String,
+    key: Arc<str>,
     value: JsonValue,
+    examples: Arc<NamespaceCache>,
 }
 impl OperationView {
     /// Borrow the selected primary key, even when selection used an alias.
@@ -603,6 +616,8 @@ struct Checks<'a> {
     evidence: [Evidence; 13],
     findings: Vec<Finding>,
     pending_locations: Vec<(usize, JsonRef<'a>)>,
+    retained_at: HashMap<usize, Vec<usize>>,
+    retained_direct: Vec<usize>,
     pointer_bytes: usize,
     truncated: bool,
 }
@@ -612,9 +627,46 @@ impl<'a> Checks<'a> {
             evidence: [Evidence::Satisfied; 13],
             findings: Vec::new(),
             pending_locations: Vec::new(),
+            retained_at: HashMap::new(),
+            retained_direct: Vec::new(),
             pointer_bytes: MAX_FINDING_POINTER_BYTES,
             truncated: false,
         }
+    }
+    fn update_evidence(&mut self, rule: usize, status: Evidence) {
+        if status == Evidence::Violated || self.evidence[rule] != Evidence::Violated {
+            self.evidence[rule] = status;
+        }
+    }
+    fn same_finding(
+        &self,
+        index: usize,
+        rule: usize,
+        status: Evidence,
+        code: &str,
+        message: &str,
+    ) -> bool {
+        let finding = &self.findings[index];
+        finding.rule == DOCUMENT_RULES[rule]
+            && finding.status == status
+            && finding.code == code
+            && finding.message == message
+    }
+    fn contains_at(
+        &self,
+        rule: usize,
+        status: Evidence,
+        at: JsonRef<'_>,
+        code: &str,
+        message: &str,
+    ) -> bool {
+        self.retained_at
+            .get(&fixed_schema::occurrence(at))
+            .is_some_and(|indices| {
+                indices
+                    .iter()
+                    .any(|&index| self.same_finding(index, rule, status, code, message))
+            })
     }
     fn mark(
         &mut self,
@@ -624,16 +676,22 @@ impl<'a> Checks<'a> {
         location: Option<SourceLocation>,
         message: impl Into<String>,
     ) {
-        if status == Evidence::Violated || self.evidence[rule] != Evidence::Violated {
-            self.evidence[rule] = status;
+        self.update_evidence(rule, status);
+        let message = message.into();
+        if self.retained_direct.iter().any(|&index| {
+            self.same_finding(index, rule, status, code, &message)
+                && self.findings[index].location == location
+        }) {
+            return;
         }
         if self.findings.len() < MAX_FINDINGS {
+            self.retained_direct.push(self.findings.len());
             self.findings.push(Finding {
                 rule: DOCUMENT_RULES[rule],
                 status,
                 code,
                 location,
-                message: message.into(),
+                message,
             });
         } else {
             self.truncated = true;
@@ -647,10 +705,12 @@ impl<'a> Checks<'a> {
         code: &'static str,
         message: impl Into<String>,
     ) {
-        // Rule evidence is independent of retained diagnostic capacity. Keep
-        // borrowed nodes until finish, then scan each source prefix only once.
-        if status == Evidence::Violated || self.evidence[rule] != Evidence::Violated {
-            self.evidence[rule] = status;
+        self.update_evidence(rule, status);
+        let message = message.into();
+        // Identity is checked before either allowance. Only retained findings
+        // have index entries, so omitted data never grows an all-seen set.
+        if self.contains_at(rule, status, at, code, &message) {
+            return;
         }
         if self.findings.len() >= MAX_FINDINGS {
             self.truncated = true;
@@ -661,8 +721,19 @@ impl<'a> Checks<'a> {
             return;
         };
         self.pointer_bytes -= bytes;
-        self.pending_locations.push((self.findings.len(), at));
-        self.mark(rule, status, code, None, message);
+        let index = self.findings.len();
+        self.pending_locations.push((index, at));
+        self.retained_at
+            .entry(fixed_schema::occurrence(at))
+            .or_default()
+            .push(index);
+        self.findings.push(Finding {
+            rule: DOCUMENT_RULES[rule],
+            status,
+            code,
+            location: None,
+            message,
+        });
     }
     fn violation(
         &mut self,
@@ -703,10 +774,13 @@ impl<'a> Checks<'a> {
         }
     }
     fn fixed(&mut self, value: &'a JsonValue, rule: usize, is_meta: bool) {
-        match fixed_schema::check(
+        match fixed_schema::check_with_retained(
             value,
             is_meta,
             MAX_FINDINGS.saturating_sub(self.findings.len()),
+            |at, message| {
+                self.contains_at(rule, Evidence::Violated, at, "schema-mismatch", message)
+            },
         ) {
             Ok(problems) => {
                 self.truncated |= problems.truncated;
@@ -747,7 +821,7 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
         return Err(refusal);
     }
     let mut c = Checks::new();
-    let duplicates = backend::duplicate_nodes(value);
+    let duplicates = backend::duplicate_member_names(value);
     if duplicates.len() != 0 {
         c.truncated = duplicates.len() > MAX_FINDINGS;
         for at in duplicates.take(MAX_FINDINGS) {
@@ -878,7 +952,7 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
                 "schema-depth-limit",
                 "schema depth exceeds 256",
             );
-        } else if meta_seen.insert(node.value.text()) {
+        } else if meta_seen.insert(fixed_schema::occurrence(schema)) {
             c.fixed(&node.value, 9, true);
         }
         if let Some(dialect) = schema.get("$schema")
@@ -1048,5 +1122,89 @@ mod name_index_storage_tests {
             panic!("primary/alias collision stays ambiguous")
         };
         assert_eq!(candidates, [primary]);
+    }
+}
+
+#[cfg(test)]
+mod finding_identity_tests {
+    use super::*;
+    #[test]
+    fn final_dedup_precedes_count_and_pointer_caps_and_preserves_evidence() {
+        let value = JsonValue::parse(r#"{"a":0,"b":0}"#).unwrap();
+        let a = value.get("a").unwrap();
+        let b = value.get("b").unwrap();
+        let mut checks = Checks::new();
+        checks.pointer_bytes = 2;
+        checks.violation(0, a, "test", "first");
+        checks.violation(0, a, "test", "first");
+        assert_eq!(checks.pointer_bytes, 0);
+        assert_eq!(checks.findings.len(), 1);
+        assert!(!checks.truncated);
+        checks.violation(1, b, "test", "distinct");
+        assert!(checks.truncated);
+        assert_eq!(checks.retained_at.len(), 1);
+        assert_eq!(checks.finish().evidence["OBI-02"], Evidence::Violated);
+
+        let mut checks = Checks::new();
+        for i in 0..MAX_FINDINGS {
+            checks.violation(0, a, "test", format!("message {i}"));
+        }
+        checks.violation(0, a, "test", "message 0");
+        assert!(!checks.truncated);
+        assert_eq!(
+            checks.retained_at.values().map(Vec::len).sum::<usize>(),
+            MAX_FINDINGS
+        );
+        checks.violation(1, a, "test", "message 0");
+        assert!(checks.truncated);
+        assert_eq!(checks.evidence[1], Evidence::Violated);
+    }
+
+    #[test]
+    fn final_identity_includes_rule_status_code_message_and_original_occurrence() {
+        let value = JsonValue::parse(r#"{"k":0,"k":0,"k":0}"#).unwrap();
+        let nodes: Vec<_> = backend::duplicate_member_names(&value).collect();
+        let mut checks = Checks::new();
+        for node in &nodes {
+            checks.violation(0, *node, "test", "same");
+        }
+        checks.violation(1, nodes[0], "test", "same");
+        checks.mark_at(0, Evidence::Inconclusive, nodes[0], "test", "same");
+        checks.violation(0, nodes[0], "other", "same");
+        checks.violation(0, nodes[0], "test", "other");
+        checks.violation(0, nodes[0], "test", "same");
+        let report = checks.finish();
+        assert_eq!(report.findings.len(), 6);
+        assert_eq!(
+            report.findings[0].location.as_ref().unwrap().pointer,
+            report.findings[1].location.as_ref().unwrap().pointer
+        );
+        assert_ne!(
+            report.findings[0].location.as_ref().unwrap().byte_offset,
+            report.findings[1].location.as_ref().unwrap().byte_offset
+        );
+        assert_eq!(report.evidence["OBI-01"], Evidence::Violated);
+        assert!(!report.findings_truncated);
+    }
+
+    #[test]
+    fn fixed_stream_excludes_already_retained_findings_before_intermediate_cap() {
+        let value = JsonValue::parse("null").unwrap();
+        let mut checks = Checks::new();
+        checks.fixed(&value, 2, true);
+        let fixed_count = checks.findings.len();
+        for i in fixed_count..MAX_FINDINGS {
+            checks.mark(
+                0,
+                Evidence::Violated,
+                "padding",
+                None,
+                format!("distinct {i}"),
+            );
+        }
+        checks.fixed(&value, 2, true);
+        assert_eq!(checks.findings.len(), MAX_FINDINGS);
+        assert!(!checks.truncated);
+        assert_eq!(checks.evidence[2], Evidence::Violated);
     }
 }
