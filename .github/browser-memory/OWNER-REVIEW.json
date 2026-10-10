@@ -1,0 +1,19 @@
+{
+  "status": "approved",
+  "reviewer": "Prime SDK coherence owner; independent of harness implementation; author of measurement policy",
+  "independentOfHarnessImplementation": true,
+  "sourceFreezeSha256": "361ee880e6def05e826ecef1f800a4347b59de2e70ac954da7859cb0ff858825",
+  "bindingsSha256": "f10ba7e7b0646ff69cf6bb4d0a5190698a498483df56d89c03fd06c2d73a8901",
+  "acceptsKernelChargeScope": true,
+  "acceptsAdmissionAndCleanup": true,
+  "reviewedAt": "2026-10-10T22:37:16.025946+00:00",
+  "notes": "Reviewed actual downloaded bundle, all6876archive members, package trees/npm archive equality, all41commands and raw output hashes, Git commits/trees/locks, Rust input and Wasm build chain, fixture and executable/browser tree identities. Accepted unchanged source harness per earlier independent review. Final Linux host/Python/dpkg/cgroup admission and three real controls remain mandatory before42fixedSDKtrials. Kernel charges are not summedRSS/heap/physical totals. No timing claim, no automatic retry or publication. Baseline is a fresh Linux rebuild from preserved original baseline Git tree; historical archive remains unchanged.",
+  "evidence": {
+    "preparationRunId": 38091335642,
+    "artifactId": 11684506537,
+    "bundleSha256": "e63a63ddaea7f8d5f2f53d92ba23e6166303fe5810ce03020466050f2fb4ffdf",
+    "bundleReviewSha256": "f76cd991ea4096bf3b53a87687b2e6ceb84123ec375db8c558c8a8c2b1bb8d17",
+    "sourceChainReviewSha256": "082893be0643b7d1200212849d1c060f9ec3b9302d0f62e90ce5e23ceb8bfa61",
+    "sourceApprovalSha256": "97f84e0a885a0f2de0e16431c3713a6e911da55afab5411d49708014e8614ab4"
+  }
+}
