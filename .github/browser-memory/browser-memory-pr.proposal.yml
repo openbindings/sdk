@@ -1,0 +1,95 @@
+# Proposal destination: .github/workflows/browser-memory-preparation.yml
+# Script/seed destination: .github/browser-memory/. Required CI is unchanged.
+name: Browser memory preparation and reviewed activation
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - '.github/browser-memory/**'
+      - '.github/workflows/browser-memory-preparation.yml'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: browser-memory-preparation-and-campaign
+  cancel-in-progress: false
+jobs:
+  browser-memory:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 165
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Check out exact proposal PR head, not merge-result SDK source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Select explicitly requested phase
+        id: gate
+        run: |
+          python3 .github/browser-memory/gate.py \
+            --request .github/browser-memory/REQUEST.json \
+            --evidence "$RUNNER_TEMP/browser-memory/gate"
+      - name: SDK-free preparation helper tests
+        if: steps.gate.outputs.phase == 'prepare'
+        run: python3 -B .github/browser-memory/test_preparation.py
+      - name: Build and freeze preparation artifact only
+        if: steps.gate.outputs.phase == 'prepare'
+        timeout-minutes: 90
+        run: |
+          python3 -B .github/browser-memory/prepare.py \
+            --request .github/browser-memory/REQUEST.json \
+            --seed .github/browser-memory/seed \
+            --evidence "$RUNNER_TEMP/browser-memory/build"
+      - name: Save successful prepared bundle for independent download and review
+        if: success() && steps.gate.outputs.phase == 'prepare'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: browser-memory-inputs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/browser-memory/build/prepared-inputs.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+      - name: Restore exact explicitly approved campaign inputs
+        if: steps.gate.outputs.phase == 'campaign'
+        run: |
+          python3 -B .github/browser-memory/activate.py stage \
+            --activation .github/browser-memory/REQUEST.json \
+            --approval .github/browser-memory/OWNER-REVIEW.json \
+            --evidence "$RUNNER_TEMP/browser-memory/activation"
+      - name: Consume this reviewed activation once before any measurement
+        if: success() && steps.gate.outputs.phase == 'campaign'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: browser-memory-activation-${{ steps.gate.outputs.activation }}
+          path: ${{ runner.temp }}/browser-memory/activation/ACTIVATION-CLAIM.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Execute one reviewed whole campaign after real controls
+        if: success() && steps.gate.outputs.phase == 'campaign'
+        run: |
+          python3 -B .github/browser-memory/activate.py run \
+            --activation .github/browser-memory/REQUEST.json \
+            --approval .github/browser-memory/OWNER-REVIEW.json \
+            --evidence "$RUNNER_TEMP/browser-memory/activation"
+      - name: Preserve preparation and activation outcomes even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: browser-memory-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          # Explicit files only: never upload work/, git checkouts, Cargo caches,
+          # original provider corpora, extracted bundle duplicates or tokens.
+          path: |
+            ${{ runner.temp }}/browser-memory/gate/*.json
+            ${{ runner.temp }}/browser-memory/build/*.json
+            ${{ runner.temp }}/browser-memory/build/*.stdout
+            ${{ runner.temp }}/browser-memory/build/*.stderr
+            ${{ runner.temp }}/browser-memory/activation/*.json
+            ${{ runner.temp }}/browser-memory/activation/*.stdout
+            ${{ runner.temp }}/browser-memory/activation/*.stderr
+            ${{ runner.temp }}/browser-memory/activation/campaign/**
+          if-no-files-found: warn
+          retention-days: 30

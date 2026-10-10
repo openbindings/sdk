@@ -1,0 +1,112 @@
+{
+  "at": "2026-10-10T22:59:41.474322+00:00",
+  "status": "review_complete",
+  "scope": "One bounded review; no further automatic work",
+  "files": {
+    "ADDITIONAL-IDENTITY-CHECKS.json": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/ADDITIONAL-IDENTITY-CHECKS.json",
+      "bytes": 22865,
+      "sha256": "b11074563f5db457b79cb6eb33e9eb079feafc35dd4709f87ef5f16fd4b42c7c"
+    },
+    "BROWSER-CONTROL-INPUTS.json": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/BROWSER-CONTROL-INPUTS.json",
+      "bytes": 1448,
+      "sha256": "31ebe7d5d24379fccb40192482025f81dd30e0769d37c705c6f356bc1881bfd7"
+    },
+    "DECISION.json": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/DECISION.json",
+      "bytes": 1359,
+      "sha256": "c4155cf2490eaf0d6e6a257a85e0497bd269a15414786b35c6958e53a67ff307"
+    },
+    "INPUTS.json": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/INPUTS.json",
+      "bytes": 572732,
+      "sha256": "5d5fbd88dde3c0a2df5d30a99cf7abc2803e288804f8f2948cca0a9d976f7f18"
+    },
+    "OFFLINE-REPLAY.json": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/OFFLINE-REPLAY.json",
+      "bytes": 63174,
+      "sha256": "6035f2bd26312661198cc255cda1cfc8a722a935d9f1467f930b27281454461d"
+    },
+    "PACKAGE-SOURCE-CHAIN.json": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/PACKAGE-SOURCE-CHAIN.json",
+      "bytes": 7201,
+      "sha256": "05787f83665c89b012408cbdd39d4fe631062ab9980b2b45fba053c2d5ffaeb2"
+    },
+    "REVIEW.md": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/REVIEW.md",
+      "bytes": 8590,
+      "sha256": "f0b863d5c3f836cf3c6c251e6edf76126d2bd207bbb8444a4c459b430b6ac6ad"
+    },
+    "VALIDATION.json": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/VALIDATION.json",
+      "bytes": 3237,
+      "sha256": "7fac37306f9e453f66e579a6d8bdce5b8c437feeb278b036a90b606a36c1805d"
+    },
+    "browser-control-source/campaign.py": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/browser-control-source/campaign.py",
+      "bytes": 25139,
+      "sha256": "8fc7d832254e37dc97078e0f456f56e215d9d93f2691c2cc4a50a6c0807dca74"
+    },
+    "browser-control-source/identity.py": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/browser-control-source/identity.py",
+      "bytes": 9708,
+      "sha256": "3b7e56040417e3f5d8b9b0ea398133caa3f1b9a03f2df34ea227b12584495e86"
+    },
+    "browser-control-source/kernel.py": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/browser-control-source/kernel.py",
+      "bytes": 11489,
+      "sha256": "4e533197cd68d530e68931e017f64ef614a774ce5e9d253995554ddb8cde21ef"
+    },
+    "browser-control-source/test_harness.py": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/browser-control-source/test_harness.py",
+      "bytes": 17818,
+      "sha256": "0dc8298309993fa2c783fe80d1c9cbc279ea3d5380f5c6637a2339431991db78"
+    },
+    "browser-control-source/touch.py": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/browser-control-source/touch.py",
+      "bytes": 604,
+      "sha256": "7be37b0ee7852449ff71c76a21555886dbd1769a2309699386a4158293366e3d"
+    },
+    "browser-controls.stderr": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/browser-controls.stderr",
+      "bytes": 3001,
+      "sha256": "62a8ee5c75d49b7f5936c2d37a24c4a396a6ba82f0c6c88c11eab8c7ea8fbabc"
+    },
+    "browser-controls.stdout": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/browser-controls.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "replay.py": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/replay.py",
+      "bytes": 11051,
+      "sha256": "baf33cff1b5bcf3bd65851c22bd55f1e5a9a9e24678a2d5cc391abc9be3743a4"
+    },
+    "replay.stderr": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/replay.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "replay.stdout": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/replay.stdout",
+      "bytes": 197,
+      "sha256": "31acc33f02574ddd40fe201034d609712c91518c5b5f22eced0d74733233571d"
+    },
+    "runtime-controls.stderr": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/runtime-controls.stderr",
+      "bytes": 2775,
+      "sha256": "fa1d24344184d961b411a442209e07d4cf270ceaea1f8703a695aa14ac20e7c4"
+    },
+    "runtime-controls.stdout": {
+      "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/runtime-controls.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "reviewedInputFiles": 2117,
+  "reportSha256": "f0b863d5c3f836cf3c6c251e6edf76126d2bd207bbb8444a4c459b430b6ac6ad",
+  "decisionSha256": "c4155cf2490eaf0d6e6a257a85e0497bd269a15414786b35c6958e53a67ff307",
+  "inputsSha256": "5d5fbd88dde3c0a2df5d30a99cf7abc2803e288804f8f2948cca0a9d976f7f18",
+  "allReviewedInputsRehashedUnchanged": true
+}

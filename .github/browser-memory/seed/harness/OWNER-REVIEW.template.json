@@ -1,0 +1,10 @@
+{
+  "status": "pending",
+  "reviewer": null,
+  "independentOfHarnessImplementation": false,
+  "sourceFreezeSha256": null,
+  "bindingsSha256": null,
+  "acceptsKernelChargeScope": false,
+  "acceptsAdmissionAndCleanup": false,
+  "notes": "Review source, package chain, numerical admission, launch isolation, full release checkpoint design, and platform setup before changing status. This template is not approval."
+}

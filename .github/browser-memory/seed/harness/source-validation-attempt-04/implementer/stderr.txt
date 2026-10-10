@@ -1,0 +1,25 @@
+test_control_current_growth_and_dropped_references_are_separate (test_harness.HarnessTests.test_control_current_growth_and_dropped_references_are_separate) ... ok
+test_descendant_rejects_cycles_and_unrelated_pids (test_harness.HarnessTests.test_descendant_rejects_cycles_and_unrelated_pids) ... ok
+test_fixed_schedule (test_harness.HarnessTests.test_fixed_schedule) ... ok
+test_incomplete_out_of_order_or_gc_evidence_refused (test_harness.HarnessTests.test_incomplete_out_of_order_or_gc_evidence_refused) ... ok
+test_lifecycle_drift_is_not_excused_by_exact_owner_return (test_harness.HarnessTests.test_lifecycle_drift_is_not_excused_by_exact_owner_return) ... ok
+test_malformed_integer_and_duplicate_key_refused (test_harness.HarnessTests.test_malformed_integer_and_duplicate_key_refused) ... ok
+test_package_archive_mismatch_is_admission_failure (test_harness.HarnessTests.test_package_archive_mismatch_is_admission_failure) ... ok
+test_peak_is_since_launch_not_reset_at_warm_idle (test_harness.HarnessTests.test_peak_is_since_launch_not_reset_at_warm_idle) ... ok
+test_safety_limits_and_swap_fail_closed (test_harness.HarnessTests.test_safety_limits_and_swap_fail_closed) ... ok
+test_sdk_free_payload_protocol_locally_without_kernel_claim (test_harness.HarnessTests.test_sdk_free_payload_protocol_locally_without_kernel_claim) ... ok
+test_snapshot_requires_every_counter (test_harness.HarnessTests.test_snapshot_requires_every_counter) ... ok
+test_tree_escape_and_source_tampering_refused (test_harness.HarnessTests.test_tree_escape_and_source_tampering_refused) ... ok
+test_unsafe_cleanup_stops_before_any_write (test_harness.HarnessTests.test_unsafe_cleanup_stops_before_any_write) ... ok
+test_cleanup_failure_stops_later_jobs_and_records_retained_scratch (test_harness.ScratchRepairTests.test_cleanup_failure_stops_later_jobs_and_records_retained_scratch) ... ok
+test_cleanup_refuses_live_processes_and_never_follows_external_link (test_harness.ScratchRepairTests.test_cleanup_refuses_live_processes_and_never_follows_external_link) ... ok
+test_cleanup_refuses_parent_identity_replacement_without_deleting_it (test_harness.ScratchRepairTests.test_cleanup_refuses_parent_identity_replacement_without_deleting_it) ... ok
+test_cleanup_refuses_permissions_and_work_symlink_replacement (test_harness.ScratchRepairTests.test_cleanup_refuses_permissions_and_work_symlink_replacement) ... ok
+test_launch_failure_preserves_evidence_and_cleans_created_scratch (test_harness.ScratchRepairTests.test_launch_failure_preserves_evidence_and_cleans_created_scratch) ... ok
+test_real_unix_sockets_fit_independently_of_long_evidence_path (test_harness.ScratchRepairTests.test_real_unix_sockets_fit_independently_of_long_evidence_path) ... ok
+test_stop_failure_status_is_separate_from_preparation_and_attempt (test_harness.ScratchRepairTests.test_stop_failure_status_is_separate_from_preparation_and_attempt) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 0.133s
+
+OK

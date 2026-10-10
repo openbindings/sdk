@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "preparerFreezeSha256": null,
+  "mode": "campaign",
+  "ownerLogin": null,
+  "sdkRepository": "openbindings/sdk",
+  "activationId": null,
+  "preparationRunId": null,
+  "preparationRunAttempt": null,
+  "artifactId": null,
+  "artifactName": null,
+  "bundleSha256": null,
+  "bindingsSha256": null,
+  "ownerReviewSha256": null,
+  "sourceFreezeSha256": "361ee880e6def05e826ecef1f800a4347b59de2e70ac954da7859cb0ff858825",
+  "candidateCommit": null,
+  "candidateArchiveSha256": null,
+  "baselineCommit": null,
+  "baselineArchiveSha256": null
+}
