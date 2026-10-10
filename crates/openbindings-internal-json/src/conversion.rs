@@ -14,11 +14,17 @@ const NUMBER_TOKEN: &str = "$serde_json::private::Number";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ValueConversionErrorKind {
+    /// A serializer emitted NaN or infinity, which JSON cannot represent.
     NonFiniteNumber,
+    /// An object map key cannot be represented as a JSON string.
     NonStringKey,
+    /// A serializer emitted repeated names, which this conversion refuses rather than overwriting.
     DuplicateKey,
+    /// The serializer requested a representation outside the supported exact conversion profile.
     UnsupportedRepresentation,
+    /// Serialization or parsing exceeded a finite conversion limit.
     Limit,
+    /// The caller's serializer returned an error.
     Serialization,
 }
 /// An owned diagnostic. Custom serializer text is available only through `message`.
@@ -31,6 +37,7 @@ pub struct ValueConversionError {
     path_omitted_for_limit: bool,
 }
 impl ValueConversionError {
+    /// Return the stable extensible conversion-failure category.
     pub fn kind(&self) -> ValueConversionErrorKind {
         self.kind
     }
@@ -38,12 +45,15 @@ impl ValueConversionError {
     pub fn pointer(&self) -> Option<&str> {
         self.pointer.as_deref()
     }
+    /// Borrow diagnostic text, including caller-provided serializer errors when applicable; treat it as untrusted display data. Debug/Display intentionally omit this prose.
     pub fn message(&self) -> &str {
         &self.message
     }
+    /// Whether the diagnostic message exceeded its 4096-byte UTF-8 retention limit.
     pub fn message_truncated(&self) -> bool {
         self.message_truncated
     }
+    /// Whether the emitted-value pointer was omitted because its escaped spelling exceeded 4096 bytes; omission never means root.
     pub fn path_omitted_for_limit(&self) -> bool {
         self.path_omitted_for_limit
     }

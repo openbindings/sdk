@@ -159,11 +159,11 @@ fn read(value: JsonRef<'_>, limits: &Limits) -> Result<Value, NoVerdict> {
     }
     let mut decoder = serde_json::Deserializer::from_slice(value.text().as_bytes());
     decoder.disable_recursion_limit();
-    serde::Deserialize::deserialize(&mut decoder).map_err(|e| {
+    serde::Deserialize::deserialize(&mut decoder).map_err(|_| {
         no_verdict(
             NoVerdictReason::EvaluatorFailure,
             "program-decoding",
-            e.to_string(),
+            "the projected schema could not be decoded",
         )
     })
 }

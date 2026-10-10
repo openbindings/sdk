@@ -33,7 +33,29 @@
  
  [dependencies.magnus]
  version = "0.9"
-@@ -398,3 +401,9 @@
+@@ -275,7 +278,9 @@
+ optional = true
+ 
+ [dependencies.referencing]
+-version = "0.58.6"
++package = "openbindings-internal-referencing"
++path = "../openbindings-internal-referencing"
++version = "=0.58.6-ob.1"
+ 
+ [dependencies.regex]
+ version = "1.11.1"
+@@ -285,7 +290,9 @@
+ features = ["derive"]
+ 
+ [dependencies.serde_json]
+-version = "1"
++package = "openbindings-internal-serde-json"
++path = "../openbindings-internal-serde-json"
++version = "=1.0.151-ob.1"
+ features = ["float_roundtrip"]
+ 
+ [dependencies.strum]
+@@ -398,3 +405,9 @@
  [lints.rust]
  unreachable_pub = "warn"
  unsafe_code = "warn"

@@ -39,26 +39,41 @@ struct Target {
 }
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
+/// Static reference inspection outcome. Located dynamic references still require evaluation-time scope resolution.
 pub enum ReferenceResolution {
+    /// A static target was located in the supplied original context.
     Located {
+        /// Original target resource and pointer, not a fetched or generated address.
         target: SchemaLocation,
+        /// True when evaluation must additionally apply dynamic-anchor scope; the static target alone is not the final runtime target.
         dynamic_lookup: bool,
     },
+    /// No sound target could be established within supported capabilities and supplied resources.
     Unresolved {
+        /// Structured unresolved-reference cause at the original reference location when available.
         detail: NoVerdict,
     },
 }
 #[derive(Clone, Debug, Serialize)]
+/// One `$ref` or `$dynamicRef` encountered in supported schema positions; opaque JSON content is not traversed as schema.
 pub struct Reference {
+    /// Original location of the reference keyword.
     pub location: SchemaLocation,
+    /// Reference keyword spelling, such as `$ref` or `$dynamicRef`.
     pub keyword: String,
+    /// Original scalar reference string, or `None` when its value is not representable as one.
     pub spelling: Option<String>,
+    /// Static location result or a structured refusal; never triggers I/O.
     pub resolution: ReferenceResolution,
 }
 #[derive(Clone, Debug, Serialize)]
+/// Bounded original-context reference inspection, not conformance proof or successful schema preparation.
 pub struct ReferenceReport {
+    /// Retained reference observations in traversal order.
     pub references: Vec<Reference>,
+    /// Whether traversal completed; individual unresolved references may still occur in a complete report.
     pub complete: bool,
+    /// Traversal-level cause when inspection is incomplete, distinct from per-reference refusals.
     pub limitation: Option<NoVerdict>,
 }
 use serde::Serialize;
@@ -223,7 +238,7 @@ impl SchemaSpace {
         if !uri::valid(reference) {
             return Err(fail(
                 "invalid-reference",
-                format!("not a well-formed URI reference: {reference}"),
+                "reference is not a well-formed URI reference".into(),
             ));
         }
         if resource.anonymous && !uri::absolute(reference) {
@@ -291,14 +306,14 @@ impl SchemaSpace {
                     holder,
                     NoVerdictReason::ResourceUnavailable,
                     "resource-unavailable",
-                    format!("static preparation requires an unsupplied resource: {name}"),
+                    "static preparation requires a resource that was not supplied",
                 ));
             }
             [id] => &self.resources[*id],
             _ => {
                 return Err(fail(
                     "ambiguous-resource",
-                    format!("more than one resource carries the exact identifier {name}"),
+                    "more than one resource carries the referenced identifier".into(),
                 ));
             }
         };
@@ -681,7 +696,7 @@ impl SchemaSpace {
             let checks = crate::fixed_schema::check(&node.value, true, 1).map_err(|e| {
                 self.failure(id, NoVerdictReason::LimitExceeded, "meta-schema-check", e)
             })?;
-            if !checks.entries.is_empty() {
+            if checks.violated {
                 return Err(self.failure(
                     id,
                     NoVerdictReason::ConservativePreparation,
@@ -862,9 +877,11 @@ struct Reach {
     dynamic: BTreeMap<String, Vec<usize>>,
 }
 impl ParsedDocument {
+    /// Inspect references with no caller resources and a fresh uncancelled control. No network or filesystem access; success is not conformance proof.
     pub fn references(&self) -> Result<ReferenceReport, InterpretationError> {
         self.references_with_resources(ResourceSet::default(), &WorkControl::new())
     }
+    /// Inspect schema references in this exact snapshot plus supplied resources, with cooperative cancellation. Interpretation errors refuse the document; traversal limits are represented in [`ReferenceReport`].
     pub fn references_with_resources(
         &self,
         resources: ResourceSet,

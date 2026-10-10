@@ -74,3 +74,6 @@ The TypeScript package provides the corresponding Fetch client and
 redirect destinations; those unavailable facts are not invented by the facade.
 
 Version 0.2.0-alpha.1 is an unpublished candidate requiring Rust 1.99. Package publication and application cutover are separate actions.
+
+Definition-level reference contracts, rendered documentation and maintained checks
+are described in the [API reference guide](../../docs/api-reference.md).

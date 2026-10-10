@@ -3,16 +3,22 @@ use openbindings::{DocumentAssessment, ValidatedDocument, VersionRefusal};
 use std::sync::Arc;
 
 #[derive(Clone, Debug, Default)]
+/// Publication header policy. Authentication, credentials and preflight handling remain the caller's responsibility.
 pub struct PublicationOptions {
     /// Empty omits CORS; `*`, `null`, or one ASCII origin is emitted unchanged.
     /// Credentialed CORS and preflight policy belong to application middleware.
     pub allow_origin: String,
 }
 #[derive(Clone, Debug)]
+/// Publication setup refusal; no listener is started and no unproved body is published.
 pub enum PublicationError {
+    /// Invalid publication options, such as an unsafe CORS origin.
     Configuration(ConfigurationError),
+    /// Unsupported declared version, separate from normative conformance.
     VersionRefused(VersionRefusal),
+    /// Assessment established a document violation; payload carries report and any parsed snapshot.
     NonConformant(DocumentAssessment),
+    /// Assessment could not establish conformance; payload preserves its evidence.
     Undetermined(DocumentAssessment),
 }
 impl std::fmt::Display for PublicationError {
@@ -33,6 +39,19 @@ pub struct Publication {
     allow_origin: String,
 }
 impl Publication {
+    /// Retain an immutable publication of a proved snapshot's exact original bytes. Validate CORS configuration; no server or listener is created.
+    ///
+    /// ```
+    /// use openbindings::assess_document;
+    /// use openbindings_http_discovery::{Publication, PublicationOptions, WELL_KNOWN_PATH};
+    /// let assessment = assess_document(r#"{"openbindings":"0.2.0","operations":{}}"#)?;
+    /// let proof = assessment.validated().expect("all normative rules established");
+    /// let publication = Publication::new(&proof, PublicationOptions::default())?;
+    /// let head = publication.respond("HEAD", WELL_KNOWN_PATH);
+    /// assert_eq!(head.status, 200);
+    /// assert!(head.body.is_empty());
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn new(
         document: &ValidatedDocument,
         options: PublicationOptions,
@@ -43,6 +62,7 @@ impl Publication {
             allow_origin: options.allow_origin,
         })
     }
+    /// Assess exact source bytes and create publication only on established conformance. Return distinct configuration, version, nonconformant or undetermined refusals.
     pub fn from_bytes(
         bytes: impl AsRef<[u8]>,
         options: PublicationOptions,
@@ -100,12 +120,17 @@ impl Publication {
     }
 }
 #[derive(Clone)]
+/// Owned HTTP response data for the caller's server adapter; no I/O or listener side effect.
 pub struct PublicationResponse {
+    /// HTTP status selected from route and method.
     pub status: u16,
+    /// Response headers, including original-body Content-Length for HEAD.
     pub headers: Vec<Header>,
+    /// Shared exact body for GET; empty for HEAD, unsupported methods and unmatched routes.
     pub body: Arc<[u8]>,
 }
 
+/// Validate empty (omit), `*`, `null`, or one ASCII URI origin with a scheme and host, without credentials, path, query, fragment or controls. Schemes are not restricted to HTTP(S); the accepted spelling is emitted unchanged.
 pub fn validate_allow_origin(origin: &str) -> Result<(), ConfigurationError> {
     let invalid = || ConfigurationError {
         code: "invalid-allow-origin",

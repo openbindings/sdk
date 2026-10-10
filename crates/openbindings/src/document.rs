@@ -12,46 +12,73 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
+/// Stable rule identifiers OBI-01 through OBI-13, in specification order.
 pub const DOCUMENT_RULES: [&str; 13] = [
     "OBI-01", "OBI-02", "OBI-03", "OBI-04", "OBI-05", "OBI-06", "OBI-07", "OBI-08", "OBI-09",
     "OBI-10", "OBI-11", "OBI-12", "OBI-13",
 ];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
+/// Evidence for one normative document rule. This closed partition may be exhaustively matched; it is separate from explanatory findings.
 pub enum Evidence {
+    /// The rule was established for this snapshot.
     Satisfied,
+    /// A rule violation was established, even if other work is inconclusive.
     Violated,
+    /// The implementation could not establish satisfaction or violation.
     Inconclusive,
+    /// The rule does not apply after an earlier prerequisite fails.
     NotApplicable,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
+/// Overall normative document conclusion. This is a closed semantic partition, not a schema-instance validation result.
 pub enum Conformance {
+    /// Every applicable document rule was established; a validated document can be obtained.
     Conformant,
+    /// At least one document rule was established as violated.
     NonConformant,
+    /// No violation was established, but evidence is insufficient to prove conformance.
     Undetermined,
 }
 #[derive(Clone, Debug, Serialize)]
+/// One explanatory normative-rule finding. Findings may be bounded; the report's independent rule evidence determines its conclusion.
 pub struct Finding {
+    /// Normative rule identifier, such as `OBI-01`.
     pub rule: &'static str,
+    /// Evidence expressed by this finding, not necessarily the final aggregate for its rule.
     pub status: Evidence,
+    /// Stable machine-readable diagnostic identifier; prefer it over message matching.
     pub code: &'static str,
+    /// Original-source coordinates when available. Pointers are data and must be escaped for display; byte columns are not UTF-16 editor columns.
     pub location: Option<SourceLocation>,
+    /// Human-facing explanation; display as text and use `rule`, `code` and `status` for logic.
     pub message: String,
 }
 #[derive(Clone, Debug, Serialize)]
+/// Assessment of all normative document rules at the pinned specification revision. At most 4096 findings and 8 MiB of aggregate generated-pointer UTF-8 bytes are retained. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source.
 pub struct ConformanceReport {
+    /// Applied specification release, independent of package version.
     pub release: &'static str,
+    /// Exact applied specification Git revision.
     pub revision: &'static str,
+    /// Identifier of the assessment policy used for this report.
     pub policy: &'static str,
+    /// Aggregate normative conclusion derived from all rule evidence.
     pub conclusion: Conformance,
+    /// One entry for every [`DOCUMENT_RULES`] identifier, including inconclusive and not-applicable rules.
     pub evidence: BTreeMap<&'static str, Evidence>,
+    /// Retained explanatory findings; an empty or truncated list alone does not prove conformance.
     pub findings: Vec<Finding>,
+    /// True when findings exceed the 4096-entry or 8 MiB aggregate generated-pointer byte cap. Omission never changes rule evidence or fabricates a shortened source pointer.
     pub findings_truncated: bool,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+/// A well-formed declared version outside this implementation's supported line. This is separate from conformance evidence.
 pub struct VersionRefusal {
+    /// Original declared version string.
     pub declared: String,
+    /// Supported specification line used for the refusal.
     pub supported: &'static str,
 }
 impl fmt::Display for VersionRefusal {
@@ -65,6 +92,7 @@ impl fmt::Display for VersionRefusal {
 }
 impl std::error::Error for VersionRefusal {}
 #[derive(Clone)]
+/// Immutable retained exact JSON snapshot, without a conformance claim. Clones share storage and lazily cached interpretation/assessment. Dropping all owners releases storage; it does not promise an immediate process RSS decrease.
 pub struct ParsedDocument {
     pub(crate) inner: Arc<DocumentInner>,
 }
@@ -83,22 +111,33 @@ impl fmt::Debug for ParsedDocument {
     }
 }
 #[derive(Clone, Debug)]
+/// Normative evidence plus the parsed snapshot when one was admitted. Invalid JSON can still produce a report without a parsed document.
 pub struct DocumentAssessment {
     document: Option<ParsedDocument>,
     report: Arc<ConformanceReport>,
 }
 #[derive(Clone, Debug)]
+/// Retained proof that this immutable snapshot satisfied every applicable normative document rule. Obtain it through [`DocumentAssessment::validated`]; contract preparation is still a separate evaluator-dependent step.
 pub struct ValidatedDocument {
     document: ParsedDocument,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
+/// Structured refusal to interpret typed fields. Causes are extensible; match specific cases or `code()` and retain a fallback. Exact parsed JSON remains available after this error.
+#[non_exhaustive]
 pub enum InterpretationError {
+    /// The declaration is unsupported; contains the distinct version refusal.
     Version(VersionRefusal),
+    /// The required version declaration is absent, malformed or not a scalar string.
     MalformedVersion,
+    /// Duplicate member names make typed interpretation ambiguous.
     DuplicateMembers,
+    /// A retained JSON string contains an unpaired UTF-16 unit that typed interpretation cannot represent.
     UnpairedString,
+    /// A typed field has an invalid shape, with an original source location.
     InvalidField {
+        /// Specific stable identifier for the invalid typed field.
         code: &'static str,
+        /// Original coordinate of the offending field/value, not a generated schema location.
         location: SourceLocation,
     },
 }
@@ -109,6 +148,7 @@ impl fmt::Display for InterpretationError {
 }
 impl std::error::Error for InterpretationError {}
 impl InterpretationError {
+    /// Return the specific stable interpretation code; messages are not identifiers.
     pub fn code(&self) -> &'static str {
         match self {
             Self::Version(_) => "unsupported-version",
@@ -118,6 +158,7 @@ impl InterpretationError {
             Self::InvalidField { code, .. } => code,
         }
     }
+    /// Borrow a located field error's original coordinates; global interpretation refusals have no invented location.
     pub fn source_location(&self) -> Option<&SourceLocation> {
         match self {
             Self::InvalidField { location, .. } => Some(location),
@@ -140,6 +181,7 @@ impl ParsedDocument {
     pub fn parse(input: impl AsRef<[u8]>) -> Result<Self, InputError> {
         JsonValue::parse(input).map(Self::from_json)
     }
+    /// Create a document snapshot from an exact value without assessment. A subtree is made standalone so subsequent document coordinates refer to its independent source.
     pub fn from_json(value: JsonValue) -> Self {
         let value = backend::standalone(value);
         Self {
@@ -152,12 +194,15 @@ impl ParsedDocument {
             }),
         }
     }
+    /// Borrow the exact document value; no new owner or conformance proof is created.
     pub fn value(&self) -> &JsonValue {
         &self.inner.value
     }
+    /// Borrow the complete immutable source bytes, including whitespace.
     pub fn original_bytes(&self) -> &[u8] {
         self.value().original_source()
     }
+    /// Copy representable normative fields into an editable draft. Refuses duplicates and invalid typed shapes; exact opaque fields retain their values. This conversion does not establish conformance.
     pub fn to_authoring(&self) -> Result<DocumentBuilder, AuthoringError> {
         DocumentBuilder::from_json(self.value())
     }
@@ -208,7 +253,7 @@ impl ParsedDocument {
         }
         Ok(())
     }
-    fn names(&self) -> Result<&NameIndex, InterpretationError> {
+    pub(crate) fn names(&self) -> Result<&NameIndex, InterpretationError> {
         self.inner
             .names
             .get_or_init(|| NameIndex::build(self.value()))
@@ -224,15 +269,19 @@ impl ParsedDocument {
             return Ok(OperationSelection::Missing);
         };
         if matches.len() > 1 {
-            let candidates = matches
+            // Deduplicate cheap operation indices before copying public names.
+            // Repeated aliases of a long primary key must not copy it per occurrence.
+            let mut candidates = matches
                 .iter()
-                .cloned()
+                .copied()
                 .collect::<std::collections::BTreeSet<_>>()
                 .into_iter()
-                .collect();
+                .map(|id| index.primary_keys[id].to_string())
+                .collect::<Vec<_>>();
+            candidates.sort();
             return Ok(OperationSelection::Ambiguous { candidates });
         }
-        let key = &matches[0];
+        let key = &index.primary_keys[matches[0]];
         self.operation_view(key, &index.operations[key])
             .map(OperationSelection::Found)
     }
@@ -253,7 +302,8 @@ impl ParsedDocument {
             value: value.clone(),
         })
     }
-    /// Primary operation objects in lexical key order. Malformed entries refuse
+    /// Allocate retained operation views in lexical key order. Each view remains
+    /// valid after this handle is dropped. Malformed entries refuse
     /// typed enumeration; `value()` remains available for exact inspection.
     pub fn operations(&self) -> Result<Vec<OperationView>, InterpretationError> {
         self.interpretable()?;
@@ -272,6 +322,7 @@ impl ParsedDocument {
         }
         Ok(index.bindings.get(key).cloned().unwrap_or_default())
     }
+    /// Return `None` when the dependency is absent, otherwise test its kind filter. Absence of `kinds` accepts all; an empty list accepts none. Interpretation may refuse the document; this method is not normative proof.
     pub fn dependency_accepts_kind(
         &self,
         dependency: &str,
@@ -294,9 +345,11 @@ impl ParsedDocument {
     }
 }
 #[derive(Default)]
-struct NameIndex {
-    operations: BTreeMap<String, JsonValue>,
-    names: HashMap<String, Vec<String>>,
+pub(crate) struct NameIndex {
+    operations: BTreeMap<Arc<str>, JsonValue>,
+    // Operation identities share primary bytes; alias occurrences store only indices.
+    primary_keys: Vec<Arc<str>>,
+    names: HashMap<String, Vec<usize>>,
     bindings: HashMap<String, Vec<String>>,
 }
 impl NameIndex {
@@ -313,8 +366,19 @@ impl NameIndex {
                 let Some(key) = member.name.as_str() else {
                     continue;
                 };
-                index.operations.insert(key.into(), member.value.to_owned());
-                index.add_name(key, key);
+                if member.value.kind() != JsonKind::Object {
+                    return Err(InterpretationError::invalid(
+                        "invalid-operation-object",
+                        member.value,
+                    ));
+                }
+                let primary = Arc::<str>::from(key);
+                let id = index.primary_keys.len();
+                index
+                    .operations
+                    .insert(primary.clone(), member.value.to_owned());
+                index.primary_keys.push(primary);
+                index.add_name(key, id);
                 if let Some(aliases) = member.value.get("aliases") {
                     let values = aliases.elements().ok_or_else(|| {
                         InterpretationError::invalid("invalid-operation-aliases", aliases)
@@ -323,7 +387,7 @@ impl NameIndex {
                         let name = alias.as_str().ok_or_else(|| {
                             InterpretationError::invalid("invalid-operation-alias", alias)
                         })?;
-                        index.add_name(name, key);
+                        index.add_name(name, id);
                     }
                 }
             }
@@ -347,15 +411,22 @@ impl NameIndex {
         }
         Ok(index)
     }
-    fn add_name(&mut self, name: &str, key: &str) {
-        self.names.entry(name.into()).or_default().push(key.into());
+    fn add_name(&mut self, name: &str, primary: usize) {
+        self.names.entry(name.into()).or_default().push(primary);
     }
 }
 #[derive(Clone, Debug)]
+/// Name-resolution result after successful interpretation; missing and ambiguous names are not schema verdicts.
 pub enum OperationSelection {
+    /// One retained operation view selected by primary key or alias; the view must still be assessed/prepared as needed.
     Found(OperationView),
+    /// No occurrence of the requested name exists.
     Missing,
-    Ambiguous { candidates: Vec<String> },
+    /// The name occurs more than once, including a repeated alias in one operation.
+    Ambiguous {
+        #[doc = "Distinct primary keys in lexical order; a single key can still represent repeated occurrences."]
+        candidates: Vec<String>,
+    },
 }
 /// Immutable retained operation object. Its exact value is not conformance proof.
 #[derive(Clone, Debug)]
@@ -365,9 +436,11 @@ pub struct OperationView {
     value: JsonValue,
 }
 impl OperationView {
+    /// Borrow the selected primary key, even when selection used an alias.
     pub fn key(&self) -> &str {
         &self.key
     }
+    /// Borrow the original exact operation object without creating a proof or evaluating schemas.
     pub fn value(&self) -> JsonRef<'_> {
         self.value.view()
     }
@@ -416,17 +489,21 @@ impl OperationView {
             })
             .transpose()
     }
+    /// Allocate binding keys in lexical presentation order; does not rank or invoke bindings.
     pub fn bindings(&self) -> Result<Vec<String>, InterpretationError> {
         self.document.operation_bindings(&self.key)
     }
 }
 impl DocumentAssessment {
+    /// Borrow complete per-rule evidence and the bounded findings list.
     pub fn report(&self) -> &ConformanceReport {
         &self.report
     }
+    /// Borrow the admitted snapshot, or `None` when input could not be parsed within admission limits.
     pub fn parsed(&self) -> Option<&ParsedDocument> {
         self.document.as_ref()
     }
+    /// Return a retained proof only for a conformant report; nonconformant and undetermined reports return `None`.
     pub fn validated(&self) -> Option<ValidatedDocument> {
         if self.report.conclusion == Conformance::Conformant {
             self.document
@@ -438,14 +515,17 @@ impl DocumentAssessment {
     }
 }
 impl ValidatedDocument {
+    /// Borrow the exact snapshot certified by this proof, for interpretation or contract setup.
     pub fn parsed(&self) -> &ParsedDocument {
         &self.document
     }
+    /// Borrow the exact bytes certified by this proof, including original formatting.
     pub fn original_bytes(&self) -> &[u8] {
         self.document.original_bytes()
     }
 }
 impl DocumentBuilder {
+    /// Encode the current draft into a fresh independent parsed snapshot. May refuse collisions, unrepresentable fields or limits; does not establish conformance.
     pub fn build(&self) -> Result<ParsedDocument, AuthoringError> {
         self.to_json().map(ParsedDocument::from_json)
     }
@@ -517,16 +597,22 @@ fn version_refusal(value: &JsonValue) -> Option<VersionRefusal> {
         supported: SUPPORTED_VERSIONS,
     })
 }
-struct Checks {
+const MAX_FINDINGS: usize = 4096;
+const MAX_FINDING_POINTER_BYTES: usize = 8 * 1024 * 1024;
+struct Checks<'a> {
     evidence: [Evidence; 13],
     findings: Vec<Finding>,
+    pending_locations: Vec<(usize, JsonRef<'a>)>,
+    pointer_bytes: usize,
     truncated: bool,
 }
-impl Checks {
+impl<'a> Checks<'a> {
     fn new() -> Self {
         Self {
             evidence: [Evidence::Satisfied; 13],
             findings: Vec::new(),
+            pending_locations: Vec::new(),
+            pointer_bytes: MAX_FINDING_POINTER_BYTES,
             truncated: false,
         }
     }
@@ -541,7 +627,7 @@ impl Checks {
         if status == Evidence::Violated || self.evidence[rule] != Evidence::Violated {
             self.evidence[rule] = status;
         }
-        if self.findings.len() < 4096 {
+        if self.findings.len() < MAX_FINDINGS {
             self.findings.push(Finding {
                 rule: DOCUMENT_RULES[rule],
                 status,
@@ -557,19 +643,31 @@ impl Checks {
         &mut self,
         rule: usize,
         status: Evidence,
-        at: JsonRef<'_>,
+        at: JsonRef<'a>,
         code: &'static str,
         message: impl Into<String>,
     ) {
-        // Evidence is still marked after the finding cap, without constructing an
-        // unretainable source location (which may have a large source prefix).
-        let location = (self.findings.len() < 4096).then(|| at.location());
-        self.mark(rule, status, code, location, message);
+        // Rule evidence is independent of retained diagnostic capacity. Keep
+        // borrowed nodes until finish, then scan each source prefix only once.
+        if status == Evidence::Violated || self.evidence[rule] != Evidence::Violated {
+            self.evidence[rule] = status;
+        }
+        if self.findings.len() >= MAX_FINDINGS {
+            self.truncated = true;
+            return;
+        }
+        let Some(bytes) = backend::location_pointer_size(at, self.pointer_bytes) else {
+            self.truncated = true;
+            return;
+        };
+        self.pointer_bytes -= bytes;
+        self.pending_locations.push((self.findings.len(), at));
+        self.mark(rule, status, code, None, message);
     }
     fn violation(
         &mut self,
         rule: usize,
-        at: JsonRef<'_>,
+        at: JsonRef<'a>,
         code: &'static str,
         message: impl Into<String>,
     ) {
@@ -578,7 +676,15 @@ impl Checks {
     fn not_applicable_after_json(&mut self) {
         self.evidence[1..].fill(Evidence::NotApplicable);
     }
-    fn finish(self) -> ConformanceReport {
+    fn finish(mut self) -> ConformanceReport {
+        let nodes: Vec<_> = self.pending_locations.iter().map(|(_, at)| *at).collect();
+        for ((index, _), location) in self
+            .pending_locations
+            .into_iter()
+            .zip(backend::locations(&nodes))
+        {
+            self.findings[index].location = Some(location);
+        }
         let conclusion = if self.evidence.contains(&Evidence::Violated) {
             Conformance::NonConformant
         } else if self.evidence.contains(&Evidence::Inconclusive) {
@@ -596,25 +702,23 @@ impl Checks {
             findings_truncated: self.truncated,
         }
     }
-    fn fixed(&mut self, value: &JsonValue, rule: usize, is_meta: bool) {
+    fn fixed(&mut self, value: &'a JsonValue, rule: usize, is_meta: bool) {
         match fixed_schema::check(
             value,
             is_meta,
-            4096usize.saturating_sub(self.findings.len()),
+            MAX_FINDINGS.saturating_sub(self.findings.len()),
         ) {
             Ok(problems) => {
                 self.truncated |= problems.truncated;
                 if problems.violated {
                     self.evidence[rule] = Evidence::Violated;
                 }
-                let nodes: Vec<_> = problems.entries.iter().map(|problem| problem.at).collect();
-                let locations = backend::locations(&nodes);
-                for (problem, location) in problems.entries.into_iter().zip(locations) {
-                    self.mark(
+                for problem in problems.entries {
+                    self.mark_at(
                         rule,
                         Evidence::Violated,
+                        problem.at,
                         "schema-mismatch",
-                        Some(location),
                         problem.message,
                     );
                 }
@@ -630,6 +734,7 @@ impl Checks {
     }
 }
 const NAME_GRAMMAR_MESSAGE: &str = "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens";
+/// Test the normative name grammar: ASCII letter, digit or underscore first, followed by ASCII letters, digits, underscores, dots or hyphens. No Unicode normalization or case folding is performed.
 pub fn valid_name(name: &str) -> bool {
     !name.is_empty()
         && name.bytes().enumerate().all(|(i, c)| {
@@ -642,14 +747,15 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
         return Err(refusal);
     }
     let mut c = Checks::new();
-    let duplicates = backend::duplicate_locations(value);
-    if !duplicates.is_empty() {
-        for at in duplicates {
-            c.mark(
+    let duplicates = backend::duplicate_nodes(value);
+    if duplicates.len() != 0 {
+        c.truncated = duplicates.len() > MAX_FINDINGS;
+        for at in duplicates.take(MAX_FINDINGS) {
+            c.mark_at(
                 0,
                 Evidence::Violated,
+                at,
                 "duplicate-member",
-                Some(at),
                 "object repeats a decoded member name",
             );
         }
@@ -861,4 +967,86 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
         }
     }
     Ok(c.finish())
+}
+
+#[cfg(test)]
+mod name_index_storage_tests {
+    use super::*;
+
+    #[test]
+    fn alias_occurrences_share_primary_storage_without_scaling_its_bytes() {
+        // Small, deterministic representation check, not a peak-memory benchmark.
+        let primary = "p".repeat(4096);
+        for count in [0, 1, 64, 256] {
+            let aliases: Vec<_> = (0..count).map(|i| format!("a{i}")).collect();
+            let source = serde_json::json!({
+                "openbindings": "0.2.0",
+                "operations": { &primary: { "aliases": aliases } },
+            });
+            let document = ParsedDocument::parse(source.to_string()).unwrap();
+            let index = document.names().unwrap();
+            assert_eq!(index.primary_keys.len(), 1);
+            let key = &index.primary_keys[0];
+            assert!(Arc::ptr_eq(index.operations.keys().next().unwrap(), key));
+            assert_eq!(index.names.len(), count + 1);
+            let occurrences: Vec<_> = index.names.values().flatten().copied().collect();
+            assert_eq!(occurrences.len(), count + 1);
+            assert!(occurrences.iter().all(|&id| id == 0));
+
+            // Count distinct retained primary allocations reached by all index
+            // owners/occurrences, plus its independent namespace lookup string.
+            let mut addresses = HashSet::new();
+            let primary_bytes: usize = index
+                .operations
+                .keys()
+                .chain(&index.primary_keys)
+                .chain(occurrences.iter().map(|&id| &index.primary_keys[id]))
+                .filter(|key| addresses.insert(Arc::as_ptr(key)))
+                .map(|key| key.len())
+                .sum();
+            assert_eq!(addresses.len(), 1);
+            assert_eq!(primary_bytes, primary.len());
+            let lookup_bytes = index.names.get_key_value(&primary).unwrap().0.len();
+            assert_eq!(primary_bytes + lookup_bytes, 2 * primary.len());
+
+            let selected = aliases.last().map(String::as_str).unwrap_or(&primary);
+            let OperationSelection::Found(operation) =
+                document.resolve_operation(selected).unwrap()
+            else {
+                panic!("every unique alias selects its primary")
+            };
+            assert_eq!(operation.key(), primary);
+        }
+    }
+
+    #[test]
+    fn repeated_aliases_stay_ambiguous_with_distinct_lexical_candidates() {
+        let primary = "p".repeat(4096);
+        let mut aliases = vec!["shared"; 256];
+        aliases.push(&primary); // primary/alias collision is another occurrence.
+        let source = serde_json::json!({
+            "openbindings": "0.2.0",
+            "operations": {
+                &primary: { "aliases": aliases },
+                "z": { "aliases": ["shared"] },
+                "a": { "aliases": ["shared"] },
+            },
+        });
+        let document = ParsedDocument::parse(source.to_string()).unwrap();
+        let OperationSelection::Ambiguous { candidates } =
+            document.resolve_operation("shared").unwrap()
+        else {
+            panic!("repeated declarations stay ambiguous")
+        };
+        assert_eq!(
+            candidates,
+            ["a".to_owned(), primary.clone(), "z".to_owned()]
+        );
+        let OperationSelection::Ambiguous { candidates } =
+            document.resolve_operation(&primary).unwrap()
+        else {
+            panic!("primary/alias collision stays ambiguous")
+        };
+        assert_eq!(candidates, [primary]);
+    }
 }

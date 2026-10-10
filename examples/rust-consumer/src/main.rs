@@ -101,11 +101,11 @@ fn contracts(document: &ParsedDocument) -> Result<(), Box<dyn std::error::Error>
     }
     assert!(matches!(
         input.validate(&exact("-1")),
-        ValueOutcome::Mismatch { .. }
+        ValueOutcome::Fails { .. }
     ));
     assert!(matches!(
         output.validate(&JsonValue::null()),
-        ValueOutcome::Mismatch { .. }
+        ValueOutcome::Fails { .. }
     ));
     assert!(matches!(
         context

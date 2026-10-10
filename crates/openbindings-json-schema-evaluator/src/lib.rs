@@ -1,5 +1,6 @@
 //! Optional JSON Schema 2020-12 evaluation. Resources are explicit; no I/O.
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 mod literals;
 use openbindings::*;
 use openbindings_internal_json::{
@@ -11,13 +12,21 @@ use std::sync::Arc;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]
+/// Finite default-evaluator budgets. Work counts are implementation units, not milliseconds; exhaustion yields no verdict unless an established failure only loses diagnostic completeness. Zero is literal, except `max_problems` has a minimum of one retained problem.
 pub struct Limits {
+    /// Evaluation work units per verdict/diagnostic pass; default 2,000,000.
     pub evaluation_steps: usize,
+    /// Nested evaluation depth; default 1024, distinct from source JSON nesting.
     pub evaluation_depth: usize,
+    /// Regular-expression work/backtracking budget per evaluation; default 2,000,000.
     pub regex_steps: usize,
+    /// Maximum retained failure diagnostics; default 256, effective minimum one. Truncation sets `problems_complete` false without changing an established failure.
     pub max_problems: usize,
+    /// Maximum projected JSON nesting admitted to evaluator compilation; default 512.
     pub compile_json_depth: usize,
+    /// Maximum UTF-8 bytes in each schema regular expression; default 1 MiB (1,048,576 bytes).
     pub pattern_bytes: usize,
+    /// Maximum parenthesis nesting in a schema regular expression; default 256.
     pub pattern_depth: usize,
 }
 impl Default for Limits {
@@ -34,16 +43,20 @@ impl Default for Limits {
     }
 }
 #[derive(Clone, Debug, Default)]
+/// Optional JSON Schema 2020-12 companion with exact numeric semantics and explicit resources only. It performs no network/filesystem acquisition. Format is annotation, Unicode property-escape matching is not qualified, and potential non-progressing cycles can conservatively refuse. Use a custom [`SchemaEvaluator`] when different qualified capabilities are required.
 pub struct DefaultEvaluator {
     limits: Limits,
 }
 impl DefaultEvaluator {
+    /// Construct the companion with [`Limits::default`]; no schemas are compiled or resources acquired yet.
     pub fn new() -> Self {
         Self::default()
     }
+    /// Construct the companion with explicit budgets; limits apply during preparation/evaluation, not as wall-clock deadlines.
     pub fn with_limits(limits: Limits) -> Self {
         Self { limits }
     }
+    /// Borrow this evaluator's configured budgets without allocation.
     pub fn limits(&self) -> &Limits {
         &self.limits
     }
@@ -53,13 +66,39 @@ struct NoRetrieval;
 impl jsonschema::Retrieve for NoRetrieval {
     fn retrieve(
         &self,
-        uri: &jsonschema::Uri<String>,
+        _uri: &jsonschema::Uri<String>,
     ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
-        Err(format!("resource is not in the prepared program: {uri}").into())
+        Err("resource is not in the prepared program".into())
     }
 }
 fn no_verdict(reason: NoVerdictReason, code: &str, message: impl Into<String>) -> NoVerdict {
     NoVerdict::new(reason, code, message)
+}
+fn preparation_error(mut kind: &jsonschema::error::ValidationErrorKind) -> NoVerdict {
+    use jsonschema::error::ValidationErrorKind;
+    // Read only trusted kind metadata, never dependency Display text or schema
+    // values. Property-name validation may wrap a regex-format failure.
+    for _ in 0..16 {
+        match kind {
+            ValidationErrorKind::Format { format } if format == "regex" => {
+                return no_verdict(
+                    NoVerdictReason::ConservativePreparation,
+                    "schema-pattern-compilation",
+                    "a schema regular expression could not be compiled; inspect pattern and patternProperties",
+                );
+            }
+            ValidationErrorKind::PropertyNames { error } => kind = error.kind(),
+            _ => break,
+        }
+    }
+    // Build errors can identify metaschema locations or resource-relative
+    // projected paths without a resource identity. Neither proves an original
+    // source location, so leave location absent rather than guessing the root.
+    no_verdict(
+        NoVerdictReason::ConservativePreparation,
+        "evaluator-preparation",
+        "the evaluator could not prepare the projected schema",
+    )
 }
 impl SchemaEvaluator for DefaultEvaluator {
     fn prepare(
@@ -77,33 +116,33 @@ impl SchemaEvaluator for DefaultEvaluator {
             let value = literals.resource(&resource.document, &self.limits, control)?;
             // Transfer each private projection into the registry. Holding a
             // second serde tree until compilation unnecessarily raises peak RSS.
-            registry = registry.add(&resource.uri, value).map_err(|e| {
+            registry = registry.add(&resource.uri, value).map_err(|_| {
                 no_verdict(
                     NoVerdictReason::EvaluatorFailure,
                     "program-resource",
-                    e.to_string(),
+                    "a projected resource could not be registered",
                 )
             })?;
         }
-        let registry = registry.prepare().map_err(|e| {
+        let registry = registry.prepare().map_err(|_| {
             no_verdict(
                 NoVerdictReason::ConservativePreparation,
                 "program-registry",
-                e.to_string(),
+                "the projected schema registry could not be prepared",
             )
         })?;
-        let entry_uri = jsonschema::Uri::parse(program.entry_uri.clone()).map_err(|e| {
+        let entry_uri = jsonschema::Uri::parse(program.entry_uri.clone()).map_err(|_| {
             no_verdict(
                 NoVerdictReason::EvaluatorFailure,
                 "program-entry-uri",
-                e.0.to_string(),
+                "the projected entry identifier is invalid",
             )
         })?;
-        let root = registry.resolver(entry_uri).lookup("").map_err(|e| {
+        let root = registry.resolver(entry_uri).lookup("").map_err(|_| {
             no_verdict(
                 NoVerdictReason::EvaluatorFailure,
                 "missing-program-entry",
-                e.to_string(),
+                "the projected schema entry could not be located",
             )
         })?;
         let validator = literals
@@ -116,13 +155,7 @@ impl SchemaEvaluator for DefaultEvaluator {
                 jsonschema::PatternOptions::fancy_regex().backtrack_limit(self.limits.regex_steps),
             )
             .build(root.contents())
-            .map_err(|e| {
-                no_verdict(
-                    NoVerdictReason::ConservativePreparation,
-                    "evaluator-preparation",
-                    e.to_string(),
-                )
-            })?;
+            .map_err(|error| preparation_error(error.kind()))?;
         control.check()?;
         // Compilation owns the state it needs. Keep the original-location map,
         // but release the intermediate source-backed projection arenas.
@@ -184,19 +217,7 @@ impl PreparedSchema for Compiled {
             }
             Err(reason) => {
                 return ValueOutcome::NoVerdict {
-                    detail: no_verdict(
-                        if reason == jsonschema::ob_work::Stop::Cycle {
-                            NoVerdictReason::ConservativePreparation
-                        } else {
-                            NoVerdictReason::LimitExceeded
-                        },
-                        if reason == jsonschema::ob_work::Stop::Arithmetic {
-                            "numeric-arithmetic-limit"
-                        } else {
-                            "evaluation-work-limit"
-                        },
-                        format!("evaluation stopped: {reason:?}"),
-                    ),
+                    detail: evaluation_stop(reason),
                 };
             }
         };
@@ -234,7 +255,7 @@ impl PreparedSchema for Compiled {
                                         instance_pointer: path,
                                         schema_location: schema_location.clone(),
                                         code: error.kind().keyword().into(),
-                                        message: diagnostic_message(error.kind()).into(),
+                                        message: diagnostic_message(error.kind()),
                                     });
                                 }
                                 if control.is_cancelled() {
@@ -253,7 +274,7 @@ impl PreparedSchema for Compiled {
         if let Err(detail) = control.check() {
             return ValueOutcome::NoVerdict { detail };
         }
-        ValueOutcome::Mismatch {
+        ValueOutcome::Fails {
             problems,
             problems_complete: complete,
         }
@@ -336,10 +357,25 @@ fn diagnostic_paths(error: &jsonschema::ValidationError<'_>, value: &JsonValue) 
         _ => vec![root.into()],
     }
 }
-fn diagnostic_message(kind: &jsonschema::error::ValidationErrorKind) -> &'static str {
+fn diagnostic_message(kind: &jsonschema::error::ValidationErrorKind) -> String {
     use jsonschema::error::ValidationErrorKind as K;
-    match kind {
-        K::Type { .. } => "value has a type not allowed by this schema",
+    let message = match kind {
+        K::Type { kind } => {
+            // The engine type enum has seven fixed names. Never render the schema
+            // or rejected instance, including user-controlled enum/member values.
+            use jsonschema::error::TypeKind;
+            return match kind {
+                TypeKind::Single(expected) => format!("expected JSON type: {expected}"),
+                TypeKind::Multiple(expected) => format!(
+                    "expected one of JSON types: {}",
+                    expected
+                        .iter()
+                        .map(|ty| ty.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            };
+        }
         K::Required { .. } => {
             "object is missing a required member; inspect the required keyword at the schema location"
         }
@@ -358,5 +394,86 @@ fn diagnostic_message(kind: &jsonschema::error::ValidationErrorKind) -> &'static
         }
         K::UniqueItems => "array contains equal items where unique items are required",
         _ => "value does not satisfy the constraint at the schema location",
+    };
+    message.into()
+}
+
+fn evaluation_stop(stop: jsonschema::ob_work::Stop) -> NoVerdict {
+    use jsonschema::ob_work::Stop;
+    let (reason, code, message) = match stop {
+        Stop::Cycle => (
+            NoVerdictReason::ConservativePreparation,
+            "evaluation-cycle",
+            "evaluation encountered a potential cycle and could not establish a verdict",
+        ),
+        Stop::Arithmetic => (
+            NoVerdictReason::LimitExceeded,
+            "numeric-arithmetic-limit",
+            "numeric arithmetic exceeds the admitted evaluation limit",
+        ),
+        Stop::Work | Stop::Depth | Stop::Diagnostics => (
+            NoVerdictReason::LimitExceeded,
+            "evaluation-work-limit",
+            "evaluation work or depth limit reached",
+        ),
+    };
+    no_verdict(reason, code, message)
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+    #[test]
+    fn preparation_classification_uses_kind_metadata_and_unwraps_property_names() {
+        use jsonschema::error::ValidationErrorKind;
+        let validator = jsonschema::options()
+            .with_draft(jsonschema::Draft::Draft202012)
+            .should_validate_formats(true)
+            .build(&serde_json::json!({"propertyNames":{"format":"regex"}}))
+            .unwrap();
+        let value = serde_json::json!({"[SECRET":true});
+        let error = validator.validate(&value).unwrap_err();
+        assert!(matches!(
+            error.kind(),
+            ValidationErrorKind::PropertyNames { .. }
+        ));
+        let classified = preparation_error(error.kind());
+        assert_eq!(classified.reason, NoVerdictReason::ConservativePreparation);
+        assert_eq!(classified.code, "schema-pattern-compilation");
+        assert_eq!(
+            classified.message,
+            "a schema regular expression could not be compiled; inspect pattern and patternProperties"
+        );
+        assert_eq!(classified.location, None);
+        for kind in [
+            ValidationErrorKind::Format {
+                format: "SECRET-unknown".into(),
+            },
+            ValidationErrorKind::Custom {
+                keyword: "SECRET-keyword".into(),
+                message: "SECRET-detail".repeat(1000),
+            },
+        ] {
+            let fallback = preparation_error(&kind);
+            assert_eq!(fallback.reason, NoVerdictReason::ConservativePreparation);
+            assert_eq!(fallback.code, "evaluator-preparation");
+            assert_eq!(
+                fallback.message,
+                "the evaluator could not prepare the projected schema"
+            );
+            assert_eq!(fallback.location, None);
+        }
+    }
+    #[test]
+    fn runtime_cycle_guard_has_a_truthful_conservative_code() {
+        use jsonschema::ob_work::Stop;
+        let cycle = evaluation_stop(Stop::Cycle);
+        assert_eq!(cycle.reason, NoVerdictReason::ConservativePreparation);
+        assert_eq!(cycle.code, "evaluation-cycle");
+        for stop in [Stop::Work, Stop::Depth, Stop::Diagnostics, Stop::Arithmetic] {
+            let stopped = evaluation_stop(stop);
+            assert_eq!(stopped.reason, NoVerdictReason::LimitExceeded);
+            assert_ne!(stopped.code, cycle.code);
+        }
     }
 }

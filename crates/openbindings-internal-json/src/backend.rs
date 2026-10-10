@@ -411,6 +411,28 @@ pub fn pointer_size(value: crate::JsonRef<'_>, limit: usize) -> Option<usize> {
     Some(size)
 }
 
+/// Bound the bytes of a retained location's pointer before constructing it.
+/// An unavailable pointer (a non-scalar ancestor name) costs zero bytes; its
+/// original byte coordinates are still useful. None means the budget is exceeded.
+pub fn location_pointer_size(value: crate::JsonRef<'_>, limit: usize) -> Option<usize> {
+    if let Some(size) = pointer_size(value, limit) {
+        return Some(size);
+    }
+    // Distinguish an unavailable pointer from an oversized one without allocating
+    // either. This second walk is needed only after the ordinary bounded measure
+    // failed; normal locations take a single ancestor walk.
+    let mut current = value.id;
+    while let Some((parent, edge)) = value.owner.nodes[current].parent {
+        if let crate::raw::Edge::Key(key) = edge
+            && value.owner.string(key).is_none()
+        {
+            return Some(0);
+        }
+        current = parent;
+    }
+    None
+}
+
 /// Locate a bounded diagnostic batch while scanning each arena's source prefix
 /// once. Sorting is assessment-local; healthy documents build no line index.
 /// Output order matches input order, including repeated nodes and mixed arenas.
@@ -526,19 +548,16 @@ pub fn standalone(value: crate::JsonValue) -> crate::JsonValue {
     )
     .expect("an admitted value's source span is a complete JSON value")
 }
-pub fn duplicate_locations(value: &crate::JsonValue) -> Vec<crate::SourceLocation> {
-    value
-        .owner
-        .duplicates
-        .iter()
-        .map(|(id, _)| {
-            crate::JsonRef {
-                owner: &value.owner,
-                id: *id,
-            }
-            .location()
-        })
-        .collect()
+/// Borrow duplicate-containing objects in parse order without materializing
+/// pointers or coordinates. Callers cap this iterator before collecting nodes.
+/// Document assessment passes a standalone root, so this covers its whole arena.
+pub fn duplicate_nodes(
+    value: &crate::JsonValue,
+) -> impl ExactSizeIterator<Item = crate::JsonRef<'_>> {
+    value.owner.duplicates.iter().map(|(id, _)| crate::JsonRef {
+        owner: &value.owner,
+        id: *id,
+    })
 }
 
 pub fn depth(value: &crate::JsonValue) -> usize {
@@ -571,6 +590,48 @@ pub fn live_arenas() -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn duplicate_locations_are_materialized_only_for_retained_nodes() {
+        let source = format!(
+            "{{\"pad\":\"{}\",\"nested\":{{\"k\":0{}}}}}",
+            "x".repeat(128 * 1024),
+            ",\"k\":0".repeat(5000)
+        );
+        let value = crate::JsonValue::parse(&source).unwrap();
+        let mut visited = 0;
+        let nodes: Vec<_> = duplicate_nodes(&value)
+            .inspect(|_| visited += 1)
+            .take(4096)
+            .collect();
+        assert_eq!(visited, 4096);
+        assert_eq!(nodes.len(), 4096);
+        let (locations, scanned) = locations_with_work(&nodes);
+        let offset = source.find("{\"k\"").unwrap();
+        assert_eq!(scanned, offset);
+        assert!(
+            locations
+                .iter()
+                .all(|at| at.byte_offset == offset && at.pointer.as_deref() == Some("/nested"))
+        );
+        assert_eq!(duplicate_nodes(&value).take(0).count(), 0);
+    }
+
+    #[test]
+    fn unavailable_pointer_keeps_coordinates_without_spending_pointer_bytes() {
+        let value = crate::JsonValue::parse(r#"{"\ud800":{"k":0,"k":1}}"#).unwrap();
+        let node = duplicate_nodes(&value).next().unwrap();
+        assert_eq!(pointer_size(node, usize::MAX), None);
+        assert_eq!(location_pointer_size(node, 0), Some(0));
+        let at = locations(&[node]).remove(0);
+        assert_eq!(at.pointer, None);
+        assert_eq!(at.byte_offset, 10);
+
+        let scalar = crate::JsonValue::parse(r#"{"a/~":{"k":0,"k":1}}"#).unwrap();
+        let node = duplicate_nodes(&scalar).next().unwrap();
+        assert_eq!(location_pointer_size(node, 5), None);
+        assert_eq!(location_pointer_size(node, 6), Some(6));
+    }
+
     #[test]
     fn batched_locations_match_original_coordinates_with_linear_source_scans() {
         let first = crate::JsonValue::parse(" {\r\n\"é/~\\n\":[1,\n2],\"z\":false}").unwrap();

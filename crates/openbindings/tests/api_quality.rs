@@ -8,7 +8,7 @@ fn parsed(operations: &str) -> ParsedDocument {
     .unwrap()
 }
 #[test]
-fn typed_inspection_retains_source_and_refuses_only_required_structure() {
+fn typed_inspection_checks_the_namespace_and_retains_unrelated_metadata() {
     let doc = parsed(
         r#"{"z":{"description":"last","aliases":["go"],"input":false,"output":null},"a":{}}"#,
     );
@@ -35,7 +35,7 @@ fn typed_inspection_retains_source_and_refuses_only_required_structure() {
     let held = op.input().unwrap().to_owned();
     drop(op);
     assert_eq!(held.text(), "false");
-    let unrelated = parsed(r#"{"good":{"description":12},"bad":false}"#);
+    let unrelated = parsed(r#"{"good":{"description":12},"bad":{}}"#);
     let OperationSelection::Found(good) = unrelated.resolve_operation("good").unwrap() else {
         panic!()
     };
@@ -48,11 +48,14 @@ fn typed_inspection_retains_source_and_refuses_only_required_structure() {
             .as_deref(),
         Some("/operations/good/description")
     );
-    assert!(unrelated.operations().is_err());
-    assert_eq!(
-        unrelated.resolve_operation("bad").unwrap_err().code(),
-        "invalid-operation-object"
-    );
+    assert!(unrelated.operations().is_ok());
+    let malformed = parsed(r#"{"good":{"description":12},"bad":false}"#);
+    for name in ["good", "bad", "absent"] {
+        assert_eq!(
+            malformed.resolve_operation(name).unwrap_err().code(),
+            "invalid-operation-object"
+        );
+    }
     assert!(matches!(
         unrelated.resolve_operation("absent").unwrap(),
         OperationSelection::Missing

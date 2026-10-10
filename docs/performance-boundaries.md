@@ -1,11 +1,11 @@
-# Historical SDK performance boundaries (SDK-A02)
+# Historical SDK performance boundaries
 
 This is an additive clarification of the immutable 2026-10-08 migration evidence
 at `ed2bf08718e7995a06d26b1a3534c326eb8bacc7`, not a new Go/Rust measurement.
 The end-to-end headline (88.13 ms Go / 19.83 ms Rust; 77.5% elapsed reduction,
 about 9% higher fresh-process peak RSS) remains the comparison of equivalent
-complete work on its frozen 1,000-schema fixture. R2 owns independent numeric
-recomputation; this note states boundaries from the preserved harness source.
+complete work on its frozen 1,000-schema fixture. Independent numeric recomputation is a separate check; this note states
+boundaries from the preserved harness source.
 
 | Series | Timed Rust work | Timed Go work | Valid interpretation |
 | --- | --- | --- | --- |

@@ -19,12 +19,12 @@ def pointer_exists(value,pointer):
 def judge_value(case,result,sources):
     failures=[];tag=result.get('outcome');detail=result.get('detail',{})
     permitted=case['optional_capability'] is not None and tag=='no-verdict' and detail.get('reason')=='unsupported-capability'
-    if tag!=case['expected'] and not permitted:failures.append('wrong verdict')
+    if tag!=('fails' if case['expected']=='mismatch' else case['expected']) and not permitted:failures.append('wrong verdict')
     if tag=='no-verdict':
         if detail.get('reason')!=case.get('refusal_kind'):failures.append('wrong refusal distinction')
         if not detail.get('code','').strip() or not detail.get('message','').strip():failures.append('unexplained refusal')
         if detail.get('reason') not in ['unsupported-capability','conservative-preparation','resource-unavailable']:failures.append('unjustified refusal reason')
-    if tag=='mismatch':
+    if tag=='fails':
         problems=result.get('problems',[])
         if not problems:failures.append('missing problems')
         if result.get('problemsComplete') is not True:failures.append('unexpected diagnostic truncation')
@@ -60,11 +60,12 @@ def judge_evaluator(fixture,observed):
 
 
 def controls():
-    case={'id':'control','value':'{"a":7}','expected':'mismatch','acceptable_paths':[['/a']],'optional_capability':None,'refusal_kind':None}
-    valid={'outcome':'mismatch','problemsComplete':True,'problems':[{'instancePointer':'/a','schemaLocation':{'resource':None,'pointer':'/type'}}]}
+    case={'id':'control','value':'{"a":7}','expected':'fails','acceptable_paths':[['/a']],'optional_capability':None,'refusal_kind':None}
+    valid={'outcome':'fails','problemsComplete':True,'problems':[{'instancePointer':'/a','schemaLocation':{'resource':None,'pointer':'/type'}}]}
     sources={None:{'type':'string'}}
     assert not judge_value(case,valid,sources)
     bad=[]
+    bad.append({**valid,'outcome':'mismatch'}) # obsolete public result tag is not a synonym
     bad.append({'outcome':'satisfies'})
     for field,value in [('instancePointer','/missing'),('schemaLocation',{'resource':None,'pointer':'/missing'}),('schemaLocation',{'resource':'https://sdk-program.openbindings.invalid/private','pointer':''})]:
         x=copy.deepcopy(valid);x['problems'][0][field]=value;bad.append(x)

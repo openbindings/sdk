@@ -22,6 +22,17 @@
  authors = ["Dmitry Dygalo <dmitry@dygalo.dev>"]
  build = "build.rs"
  autolib = false
+@@ -113,7 +114,9 @@
+ optional = true
+ 
+ [dependencies.serde_json]
+-version = "1"
++package = "openbindings-internal-serde-json"
++path = "../openbindings-internal-serde-json"
++version = "=1.0.151-ob.1"
+ features = ["float_roundtrip"]
+ 
+ [dependencies.zmij]
 --- a/Cargo.toml.orig
 +++ b/Cargo.toml.orig
 @@ -1,56 +0,0 @@

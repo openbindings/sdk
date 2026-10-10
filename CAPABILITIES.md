@@ -59,10 +59,10 @@ undefinedness. Exact-case declarations and the full suite distinguish these
 limits from wrong verdicts. The implementation does not promise a complete
 irrelevance decision procedure for `anyOf(true, problematic-schema)`.
 
-Mismatch diagnostics are bounded, omit instance values and identify original
+Failure diagnostics are bounded, omit instance values and identify original
 schema/instance locations. `problems_complete`/`problemsComplete` describes the
 selected diagnostic pass, not every logically redundant failed keyword. Truncation
-is explicit. Callers must handle no-verdict separately from mismatch and success.
+is explicit. Callers must handle no-verdict separately from failure and success.
 
 ## Ownership, retention and cancellation
 

@@ -1,16 +1,24 @@
 //! Declared-version policy. Numeric components have no machine-integer ceiling.
 use serde::Serialize;
 
+/// Supported stable specification line, `0.2.x`; independent of the crate version.
 pub const SUPPORTED_VERSIONS: &str = "0.2.x";
+/// Default declaration written by new authoring drafts, `0.2.0`.
 pub const AUTHORING_VERSION: &str = "0.2.0";
+/// Specification release whose document rules this build applies.
 pub const APPLIED_SPEC_RELEASE: &str = "0.2.0";
+/// Exact applied specification Git revision; identifies the rules behind assessment.
 pub const APPLIED_SPEC_REVISION: &str = "2f7d754dc2da374058cd517064c17e50f7d95d99";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
+/// Declared-version classification, independent of document conformance.
 pub enum VersionDecision {
+    /// Well-formed stable version in the supported line; document rules still need assessment.
     Supported,
+    /// The declaration is not syntactically valid SemVer.
     Malformed,
+    /// Well-formed SemVer outside the supported line, including prereleases.
     Unsupported,
 }
 

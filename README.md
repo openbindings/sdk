@@ -10,7 +10,7 @@ document rules, indexes operation names and aliases, inspects kinds and referenc
 and creates value-contract contexts with explicit resources and evaluators. Optional
 companions provide a default evaluator, an evaluator qualification kit, and HTTP
 discovery. Invocation, synthesis, binding adaptation and application migration are
-outside this delivery.
+outside the SDK.
 
 ## Installation status
 
@@ -45,7 +45,7 @@ Parsing preserves evidence; validation establishes conformance separately. For
 operation values, select `openbindings-json-schema-evaluator` explicitly and pass
 an immutable `ResourceSet`. `ContractPreparation` distinguishes ready, absent
 contract, missing or ambiguous operation, and preparation refusal. Only a ready
-contract validates values; `ValueOutcome` distinguishes satisfies, mismatch and
+contract validates values; `ValueOutcome` distinguishes satisfies, fails and
 no-verdict. Core never acquires references.
 The broader [six-workflow caller](examples/rust-consumer/src/main.rs) additionally
 covers HTTP discovery and evaluator qualification.
@@ -87,7 +87,7 @@ shows retained in-flight work and a replacement that is installed only when read
 | `openbindings-wasm` | Internal bridge used by the supported TypeScript facade |
 | `@openbindings/sdk` | First-class TypeScript API and included Wasm asset |
 
-`openbindings-internal-json` and three renamed dependency forks are implementation
+`openbindings-internal-json` and five renamed dependency packages are implementation
 packages. Their upstream APIs are not SDK extension contracts. The core's private
 schema machinery checks the normative document schema; transport and operation
 value-evaluator policy remain outside core. See [architecture](docs/architecture.md),
@@ -118,10 +118,11 @@ the exact applied revision below using `node tools/verify-spec.mjs . <spec-check
 <applied-sha>`; the checkout must be at that SHA. Full multi-crate Cargo archive
 qualification remains a separate prerelease/package-change check.
 
-CI definitions cover Linux, macOS and Windows; definitions are not evidence of
-execution. Migration qualification was conducted on the recorded macOS arm64 host
-and actual Chromium/WebKit, Node ESM and local workerd. The accompanying delivery
-reports identify final tested source/artifacts, results, limits and measurements.
+CI runs the component checks on Linux, macOS, Windows, Chromium and WebKit.
+Inspect [CI results](https://github.com/openbindings/sdk/actions/workflows/ci.yml)
+for the intended commit. Node ESM package checks are included; local workerd and
+full Cargo archive qualification are separate host/package checks. Record exact
+source and artifact identities with additional qualification results.
 Do not infer publication or application cutover from this repository. Follow
 [RELEASING.md](RELEASING.md) for the separate release process.
 
@@ -136,3 +137,6 @@ The npm archive carries its own notices, Rust standard-library attribution and
 build metadata. Fixture sources carry separate provenance and licenses.
 
 Historical measurements and their exact setup/cache/value-parsing boundaries are explained in [performance boundaries](docs/performance-boundaries.md).
+
+Definition-level reference contracts, rendered documentation and maintained checks
+are described in the [API reference guide](docs/api-reference.md).

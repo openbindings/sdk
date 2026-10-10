@@ -14,6 +14,9 @@ run(['cargo', 'check', '--locked', '-p', 'openbindings', '--no-default-features'
 run(['cargo', 'fmt', '--all', '--check'])
 run(['cargo', 'clippy', '--locked', '--workspace', '--all-targets', '--features', 'openbindings-http-discovery/native', '--', '-D', 'warnings'])
 run(['cargo', 'test', '--locked', '--workspace', '--features', 'openbindings-http-discovery/native'])
+run([sys.executable, 'tools/verify-api-reference.py', '--rust-only'])
+run([sys.executable, 'tools/verify-dependency-isolation.py'])
+run([sys.executable, 'tools/verify-consumer-compat.py'])
 for example in ['first_use', 'replacement']:
     run(['cargo', 'run', '--locked', '-p', 'openbindings-json-schema-evaluator', '--example', example])
 run([sys.executable, 'tools/verify-rust-snippets.py'])
@@ -27,6 +30,7 @@ if a.browser:
     run([npm, 'ci', '--ignore-scripts'], package)
     for command in ['build:wasm', 'build', 'test', 'test:types', 'format:check', 'test:package']:
         run([npm, 'run', command], package)
+    run([sys.executable, 'tools/verify-api-reference.py', '--typescript-only'])
     run([sys.executable, 'tools/qualification/replay/prepare-browser-fixtures.py'])
     for engine in ['chromium', 'webkit']:
         run(['node', 'packages/typescript/test/browser.mjs', engine])

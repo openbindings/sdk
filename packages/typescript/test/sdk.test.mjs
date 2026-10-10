@@ -158,7 +158,7 @@ test("retained contracts and metadata support repeated native-feeling caller use
       bad = sdk.ExactJson.from("private-value");
     assert.equal(input.validate(good).outcome, "satisfies");
     const mismatch = input.validate(bad);
-    assert.equal(mismatch.outcome, "mismatch");
+    assert.equal(mismatch.outcome, "fails");
     assert.ok(!JSON.stringify(mismatch).includes("private-value"));
     assert.equal(output.status, "no-contract");
     good.dispose();

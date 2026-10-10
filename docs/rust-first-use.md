@@ -40,7 +40,7 @@ Keep the returned conformance proof, select `DefaultEvaluator` from the optional
 | `OperationAmbiguous { candidates }` | Resolve the document's repeated identifier occurrences. |
 | `NoVerdict { detail }` | Inspect the reason/code/location; correct resources or capability/work conditions as appropriate. |
 
-Preparation refusal is not an input mismatch and does not prove that the schema has no meaning. Different applications may accept different setup states; the examples require a ready input.
+Preparation refusal is not an input failure and does not prove that the schema has no meaning. Different applications may accept different setup states; the examples require a ready input.
 
 ## Diagnose and correct a document
 
@@ -93,10 +93,10 @@ Retain one ready contract and call `input.validate(&value)` repeatedly:
 | Outcome | Meaning |
 | --- | --- |
 | `Satisfies` | The input satisfies the contract. |
-| `Mismatch { problems, problems_complete }` | A mismatch is established; selected diagnostics may be incomplete. |
-| `NoVerdict { detail }` | The evaluator did not establish a verdict; this is neither success nor mismatch. |
+| `Fails { problems, problems_complete }` | A failure is established; selected diagnostics may be incomplete. |
+| `NoVerdict { detail }` | The evaluator did not establish a verdict; this is neither success nor failure. |
 
-Mismatch problems identify instance pointers and original schema locations when available. `problems_complete` describes the selected diagnostic pass, not every logically redundant failed keyword. The first-use example validates an ordinary struct containing `9007199254740993`, then an adjacent smaller exact integer to show a mismatch without losing digits.
+Failure problems identify instance pointers and original schema locations when available. `problems_complete` describes the selected diagnostic pass, not every logically redundant failed keyword. The first-use example validates an ordinary struct containing `9007199254740993`, then an adjacent smaller exact integer to show a failure without losing digits.
 
 ## Retained work and replacement
 
@@ -109,3 +109,24 @@ Contexts retain four most-recent preparation entries by default. A separate fixt
 `prepare_with_control` and `validate_with_control` accept `WorkControl`. Clones share a cancellation state, and cancellation is permanent for that state. Create a fresh control for an independent retry. Cancelled preparation returns no ready owner; cancellation and transient evaluator failure do not poison healthy subsequent preparation on the context. A cancelled validation yields no-verdict and leaves the ready contract usable.
 
 Cancellation is cooperative, not a hard deadline. The example exercises cancellation before entry and recovery afterward. Invalid and cancelled candidates leave the existing active owner intact; the application chooses whether and when to install a later healthy replacement. No SDK-managed scheduler or active-document service is needed.
+
+### Interpretation and diagnostic compatibility
+
+Creating a value-contract context checks the entire operation namespace. A malformed
+operation or alias returns its specific `InterpretationError` and source location
+before selection, even when another operation would otherwise be usable.
+`resolve_operation` checks the same namespace. Unrelated metadata may remain
+nonconformant for draft evaluation; applications requiring a normative document
+must establish conformance before accepting it.
+
+`ValueOutcome::Fails` is the established failure outcome. `NoVerdictReason` and
+`InterpretationError` are non-exhaustive cause families: external matches need a
+wildcard for future causes. Semantic outcome enums remain closed, and public
+diagnostic structs remain constructible by evaluator implementations.
+
+Default diagnostic messages are advisory and bounded. Reference/resource prose
+omits source identifiers; value-failure prose omits instance data and user-schema
+enum/member strings. Type guidance uses only fixed JSON type names. Structured
+locations, reference spellings and explicitly accessed source fields can still
+contain source text; apply your application's disclosure policy before logging
+them. Custom evaluator messages are supplied by their authors.

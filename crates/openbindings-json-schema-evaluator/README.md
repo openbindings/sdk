@@ -36,8 +36,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ordinary = JsonValue::from_serializable("item")?;
     match input.validate(&ordinary) {
         ValueOutcome::Satisfies => println!("input satisfies the contract"),
-        ValueOutcome::Mismatch { problems, problems_complete } => {
-            println!("mismatch: {problems:?}; diagnostics complete: {problems_complete}");
+        ValueOutcome::Fails { problems, problems_complete } => {
+            println!("fails: {problems:?}; diagnostics complete: {problems_complete}");
         }
         ValueOutcome::NoVerdict { detail } => {
             println!("no verdict ({:?}): {}", detail.reason, detail.message);
@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 The shipped [first-use example](examples/first_use.rs) adds metadata, alias selection,
-exact wide integers and original mismatch locations. The separate
+exact wide integers and original failure locations. The separate
 [replacement example](examples/replacement.rs) shows caller-owned replacement,
 explicit same-URI resources, retained old work, invalid/cancelled candidates and
 healthy recovery. Run them from this package or the workspace:
@@ -71,7 +71,13 @@ A prepared contract retains its resources after the document/context is dropped.
 
 `NoVerdict` distinguishes unsupported capabilities, conservative preparation, missing resources, limits and cancellation. A missing reference or invalid pattern in a potentially visited branch may cause a conservative refusal even if another branch would establish validity. Such a refusal does not claim semantic undefinedness. Unicode property-escape *syntax* follows ECMA-262 edition 11; actual property matching is explicitly unsupported and declined only when applied. `format` remains an annotation. Custom/historical dialects are not interpreted as 2020-12.
 
-Mismatches report actual instance locations and original schema locations where available. They do not promise every possible failing keyword or Go's diagnostic multiplicity. `problems_complete` means the selected diagnostic pass completed without truncation, not exhaustive traversal of every semantically redundant failure. Diagnostic collection has its own work scope and allocation cap; a confirmed mismatch remains a mismatch when its diagnostics are truncated. Messages omit instance values.
+Regex compilation refusals use `schema-pattern-compilation` with bounded guidance
+to inspect `pattern` and `patternProperties`. They do not echo patterns or resource
+identifiers. A source location remains absent when the compiler cannot establish
+the original resource; other unclassified preparation failures retain the generic
+`evaluator-preparation` diagnostic.
+
+Failures report actual instance locations and original schema locations where available. They do not promise every possible failing keyword or Go's diagnostic multiplicity. `problems_complete` means the selected diagnostic pass completed without truncation, not exhaustive traversal of every semantically redundant failure. Diagnostic collection has its own work scope and allocation cap; a confirmed failure remains a failure when its diagnostics are truncated. Messages omit instance values.
 
 `Limits` bounds evaluation work, recursion, regex work, diagnostic output, dependency compilation depth and pattern admission. Parsing, graph preparation and dependency compilation use separate admission bounds. Cancellation is cooperative; dependency compilation/evaluation has bounded regions that are not preempted midway. Browser applications should use a Worker for large synchronous jobs.
 
@@ -84,3 +90,6 @@ attempt. Cancelled preparation returns no ready owner, while cancelled validatio
 leaves an existing contract usable. The application decides whether a candidate is
 ready to replace active work and controls its scheduling. Releasing the final Rust
 owner is distinct from reducing allocator RSS.
+
+Definition-level reference contracts, rendered documentation and maintained checks
+are described in the [API reference guide](../../docs/api-reference.md).

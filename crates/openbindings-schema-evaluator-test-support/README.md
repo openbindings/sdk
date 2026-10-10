@@ -17,3 +17,6 @@ The report records preparation refusals separately from optional value outcomes.
 `examples/boolean_evaluator.rs` is a small custom evaluator that consumes the original context and honestly declines non-boolean schemas. It demonstrates integration rather than claiming full capability. An integration test wraps the default evaluator with an original-context assertion and runs the complete suite.
 
 Version 0.2.0-alpha.1 is an unpublished candidate requiring Rust 1.99. Package publication and application cutover are separate actions.
+
+Definition-level reference contracts, rendered documentation and maintained checks
+are described in the [API reference guide](../../docs/api-reference.md).

@@ -1,0 +1,3 @@
+# Mechanical upstream packages retain their exact archived bytes on every host.
+/vendor/openbindings-internal-serde-json/** -text
+/vendor/openbindings-internal-referencing/** -text

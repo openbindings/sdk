@@ -28,7 +28,7 @@ impl PreparedSchema for BooleanContract {
         if self.0 {
             ValueOutcome::Satisfies
         } else {
-            ValueOutcome::Mismatch {
+            ValueOutcome::Fails {
                 problems: vec![ValueProblem {
                     instance_pointer: String::new(),
                     schema_location: None,
@@ -55,7 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert!(matches!(input.validate(&value), ValueOutcome::Satisfies));
     assert!(matches!(
         output.validate(&value),
-        ValueOutcome::Mismatch { .. }
+        ValueOutcome::Fails { .. }
     ));
     Ok(())
 }

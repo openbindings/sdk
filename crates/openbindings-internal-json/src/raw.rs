@@ -249,6 +249,18 @@ impl Arena {
         Some(current)
     }
     pub fn pointer(&self, id: Id) -> Option<String> {
+        // An unrepresentable ancestor makes the whole pointer unavailable. Check
+        // before copying any other (possibly large) segments. Scalar-only arenas
+        // keep the ordinary single walk.
+        if !self.unpaired.is_empty() {
+            let mut current = id;
+            while let Some((parent, edge)) = self.nodes[current].parent {
+                if let Edge::Key(key) = edge {
+                    self.string(key)?;
+                }
+                current = parent;
+            }
+        }
         let mut segments = Vec::new();
         let mut current = id;
         while let Some((parent, edge)) = self.nodes[current].parent {

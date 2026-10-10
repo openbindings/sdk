@@ -8,13 +8,19 @@ use std::{collections::BTreeMap, fmt};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum AuthoringErrorKind {
+    /// An additional field would shadow a typed normative member.
     FieldCollision,
+    /// A field cannot be represented by the typed authoring model.
     InvalidField,
+    /// Repeated object names prevent lossless typed authoring.
     DuplicateMembers,
+    /// The draft could not be encoded as supported exact JSON.
     Serialization,
+    /// Encoding or parsing exceeded an admission limit.
     Limit,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
+/// Expected authoring failure. A native draft pointer and an original source location are distinct coordinates; inspect the available one. Messages explain failures, while `kind` supports branching.
 pub struct AuthoringError {
     kind: AuthoringErrorKind,
     draft_pointer: Option<String>,
@@ -23,6 +29,7 @@ pub struct AuthoringError {
     path_omitted_for_limit: bool,
 }
 impl AuthoringError {
+    /// Return the stable failure category; callers must allow future categories.
     pub fn kind(&self) -> AuthoringErrorKind {
         self.kind
     }
@@ -30,12 +37,15 @@ impl AuthoringError {
     pub fn draft_pointer(&self) -> Option<&str> {
         self.draft_pointer.as_deref()
     }
+    /// Borrow the original parsed location when converting source JSON; native drafts have no invented byte coordinates.
     pub fn source_location(&self) -> Option<&crate::SourceLocation> {
         self.source_location.as_ref()
     }
+    /// Borrow the explanatory message. Use `kind` for program logic and escape text for the presentation context.
     pub fn message(&self) -> &str {
         &self.message
     }
+    /// Whether a draft pointer was omitted because its escaped UTF-8 spelling would exceed 4096 bytes; an omitted path is not the root.
     pub fn path_omitted_for_limit(&self) -> bool {
         self.path_omitted_for_limit
     }
@@ -151,11 +161,13 @@ impl<T: Read> Read for BTreeMap<String, T> {
 #[serde(transparent)]
 pub struct Preference(i64);
 impl Preference {
+    /// Return `None` outside the inclusive interoperable integer range ±9,007,199,254,740,991.
     pub fn new(value: i64) -> Option<Self> {
         (-9_007_199_254_740_991..=9_007_199_254_740_991)
             .contains(&value)
             .then_some(Self(value))
     }
+    /// Return the exact checked integer, without conversion to floating point.
     pub fn get(self) -> i64 {
         self.0
     }
@@ -186,15 +198,25 @@ impl Read for Preference {
 }
 
 #[derive(Clone, Debug)]
+/// Owned, editable normative vocabulary. `None` omits an optional member; opaque `JsonValue::null()` remains present JSON null. Building checks representability and collisions, not conformance. Assess the new immutable snapshot before publication.
 pub struct DocumentBuilder {
+    /// Declared specification version; defaults to [`AUTHORING_VERSION`].
     pub openbindings: String,
+    /// Primary operation keys and draft operations; aliases share their namespace during interpretation.
     pub operations: BTreeMap<String, Operation>,
+    /// Optional human-facing interface name.
     pub name: Option<String>,
+    /// Optional interface-defined version, independent of the `openbindings` declaration.
     pub version: Option<String>,
+    /// Optional human-facing interface description.
     pub description: Option<String>,
+    /// Optional named JSON Schema values; exact opaque contents remain unmodified.
     pub schemas: Option<BTreeMap<String, JsonValue>>,
+    /// Optional named dependencies on operation contracts.
     pub dependencies: Option<BTreeMap<String, Dependency>>,
+    /// Optional named binding sources, interpreted by their source kind outside core.
     pub sources: Option<BTreeMap<String, Source>>,
+    /// Optional named operation-to-source bindings; core does not invoke or rank them.
     pub bindings: Option<BTreeMap<String, Binding>>,
     /// Extension and unknown members, retained verbatim; conformance determines whether each is allowed.
     pub additional_fields: BTreeMap<String, JsonValue>,
@@ -306,13 +328,21 @@ impl Read for DocumentBuilder {
 }
 
 #[derive(Clone, Debug, Default)]
+/// Editable operation metadata and optional input/output schemas. A present schema is not evidence that an evaluator supports it.
 pub struct Operation {
+    /// Optional human-facing operation description.
     pub description: Option<String>,
+    /// Optional deprecation annotation; omission is distinct from explicit false.
     pub deprecated: Option<bool>,
+    /// Optional application-facing classification tags, preserving order.
     pub tags: Option<Vec<String>>,
+    /// Optional alternative operation names in the shared primary-key/alias namespace.
     pub aliases: Option<Vec<String>>,
+    /// Optional input JSON Schema; absence means no input contract, while false is a present schema.
     pub input: Option<JsonValue>,
+    /// Optional output JSON Schema; absence means no output contract, while false is a present schema.
     pub output: Option<JsonValue>,
+    /// Optional named examples carrying exact input/output instances.
     pub examples: Option<BTreeMap<String, OperationExample>>,
     /// Extension and unknown members, retained verbatim; conformance determines whether each is allowed.
     pub additional_fields: BTreeMap<String, JsonValue>,
@@ -401,9 +431,13 @@ impl Read for Operation {
 }
 
 #[derive(Clone, Debug, Default)]
+/// Editable example values; these are instances, not schemas or proof that an operation accepts them.
 pub struct OperationExample {
+    /// Optional human-facing explanation of this example.
     pub description: Option<String>,
+    /// Optional exact input instance; explicit JSON null is preserved.
     pub input: Option<JsonValue>,
+    /// Optional exact output instance; explicit JSON null is preserved.
     pub output: Option<JsonValue>,
     /// Extension and unknown members, retained verbatim; conformance determines whether each is allowed.
     pub additional_fields: BTreeMap<String, JsonValue>,
@@ -456,9 +490,13 @@ impl Read for OperationExample {
 }
 
 #[derive(Clone, Debug, Default)]
+/// Editable dependency on another operation, with an optional source-kind restriction.
 pub struct Dependency {
+    /// Referenced operation name; document assessment checks the applicable normative constraints.
     pub operation: String,
+    /// Allowed source kinds. Absence accepts every kind; an empty list accepts none.
     pub kinds: Option<Vec<String>>,
+    /// Optional human-facing dependency description.
     pub description: Option<String>,
     /// Extension and unknown members, retained verbatim; conformance determines whether each is allowed.
     pub additional_fields: BTreeMap<String, JsonValue>,
@@ -513,9 +551,13 @@ impl Read for Dependency {
 }
 
 #[derive(Clone, Debug, Default)]
+/// Editable source metadata and opaque kind-specific content. Core preserves content without acquiring resources or executing it.
 pub struct Source {
+    /// Source-kind identifier selecting the external binding vocabulary.
     pub kind: String,
+    /// Optional exact kind-specific content; explicit JSON null remains present.
     pub content: Option<JsonValue>,
+    /// Optional human-facing source description.
     pub description: Option<String>,
     /// Extension and unknown members, retained verbatim; conformance determines whether each is allowed.
     pub additional_fields: BTreeMap<String, JsonValue>,
@@ -566,13 +608,21 @@ impl Read for Source {
 }
 
 #[derive(Clone, Debug, Default)]
+/// Editable link from an operation to a source. Core retains binding content and annotations; invocation and selection policy belong to the consumer.
 pub struct Binding {
+    /// Primary operation name referenced by this binding.
     pub operation: String,
+    /// Key of the source containing this binding's interpretation context.
     pub source: String,
+    /// Optional exact source-kind-specific binding content.
     pub content: Option<JsonValue>,
+    /// Optional idempotence annotation; it does not cause retries or execution.
     pub idempotent: Option<bool>,
+    /// Optional exact interoperable preference integer; core does not rank bindings.
     pub preference: Option<Preference>,
+    /// Optional human-facing binding description.
     pub description: Option<String>,
+    /// Optional deprecation annotation, independent of operation deprecation.
     pub deprecated: Option<bool>,
     /// Extension and unknown members, retained verbatim; conformance determines whether each is allowed.
     pub additional_fields: BTreeMap<String, JsonValue>,
@@ -673,6 +723,7 @@ impl Default for DocumentBuilder {
     }
 }
 impl DocumentBuilder {
+    /// Create an empty draft declaring [`AUTHORING_VERSION`], with all optional fields absent.
     pub fn new() -> Self {
         Self::default()
     }
@@ -737,6 +788,7 @@ impl DocumentBuilder {
     }
 }
 impl Dependency {
+    /// Test the declared kind filter with exact string equality; absence accepts all and an empty list accepts none. This does not resolve or execute a dependency.
     pub fn accepts_kind(&self, kind: &str) -> bool {
         self.kinds
             .as_ref()

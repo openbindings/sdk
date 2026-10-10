@@ -81,6 +81,7 @@ jobs:
         working-directory: packages/typescript
       - run: npm run build:wasm && npm run build && npm test && npm run test:types && npm run format:check && npm run test:package
         working-directory: packages/typescript
+      - run: python tools/verify-api-reference.py --typescript-only
       - run: npx playwright-core install --with-deps chromium webkit
         working-directory: packages/typescript
       - run: python tools/qualification/replay/prepare-browser-fixtures.py

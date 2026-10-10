@@ -43,7 +43,7 @@ or context drop. The default context cache has four entries, configurable throug
 `ValueContractOptions`; retained contracts survive eviction. Cancellation and
 transient failures are retryable. Handle every `ContractPreparation` branch: ready, no-contract, operation-missing,
 operation-ambiguous and no-verdict. Only ready contracts expose value validation;
-`ValueOutcome` is satisfies, mismatch or no-verdict. Preparation refusal is not
+`ValueOutcome` is satisfies, fails or no-verdict. Preparation refusal is not
 proof of semantic undefinedness. `openbindings-schema-evaluator-test-support`
 qualifies custom adapters; `openbindings-http-discovery` supplies optional HTTP policy.
 
@@ -101,3 +101,6 @@ label UTF-8 byte coordinates explicitly. Complex failures retain a general
 explanation. Message wording is guidance; use rule/code/evidence and original
 locations for program logic. The [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
 shows source correction through conformance proof and contract setup.
+
+Definition-level reference contracts, rendered documentation and maintained checks
+are described in the [API reference guide](../../docs/api-reference.md).

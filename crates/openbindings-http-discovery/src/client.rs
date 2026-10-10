@@ -12,11 +12,15 @@ use std::{
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+/// Owned HTTP header name and uninterpreted value bytes, preserving non-UTF-8 values.
 pub struct Header {
+    /// Header name; lookup uses ASCII case-insensitive comparison.
     pub name: String,
+    /// Raw field value bytes; consumers choose an appropriate text-decoding/display policy.
     pub value: Vec<u8>,
 }
 impl Header {
+    /// Copy a header name and byte value into owned response metadata.
     pub fn new(name: impl Into<String>, value: impl AsRef<[u8]>) -> Self {
         Self {
             name: name.into(),
@@ -25,14 +29,19 @@ impl Header {
     }
 }
 #[derive(Clone, Debug, Serialize)]
+/// Response facts retained independently from body acquisition or document assessment.
 pub struct ResponseMetadata {
+    /// Constructed discovery URL sent to the caller's transport.
     pub requested_url: String,
     /// None when a custom transport or host cannot expose the final URL.
     pub final_url: Option<String>,
+    /// Observed HTTP status code; only 200 bodies enter assessment.
     pub status: u16,
+    /// Owned observed headers, retaining repeated names and raw values.
     pub headers: Vec<Header>,
 }
 impl ResponseMetadata {
+    /// Borrow the first case-insensitive matching header value, or `None`; does not combine repeated fields.
     pub fn header(&self, name: &str) -> Option<&[u8]> {
         self.headers
             .iter()
@@ -42,15 +51,23 @@ impl ResponseMetadata {
 }
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+/// Transport-provided failure category; distinct from document evidence and HTTP response status.
 pub enum FailureKind {
+    /// The transport could not complete a network operation.
     Network,
+    /// A transport-owned deadline expired.
     Timeout,
+    /// The transport reports cancellation or abortion.
     Aborted,
+    /// The transport cannot classify the failure more specifically.
     Other,
 }
 #[derive(Clone, Debug, Serialize)]
+/// Caller-transport failure during request or body reading. Its message is supplied by the adapter, not normative evidence.
 pub struct RequestFailure {
+    /// Transport failure category.
     pub kind: FailureKind,
+    /// Adapter-provided explanation; adapters should remove credentials, URLs and source data from default diagnostics.
     pub message: String,
 }
 impl std::fmt::Display for RequestFailure {
@@ -64,6 +81,7 @@ impl std::error::Error for RequestFailure {}
 /// zero only at EOF. Dropping the body must release/cancel host response state.
 /// Futures need not be Send, permitting local browser/Worker transports.
 pub trait ResponseBody {
+    /// Read at most `output.len()` decoded bytes and return their count; zero means EOF. Do not return more than the buffer length. Dropping the body must release/cancel acquisition; futures need not be `Send`.
     fn read(&mut self, output: &mut [u8]) -> impl Future<Output = Result<usize, RequestFailure>>;
     /// Optional bounded cleanup for connection reuse. The default closes on drop.
     /// Implementations must bound their own cleanup time and bytes; failures must
@@ -72,25 +90,35 @@ pub trait ResponseBody {
         std::future::ready(())
     }
 }
+/// Response supplied by the caller transport, before bounded body reading. The transport owns redirects, credentials, TLS and timeouts.
 pub struct HttpResponse<B> {
+    /// Final URL when known, for metadata only; never an implicit schema base or acquisition permission.
     pub final_url: Option<String>,
+    /// Observed HTTP response status.
     pub status: u16,
+    /// Owned response headers, preserving repeated fields and raw bytes.
     pub headers: Vec<Header>,
+    /// Decoded-body stream whose drop releases transport resources.
     pub body: B,
 }
 #[derive(Clone, Debug)]
+/// One finite request constructed by the portable discovery client; the callback performs acquisition.
 pub struct DiscoveryRequest {
+    /// Absolute discovery endpoint derived from the caller's HTTP(S) origin.
     pub url: String,
+    /// Companion Accept header value to send with the request.
     pub accept: &'static str,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
+/// Portable discovery configuration. Default uses a 1 MiB decoded-body limit; zero selects the default and negative values are refused.
 pub struct ClientOptions {
     /// Bound on decoded bytes delivered by the transport. Zero selects 1 MiB;
     /// negative values are configuration errors. At most one extra byte is read.
     pub max_document_bytes: i64,
 }
 impl ClientOptions {
+    /// Resolve the configured decoded-byte limit, reserving capacity for a one-byte over-limit sentinel. Reject negative or unrepresentable limits before transport work.
     pub fn byte_limit(&self) -> Result<usize, ConfigurationError> {
         if self.max_document_bytes == 0 {
             return Ok(DEFAULT_MAX_DOCUMENT_BYTES);
@@ -206,21 +234,56 @@ pub(crate) async fn until_cancelled<F: Future>(
     .await
 }
 #[derive(Clone, Debug)]
+/// Acquisition and assessment partition. Only `Found` carries normative proof; HTTP status, refusal and incomplete work remain distinct.
 pub enum DiscoveryOutcome {
-    Found { document: ValidatedDocument },
-    NonConformant { assessment: DocumentAssessment },
-    Undetermined { assessment: DocumentAssessment },
-    VersionRefused { refusal: VersionRefusal },
+    /// A complete bounded 200 body established normative document conformance.
+    Found {
+        #[doc = "Retained immutable proof for the exact acquired body."]
+        document: ValidatedDocument,
+    },
+    /// A complete 200 body established at least one normative violation, including invalid JSON.
+    NonConformant {
+        #[doc = "Report and parsed snapshot when input was admitted."]
+        assessment: DocumentAssessment,
+    },
+    /// A complete 200 body could not be proved conformant or nonconformant within supported limits/capabilities.
+    Undetermined {
+        #[doc = "Report preserving inconclusive evidence and any admitted snapshot."]
+        assessment: DocumentAssessment,
+    },
+    /// A complete 200 body declared a well-formed unsupported version.
+    VersionRefused {
+        #[doc = "Declared/supported version information, not conformance evidence."]
+        refusal: VersionRefusal,
+    },
+    /// HTTP 404; the only status interpreted as absence.
     Absent,
+    /// HTTP 401 or 403; authorization is required or denied.
     Gated,
+    /// Any observed status other than 200, 401, 403 or 404; inspect response metadata.
     HttpStatus,
-    BodyLimit { limit: usize },
+    /// The decoded 200 body exceeded the configured byte limit; no partial body is published as a document.
+    BodyLimit {
+        #[doc = "Effective decoded-byte limit, in bytes."]
+        limit: usize,
+    },
+    /// Caller cancellation was observed during acquisition or at assessment boundaries.
     Cancelled,
-    TransportFailure { failure: RequestFailure },
-    BodyFailure { failure: RequestFailure },
+    /// The request failed before response metadata was available.
+    TransportFailure {
+        #[doc = "Transport classification and adapter-owned explanation."]
+        failure: RequestFailure,
+    },
+    /// The response was obtained but decoded-body reading failed; response metadata remains available.
+    BodyFailure {
+        #[doc = "Body-reader classification and adapter-owned explanation."]
+        failure: RequestFailure,
+    },
 }
 #[derive(Clone)]
+/// Finite discovery receipt: semantic outcome, observed response metadata and complete bounded body when available. No response cache or server is created.
 pub struct DiscoveryResult {
+    /// Distinct acquisition or assessment outcome; do not collapse absence, gating and inability into invalidity.
     pub outcome: DiscoveryOutcome,
     /// Present once a response has been received, including body failures.
     pub metadata: Option<ResponseMetadata>,

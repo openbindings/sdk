@@ -12,7 +12,7 @@ console.log(
   JSON.stringify(
     {
       accepted: firstUse({ id: 7 }),
-      mismatch: firstUse({ id: 0 }),
+      fails: firstUse({ id: 0 }),
       invalidInput: firstUse({ id: NaN }),
     },
     null,

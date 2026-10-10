@@ -102,7 +102,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     for value in [&ordinary, &exact] {
         match input.validate(value) {
             ValueOutcome::Satisfies => println!("input satisfies the contract"),
-            ValueOutcome::Mismatch {
+            ValueOutcome::Fails {
                 problems,
                 problems_complete,
             } => {

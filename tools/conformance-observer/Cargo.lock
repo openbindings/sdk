@@ -361,8 +361,8 @@ dependencies = [
  "openbindings-internal-json",
  "openbindings-internal-jsonschema",
  "openbindings-internal-jsonschema-value",
+ "openbindings-internal-serde-json",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -372,6 +372,7 @@ dependencies = [
  "itoa",
  "openbindings-internal-jsonschema",
  "openbindings-internal-jsonschema-value",
+ "openbindings-internal-serde-json",
  "serde",
  "serde_json",
 ]
@@ -394,12 +395,12 @@ dependencies = [
  "num-cmp",
  "num-traits",
  "openbindings-internal-jsonschema-value",
+ "openbindings-internal-referencing",
  "openbindings-internal-regress",
+ "openbindings-internal-serde-json",
  "percent-encoding",
- "referencing",
  "regex",
  "serde",
- "serde_json",
  "strum",
  "unicode-general-category",
  "uuid-simd",
@@ -416,8 +417,23 @@ dependencies = [
  "num-bigint",
  "num-cmp",
  "num-traits",
- "serde_json",
+ "openbindings-internal-serde-json",
  "zmij",
+]
+
+[[package]]
+name = "openbindings-internal-referencing"
+version = "0.58.6-ob.1"
+dependencies = [
+ "ahash",
+ "fluent-uri",
+ "getrandom",
+ "hashbrown",
+ "itoa",
+ "micromap",
+ "openbindings-internal-serde-json",
+ "parking_lot",
+ "percent-encoding",
 ]
 
 [[package]]
@@ -428,6 +444,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "openbindings-internal-serde-json"
+version = "1.0.151-ob.1"
+dependencies = [
+ "itoa",
+ "memchr",
+ "serde",
+ "serde_core",
+ "zmij",
+]
+
+[[package]]
 name = "openbindings-json-schema-evaluator"
 version = "0.2.0-alpha.1"
 dependencies = [
@@ -435,8 +462,8 @@ dependencies = [
  "openbindings-internal-json",
  "openbindings-internal-jsonschema",
  "openbindings-internal-jsonschema-value",
+ "openbindings-internal-serde-json",
  "serde",
- "serde_json",
 ]
 
 [[package]]
