@@ -43,6 +43,11 @@ jobs:
           toolchain: ${{ steps.rust-version.outputs.version }}
           components: rustfmt, clippy
       - run: python tools/verify.py
+      - name: Verify core acquisition boundaries
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cargo build --locked --manifest-path tools/no-io/Cargo.toml
+          python tools/verify-no-io.py --binary target/debug/sdk-no-io --output target/no-io-receipt
   browser:
     runs-on: ubuntu-latest
     timeout-minutes: 30

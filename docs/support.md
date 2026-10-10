@@ -26,6 +26,22 @@ own evaluator and qualify it with the evaluator test-support crate. TypeScript
 custom evaluator callbacks are not currently provided. The complete boundaries
 are in [CAPABILITIES.md](../CAPABILITIES.md).
 
+For untrusted request validation, start with a smaller diagnostic allowance such
+as 64 KiB and 32 problems (`diagnostic_bytes` / `max_problems` in Rust,
+`diagnosticBytes` / `maxProblems` in TypeScript), then choose limits for the facts
+your application needs. The 1 MiB default permits richer editor and inspection
+reports; it is not an optimized service response target. These allowances count
+retained diagnostic strings, not serialized response bytes or total memory.
+Always inspect the result's completeness flag, including failures with no retained
+problems. See the [evaluator budget contract](../crates/openbindings-json-schema-evaluator/README.md).
+
+Source admission does not guarantee that validation finishes within the default
+work allowance. A valid value near the input-size limit can return no-verdict
+with `evaluation-work-limit`. Applications can adjust `evaluation_steps` in Rust
+or `evaluationSteps` in TypeScript after qualifying their workload and resource
+budget. Process memory and Wasm capacity have no qualified numeric limit; raising
+the work allowance does not establish one.
+
 Before 1.0, minor releases may change public APIs; compatible fixes belong in
 patch releases. This does not promise a stable 1.x contract for prereleases.
 Read the changelog when updating. Coupled internal packages and Wasm tooling use

@@ -8,7 +8,7 @@ These packages are unpublished. Use an exact checkout or locally built archives 
 [dependencies]
 openbindings = "=0.2.0-alpha.1"
 openbindings-json-schema-evaluator = "=0.2.0-alpha.1"
-serde = { version = "=1.0.229", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"] }
 ```
 
 Until publication, patch those version dependencies and their unpublished siblings to extracted Cargo archives. The companion archive includes both examples and its README; it needs no HTTP client, async executor or evaluator qualification kit to run them. From a source checkout or the companion's extracted package with sibling patches configured:
