@@ -25,6 +25,8 @@ struct Admission {
     holes: usize,
     generated_nodes: usize,
     generated_edges: usize,
+    #[cfg(test)]
+    output_fault: OutputFault,
 }
 impl Default for Admission {
     fn default() -> Self {
@@ -36,7 +38,34 @@ impl Default for Admission {
             holes: HOLE_LIMIT,
             generated_nodes: 100_000,
             generated_edges: 200_000,
+            #[cfg(test)]
+            output_fault: OutputFault::default(),
         }
+    }
+}
+// Private fault injection after count admission; absent from production builds.
+#[cfg(test)]
+#[derive(Clone, Copy, Default)]
+struct OutputFault {
+    size: isize,
+    decoded: isize,
+    nodes: isize,
+    edges: isize,
+    cancel: bool,
+}
+#[cfg(test)]
+impl OutputFault {
+    fn bytes(self, size: usize, decoded: usize, control: &WorkControl) -> (usize, usize) {
+        if self.cancel {
+            control.cancel();
+        }
+        (
+            size.checked_add_signed(self.size)
+                .expect("test byte perturbation"),
+            decoded
+                .checked_add_signed(self.decoded)
+                .expect("test decoded perturbation"),
+        )
     }
 }
 #[derive(Clone, Copy, PartialEq)]
@@ -107,6 +136,16 @@ fn text_limit() -> NoVerdict {
         "partial-program-byte-limit",
         "paired projection text exceeds 64 MiB",
     )
+}
+fn output_mismatch() -> NoVerdict {
+    NoVerdict::new(
+        NoVerdictReason::EvaluatorFailure,
+        "projection-output-mismatch",
+        "projection output does not match the admitted counts",
+    )
+}
+fn output_failure(control: &WorkControl) -> NoVerdict {
+    control.check().err().unwrap_or_else(output_mismatch)
 }
 fn add_bytes(total: &mut usize, size: usize, cap: usize) -> Result<(), NoVerdict> {
     *total = total
@@ -424,6 +463,7 @@ impl SchemaSpace {
                     | "partial-generated-cycle"
                     | "program-json-limit"
                     | "projection-target"
+                    | "projection-output-mismatch"
             ) {
                 self.bounds_failure(detail, entry, "", None, cap)
             } else {
@@ -513,12 +553,14 @@ impl SchemaSpace {
                 Vec::with_capacity(groups.len() + usize::from(!plan.holes.is_empty()));
             for ((&resource, ids), &(size, decoded)) in groups.iter().zip(&sizes[pass]) {
                 control.check()?;
+                #[cfg(test)]
+                let (size, decoded) = cap.output_fault.bytes(size, decoded, control);
                 let mut sink = Sink::output(size, decoded);
                 self.write_resource(&mut sink, resource, ids, entry, &plan, control)
-                    .map_err(|_| control.check().err().unwrap_or_else(text_limit))?;
+                    .map_err(|_| output_failure(control))?;
                 let mut uri = String::new();
                 resource_uri(&mut uri, plan.namespace, resource).expect("String writer");
-                let document = JsonValue::parse(sink.text.expect("output sink")).map_err(|_| {
+                let document = JsonValue::parse(sink.finish(control)?).map_err(|_| {
                     limit(
                         "program-json-limit",
                         "projected resource exceeds JSON admission",
@@ -742,6 +784,7 @@ struct Sink {
     size: usize,
     decoded: usize,
     cap: usize,
+    expected: Option<(usize, usize)>,
 }
 impl Sink {
     fn count(cap: usize) -> Self {
@@ -750,6 +793,7 @@ impl Sink {
             size: 0,
             decoded: 0,
             cap,
+            expected: None,
         }
     }
     fn output(size: usize, decoded: usize) -> Self {
@@ -758,13 +802,24 @@ impl Sink {
             size: 0,
             decoded: 0,
             cap: size + decoded,
+            expected: Some((size, decoded)),
         }
+    }
+    fn finish(self, control: &WorkControl) -> Result<String, NoVerdict> {
+        control.check()?;
+        if self.expected != Some((self.size, self.decoded)) {
+            return Err(output_mismatch());
+        }
+        self.text
+            .filter(|text| text.len() == self.size)
+            .ok_or_else(output_mismatch)
     }
     fn add_decoded(&mut self, bytes: usize) -> fmt::Result {
         self.decoded = self
             .decoded
             .checked_add(bytes)
             .filter(|n| *n <= self.cap - self.size)
+            .filter(|n| self.expected.is_none_or(|(_, decoded)| *n <= decoded))
             .ok_or(fmt::Error)?;
         Ok(())
     }
@@ -785,6 +840,7 @@ impl Write for Sink {
             .size
             .checked_add(value.len())
             .filter(|n| *n <= self.cap - self.decoded)
+            .filter(|n| self.expected.is_none_or(|(size, _)| *n <= size))
             .ok_or(fmt::Error)?;
         if let Some(text) = &mut self.text {
             text.push_str(value);
@@ -841,6 +897,216 @@ mod tests {
             }
         }
         size
+    }
+    const POSITIVE_OUTPUT: &str =
+        r#"{"description":"quoted\"","properties":{"x":{"$ref":"https://absent.invalid/U"}}}"#;
+    const ONEOF_OUTPUT: &str =
+        r#"{"description":"quoted\"","oneOf":[true,{"$ref":"https://absent.invalid/U"}]}"#;
+    fn output_mismatch(schema: &str, fault: OutputFault) {
+        let (space, entry) = space(schema);
+        let control = WorkControl::new();
+        let detail = space
+            .bounds_admitted(
+                entry,
+                &control,
+                Admission {
+                    output_fault: fault,
+                    ..Admission::default()
+                },
+            )
+            .unwrap_err();
+        assert_eq!(detail.reason, NoVerdictReason::EvaluatorFailure);
+        assert_eq!(detail.code, "projection-output-mismatch");
+        assert_eq!(
+            detail.message,
+            "projection output does not match the admitted counts"
+        );
+        assert_eq!(
+            detail.location.unwrap(),
+            SchemaLocation {
+                resource: None,
+                pointer: "/operations/op/input".into(),
+            }
+        );
+        assert!(space.bounds(entry, &WorkControl::new()).is_ok());
+    }
+    #[test]
+    fn positive_output_undercount_is_an_internal_failure() {
+        for fault in [
+            OutputFault {
+                size: -1,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                decoded: -1,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                size: -1,
+                decoded: 1,
+                ..OutputFault::default()
+            },
+        ] {
+            output_mismatch(POSITIVE_OUTPUT, fault);
+        }
+    }
+    #[test]
+    fn positive_output_overcount_is_an_internal_failure() {
+        for fault in [
+            OutputFault {
+                size: 1,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                decoded: 1,
+                ..OutputFault::default()
+            },
+        ] {
+            output_mismatch(POSITIVE_OUTPUT, fault);
+        }
+    }
+    #[test]
+    fn oneof_output_undercount_is_an_internal_failure() {
+        for fault in [
+            OutputFault {
+                size: -1,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                decoded: -1,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                size: -1,
+                decoded: 1,
+                ..OutputFault::default()
+            },
+        ] {
+            output_mismatch(ONEOF_OUTPUT, fault);
+        }
+    }
+    #[test]
+    fn oneof_output_overcount_is_an_internal_failure() {
+        for fault in [
+            OutputFault {
+                size: 1,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                decoded: 1,
+                ..OutputFault::default()
+            },
+        ] {
+            output_mismatch(ONEOF_OUTPUT, fault);
+        }
+    }
+    #[test]
+    fn oneof_output_occurrence_mismatches_are_internal_failures() {
+        for fault in [
+            OutputFault {
+                nodes: -2,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                nodes: 2,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                edges: -2,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                edges: 2,
+                ..OutputFault::default()
+            },
+        ] {
+            output_mismatch(ONEOF_OUTPUT, fault);
+        }
+    }
+    #[test]
+    fn output_guards_precede_copy_and_completion_checks_preserve_cancellation() {
+        let mut serialized = Sink::output(1, 2);
+        assert!(serialized.write_str("ab").is_err());
+        assert_eq!(serialized.text.as_deref(), Some(""));
+        assert_eq!(serialized.size, 0);
+        let mut decoded = Sink::output(2, 1);
+        assert!(decoded.add_decoded(2).is_err());
+        assert_eq!(decoded.decoded, 0);
+        // A different encoded/decoded split cannot borrow unused allowance.
+        let mut exact = Sink::output(2, 1);
+        exact.write_str("ab").unwrap();
+        exact.add_decoded(1).unwrap();
+        assert_eq!(exact.finish(&WorkControl::new()).unwrap(), "ab");
+        let stopped = WorkControl::new();
+        stopped.cancel();
+        let detail = Sink::output(1, 0).finish(&stopped).unwrap_err();
+        assert_eq!(detail.reason, NoVerdictReason::Cancelled);
+        assert!(detail.location.is_none());
+        let (space, entry) = space("true");
+        let detail = space.bounds_failure(
+            super::output_mismatch(),
+            entry,
+            "",
+            None,
+            Admission {
+                scratch: 0,
+                ..Admission::default()
+            },
+        );
+        assert_eq!(detail.code, "projection-output-mismatch");
+        assert!(detail.location.is_none());
+    }
+    #[test]
+    fn output_faults_do_not_change_count_limits_or_cancellation_priority() {
+        for schema in [POSITIVE_OUTPUT, ONEOF_OUTPUT] {
+            let (space, entry) = space(schema);
+            for size in [-1, 1] {
+                let control = WorkControl::new();
+                let cap = Admission {
+                    output_fault: OutputFault {
+                        size,
+                        cancel: true,
+                        ..OutputFault::default()
+                    },
+                    ..Admission::default()
+                };
+                let detail = space.bounds_admitted(entry, &control, cap).unwrap_err();
+                assert_eq!(detail.reason, NoVerdictReason::Cancelled);
+                assert!(detail.location.is_none());
+                let control = WorkControl::new();
+                let detail = space
+                    .bounds_admitted(entry, &control, Admission { text: 1, ..cap })
+                    .unwrap_err();
+                assert_eq!(detail.reason, NoVerdictReason::LimitExceeded);
+                assert_eq!(detail.code, "partial-program-byte-limit");
+                assert!(!control.is_cancelled()); // refused before the injected output fault
+            }
+        }
+        let (space, entry) = space(ONEOF_OUTPUT);
+        for (nodes, edges, code) in [
+            (0, 200_000, "partial-generated-node-limit"),
+            (100_000, 0, "partial-generated-edge-limit"),
+        ] {
+            let control = WorkControl::new();
+            let detail = space
+                .bounds_admitted(
+                    entry,
+                    &control,
+                    Admission {
+                        generated_nodes: nodes,
+                        generated_edges: edges,
+                        output_fault: OutputFault {
+                            cancel: true,
+                            ..OutputFault::default()
+                        },
+                        ..Admission::default()
+                    },
+                )
+                .unwrap_err();
+            assert_eq!(detail.reason, NoVerdictReason::LimitExceeded);
+            assert_eq!(detail.code, code);
+            assert!(!control.is_cancelled());
+        }
     }
     #[test]
     fn exact_combined_text_admission_includes_wrappers_entries_maps_and_evidence() {

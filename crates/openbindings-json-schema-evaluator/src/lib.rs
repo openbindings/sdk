@@ -849,6 +849,10 @@ mod partial_budget_tests {
             (NoVerdictReason::LimitExceeded, "schema-edge-limit"),
             (NoVerdictReason::LimitExceeded, "schema-depth-limit"),
             (NoVerdictReason::LimitExceeded, "program-json-limit"),
+            (
+                NoVerdictReason::EvaluatorFailure,
+                "projection-output-mismatch",
+            ),
             (NoVerdictReason::ConservativePreparation, "invalid-schema"),
             (
                 NoVerdictReason::ConservativePreparation,
@@ -865,7 +869,11 @@ mod partial_budget_tests {
                 "lone-surrogate-schema",
             ),
         ] {
-            let actual = no_verdict(reason, code, "actual refusal");
+            let mut actual = no_verdict(reason, code, "actual refusal");
+            actual.location = Some(SchemaLocation {
+                resource: Some("https://original.invalid/R".into()),
+                pointer: "/selected/schema".into(),
+            });
             assert_eq!(
                 serde_json::to_value(recover_partial_decline(strict.clone(), actual.clone()))
                     .unwrap(),

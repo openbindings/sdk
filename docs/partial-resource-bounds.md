@@ -261,6 +261,12 @@ complete decoded copy. Generated numeric identities contain no escapes. Only a
 fully admitted aggregate plan allocates projection buffers, mappings and evidence,
 then parses the projections and their decoded strings. Buffer capacity uses only
 the admitted serialized length. The check does not parse a speculative projection.
+Output separately enforces the admitted serialized and decoded sizes and checks
+exact agreement at completion; dependent-oneOf output also enforces and verifies
+the admitted node/edge counts. A count/output disagreement is an internal
+`EvaluatorFailure` (`projection-output-mismatch`), located at the selected schema
+boundary when safely representable. It is not an optional admission decline and
+is never recovered to missing resources. Observed cancellation takes precedence.
 
 A separate **64 MiB scratch-input guard** applies before invoking resolution or
 copying full source pointers: reference plus base length, each full source pointer,

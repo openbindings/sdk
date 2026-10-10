@@ -394,7 +394,13 @@ impl<'a> Emitter<'a> {
         self.footer(entry)
     }
     fn failure(&mut self) -> NoVerdict {
-        self.error.take().unwrap_or_else(text_limit)
+        if self.discovering {
+            self.error.take().unwrap_or_else(text_limit)
+        } else {
+            // The count pass already admitted every output allowance. A later
+            // overflow is an invariant failure, never another optional limit.
+            output_failure(self.control)
+        }
     }
     fn check_cycles(&self) -> Result<(), NoVerdict> {
         let mut colors = BTreeMap::new();
@@ -597,12 +603,32 @@ impl SchemaSpace {
         let mut programs = Vec::with_capacity(2);
         for polarity in [Polarity::Lower, Polarity::Upper] {
             control.check()?;
+            let (size, decoded) = (count.sink.size, count.sink.decoded);
+            #[cfg(test)]
+            let (size, decoded) = cap.output_fault.bytes(size, decoded, control);
+            let output_cap = Admission {
+                generated_nodes: count.nodes,
+                generated_edges: count.edges,
+                ..cap
+            };
+            #[cfg(test)]
+            let output_cap = Admission {
+                generated_nodes: output_cap
+                    .generated_nodes
+                    .checked_add_signed(cap.output_fault.nodes)
+                    .expect("test node perturbation"),
+                generated_edges: output_cap
+                    .generated_edges
+                    .checked_add_signed(cap.output_fault.edges)
+                    .expect("test edge perturbation"),
+                ..output_cap
+            };
             let mut output = Emitter::new(
                 self,
                 plan,
                 control,
-                cap,
-                Sink::output(count.sink.size, count.sink.decoded),
+                output_cap,
+                Sink::output(size, decoded),
                 false,
             );
             if output
@@ -611,27 +637,18 @@ impl SchemaSpace {
             {
                 return Err(output.failure());
             }
-            debug_assert_eq!(
-                (
-                    output.nodes,
-                    output.edges,
-                    output.sink.size,
-                    output.sink.decoded
-                ),
-                (
-                    count.nodes,
-                    count.edges,
-                    count.sink.size,
-                    count.sink.decoded
+            control.check()?;
+            if (output.nodes, output.edges)
+                != (output_cap.generated_nodes, output_cap.generated_edges)
+            {
+                return Err(output_mismatch());
+            }
+            let document = JsonValue::parse(output.sink.finish(control)?).map_err(|_| {
+                limit(
+                    "program-json-limit",
+                    "projected resource exceeds JSON admission",
                 )
-            );
-            let document =
-                JsonValue::parse(output.sink.text.expect("output sink")).map_err(|_| {
-                    limit(
-                        "program-json-limit",
-                        "projected resource exceeds JSON admission",
-                    )
-                })?;
+            })?;
             let mut uri = String::new();
             dual_uri(&mut uri, plan.namespace).expect("String writer");
             programs.push(EvaluationProgram {
