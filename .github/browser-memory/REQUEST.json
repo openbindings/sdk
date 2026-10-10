@@ -13,9 +13,9 @@
     "expectedArchiveSha256": null
   },
   "candidate": {
-    "commit": "96a2380fba61b9aec42fabc21f8bc815cf2ab93f",
-    "tree": "c2f16b991a2f91e9a38977858600a89a69660a21",
-    "expectedRustSourceSha256": "cb32e9f958469270c07c37bcb2e7ef9aa6f84ecf69bab06c7048b5ed3c1c4865",
+    "commit": "5aee03054077ba7465acb024220027b5344faf29",
+    "tree": "37c69e4e9b87b02d8331d3a0b9cf9eff205a156b",
+    "expectedRustSourceSha256": "4287a547cf1610519780a98a06a443f4fd7a194bd72c995bd942a16fd7e940b3",
     "expectedArchiveSha256": null
   },
   "node": {
