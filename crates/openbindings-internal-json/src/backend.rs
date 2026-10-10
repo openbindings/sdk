@@ -398,6 +398,30 @@ pub fn view(value: &crate::JsonValue) -> View<'_> {
 pub fn pointer(value: &crate::JsonValue) -> Option<String> {
     value.owner.pointer(value.id)
 }
+/// Measure separately owned decoded UTF-8 strings in a borrowed exact subtree,
+/// including member names. Raw source bytes are excluded. Unescaped strings borrow
+/// their source; escaped scalar strings own their complete decoded value. This
+/// visits the existing flat nodes without parsing or allocating. `None` means the
+/// byte limit is exceeded or the subtree contains non-scalar UTF-16 strings.
+pub fn decoded_string_size(value: crate::JsonRef<'_>, limit: usize) -> Option<usize> {
+    let end = value.owner.nodes[value.id].span.end;
+    let mut size = 0usize;
+    for node in value.owner.nodes[value.id..]
+        .iter()
+        .take_while(|node| node.span.start < end)
+    {
+        if let Kind::String { decoded, unpaired } = &node.kind {
+            if unpaired.is_some() {
+                return None;
+            }
+            size = size.checked_add(decoded.as_ref().map_or(0, |s| s.len()))?;
+            if size > limit {
+                return None;
+            }
+        }
+    }
+    Some(size)
+}
 /// Measure an escaped source pointer before allocating it. `None` means that
 /// the pointer is unavailable or would exceed the caller's remaining byte budget.
 pub fn pointer_size(value: crate::JsonRef<'_>, limit: usize) -> Option<usize> {
@@ -626,6 +650,27 @@ pub fn live_arenas() -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn decoded_string_size_counts_owned_subtree_strings_without_ancestors_or_siblings() {
+        let value = crate::JsonValue::parse(
+            r#"{"outside\n":"sibling\t","nested":{"key\"":"raw雪","list":["a\/b","\uD83D\uDE00",{"\u006b":"end\n"}]},"after":"other\r"}"#,
+        ).unwrap();
+        let nested = value.at("/nested").unwrap();
+        // key\" (4), a\/b (3), emoji (4 UTF-8), \u006b (1), end\n (4).
+        assert_eq!(decoded_string_size(nested, 16), Some(16));
+        assert_eq!(decoded_string_size(nested, 15), None);
+        assert_eq!(
+            decoded_string_size(value.at("/nested/key\"").unwrap(), 0),
+            Some(0)
+        );
+        assert_eq!(
+            decoded_string_size(value.at("/nested/list/1").unwrap(), 4),
+            Some(4)
+        );
+        assert_eq!(decoded_string_size(value.view(), 38), Some(38));
+        let unsupported = crate::JsonValue::parse(r#"["\ud800"]"#).unwrap();
+        assert_eq!(decoded_string_size(unsupported.view(), usize::MAX), None);
+    }
     #[test]
     fn indexed_members_preserve_each_exact_occurrence() {
         let source = r#"{"z":9007199254740993,"\ud800":null,"z":0.29000000000000001}"#;

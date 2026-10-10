@@ -1,6 +1,6 @@
 //! Positive validity bounds. The strict projector remains a separate path.
 use super::*;
-use openbindings_internal_json::backend::pointer_size;
+use openbindings_internal_json::backend::{decoded_string_size, pointer_size};
 use std::{
     fmt::{self, Write},
     sync::Arc,
@@ -358,8 +358,8 @@ impl SchemaSpace {
                 let mut count = Sink::count(cap.text - total);
                 self.write_resource(&mut count, resource, ids, entry, &plan, control)
                     .map_err(|_| control.check().err().unwrap_or_else(text_limit))?;
-                add_bytes(&mut total, count.size, cap.text)?;
-                sizes[pass].push(count.size);
+                add_bytes(&mut total, count.size + count.decoded, cap.text)?;
+                sizes[pass].push((count.size, count.decoded));
                 let mut uri_count = Sink::count(cap.text);
                 resource_uri(&mut uri_count, plan.namespace, resource).map_err(|_| text_limit())?;
                 add_bytes(&mut total, uri_count.size, cap.text)?;
@@ -396,9 +396,9 @@ impl SchemaSpace {
         for (pass, lower) in [true, false].into_iter().enumerate() {
             let mut resources =
                 Vec::with_capacity(groups.len() + usize::from(!plan.holes.is_empty()));
-            for ((&resource, ids), size) in groups.iter().zip(&sizes[pass]) {
+            for ((&resource, ids), &(size, decoded)) in groups.iter().zip(&sizes[pass]) {
                 control.check()?;
-                let mut sink = Sink::output(*size);
+                let mut sink = Sink::output(size, decoded);
                 self.write_resource(&mut sink, resource, ids, entry, &plan, control)
                     .map_err(|_| control.check().err().unwrap_or_else(text_limit))?;
                 let mut uri = String::new();
@@ -437,7 +437,7 @@ impl SchemaSpace {
     }
     fn write_resource(
         &self,
-        sink: &mut impl Write,
+        sink: &mut Sink,
         resource: usize,
         ids: &[usize],
         entry: usize,
@@ -469,7 +469,7 @@ impl SchemaSpace {
     }
     fn write_child(
         &self,
-        sink: &mut impl Write,
+        sink: &mut Sink,
         namespace: usize,
         source: usize,
         value: JsonRef<'_>,
@@ -479,7 +479,7 @@ impl SchemaSpace {
         address(sink, namespace, self.nodes[target].resource, target)?;
         sink.write_str("\"}")
     }
-    fn write_node(&self, sink: &mut impl Write, id: usize, plan: &Plan) -> fmt::Result {
+    fn write_node(&self, sink: &mut Sink, id: usize, plan: &Plan) -> fmt::Result {
         let node = &self.nodes[id];
         if node.value.kind() == JsonKind::Boolean {
             return sink.write_str(node.value.text());
@@ -551,7 +551,7 @@ impl SchemaSpace {
                     }
                 }
             } else {
-                sink.write_str(member.value.text())?;
+                sink.raw(member.value)?;
             }
         }
         sink.write_char('}')
@@ -598,7 +598,12 @@ fn address(sink: &mut impl Write, namespace: usize, resource: usize, node: usize
     resource_uri(sink, namespace, resource)?;
     write!(sink, "#/$defs/n{node}")
 }
-fn quote(sink: &mut impl Write, text: &str) -> fmt::Result {
+fn quote(sink: &mut Sink, text: &str) -> fmt::Result {
+    // The parser owns a complete decoded string if any emitted character is
+    // escaped. Count the actual output spelling, not the original token spelling.
+    if text.bytes().any(|b| b < b' ' || matches!(b, b'"' | b'\\')) {
+        sink.add_decoded(text.len())?;
+    }
     sink.write_char('"')?;
     for c in text.chars() {
         match c {
@@ -615,10 +620,12 @@ fn quote(sink: &mut impl Write, text: &str) -> fmt::Result {
     }
     sink.write_char('"')
 }
-// Count without copying, then allocate only the fully admitted final buffer.
+// Count both arena source and separately owned decoded strings without copying.
+// Allocate the serialized buffer only after the complete paired plan is admitted.
 struct Sink {
     text: Option<String>,
     size: usize,
+    decoded: usize,
     cap: usize,
 }
 impl Sink {
@@ -626,15 +633,35 @@ impl Sink {
         Self {
             text: None,
             size: 0,
+            decoded: 0,
             cap,
         }
     }
-    fn output(cap: usize) -> Self {
+    fn output(size: usize, decoded: usize) -> Self {
         Self {
-            text: Some(String::with_capacity(cap)),
+            text: Some(String::with_capacity(size)),
             size: 0,
-            cap,
+            decoded: 0,
+            cap: size + decoded,
         }
+    }
+    fn add_decoded(&mut self, bytes: usize) -> fmt::Result {
+        self.decoded = self
+            .decoded
+            .checked_add(bytes)
+            .filter(|n| *n <= self.cap - self.size)
+            .ok_or(fmt::Error)?;
+        Ok(())
+    }
+    fn raw(&mut self, value: JsonRef<'_>) -> fmt::Result {
+        let remaining = (self.cap - self.size - self.decoded)
+            .checked_sub(value.text().len())
+            .ok_or(fmt::Error)?;
+        // Unchanged subtrees retain identical encoded tokens. Borrow the existing
+        // flat parser's decoded storage lengths, including nested member names.
+        let decoded = decoded_string_size(value, remaining).ok_or(fmt::Error)?;
+        self.add_decoded(decoded)?;
+        self.write_str(value.text())
     }
 }
 impl Write for Sink {
@@ -642,7 +669,7 @@ impl Write for Sink {
         let size = self
             .size
             .checked_add(value.len())
-            .filter(|n| *n <= self.cap)
+            .filter(|n| *n <= self.cap - self.decoded)
             .ok_or(fmt::Error)?;
         if let Some(text) = &mut self.text {
             text.push_str(value);
@@ -679,6 +706,7 @@ mod tests {
             size += program.entry_uri.len();
             for resource in &program.resources {
                 size += resource.uri.len() + resource.document.text().len();
+                size += decoded_string_size(resource.document.view(), usize::MAX).unwrap();
             }
         }
         assert!(Arc::ptr_eq(
@@ -701,6 +729,8 @@ mod tests {
     fn exact_combined_text_admission_includes_wrappers_entries_maps_and_evidence() {
         for schema in [
             r#"{"properties":{"quote\"/tilde~雪":{"$ref":"https://absent.invalid/U"}},"description":"line\nline"}"#,
+            r#"{"$ref":"https://absent.invalid/U","const":{"nested\n":["\u0061","\uD83D\uDE00"]},"description":"escaped\""}"#,
+            r#"{"\u0070roperties":{"\u0061":{"$ref":"https://absent.invalid/U"},"x\"\\\n":true},"x\u002dopaque":{"\u006b":["raw雪","\uD83D\uDE00",{"q\"":"a\/b"}]}}"#,
             r#"{"type":"number","const":0.290000000000000000001}"#,
             "true",
         ] {
@@ -732,6 +762,93 @@ mod tests {
             assert_eq!(refused.code, "partial-program-byte-limit");
             if schema == "true" {
                 assert!(bounds.unavailable.is_none());
+            }
+        }
+    }
+    #[test]
+    fn decoded_projection_storage_uses_actual_emitted_spelling_before_copying() {
+        for (source, decoded) in [
+            (r#""raw雪""#, 0),
+            (r#""\u0061""#, 1),
+            (r#""a\/b""#, 3),
+            (r#""\uD83D\uDE00""#, 4),
+            (r#"{"k\n":["x\"",{"\u0061":"z\\"}]}"#, 7),
+        ] {
+            let value = JsonValue::parse(source).unwrap();
+            let total = source.len() + decoded;
+            let mut count = Sink::count(total);
+            count.raw(value.view()).unwrap();
+            assert_eq!((count.size, count.decoded), (source.len(), decoded));
+            assert!(count.text.is_none());
+            let mut refused = Sink::count(total - 1);
+            assert!(refused.raw(value.view()).is_err());
+            assert_eq!((refused.size, refused.decoded), (0, 0));
+            assert!(refused.text.is_none());
+            let mut output = Sink::output(count.size, count.decoded);
+            output.raw(value.view()).unwrap();
+            let parsed = JsonValue::parse(output.text.unwrap()).unwrap();
+            assert_eq!(decoded_string_size(parsed.view(), decoded), Some(decoded));
+            if let Some(text) = value.view().as_str() {
+                let mut rewritten = Sink::count(1024);
+                quote(&mut rewritten, text).unwrap();
+                let mut output = Sink::output(rewritten.size, rewritten.decoded);
+                quote(&mut output, text).unwrap();
+                let parsed = JsonValue::parse(output.text.unwrap()).unwrap();
+                assert_eq!(
+                    decoded_string_size(parsed.view(), usize::MAX),
+                    Some(rewritten.decoded)
+                );
+                // Rewriting unnecessary Unicode/slash escapes does not retain a
+                // decoded copy, while copying the original raw token above does.
+                assert_eq!(rewritten.decoded, 0);
+            }
+        }
+        for text in ["quote\"", "back\\slash", "\n\t\r\u{8}\u{c}\0雪"] {
+            let mut count = Sink::count(1024);
+            quote(&mut count, text).unwrap();
+            assert_eq!(count.decoded, text.len());
+            let mut output = Sink::output(count.size, count.decoded);
+            quote(&mut output, text).unwrap();
+            let parsed = JsonValue::parse(output.text.unwrap()).unwrap();
+            assert_eq!(
+                decoded_string_size(parsed.view(), usize::MAX),
+                Some(text.len())
+            );
+            let mut refused = Sink::count(count.size + count.decoded - 1);
+            assert!(quote(&mut refused, text).is_err());
+            assert!(refused.text.is_none());
+        }
+    }
+    #[test]
+    #[ignore = "real 64 MiB admission boundary; run explicitly under an external memory ceiling"]
+    fn escaped_text_real_64_mib_boundary_and_frozen_twenty_mib_witness() {
+        let witness = |n: usize| {
+            space(&format!(
+                r#"{{"description":"{}\"","properties":{{"x":{{"$ref":"https://sol-review.invalid/U"}}}}}}"#,
+                "a".repeat(n)
+            ))
+        };
+        let (small, entry) = witness(0);
+        let base = text_size(&small.bounds(entry, &WorkControl::new()).unwrap());
+        assert_eq!(base, 1273); // Frozen independent review witness.
+        let largest = (TEXT_LIMIT - base) / 4;
+        for (n, admitted) in [
+            (largest, true),
+            (largest + 1, false),
+            (20 * 1024 * 1024, false),
+        ] {
+            let (space, entry) = witness(n);
+            let expected = base + 4 * n;
+            let result = space.bounds(entry, &WorkControl::new());
+            if admitted {
+                let actual = text_size(&result.unwrap());
+                assert_eq!(actual, expected);
+                assert!(actual <= TEXT_LIMIT);
+                println!("repeat={n}; retained_utf8={actual}; admitted");
+            } else {
+                assert!(expected > TEXT_LIMIT);
+                assert_eq!(result.unwrap_err().code, "partial-program-byte-limit");
+                println!("repeat={n}; retained_utf8_would_be={expected}; refused");
             }
         }
     }

@@ -61,7 +61,10 @@
   missing `$ref`, now prepare ready; dependent values return `ResourceUnavailable`
   at validation. This is an intentional phase change and decision-coverage expansion.
   Hole-dependent nonpositive applicators and evaluated annotation/dynamic hazards
-  refuse. Complete-resource preparation retains its existing path.
+  refuse. Partial text admission counts serialized resource text and separately
+  owned decoded strings, including escaped member names and nested opaque values,
+  before constructing either projection. Complete-resource preparation retains its
+  existing path.
 
 - TypeScript operation inventories now interpret `tags` and `deprecated` along
   with the other metadata. Malformed values, including those on an unrelated

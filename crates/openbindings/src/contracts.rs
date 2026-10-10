@@ -304,8 +304,9 @@ impl SchemaRequest {
 ///
 /// Admission: depth 256, 100,000 reached nodes, 200,000 dependency edges (including
 /// holes), 100,000 holes, and 64 MiB combined retained UTF-8 text. Text includes
-/// both projected JSON resources and their URI/entry strings, shared original
-/// maps once, and evidence strings. This is not a heap, allocator-capacity or
+/// both projected JSON resources' serialized text and separately owned decoded
+/// strings, their URI/entry strings, shared original maps once, and evidence
+/// strings. This is not a heap, allocator-capacity or
 /// compiled-memory bound. Reference-resolution scratch inputs and full original
 /// pointers also have a separate 64 MiB pre-copy guard. No I/O occurs. Later
 /// resource replacements require a new context; these bounds never change.

@@ -72,8 +72,9 @@ subgraphs remain supported. Evaluated `unevaluated*` and dynamic keywords reject
 partial bounds. Known invalid targets, dialects, patterns and cycles remain refusals.
 
 Partial admission adds 200,000 dependency edges, 100,000 missing edges and a
-64 MiB combined text allowance for both programs, URIs, entries, shared mapping and
-evidence. A separate 64 MiB resolver/full-pointer scratch guard applies. These are
+64 MiB combined text allowance for both programs' serialized and owned decoded
+string text, URIs, entries, shared mapping and evidence. A separate 64 MiB
+resolver/full-pointer scratch guard applies. These are
 not compiled-memory or RSS bounds. Upper/lower share one verdict work/regex budget;
 failure diagnostics retain a separate bounded pass. The
 [proof and adapter contract](docs/partial-resource-bounds.md) specifies exact

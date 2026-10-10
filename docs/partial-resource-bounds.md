@@ -126,14 +126,23 @@ before edge admission. Influence marking visits each admitted vertex/edge a boun
 number of times and uses no per-instance guard graph.
 
 The combined plan admits **64 MiB logical retained UTF-8 text**: both projected JSON
-resources including generated wrappers, every resource URI and entry string,
-generated/original mapping strings, and owned refusal code/message/location text.
+resources including generated wrappers and separately owned decoded strings,
+every resource URI and entry string, generated/original mapping strings, and owned
+refusal code/message/location text. An escaped JSON string owns its complete
+decoded UTF-8 value in addition to its serialized token; both count. This applies
+to member names and strings anywhere inside copied annotations or exact literals.
 The two programs share one immutable source map, counted once; copied text is
 counted for every retained copy. No separate hole-identity strings are retained:
 integer holder identities in the temporary graph refer to the immutable original
 request during construction. The retained evidence names an original `$ref`.
-A counting sink computes the complete projection sizes without copying text; only
-a fully admitted plan allocates projection buffers, mappings and retained evidence.
+A counting sink separately measures serialized and decoded bytes without copying
+text. Unchanged JSON subtrees borrow decoded lengths from their existing flat node
+storage. Rewritten names use the actual emitted escaping policy: a name rewritten
+without escapes borrows its new source, while a name requiring any escape owns a
+complete decoded copy. Generated numeric identities contain no escapes. Only a
+fully admitted aggregate plan allocates projection buffers, mappings and evidence,
+then parses the projections and their decoded strings. Buffer capacity uses only
+the admitted serialized length. The check does not parse a speculative projection.
 
 A separate **64 MiB scratch-input guard** applies before invoking resolution or
 copying full source pointers: reference plus base length, each full source pointer,
