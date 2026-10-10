@@ -1,31 +1,20 @@
 {
   "schemaVersion": 1,
-  "mode": "prepare",
+  "preparerFreezeSha256": "bbbb35fb5e8ee51421d39da02a2579b369cce69178ed0797d8cce8bbe0fd4898",
+  "mode": "campaign",
   "ownerLogin": "clevengermatt",
   "sdkRepository": "openbindings/sdk",
-  "canonicalRoot": "/opt/ob-memory-inputs",
-  "baseline": {
-    "commit": "346da6523e2c87a7f2eb1b415ddeb77def7aab6c",
-    "tree": "86ca4a150675ef4ea286c726409d98e6f18c1633",
-    "expectedRustSourceSha256": "32a94299a2adfe9c14288a29cc8584777bba27002192d6ddcbb961f46ce712f6",
-    "referencePackagedCommit": "ba38c94c0da436f16cc9b4630d9d2ee2b896709b",
-    "referenceArchiveSha256": "80bceb3e1c71b5c6d6366c7aab5f8aae4481aed513df1cb1f4cdb3a496148994",
-    "expectedArchiveSha256": null
-  },
-  "candidate": {
-    "commit": "5aee03054077ba7465acb024220027b5344faf29",
-    "tree": "37c69e4e9b87b02d8331d3a0b9cf9eff205a156b",
-    "expectedRustSourceSha256": "4287a547cf1610519780a98a06a443f4fd7a194bd72c995bd942a16fd7e940b3",
-    "expectedArchiveSha256": null
-  },
-  "node": {
-    "version": "22.19.0",
-    "archiveSha256": "c0649af18e6a24f6fe5535a3e86b341dd49a8e71117c8b68bde973ef834f16f2"
-  },
-  "playwright": {
-    "version": "1.64.0",
-    "archiveSha256": "90c8b6b19da0a1b1e9a004cd6ff3e49e82668a0856e01efcc0e2d9c2b4466bb6"
-  },
-  "rustToolchain": "1.99.0",
-  "wasmBindgen": "0.2.129"
+  "activationId": "4767cc9d7db34b87a9fd565226f6ec68",
+  "preparationRunId": 38094055142,
+  "preparationRunAttempt": 1,
+  "artifactId": 11685072434,
+  "artifactName": "browser-memory-inputs-38094055142-1",
+  "bundleSha256": "a53428486d14590e9d9d0aa5fd461ce487703bf004d01cd32c560d0a7348ee86",
+  "bindingsSha256": "64226f0adaaf5bec6ca8bc07b90ce6f98b9818da0842c64c1527b309a164909d",
+  "ownerReviewSha256": "5ca3445edab6e6b191d6154a8a15658c192d4590e5ecb4a8fca35406a436cdf4",
+  "sourceFreezeSha256": "5239eb8a20ba7bb0f6265bfb0a8584f2c8f8c7b40cc7ccbcdf249c2af4892885",
+  "candidateCommit": "5aee03054077ba7465acb024220027b5344faf29",
+  "candidateArchiveSha256": "1815b3c41d8c2314d1b1ec29e496262633f3d6393af6a45ed0237b165e5b14d1",
+  "baselineCommit": "346da6523e2c87a7f2eb1b415ddeb77def7aab6c",
+  "baselineArchiveSha256": "7601683f1be63301593abef7800254240160db661559bfc2c2fde78b26d92ea6"
 }
