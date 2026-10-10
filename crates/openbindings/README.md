@@ -36,6 +36,21 @@ source locations. Use its text/bytes for values such as 9007199254740993. Typed
 unknown members but cannot shadow typed fields. Building is separate from checking
 conformance. JSON input defaults to 64 MiB, 10,000 containers and 1,000,000 nodes.
 
+To edit an existing document, call `ParsedDocument::to_authoring()`, update the
+builder, then `build()` and assess the new snapshot. Typed fields are re-encoded:
+integer preferences such as `1.0` or `1e0` become `1`, and `-0` becomes `0`.
+Opaque exact values keep their numeric tokens. Operation renaming leaves reference
+updates to the caller.
+
+The packaged [exact object editing example](examples/exact_edit.rs) replaces one
+opaque member using public traversal, exact `JsonValue` children and their Serde
+representation. It uses the same builder path and verifies the result after the
+input owners are dropped. Its generic application helper requires unique names
+throughout the subtree and UTF-8-representable member names; it refuses absent
+members. It serializes/parses the entire changed object and orders its immediate
+names in a `BTreeMap`. Formatting, ordering and member-name escaping may change.
+This helper is example code, not another SDK export or a general JSON Patch API.
+
 Operation validation uses explicit `ResourceSet`, `SchemaEvaluator` and immutable
 `ValueContracts`. Select the separate `openbindings-json-schema-evaluator` companion
 or implement the trait. Prepared contracts retain required owners after document

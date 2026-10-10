@@ -266,6 +266,24 @@ The [complete inspection/edit example](examples/inspect-edit.ts) uses a named
 owner. Existing readonly inputs remain accepted by `authorDocument`; opaque
 interiors are not promised as mutable JavaScript graphs.
 
+To change a member **inside** an exact opaque object, the same example supplies
+`replaceExactObjectMember(object, key, replacement)` and an
+`editExtensionMember` caller. These are application recipes, not additional SDK
+exports. The helper traverses `members()`, borrows unchanged sibling values as
+`ExactJson`, and composes a new object with `ExactJson.from`. It converts member
+names only; it never decodes the sibling values through JavaScript numbers.
+Assign the result to the ordinary editable draft, then call `authorDocument`.
+The returned exact object is caller-owned and must remain live through that build;
+the example uses `using` for the result and all temporary owners.
+
+This recipe replaces one existing member. It refuses non-objects, absent members,
+duplicate names anywhere in the input subtree, and names that checked conversion
+cannot represent. It preserves untouched exact numeric tokens and decoded Unicode
+name distinctions, but may change formatting, name escaping and member order.
+Traversal visits every immediate member; composition encodes and parses the whole
+changed object. Building the document then encodes its full result. For large
+opaque objects, include both costs in the application's editing budget.
+
 ### Recovering invalid drafts
 
 `authorDocument` returns `authoring-error` for expected invalid draft data:
