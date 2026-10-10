@@ -20,7 +20,8 @@ def sha(path):
 
 def inventory(root):
     return {p.relative_to(root).as_posix(): sha(p) for p in root.rglob("*")
-            if p.is_file() and "target" not in p.parts and ".git" not in p.parts}
+            if p.is_file() and "target" not in p.relative_to(root).parts
+            and ".git" not in p.relative_to(root).parts}
 
 
 def main():

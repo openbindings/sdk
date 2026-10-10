@@ -54,7 +54,8 @@ def main():
                         for m in tar.getmembers() if m.isfile()}
         current = {f.relative_to(modified).as_posix(): f.read_bytes()
                    for f in modified.rglob('*')
-                   if f.is_file() and 'target' not in f.parts and '.git' not in f.parts}
+                   if f.is_file() and 'target' not in f.relative_to(modified).parts
+                   and '.git' not in f.relative_to(modified).parts}
         changes, patches = [], []
         for file in sorted(original.keys() | current.keys()):
             before, after = original.get(file), current.get(file)
