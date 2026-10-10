@@ -194,3 +194,11 @@ witness itself. The Unicode-property witness directly covers the selected matche
 on the documented enclosing guard/source reasoning. That single test does not
 claim four distinct wrapper executions or the entire raw test's unmatched branch.
 No new Draft4 capability or fresh upstream-suite run is claimed in the facade repair.
+
+
+For typed schema details, preserve `diagnostic_schema_details` scope restoration
+and admitted required-name capture in all specialized required validators. Default
+metadata still omits the name. Optional refusal must not invalidate an established
+base problem; final exact facts are recovered by the adapter from original sources.
+`property_name_recheck` covers nested applicator name-copy admission in every
+propertyNames path; normal validity must remain unchanged outside metadata mode.

@@ -1,4 +1,5 @@
-import { initialize, parseDocument } from "@openbindings/sdk";
+import { parseDocument } from "../dist/index.js";
+import { createWorkerView } from "./worker-view.mjs";
 
 export const exampleDraft = `{
   "openbindings": "0.2.0",
@@ -18,7 +19,7 @@ export const exampleDraft = `{
 // The component keeps its latest usable immutable snapshot. Results are plain data.
 export class DocumentEditor {
   #document;
-  update(text) {
+  update(text, value = { id: 7 }, includeSchemaDetails = false) {
     const parsed = parseDocument(text);
     if (parsed.status !== "parsed") return parsed;
     let proof, context, input;
@@ -27,11 +28,11 @@ export class DocumentEditor {
       if (checked.status !== "validated") return checked;
       proof = checked.document;
       const operations = proof.operations;
-      context = proof.contracts();
+      context = proof.contracts({ includeSchemaDetails });
       const setup = context.prepare("find", "input");
       if (setup.status !== "ready") return setup;
       input = setup.contract;
-      const result = input.validate({ id: 7 });
+      const result = input.validate(value);
       const previous = this.#document;
       this.#document = proof; // transfer the validated owner after successful setup
       proof = undefined;
@@ -64,22 +65,41 @@ function schemaLocation(location) {
   return `schema ${JSON.stringify(location.pointer)}, resource ${JSON.stringify(location.resource)}`;
 }
 
+// This example displays details only after the user explicitly requests them.
+// Tokens/names are displayed as text, never interpreted as HTML or rounded numbers.
+function detailLine(detail) {
+  if (!detail) return "";
+  switch (detail.kind) {
+    case "required":
+      return ` Missing member: ${JSON.stringify(detail.member)}.`;
+    case "numeric-bound":
+    case "size-bound":
+      return ` Exact bound: ${detail.bound}.`;
+    case "enum":
+      return ` Exact allowed values: ${detail.choices.join(", ")}.`;
+    case "type":
+      return ` Expected types: ${detail.expected.join(", ")}.`;
+    case "truncated":
+      return " Requested schema detail was omitted for the diagnostic budget.";
+  }
+}
+
 function valueLines(result) {
   switch (result.outcome) {
     case "satisfies":
-      return ["Example input { id: 7 } satisfies the input contract."];
+      return ["Selected input satisfies the input contract."];
     case "fails":
       return [
-        "Example input does not satisfy the input contract.",
+        "Selected input does not satisfy the input contract.",
         ...result.problems.map(
           (problem) =>
-            `Instance ${JSON.stringify(problem.instancePointer)}; ${schemaLocation(problem.schemaLocation)}: ${problem.message}`,
+            `Instance ${JSON.stringify(problem.instancePointer)}; ${schemaLocation(problem.schemaLocation)}: ${problem.message}${detailLine(problem.details)}`,
         ),
         `Selected input diagnostics complete: ${result.problemsComplete}.`,
       ];
     case "input-error":
       return [
-        `Example input was not admitted (${result.error.code}) at ${JSON.stringify(result.error.instancePointer)}: ${result.error.message}`,
+        `Selected input was not admitted (${result.error.code}) at ${JSON.stringify(result.error.instancePointer)}: ${result.error.message}`,
       ];
     case "no-verdict":
       return [
@@ -90,6 +110,10 @@ function valueLines(result) {
 
 export function formatEditorResult(result) {
   switch (result.status) {
+    case "value-input-error":
+      return `Selected input was not parsed (${result.error.code}): ${result.error.message}`;
+    case "operational-error":
+      return `SDK call failed (${result.code}): ${result.message}`;
     case "input-error":
       return `Document was not parsed (${result.error.code})${result.error.byteOffset === undefined ? "" : ` at UTF-8 byte offset ${result.error.byteOffset}`}: ${result.error.message}`;
     case "version-refused":
@@ -125,33 +149,77 @@ export function formatEditorResult(result) {
 }
 
 export async function mountEditor(root) {
-  await initialize();
-  const editor = new DocumentEditor();
   const form = root.querySelector("form"),
-    source = root.querySelector("textarea"),
+    source = root.querySelector("#source"),
+    value = root.querySelector("#input"),
+    disclosure = root.querySelector("#schema-details"),
     correction = root.querySelector('[data-action="correct"]'),
+    locate = root.querySelector('[data-action="locate"]'),
     output = root.querySelector("output");
   source.value = exampleDraft;
-  const render = (event) => {
+  let closed = false,
+    lastSource,
+    lastLocation;
+  const view = createWorkerView(
+    ({ result, source: checkedSource, arenas }) => {
+      if (closed) return;
+      output.textContent = formatEditorResult(result);
+      output.dataset.pending = "false";
+      output.dataset.arenas = String(arenas); // Test observation, not an RSS/heap claim.
+      lastSource = checkedSource;
+      lastLocation =
+        result.status === "assessed"
+          ? result.report.findings.find((f) => f.location)?.location
+          : undefined;
+      locate.disabled = !lastLocation;
+    },
+    new URL("./editor-worker.mjs", import.meta.url),
+  );
+  const render = async (event) => {
     event?.preventDefault();
+    output.dataset.pending = "true";
+    locate.disabled = true;
     try {
-      // Never interpret diagnostics or caller-controlled pointers as HTML.
-      output.textContent = formatEditorResult(editor.update(source.value));
+      await view.check(source.value, value.value, {
+        includeSchemaDetails: disclosure.checked,
+      });
     } catch (error) {
-      output.textContent = `SDK call failed: ${error.message}`;
+      if (!closed && error.name !== "AbortError") {
+        output.textContent = `SDK call failed: ${error.message}`;
+        output.dataset.pending = "false";
+      }
     }
   };
   const correct = () => {
-    // Correct this known fixture's original source, without parsing message text.
     source.value = source.value.replace('"inputSchema":', '"input":');
-    render();
+    void render();
+  };
+  const focusLocation = () => {
+    if (!lastLocation || source.value !== lastSource) return;
+    // Convert against the identical source snapshot. Textarea selection is UTF-16;
+    // SDK byteOffset is UTF-8. The source location is a point, not an invented span.
+    const original = new TextEncoder().encode(lastSource);
+    const offset = new TextDecoder("utf-8", { fatal: true }).decode(
+      original.subarray(0, lastLocation.byteOffset),
+    ).length;
+    source.focus();
+    source.setSelectionRange(offset, offset);
   };
   form.addEventListener("submit", render);
+  source.addEventListener("input", render);
+  value.addEventListener("input", render);
+  disclosure.addEventListener("change", render);
   correction.addEventListener("click", correct);
-  render();
+  locate.addEventListener("click", focusLocation);
+  await render();
   return () => {
+    closed = true;
     form.removeEventListener("submit", render);
+    source.removeEventListener("input", render);
+    value.removeEventListener("input", render);
+    disclosure.removeEventListener("change", render);
     correction.removeEventListener("click", correct);
-    editor.dispose();
+    locate.removeEventListener("click", focusLocation);
+    view.dispose(); // Rejects pending work and terminates the entire owned Wasm realm.
   };
 }

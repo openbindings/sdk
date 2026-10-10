@@ -14,3 +14,12 @@ The SDK value-diagnostic metadata scope admits copied instance/member strings
 before allocation, omits unused nested/payload diagnostics and records deterministic
 usage counters. It is active only during the default evaluator's post-verdict
 diagnostic pass. See the root maintenance contract and evaluator resource guide.
+
+
+Metadata-mode property-name validity/validate/evaluate rechecks preflight copied
+names before `with_string_node`, including nested applicator paths. Scratch refusal
+poisons diagnostic construction, while normal verdict evaluation is unchanged.
+Opt-in required-name metadata captures the already established missing member only
+after scratch admission; optional refusal is separate from base diagnostic refusal.
+The SDK subsequently verifies membership in the original required array before
+exposing it. No other source operands are copied into vendor error payloads.

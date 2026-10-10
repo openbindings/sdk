@@ -99,6 +99,42 @@ impl fmt::Display for NoVerdict {
 }
 impl std::error::Error for NoVerdict {}
 #[derive(Clone, Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+#[non_exhaustive]
+/// Optional schema facts. Treat source operands as sensitive; none contain a
+/// rejected instance value. Numeric bounds and enum choices are exact JSON token
+/// strings. Every variant is atomic; Truncated never contains partial facts.
+pub enum ValueProblemDetails {
+    /// Complete expected types from the fixed JSON type vocabulary.
+    Type {
+        /// Fixed JSON type names, never arbitrary schema strings.
+        expected: Vec<String>,
+    },
+    /// One established missing member, verified against the original required array.
+    Required {
+        /// Source-controlled member name; the instance pointer stays at the existing parent.
+        member: String,
+    },
+    /// Exact numeric bound; the problem code supplies comparator and inclusivity.
+    NumericBound {
+        /// Original JSON numeric token, without floating-point conversion.
+        bound: String,
+    },
+    /// Exact length/count bound; the problem code supplies unit and direction.
+    SizeBound {
+        /// Original JSON numeric token.
+        bound: String,
+    },
+    /// Complete enum choices; never a partial prefix.
+    Enum {
+        /// Exact original JSON token text for every choice, including source-controlled data.
+        choices: Vec<String>,
+    },
+    /// Requested applicable facts were omitted for the diagnostic byte budget.
+    /// The enclosing failure has problems_complete=false.
+    Truncated,
+}
+#[derive(Clone, Debug, Serialize)]
 /// One established instance failure with an optional original schema coordinate. Custom evaluators can construct this public record.
 pub struct ValueProblem {
     /// RFC 6901 pointer to an existing location in the input instance; empty means the root.
@@ -109,6 +145,9 @@ pub struct ValueProblem {
     pub code: String,
     /// Explanatory text; custom evaluators should avoid exposing instance values or source-controlled strings by default.
     pub message: String,
+    /// Optional schema facts. None means disabled or unavailable; Truncated explicitly marks budget omission.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<ValueProblemDetails>,
 }
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
@@ -120,7 +159,7 @@ pub enum ValueOutcome {
     Fails {
         /// Retained actual failing instance locations; diagnostics may be bounded after failure is established.
         problems: Vec<ValueProblem>,
-        /// Whether all available failure diagnostics were collected. False does not weaken the established failure verdict.
+        /// Whether selected diagnostics, including requested details, completed. False does not weaken the established failure verdict.
         problems_complete: bool,
     },
     /// No satisfaction/failure verdict was established.

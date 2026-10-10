@@ -5,11 +5,14 @@ export function createWorkerView(render, url) {
     generation = 0,
     closed = false;
   return {
-    async check(document, value) {
+    async check(document, value, options = {}) {
       if (closed) throw new Error("View is closed.");
       const current = ++generation;
       owner ??= new WorkerOwner(url);
-      const result = await owner.run({ document, value }, [document, value]);
+      const transfer = [document, value].filter(
+        (value) => value instanceof ArrayBuffer,
+      );
+      const result = await owner.run({ ...options, document, value }, transfer);
       const accepted = current === generation;
       if (accepted) render(result);
       return { accepted, result };

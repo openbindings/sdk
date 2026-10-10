@@ -92,3 +92,14 @@ rejected. Definition presence is an omission gate, **not a quality percentage**.
 Review rendered pages and compiled examples for truthful stage distinctions,
 actionable errors, ownership, defaults/units, capability limits and retention. The
 release checklist records those SDK-specific outcomes separately from source landing.
+
+
+Optional default-evaluator schema facts use
+`DefaultEvaluator::new().with_schema_details(true)` (TS
+`contracts({ includeSchemaDetails: true })`). They retain original source snapshots
+and share the diagnostic string-byte budget. `ValueProblemDetails::Truncated`
+sets result completeness false; absent details mean disabled or unavailable.
+Exact bounds and enum choices remain JSON token strings. Existing Rust evaluator
+implementations constructing `ValueProblem` must add `details: None` to preserve
+their previous output. The enum is non-exhaustive; match future variants safely.
+See the [evaluator resource contract](../crates/openbindings-json-schema-evaluator/README.md).

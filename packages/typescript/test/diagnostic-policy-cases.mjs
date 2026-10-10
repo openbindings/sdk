@@ -275,7 +275,7 @@ export function diagnosticPolicyCases(sdk) {
       [
         { enum: ["SECRET-schema"] },
         "SECRET-instance",
-        "value does not satisfy the constraint at the schema location",
+        "value is not one of the allowed values; inspect enum at the schema location",
       ],
       [
         { required: ["SECRET-member"] },

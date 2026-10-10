@@ -9,6 +9,7 @@ import {
   initialize,
   type JsonOutput,
   type ValueOutcome,
+  type ValueProblemDetails,
 } from "../dist/index.js";
 import { DiscoveryPublication, discover } from "../dist/http-discovery.js";
 
@@ -50,6 +51,7 @@ async function caller(
     using resources = empty.with("https://example.test/schema", schema);
     using contracts = document.contracts({
       resources,
+      includeSchemaDetails: true,
       limits: { maxProblems: 4 },
     });
     const prepared = contracts.prepare("run", "input", {
@@ -61,6 +63,13 @@ async function caller(
     const result: ValueOutcome = input.validate(value);
     if (result.outcome === "fails") {
       result.problems[0].instancePointer satisfies string;
+      const detail: ValueProblemDetails | undefined =
+        result.problems[0].details;
+      if (detail?.kind === "required") detail.member satisfies string;
+      if (detail?.kind === "enum") detail.choices satisfies readonly string[];
+      if (detail?.kind === "type") detail.expected satisfies readonly string[];
+      if (detail?.kind === "numeric-bound" || detail?.kind === "size-bound")
+        detail.bound satisfies string;
     }
     if (result.outcome === "no-verdict") result.detail.reason satisfies string;
     const ordinary = value.toValue();

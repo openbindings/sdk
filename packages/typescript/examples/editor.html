@@ -34,12 +34,22 @@
     <p>
       This draft uses <code>inputSchema</code> where the operation member is
       <code>input</code>. Check its diagnostics, then correct the original
-      source and prepare the input contract. Changes are local to this page.
+      source and prepare the input contract. Checks run in an owned Worker; only
+      the latest edit renders. Changes are local to this page.
     </p>
     <form>
       <label for="source">Document JSON</label>
       <textarea id="source" rows="17" spellcheck="false" required></textarea>
+      <label for="input">Selected operation input (exact JSON)</label>
+      <textarea id="input" rows="3" spellcheck="false">{"id":7}</textarea>
+      <label
+        ><input id="schema-details" type="checkbox" /> Show schema details (may
+        contain private source data)</label
+      >
       <button type="submit">Check draft</button>
+      <button type="button" data-action="locate" disabled>
+        Go to first issue
+      </button>
       <button type="button" data-action="correct">
         Rename inputSchema to input
       </button>
@@ -47,9 +57,10 @@
     <p>
       Locations refer to the original JSON: lines and UTF-8 byte columns start
       at one; byte offsets start at zero. These are not JavaScript UTF-16
-      selection offsets. Pointers are JSON-quoted, making newlines, tabs, quotes
-      and backslashes visible; other Unicode formatting characters are not
-      escaped.
+      selection offsets. Go to first issue converts the original byte offset to
+      a textarea cursor position. Pointers are JSON-quoted, making newlines,
+      tabs, quotes and backslashes visible; other Unicode formatting characters
+      are not escaped.
     </p>
     <output aria-live="polite"></output>
   </main>

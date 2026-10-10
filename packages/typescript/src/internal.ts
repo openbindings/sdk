@@ -168,6 +168,42 @@ export interface NoVerdict {
   /** Original schema location when known, otherwise null. */
   location: SchemaLocation | null;
 }
+/** Opt-in schema facts, not rejected instance data. Bounds and enum choices are exact JSON token strings: do not coerce them to Number. Source facts can contain secrets and must be rendered as text under an application disclosure policy. Each variant is atomic; truncated contains no partial facts. */
+export type ValueProblemDetails =
+  | {
+      /** Complete expected JSON type names, drawn from the fixed JSON type vocabulary. */
+      kind: "type";
+      /** Fixed expected type names. */
+      expected: readonly string[];
+    }
+  | {
+      /** One established missing member, verified against the original required array. */
+      kind: "required";
+      /** Source-controlled missing member name; the problem pointer still identifies its existing parent object. */
+      member: string;
+    }
+  | {
+      /** Exact numeric bound; the problem code supplies direction and inclusivity. */
+      kind: "numeric-bound";
+      /** Original JSON number token, never a rounded JavaScript number. */
+      bound: string;
+    }
+  | {
+      /** Exact length/count bound; the problem code identifies the unit and direction. */
+      kind: "size-bound";
+      /** Original JSON number token. */
+      bound: string;
+    }
+  | {
+      /** Complete allowed choices; the array is never a partial prefix. */
+      kind: "enum";
+      /** Original exact JSON token for every choice, including source-controlled strings/objects and exact numbers. */
+      choices: readonly string[];
+    }
+  | {
+      /** Applicable requested facts were omitted for the byte budget; outer problemsComplete is false. */
+      kind: "truncated";
+    };
 /** Established instance failure, with an existing instance pointer and optional original schema coordinate. Failure messages avoid echoing instance values by default; pointers still contain source-controlled strings and must be rendered as text. */
 export interface ValueProblem {
   /** RFC 6901 pointer to an existing input location; empty string means root. */
@@ -178,6 +214,8 @@ export interface ValueProblem {
   code: string;
   /** Explanatory text; present pointers separately and safely. */
   message: string;
+  /** Optional schema facts. Absent means disabled or unavailable; truncated explicitly marks byte-budget omission. */
+  details?: ValueProblemDetails;
 }
 /** Closed selected-schema result partition: satisfies, fails, or no-verdict. An established failure may have incomplete diagnostics; problemsComplete does not weaken its verdict. Neither satisfies nor fails proves normative OBI conformance of the surrounding draft. */
 export type ValueOutcome =
@@ -190,7 +228,7 @@ export type ValueOutcome =
       outcome: "fails";
       /** Retained actual failing instance locations. */
       problems: readonly ValueProblem[];
-      /** Whether failure diagnostics completed; false does not weaken the established failure. */
+      /** Whether selected failure diagnostics, including requested details, completed; false does not weaken the established failure. */
       problemsComplete: boolean;
     }
   | {
@@ -318,7 +356,7 @@ export interface EvaluatorLimits {
   regexSteps: number;
   /** Retained failure diagnostics; default 256, minimum count allowance one; byte admission may retain none. Truncation clears problemsComplete. */
   maxProblems: number;
-  /** Aggregate retained UTF-8 bytes in failure pointers, resource identifiers, codes and messages; default 1,048,576. Zero returns an established failure with empty, incomplete diagnostics. Not a heap or wire-byte limit. */
+  /** Aggregate retained UTF-8 bytes in failure pointers, resource identifiers, codes, messages and requested detail strings; default 1,048,576. Zero returns an established failure with empty, incomplete diagnostics. Not a heap or wire-byte limit. */
   diagnosticBytes: number;
   /** Projected JSON nesting admitted to compilation; default 512. */
   compileJsonDepth: number;
@@ -335,6 +373,8 @@ export interface ContractOptions {
   limits?: Partial<EvaluatorLimits>;
   /** Most-recently-used preparations retained by the context; default 4, zero disables caching. */
   cacheCapacity?: number;
+  /** Opt into source-controlled schema facts (default false). Ready validators then retain original document/resource snapshots until their last owner is released. Details obey diagnosticBytes, may expose secrets, and never include rejected instance values. Invalid non-boolean values throw SdkError. */
+  includeSchemaDetails?: boolean;
 }
 /** Explicit resources and cooperative cancellation for reference inspection; no retrieval or global resource registry is used. */
 export interface ReferenceOptions extends WorkOptions {
@@ -644,7 +684,7 @@ export function parseJson(input: ExactInput): ParseResult<ExactJson> {
     return failure(e);
   }
 }
-/** Parse an exact immutable document under default admission limits. The parsed branch transfers a disposable ParsedDocument but proves no OBI rules. Use validate() for a retained proof or assess() for plain evidence. */
+/** Parse an exact immutable document under default admission limits. The parsed branch transfers a disposable ParsedDocument but proves no OBI rules. Use validate() for a retained proof or assess() for plain evidence. Initialization, wrong input types and literal unpaired UTF-16 text throw; JSON escapes preserve such units. */
 export function parseDocument(input: ExactInput): ParseResult<ParsedDocument> {
   requireReady();
   const data = bytes(input);
@@ -657,7 +697,7 @@ export function parseDocument(input: ExactInput): ParseResult<ParsedDocument> {
     return failure(e);
   }
 }
-/** Assess all normative document rules directly from exact source, including invalid JSON. Unsupported declared versions return version-refused; parse/limit failures become truthful evidence. Returns plain data with no handle to dispose. */
+/** Assess all normative document rules directly from exact source, including invalid JSON. Unsupported declared versions return version-refused; parse/limit failures become truthful evidence. Returns plain data with no handle to dispose. Initialization, wrong input types and literal unpaired UTF-16 text throw; represent unpaired units with JSON escapes or exact UTF-8 bytes. */
 export function assessDocument(input: ExactInput): Assessment {
   requireReady();
   return decode(wasm.assessBytes(bytes(input)));
@@ -790,6 +830,14 @@ export class ParsedDocument extends Managed {
   /** Create a NEW disposable immutable evaluator/resource context. Eagerly validates the whole operation namespace, including unrelated aliases, throwing a specific interpretation error for malformed entries. Unrelated metadata may remain a draft. A later value verdict concerns only the selected schema; use validate() first when accepting a normative document. */
   contracts(options: ContractOptions = {}): ValueContracts {
     if (
+      options.includeSchemaDetails !== undefined &&
+      typeof options.includeSchemaDetails !== "boolean"
+    )
+      throw new SdkError(
+        "invalid-schema-details",
+        "includeSchemaDetails must be a boolean.",
+      );
+    if (
       options.cacheCapacity !== undefined &&
       (!Number.isSafeInteger(options.cacheCapacity) ||
         options.cacheCapacity < 0 ||
@@ -809,6 +857,7 @@ export class ParsedDocument extends Managed {
             resourceRaw(resources ?? empty!),
             limits,
             options.cacheCapacity,
+            options.includeSchemaDetails ?? false,
           ),
         ),
       );

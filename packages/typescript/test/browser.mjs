@@ -37,6 +37,9 @@ for (const name of [
   "first-use.mjs",
   "editor.html",
   "editor.mjs",
+  "editor-worker.mjs",
+  "worker-owner.mjs",
+  "worker-view.mjs",
 ])
   files.set(
     "/examples/" + name,

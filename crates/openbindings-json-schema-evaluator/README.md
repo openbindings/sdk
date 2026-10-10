@@ -82,7 +82,7 @@ Failures report actual instance locations and original schema locations where av
 
 Value failure diagnostics use `Limits::diagnostic_bytes` (TypeScript
 `diagnosticBytes`), default **1,048,576 UTF-8 bytes per result**. The total includes
-every retained instance pointer, schema resource URI and pointer, code and message.
+every retained instance pointer, schema resource URI and pointer, code, message and every requested detail string (including its kind tag).
 The evaluator retains a deterministic prefix of whole problems; it never clips a
 pointer or invents a location. `max_problems` / `maxProblems` still defaults to 256
 and has a minimum count allowance of one. A byte allowance need not fit one
@@ -102,8 +102,10 @@ Pretty printing, application wrappers and custom evaluators are outside this bou
 Before collecting final problems, the private validator separately admits at most
 `diagnostic_bytes` logical bytes of copied instance paths and member-name strings,
 and at most `8 * max(max_problems, 1)` error records and collection entries each.
-Unused nested applicator error trees, rejected item values, required names and
-pattern/schema payloads are omitted before copying. The final adapter walks
+Unused nested applicator error trees, rejected item values and pattern/schema
+payloads are omitted before copying. Required names are omitted by default;
+opt-in required names share this scratch allowance, with optional refusal recorded
+separately so an already established base failure can remain. The final adapter walks
 collections one member at a time, sizes JSON Pointer escaping before allocation,
 and admits original resource/pointer copies before constructing each problem.
 Original generated-URI decoding has its own same-sized scratch allowance; normal
@@ -130,3 +132,42 @@ owner is distinct from reducing allocator RSS.
 
 Definition-level reference contracts, rendered documentation and maintained checks
 are described in the [API reference guide](../../docs/api-reference.md).
+
+
+### Optional exact schema facts
+
+`DefaultEvaluator::new().with_schema_details(true)` enables `ValueProblem.details`.
+It defaults to false and is separate from `Limits`: disclosure is an application
+choice, not a resource limit. Default messages explain keyword semantics without
+copying schema operands or rejected values. Custom evaluators choose their own
+policy.
+
+The non-exhaustive `ValueProblemDetails` enum carries expected type names, a
+verified missing required member, an exact numeric/size bound, or complete enum
+choices as original JSON token strings. Match `code` to distinguish inclusive,
+exclusive, lower and upper bounds. Numeric strings never pass through `f64`.
+Required problems keep the existing object's instance pointer. Unsupported facts
+have no detail; `None` means disabled or unavailable. `Truncated` exclusively means
+requested applicable facts did not fit the budget. It makes `problems_complete`
+false, including when all base problems are present.
+
+Opt-in compiled contracts retain their original document and supplied resource
+snapshots for exact source recovery. This can extend the lifetime of whole source
+arenas, including unrelated document members, until the contracts/context release
+them. Resource replacement creates new snapshots; existing contracts keep their
+old facts. The default evaluator does not add these original snapshot owners.
+
+Each opt-in problem reserves nine string bytes for `Truncated` before admission.
+If even the base and marker cannot fit, the whole problem is omitted. Facts are
+preflighted against borrowed original nodes before copying. Enum tokens and arrays
+are atomic: no clipped token or partial choices list is returned. The same work and
+cancellation limits apply to source lookup and detail preflight. These operations
+can leave an incomplete prefix when interrupted.
+
+With details, compact Rust/Wasm JSON and TypeScript `JSON.stringify` failure output
+are both conservatively bounded by `59 + 160*N + 9*B` UTF-8 bytes. `B` includes all
+retained strings and kind tags; JSON escaping costs at most `6*B`. Every enum token
+is at least one byte, so at most `B` entries add at most `3*B` bytes of quotes and
+commas. The fixed envelope and base/detail field framing fit the remaining terms;
+type lists use a fixed seven-name vocabulary. This bounds serialization, not total
+heap, vector headers/capacity, the retained source snapshots, or transport copies.

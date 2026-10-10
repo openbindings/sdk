@@ -30,6 +30,7 @@ impl PreparedSchema for BooleanContract {
         } else {
             ValueOutcome::Fails {
                 problems: vec![ValueProblem {
+                    details: None,
                     instance_pointer: String::new(),
                     schema_location: None,
                     code: "false-schema".into(),

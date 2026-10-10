@@ -40,6 +40,7 @@ fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {
     for path in ["/absent", "", "/a/absent"] {
         let wrong = ValueOutcome::Fails {
             problems: vec![ValueProblem {
+                details: None,
                 instance_pointer: path.into(),
                 schema_location: None,
                 code: "wrong".into(),
@@ -51,6 +52,7 @@ fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {
     }
     let valid = ValueOutcome::Fails {
         problems: vec![ValueProblem {
+            details: None,
             instance_pointer: "/a".into(),
             schema_location: None,
             code: "type".into(),

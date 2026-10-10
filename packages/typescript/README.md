@@ -428,7 +428,7 @@ Definition-level reference contracts, rendered documentation and maintained chec
 are described in the [API reference guide](../../docs/api-reference.md).
 
 Value diagnostics default to an aggregate `diagnosticBytes` allowance of 1 MiB of
-retained UTF-8 strings (pointers, resource URIs, codes and messages), alongside
+retained UTF-8 strings (pointers, resource URIs, codes, messages and requested detail strings), alongside
 `maxProblems` (default 256, minimum count allowance one). Set these in
 `document.contracts({ limits: { diagnosticBytes: 65536, maxProblems: 32 } })`.
 Only complete problems are retained in deterministic order. Zero or an oversized
@@ -437,10 +437,60 @@ first problem preserves `outcome: "fails"` with `problems: []` and
 and cancellation keep their existing no-verdict result.
 
 This is not a heap or wire-byte cap. Compact `JSON.stringify` failure output is
-bounded by `58 + 94*N + 6*B` UTF-8 bytes, with `N` retained problems and `B` retained
+bounded by `59 + 160*N + 9*B` with optional details, or `58 + 94*N + 6*B` without them UTF-8 bytes, with `N` retained problems and `B` retained
 string bytes; JSON escaping and fixed framing are included. Application wrappers
 and pretty printing add bytes. The engine also preflights copied diagnostic paths,
 member collections and original locations; source admission, compilation,
 evaluation bookkeeping and JS/Wasm transport copies have separate costs. See the
-[evaluator resource contract](../../crates/openbindings-json-schema-evaluator/README.md)
+[evaluator resource contract](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/README.md)
 for scratch allowances and scope.
+
+
+### Requesting exact schema facts
+
+Default messages keep schema operands private. An authoring application can opt in:
+
+```ts
+const contracts = document.contracts({ includeSchemaDetails: true });
+// Reuse contracts/ready.contract normally; dispose their owners when finished.
+```
+
+`ValueProblem.details` is an optional discriminated union: `type` has `expected`
+type names; `required` has the verified missing `member`; `numeric-bound` and
+`size-bound` have an exact JSON number token `bound`; `enum` has complete `choices`
+as exact JSON token strings. Interpret bounds with the problem's `code`.
+Do not turn exact numeric strings into JavaScript numbers when precision matters.
+No rejected instance data is included. Source operands can be sensitive: choose
+where to render or store them deliberately.
+
+Absent details mean disabled or unavailable. `{ kind: "truncated" }` means requested
+facts did not fit, and sets `problemsComplete: false`. The evaluator reserves the
+marker before admitting a base problem; if that also fails, it omits the entire
+problem. Enum lists and all tokens are atomic. String-byte accounting includes
+kind tags and every detail string; the wire formula above includes enum framing.
+
+Opting in retains whole original document/resource snapshots with prepared
+contracts, potentially including unrelated source members. Disposing the context
+and contracts releases those owners. A new resource set does not change facts
+returned by an existing prepared contract.
+
+The delivered [editor](./examples/editor.html) sends source and selected input text
+to a component-owned module Worker. Its unchecked disclosure checkbox is the
+explicit opt-in. It suppresses stale results, retains the last proved snapshot,
+terminates the Worker on teardown, and converts original UTF-8 byte offsets to
+textarea UTF-16 coordinates before moving the caret. It renders strings with
+`textContent`; the small renderer is application code, not an SDK API.
+
+Text entry points may throw for initialization errors, wrong JavaScript argument
+types or literal unpaired UTF-16 surrogates. A malformed JSON document instead
+returns its documented parse outcome. Keep operational recovery around the call:
+
+```ts
+try {
+  const result = assessDocument(sourceText);
+  if (result.status === "input-error") showParseError(result.error);
+  else showAssessment(result);
+} catch (error) {
+  showOperationalError(error); // retry initialization or correct the JS input
+}
+```

@@ -201,6 +201,8 @@ pub(crate) fn diagnostic_admit() -> bool {
 pub struct DiagnosticUsage {
     pub copied_bytes: usize,
     pub rejected_copies: usize,
+    /// Optional schema operands omitted before copying; does not suppress base errors.
+    pub omitted_optional_copies: usize,
     pub collection_items: usize,
     pub collection_truncated: bool,
 }
@@ -213,7 +215,7 @@ struct MetadataState {
 }
 thread_local! {static METADATA:Cell<MetadataState>=const{Cell::new(MetadataState{
     active:false, remaining:usize::MAX, items_remaining:usize::MAX,
-    usage:DiagnosticUsage{copied_bytes:0,rejected_copies:0,collection_items:0,collection_truncated:false}
+    usage:DiagnosticUsage{copied_bytes:0,rejected_copies:0,omitted_optional_copies:0,collection_items:0,collection_truncated:false}
 })};}
 struct MetadataScope {
     prior: MetadataState,
@@ -239,6 +241,10 @@ impl Drop for MetadataScope {
                 .usage
                 .rejected_copies
                 .saturating_add(after.usage.rejected_copies);
+            prior.usage.omitted_optional_copies = prior
+                .usage
+                .omitted_optional_copies
+                .saturating_add(after.usage.omitted_optional_copies);
             prior.usage.collection_items = prior
                 .usage
                 .collection_items
@@ -323,4 +329,39 @@ pub(crate) fn diagnostic_collection_item() -> bool {
     state.usage.collection_items += 1;
     METADATA.set(state);
     true
+}
+
+// Only the selected SDK detail pass can request source operands. Nested calls
+// restore their caller's choice, including unwinding. The verdict pass is unchanged.
+thread_local! { static SCHEMA_DETAILS: Cell<bool> = const { Cell::new(false) }; }
+/// Private adapter switch for admitted required-name metadata, default disabled.
+pub fn diagnostic_schema_details<T>(enabled: bool, call: impl FnOnce() -> T) -> T {
+    struct Restore(bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            SCHEMA_DETAILS.set(self.0);
+        }
+    }
+    let _restore = Restore(SCHEMA_DETAILS.replace(enabled));
+    call()
+}
+/// Preserve one established missing member only after optional scratch admission.
+/// Null is a deliberate unavailable/omitted operand, never a fabricated name.
+pub(crate) fn diagnostic_required_name(name: &str) -> serde_json::Value {
+    if !metadata_only() {
+        return serde_json::Value::String(name.to_owned());
+    }
+    if !SCHEMA_DETAILS.get() {
+        return serde_json::Value::Null;
+    }
+    let mut state = METADATA.get();
+    if metadata_exhausted() || name.len() > state.remaining {
+        state.usage.omitted_optional_copies = state.usage.omitted_optional_copies.saturating_add(1);
+        METADATA.set(state);
+        return serde_json::Value::Null;
+    }
+    state.remaining -= name.len();
+    state.usage.copied_bytes += name.len();
+    METADATA.set(state);
+    serde_json::Value::String(name.to_owned())
 }

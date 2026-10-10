@@ -245,7 +245,7 @@
 -required-features = ["jsonb"]
 --- /dev/null
 +++ b/OPENBINDINGS-PATCH.md
-@@ -0,0 +1,16 @@
+@@ -0,0 +1,25 @@
 +# Internal dependency fork
 +
 +Based on `jsonschema-0.58.6`; upstream license and notices are retained.
@@ -262,6 +262,15 @@
 +before allocation, omits unused nested/payload diagnostics and records deterministic
 +usage counters. It is active only during the default evaluator's post-verdict
 +diagnostic pass. See the root maintenance contract and evaluator resource guide.
++
++
++Metadata-mode property-name validity/validate/evaluate rechecks preflight copied
++names before `with_string_node`, including nested applicator paths. Scratch refusal
++poisons diagnostic construction, while normal verdict evaluation is unchanged.
++Opt-in required-name metadata captures the already established missing member only
++after scratch admission; optional refusal is separate from base diagnostic refusal.
++The SDK subsequently verifies membership in the original required array before
++exposing it. No other source operands are copied into vendor error payloads.
 --- /dev/null
 +++ b/UPSTREAM-Cargo.toml
 @@ -0,0 +1,173 @@
@@ -1159,7 +1168,29 @@
                  for (name, value) in object.members() {
 --- a/src/keywords/property_names.rs
 +++ b/src/keywords/property_names.rs
-@@ -87,6 +87,9 @@
+@@ -32,6 +32,11 @@
+         if let Some(object) = instance.as_object() {
+             let mut buffer = F::StringBuffer::default();
+             for (name, _) in object.members() {
++                // Applicators recheck validity during metadata collection too.
++                // A refusal poisons that diagnostic pass; its verdict is ignored.
++                if !crate::ob_work::diagnostic_copy(name.as_ref().len()) {
++                    return false;
++                }
+                 let valid = F::with_string_node(&mut buffer, name.as_ref(), |node| {
+                     self.node.is_valid(&node, ctx)
+                 });
+@@ -53,6 +58,9 @@
+         if let Some(object) = instance.as_object() {
+             let mut buffer = F::StringBuffer::default();
+             for (name, _) in object.members() {
++                if !crate::ob_work::diagnostic_copy(name.as_ref().len()) {
++                    return Ok(());
++                }
+                 let result = F::with_string_node(&mut buffer, name.as_ref(), |node| {
+                     self.node
+                         .validate(&node, location, tracker, ctx)
+@@ -87,6 +95,9 @@
          let mut buffer = F::StringBuffer::default();
          let mut name_errors = Vec::new();
          for (name, _) in object.members() {
@@ -1169,7 +1200,7 @@
              F::with_string_node(&mut buffer, name.as_ref(), |node| {
                  let mut collected = Vec::new();
                  self.node
-@@ -95,13 +98,15 @@
+@@ -95,13 +106,15 @@
              });
              for error in name_errors.drain(..) {
                  let schema_path = error.schema_path().clone();
@@ -1192,20 +1223,28 @@
              }
          }
      }
+@@ -117,6 +130,9 @@
+             let mut children = ChildList::default();
+             let mut buffer = F::StringBuffer::default();
+             for (name, _) in object.members() {
++                if !crate::ob_work::diagnostic_copy(name.as_ref().len()) {
++                    return EvaluationResult::valid_empty();
++                }
+                 let child = F::with_string_node(&mut buffer, name.as_ref(), |node| {
+                     self.node.evaluate_instance(&node, location, tracker, ctx)
+                 });
 --- a/src/keywords/required.rs
 +++ b/src/keywords/required.rs
-@@ -137,7 +137,9 @@
+@@ -137,7 +137,7 @@
                      crate::paths::capture_evaluation_path(tracker, &self.location),
                      location.into(),
                      instance.lazy_value(),
 -                    Value::String(property_name.as_str().to_owned()),
-+                    crate::ob_work::diagnostic_payload(|| {
-+                        Value::String(property_name.as_str().to_owned())
-+                    }),
++                    crate::ob_work::diagnostic_required_name(property_name.as_str()),
                  ));
              }
          }
-@@ -160,13 +162,17 @@
+@@ -160,13 +160,15 @@
                      None => object.get(key).is_some(),
                  };
                  if !present {
@@ -1222,46 +1261,40 @@
 +                            eval_path.clone(),
 +                            location.into(),
 +                            instance.lazy_value(),
-+                            crate::ob_work::diagnostic_payload(|| {
-+                                Value::String(property_name.as_str().to_owned())
-+                            }),
++                            crate::ob_work::diagnostic_required_name(property_name.as_str()),
 +                        )
 +                    });
                  }
              }
          }
-@@ -204,7 +210,7 @@
+@@ -204,7 +206,7 @@
                  crate::paths::capture_evaluation_path(tracker, &self.location),
                  location.into(),
                  instance.lazy_value(),
 -                Value::String(self.value.clone()),
-+                crate::ob_work::diagnostic_payload(|| Value::String(self.value.clone())),
++                crate::ob_work::diagnostic_required_name(&self.value),
              ));
          }
          Ok(())
-@@ -275,7 +281,9 @@
+@@ -275,7 +277,7 @@
                      crate::paths::capture_evaluation_path(tracker, &self.location),
                      location.into(),
                      instance.lazy_value(),
 -                    Value::String(self.first.as_str().to_owned()),
-+                    crate::ob_work::diagnostic_payload(|| {
-+                        Value::String(self.first.as_str().to_owned())
-+                    }),
++                    crate::ob_work::diagnostic_required_name(self.first.as_str()),
                  ));
              }
              if object.get(&self.second_key).is_none() {
-@@ -284,7 +292,9 @@
+@@ -284,7 +286,7 @@
                      crate::paths::capture_evaluation_path(tracker, &self.location),
                      location.into(),
                      instance.lazy_value(),
 -                    Value::String(self.second.as_str().to_owned()),
-+                    crate::ob_work::diagnostic_payload(|| {
-+                        Value::String(self.second.as_str().to_owned())
-+                    }),
++                    crate::ob_work::diagnostic_required_name(self.second.as_str()),
                  ));
              }
          }
-@@ -302,22 +312,30 @@
+@@ -302,22 +304,26 @@
          if let Some(object) = instance.as_object() {
              let eval_path = crate::paths::capture_evaluation_path(tracker, &self.location);
              if object.get(&self.first_key).is_none() {
@@ -1278,9 +1311,7 @@
 +                        eval_path.clone(),
 +                        location.into(),
 +                        instance.lazy_value(),
-+                        crate::ob_work::diagnostic_payload(|| {
-+                            Value::String(self.first.as_str().to_owned())
-+                        }),
++                        crate::ob_work::diagnostic_required_name(self.first.as_str()),
 +                    )
 +                });
              }
@@ -1298,26 +1329,22 @@
 +                        eval_path,
 +                        location.into(),
 +                        instance.lazy_value(),
-+                        crate::ob_work::diagnostic_payload(|| {
-+                            Value::String(self.second.as_str().to_owned())
-+                        }),
++                        crate::ob_work::diagnostic_required_name(self.second.as_str()),
 +                    )
 +                });
              }
          }
      }
-@@ -423,7 +441,9 @@
+@@ -423,7 +429,7 @@
                      crate::paths::capture_evaluation_path(tracker, &self.location),
                      location.into(),
                      instance.lazy_value(),
 -                    Value::String(missing.as_str().to_owned()),
-+                    crate::ob_work::diagnostic_payload(|| {
-+                        Value::String(missing.as_str().to_owned())
-+                    }),
++                    crate::ob_work::diagnostic_required_name(missing.as_str()),
                  ));
              }
          }
-@@ -442,31 +462,43 @@
+@@ -442,31 +448,37 @@
              let eval_path = crate::paths::capture_evaluation_path(tracker, &self.location);
              let found = self.found(&object);
              if found & 0b001 == 0 {
@@ -1334,9 +1361,7 @@
 +                        eval_path.clone(),
 +                        location.into(),
 +                        instance.lazy_value(),
-+                        crate::ob_work::diagnostic_payload(|| {
-+                            Value::String(self.first.as_str().to_owned())
-+                        }),
++                        crate::ob_work::diagnostic_required_name(self.first.as_str()),
 +                    )
 +                });
              }
@@ -1354,9 +1379,7 @@
 +                        eval_path.clone(),
 +                        location.into(),
 +                        instance.lazy_value(),
-+                        crate::ob_work::diagnostic_payload(|| {
-+                            Value::String(self.second.as_str().to_owned())
-+                        }),
++                        crate::ob_work::diagnostic_required_name(self.second.as_str()),
 +                    )
 +                });
              }
@@ -1374,9 +1397,7 @@
 +                        eval_path,
 +                        location.into(),
 +                        instance.lazy_value(),
-+                        crate::ob_work::diagnostic_payload(|| {
-+                            Value::String(self.third.as_str().to_owned())
-+                        }),
++                        crate::ob_work::diagnostic_required_name(self.third.as_str()),
 +                    )
 +                });
              }
@@ -1785,7 +1806,7 @@
 +}
 --- /dev/null
 +++ b/src/ob_work.rs
-@@ -0,0 +1,326 @@
+@@ -0,0 +1,367 @@
 +//! OpenBindings qualification patch: evaluator entry work/depth accounting.
 +//! A bounded call must check its outcome before exposing any engine verdict.
 +use std::cell::Cell;
@@ -1989,6 +2010,8 @@
 +pub struct DiagnosticUsage {
 +    pub copied_bytes: usize,
 +    pub rejected_copies: usize,
++    /// Optional schema operands omitted before copying; does not suppress base errors.
++    pub omitted_optional_copies: usize,
 +    pub collection_items: usize,
 +    pub collection_truncated: bool,
 +}
@@ -2001,7 +2024,7 @@
 +}
 +thread_local! {static METADATA:Cell<MetadataState>=const{Cell::new(MetadataState{
 +    active:false, remaining:usize::MAX, items_remaining:usize::MAX,
-+    usage:DiagnosticUsage{copied_bytes:0,rejected_copies:0,collection_items:0,collection_truncated:false}
++    usage:DiagnosticUsage{copied_bytes:0,rejected_copies:0,omitted_optional_copies:0,collection_items:0,collection_truncated:false}
 +})};}
 +struct MetadataScope {
 +    prior: MetadataState,
@@ -2027,6 +2050,10 @@
 +                .usage
 +                .rejected_copies
 +                .saturating_add(after.usage.rejected_copies);
++            prior.usage.omitted_optional_copies = prior
++                .usage
++                .omitted_optional_copies
++                .saturating_add(after.usage.omitted_optional_copies);
 +            prior.usage.collection_items = prior
 +                .usage
 +                .collection_items
@@ -2111,6 +2138,41 @@
 +    state.usage.collection_items += 1;
 +    METADATA.set(state);
 +    true
++}
++
++// Only the selected SDK detail pass can request source operands. Nested calls
++// restore their caller's choice, including unwinding. The verdict pass is unchanged.
++thread_local! { static SCHEMA_DETAILS: Cell<bool> = const { Cell::new(false) }; }
++/// Private adapter switch for admitted required-name metadata, default disabled.
++pub fn diagnostic_schema_details<T>(enabled: bool, call: impl FnOnce() -> T) -> T {
++    struct Restore(bool);
++    impl Drop for Restore {
++        fn drop(&mut self) {
++            SCHEMA_DETAILS.set(self.0);
++        }
++    }
++    let _restore = Restore(SCHEMA_DETAILS.replace(enabled));
++    call()
++}
++/// Preserve one established missing member only after optional scratch admission.
++/// Null is a deliberate unavailable/omitted operand, never a fabricated name.
++pub(crate) fn diagnostic_required_name(name: &str) -> serde_json::Value {
++    if !metadata_only() {
++        return serde_json::Value::String(name.to_owned());
++    }
++    if !SCHEMA_DETAILS.get() {
++        return serde_json::Value::Null;
++    }
++    let mut state = METADATA.get();
++    if metadata_exhausted() || name.len() > state.remaining {
++        state.usage.omitted_optional_copies = state.usage.omitted_optional_copies.saturating_add(1);
++        METADATA.set(state);
++        return serde_json::Value::Null;
++    }
++    state.remaining -= name.len();
++    state.usage.copied_bytes += name.len();
++    METADATA.set(state);
++    serde_json::Value::String(name.to_owned())
 +}
 --- a/src/paths.rs
 +++ b/src/paths.rs
