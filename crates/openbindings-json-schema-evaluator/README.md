@@ -71,6 +71,12 @@ A prepared contract retains its resources after the document/context is dropped.
 
 `NoVerdict` distinguishes unsupported capabilities, conservative preparation, missing resources, limits and cancellation. A missing reference or invalid pattern in a potentially visited branch may cause a conservative refusal even if another branch would establish validity. Such a refusal does not claim semantic undefinedness. Unicode property-escape *syntax* follows ECMA-262 edition 11; actual property matching is explicitly unsupported and declined only when applied. `format` remains an annotation. Custom/historical dialects are not interpreted as 2020-12.
 
+Regex compilation refusals use `schema-pattern-compilation` with bounded guidance
+to inspect `pattern` and `patternProperties`. They do not echo patterns or resource
+identifiers. A source location remains absent when the compiler cannot establish
+the original resource; other unclassified preparation failures retain the generic
+`evaluator-preparation` diagnostic.
+
 Failures report actual instance locations and original schema locations where available. They do not promise every possible failing keyword or Go's diagnostic multiplicity. `problems_complete` means the selected diagnostic pass completed without truncation, not exhaustive traversal of every semantically redundant failure. Diagnostic collection has its own work scope and allocation cap; a confirmed failure remains a failure when its diagnostics are truncated. Messages omit instance values.
 
 `Limits` bounds evaluation work, recursion, regex work, diagnostic output, dependency compilation depth and pattern admission. Parsing, graph preparation and dependency compilation use separate admission bounds. Cancellation is cooperative; dependency compilation/evaluation has bounded regions that are not preempted midway. Browser applications should use a Worker for large synchronous jobs.

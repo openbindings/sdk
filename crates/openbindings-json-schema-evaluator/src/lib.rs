@@ -74,6 +74,32 @@ impl jsonschema::Retrieve for NoRetrieval {
 fn no_verdict(reason: NoVerdictReason, code: &str, message: impl Into<String>) -> NoVerdict {
     NoVerdict::new(reason, code, message)
 }
+fn preparation_error(mut kind: &jsonschema::error::ValidationErrorKind) -> NoVerdict {
+    use jsonschema::error::ValidationErrorKind;
+    // Read only trusted kind metadata, never dependency Display text or schema
+    // values. Property-name validation may wrap a regex-format failure.
+    for _ in 0..16 {
+        match kind {
+            ValidationErrorKind::Format { format } if format == "regex" => {
+                return no_verdict(
+                    NoVerdictReason::ConservativePreparation,
+                    "schema-pattern-compilation",
+                    "a schema regular expression could not be compiled; inspect pattern and patternProperties",
+                );
+            }
+            ValidationErrorKind::PropertyNames { error } => kind = error.kind(),
+            _ => break,
+        }
+    }
+    // Build errors can identify metaschema locations or resource-relative
+    // projected paths without a resource identity. Neither proves an original
+    // source location, so leave location absent rather than guessing the root.
+    no_verdict(
+        NoVerdictReason::ConservativePreparation,
+        "evaluator-preparation",
+        "the evaluator could not prepare the projected schema",
+    )
+}
 impl SchemaEvaluator for DefaultEvaluator {
     fn prepare(
         &self,
@@ -129,13 +155,7 @@ impl SchemaEvaluator for DefaultEvaluator {
                 jsonschema::PatternOptions::fancy_regex().backtrack_limit(self.limits.regex_steps),
             )
             .build(root.contents())
-            .map_err(|_| {
-                no_verdict(
-                    NoVerdictReason::ConservativePreparation,
-                    "evaluator-preparation",
-                    "the evaluator could not prepare the projected schema",
-                )
-            })?;
+            .map_err(|error| preparation_error(error.kind()))?;
         control.check()?;
         // Compilation owns the state it needs. Keep the original-location map,
         // but release the intermediate source-backed projection arenas.
@@ -403,6 +423,47 @@ fn evaluation_stop(stop: jsonschema::ob_work::Stop) -> NoVerdict {
 #[cfg(test)]
 mod diagnostic_tests {
     use super::*;
+    #[test]
+    fn preparation_classification_uses_kind_metadata_and_unwraps_property_names() {
+        use jsonschema::error::ValidationErrorKind;
+        let validator = jsonschema::options()
+            .with_draft(jsonschema::Draft::Draft202012)
+            .should_validate_formats(true)
+            .build(&serde_json::json!({"propertyNames":{"format":"regex"}}))
+            .unwrap();
+        let value = serde_json::json!({"[SECRET":true});
+        let error = validator.validate(&value).unwrap_err();
+        assert!(matches!(
+            error.kind(),
+            ValidationErrorKind::PropertyNames { .. }
+        ));
+        let classified = preparation_error(error.kind());
+        assert_eq!(classified.reason, NoVerdictReason::ConservativePreparation);
+        assert_eq!(classified.code, "schema-pattern-compilation");
+        assert_eq!(
+            classified.message,
+            "a schema regular expression could not be compiled; inspect pattern and patternProperties"
+        );
+        assert_eq!(classified.location, None);
+        for kind in [
+            ValidationErrorKind::Format {
+                format: "SECRET-unknown".into(),
+            },
+            ValidationErrorKind::Custom {
+                keyword: "SECRET-keyword".into(),
+                message: "SECRET-detail".repeat(1000),
+            },
+        ] {
+            let fallback = preparation_error(&kind);
+            assert_eq!(fallback.reason, NoVerdictReason::ConservativePreparation);
+            assert_eq!(fallback.code, "evaluator-preparation");
+            assert_eq!(
+                fallback.message,
+                "the evaluator could not prepare the projected schema"
+            );
+            assert_eq!(fallback.location, None);
+        }
+    }
     #[test]
     fn runtime_cycle_guard_has_a_truthful_conservative_code() {
         use jsonschema::ob_work::Stop;

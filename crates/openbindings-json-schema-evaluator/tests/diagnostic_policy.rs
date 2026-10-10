@@ -118,6 +118,54 @@ fn cycles_are_conservative_even_with_a_dominating_success_branch() {
     }
 }
 #[test]
+fn pattern_preparation_failures_are_actionable_without_source_echo_or_guessed_locations() {
+    const URI: &str = "https://SECRET-user:SECRET-password@example.invalid/SECRET-resource";
+    for pattern in [
+        "[".to_owned(),
+        format!("[{}", "SECRET-pattern".repeat(2000)),
+    ] {
+        for schema in [
+            serde_json::json!({"type":"string", "pattern":pattern}),
+            serde_json::json!({"patternProperties":{pattern:true}}),
+        ] {
+            for (entry, resources) in [
+                (schema.clone(), ResourceSet::default()),
+                (
+                    serde_json::json!({"$defs":{"target":schema},"$ref":"#/operations/op/input/$defs/target"}),
+                    ResourceSet::default(),
+                ),
+                (
+                    serde_json::json!({"$ref":URI}),
+                    ResourceSet::new([SchemaResource {
+                        uri: URI.into(),
+                        document: JsonValue::parse(schema.to_string()).unwrap(),
+                    }])
+                    .unwrap(),
+                ),
+            ] {
+                let context = document(entry)
+                    .value_contracts(Arc::new(DefaultEvaluator::new()), resources)
+                    .unwrap();
+                let ContractPreparation::NoVerdict { detail } = context.prepare("op", Side::Input)
+                else {
+                    panic!("an uncompilable pattern must refuse preparation")
+                };
+                assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
+                assert_eq!(detail.code, "schema-pattern-compilation");
+                assert_eq!(
+                    detail.message,
+                    "a schema regular expression could not be compiled; inspect pattern and patternProperties"
+                );
+                assert_eq!(detail.location, None);
+                safe(&detail.message);
+                let serialized = serde_json::to_string(&detail).unwrap();
+                assert!(!serialized.contains("SECRET"));
+                assert!(!serialized.contains("/$defs/n"));
+            }
+        }
+    }
+}
+#[test]
 fn reference_and_resource_messages_do_not_echo_source_identifiers() {
     let secret = "https://SECRET-user:SECRET-password@example.invalid/SECRET-path?token=SECRET-query#SECRET-fragment";
     for reference in [

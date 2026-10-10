@@ -160,6 +160,53 @@ export function diagnosticPolicyCases(sdk) {
     }
     const secret =
       "https://SECRET-user:SECRET-password@example.invalid/SECRET-path?token=SECRET-query#SECRET-fragment";
+    const patternUri =
+      "https://SECRET-user:SECRET-password@example.invalid/SECRET-resource";
+    for (const pattern of ["[", "[" + "SECRET-pattern".repeat(2000)]) {
+      for (const schema of [
+        { type: "string", pattern },
+        { patternProperties: { [pattern]: true } },
+      ]) {
+        const parsed = sdk.parseJson(JSON.stringify(schema));
+        check(parsed.status === "parsed", "pattern resource admitted");
+        const resources = own(
+          new sdk.SchemaResources([[patternUri, own(parsed.value)]]),
+        );
+        for (const [entry, options] of [
+          [schema, undefined],
+          [
+            {
+              $defs: { target: schema },
+              $ref: "#/operations/op/input/$defs/target",
+            },
+            undefined,
+          ],
+          [{ $ref: patternUri }, { resources }],
+        ]) {
+          const state = own(withSchema(entry).contracts(options)).prepare(
+            "op",
+            "input",
+          );
+          check(
+            state.status === "no-verdict" &&
+              state.detail.reason === "conservative-preparation" &&
+              state.detail.code === "schema-pattern-compilation" &&
+              state.detail.message ===
+                "a schema regular expression could not be compiled; inspect pattern and patternProperties",
+            "pattern refusal provides safe actionable classification",
+          );
+          check(
+            state.detail.location == null,
+            "pattern refusal does not guess a source location",
+          );
+          safe(state.detail.message);
+          check(
+            !JSON.stringify(state.detail).includes("SECRET"),
+            "pattern refusal never exposes source pattern or resource data",
+          );
+        }
+      }
+    }
     for (const reference of [
       secret,
       secret + "\nSECRET-control",
