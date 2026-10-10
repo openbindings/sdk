@@ -175,12 +175,16 @@ impl WasmDocument {
         resources: &WasmResources,
         limits: &str,
         cache_capacity: Option<usize>,
+        include_schema_details: bool,
     ) -> Result<WasmContracts, JsValue> {
         let limits: Limits =
             serde_json::from_str(limits).map_err(|e| error("invalid-evaluator-limits", e))?;
         self.document
             .value_contracts_with_options(
-                Arc::new(DefaultEvaluator::with_limits(limits)),
+                Arc::new(
+                    DefaultEvaluator::with_limits(limits)
+                        .with_schema_details(include_schema_details),
+                ),
                 resources.resources.clone(),
                 ValueContractOptions {
                     cache_capacity: cache_capacity

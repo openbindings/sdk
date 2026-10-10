@@ -137,7 +137,7 @@ impl<F: Json> Validate<F> for RequiredValidator<F> {
                     crate::paths::capture_evaluation_path(tracker, &self.location),
                     location.into(),
                     instance.lazy_value(),
-                    Value::String(property_name.as_str().to_owned()),
+                    crate::ob_work::diagnostic_required_name(property_name.as_str()),
                 ));
             }
         }
@@ -166,7 +166,7 @@ impl<F: Json> Validate<F> for RequiredValidator<F> {
                             eval_path.clone(),
                             location.into(),
                             instance.lazy_value(),
-                            Value::String(property_name.as_str().to_owned()),
+                            crate::ob_work::diagnostic_required_name(property_name.as_str()),
                         )
                     });
                 }
@@ -206,7 +206,7 @@ impl<F: Json> Validate<F> for SingleItemRequiredValidator<F> {
                 crate::paths::capture_evaluation_path(tracker, &self.location),
                 location.into(),
                 instance.lazy_value(),
-                Value::String(self.value.clone()),
+                crate::ob_work::diagnostic_required_name(&self.value),
             ));
         }
         Ok(())
@@ -277,7 +277,7 @@ impl<F: Json> Validate<F> for Required2Validator<F> {
                     crate::paths::capture_evaluation_path(tracker, &self.location),
                     location.into(),
                     instance.lazy_value(),
-                    Value::String(self.first.as_str().to_owned()),
+                    crate::ob_work::diagnostic_required_name(self.first.as_str()),
                 ));
             }
             if object.get(&self.second_key).is_none() {
@@ -286,7 +286,7 @@ impl<F: Json> Validate<F> for Required2Validator<F> {
                     crate::paths::capture_evaluation_path(tracker, &self.location),
                     location.into(),
                     instance.lazy_value(),
-                    Value::String(self.second.as_str().to_owned()),
+                    crate::ob_work::diagnostic_required_name(self.second.as_str()),
                 ));
             }
         }
@@ -310,7 +310,7 @@ impl<F: Json> Validate<F> for Required2Validator<F> {
                         eval_path.clone(),
                         location.into(),
                         instance.lazy_value(),
-                        Value::String(self.first.as_str().to_owned()),
+                        crate::ob_work::diagnostic_required_name(self.first.as_str()),
                     )
                 });
             }
@@ -321,7 +321,7 @@ impl<F: Json> Validate<F> for Required2Validator<F> {
                         eval_path,
                         location.into(),
                         instance.lazy_value(),
-                        Value::String(self.second.as_str().to_owned()),
+                        crate::ob_work::diagnostic_required_name(self.second.as_str()),
                     )
                 });
             }
@@ -429,7 +429,7 @@ impl<F: Json> Validate<F> for Required3Validator<F> {
                     crate::paths::capture_evaluation_path(tracker, &self.location),
                     location.into(),
                     instance.lazy_value(),
-                    Value::String(missing.as_str().to_owned()),
+                    crate::ob_work::diagnostic_required_name(missing.as_str()),
                 ));
             }
         }
@@ -454,7 +454,7 @@ impl<F: Json> Validate<F> for Required3Validator<F> {
                         eval_path.clone(),
                         location.into(),
                         instance.lazy_value(),
-                        Value::String(self.first.as_str().to_owned()),
+                        crate::ob_work::diagnostic_required_name(self.first.as_str()),
                     )
                 });
             }
@@ -465,7 +465,7 @@ impl<F: Json> Validate<F> for Required3Validator<F> {
                         eval_path.clone(),
                         location.into(),
                         instance.lazy_value(),
-                        Value::String(self.second.as_str().to_owned()),
+                        crate::ob_work::diagnostic_required_name(self.second.as_str()),
                     )
                 });
             }
@@ -476,7 +476,7 @@ impl<F: Json> Validate<F> for Required3Validator<F> {
                         eval_path,
                         location.into(),
                         instance.lazy_value(),
-                        Value::String(self.third.as_str().to_owned()),
+                        crate::ob_work::diagnostic_required_name(self.third.as_str()),
                     )
                 });
             }

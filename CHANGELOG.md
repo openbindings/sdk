@@ -2,7 +2,26 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- Opt-in typed exact schema details through Rust `with_schema_details(true)` and
+  TypeScript `includeSchemaDetails: true`, with atomic bounded truncation and
+  explicit original-source retention. Default messages explain built-in keywords
+  without source operands. Rust `ValueProblem` literals now require `details: None`
+  (or a chosen typed detail); this is an intentional source compatibility change.
+- The delivered editor uses an owned module Worker, selected exact input,
+  explicit detail disclosure, stale-result suppression and UTF-8/UTF-16 caret mapping.
+- Close a metadata property-name copy gap during nested applicator validity rechecks;
+  scratch refusal now occurs before materialization and leaves diagnostics incomplete.
+
+
 ### Added
+
+- Default value-diagnostic `diagnostic_bytes` / `diagnosticBytes` budget (1 MiB
+  retained UTF-8 strings), bounded pre-copy diagnostic construction, whole-problem
+  truncation and explicit zero semantics. This adds an intentional prerelease Rust
+  `Limits` struct field; `ValueOutcome` fields are unchanged.
+- `EvaluationProgram::original_location_bounded` and `LocationBudgetExceeded` for
+  custom evaluators that need original-coordinate admission before copying.
+
 
 - Definition-level Rust and TypeScript API reference contracts, compiled reference
   examples, and required checks for missing documentation and broken Rust links.

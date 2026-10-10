@@ -86,14 +86,16 @@ impl<F: Json, D: Dispatch<F>> Validate<F> for AnyOfValidator<F, D> {
                 crate::paths::capture_evaluation_path(tracker, &self.location),
                 location.into(),
                 instance.lazy_value(),
-                self.schemas
-                    .iter()
-                    .map(|schema| {
-                        let mut branch = Vec::new();
-                        schema.collect_errors(instance, location, tracker, ctx, &mut branch);
-                        branch
-                    })
-                    .collect(),
+                crate::ob_work::diagnostic_payload(|| {
+                    self.schemas
+                        .iter()
+                        .map(|schema| {
+                            let mut branch = Vec::new();
+                            schema.collect_errors(instance, location, tracker, ctx, &mut branch);
+                            branch
+                        })
+                        .collect()
+                }),
             ))
         }
     }
@@ -109,8 +111,16 @@ impl<F: Json, D: Dispatch<F>> Validate<F> for AnyOfValidator<F, D> {
         if self.is_valid(instance, ctx) {
             return;
         }
-        let mut branches = Vec::with_capacity(self.schemas.len());
-        for schema in &self.schemas {
+        let mut branches = Vec::new();
+        for schema in self
+            .schemas
+            .iter()
+            .take(if crate::ob_work::metadata_only() {
+                0
+            } else {
+                self.schemas.len()
+            })
+        {
             let mut branch = Vec::new();
             schema.collect_errors(instance, location, tracker, ctx, &mut branch);
             branches.push(branch);
@@ -222,12 +232,14 @@ impl<F: Json> Validate<F> for SingleAnyOfValidator<F> {
                 crate::paths::capture_evaluation_path(tracker, &self.location),
                 location.into(),
                 instance.lazy_value(),
-                vec![{
-                    let mut branch = Vec::new();
-                    self.node
-                        .collect_errors(instance, location, tracker, ctx, &mut branch);
-                    branch
-                }],
+                crate::ob_work::diagnostic_payload(|| {
+                    vec![{
+                        let mut branch = Vec::new();
+                        self.node
+                            .collect_errors(instance, location, tracker, ctx, &mut branch);
+                        branch
+                    }]
+                }),
             ))
         }
     }
@@ -244,8 +256,10 @@ impl<F: Json> Validate<F> for SingleAnyOfValidator<F> {
             return;
         }
         let mut branch = Vec::new();
-        self.node
-            .collect_errors(instance, location, tracker, ctx, &mut branch);
+        if !crate::ob_work::metadata_only() {
+            self.node
+                .collect_errors(instance, location, tracker, ctx, &mut branch);
+        }
         crate::ob_work::push_error(errors, || {
             ValidationError::any_of(
                 self.location.clone(),

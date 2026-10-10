@@ -37,6 +37,9 @@ for (const name of [
   "first-use.mjs",
   "editor.html",
   "editor.mjs",
+  "editor-worker.mjs",
+  "worker-owner.mjs",
+  "worker-view.mjs",
 ])
   files.set(
     "/examples/" + name,
@@ -47,10 +50,23 @@ files.set(
   await fs.readFile(path.join(packageRoot, "test/fixed-diagnostic-cases.mjs")),
 );
 files.set(
+  "/diagnostic-budget-cases.mjs",
+  await fs.readFile(path.join(packageRoot, "test/diagnostic-budget-cases.mjs")),
+);
+files.set(
   "/observer.mjs",
   await fs.readFile(
     path.join(root, "tools/qualification/replay/sdk-observe.mjs"),
   ),
+);
+files.set(
+  "/diagnostic-budget-worker.mjs",
+  Buffer.from(`
+import * as sdk from "/dist/index.js";
+import { diagnosticBudgetCases } from "/diagnostic-budget-cases.mjs";
+try { await sdk.initialize(); self.postMessage(diagnosticBudgetCases(sdk)); }
+catch (error) { self.postMessage({ error: String(error) }); }
+`),
 );
 const server = http.createServer((req, res) => {
   if (req.url === "/") {
@@ -89,7 +105,8 @@ try {
   const result = await page.evaluate(async (requests) => {
     const sdk = await import("/dist/index.js"),
       { observe } = await import("/observer.mjs"),
-      { fixedDiagnosticCases } = await import("/fixed-diagnostic-cases.mjs");
+      { fixedDiagnosticCases } = await import("/fixed-diagnostic-cases.mjs"),
+      { diagnosticBudgetCases } = await import("/diagnostic-budget-cases.mjs");
     await sdk.initialize();
     const run = (list) =>
       list.map((request) => {
@@ -103,8 +120,26 @@ try {
       core: run(requests.core),
       suite: run(requests.suite),
       fixedDiagnostics: fixedDiagnosticCases(sdk),
+      ...diagnosticBudgetCases(sdk),
     };
   }, requests);
+  result.diagnosticBudgetWorker = await page.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
+        const worker = new Worker("/diagnostic-budget-worker.mjs", {
+          type: "module",
+        });
+        worker.onmessage = ({ data }) => {
+          worker.terminate();
+          if (data.error) reject(new Error(data.error));
+          else resolve(data);
+        };
+        worker.onerror = (error) => {
+          worker.terminate();
+          reject(new Error(error.message));
+        };
+      }),
+  );
   const exampleUrl = `http://127.0.0.1:${server.address().port}/examples/first-use.html`;
   const firstUse = await firstUsePage(browser, exampleUrl);
   const loadingFailures = await firstUseLoadingFailures(browser, exampleUrl);
@@ -122,6 +157,8 @@ try {
       {
         ...firstUse,
         fixedDiagnostics: result.fixedDiagnostics,
+        diagnosticBudget: result.diagnosticBudget,
+        diagnosticBudgetWorker: result.diagnosticBudgetWorker,
         loadingFailures,
       },
       null,

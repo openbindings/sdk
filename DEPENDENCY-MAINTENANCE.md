@@ -98,6 +98,18 @@ below for behavioral dependency changes. Keep every `publish = false` guard.
 - `src/error.rs`, `src/keywords/custom.rs`: retain lazy exact instance views through custom-keyword error context; avoid recursive materialization/drop of 10,000-level literals. Internal diagnostics expose bounded metadata and original locations, not whole instance values.
 - `src/keywords/additional_properties.rs`, `any_of.rs`, `helpers.rs`, `items.rs`, `min_length.rs`, `properties.rs`, `property_names.rs`, `required.rs`, `unevaluated_items.rs`, `unevaluated_properties.rs`, and `src/properties.rs`: preserve generic flat-value operation, scoped evaluation/diagnostic work, ECMAScript matching and dynamic reference behavior in the affected applicator/keyword paths. Check the full diff when rebasing; these are evaluator-sensitive changes, not mechanical wrappers.
 
+The value-diagnostic budget repair adds a private `diagnostic_metadata` scope to
+`ob_work.rs`, with pre-copy path/member admission and deterministic usage counters.
+`paths.rs` sizes escaped instance paths before any segment vector/string expansion
+and omits unused evaluation trackers. Metadata mode skips unused applicator branch
+contexts, source-controlled keyword payloads and owned rejected values before
+construction; property-name temporaries are admitted explicitly. The ordinary
+upstream diagnostic path and SDK document diagnostic count scope remain separate.
+The adapter independently admits original source coordinates and final problems;
+private copied bytes do not establish a total heap guarantee. Maintained native
+`diagnostic_budget` and shared package/browser `diagnostic-budget-cases.mjs` cover
+the witness, boundaries, pre-copy counters and deterministic seed 0x5eedcafe.
+
 ## jsonschema-value
 
 - `Cargo.toml`: private package identity and bounded-integer arithmetic dependencies.
@@ -132,6 +144,25 @@ The complete diff inventory is in `docs/dependency-patches/`. Reproduce it with
 `python3 tools/dependency-patches.py --upstream-dir <original-crate-archives> --output <new-directory>`;
 verify the original archives against the manifest checksums first.
 
+For an isolated rehearsal of the current `jsonschema` fork, use a new output
+directory and the original crate archive directory:
+
+```sh
+python3 tools/rehearse-dependency.py --package jsonschema \
+  --upstream-dir /path/to/original-crate-archives \
+  --output target/dependency-rehearsal
+```
+
+This checks the upstream checksum, extracts pristine sources, applies the
+maintained patch with the standard `patch` executable, and compares every
+reconstructed file to the current fork. Keep `RECONSTRUCTION.json` and the patch
+log. Independently regenerate the patch inventory with `dependency-patches.py`
+into another fresh directory and compare it with `docs/dependency-patches`.
+Then run the applicable source, consumer compatibility, evaluator and packaged
+artifact gates described above on the same committed candidate. Exact source
+reconstruction is a maintenance rehearsal; it neither upgrades the dependency
+nor establishes that a future upstream rebase will be straightforward.
+
 The upstream regress suite and jsonschema-value library/numeric suite pass in the
 SDK-relevant configuration. The jsonschema library suite has 17 exact dispositions:
 two Draft 4/non-u regex cases, four finite huge-number integer cases, three legacy
@@ -163,3 +194,11 @@ witness itself. The Unicode-property witness directly covers the selected matche
 on the documented enclosing guard/source reasoning. That single test does not
 claim four distinct wrapper executions or the entire raw test's unmatched branch.
 No new Draft4 capability or fresh upstream-suite run is claimed in the facade repair.
+
+
+For typed schema details, preserve `diagnostic_schema_details` scope restoration
+and admitted required-name capture in all specialized required validators. Default
+metadata still omits the name. Optional refusal must not invalidate an established
+base problem; final exact facts are recovered by the adapter from original sources.
+`property_name_recheck` covers nested applicator name-copy admission in every
+propertyNames path; normal validity must remain unchanged outside metadata mode.

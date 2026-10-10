@@ -246,7 +246,7 @@ fn messages_use_only_bounded_fixed_type_names_and_never_instance_or_schema_value
         (
             serde_json::json!({"enum":["SECRET-schema"]}),
             "\"SECRET-instance\"",
-            "value does not satisfy the constraint at the schema location",
+            "value is not one of the allowed values; inspect enum at the schema location",
         ),
         (
             serde_json::json!({"required":["SECRET-member"]}),
@@ -287,6 +287,7 @@ impl PreparedSchema for CustomPrepared {
     fn validate(&self, _: &JsonValue, _: &WorkControl) -> ValueOutcome {
         ValueOutcome::Fails {
             problems: vec![ValueProblem {
+                details: None,
                 instance_pointer: "".into(),
                 schema_location: None,
                 code: "custom".into(),

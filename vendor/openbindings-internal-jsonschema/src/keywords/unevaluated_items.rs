@@ -790,8 +790,10 @@ impl<F: Json> Validate<F> for UnevaluatedItemsValidator<F> {
                     };
 
                     if !is_valid {
-                        if crate::ob_work::diagnostic_admit() {
-                            unevaluated.push(item.diagnostic_text());
+                        if crate::ob_work::diagnostic_collection_item() {
+                            unevaluated.push(crate::ob_work::diagnostic_payload(|| {
+                                item.diagnostic_text()
+                            }));
                             invalid_indexes.push(index);
                         }
                     }
@@ -836,12 +838,16 @@ impl<F: Json> Validate<F> for UnevaluatedItemsValidator<F> {
                         validator.evaluate_instance_below(&item, &location.push(idx), tracker, ctx);
                     if !child.valid {
                         invalid = true;
-                        unevaluated.push(item.diagnostic_text());
+                        unevaluated.push(crate::ob_work::diagnostic_payload(|| {
+                            item.diagnostic_text()
+                        }));
                     }
                     children.push(&mut ctx.arena, child);
                 } else {
                     invalid = true;
-                    unevaluated.push(item.diagnostic_text());
+                    unevaluated.push(crate::ob_work::diagnostic_payload(|| {
+                        item.diagnostic_text()
+                    }));
                 }
             }
 

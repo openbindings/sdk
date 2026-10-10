@@ -34,6 +34,11 @@ the extracted archives, or install the npm tarball into a fresh project. Cargo
 archive manifests contain no development path dependencies. Neither route requires
 publishing these packages.
 
+Use [the candidate procedure](docs/release-candidate.md) to generate and verify
+fresh archives and a versioned local reference bundle. The public
+[support policy](docs/support.md) distinguishes qualified hosts, prerelease
+compatibility, and reporting channels.
+
 ## SDK release readiness evidence
 
 Source landing, package publication, consumer migration and legacy SDK retirement

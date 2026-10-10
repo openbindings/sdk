@@ -15,6 +15,7 @@ export {
   NoVerdictReason,
   NoVerdict,
   ValueProblem,
+  ValueProblemDetails,
   ValueOutcome,
   OperationSelection,
   ContractPreparation,

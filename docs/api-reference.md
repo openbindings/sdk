@@ -56,6 +56,17 @@ and transport traits document their additional SDK obligations explicitly.
   editors. A report's independent rule evidence survives finding-count and aggregate
   pointer-byte caps; diagnostic truncation must remain visible.
 
+The value diagnostic byte contract, scratch allowances and conservative serialized
+bounds are specified in the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md).
+`Limits::diagnostic_bytes` and TS `EvaluatorLimits.diagnosticBytes` are the only
+new evaluator limit. Adding a Rust `Limits` field is an intentional prerelease
+struct-literal source change; callers should use `..Limits::default()` for
+unspecified settings. Existing Rust `ValueProblem` literals must also add
+`details: None`; `ValueOutcome` construction is unchanged.
+Custom evaluator authors can call `EvaluationProgram::original_location_bounded`
+and match `LocationBudgetExceeded` separately from an unmapped location; its
+point-of-definition Rustdoc demonstrates the complete match.
+
 ## Maintained verification
 
 After generating the current package (`npm run build:wasm` then `npm run build` in
@@ -82,3 +93,14 @@ rejected. Definition presence is an omission gate, **not a quality percentage**.
 Review rendered pages and compiled examples for truthful stage distinctions,
 actionable errors, ownership, defaults/units, capability limits and retention. The
 release checklist records those SDK-specific outcomes separately from source landing.
+
+
+Optional default-evaluator schema facts use
+`DefaultEvaluator::new().with_schema_details(true)` (TS
+`contracts({ includeSchemaDetails: true })`). They retain original source snapshots
+and share the diagnostic string-byte budget. `ValueProblemDetails::Truncated`
+sets result completeness false; absent details mean disabled or unavailable.
+Exact bounds and enum choices remain JSON token strings. Existing Rust evaluator
+implementations constructing `ValueProblem` must add `details: None` to preserve
+their previous output. The enum is non-exhaustive; match future variants safely.
+See the [evaluator resource contract](../crates/openbindings-json-schema-evaluator/README.md).

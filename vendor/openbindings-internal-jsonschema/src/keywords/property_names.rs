@@ -32,6 +32,11 @@ impl<F: Json> Validate<F> for PropertyNamesObjectValidator<F> {
         if let Some(object) = instance.as_object() {
             let mut buffer = F::StringBuffer::default();
             for (name, _) in object.members() {
+                // Applicators recheck validity during metadata collection too.
+                // A refusal poisons that diagnostic pass; its verdict is ignored.
+                if !crate::ob_work::diagnostic_copy(name.as_ref().len()) {
+                    return false;
+                }
                 let valid = F::with_string_node(&mut buffer, name.as_ref(), |node| {
                     self.node.is_valid(&node, ctx)
                 });
@@ -53,6 +58,9 @@ impl<F: Json> Validate<F> for PropertyNamesObjectValidator<F> {
         if let Some(object) = instance.as_object() {
             let mut buffer = F::StringBuffer::default();
             for (name, _) in object.members() {
+                if !crate::ob_work::diagnostic_copy(name.as_ref().len()) {
+                    return Ok(());
+                }
                 let result = F::with_string_node(&mut buffer, name.as_ref(), |node| {
                     self.node
                         .validate(&node, location, tracker, ctx)
@@ -87,6 +95,9 @@ impl<F: Json> Validate<F> for PropertyNamesObjectValidator<F> {
         let mut buffer = F::StringBuffer::default();
         let mut name_errors = Vec::new();
         for (name, _) in object.members() {
+            if !crate::ob_work::diagnostic_copy(name.as_ref().len()) {
+                break;
+            }
             F::with_string_node(&mut buffer, name.as_ref(), |node| {
                 let mut collected = Vec::new();
                 self.node
@@ -119,6 +130,9 @@ impl<F: Json> Validate<F> for PropertyNamesObjectValidator<F> {
             let mut children = ChildList::default();
             let mut buffer = F::StringBuffer::default();
             for (name, _) in object.members() {
+                if !crate::ob_work::diagnostic_copy(name.as_ref().len()) {
+                    return EvaluationResult::valid_empty();
+                }
                 let child = F::with_string_node(&mut buffer, name.as_ref(), |node| {
                     self.node.evaluate_instance(&node, location, tracker, ctx)
                 });

@@ -1,0 +1,20 @@
+[package]
+name = "sdk-runtime-qualification"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[[bin]]
+name = "runtime-regression"
+path = "src/regression.rs"
+
+[dependencies]
+openbindings = { path = "../../../crates/openbindings" }
+openbindings-json-schema-evaluator = { path = "../../../crates/openbindings-json-schema-evaluator" }
+serde_json = "=1.0.151"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

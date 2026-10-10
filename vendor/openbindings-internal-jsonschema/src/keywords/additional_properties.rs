@@ -284,7 +284,7 @@ impl<F: Json, M: PropertiesValidatorsMap<F>> Validate<F>
             if let Some((name, node)) = self.properties.get_key_validator(property.as_ref()) {
                 node.collect_errors(&value, &location.push(name), tracker, ctx, errors);
             } else {
-                crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
+                crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
             }
         }
         if !unexpected.is_empty() {
@@ -320,7 +320,7 @@ impl<F: Json, M: PropertiesValidatorsMap<F>> Validate<F>
                     );
                     children.push(&mut ctx.arena, child);
                 } else {
-                    crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
+                    crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
                 }
             }
             let mut result = EvaluationResult::from_children(children);
@@ -505,7 +505,7 @@ impl<F: Json, M: PropertiesValidatorsMap<F>> Validate<F>
                     found_required = true;
                 }
             } else {
-                crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
+                crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
             }
         }
         if !unexpected.is_empty() {
@@ -550,7 +550,7 @@ impl<F: Json, M: PropertiesValidatorsMap<F>> Validate<F>
                         found_required = true;
                     }
                 } else {
-                    crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
+                    crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
                 }
             }
             let mut result = EvaluationResult::from_children(children);
@@ -1022,7 +1022,7 @@ impl<F: Json, R: RegexEngine> Validate<F> for AdditionalPropertiesWithPatternsFa
                 }
             }
             if !has_match {
-                crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
+                crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
             }
         }
         if !unexpected.is_empty() {
@@ -1061,7 +1061,7 @@ impl<F: Json, R: RegexEngine> Validate<F> for AdditionalPropertiesWithPatternsFa
                     }
                 }
                 if !has_match {
-                    crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
+                    crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
                 }
             }
             if !pattern_matched_props.is_empty() {
@@ -1498,7 +1498,7 @@ impl<F: Json, M: PropertiesValidatorsMap<F>, R: RegexEngine> Validate<F>
                     }
                 }
                 if !has_match {
-                    crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
+                    crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
                 }
             }
         }
@@ -1552,9 +1552,7 @@ impl<F: Json, M: PropertiesValidatorsMap<F>, R: RegexEngine> Validate<F>
                         }
                     }
                     if !has_match {
-                        crate::ob_work::push_error(&mut unexpected, || {
-                            property.as_ref().to_owned()
-                        });
+                        crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
                     }
                 }
             }

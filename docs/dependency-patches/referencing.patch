@@ -1,12 +1,14 @@
 --- a/.cargo_vcs_info.json
-+++ b/.cargo_vcs_info.json
++++ /dev/null
 @@ -1,6 +0,0 @@
 -{
 -  "git": {
 -    "sha1": "55ac1664384793c5d3b20745d3f9c169dfe2c06f"
 -  },
 -  "path_in_vcs": "crates/jsonschema-referencing"
--}--- a/Cargo.toml
+-}
+\ No newline at end of file
+--- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -10,10 +10,11 @@
  # See Cargo.toml.orig for the original contents.
@@ -34,7 +36,7 @@
  [dev-dependencies.codspeed-criterion-compat]
  version = "5.0"
 --- a/Cargo.toml.orig
-+++ b/Cargo.toml.orig
++++ /dev/null
 @@ -1,59 +0,0 @@
 -[package]
 -name = "referencing"
@@ -95,7 +97,7 @@
 -[[bench]]
 -harness = false
 -name = "registry"
---- a/OPENBINDINGS-PATCH.md
+--- /dev/null
 +++ b/OPENBINDINGS-PATCH.md
 @@ -0,0 +1,5 @@
 +# Internal package identity fork
@@ -103,7 +105,7 @@
 +Based on referencing 0.58.6; upstream Rust source is byte-identical. Only package identity and internal dependency wiring change. This package isolates the SDK arbitrary-precision JSON feature graph from consumer serde_json. It is unpublished and not a supported SDK extension API.
 +
 +Original licenses, UPSTREAM-Cargo.toml and UPSTREAM-VCS.json are retained. See the root DEPENDENCY-MAINTENANCE.md and tools/verify-dependency-isolation.py for the update procedure and source identity gate.
---- a/UPSTREAM-Cargo.toml
+--- /dev/null
 +++ b/UPSTREAM-Cargo.toml
 @@ -0,0 +1,59 @@
 +[package]
@@ -165,7 +167,7 @@
 +[[bench]]
 +harness = false
 +name = "registry"
---- a/UPSTREAM-VCS.json
+--- /dev/null
 +++ b/UPSTREAM-VCS.json
 @@ -0,0 +1,6 @@
 +{
@@ -174,3 +176,4 @@
 +  },
 +  "path_in_vcs": "crates/jsonschema-referencing"
 +}
+\ No newline at end of file

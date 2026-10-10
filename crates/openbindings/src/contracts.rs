@@ -99,6 +99,42 @@ impl fmt::Display for NoVerdict {
 }
 impl std::error::Error for NoVerdict {}
 #[derive(Clone, Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+#[non_exhaustive]
+/// Optional schema facts. Treat source operands as sensitive; none contain a
+/// rejected instance value. Numeric bounds and enum choices are exact JSON token
+/// strings. Every variant is atomic; Truncated never contains partial facts.
+pub enum ValueProblemDetails {
+    /// Complete expected types from the fixed JSON type vocabulary.
+    Type {
+        /// Fixed JSON type names, never arbitrary schema strings.
+        expected: Vec<String>,
+    },
+    /// One established missing member, verified against the original required array.
+    Required {
+        /// Source-controlled member name; the instance pointer stays at the existing parent.
+        member: String,
+    },
+    /// Exact numeric bound; the problem code supplies comparator and inclusivity.
+    NumericBound {
+        /// Original JSON numeric token, without floating-point conversion.
+        bound: String,
+    },
+    /// Exact length/count bound; the problem code supplies unit and direction.
+    SizeBound {
+        /// Original JSON numeric token.
+        bound: String,
+    },
+    /// Complete enum choices; never a partial prefix.
+    Enum {
+        /// Exact original JSON token text for every choice, including source-controlled data.
+        choices: Vec<String>,
+    },
+    /// Requested applicable facts were omitted for the diagnostic byte budget.
+    /// The enclosing failure has problems_complete=false.
+    Truncated,
+}
+#[derive(Clone, Debug, Serialize)]
 /// One established instance failure with an optional original schema coordinate. Custom evaluators can construct this public record.
 pub struct ValueProblem {
     /// RFC 6901 pointer to an existing location in the input instance; empty means the root.
@@ -109,6 +145,9 @@ pub struct ValueProblem {
     pub code: String,
     /// Explanatory text; custom evaluators should avoid exposing instance values or source-controlled strings by default.
     pub message: String,
+    /// Optional schema facts. None means disabled or unavailable; Truncated explicitly marks budget omission.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<ValueProblemDetails>,
 }
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
@@ -120,7 +159,7 @@ pub enum ValueOutcome {
     Fails {
         /// Retained actual failing instance locations; diagnostics may be bounded after failure is established.
         problems: Vec<ValueProblem>,
-        /// Whether all available failure diagnostics were collected. False does not weaken the established failure verdict.
+        /// Whether selected diagnostics, including requested details, completed. False does not weaken the established failure verdict.
         problems_complete: bool,
     },
     /// No satisfaction/failure verdict was established.
@@ -240,23 +279,90 @@ pub struct EvaluationProgram {
     pub resources: Vec<SchemaResource>,
     pub(crate) locations: BTreeMap<String, SchemaLocation>,
 }
+/// Original schema location or URI-decoding scratch exceeds the caller's UTF-8
+/// byte allowance. No partial location is returned.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LocationBudgetExceeded;
+impl fmt::Display for LocationBudgetExceeded {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("original schema location exceeds the diagnostic byte allowance")
+    }
+}
+impl std::error::Error for LocationBudgetExceeded {}
 impl EvaluationProgram {
     /// Map a generated absolute keyword URI back to original source, or return `None` if no mapping exists. Never invent coordinates for an unmapped diagnostic.
     pub fn original_location(&self, generated_uri: &str) -> Option<SchemaLocation> {
-        let normalized = if let Some((base, fragment)) = generated_uri.split_once('#') {
-            format!("{base}#{}", crate::uri::decode_fragment(fragment)?)
-        } else {
-            generated_uri.into()
+        self.original_location_bounded(generated_uri, usize::MAX)
+            .ok()
+            .flatten()
+    }
+    /// Map an original location when its resource URI plus complete pointer fit
+    /// `max_bytes` UTF-8 bytes. Admission precedes copying original strings.
+    /// URI fragment percent-decoding uses one normalized-string buffer with a
+    /// separate logical UTF-8 allowance of `max_bytes`. Its encoded input length
+    /// is a conservative preallocation bound; allocator capacity/reallocation is
+    /// not measured. Percent escapes in the URI base are preserved verbatim.
+    /// `Ok(None)` means no mapping or an invalid percent-encoded fragment;
+    /// [`LocationBudgetExceeded`] means either allowance was insufficient.
+    /// This helper establishes neither a verdict nor a total heap bound.
+    ///
+    /// ```
+    /// # use openbindings::{EvaluationProgram, LocationBudgetExceeded};
+    /// # fn map(program: &EvaluationProgram, uri: &str) {
+    /// match program.original_location_bounded(uri, 1024) {
+    ///     Ok(Some(location)) => assert!(location.pointer.len() <= 1024),
+    ///     Ok(None) => {} // Preserve an absent location; never guess coordinates.
+    ///     Err(LocationBudgetExceeded) => {} // Mark diagnostics incomplete.
+    /// }
+    /// # }
+    /// ```
+    pub fn original_location_bounded(
+        &self,
+        generated_uri: &str,
+        max_bytes: usize,
+    ) -> Result<Option<SchemaLocation>, LocationBudgetExceeded> {
+        let normalized = match generated_uri.split_once('#') {
+            Some((base, fragment)) if fragment.contains('%') => {
+                if generated_uri.len() > max_bytes {
+                    return Err(LocationBudgetExceeded);
+                }
+                let Some(mut decoded) = crate::uri::decode_fragment(fragment) else {
+                    return Ok(None);
+                };
+                // Grow this admitted buffer instead of retaining both decoded
+                // and formatted URI strings. Logical length never exceeds the
+                // encoded URI length admitted above.
+                decoded.insert(0, '#');
+                decoded.insert_str(0, base);
+                std::borrow::Cow::Owned(decoded)
+            }
+            _ => std::borrow::Cow::Borrowed(generated_uri),
         };
-        let generated_uri = normalized.as_str();
+        let generated_uri = normalized.as_ref();
         let mut end = generated_uri.len();
         loop {
             if let Some(location) = self.locations.get(&generated_uri[..end]) {
-                let mut out = location.clone();
-                out.pointer.push_str(&generated_uri[end..]);
-                return Some(out);
+                let bytes = location
+                    .resource
+                    .as_ref()
+                    .map_or(0, String::len)
+                    .saturating_add(location.pointer.len())
+                    .saturating_add(generated_uri.len() - end);
+                if bytes > max_bytes {
+                    return Err(LocationBudgetExceeded);
+                }
+                let mut pointer =
+                    String::with_capacity(location.pointer.len() + generated_uri.len() - end);
+                pointer.push_str(&location.pointer);
+                pointer.push_str(&generated_uri[end..]);
+                return Ok(Some(SchemaLocation {
+                    resource: location.resource.clone(),
+                    pointer,
+                }));
             }
-            let previous = generated_uri[..end].rfind('/')?;
+            let Some(previous) = generated_uri[..end].rfind('/') else {
+                return Ok(None);
+            };
             end = previous;
         }
     }
@@ -573,5 +679,109 @@ impl ValueContracts {
             ContractState::Ready(schema) => ContractPreparation::Ready(PreparedContract { schema }),
             ContractState::NoVerdict(detail) => ContractPreparation::NoVerdict { detail },
         }
+    }
+}
+
+#[cfg(test)]
+mod location_budget_tests {
+    use super::*;
+    #[test]
+    fn original_mapping_admits_complete_locations_and_decoding_separately() {
+        let uri = "https://sdk-program.openbindings.invalid/p#/$defs/n0";
+        let location = SchemaLocation {
+            resource: Some("https://example.test/".to_owned() + &"u".repeat(32768)),
+            pointer: "/é~0~1\n".into(),
+        };
+        let program = EvaluationProgram {
+            entry_uri: uri.into(),
+            resources: vec![],
+            locations: BTreeMap::from([(uri.into(), location.clone())]),
+        };
+        let generated = uri.to_owned() + "/type";
+        let required = location.resource.as_ref().unwrap().len() + location.pointer.len() + 5;
+        for bytes in [0, 1, required - 1] {
+            assert_eq!(
+                program.original_location_bounded(&generated, bytes),
+                Err(LocationBudgetExceeded)
+            );
+        }
+        for bytes in [required, required + 1] {
+            assert_eq!(
+                program
+                    .original_location_bounded(&generated, bytes)
+                    .unwrap(),
+                Some(SchemaLocation {
+                    resource: location.resource.clone(),
+                    pointer: location.pointer.clone() + "/type"
+                })
+            );
+        }
+        assert_eq!(
+            program.original_location(&generated),
+            program
+                .original_location_bounded(&generated, usize::MAX)
+                .unwrap()
+        );
+        assert_eq!(
+            program
+                .original_location_bounded(&(uri.to_owned() + "/%74ype"), required)
+                .unwrap(),
+            program.original_location(&generated)
+        );
+        assert_eq!(
+            program
+                .original_location_bounded(&(uri.to_owned() + "/%GG"), required)
+                .unwrap(),
+            None
+        );
+        assert_eq!(
+            program
+                .original_location_bounded("https://unmapped.test/#/x", 0)
+                .unwrap(),
+            None
+        );
+    }
+    #[test]
+    fn percent_bearing_base_lookup_preserves_original_mapping_contract() {
+        let at = SchemaLocation {
+            resource: None,
+            pointer: String::new(),
+        };
+        for base in [
+            "https://example.test/%61",
+            "https://example.test/%61#/$defs/n0",
+        ] {
+            let program = EvaluationProgram {
+                entry_uri: base.into(),
+                resources: vec![],
+                locations: BTreeMap::from([(base.into(), at.clone())]),
+            };
+            assert_eq!(program.original_location(base), Some(at.clone()));
+            assert_eq!(
+                program.original_location_bounded(base, 0),
+                Ok(Some(at.clone()))
+            );
+            assert_eq!(
+                program.original_location_bounded(&(base.to_owned() + "/type"), 5),
+                Ok(Some(SchemaLocation {
+                    resource: None,
+                    pointer: "/type".into()
+                }))
+            );
+        }
+        let uri = "https://example.test/%61#/%74ype";
+        let program = EvaluationProgram {
+            entry_uri: uri.into(),
+            resources: vec![],
+            locations: BTreeMap::from([("https://example.test/%61#/type".into(), at.clone())]),
+        };
+        assert_eq!(
+            program.original_location_bounded(uri, uri.len() - 1),
+            Err(LocationBudgetExceeded)
+        );
+        assert_eq!(
+            program.original_location_bounded(uri, uri.len()),
+            Ok(Some(at))
+        );
     }
 }

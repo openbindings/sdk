@@ -887,9 +887,10 @@ impl<F: Json> Validate<F> for UnevaluatedPropertiesValidator<F> {
                     }
                     match &self.validators.unevaluated {
                         Some(schema) if schema.is_valid(&value, ctx) => {}
-                        _ => crate::ob_work::push_error(&mut unevaluated, || {
-                            property.as_ref().to_owned()
-                        }),
+                        _ => crate::ob_work::push_diagnostic_name(
+                            &mut unevaluated,
+                            property.as_ref(),
+                        ),
                     }
                 }
                 if unevaluated.is_empty() {
@@ -923,13 +924,11 @@ impl<F: Json> Validate<F> for UnevaluatedPropertiesValidator<F> {
                 // Check against unevaluatedProperties schema
                 if let Some(unevaluated_schema) = &self.validators.unevaluated {
                     if !unevaluated_schema.is_valid(&value, ctx) {
-                        crate::ob_work::push_error(&mut unevaluated, || {
-                            property.as_ref().to_owned()
-                        });
+                        crate::ob_work::push_diagnostic_name(&mut unevaluated, property.as_ref());
                     }
                 } else {
                     // No unevaluatedProperties schema means false (reject all)
-                    crate::ob_work::push_error(&mut unevaluated, || property.as_ref().to_owned());
+                    crate::ob_work::push_diagnostic_name(&mut unevaluated, property.as_ref());
                 }
             }
 
@@ -1016,14 +1015,12 @@ impl<F: Json> Validate<F> for UnevaluatedPropertiesValidator<F> {
                     );
                     if !child.valid {
                         invalid = true;
-                        crate::ob_work::push_error(&mut unevaluated, || {
-                            property.as_ref().to_owned()
-                        });
+                        crate::ob_work::push_diagnostic_name(&mut unevaluated, property.as_ref());
                     }
                     children.push(&mut ctx.arena, child);
                 } else {
                     invalid = true;
-                    crate::ob_work::push_error(&mut unevaluated, || property.as_ref().to_owned());
+                    crate::ob_work::push_diagnostic_name(&mut unevaluated, property.as_ref());
                 }
             }
 

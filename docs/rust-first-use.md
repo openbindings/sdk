@@ -8,7 +8,7 @@ These packages are unpublished. Use an exact checkout or locally built archives 
 [dependencies]
 openbindings = "=0.2.0-alpha.1"
 openbindings-json-schema-evaluator = "=0.2.0-alpha.1"
-serde = { version = "=1.0.229", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"] }
 ```
 
 Until publication, patch those version dependencies and their unpublished siblings to extracted Cargo archives. The companion archive includes both examples and its README; it needs no HTTP client, async executor or evaluator qualification kit to run them. From a source checkout or the companion's extracted package with sibling patches configured:
@@ -130,3 +130,14 @@ enum/member strings. Type guidance uses only fixed JSON type names. Structured
 locations, reference spellings and explicitly accessed source fields can still
 contain source text; apply your application's disclosure policy before logging
 them. Custom evaluator messages are supplied by their authors.
+
+
+Optional default-evaluator schema facts use
+`DefaultEvaluator::new().with_schema_details(true)` (TS
+`contracts({ includeSchemaDetails: true })`). They retain original source snapshots
+and share the diagnostic string-byte budget. `ValueProblemDetails::Truncated`
+sets result completeness false; absent details mean disabled or unavailable.
+Exact bounds and enum choices remain JSON token strings. Existing Rust evaluator
+implementations constructing `ValueProblem` must add `details: None` to preserve
+their previous output. The enum is non-exhaustive; match future variants safely.
+See the [evaluator resource contract](../crates/openbindings-json-schema-evaluator/README.md).

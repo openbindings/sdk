@@ -249,8 +249,18 @@ pub(crate) trait Validate<F: Json = SerdeJson>: Send + Sync {
         ctx: &mut ValidationContext,
         errors: &mut Vec<ValidationError<'i>>,
     ) {
-        if let Err(error) = self.validate(instance, location, tracker, ctx) {
-            crate::ob_work::push_error(errors, || error);
+        if !crate::ob_work::metadata_only() {
+            if let Err(error) = self.validate(instance, location, tracker, ctx) {
+                crate::ob_work::push_error(errors, || error);
+            }
+            return;
+        }
+        if crate::ob_work::diagnostic_admit() {
+            if let Err(error) = self.validate(instance, location, tracker, ctx) {
+                if !crate::ob_work::metadata_exhausted() {
+                    errors.push(error);
+                }
+            }
         }
     }
 
