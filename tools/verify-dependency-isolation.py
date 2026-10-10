@@ -13,7 +13,7 @@ root = Path(__file__).resolve().parents[1]
 records = json.loads((root / 'docs/dependency-isolation.json').read_text())['mechanical_packages']
 for record in records:
     package = root / 'vendor' / record['package']
-    actual = {str(path.relative_to(package)): hashlib.sha256(path.read_bytes()).hexdigest()
+    actual = {path.relative_to(package).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
               for path in package.rglob('*.rs') if 'target' not in path.parts}
     assert actual == record['rust_files'], f"upstream Rust source changed: {record['package']}"
     if a.upstream_dir:
