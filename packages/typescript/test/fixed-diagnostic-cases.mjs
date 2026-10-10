@@ -224,6 +224,57 @@ export function fixedDiagnosticCases(sdk) {
       conclusion: "non-conformant",
     });
   }
+  for (const [name, count] of [
+    ["x-duplicates", 4095],
+    ["x-duplicates", 4096],
+    ["x-duplicates", 4097],
+    ["x-" + "a".repeat(4096), 4096],
+  ]) {
+    const text = `{"openbindings":"0.2.0","operations":{},"x-pad":"${"p".repeat(128 * 1024)}",\n"${name}":{"k":0${',"k":0'.repeat(count)}}}`;
+    const parsed = sdk.parseDocument(text);
+    check(parsed.status === "parsed", "duplicate input parses exactly");
+    try {
+      const assessed = parsed.value.assess();
+      check(assessed.status === "assessed", "duplicate assessment completes");
+      const report = assessed.report;
+      const expected = Math.min(
+        count,
+        4096,
+        Math.floor((8 * 1024 * 1024) / (name.length + 1)),
+      );
+      check(
+        report.findings.length === expected,
+        "duplicate retention honors both caps",
+      );
+      check(
+        report.findingsTruncated === expected < count,
+        "duplicate truncation is truthful",
+      );
+      check(
+        report.evidence["OBI-01"] === "violated" &&
+          report.evidence["OBI-02"] === "not-applicable",
+        "duplicate evidence is independent of retention",
+      );
+      for (const finding of report.findings) {
+        check(finding.code === "duplicate-member", "duplicate code preserved");
+        check(
+          finding.location.pointer === "/" + name,
+          "containing-object pointer preserved",
+        );
+        check(
+          finding.location.byteOffset === text.indexOf('{"k":'),
+          "original containing-object offset preserved",
+        );
+        check(finding.location.line === 2, "original line preserved");
+      }
+      results.push({
+        name: `duplicate bounds ${name.length} ${count}`,
+        findings: report.findings.length,
+      });
+    } finally {
+      parsed.value.dispose();
+    }
+  }
   const invalidName = sdk.parseDocument(
     '{"openbindings":"0.2.0","operations":{"/private":{"aliases":[".private"],"examples":{"-private":{}}}}}',
   );

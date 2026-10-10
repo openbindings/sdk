@@ -681,7 +681,7 @@ impl SchemaSpace {
             let checks = crate::fixed_schema::check(&node.value, true, 1).map_err(|e| {
                 self.failure(id, NoVerdictReason::LimitExceeded, "meta-schema-check", e)
             })?;
-            if !checks.entries.is_empty() {
+            if checks.violated {
                 return Err(self.failure(
                     id,
                     NoVerdictReason::ConservativePreparation,

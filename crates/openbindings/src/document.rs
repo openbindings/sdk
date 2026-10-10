@@ -517,16 +517,22 @@ fn version_refusal(value: &JsonValue) -> Option<VersionRefusal> {
         supported: SUPPORTED_VERSIONS,
     })
 }
-struct Checks {
+const MAX_FINDINGS: usize = 4096;
+const MAX_FINDING_POINTER_BYTES: usize = 8 * 1024 * 1024;
+struct Checks<'a> {
     evidence: [Evidence; 13],
     findings: Vec<Finding>,
+    pending_locations: Vec<(usize, JsonRef<'a>)>,
+    pointer_bytes: usize,
     truncated: bool,
 }
-impl Checks {
+impl<'a> Checks<'a> {
     fn new() -> Self {
         Self {
             evidence: [Evidence::Satisfied; 13],
             findings: Vec::new(),
+            pending_locations: Vec::new(),
+            pointer_bytes: MAX_FINDING_POINTER_BYTES,
             truncated: false,
         }
     }
@@ -541,7 +547,7 @@ impl Checks {
         if status == Evidence::Violated || self.evidence[rule] != Evidence::Violated {
             self.evidence[rule] = status;
         }
-        if self.findings.len() < 4096 {
+        if self.findings.len() < MAX_FINDINGS {
             self.findings.push(Finding {
                 rule: DOCUMENT_RULES[rule],
                 status,
@@ -557,19 +563,31 @@ impl Checks {
         &mut self,
         rule: usize,
         status: Evidence,
-        at: JsonRef<'_>,
+        at: JsonRef<'a>,
         code: &'static str,
         message: impl Into<String>,
     ) {
-        // Evidence is still marked after the finding cap, without constructing an
-        // unretainable source location (which may have a large source prefix).
-        let location = (self.findings.len() < 4096).then(|| at.location());
-        self.mark(rule, status, code, location, message);
+        // Rule evidence is independent of retained diagnostic capacity. Keep
+        // borrowed nodes until finish, then scan each source prefix only once.
+        if status == Evidence::Violated || self.evidence[rule] != Evidence::Violated {
+            self.evidence[rule] = status;
+        }
+        if self.findings.len() >= MAX_FINDINGS {
+            self.truncated = true;
+            return;
+        }
+        let Some(bytes) = backend::location_pointer_size(at, self.pointer_bytes) else {
+            self.truncated = true;
+            return;
+        };
+        self.pointer_bytes -= bytes;
+        self.pending_locations.push((self.findings.len(), at));
+        self.mark(rule, status, code, None, message);
     }
     fn violation(
         &mut self,
         rule: usize,
-        at: JsonRef<'_>,
+        at: JsonRef<'a>,
         code: &'static str,
         message: impl Into<String>,
     ) {
@@ -578,7 +596,15 @@ impl Checks {
     fn not_applicable_after_json(&mut self) {
         self.evidence[1..].fill(Evidence::NotApplicable);
     }
-    fn finish(self) -> ConformanceReport {
+    fn finish(mut self) -> ConformanceReport {
+        let nodes: Vec<_> = self.pending_locations.iter().map(|(_, at)| *at).collect();
+        for ((index, _), location) in self
+            .pending_locations
+            .into_iter()
+            .zip(backend::locations(&nodes))
+        {
+            self.findings[index].location = Some(location);
+        }
         let conclusion = if self.evidence.contains(&Evidence::Violated) {
             Conformance::NonConformant
         } else if self.evidence.contains(&Evidence::Inconclusive) {
@@ -596,25 +622,23 @@ impl Checks {
             findings_truncated: self.truncated,
         }
     }
-    fn fixed(&mut self, value: &JsonValue, rule: usize, is_meta: bool) {
+    fn fixed(&mut self, value: &'a JsonValue, rule: usize, is_meta: bool) {
         match fixed_schema::check(
             value,
             is_meta,
-            4096usize.saturating_sub(self.findings.len()),
+            MAX_FINDINGS.saturating_sub(self.findings.len()),
         ) {
             Ok(problems) => {
                 self.truncated |= problems.truncated;
                 if problems.violated {
                     self.evidence[rule] = Evidence::Violated;
                 }
-                let nodes: Vec<_> = problems.entries.iter().map(|problem| problem.at).collect();
-                let locations = backend::locations(&nodes);
-                for (problem, location) in problems.entries.into_iter().zip(locations) {
-                    self.mark(
+                for problem in problems.entries {
+                    self.mark_at(
                         rule,
                         Evidence::Violated,
+                        problem.at,
                         "schema-mismatch",
-                        Some(location),
                         problem.message,
                     );
                 }
@@ -642,14 +666,15 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
         return Err(refusal);
     }
     let mut c = Checks::new();
-    let duplicates = backend::duplicate_locations(value);
-    if !duplicates.is_empty() {
-        for at in duplicates {
-            c.mark(
+    let duplicates = backend::duplicate_nodes(value);
+    if duplicates.len() != 0 {
+        c.truncated = duplicates.len() > MAX_FINDINGS;
+        for at in duplicates.take(MAX_FINDINGS) {
+            c.mark_at(
                 0,
                 Evidence::Violated,
+                at,
                 "duplicate-member",
-                Some(at),
                 "object repeats a decoded member name",
             );
         }
