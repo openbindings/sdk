@@ -240,23 +240,85 @@ pub struct EvaluationProgram {
     pub resources: Vec<SchemaResource>,
     pub(crate) locations: BTreeMap<String, SchemaLocation>,
 }
+/// Original schema location or URI-decoding scratch exceeds the caller's UTF-8
+/// byte allowance. No partial location is returned.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LocationBudgetExceeded;
+impl fmt::Display for LocationBudgetExceeded {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("original schema location exceeds the diagnostic byte allowance")
+    }
+}
+impl std::error::Error for LocationBudgetExceeded {}
 impl EvaluationProgram {
     /// Map a generated absolute keyword URI back to original source, or return `None` if no mapping exists. Never invent coordinates for an unmapped diagnostic.
     pub fn original_location(&self, generated_uri: &str) -> Option<SchemaLocation> {
-        let normalized = if let Some((base, fragment)) = generated_uri.split_once('#') {
-            format!("{base}#{}", crate::uri::decode_fragment(fragment)?)
+        self.original_location_bounded(generated_uri, usize::MAX)
+            .ok()
+            .flatten()
+    }
+    /// Map an original location when its resource URI plus complete pointer fit
+    /// `max_bytes` UTF-8 bytes. Admission precedes copying original strings.
+    /// URI percent-decoding uses a separate scratch allowance of `max_bytes`;
+    /// its encoded input length is a conservative upper bound on decoded bytes.
+    /// `Ok(None)` means no mapping or an invalid percent-encoded fragment;
+    /// [`LocationBudgetExceeded`] means either allowance was insufficient.
+    /// This helper establishes neither a verdict nor a total heap bound.
+    ///
+    /// ```
+    /// # use openbindings::{EvaluationProgram, LocationBudgetExceeded};
+    /// # fn map(program: &EvaluationProgram, uri: &str) {
+    /// match program.original_location_bounded(uri, 1024) {
+    ///     Ok(Some(location)) => assert!(location.pointer.len() <= 1024),
+    ///     Ok(None) => {} // Preserve an absent location; never guess coordinates.
+    ///     Err(LocationBudgetExceeded) => {} // Mark diagnostics incomplete.
+    /// }
+    /// # }
+    /// ```
+    pub fn original_location_bounded(
+        &self,
+        generated_uri: &str,
+        max_bytes: usize,
+    ) -> Result<Option<SchemaLocation>, LocationBudgetExceeded> {
+        let normalized = if generated_uri.contains('%') {
+            if generated_uri.len() > max_bytes {
+                return Err(LocationBudgetExceeded);
+            }
+            let Some((base, fragment)) = generated_uri.split_once('#') else {
+                return Ok(None);
+            };
+            let Some(decoded) = crate::uri::decode_fragment(fragment) else {
+                return Ok(None);
+            };
+            std::borrow::Cow::Owned(format!("{base}#{decoded}"))
         } else {
-            generated_uri.into()
+            std::borrow::Cow::Borrowed(generated_uri)
         };
-        let generated_uri = normalized.as_str();
+        let generated_uri = normalized.as_ref();
         let mut end = generated_uri.len();
         loop {
             if let Some(location) = self.locations.get(&generated_uri[..end]) {
-                let mut out = location.clone();
-                out.pointer.push_str(&generated_uri[end..]);
-                return Some(out);
+                let bytes = location
+                    .resource
+                    .as_ref()
+                    .map_or(0, String::len)
+                    .saturating_add(location.pointer.len())
+                    .saturating_add(generated_uri.len() - end);
+                if bytes > max_bytes {
+                    return Err(LocationBudgetExceeded);
+                }
+                let mut pointer =
+                    String::with_capacity(location.pointer.len() + generated_uri.len() - end);
+                pointer.push_str(&location.pointer);
+                pointer.push_str(&generated_uri[end..]);
+                return Ok(Some(SchemaLocation {
+                    resource: location.resource.clone(),
+                    pointer,
+                }));
             }
-            let previous = generated_uri[..end].rfind('/')?;
+            let Some(previous) = generated_uri[..end].rfind('/') else {
+                return Ok(None);
+            };
             end = previous;
         }
     }
@@ -573,5 +635,66 @@ impl ValueContracts {
             ContractState::Ready(schema) => ContractPreparation::Ready(PreparedContract { schema }),
             ContractState::NoVerdict(detail) => ContractPreparation::NoVerdict { detail },
         }
+    }
+}
+
+#[cfg(test)]
+mod location_budget_tests {
+    use super::*;
+    #[test]
+    fn original_mapping_admits_complete_locations_and_decoding_separately() {
+        let uri = "https://sdk-program.openbindings.invalid/p#/$defs/n0";
+        let location = SchemaLocation {
+            resource: Some("https://example.test/".to_owned() + &"u".repeat(32768)),
+            pointer: "/é~0~1\n".into(),
+        };
+        let program = EvaluationProgram {
+            entry_uri: uri.into(),
+            resources: vec![],
+            locations: BTreeMap::from([(uri.into(), location.clone())]),
+        };
+        let generated = uri.to_owned() + "/type";
+        let required = location.resource.as_ref().unwrap().len() + location.pointer.len() + 5;
+        for bytes in [0, 1, required - 1] {
+            assert_eq!(
+                program.original_location_bounded(&generated, bytes),
+                Err(LocationBudgetExceeded)
+            );
+        }
+        for bytes in [required, required + 1] {
+            assert_eq!(
+                program
+                    .original_location_bounded(&generated, bytes)
+                    .unwrap(),
+                Some(SchemaLocation {
+                    resource: location.resource.clone(),
+                    pointer: location.pointer.clone() + "/type"
+                })
+            );
+        }
+        assert_eq!(
+            program.original_location(&generated),
+            program
+                .original_location_bounded(&generated, usize::MAX)
+                .unwrap()
+        );
+        assert_eq!(
+            program
+                .original_location_bounded(&(uri.to_owned() + "/%74ype"), required)
+                .unwrap(),
+            program.original_location(&generated)
+        );
+        assert_eq!(
+            program
+                .original_location_bounded(&(uri.to_owned() + "/%GG"), required)
+                .unwrap(),
+            None
+        );
+        assert_eq!(
+            program
+                .original_location_bounded("https://unmapped.test/#/x", 0)
+                .unwrap(),
+            None
+        );
     }
 }

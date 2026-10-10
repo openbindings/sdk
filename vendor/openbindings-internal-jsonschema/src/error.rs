@@ -565,6 +565,17 @@ impl<'a> ValidationError<'a> {
     /// Converts the `ValidationError` into an owned version with `'static` lifetime.
     #[must_use]
     pub fn to_owned(self) -> ValidationError<'static> {
+        if crate::ob_work::metadata_only() {
+            let repr = *self.repr;
+            return ValidationError::new(
+                LazyInstance::Ready(Cow::Owned(Value::Null)),
+                repr.kind,
+                repr.instance_path,
+                repr.schema_path,
+                LazyEvaluationPath::SameAsSchemaPath,
+            )
+            .with_absolute_keyword_location(repr.absolute_keyword_location);
+        }
         let parts = self.into_parts();
         ValidationError::new(
             LazyInstance::Ready(Cow::Owned(parts.instance.into_owned())),

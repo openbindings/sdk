@@ -63,12 +63,15 @@ impl<F: Json> Validate<F> for CustomKeyword<F> {
             if !crate::ob_work::diagnostic_admit() {
                 break;
             }
-            errors.push(err.with_context(
+            let err = err.with_context(
                 instance.lazy_value(),
                 instance_path,
                 &self.location,
                 &self.keyword,
-            ));
+            );
+            if !crate::ob_work::metadata_exhausted() {
+                errors.push(err);
+            }
         }
     }
 }

@@ -79,6 +79,43 @@ the original resource; other unclassified preparation failures retain the generi
 
 Failures report actual instance locations and original schema locations where available. They do not promise every possible failing keyword or Go's diagnostic multiplicity. `problems_complete` means the selected diagnostic pass completed without truncation, not exhaustive traversal of every semantically redundant failure. Diagnostic collection has its own work scope and allocation cap; a confirmed failure remains a failure when its diagnostics are truncated. Messages omit instance values.
 
+
+Value failure diagnostics use `Limits::diagnostic_bytes` (TypeScript
+`diagnosticBytes`), default **1,048,576 UTF-8 bytes per result**. The total includes
+every retained instance pointer, schema resource URI and pointer, code and message.
+The evaluator retains a deterministic prefix of whole problems; it never clips a
+pointer or invents a location. `max_problems` / `maxProblems` still defaults to 256
+and has a minimum count allowance of one. A byte allowance need not fit one
+problem: zero, or a single oversized location, can produce `fails` with an empty
+list and `problems_complete = false` / `problemsComplete: false`. Established
+success and failure do not change when this allowance is lowered. Cancellation
+and pre-verdict work exhaustion retain their existing no-verdict semantics.
+
+The byte allowance is neither a heap cap nor a wire cap. For the current default
+problem shape, compact UTF-8 JSON is conservatively bounded by `59 + 96*N + 6*B`
+bytes for Rust/Wasm transport, and `58 + 94*N + 6*B` for `JSON.stringify` of the
+built-in TypeScript failure result. `N` is the retained problem count and `B` the
+retained UTF-8 string-byte total. The envelope, field names, null resource and
+comma framing are included; JSON escaping costs at most six bytes per UTF-8 byte.
+Pretty printing, application wrappers and custom evaluators are outside this bound.
+
+Before collecting final problems, the private validator separately admits at most
+`diagnostic_bytes` logical bytes of copied instance paths and member-name strings,
+and at most `8 * max(max_problems, 1)` error records and collection entries each.
+Unused nested applicator error trees, rejected item values, required names and
+pattern/schema payloads are omitted before copying. The final adapter walks
+collections one member at a time, sizes JSON Pointer escaping before allocation,
+and admits original resource/pointer copies before constructing each problem.
+Original generated-URI decoding has its own same-sized scratch allowance; normal
+unescaped generated identifiers are borrowed. Fixed keyword/type message text is
+at most 192 bytes. Counters measure admitted logical data, not allocator calls or
+capacities. Arc/buffer copies, vector headers/capacity, evaluation bookkeeping,
+source admission, schema compilation, retained source maps and facade transport
+copies remain distinct costs. Exhausting a private diagnostic allowance may produce
+a shorter prefix even when some final byte allowance remains. These guarantees
+apply to the default evaluator and built-in facade, not arbitrary application
+implementations of `SchemaEvaluator`.
+
 `Limits` bounds evaluation work, recursion, regex work, diagnostic output, dependency compilation depth and pattern admission. Parsing, graph preparation and dependency compilation use separate admission bounds. Cancellation is cooperative; dependency compilation/evaluation has bounded regions that are not preempted midway. Browser applications should use a Worker for large synchronous jobs.
 
 The vendored adaptation is an implementation detail. Upgrade it with the recorded patch invariants and the complete evaluator contract suite; a dependency draft label alone is insufficient evidence.

@@ -56,6 +56,16 @@ and transport traits document their additional SDK obligations explicitly.
   editors. A report's independent rule evidence survives finding-count and aggregate
   pointer-byte caps; diagnostic truncation must remain visible.
 
+The value diagnostic byte contract, scratch allowances and conservative serialized
+bounds are specified in the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md).
+`Limits::diagnostic_bytes` and TS `EvaluatorLimits.diagnosticBytes` are the only
+new evaluator limit. Adding a Rust `Limits` field is an intentional prerelease
+struct-literal source change; callers should use `..Limits::default()` for
+unspecified settings. `ValueProblem` and `ValueOutcome` construction is unchanged.
+Custom evaluator authors can call `EvaluationProgram::original_location_bounded`
+and match `LocationBudgetExceeded` separately from an unmapped location; its
+point-of-definition Rustdoc demonstrates the complete match.
+
 ## Maintained verification
 
 After generating the current package (`npm run build:wasm` then `npm run build` in

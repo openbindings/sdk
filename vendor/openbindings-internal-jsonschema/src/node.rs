@@ -854,6 +854,9 @@ impl<F: Json> Validate<F> for SchemaNode<F> {
         ctx: &mut ValidationContext,
         errors: &mut Vec<ValidationError<'i>>,
     ) {
+        if crate::ob_work::metadata_exhausted() {
+            return;
+        }
         let Some(_budget_frame) = crate::ob_work::enter() else {
             return;
         };

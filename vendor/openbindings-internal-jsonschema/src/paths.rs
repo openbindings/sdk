@@ -83,6 +83,25 @@ fn get_cached_index_paths() -> &'static [Location; 16] {
 impl<'a> From<&'a LazyLocation<'_, '_>> for Location {
     fn from(value: &'a LazyLocation<'_, '_>) -> Self {
         const STACK_CAPACITY: usize = 16;
+        let mut bytes = 0usize;
+        let mut head = value;
+        while let Some(parent) = head.parent() {
+            let segment = match head.segment() {
+                JsonPointerSegment::Key(key) => key
+                    .len()
+                    .saturating_add(key.bytes().filter(|b| matches!(b, b'~' | b'/')).count()),
+                JsonPointerSegment::Index(index) => {
+                    index.checked_ilog10().unwrap_or(0) as usize + 1
+                }
+            };
+            bytes = bytes.saturating_add(1).saturating_add(segment);
+            head = parent;
+        }
+        if !crate::ob_work::diagnostic_copy(bytes) {
+            // The enclosing collector discards this error; never expose this
+            // placeholder as an original instance coordinate.
+            return Location::new();
+        }
 
         // Fast path: empty location
         if value.parent().is_none() {
@@ -408,6 +427,9 @@ pub(crate) fn capture_evaluation_path(
     tracker: Option<&RefTracker<'_>>,
     location: &Location,
 ) -> LazyEvaluationPath {
+    if crate::ob_work::metadata_only() {
+        return LazyEvaluationPath::SameAsSchemaPath;
+    }
     match tracker {
         None => LazyEvaluationPath::SameAsSchemaPath,
         Some(t) => t.capture(location),

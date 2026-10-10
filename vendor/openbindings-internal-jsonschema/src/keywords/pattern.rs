@@ -47,7 +47,7 @@ impl<F: Json> Validate<F> for PrefixPatternValidator {
                     crate::paths::capture_evaluation_path(tracker, &self.location),
                     location.into(),
                     instance.lazy_value(),
-                    self.pattern.clone(),
+                    crate::ob_work::diagnostic_payload(|| self.pattern.clone()),
                 ));
             }
         }
@@ -85,7 +85,7 @@ impl<F: Json> Validate<F> for ExactPatternValidator {
                     crate::paths::capture_evaluation_path(tracker, &self.location),
                     location.into(),
                     instance.lazy_value(),
-                    self.pattern.clone(),
+                    crate::ob_work::diagnostic_payload(|| self.pattern.clone()),
                 ));
             }
         }
@@ -129,7 +129,7 @@ impl<F: Json> Validate<F> for AlternationPatternValidator {
                     crate::paths::capture_evaluation_path(tracker, &self.location),
                     location.into(),
                     instance.lazy_value(),
-                    self.pattern.clone(),
+                    crate::ob_work::diagnostic_payload(|| self.pattern.clone()),
                 ));
             }
         }
@@ -166,7 +166,7 @@ impl<F: Json> Validate<F> for NoWhitespacePatternValidator {
                     crate::paths::capture_evaluation_path(tracker, &self.location),
                     location.into(),
                     instance.lazy_value(),
-                    self.pattern.clone(),
+                    crate::ob_work::diagnostic_payload(|| self.pattern.clone()),
                 ));
             }
         }
@@ -199,7 +199,7 @@ impl<R: RegexEngine, F: Json> Validate<F> for PatternValidator<R> {
                             crate::paths::capture_evaluation_path(tracker, &self.location),
                             location.into(),
                             instance.lazy_value(),
-                            self.pattern.clone(),
+                            crate::ob_work::diagnostic_payload(|| self.pattern.clone()),
                         ));
                     }
                 }

@@ -4,6 +4,14 @@
 
 ### Added
 
+- Default value-diagnostic `diagnostic_bytes` / `diagnosticBytes` budget (1 MiB
+  retained UTF-8 strings), bounded pre-copy diagnostic construction, whole-problem
+  truncation and explicit zero semantics. This adds an intentional prerelease Rust
+  `Limits` struct field; `ValueProblem` and `ValueOutcome` fields are unchanged.
+- `EvaluationProgram::original_location_bounded` and `LocationBudgetExceeded` for
+  custom evaluators that need original-coordinate admission before copying.
+
+
 - Definition-level Rust and TypeScript API reference contracts, compiled reference
   examples, and required checks for missing documentation and broken Rust links.
 - Consumer feature-matrix and source-identity guards for the private exact-number

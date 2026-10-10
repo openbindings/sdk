@@ -308,7 +308,7 @@ export interface WorkOptions {
   /** Optional caller-owned cooperative cancellation signal; synchronous Wasm only observes same-thread cancellation at call boundaries. */
   signal?: AbortSignal;
 }
-/** Default-evaluator finite budgets, each a nonnegative 32-bit integer. Work counts are implementation units, not milliseconds. Zero is literal except maxProblems has a minimum of one; exhaustion produces no-verdict unless only post-verdict diagnostics are incomplete. */
+/** Default-evaluator finite budgets, each a nonnegative 32-bit integer. Work counts are implementation units, not milliseconds. Zero is literal except maxProblems has a minimum count allowance of one; a byte budget may retain zero problems; exhaustion produces no-verdict unless only post-verdict diagnostics are incomplete. */
 export interface EvaluatorLimits {
   /** Work units per verdict/diagnostic pass; default 2,000,000. */
   evaluationSteps: number;
@@ -316,8 +316,10 @@ export interface EvaluatorLimits {
   evaluationDepth: number;
   /** Regex evaluation/backtracking work budget; default 2,000,000. */
   regexSteps: number;
-  /** Retained failure diagnostics; default 256, minimum one. Truncation clears problemsComplete. */
+  /** Retained failure diagnostics; default 256, minimum count allowance one; byte admission may retain none. Truncation clears problemsComplete. */
   maxProblems: number;
+  /** Aggregate retained UTF-8 bytes in failure pointers, resource identifiers, codes and messages; default 1,048,576. Zero returns an established failure with empty, incomplete diagnostics. Not a heap or wire-byte limit. */
+  diagnosticBytes: number;
   /** Projected JSON nesting admitted to compilation; default 512. */
   compileJsonDepth: number;
   /** Maximum UTF-8 bytes per schema regex; default 1,048,576 (1 MiB). */

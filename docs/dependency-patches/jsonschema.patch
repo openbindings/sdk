@@ -243,7 +243,7 @@
 -required-features = ["jsonb"]
 --- a/OPENBINDINGS-PATCH.md
 +++ b/OPENBINDINGS-PATCH.md
-@@ -0,0 +1,11 @@
+@@ -0,0 +1,16 @@
 +# Internal dependency fork
 +
 +Based on `jsonschema-0.58.6`; upstream license and notices are retained.
@@ -255,6 +255,11 @@
 +The repository maintenance contract is DEPENDENCY-MAINTENANCE.md. Original
 +upstream identity and manifest are retained as UPSTREAM-VCS.json and
 +UPSTREAM-Cargo.toml; these names avoid Cargo-reserved packaging metadata.
++
++The SDK value-diagnostic metadata scope admits copied instance/member strings
++before allocation, omits unused nested/payload diagnostics and records deterministic
++usage counters. It is active only during the default evaluator's post-verdict
++diagnostic pass. See the root maintenance contract and evaluator resource guide.
 --- a/UPSTREAM-Cargo.toml
 +++ b/UPSTREAM-Cargo.toml
 @@ -0,0 +1,173 @@
@@ -519,7 +524,25 @@
      /// Creates a new validation error from parts.
      #[inline]
      #[must_use]
-@@ -1192,7 +1205,10 @@
+@@ -552,6 +565,17 @@
+     /// Converts the `ValidationError` into an owned version with `'static` lifetime.
+     #[must_use]
+     pub fn to_owned(self) -> ValidationError<'static> {
++        if crate::ob_work::metadata_only() {
++            let repr = *self.repr;
++            return ValidationError::new(
++                LazyInstance::Ready(Cow::Owned(Value::Null)),
++                repr.kind,
++                repr.instance_path,
++                repr.schema_path,
++                LazyEvaluationPath::SameAsSchemaPath,
++            )
++            .with_absolute_keyword_location(repr.absolute_keyword_location);
++        }
+         let parts = self.into_parts();
+         ValidationError::new(
+             LazyInstance::Ready(Cow::Owned(parts.instance.into_owned())),
+@@ -1192,7 +1216,10 @@
      ) -> ValidationError<'a> {
          Self::borrowed(
              instance,
@@ -531,7 +554,7 @@
              instance_path,
              schema_path,
              tracker,
-@@ -1280,7 +1296,7 @@
+@@ -1280,7 +1307,7 @@
      /// so evaluation path equals schema path.
      pub(crate) fn with_context<'i>(
          self,
@@ -540,7 +563,7 @@
          instance_path: &LazyLocation,
          schema_path: &Location,
          keyword: &str,
-@@ -1293,7 +1309,7 @@
+@@ -1293,7 +1320,7 @@
              other => other,
          };
          ValidationError::new(
@@ -549,7 +572,7 @@
              kind,
              instance_path.into(),
              schema_path.clone(),
-@@ -1622,7 +1638,7 @@
+@@ -1622,7 +1649,7 @@
                      multiple_of
                  )
              }
@@ -558,7 +581,7 @@
                  f.write_str("Unevaluated items are not allowed (")?;
                  write_quoted_list(f, unexpected)?;
                  write_unexpected_suffix(f, unexpected.len())
-@@ -1817,7 +1833,7 @@
+@@ -1817,7 +1844,7 @@
                      self.placeholder, multiple_of
                  )
              }
@@ -574,7 +597,7 @@
                  node.collect_errors(&value, &location.push(name), tracker, ctx, errors);
              } else {
 -                unexpected.push(property.as_ref().to_owned());
-+                crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
++                crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
              }
          }
          if !unexpected.is_empty() {
@@ -602,7 +625,7 @@
                      children.push(&mut ctx.arena, child);
                  } else {
 -                    unexpected.push(property.as_ref().to_owned());
-+                    crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
++                    crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
                  }
              }
              let mut result = EvaluationResult::from_children(children);
@@ -611,7 +634,7 @@
                  }
              } else {
 -                unexpected.push(property.as_ref().to_owned());
-+                crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
++                crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
              }
          }
          if !unexpected.is_empty() {
@@ -645,7 +668,7 @@
                      }
                  } else {
 -                    unexpected.push(property.as_ref().to_owned());
-+                    crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
++                    crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
                  }
              }
              let mut result = EvaluationResult::from_children(children);
@@ -654,7 +677,7 @@
              }
              if !has_match {
 -                unexpected.push(property.as_ref().to_owned());
-+                crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
++                crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
              }
          }
          if !unexpected.is_empty() {
@@ -682,7 +705,7 @@
                  }
                  if !has_match {
 -                    unexpected.push(property.as_ref().to_owned());
-+                    crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
++                    crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
                  }
              }
              if !pattern_matched_props.is_empty() {
@@ -691,7 +714,7 @@
                  }
                  if !has_match {
 -                    unexpected.push(property.as_ref().to_owned());
-+                    crate::ob_work::push_error(&mut unexpected, || property.as_ref().to_owned());
++                    crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
                  }
              }
          }
@@ -715,18 +738,16 @@
          }
      }
  
-@@ -1542,7 +1552,9 @@
+@@ -1542,7 +1552,7 @@
                          }
                      }
                      if !has_match {
 -                        unexpected.push(property.as_ref().to_owned());
-+                        crate::ob_work::push_error(&mut unexpected, || {
-+                            property.as_ref().to_owned()
-+                        });
++                        crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
                      }
                  }
              }
-@@ -1683,7 +1695,7 @@
+@@ -1683,7 +1693,7 @@
                              if let Some(properties) = properties {
                                  if let Value::Object(map) = properties {
                                      compile_pattern_non_empty_false::<
@@ -735,7 +756,7 @@
                                          F,
                                      >(ctx, map, patterns)
                                  } else {
-@@ -1715,7 +1727,7 @@
+@@ -1715,7 +1725,7 @@
                              if let Some(properties) = properties {
                                  if let Value::Object(map) = properties {
                                      compile_pattern_non_empty::<
@@ -746,7 +767,48 @@
                                  } else {
 --- a/src/keywords/any_of.rs
 +++ b/src/keywords/any_of.rs
-@@ -115,13 +115,15 @@
+@@ -86,14 +86,16 @@
+                 crate::paths::capture_evaluation_path(tracker, &self.location),
+                 location.into(),
+                 instance.lazy_value(),
+-                self.schemas
+-                    .iter()
+-                    .map(|schema| {
+-                        let mut branch = Vec::new();
+-                        schema.collect_errors(instance, location, tracker, ctx, &mut branch);
+-                        branch
+-                    })
+-                    .collect(),
++                crate::ob_work::diagnostic_payload(|| {
++                    self.schemas
++                        .iter()
++                        .map(|schema| {
++                            let mut branch = Vec::new();
++                            schema.collect_errors(instance, location, tracker, ctx, &mut branch);
++                            branch
++                        })
++                        .collect()
++                }),
+             ))
+         }
+     }
+@@ -109,19 +111,29 @@
+         if self.is_valid(instance, ctx) {
+             return;
+         }
+-        let mut branches = Vec::with_capacity(self.schemas.len());
+-        for schema in &self.schemas {
++        let mut branches = Vec::new();
++        for schema in self
++            .schemas
++            .iter()
++            .take(if crate::ob_work::metadata_only() {
++                0
++            } else {
++                self.schemas.len()
++            })
++        {
+             let mut branch = Vec::new();
              schema.collect_errors(instance, location, tracker, ctx, &mut branch);
              branches.push(branch);
          }
@@ -769,10 +831,33 @@
      }
  
      fn evaluate(
-@@ -244,13 +246,15 @@
+@@ -220,12 +232,14 @@
+                 crate::paths::capture_evaluation_path(tracker, &self.location),
+                 location.into(),
+                 instance.lazy_value(),
+-                vec![{
+-                    let mut branch = Vec::new();
+-                    self.node
+-                        .collect_errors(instance, location, tracker, ctx, &mut branch);
+-                    branch
+-                }],
++                crate::ob_work::diagnostic_payload(|| {
++                    vec![{
++                        let mut branch = Vec::new();
++                        self.node
++                            .collect_errors(instance, location, tracker, ctx, &mut branch);
++                        branch
++                    }]
++                }),
+             ))
+         }
+     }
+@@ -242,15 +256,19 @@
+             return;
+         }
          let mut branch = Vec::new();
-         self.node
-             .collect_errors(instance, location, tracker, ctx, &mut branch);
+-        self.node
+-            .collect_errors(instance, location, tracker, ctx, &mut branch);
 -        errors.push(ValidationError::any_of(
 -            self.location.clone(),
 -            crate::paths::capture_evaluation_path(tracker, &self.location),
@@ -780,6 +865,10 @@
 -            instance.lazy_value(),
 -            vec![branch],
 -        ));
++        if !crate::ob_work::metadata_only() {
++            self.node
++                .collect_errors(instance, location, tracker, ctx, &mut branch);
++        }
 +        crate::ob_work::push_error(errors, || {
 +            ValidationError::any_of(
 +                self.location.clone(),
@@ -810,7 +899,7 @@
          })
      }
  
-@@ -56,11 +59,17 @@
+@@ -56,11 +59,20 @@
          if inner_errors.peek().is_none() {
              return;
          }
@@ -823,12 +912,15 @@
 +            if !crate::ob_work::diagnostic_admit() {
 +                break;
 +            }
-+            errors.push(err.with_context(
++            let err = err.with_context(
 +                instance.lazy_value(),
 +                instance_path,
 +                &self.location,
 +                &self.keyword,
-+            ));
++            );
++            if !crate::ob_work::metadata_exhausted() {
++                errors.push(err);
++            }
 +        }
      }
  }
@@ -901,6 +993,147 @@
              }
          }
      }
+--- a/src/keywords/not.rs
++++ b/src/keywords/not.rs
+@@ -49,7 +49,7 @@
+                 crate::paths::capture_evaluation_path(tracker, self.node.location()),
+                 location.into(),
+                 instance.lazy_value(),
+-                self.original.clone(),
++                crate::ob_work::diagnostic_payload(|| self.original.clone()),
+             ))
+         }
+     }
+--- a/src/keywords/one_of.rs
++++ b/src/keywords/one_of.rs
+@@ -152,12 +152,14 @@
+                 crate::paths::capture_evaluation_path(tracker, &self.location),
+                 location.into(),
+                 instance.lazy_value(),
+-                vec![{
+-                    let mut branch = Vec::new();
+-                    self.node
+-                        .collect_errors(instance, location, tracker, ctx, &mut branch);
+-                    branch
+-                }],
++                crate::ob_work::diagnostic_payload(|| {
++                    vec![{
++                        let mut branch = Vec::new();
++                        self.node
++                            .collect_errors(instance, location, tracker, ctx, &mut branch);
++                        branch
++                    }]
++                }),
+             ))
+         }
+     }
+@@ -208,6 +210,32 @@
+                     crate::paths::capture_evaluation_path(tracker, &self.location),
+                     location.into(),
+                     instance.lazy_value(),
++                    crate::ob_work::diagnostic_payload(|| {
++                        self.schemas
++                            .iter()
++                            .map(|schema| {
++                                let mut branch = Vec::new();
++                                schema.collect_errors(
++                                    instance,
++                                    location,
++                                    tracker,
++                                    ctx,
++                                    &mut branch,
++                                );
++                                branch
++                            })
++                            .collect()
++                    }),
++                ));
++            }
++            Ok(())
++        } else {
++            Err(ValidationError::one_of_not_valid(
++                self.location.clone(),
++                crate::paths::capture_evaluation_path(tracker, &self.location),
++                location.into(),
++                instance.lazy_value(),
++                crate::ob_work::diagnostic_payload(|| {
+                     self.schemas
+                         .iter()
+                         .map(|schema| {
+@@ -215,24 +243,8 @@
+                             schema.collect_errors(instance, location, tracker, ctx, &mut branch);
+                             branch
+                         })
+-                        .collect(),
+-                ));
+-            }
+-            Ok(())
+-        } else {
+-            Err(ValidationError::one_of_not_valid(
+-                self.location.clone(),
+-                crate::paths::capture_evaluation_path(tracker, &self.location),
+-                location.into(),
+-                instance.lazy_value(),
+-                self.schemas
+-                    .iter()
+-                    .map(|schema| {
+-                        let mut branch = Vec::new();
+-                        schema.collect_errors(instance, location, tracker, ctx, &mut branch);
+-                        branch
+-                    })
+-                    .collect(),
++                        .collect()
++                }),
+             ))
+         }
+     }
+--- a/src/keywords/pattern.rs
++++ b/src/keywords/pattern.rs
+@@ -47,7 +47,7 @@
+                     crate::paths::capture_evaluation_path(tracker, &self.location),
+                     location.into(),
+                     instance.lazy_value(),
+-                    self.pattern.clone(),
++                    crate::ob_work::diagnostic_payload(|| self.pattern.clone()),
+                 ));
+             }
+         }
+@@ -85,7 +85,7 @@
+                     crate::paths::capture_evaluation_path(tracker, &self.location),
+                     location.into(),
+                     instance.lazy_value(),
+-                    self.pattern.clone(),
++                    crate::ob_work::diagnostic_payload(|| self.pattern.clone()),
+                 ));
+             }
+         }
+@@ -129,7 +129,7 @@
+                     crate::paths::capture_evaluation_path(tracker, &self.location),
+                     location.into(),
+                     instance.lazy_value(),
+-                    self.pattern.clone(),
++                    crate::ob_work::diagnostic_payload(|| self.pattern.clone()),
+                 ));
+             }
+         }
+@@ -166,7 +166,7 @@
+                     crate::paths::capture_evaluation_path(tracker, &self.location),
+                     location.into(),
+                     instance.lazy_value(),
+-                    self.pattern.clone(),
++                    crate::ob_work::diagnostic_payload(|| self.pattern.clone()),
+                 ));
+             }
+         }
+@@ -199,7 +199,7 @@
+                             crate::paths::capture_evaluation_path(tracker, &self.location),
+                             location.into(),
+                             instance.lazy_value(),
+-                            self.pattern.clone(),
++                            crate::ob_work::diagnostic_payload(|| self.pattern.clone()),
+                         ));
+                     }
+                 }
 --- a/src/keywords/properties.rs
 +++ b/src/keywords/properties.rs
 @@ -396,10 +396,14 @@
@@ -922,7 +1155,17 @@
                  for (name, value) in object.members() {
 --- a/src/keywords/property_names.rs
 +++ b/src/keywords/property_names.rs
-@@ -95,13 +95,15 @@
+@@ -87,6 +87,9 @@
+         let mut buffer = F::StringBuffer::default();
+         let mut name_errors = Vec::new();
+         for (name, _) in object.members() {
++            if !crate::ob_work::diagnostic_copy(name.as_ref().len()) {
++                break;
++            }
+             F::with_string_node(&mut buffer, name.as_ref(), |node| {
+                 let mut collected = Vec::new();
+                 self.node
+@@ -95,13 +98,15 @@
              });
              for error in name_errors.drain(..) {
                  let schema_path = error.schema_path().clone();
@@ -947,7 +1190,18 @@
      }
 --- a/src/keywords/required.rs
 +++ b/src/keywords/required.rs
-@@ -160,13 +160,15 @@
+@@ -137,7 +137,9 @@
+                     crate::paths::capture_evaluation_path(tracker, &self.location),
+                     location.into(),
+                     instance.lazy_value(),
+-                    Value::String(property_name.as_str().to_owned()),
++                    crate::ob_work::diagnostic_payload(|| {
++                        Value::String(property_name.as_str().to_owned())
++                    }),
+                 ));
+             }
+         }
+@@ -160,13 +162,17 @@
                      None => object.get(key).is_some(),
                  };
                  if !present {
@@ -964,13 +1218,46 @@
 +                            eval_path.clone(),
 +                            location.into(),
 +                            instance.lazy_value(),
-+                            Value::String(property_name.as_str().to_owned()),
++                            crate::ob_work::diagnostic_payload(|| {
++                                Value::String(property_name.as_str().to_owned())
++                            }),
 +                        )
 +                    });
                  }
              }
          }
-@@ -302,22 +304,26 @@
+@@ -204,7 +210,7 @@
+                 crate::paths::capture_evaluation_path(tracker, &self.location),
+                 location.into(),
+                 instance.lazy_value(),
+-                Value::String(self.value.clone()),
++                crate::ob_work::diagnostic_payload(|| Value::String(self.value.clone())),
+             ));
+         }
+         Ok(())
+@@ -275,7 +281,9 @@
+                     crate::paths::capture_evaluation_path(tracker, &self.location),
+                     location.into(),
+                     instance.lazy_value(),
+-                    Value::String(self.first.as_str().to_owned()),
++                    crate::ob_work::diagnostic_payload(|| {
++                        Value::String(self.first.as_str().to_owned())
++                    }),
+                 ));
+             }
+             if object.get(&self.second_key).is_none() {
+@@ -284,7 +292,9 @@
+                     crate::paths::capture_evaluation_path(tracker, &self.location),
+                     location.into(),
+                     instance.lazy_value(),
+-                    Value::String(self.second.as_str().to_owned()),
++                    crate::ob_work::diagnostic_payload(|| {
++                        Value::String(self.second.as_str().to_owned())
++                    }),
+                 ));
+             }
+         }
+@@ -302,22 +312,30 @@
          if let Some(object) = instance.as_object() {
              let eval_path = crate::paths::capture_evaluation_path(tracker, &self.location);
              if object.get(&self.first_key).is_none() {
@@ -987,7 +1274,9 @@
 +                        eval_path.clone(),
 +                        location.into(),
 +                        instance.lazy_value(),
-+                        Value::String(self.first.as_str().to_owned()),
++                        crate::ob_work::diagnostic_payload(|| {
++                            Value::String(self.first.as_str().to_owned())
++                        }),
 +                    )
 +                });
              }
@@ -1005,13 +1294,26 @@
 +                        eval_path,
 +                        location.into(),
 +                        instance.lazy_value(),
-+                        Value::String(self.second.as_str().to_owned()),
++                        crate::ob_work::diagnostic_payload(|| {
++                            Value::String(self.second.as_str().to_owned())
++                        }),
 +                    )
 +                });
              }
          }
      }
-@@ -442,31 +448,37 @@
+@@ -423,7 +441,9 @@
+                     crate::paths::capture_evaluation_path(tracker, &self.location),
+                     location.into(),
+                     instance.lazy_value(),
+-                    Value::String(missing.as_str().to_owned()),
++                    crate::ob_work::diagnostic_payload(|| {
++                        Value::String(missing.as_str().to_owned())
++                    }),
+                 ));
+             }
+         }
+@@ -442,31 +462,43 @@
              let eval_path = crate::paths::capture_evaluation_path(tracker, &self.location);
              let found = self.found(&object);
              if found & 0b001 == 0 {
@@ -1028,7 +1330,9 @@
 +                        eval_path.clone(),
 +                        location.into(),
 +                        instance.lazy_value(),
-+                        Value::String(self.first.as_str().to_owned()),
++                        crate::ob_work::diagnostic_payload(|| {
++                            Value::String(self.first.as_str().to_owned())
++                        }),
 +                    )
 +                });
              }
@@ -1046,7 +1350,9 @@
 +                        eval_path.clone(),
 +                        location.into(),
 +                        instance.lazy_value(),
-+                        Value::String(self.second.as_str().to_owned()),
++                        crate::ob_work::diagnostic_payload(|| {
++                            Value::String(self.second.as_str().to_owned())
++                        }),
 +                    )
 +                });
              }
@@ -1064,7 +1370,9 @@
 +                        eval_path,
 +                        location.into(),
 +                        instance.lazy_value(),
-+                        Value::String(self.third.as_str().to_owned()),
++                        crate::ob_work::diagnostic_payload(|| {
++                            Value::String(self.third.as_str().to_owned())
++                        }),
 +                    )
 +                });
              }
@@ -1084,19 +1392,21 @@
                  if !is_evaluated {
                      let is_valid = if let Some(validator) = &self.validators.unevaluated {
                          validator.is_valid(&item, ctx)
-@@ -789,7 +790,10 @@
+@@ -789,7 +790,12 @@
                      };
  
                      if !is_valid {
 -                        unevaluated.push(item.to_value().to_string());
-+                        if crate::ob_work::diagnostic_admit() {
-+                            unevaluated.push(item.diagnostic_text());
++                        if crate::ob_work::diagnostic_collection_item() {
++                            unevaluated.push(crate::ob_work::diagnostic_payload(|| {
++                                item.diagnostic_text()
++                            }));
 +                            invalid_indexes.push(index);
 +                        }
                      }
                  }
              }
-@@ -801,7 +805,8 @@
+@@ -801,7 +807,8 @@
                      location.into(),
                      instance.lazy_value(),
                      unevaluated,
@@ -1106,18 +1416,22 @@
              }
          }
          Ok(())
-@@ -831,12 +836,12 @@
+@@ -831,12 +838,16 @@
                          validator.evaluate_instance_below(&item, &location.push(idx), tracker, ctx);
                      if !child.valid {
                          invalid = true;
 -                        unevaluated.push(item.to_value().to_string());
-+                        unevaluated.push(item.diagnostic_text());
++                        unevaluated.push(crate::ob_work::diagnostic_payload(|| {
++                            item.diagnostic_text()
++                        }));
                      }
                      children.push(&mut ctx.arena, child);
                  } else {
                      invalid = true;
 -                    unevaluated.push(item.to_value().to_string());
-+                    unevaluated.push(item.diagnostic_text());
++                    unevaluated.push(crate::ob_work::diagnostic_payload(|| {
++                        item.diagnostic_text()
++                    }));
                  }
              }
  
@@ -1132,47 +1446,44 @@
      standard: Vec<Arc<regex::Regex>>,
  }
  
-@@ -887,7 +887,9 @@
+@@ -887,7 +887,10 @@
                      }
                      match &self.validators.unevaluated {
                          Some(schema) if schema.is_valid(&value, ctx) => {}
 -                        _ => unevaluated.push(property.as_ref().to_owned()),
-+                        _ => crate::ob_work::push_error(&mut unevaluated, || {
-+                            property.as_ref().to_owned()
-+                        }),
++                        _ => crate::ob_work::push_diagnostic_name(
++                            &mut unevaluated,
++                            property.as_ref(),
++                        ),
                      }
                  }
                  if unevaluated.is_empty() {
-@@ -921,11 +923,13 @@
+@@ -921,11 +924,11 @@
                  // Check against unevaluatedProperties schema
                  if let Some(unevaluated_schema) = &self.validators.unevaluated {
                      if !unevaluated_schema.is_valid(&value, ctx) {
 -                        unevaluated.push(property.as_ref().to_owned());
-+                        crate::ob_work::push_error(&mut unevaluated, || {
-+                            property.as_ref().to_owned()
-+                        });
++                        crate::ob_work::push_diagnostic_name(&mut unevaluated, property.as_ref());
                      }
                  } else {
                      // No unevaluatedProperties schema means false (reject all)
 -                    unevaluated.push(property.as_ref().to_owned());
-+                    crate::ob_work::push_error(&mut unevaluated, || property.as_ref().to_owned());
++                    crate::ob_work::push_diagnostic_name(&mut unevaluated, property.as_ref());
                  }
              }
  
-@@ -1012,12 +1016,14 @@
+@@ -1012,12 +1015,12 @@
                      );
                      if !child.valid {
                          invalid = true;
 -                        unevaluated.push(property.as_ref().to_owned());
-+                        crate::ob_work::push_error(&mut unevaluated, || {
-+                            property.as_ref().to_owned()
-+                        });
++                        crate::ob_work::push_diagnostic_name(&mut unevaluated, property.as_ref());
                      }
                      children.push(&mut ctx.arena, child);
                  } else {
                      invalid = true;
 -                    unevaluated.push(property.as_ref().to_owned());
-+                    crate::ob_work::push_error(&mut unevaluated, || property.as_ref().to_owned());
++                    crate::ob_work::push_diagnostic_name(&mut unevaluated, property.as_ref());
                  }
              }
  
@@ -1305,17 +1616,20 @@
          match &self.inner.validators {
              NodeValidators::Keyword(kvs) if kvs.validators.len() == 1 => {
                  let entry = &kvs.validators[0];
-@@ -829,6 +854,9 @@
+@@ -829,6 +854,12 @@
          ctx: &mut ValidationContext,
          errors: &mut Vec<ValidationError<'i>>,
      ) {
++        if crate::ob_work::metadata_exhausted() {
++            return;
++        }
 +        let Some(_budget_frame) = crate::ob_work::enter() else {
 +            return;
 +        };
          match &self.inner.validators {
              NodeValidators::Keyword(kvs) => {
                  for entry in &kvs.validators {
-@@ -871,6 +899,9 @@
+@@ -871,6 +902,9 @@
          tracker: Option<&RefTracker>,
          ctx: &mut ValidationContext,
      ) -> EvaluationResult {
@@ -1325,7 +1639,7 @@
          self.evaluate_at(instance, location, &location.into(), tracker, ctx)
      }
  
-@@ -882,6 +913,9 @@
+@@ -882,6 +916,9 @@
          tracker: Option<&RefTracker>,
          ctx: &mut ValidationContext,
      ) -> EvaluationResult {
@@ -1335,7 +1649,7 @@
          self.evaluate_at(instance, location, instance_location, tracker, ctx)
      }
  }
-@@ -896,6 +930,9 @@
+@@ -896,6 +933,9 @@
          tracker: Option<&RefTracker>,
          ctx: &mut ValidationContext,
      ) -> EvaluationResult {
@@ -1467,7 +1781,7 @@
 +}
 --- a/src/ob_work.rs
 +++ b/src/ob_work.rs
-@@ -0,0 +1,189 @@
+@@ -0,0 +1,326 @@
 +//! OpenBindings qualification patch: evaluator entry work/depth accounting.
 +//! A bounded call must check its outcome before exposing any engine verdict.
 +use std::cell::Cell;
@@ -1641,10 +1955,16 @@
 +/// Delay diagnostic construction until allocation admission succeeds.
 +pub(crate) fn push_error<T>(errors: &mut Vec<T>, make: impl FnOnce() -> T) {
 +    if diagnostic_admit() {
-+        errors.push(make());
++        let value = make();
++        if !metadata_exhausted() {
++            errors.push(value);
++        }
 +    }
 +}
 +pub(crate) fn diagnostic_admit() -> bool {
++    if metadata_exhausted() {
++        return false;
++    }
 +    let mut state = DIAGNOSTICS.get();
 +    if state.active {
 +        if state.remaining == 0 {
@@ -1657,6 +1977,175 @@
 +    }
 +    true
 +}
++
++// The SDK needs only keyword/type metadata, instance pointers and original schema
++// coordinates. This mode avoids unused upstream error payloads and admits copied
++// strings before allocation. It is never active during the verdict pass.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct DiagnosticUsage {
++    pub copied_bytes: usize,
++    pub rejected_copies: usize,
++    pub collection_items: usize,
++    pub collection_truncated: bool,
++}
++#[derive(Clone, Copy)]
++struct MetadataState {
++    active: bool,
++    remaining: usize,
++    items_remaining: usize,
++    usage: DiagnosticUsage,
++}
++thread_local! {static METADATA:Cell<MetadataState>=const{Cell::new(MetadataState{
++    active:false, remaining:usize::MAX, items_remaining:usize::MAX,
++    usage:DiagnosticUsage{copied_bytes:0,rejected_copies:0,collection_items:0,collection_truncated:false}
++})};}
++struct MetadataScope {
++    prior: MetadataState,
++    initial_bytes: usize,
++    initial_items: usize,
++}
++impl Drop for MetadataScope {
++    fn drop(&mut self) {
++        let after = METADATA.get();
++        let mut prior = self.prior;
++        if prior.active {
++            prior.remaining = prior
++                .remaining
++                .saturating_sub(self.initial_bytes.saturating_sub(after.remaining));
++            prior.items_remaining = prior
++                .items_remaining
++                .saturating_sub(self.initial_items.saturating_sub(after.items_remaining));
++            prior.usage.copied_bytes = prior
++                .usage
++                .copied_bytes
++                .saturating_add(after.usage.copied_bytes);
++            prior.usage.rejected_copies = prior
++                .usage
++                .rejected_copies
++                .saturating_add(after.usage.rejected_copies);
++            prior.usage.collection_items = prior
++                .usage
++                .collection_items
++                .saturating_add(after.usage.collection_items);
++            prior.usage.collection_truncated |= after.usage.collection_truncated;
++        }
++        METADATA.set(prior);
++    }
++}
++/// Internal adapter mode; returned usage counts admitted logical string bytes,
++/// not allocator bytes, capacities, input storage or total heap.
++pub fn diagnostic_metadata<T>(
++    bytes: usize,
++    items: usize,
++    call: impl FnOnce() -> T,
++) -> (T, DiagnosticUsage) {
++    let prior = METADATA.get();
++    let _scope = MetadataScope {
++        prior,
++        initial_bytes: bytes.min(prior.remaining),
++        initial_items: items.min(prior.items_remaining),
++    };
++    METADATA.set(MetadataState {
++        active: true,
++        remaining: bytes.min(prior.remaining),
++        items_remaining: items.min(prior.items_remaining),
++        usage: DiagnosticUsage::default(),
++    });
++    let result = call();
++    (result, METADATA.get().usage)
++}
++pub(crate) fn metadata_only() -> bool {
++    METADATA.get().active
++}
++pub(crate) fn metadata_exhausted() -> bool {
++    METADATA.get().usage.rejected_copies != 0
++}
++pub(crate) fn diagnostic_copy(bytes: usize) -> bool {
++    let mut state = METADATA.get();
++    if !state.active {
++        return true;
++    }
++    if metadata_exhausted() || bytes > state.remaining {
++        state.usage.rejected_copies = state.usage.rejected_copies.saturating_add(1);
++        METADATA.set(state);
++        return false;
++    }
++    state.remaining -= bytes;
++    state.usage.copied_bytes += bytes;
++    METADATA.set(state);
++    true
++}
++pub(crate) fn push_diagnostic_name(names: &mut Vec<String>, name: &str) {
++    if !metadata_only() {
++        push_error(names, || name.to_owned());
++        return;
++    }
++    if diagnostic_collection_item() && diagnostic_copy(name.len()) {
++        names.push(name.to_owned());
++    }
++}
++/// Defer payload cloning which the metadata consumer never observes.
++pub(crate) fn diagnostic_payload<T: Default>(make: impl FnOnce() -> T) -> T {
++    if metadata_only() {
++        T::default()
++    } else {
++        make()
++    }
++}
++
++pub(crate) fn diagnostic_collection_item() -> bool {
++    let mut state = METADATA.get();
++    if !state.active {
++        return diagnostic_admit();
++    }
++    if state.items_remaining == 0 {
++        state.usage.collection_truncated = true;
++        METADATA.set(state);
++        return false;
++    }
++    state.items_remaining -= 1;
++    state.usage.collection_items += 1;
++    METADATA.set(state);
++    true
++}
+--- a/src/paths.rs
++++ b/src/paths.rs
+@@ -83,6 +83,25 @@
+ impl<'a> From<&'a LazyLocation<'_, '_>> for Location {
+     fn from(value: &'a LazyLocation<'_, '_>) -> Self {
+         const STACK_CAPACITY: usize = 16;
++        let mut bytes = 0usize;
++        let mut head = value;
++        while let Some(parent) = head.parent() {
++            let segment = match head.segment() {
++                JsonPointerSegment::Key(key) => key
++                    .len()
++                    .saturating_add(key.bytes().filter(|b| matches!(b, b'~' | b'/')).count()),
++                JsonPointerSegment::Index(index) => {
++                    index.checked_ilog10().unwrap_or(0) as usize + 1
++                }
++            };
++            bytes = bytes.saturating_add(1).saturating_add(segment);
++            head = parent;
++        }
++        if !crate::ob_work::diagnostic_copy(bytes) {
++            // The enclosing collector discards this error; never expose this
++            // placeholder as an original instance coordinate.
++            return Location::new();
++        }
+ 
+         // Fast path: empty location
+         if value.parent().is_none() {
+@@ -408,6 +427,9 @@
+     tracker: Option<&RefTracker<'_>>,
+     location: &Location,
+ ) -> LazyEvaluationPath {
++    if crate::ob_work::metadata_only() {
++        return LazyEvaluationPath::SameAsSchemaPath;
++    }
+     match tracker {
+         None => LazyEvaluationPath::SameAsSchemaPath,
+         Some(t) => t.capture(location),
 --- a/src/properties.rs
 +++ b/src/properties.rs
 @@ -45,7 +45,7 @@
@@ -1699,16 +2188,28 @@
      }
 --- a/src/validator.rs
 +++ b/src/validator.rs
-@@ -250,7 +250,7 @@
+@@ -249,8 +249,18 @@
+         ctx: &mut ValidationContext,
          errors: &mut Vec<ValidationError<'i>>,
      ) {
-         if let Err(error) = self.validate(instance, location, tracker, ctx) {
+-        if let Err(error) = self.validate(instance, location, tracker, ctx) {
 -            errors.push(error);
-+            crate::ob_work::push_error(errors, || error);
++        if !crate::ob_work::metadata_only() {
++            if let Err(error) = self.validate(instance, location, tracker, ctx) {
++                crate::ob_work::push_error(errors, || error);
++            }
++            return;
++        }
++        if crate::ob_work::diagnostic_admit() {
++            if let Err(error) = self.validate(instance, location, tracker, ctx) {
++                if !crate::ob_work::metadata_exhausted() {
++                    errors.push(error);
++                }
++            }
          }
      }
  
-@@ -654,11 +654,11 @@
+@@ -654,11 +664,11 @@
  
  #[cfg(test)]
  mod tests {

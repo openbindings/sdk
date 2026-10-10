@@ -426,3 +426,21 @@ upgrading. Neither language adds an `unknown` semantic outcome.
 
 Definition-level reference contracts, rendered documentation and maintained checks
 are described in the [API reference guide](../../docs/api-reference.md).
+
+Value diagnostics default to an aggregate `diagnosticBytes` allowance of 1 MiB of
+retained UTF-8 strings (pointers, resource URIs, codes and messages), alongside
+`maxProblems` (default 256, minimum count allowance one). Set these in
+`document.contracts({ limits: { diagnosticBytes: 65536, maxProblems: 32 } })`.
+Only complete problems are retained in deterministic order. Zero or an oversized
+first problem preserves `outcome: "fails"` with `problems: []` and
+`problemsComplete: false`; an empty problem list is not success. Pre-verdict limits
+and cancellation keep their existing no-verdict result.
+
+This is not a heap or wire-byte cap. Compact `JSON.stringify` failure output is
+bounded by `58 + 94*N + 6*B` UTF-8 bytes, with `N` retained problems and `B` retained
+string bytes; JSON escaping and fixed framing are included. Application wrappers
+and pretty printing add bytes. The engine also preflights copied diagnostic paths,
+member collections and original locations; source admission, compilation,
+evaluation bookkeeping and JS/Wasm transport copies have separate costs. See the
+[evaluator resource contract](../../crates/openbindings-json-schema-evaluator/README.md)
+for scratch allowances and scope.

@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]
-/// Finite default-evaluator budgets. Work counts are implementation units, not milliseconds; exhaustion yields no verdict unless an established failure only loses diagnostic completeness. Zero is literal, except `max_problems` has a minimum of one retained problem.
+/// Finite default-evaluator budgets. Work counts are implementation units, not milliseconds; exhaustion yields no verdict unless an established failure only loses diagnostic completeness. Zero is literal, except `max_problems` has a minimum count allowance of one. A byte budget may admit no complete problems.
 pub struct Limits {
     /// Evaluation work units per verdict/diagnostic pass; default 2,000,000.
     pub evaluation_steps: usize,
@@ -20,8 +20,10 @@ pub struct Limits {
     pub evaluation_depth: usize,
     /// Regular-expression work/backtracking budget per evaluation; default 2,000,000.
     pub regex_steps: usize,
-    /// Maximum retained failure diagnostics; default 256, effective minimum one. Truncation sets `problems_complete` false without changing an established failure.
+    /// Maximum retained failure diagnostics; default 256, effective minimum count allowance one; byte admission may retain none. Truncation sets `problems_complete` false without changing an established failure.
     pub max_problems: usize,
+    /// Aggregate retained UTF-8 diagnostic string bytes per failure result; default 1 MiB. Includes pointers, resource identifiers, codes and messages. Zero preserves failure with empty, incomplete diagnostics. Not a heap or serialized byte limit.
+    pub diagnostic_bytes: usize,
     /// Maximum projected JSON nesting admitted to evaluator compilation; default 512.
     pub compile_json_depth: usize,
     /// Maximum UTF-8 bytes in each schema regular expression; default 1 MiB (1,048,576 bytes).
@@ -36,6 +38,7 @@ impl Default for Limits {
             evaluation_depth: 1024,
             regex_steps: 2_000_000,
             max_problems: 256,
+            diagnostic_bytes: 1024 * 1024,
             compile_json_depth: 512,
             pattern_bytes: 1024 * 1024,
             pattern_depth: 256,
@@ -229,46 +232,106 @@ impl PreparedSchema for Compiled {
         }
         let mut problems = Vec::new();
         let mut complete = true;
-        let diagnostics = jsonschema::ob_work::diagnostics(
-            self.limits.max_problems.max(1).saturating_mul(8),
+        let mut remaining = self.limits.diagnostic_bytes;
+        if remaining == 0 {
+            return ValueOutcome::Fails {
+                problems,
+                problems_complete: false,
+            };
+        }
+        let count = self.limits.max_problems.max(1);
+        let (diagnostics, usage) = jsonschema::ob_work::diagnostic_metadata(
+            self.limits.diagnostic_bytes,
+            count.saturating_mul(8),
             || {
-                jsonschema::ob_work::bounded(
-                    self.limits.evaluation_steps,
-                    self.limits.evaluation_depth,
-                    || {
-                        jsonschema::ob_ecma::top_level(self.limits.regex_steps, || {
-                            for error in self.validator.iter_errors(backend::view(value)) {
-                                if problems.len() >= self.limits.max_problems.max(1) {
-                                    complete = false;
-                                    break;
-                                }
-                                let schema_location = error
-                                    .absolute_keyword_location()
-                                    .and_then(|uri| self.program.original_location(uri.as_str()));
-                                let paths = diagnostic_paths(&error, value);
-                                for path in paths {
-                                    if problems.len() >= self.limits.max_problems.max(1) {
+                jsonschema::ob_work::diagnostics(count.saturating_mul(8), || {
+                    jsonschema::ob_work::bounded(
+                        self.limits.evaluation_steps,
+                        self.limits.evaluation_depth,
+                        || {
+                            jsonschema::ob_ecma::top_level(self.limits.regex_steps, || {
+                                for error in self.validator.iter_errors(backend::view(value)) {
+                                    if problems.len() >= count {
                                         complete = false;
                                         break;
                                     }
-                                    problems.push(ValueProblem {
-                                        instance_pointer: path,
-                                        schema_location: schema_location.clone(),
-                                        code: error.kind().keyword().into(),
-                                        message: diagnostic_message(error.kind()),
-                                    });
+                                    // Messages use only fixed keyword/type metadata (<=192 bytes).
+                                    // No source-controlled operand or rejected instance is rendered.
+                                    let message = diagnostic_message(error.kind());
+                                    let code = error.kind().keyword();
+                                    let fixed = code.len().saturating_add(message.len());
+                                    if fixed > remaining {
+                                        complete = false;
+                                        break;
+                                    }
+                                    let all_paths =
+                                        diagnostic_paths(&error, value, |root, child| {
+                                            if problems.len() >= count {
+                                                return false;
+                                            }
+                                            let bytes =
+                                                root.len().saturating_add(child.map_or(0, |s| {
+                                                    1usize.saturating_add(escaped_len(s))
+                                                }));
+                                            if fixed.saturating_add(bytes) > remaining {
+                                                return false;
+                                            }
+                                            let location = match error.absolute_keyword_location() {
+                                                Some(uri) => match self
+                                                    .program
+                                                    .original_location_bounded(
+                                                        uri.as_str(),
+                                                        remaining - fixed - bytes,
+                                                    ) {
+                                                    Ok(location) => location,
+                                                    Err(LocationBudgetExceeded) => return false,
+                                                },
+                                                None => None,
+                                            };
+                                            let location_bytes =
+                                                location.as_ref().map_or(0, |at| {
+                                                    at.pointer.len().saturating_add(
+                                                        at.resource.as_ref().map_or(0, String::len),
+                                                    )
+                                                });
+                                            let total = fixed + bytes + location_bytes;
+                                            // Allocate only a whole admitted problem, with exact capacity.
+                                            let mut path = String::with_capacity(bytes);
+                                            path.push_str(root);
+                                            if let Some(child) = child {
+                                                path.push('/');
+                                                for character in child.chars() {
+                                                    match character {
+                                                        '~' => path.push_str("~0"),
+                                                        '/' => path.push_str("~1"),
+                                                        _ => path.push(character),
+                                                    }
+                                                }
+                                            }
+                                            remaining -= total;
+                                            problems.push(ValueProblem {
+                                                instance_pointer: path,
+                                                schema_location: location,
+                                                code: code.into(),
+                                                message: message.clone(),
+                                            });
+                                            true
+                                        });
+                                    if !all_paths || control.is_cancelled() {
+                                        complete = false;
+                                        break;
+                                    }
                                 }
-                                if control.is_cancelled() {
-                                    complete = false;
-                                    break;
-                                }
-                            }
-                        })
-                    },
-                )
+                            })
+                        },
+                    )
+                })
             },
         );
-        if !matches!(diagnostics, Ok(Ok(Ok(())))) {
+        if !matches!(diagnostics, Ok(Ok(Ok(()))))
+            || usage.rejected_copies != 0
+            || usage.collection_truncated
+        {
             complete = false;
         }
         if let Err(detail) = control.check() {
@@ -338,23 +401,33 @@ fn check_patterns(
     Ok(())
 }
 
-fn diagnostic_paths(error: &jsonschema::ValidationError<'_>, value: &JsonValue) -> Vec<String> {
+fn escaped_len(text: &str) -> usize {
+    text.len()
+        .saturating_add(text.bytes().filter(|b| matches!(b, b'~' | b'/')).count())
+}
+// Visit one path at a time, borrowing root/member strings. Never expand the whole
+// vendor keyword collection or stringify an input value to find an item index.
+fn diagnostic_paths(
+    error: &jsonschema::ValidationError<'_>,
+    value: &JsonValue,
+    mut admit: impl FnMut(&str, Option<&str>) -> bool,
+) -> bool {
     use jsonschema::error::ValidationErrorKind as Kind;
     let root = error.instance_path().as_str();
-    let child = |name: &str| format!("{root}/{}", name.replace('~', "~0").replace('/', "~1"));
     match error.kind() {
         Kind::AdditionalProperties { unexpected } | Kind::UnevaluatedProperties { unexpected } => {
-            unexpected.iter().map(|name| child(name)).collect()
+            unexpected.iter().all(|name| admit(root, Some(name)))
         }
-        Kind::AdditionalItems { limit } => value
-            .at(root)
-            .and_then(|v| v.elements())
-            .map(|a| (*limit..a.len()).map(|i| child(&i.to_string())).collect())
-            .unwrap_or_else(|| vec![root.into()]),
+        Kind::AdditionalItems { limit } => {
+            match value.at(root).and_then(|v| v.elements().map(|a| a.len())) {
+                Some(len) => (*limit..len).all(|i| admit(root, Some(&i.to_string()))),
+                None => admit(root, None),
+            }
+        }
         Kind::UnevaluatedItems { indexes, .. } if !indexes.is_empty() => {
-            indexes.iter().map(|i| child(&i.to_string())).collect()
+            indexes.iter().all(|i| admit(root, Some(&i.to_string())))
         }
-        _ => vec![root.into()],
+        _ => admit(root, None),
     }
 }
 fn diagnostic_message(kind: &jsonschema::error::ValidationErrorKind) -> String {

@@ -98,6 +98,18 @@ below for behavioral dependency changes. Keep every `publish = false` guard.
 - `src/error.rs`, `src/keywords/custom.rs`: retain lazy exact instance views through custom-keyword error context; avoid recursive materialization/drop of 10,000-level literals. Internal diagnostics expose bounded metadata and original locations, not whole instance values.
 - `src/keywords/additional_properties.rs`, `any_of.rs`, `helpers.rs`, `items.rs`, `min_length.rs`, `properties.rs`, `property_names.rs`, `required.rs`, `unevaluated_items.rs`, `unevaluated_properties.rs`, and `src/properties.rs`: preserve generic flat-value operation, scoped evaluation/diagnostic work, ECMAScript matching and dynamic reference behavior in the affected applicator/keyword paths. Check the full diff when rebasing; these are evaluator-sensitive changes, not mechanical wrappers.
 
+The value-diagnostic budget repair adds a private `diagnostic_metadata` scope to
+`ob_work.rs`, with pre-copy path/member admission and deterministic usage counters.
+`paths.rs` sizes escaped instance paths before any segment vector/string expansion
+and omits unused evaluation trackers. Metadata mode skips unused applicator branch
+contexts, source-controlled keyword payloads and owned rejected values before
+construction; property-name temporaries are admitted explicitly. The ordinary
+upstream diagnostic path and SDK document diagnostic count scope remain separate.
+The adapter independently admits original source coordinates and final problems;
+private copied bytes do not establish a total heap guarantee. Maintained native
+`diagnostic_budget` and shared package/browser `diagnostic-budget-cases.mjs` cover
+the witness, boundaries, pre-copy counters and deterministic seed 0x5eedcafe.
+
 ## jsonschema-value
 
 - `Cargo.toml`: private package identity and bounded-integer arithmetic dependencies.

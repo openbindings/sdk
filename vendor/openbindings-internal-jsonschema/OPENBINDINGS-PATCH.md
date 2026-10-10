@@ -9,3 +9,8 @@ This package is an implementation detail, not a supported SDK extension API.
 The repository maintenance contract is DEPENDENCY-MAINTENANCE.md. Original
 upstream identity and manifest are retained as UPSTREAM-VCS.json and
 UPSTREAM-Cargo.toml; these names avoid Cargo-reserved packaging metadata.
+
+The SDK value-diagnostic metadata scope admits copied instance/member strings
+before allocation, omits unused nested/payload diagnostics and records deterministic
+usage counters. It is active only during the default evaluator's post-verdict
+diagnostic pass. See the root maintenance contract and evaluator resource guide.

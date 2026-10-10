@@ -115,6 +115,10 @@ console.log("Installed README TypeScript first-use block compiled and ran verbat
     join(root, "test/diagnostic-policy-cases.mjs"),
     join(temporary, "diagnostic-policy-cases.mjs"),
   );
+  copyFileSync(
+    join(root, "test/diagnostic-budget-cases.mjs"),
+    join(temporary, "diagnostic-budget-cases.mjs"),
+  );
   const declaration = readFileSync(
     join(installed, "dist/internal.d.ts"),
     "utf8",
@@ -132,6 +136,7 @@ import * as http from "@openbindings/sdk/http-discovery";
 import { apiQualityCases } from "./api-quality-cases.mjs";
 import { fixedDiagnosticCases } from "./fixed-diagnostic-cases.mjs";
 import { diagnosticPolicyCases } from "./diagnostic-policy-cases.mjs";
+import { diagnosticBudgetCases } from "./diagnostic-budget-cases.mjs";
 const { initialize, parseDocument } = sdk;
 const resolved = fileURLToPath(import.meta.resolve("@openbindings/sdk"));
 assert.equal(await realpath(resolved), resolved, "Package must not resolve through a workspace symlink");
@@ -146,7 +151,7 @@ try {
 } finally {
   parsed.value.dispose();
 }
-console.log(JSON.stringify({ installedPackage: true, ...await apiQualityCases(sdk, http), fixedDiagnostics: fixedDiagnosticCases(sdk), ...diagnosticPolicyCases(sdk) }));
+console.log(JSON.stringify({ installedPackage: true, ...await apiQualityCases(sdk, http), fixedDiagnostics: fixedDiagnosticCases(sdk), ...diagnosticPolicyCases(sdk), ...diagnosticBudgetCases(sdk) }));
 `,
   );
   execFileSync(process.execPath, [join(temporary, "consumer.mjs")], {

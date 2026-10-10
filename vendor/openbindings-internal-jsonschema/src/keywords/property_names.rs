@@ -87,6 +87,9 @@ impl<F: Json> Validate<F> for PropertyNamesObjectValidator<F> {
         let mut buffer = F::StringBuffer::default();
         let mut name_errors = Vec::new();
         for (name, _) in object.members() {
+            if !crate::ob_work::diagnostic_copy(name.as_ref().len()) {
+                break;
+            }
             F::with_string_node(&mut buffer, name.as_ref(), |node| {
                 let mut collected = Vec::new();
                 self.node
