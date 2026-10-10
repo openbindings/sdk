@@ -99,8 +99,15 @@ resources, including the constant and known-resource containers, use that namesp
 This includes relative spellings and fragments that resolve to the same carrier.
 Reference siblings, property/pattern names, array prefix positions, known identities
 and original mappings survive. The constants have no source map. Missing anchors
-or non-schema targets in a supplied carrier are not holes. Independently invalid
-pointer/anchor fragment syntax cannot qualify an absent carrier as a hole.
+or non-schema targets in a supplied carrier are not holes. The bundled context
+selects unique contained declared IDs before supplied names and packaged standards.
+Both planners check the selected base and final target carrier for references and
+every directly reached carrier. A competing canonical carrier is a conservative
+`resource-identity-conflict` refusal, even through an otherwise unique retrieval
+alias; it never produces an incomplete ready owner. Independently named nested
+resources retain their original base, dialect and provenance, without admitting an
+unused conflicting lexical ancestor. Independently invalid pointer/anchor fragment
+syntax cannot qualify an absent carrier as a hole.
 
 ## Influence proof
 

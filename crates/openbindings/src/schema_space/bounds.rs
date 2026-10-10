@@ -1410,7 +1410,7 @@ mod tests {
             Some("https://known.invalid/R".into()),
             nested,
             &index,
-            false,
+            ResourceOrigin::Supplied,
         );
         let id = supplied
             .nodes

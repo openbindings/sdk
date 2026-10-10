@@ -43,6 +43,17 @@ original resource/dynamic scope are preserved through a private evaluator
 projection. Diagnostic locations map back to original documents. Format remains
 annotation; unknown keywords are carried without inventing assertions.
 
+The bundled resolver gives unique contained declared IDs priority over supplied
+name associations, followed by packaged standards. Supplied aliases and declared
+IDs have equal priority; peers remain ambiguous. Every reached named carrier must
+own its canonical identity, including alias, pointer, direct-child and dynamic
+routes. Conflicting routes conservatively refuse; unused conflicts do not poison
+other contracts or independently named nested resources. Original supplied rows,
+bases, dialects and diagnostic retrieval provenance remain intact. Selection occurs
+before fragment lookup, with no schema equality or fragment fallback. URI comparison
+retains exact spelling after RFC resolution, literal-dot and empty-fragment removal;
+case/percent-encoding equivalence is not added. Trusted fixed assessment is separate.
+
 Default limits: 2,000,000 evaluation steps per verdict/diagnostic pass; evaluation
 depth 1,024; 2,000,000 regex steps; 256 selected problems; compiler JSON depth 512;
 pattern size 1 MiB; pattern nesting 256. Schema traversal admits depth 256, 100,000

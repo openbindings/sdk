@@ -73,6 +73,20 @@ rendering caller-controlled text.
 Resources are immutable and caller supplied; acquisition URLs do not change schema
 bases. Anonymous document and dynamic scope remain part of interpretation.
 
+The bundled resolver and default evaluator give a unique contained declared ID
+priority over supplied names; packaged standards are the final fallback. Supplied
+retrieval aliases and declared IDs compete equally when no contained ID owns the
+name. A reached carrier must itself own its canonical ID: aliases, pointers and
+direct applicators into a competing carrier conservatively refuse preparation.
+Unused conflicts do not poison other contracts, and an independently named nested
+resource retains its original base and dialect. No schema-body comparison, alias
+transfer or missing-fragment fallback occurs. `SchemaRequest::supplied_resources()`
+retains the original catalog. `SchemaLocation.resource` records original retrieval
+provenance, which need not be the winning lookup association for that URI. Replacing
+resources requires a new immutable context; retained contracts keep their inputs.
+Name comparison remains exact after RFC resolution, literal-dot removal and empty
+fragment removal, without added case folding or percent-encoding equivalence.
+
 Version 0.2.0-alpha.1 is an unpublished candidate requiring Rust 1.99. Applied
 specification revision: 2f7d754dc2da374058cd517064c17e50f7d95d99. Package publication
 and application cutover are separate actions.

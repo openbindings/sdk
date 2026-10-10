@@ -4,7 +4,7 @@ use crate::{
     schema_index::{DIALECT, SchemaIndex},
     uri, *,
 };
-use openbindings_internal_json::backend::{has_unpaired, node_id, pointer};
+use openbindings_internal_json::backend::{has_unpaired, node_id, pointer, pointer_size};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 pub(crate) struct SpaceNode {
@@ -19,6 +19,21 @@ struct Resource {
     anonymous: bool,
     dialect: Option<String>,
     anchors: BTreeMap<String, Vec<(usize, bool)>>,
+    origin: ResourceOrigin,
+    eligible: bool,
+}
+// Priority applies to name associations, not bodies or source provenance. A
+// supplied retrieval alias competes equally with every supplied declared ID.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum ResourceOrigin {
+    Contained,
+    Supplied,
+    Standard,
+}
+struct NameSelection {
+    origin: ResourceOrigin,
+    // None denotes multiple carriers at the winning priority, never absence.
+    carrier: Option<usize>,
 }
 struct Source {
     uri: Option<String>,
@@ -31,7 +46,7 @@ pub(crate) struct SchemaSpace {
     pub nodes: Vec<SpaceNode>,
     resources: Vec<Resource>,
     sources: Vec<Source>,
-    names: BTreeMap<String, Vec<usize>>,
+    names: BTreeMap<String, NameSelection>,
 }
 #[derive(Clone)]
 struct Target {
@@ -89,14 +104,19 @@ impl SchemaSpace {
             sources: Vec::new(),
             names: BTreeMap::new(),
         };
-        out.add_source(None, document.value().clone(), document.schemas(), false);
+        out.add_source(
+            None,
+            document.value().clone(),
+            document.schemas(),
+            ResourceOrigin::Contained,
+        );
         for resource in supplied.iter() {
             let index = SchemaIndex::supplied(&resource.document, &resource.uri);
             out.add_source(
                 Some(resource.uri.clone()),
                 resource.document.clone(),
                 &index,
-                false,
+                ResourceOrigin::Supplied,
             );
         }
         for resource in embedded_resources() {
@@ -105,8 +125,17 @@ impl SchemaSpace {
                 Some(resource.uri.clone()),
                 resource.document.clone(),
                 &index,
-                true,
+                ResourceOrigin::Standard,
             );
+        }
+        // Finalize once, after every alias and canonical association is known.
+        // An independently named child does not inherit its parent's eligibility.
+        for (id, resource) in out.resources.iter_mut().enumerate() {
+            if !resource.anonymous
+                && let Some(base) = &resource.base
+            {
+                resource.eligible = out.names.get(base).and_then(|name| name.carrier) == Some(id);
+            }
         }
         out
     }
@@ -115,7 +144,7 @@ impl SchemaSpace {
         retrieval: Option<String>,
         value: JsonValue,
         index: &SchemaIndex,
-        fallback: bool,
+        origin: ResourceOrigin,
     ) {
         let source = self.sources.len();
         let start = self.nodes.len();
@@ -128,6 +157,8 @@ impl SchemaSpace {
             anonymous: retrieval.is_none(),
             dialect: Some(DIALECT.into()),
             anchors: BTreeMap::new(),
+            origin,
+            eligible: true,
         });
         if retrieval.is_some() {
             self.resources[initial].dialect = declared_dialect(value.view(), Some(DIALECT));
@@ -148,6 +179,8 @@ impl SchemaSpace {
                     anonymous: false,
                     dialect,
                     anchors: BTreeMap::new(),
+                    origin,
+                    eligible: true,
                 });
                 id
             };
@@ -178,14 +211,14 @@ impl SchemaSpace {
             let root_resource = self.nodes[start].resource;
             self.resources[root_resource].root = Some(start);
             if let Some(retrieval) = &retrieval {
-                self.add_name(retrieval.clone(), root_resource, fallback);
+                self.add_name(retrieval.clone(), root_resource);
             }
         }
         for &id in resources.values() {
             if let Some(base) = self.resources[id].base.clone()
                 && self.resources[id].root.is_some()
             {
-                self.add_name(base, id, fallback);
+                self.add_name(base, id);
             }
         }
         self.sources.push(Source {
@@ -194,14 +227,47 @@ impl SchemaSpace {
             positions,
         });
     }
-    fn add_name(&mut self, name: String, resource: usize, fallback: bool) {
-        if fallback && self.names.contains_key(&name) {
-            return;
+    fn add_name(&mut self, name: String, resource: usize) {
+        let origin = self.resources[resource].origin;
+        self.names
+            .entry(name)
+            .and_modify(|selected| {
+                if origin < selected.origin {
+                    *selected = NameSelection {
+                        origin,
+                        carrier: Some(resource),
+                    };
+                } else if origin == selected.origin && selected.carrier != Some(resource) {
+                    selected.carrier = None;
+                }
+            })
+            .or_insert(NameSelection {
+                origin,
+                carrier: Some(resource),
+            });
+    }
+    fn check_resource(&self, resource: usize, at: usize) -> Result<(), NoVerdict> {
+        if self.resources[resource].eligible {
+            return Ok(());
         }
-        let list = self.names.entry(name).or_default();
-        if !list.contains(&resource) {
-            list.push(resource);
+        let mut detail = NoVerdict::new(
+            NoVerdictReason::ConservativePreparation,
+            "resource-identity-conflict",
+            "the reached resource is not the selected carrier of its canonical identifier",
+        );
+        // Refusal is independent of optional diagnostic text. Measure original
+        // pointers and retrieval provenance before any location allocation.
+        const LOCATION_BYTES: usize = 64 * 1024;
+        let node = &self.nodes[at];
+        let source = &self.sources[node.source];
+        let uri_bytes = source.uri.as_ref().map_or(0, String::len);
+        if let Some(remaining) = LOCATION_BYTES.checked_sub(uri_bytes)
+            && pointer_size(node.value.view(), remaining).is_some()
+            && pointer_size(source.value.view(), remaining).is_some()
+        {
+            detail.location = Some(self.location(at));
         }
+        Err(detail)
     }
     pub fn document_node(&self, value: &JsonValue) -> Option<usize> {
         self.sources[0].positions.get(&node_id(value)).copied()
@@ -269,6 +335,7 @@ impl SchemaSpace {
                             "target is outside the schema index".into(),
                         )
                     })?;
+                    self.check_resource(self.nodes[node].resource, holder)?;
                     let name =
                         uri::decode_fragment(reference.strip_prefix('#').unwrap_or(reference))
                             .filter(|s| !s.is_empty() && !s.starts_with('/'));
@@ -308,9 +375,8 @@ impl SchemaSpace {
                 "the reference fragment does not decode to UTF-8".into(),
             )
         })?;
-        let carriers = self.names.get(name).map(Vec::as_slice).unwrap_or(&[]);
-        let resource = match carriers {
-            [] => {
+        let resource_id = match self.names.get(name) {
+            None => {
                 missing(name);
                 return Err(self.failure(
                     holder,
@@ -319,14 +385,18 @@ impl SchemaSpace {
                     "static preparation requires a resource that was not supplied",
                 ));
             }
-            [id] => &self.resources[*id],
-            _ => {
+            Some(NameSelection {
+                carrier: Some(id), ..
+            }) => *id,
+            Some(NameSelection { carrier: None, .. }) => {
                 return Err(fail(
                     "ambiguous-resource",
                     "more than one resource carries the referenced identifier".into(),
                 ));
             }
         };
+        self.check_resource(resource_id, holder)?;
+        let resource = &self.resources[resource_id];
         if fragment.is_empty() {
             return resource
                 .root
@@ -361,6 +431,7 @@ impl SchemaSpace {
                         "resource pointer does not identify an indexed schema".into(),
                     )
                 })?;
+            self.check_resource(self.nodes[node].resource, holder)?;
             return Ok(Target {
                 node,
                 dynamic_name: None,
@@ -372,10 +443,13 @@ impl SchemaSpace {
             .map(Vec::as_slice)
             .unwrap_or(&[])
         {
-            [(node, dynamic)] => Ok(Target {
-                node: *node,
-                dynamic_name: dynamic.then_some(fragment),
-            }),
+            [(node, dynamic)] => {
+                self.check_resource(self.nodes[*node].resource, holder)?;
+                Ok(Target {
+                    node: *node,
+                    dynamic_name: dynamic.then_some(fragment),
+                })
+            }
             [] => Err(fail(
                 "anchor-missing",
                 "resource declares no such plain name".into(),
@@ -672,6 +746,7 @@ impl SchemaSpace {
                 "preparation reached a schema deeper than 256 levels",
             ));
         }
+        self.check_resource(node.resource, id)?;
         if !matches!(
             resource.dialect.as_deref(),
             Some(DIALECT) | Some("https://json-schema.org/draft/2020-12/schema#")

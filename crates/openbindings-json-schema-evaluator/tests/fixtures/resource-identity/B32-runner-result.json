@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.challenge03.example.invalid/build/runner-result.json",
+  "type": "object",
+  "properties": {
+    "status": {
+      "const": "finished"
+    },
+    "job": {
+      "type": "string",
+      "minLength": 1
+    },
+    "exitCode": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri"
+      }
+    }
+  },
+  "required": [
+    "status",
+    "job",
+    "exitCode",
+    "artifacts"
+  ],
+  "additionalProperties": false
+}

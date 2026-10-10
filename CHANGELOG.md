@@ -2,6 +2,13 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- The bundled resource resolver now gives unique contained declared IDs priority
+  over supplied name associations, with conservative refusal of competing canonical
+  carriers reached through aliases, pointers or direct applicators. This intentionally
+  expands contained-target admission and tightens competing-carrier routes. Supplied
+  catalog contents and original retrieval provenance remain intact; public API shapes
+  are unchanged. Previous conservative refusals are not reclassified as normative bugs.
+
 - Opt-in typed exact schema details through Rust `with_schema_details(true)` and
   TypeScript `includeSchemaDetails: true`, with atomic bounded truncation and
   explicit original-source retention. Default messages explain built-in keywords

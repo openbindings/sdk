@@ -90,6 +90,21 @@ refusing. No I/O occurs. `ParsedDocument::references()` exposes document-wide
 reference spellings and locations; new supplied resources require a new context.
 Existing prepared owners retain their original snapshots.
 
+Within that immutable context, a unique contained declared ID owns its name ahead
+of supplied resources and packaged standards. Supplied retrieval aliases and
+canonical IDs otherwise compete strictly. Reaching a competing canonical carrier
+through an alias, pointer or direct applicator returns `ConservativePreparation`
+with `resource-identity-conflict`; it is not a missing-resource hole or value failure.
+Unused conflicting resources remain isolated, while independently identified nested
+resources retain their own original base and dialect. A selected resource's missing
+fragment never falls through to another carrier. Original supplied rows and location
+provenance remain intact: a diagnostic source URI can differ from the selected
+lookup association for that URI. New identity-refusal locations are optional and
+measure source URI plus full pointer against 64 KiB before copying. Comparison
+retains exact spelling after RFC resolution, literal-dot removal and empty-fragment
+removal; this is not a claim of complete RFC URI equivalence. Fixed OBI and
+meta-schema assessment uses its separate trusted loader.
+
 Both bound programs are closed, but neither alone is equivalent to the partial
 schema. Rust adapter authors may opt into `SchemaRequest::evaluation_bounds` and
 consume `(lower, upper, unavailable)` with `EvaluationBounds::into_parts`; custom
