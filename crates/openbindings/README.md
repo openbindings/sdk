@@ -101,3 +101,6 @@ label UTF-8 byte coordinates explicitly. Complex failures retain a general
 explanation. Message wording is guidance; use rule/code/evidence and original
 locations for program logic. The [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
 shows source correction through conformance proof and contract setup.
+
+Definition-level reference contracts, rendered documentation and maintained checks
+are described in the [API reference guide](../../docs/api-reference.md).

@@ -4,19 +4,23 @@ use crate::*;
 use openbindings::WorkControl;
 
 #[derive(Clone)]
+/// Reusable native reqwest discovery adapter. The supplied HTTP client owns TLS, redirects, credentials, connection reuse and deadlines; no global client or response cache is installed.
 pub struct Client {
     http: reqwest::Client,
     options: ClientOptions,
 }
 impl Client {
+    /// Validate options and retain the caller-configured reqwest client. Does not perform acquisition.
     pub fn new(http: reqwest::Client, options: ClientOptions) -> Result<Self, ConfigurationError> {
         options.byte_limit()?;
         Ok(Self { http, options })
     }
+    /// Run one discovery attempt with a fresh uncancelled control and the retained HTTP client.
     pub async fn discover(&self, origin: &str) -> Result<DiscoveryResult, ConfigurationError> {
         self.discover_with_control(origin, &WorkControl::new())
             .await
     }
+    /// Run one cooperatively cancellable discovery attempt. Request/body work can be interrupted; synchronous assessment observes cancellation only at its boundaries.
     pub async fn discover_with_control(
         &self,
         origin: &str,

@@ -4,6 +4,7 @@
 //! kit. See `fixtures/provenance.json` for identities and intentional translations.
 //! A permitted refusal remains a refusal in the report, never a validity verdict.
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 use openbindings::*;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -12,32 +13,52 @@ use std::{
 };
 
 #[derive(Clone, Debug, Deserialize)]
+/// One frozen evaluator observation. Exact JSON text avoids host numeric conversion; expected outcome and capability exceptions come from packaged provenance.
 pub struct Case {
+    /// Stable case identity, also used for explicit capability allowances.
     pub id: String,
+    /// Exact instance JSON text parsed independently for this case.
     pub value: String,
+    /// Expected wire outcome spelling for the pinned fixture.
     pub expected: String,
+    /// Alternative complete sets of instance pointers accepted for an established failure; absent means no specific set constraint.
     pub acceptable_paths: Option<Vec<Vec<String>>>,
+    /// Capability explanation eligible for a case-specific unsupported-capability allowance.
     pub optional_capability: Option<String>,
+    /// Human-readable fixture explanation for its refusal expectation.
     pub refusal_reason: String,
+    /// Expected no-verdict reason wire spelling, when a refusal is expected.
     pub refusal_kind: Option<String>,
 }
 #[derive(Clone, Debug, Deserialize)]
+/// Related cases sharing one original document, operation `op` input contract and supplied resource set.
 pub struct Group {
+    /// Stable group identity.
     pub id: String,
+    /// Exact OpenBindings document JSON containing operation `op`.
     pub document: String,
+    /// Keys of explicitly supplied resources in Suite::resources.
     pub resources: Vec<String>,
+    /// Finite observations sharing this prepared contract.
     pub cases: Vec<Case>,
 }
 #[derive(Clone, Debug, Deserialize)]
+/// One exact schema resource in the packaged fixture registry; no acquisition is implied.
 pub struct Resource {
+    /// Absolute resource identity used when building the explicit resource set.
     pub uri: String,
     #[serde(rename = "documentJson")]
+    /// Exact resource JSON text; serialized fixture key is `documentJson`.
     pub document: String,
 }
 #[derive(Clone, Debug, Deserialize)]
+/// Frozen finite evaluator contract suite. This is a qualification input, not a claim of complete JSON Schema coverage.
 pub struct Suite {
+    /// Named resource fixtures available to groups.
     pub resources: BTreeMap<String, Resource>,
+    /// All finite groups in the pinned suite.
     pub groups: Vec<Group>,
+    /// Embedded meta-schema identities/text used to check original diagnostic locations.
     pub builtin_resources: BTreeMap<String, String>,
 }
 /// Frozen inputs. No network access, environment variables, or sibling checkout is needed.
@@ -58,6 +79,7 @@ pub fn suite() -> &'static Suite {
 /// Exact optional case IDs. Unknown, blank and unused declarations fail the run.
 #[derive(Clone, Debug, Default)]
 pub struct Options {
+    /// Exact optional case IDs mapped to their declared capability explanation. Unknown, mismatched, blank or unused allowances make the report fail.
     pub permitted_refusals: BTreeMap<String, String>,
 }
 impl Options {
@@ -78,25 +100,36 @@ impl Options {
     }
 }
 #[derive(Clone, Debug, Serialize)]
+/// Receipt for one case, preserving verdicts and refusals separately from contract-check failures.
 pub struct Observation {
+    /// Case identity from the fixture.
     pub id: String,
+    /// Expected fixture outcome, distinct from the actual observation.
     pub expected: String,
+    /// Setup refusal when no prepared owner was produced; outcome is absent in this case.
     pub preparation_refusal: Option<NoVerdict>,
+    /// Actual value outcome when preparation succeeded, including evaluation refusal.
     pub outcome: Option<ValueOutcome>,
+    /// Contract-check failures for this observation; empty can include an allowed refusal.
     pub failures: Vec<String>,
 }
 #[derive(Clone, Debug, Serialize)]
+/// Finite suite receipt. Success permits explicitly declared capability refusals; inspect verdict/refusal counts before claiming coverage.
 pub struct Report {
+    /// Actual observations in fixture order.
     pub observations: Vec<Observation>,
+    /// Invalid or unused allowance declarations and setup invariant failures.
     pub configuration_failures: Vec<String>,
 }
 impl Report {
+    /// Whether configuration is valid, every frozen case was observed and no observation violates the kit contract. Permitted refusals are not counted as verdicts.
     pub fn is_success(&self) -> bool {
         self.configuration_failures.is_empty()
             && self.observations.iter().all(|o| o.failures.is_empty())
             && self.observations.len()
                 == suite().groups.iter().map(|g| g.cases.len()).sum::<usize>()
     }
+    /// Count established satisfies/fails observations, excluding preparation and evaluation refusals.
     pub fn verdict_count(&self) -> usize {
         self.observations
             .iter()
@@ -108,6 +141,7 @@ impl Report {
             })
             .count()
     }
+    /// Count preparation or evaluation no-verdict observations, including explicitly permitted capability refusals.
     pub fn refusal_count(&self) -> usize {
         self.observations
             .iter()

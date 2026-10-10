@@ -84,3 +84,6 @@ attempt. Cancelled preparation returns no ready owner, while cancelled validatio
 leaves an existing contract usable. The application decides whether a candidate is
 ready to replace active work and controls its scheduling. Releasing the final Rust
 owner is distinct from reducing allocator RSS.
+
+Definition-level reference contracts, rendered documentation and maintained checks
+are described in the [API reference guide](../../docs/api-reference.md).

@@ -136,3 +136,6 @@ The npm archive carries its own notices, Rust standard-library attribution and
 build metadata. Fixture sources carry separate provenance and licenses.
 
 Historical measurements and their exact setup/cache/value-parsing boundaries are explained in [performance boundaries](docs/performance-boundaries.md).
+
+Definition-level reference contracts, rendered documentation and maintained checks
+are described in the [API reference guide](docs/api-reference.md).

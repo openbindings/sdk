@@ -54,9 +54,11 @@ impl WorkControl {
             waker.wake();
         }
     }
+    /// Read the shared permanent cancellation flag without registering a waiter.
     pub fn is_cancelled(&self) -> bool {
         self.state.cancelled.load(Ordering::Acquire)
     }
+    /// Return a `caller-cancelled` refusal when cancelled; otherwise continue. Call at cooperative work boundaries.
     pub fn check(&self) -> Result<(), NoVerdict> {
         if self.is_cancelled() {
             Err(NoVerdict::new(
@@ -77,6 +79,7 @@ impl WorkControl {
     }
 }
 #[must_use = "cancellation futures must be polled or awaited"]
+/// Executor-independent future that resolves on [`WorkControl::cancel`]. Polling registers a scoped waker; dropping the future unregisters it. It owns a clone of the cancellation state, not a task or timer.
 pub struct Cancellation {
     control: WorkControl,
     id: Option<usize>,

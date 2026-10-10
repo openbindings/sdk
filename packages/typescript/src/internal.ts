@@ -1,5 +1,6 @@
 /** Portable OpenBindings APIs. Call initialize once before constructing values. */
 import init, * as wasm from "./wasm/openbindings_wasm.js";
+/** Host input for WebAssembly initialization. A compiled module or bytes avoids fetching; URL/string/Request inputs and the default initializer may use host loading. Schema interpretation and evaluation perform no resource I/O. */
 export type WasmInput =
   | BufferSource
   | WebAssembly.Module
@@ -9,6 +10,7 @@ export type WasmInput =
   | string;
 let initialization: Promise<void> | undefined;
 let ready = false;
+/** Initialize this module instance once before using SDK APIs. Concurrent calls share one promise; a failed attempt can be retried. Requires host crypto.getRandomValues (request-scoped hosts should call inside a request). Throws SdkError for initialization/entropy failures. Supplying compiled bytes/module avoids a default asset fetch. */
 export function initialize(
   input?: WasmInput | Promise<WasmInput>,
 ): Promise<void> {
@@ -44,50 +46,109 @@ function requireReady(): void {
       "Call and await initialize() before using the SDK.",
     );
 }
+/** Exact JSON source: UTF-8 bytes or JavaScript scalar text encoded as UTF-8. Text containing literal unpaired UTF-16 units throws; represent those units using JSON \u escapes or exact bytes. Parsing copies input into immutable storage. */
 export type ExactInput = string | Uint8Array;
+/** Expected JSON syntax/encoding/admission refusal. This is separate from normative document evidence and schema-instance failure; initialization and API misuse still throw. */
 export interface InputFailure {
+  /** Discriminant for expected exact-input refusal. */
   status: "input-error";
-  error: { code: string; kind?: string; byteOffset?: number; message: string };
+  /** Stable input code/category, optional zero-based byte offset, and explanatory message. */
+  error: {
+    /** Stable detailed failure identifier. */
+    code: string;
+    /** Stable category describing the observed value or failure. */
+    kind?: string;
+    /** Zero-based offset in original UTF-8 source when available. */
+    byteOffset?: number;
+    /** Human-readable explanation; use structured discriminants/codes for logic. */
+    message: string;
+  };
 }
-export type ParseResult<T> = { status: "parsed"; value: T } | InputFailure;
+/** Parse result only. The parsed branch transfers one disposable owner to the caller; it establishes neither document conformance nor schema readiness. */
+export type ParseResult<T> =
+  | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "parsed";
+      /** Parsed owner or detached converted value, as specified by this branch. */
+      value: T;
+    }
+  | InputFailure;
+/** Closed per-rule evidence partition: satisfied establishes the rule; violated establishes a counterexample; inconclusive lacks proof; not-applicable records a failed prerequisite. Findings explain evidence but do not replace it. */
 export type Evidence =
   | "satisfied"
   | "violated"
   | "inconclusive"
   | "not-applicable";
+/** Coordinates in original UTF-8 source. byteOffset is zero-based; line and byteColumn are one-based. A byte column is not a JavaScript UTF-16 editor column: convert against the original source. Pointers are untrusted display data and repeated keys may share a pointer. */
 export interface SourceLocation {
+  /** RFC 6901 pointer; empty string means root, null means unavailable. Use byteOffset to distinguish duplicate key occurrences. */
   pointer: string | null;
+  /** Zero-based original UTF-8 byte offset. */
   byteOffset: number;
+  /** One-based original source line. */
   line: number;
+  /** One-based UTF-8 byte column, not a UTF-16 character index. */
   byteColumn: number;
 }
+/** One explanatory normative-rule finding. Use rule/code/status for logic and render message/pointer as text. Retained coordinates refer to original source; bounded findings do not replace the report evidence map. */
 export interface Finding {
+  /** Normative rule identifier such as OBI-01. */
   rule: string;
+  /** Evidence expressed by this finding; consult the report map for aggregate rule evidence. */
   status: Evidence;
+  /** Stable detailed diagnostic identifier. */
   code: string;
+  /** Original source coordinate, or null when unavailable. */
   location: SourceLocation | null;
+  /** Human-readable explanation; render as text rather than HTML. */
   message: string;
 }
+/** Normative OBI assessment at an exact specification revision. All rules retain independent evidence even if findings are omitted. Presentation retains at most 4096 findings and 8 MiB aggregate generated-pointer UTF-8 bytes; findingsTruncated records omissions without changing the conclusion. */
 export interface ConformanceReport {
+  /** Applied specification release. */
   release: string;
+  /** Exact applied specification Git revision. */
   revision: string;
+  /** Assessment-policy identifier. */
   policy: string;
+  /** Aggregate normative conclusion derived from independent rule evidence. */
   conclusion: "conformant" | "non-conformant" | "undetermined";
+  /** Entry for every OBI rule, including inconclusive and not-applicable. */
   evidence: Readonly<Record<string, Evidence>>;
+  /** Retained explanatory findings, bounded independently of rule evidence. */
   findings: readonly Finding[];
+  /** True when the 4096-finding or 8 MiB aggregate generated-pointer byte cap omitted findings. Omission never changes evidence or substitutes a shortened pointer. */
   findingsTruncated: boolean;
 }
+/** Normative assessment or a distinct unsupported-version refusal. An assessed report can be conformant, non-conformant or undetermined. This plain-data result owns no handles; use ParsedDocument.validate() to obtain a retained proof. */
 export type Assessment =
-  | { status: "assessed"; report: ConformanceReport }
   | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "assessed";
+      /** Plain normative report for the exact snapshot. */
+      report: ConformanceReport;
+    }
+  | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
       status: "version-refused";
-      refusal: { declared: string; supported: string };
+      /** Declared/supported version refusal, distinct from normative evidence. */
+      refusal: {
+        /** Original unsupported declared version. */
+        declared: string;
+        /** Supported specification line. */
+        supported: string;
+      };
     };
+/** Closed choice of the normative operation input or output schema field. */
 export type Side = "input" | "output";
+/** Original schema resource/pointer identity. resource null denotes the OpenBindings document; supplied URIs identify explicit resources and never initiate acquisition. Private evaluator projection identities are not exposed. */
 export interface SchemaLocation {
+  /** Original supplied-resource URI, or null for the OpenBindings document. */
   resource: string | null;
+  /** RFC 6901 pointer within that original source; empty string denotes root. */
   pointer: string;
 }
+/** Extensible refusal causes. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. Undefined is reserved for proved semantic undefinedness; a potential cycle alone is conservative-preparation. Preserve an unknown-cause fallback across package upgrades. */
 export type NoVerdictReason =
   | "unsupported-capability"
   | "conservative-preparation"
@@ -96,36 +157,93 @@ export type NoVerdictReason =
   | "cancelled"
   | "evaluator-failure"
   | "undefined";
+/** Structured reason no schema verdict was established. code is the stable detail identifier; message is explanatory and location is an original schema coordinate when known. */
 export interface NoVerdict {
+  /** Extensible broad refusal category. */
   reason: NoVerdictReason;
+  /** Stable evaluator-defined refusal detail code. */
   code: string;
+  /** Human-readable explanation; use reason/code for logic. */
   message: string;
+  /** Original schema location when known, otherwise null. */
   location: SchemaLocation | null;
 }
+/** Established instance failure, with an existing instance pointer and optional original schema coordinate. Failure messages avoid echoing instance values by default; pointers still contain source-controlled strings and must be rendered as text. */
 export interface ValueProblem {
+  /** RFC 6901 pointer to an existing input location; empty string means root. */
   instancePointer: string;
+  /** Original schema keyword coordinate when mapped, otherwise null. */
   schemaLocation: SchemaLocation | null;
+  /** Stable evaluator-defined problem code, commonly the failed keyword. */
   code: string;
+  /** Explanatory text; present pointers separately and safely. */
   message: string;
 }
+/** Closed selected-schema result partition: satisfies, fails, or no-verdict. An established failure may have incomplete diagnostics; problemsComplete does not weaken its verdict. Neither satisfies nor fails proves normative OBI conformance of the surrounding draft. */
 export type ValueOutcome =
-  | { outcome: "satisfies" }
   | {
+      /** Semantic result discriminant; narrow before reading branch-specific data. */
+      outcome: "satisfies";
+    }
+  | {
+      /** Semantic result discriminant; narrow before reading branch-specific data. */
       outcome: "fails";
+      /** Retained actual failing instance locations. */
       problems: readonly ValueProblem[];
+      /** Whether failure diagnostics completed; false does not weaken the established failure. */
       problemsComplete: boolean;
     }
-  | { outcome: "no-verdict"; detail: NoVerdict };
+  | {
+      /** Semantic result discriminant; narrow before reading branch-specific data. */
+      outcome: "no-verdict";
+      /** Structured no-verdict reason; no satisfaction/failure is claimed. */
+      detail: NoVerdict;
+    };
+/** Name lookup after successful interpretation. Found transfers a disposable OperationView; missing means no occurrence; ambiguous retains distinct primary keys in lexical order, possibly one key for repeated aliases. Invalid typed namespace structure throws SdkError. */
 export type OperationSelection =
-  | { status: "found"; operation: OperationView }
-  | { status: "missing" }
-  | { status: "ambiguous"; candidates: readonly string[] };
+  | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "found";
+      /** Caller-owned selected operation view; dispose independently. */
+      operation: OperationView;
+    }
+  | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "missing";
+    }
+  | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "ambiguous";
+      /** Distinct primary keys in lexical order; repeated occurrences can yield one key. */
+      candidates: readonly string[];
+    };
+/** Setup partition: ready transfers a disposable PreparedContract; no-contract means the selected side is absent; operation-missing/operation-ambiguous are selection outcomes; no-verdict is preparation refusal. Present false is a contract. None of these setup refusals judges an instance. */
 export type ContractPreparation =
-  | { status: "ready"; contract: PreparedContract }
-  | { status: "no-contract" | "operation-missing" }
-  | { status: "operation-ambiguous"; candidates: readonly string[] }
-  | { status: "no-verdict"; detail: NoVerdict };
+  | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "ready";
+      /** Caller-owned prepared contract, valid independently of its context. */
+      contract: PreparedContract;
+    }
+  | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "no-contract" | "operation-missing";
+    }
+  | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "operation-ambiguous";
+      /** Distinct primary keys in lexical order; repeated occurrences can yield one key. */
+      candidates: readonly string[];
+    }
+  | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "no-verdict";
+      /** Structured no-verdict reason; no satisfaction/failure is claimed. */
+      detail: NoVerdict;
+    };
+/** Expected refusal while converting an ordinary caller value into exact JSON, before schema evaluation. The code identifies the unsupported shape; instancePointer is a logical ordinary-value path, never invented source coordinates. */
 export interface ValueAdmissionFailure {
+  /** Stable ordinary-value admission category; returned before schema evaluation. */
   readonly code:
     | "non-finite-number"
     | "unsupported-value"
@@ -139,45 +257,89 @@ export interface ValueAdmissionFailure {
     | "input-limit";
   /** Pointer into the ordinary caller value; no source bytes are invented. */
   readonly instancePointer: string | null;
+  /** Explanatory ordinary-value admission failure. */
   readonly message: string;
 }
+/** Ordinary-value validation result: admission may return input-error; after admission, the result is the same selected-schema ValueOutcome as for an ExactJson root. */
 export type ValueCheck =
   | ValueOutcome
-  | { outcome: "input-error"; error: ValueAdmissionFailure };
+  | {
+      /** Semantic result discriminant; narrow before reading branch-specific data. */
+      outcome: "input-error";
+      /** Structured expected failure for this branch. */
+      error: ValueAdmissionFailure;
+    };
+/** One reference keyword in a supported schema position. Opaque content is not interpreted as schema; located is static resolution, and dynamicLookup still requires evaluation-time scope handling. */
 export interface Reference {
+  /** Original reference-keyword location. */
   location: SchemaLocation;
+  /** Reference keyword spelling, such as $ref or $dynamicRef. */
   keyword: string;
+  /** Original scalar string, or null when not representable. */
   spelling: string | null;
+  /** Static resolution or structured refusal; does not acquire resources. */
   resolution:
-    | { outcome: "located"; target: SchemaLocation; dynamicLookup: boolean }
-    | { outcome: "unresolved"; detail: NoVerdict };
+    | {
+        /** Located establishes a static target; unresolved preserves the refusal. */
+        outcome: "located";
+        /** Original source target coordinate. */
+        target: SchemaLocation;
+        /** Whether runtime dynamic-anchor scope must still be applied. */
+        dynamicLookup: boolean;
+      }
+    | {
+        /** Located establishes a static target; unresolved preserves the refusal. */
+        outcome: "unresolved";
+        /** Structured unresolved-reference cause. */
+        detail: NoVerdict;
+      };
 }
+/** Original-context reference inspection, separate from normative proof and preparation. complete describes traversal completion; a complete report can still contain unresolved reference results. */
 export interface ReferenceReport {
+  /** Retained reference observations in traversal order. */
   references: readonly Reference[];
+  /** Whether traversal completed; unresolved entries can occur even when true. */
   complete: boolean;
+  /** Traversal-level limitation when incomplete, otherwise null. */
   limitation: NoVerdict | null;
 }
+/** Cooperative work control. A pre-aborted signal returns cancellation. Synchronous Wasm does not yield to same-thread JavaScript, so use a worker plus host scheduling to interrupt long synchronous work externally. This is not a wall-clock deadline. */
 export interface WorkOptions {
+  /** Optional caller-owned cooperative cancellation signal; synchronous Wasm only observes same-thread cancellation at call boundaries. */
   signal?: AbortSignal;
 }
+/** Default-evaluator finite budgets, each a nonnegative 32-bit integer. Work counts are implementation units, not milliseconds. Zero is literal except maxProblems has a minimum of one; exhaustion produces no-verdict unless only post-verdict diagnostics are incomplete. */
 export interface EvaluatorLimits {
+  /** Work units per verdict/diagnostic pass; default 2,000,000. */
   evaluationSteps: number;
+  /** Nested evaluation depth; default 1024. */
   evaluationDepth: number;
+  /** Regex evaluation/backtracking work budget; default 2,000,000. */
   regexSteps: number;
+  /** Retained failure diagnostics; default 256, minimum one. Truncation clears problemsComplete. */
   maxProblems: number;
+  /** Projected JSON nesting admitted to compilation; default 512. */
   compileJsonDepth: number;
+  /** Maximum UTF-8 bytes per schema regex; default 1,048,576 (1 MiB). */
   patternBytes: number;
+  /** Maximum regex parenthesis nesting; default 256. */
   patternDepth: number;
 }
+/** Immutable context inputs and bounded preparation reuse. The built-in JSON Schema 2020-12 evaluator performs no resource I/O, treats format as annotation, declines unqualified Unicode property-escape matching, and may conservatively refuse potential non-progressing cycles. */
 export interface ContractOptions {
+  /** Explicit resources retained by the context; omitted means an empty caller set. The passed owner remains caller-owned. */
   resources?: SchemaResources;
+  /** Overrides for built-in evaluator budgets; unspecified entries use evaluatorLimits(). */
   limits?: Partial<EvaluatorLimits>;
   /** Most-recently-used preparations retained by the context; default 4, zero disables caching. */
   cacheCapacity?: number;
 }
+/** Explicit resources and cooperative cancellation for reference inspection; no retrieval or global resource registry is used. */
 export interface ReferenceOptions extends WorkOptions {
+  /** Explicit resource set borrowed for inspection; no owner is transferred and no URI is fetched. */
   resources?: SchemaResources;
 }
+/** Return a fresh frozen copy of default evaluator budgets. Requires initialization; values describe work/depth/retention units rather than elapsed-time deadlines. */
 export function evaluatorLimits(): Readonly<EvaluatorLimits> {
   requireReady();
   return Object.freeze(decode<EvaluatorLimits>(wasm.evaluatorLimits()));
@@ -201,11 +363,17 @@ function encodedLimits(limits: Partial<EvaluatorLimits> = {}): string {
   }
   return JSON.stringify(encoded);
 }
+/** Frozen metadata snapshot in lexical primary-key order. It contains no disposable owners and is not evidence of conformance, schema support or binding priority. */
 export interface OperationMetadata {
+  /** Primary operation key, independent of the alias used to select it. */
   readonly key: string;
+  /** Optional decoded description; null means absent. */
   readonly description: string | null;
+  /** Frozen aliases preserving declaration order; null means absent. */
   readonly aliases: readonly string[] | null;
+  /** Whether an input member is present, without proving it is a supported schema. */
   readonly hasInput: boolean;
+  /** Whether an output member is present, without proving it is a supported schema. */
   readonly hasOutput: boolean;
 }
 function camel(value: unknown): unknown {
@@ -222,11 +390,14 @@ function camel(value: unknown): unknown {
 function decode<T>(text: string): T {
   return camel(JSON.parse(text)) as T;
 }
-/** Structured SDK misuse/configuration/interpretation error. Semantic outcomes use unions. */
+/** Thrown SDK misuse, configuration or typed-interpretation failure. Expected parse, authoring, conformance and schema outcomes use result unions. code is the broad category; interpretationCode, when present, preserves a specific interpretation cause. location holds original byte coordinates. Error messages are explanatory. */
 export class SdkError extends Error {
+  /** Construct a structured thrown error with a broad code, explanatory message and optional original-source location. */
   constructor(
+    /** Broad stable SDK error category; expected semantic outcomes use result unions. */
     readonly code: string,
     message: string,
+    /** Optional frozen original UTF-8 source coordinates. */
     readonly location?: Readonly<SourceLocation>,
     /** Specific interpretation refusal; broad code remains "interpretation". */
     readonly interpretationCode?: string,
@@ -318,9 +489,11 @@ abstract class Managed {
   protected constructor(raw: Raw) {
     registerHandle(this, raw);
   }
+  /** Whether this handle has been released. Safe to inspect after disposal. */
   get disposed(): boolean {
     return !handles.has(this);
   }
+  /** Release this owner deterministically; idempotent. Other retained owners remain usable. Later handle access throws disposed-handle. Release is not a promise of reduced process RSS or Wasm memory capacity. */
   dispose(): void {
     const raw = handles.get(this);
     if (raw) {
@@ -329,6 +502,7 @@ abstract class Managed {
       raw.free();
     }
   }
+  /** Explicit resource-management alias for dispose(); use with JavaScript using where supported. */
   [Symbol.dispose](): void {
     this.dispose();
   }
@@ -341,58 +515,83 @@ const jsonRaw = (owner: ExactJson) => handle<wasm.WasmJson>(owner);
 const documentRaw = (owner: ParsedDocument) => handle<wasm.WasmDocument>(owner);
 const resourceRaw = (owner: SchemaResources) =>
   handle<wasm.WasmResources>(owner);
+/** Ordinary JSON scalar types; runtime admission additionally requires finite numbers. JavaScript number precision already lost before admission cannot be reconstructed. */
 export type JsonPrimitive = null | boolean | number | string;
+/** Checked ordinary JSON input, including nested borrowed ExactJson owners for precise subtrees. Arrays must be dense; objects plain with enumerable data properties; cycles, accessors, symbols, bigint and undefined are refused. Admission never invokes toJSON or getters. Ordinary encoding admits at most 67,108,864 UTF-16 code units of serialized text, 1,000,000 visited values and depth 10,000; subsequent exact parsing also enforces 64 MiB UTF-8 and 1,000,000 total nodes, including member-name tokens. */
 export type JsonInput =
   | JsonPrimitive
   | ExactJson
   | readonly JsonInput[]
   | { readonly [name: string]: JsonInput };
+/** Ordinary JavaScript JSON tree returned only after exact conversion checks. Values are detached from Wasm storage and need no disposal. */
 export type JsonOutput =
   | JsonPrimitive
   | JsonOutput[]
   | { [name: string]: JsonOutput };
-/** Exact immutable JSON; token-preserving text/bytes remain available after conversion is declined. */
+/** Immutable exact JSON owner retaining numeric token spelling and duplicate names. Dispose each owner deterministically (or use Symbol.dispose). Retained/subtree owners share storage and survive parent disposal; they may retain the whole source arena. Text/bytes stay available when ordinary conversion is inexact. */
 export class ExactJson extends Managed {
   /** @internal */ constructor(raw: wasm.WasmJson) {
     super(raw);
     exactOwners.add(this);
   }
+  /** Admit checked ordinary JSON into a new disposable exact owner. Nested ExactJson inputs are borrowed. Ordinary encoding failures throw TypeError/RangeError; exact parser admission failures also throw. Use parseJson for structured exact-input failures. Handle misuse throws SdkError; precision already lost in JavaScript numbers cannot be recovered. */
   static from(value: JsonInput): ExactJson {
     requireReady();
     return new ExactJson(wasm.WasmJson.parseText(encodeOrdinary(value)));
   }
+  /** Return a new independently disposable owner sharing this exact snapshot; no reparse. */
   retain(): ExactJson {
     return new ExactJson(handle<wasm.WasmJson>(this).retain());
   }
+  /** Allocate exact token text in JavaScript, excluding surrounding whitespace; no disposal is needed for the string. */
   get text(): string {
     return handle<wasm.WasmJson>(this).text();
   }
+  /** Allocate a detached copy of exact token UTF-8 bytes; mutating the copy does not change this snapshot. */
   get bytes(): Uint8Array {
     return handle<wasm.WasmJson>(this).bytes();
   }
+  /** Allocate plain metadata for this value: kind, original byte coordinates and subtree duplicate-name presence. No disposable owner is returned. */
   get metadata(): {
+    /** Stable category describing the observed value or failure. */
     kind: string;
+    /** Original-source coordinates for this exact value. */
     location: SourceLocation;
+    /** Whether this subtree contains repeated decoded object member names. */
     duplicateNames: boolean;
   } {
     return decode(handle<wasm.WasmJson>(this).metadata());
   }
+  /** Resolve a relative RFC 6901 pointer and return a NEW disposable subtree owner, or undefined. Empty selects this value; repeated names select the first occurrence. The owner can retain the entire source. */
   at(pointer: string): ExactJson | undefined {
     scalar(pointer);
     const found = handle<wasm.WasmJson>(this).at(pointer);
     return found ? new ExactJson(found) : undefined;
   }
+  /** Return a NEW disposable owner for the first member with this decoded name, or undefined if absent/not an object. Duplicate names remain available through exact text; this lookup does not prove uniqueness. */
   get(name: string): ExactJson | undefined {
     scalar(name);
     const found = handle<wasm.WasmJson>(this).get(name);
     return found ? new ExactJson(found) : undefined;
   }
+  /** Compare exact mathematical JSON values without binary64 rounding. Returns undefined when duplicate names make equality ambiguous; borrows both owners. */
   equals(other: ExactJson): boolean | undefined {
     return handle<wasm.WasmJson>(this).equals(jsonRaw(other));
   }
+  /** Allocate an ordinary JS value only if exact round-trip comparison succeeds. Returns inexact for duplicate names, numeric rounding or unsupported conversion. Keeps this owner valid and leaves text/bytes available. */
   toValue():
-    | { status: "converted"; value: JsonOutput }
-    | { status: "inexact"; message: string } {
+    | {
+        /** Result discriminant; narrow this before reading branch-specific fields. */
+        status: "converted";
+        /** Parsed owner or detached converted value, as specified by this branch. */
+        value: JsonOutput;
+      }
+    | {
+        /** Result discriminant; narrow this before reading branch-specific fields. */
+        status: "inexact";
+        /** Human-readable explanation; use structured discriminants/codes for logic. */
+        message: string;
+      } {
     if (this.metadata.duplicateNames)
       return {
         status: "inexact",
@@ -430,6 +629,7 @@ export class ExactJson extends Managed {
     return { status: "converted", value: value as JsonOutput };
   }
 }
+/** Parse exact JSON using default admission limits (64 MiB UTF-8, 10,000 container depth, 1,000,000 nodes). Returns a caller-owned ExactJson or input-error. Initialization, wrong input types and literal unpaired UTF-16 text throw; JSON escapes preserve such units. */
 export function parseJson(input: ExactInput): ParseResult<ExactJson> {
   requireReady();
   const data = bytes(input);
@@ -442,6 +642,7 @@ export function parseJson(input: ExactInput): ParseResult<ExactJson> {
     return failure(e);
   }
 }
+/** Parse an exact immutable document under default admission limits. The parsed branch transfers a disposable ParsedDocument but proves no OBI rules. Use validate() for a retained proof or assess() for plain evidence. */
 export function parseDocument(input: ExactInput): ParseResult<ParsedDocument> {
   requireReady();
   const data = bytes(input);
@@ -454,18 +655,24 @@ export function parseDocument(input: ExactInput): ParseResult<ParsedDocument> {
     return failure(e);
   }
 }
+/** Assess all normative document rules directly from exact source, including invalid JSON. Unsupported declared versions return version-refused; parse/limit failures become truthful evidence. Returns plain data with no handle to dispose. */
 export function assessDocument(input: ExactInput): Assessment {
   requireReady();
   return decode(wasm.assessBytes(bytes(input)));
 }
+/** Return authoring default, supported specification line and exact applied specification revision. These identities are independent of the npm package version. */
 export function versionPolicy(): {
+  /** Default version emitted by typed authoring. */
   authoringVersion: string;
+  /** Supported stable specification line. */
   supportedVersions: string;
+  /** Exact applied specification Git revision. */
   appliedSpecRevision: string;
 } {
   requireReady();
   return decode(wasm.versionPolicy());
 }
+/** Classify strict SemVer: stable 0.2.x is supported, prereleases/other well-formed lines unsupported, invalid syntax malformed. Build metadata does not affect support and numeric components have no machine-integer ceiling. */
 export function checkVersion(
   version: string,
 ): "supported" | "malformed" | "unsupported" {
@@ -485,26 +692,33 @@ export function liveStorageOwners(): number {
   requireReady();
   return wasm.liveStorageOwners();
 }
+/** Disposable immutable exact snapshot without normative proof. retain() creates an independent owner. Assessment may be cached in Rust; operations caches frozen plain metadata. Owner-producing properties create fresh handles on every access and require separate disposal. */
 export class ParsedDocument extends Managed {
   #operations?: readonly OperationMetadata[];
   /** @internal */ constructor(raw: wasm.WasmDocument) {
     super(raw);
   }
+  /** Create an independently disposable owner sharing this immutable snapshot and Rust caches. */
   retain(): ParsedDocument {
     return new ParsedDocument(handle<wasm.WasmDocument>(this).retain());
   }
+  /** Allocate a detached copy of the complete original UTF-8 source, including formatting. */
   get originalBytes(): Uint8Array {
     return handle<wasm.WasmDocument>(this).originalBytes();
   }
+  /** Return a NEW independently disposable ExactJson owner on every access. Cache it locally and dispose it; disposing this document does not release that separate owner. */
   get value(): ExactJson {
     return new ExactJson(handle<wasm.WasmDocument>(this).value());
   }
+  /** Return plain normative evidence or version refusal; no proof owner is created and no result needs disposal. */
   assess(): Assessment {
     return decode(handle<wasm.WasmDocument>(this).assess());
   }
+  /** Establish normative conformance and, only on validated, return a NEW independent proof owner. The original document remains caller-owned. Other branches preserve plain evidence/refusal. */
   validate(): ValidationResult {
     return validateParsed(this);
   }
+  /** Return cached frozen plain metadata in lexical primary-key order. No handles are created. Throws a located interpretation error for malformed typed namespace/metadata; does not assess all OBI rules. */
   get operations(): readonly OperationMetadata[] {
     handle<wasm.WasmDocument>(this);
     return (this.#operations ??= Object.freeze(
@@ -518,6 +732,7 @@ export class ParsedDocument extends Managed {
       ),
     ));
   }
+  /** Resolve an exact primary key or alias; found transfers a new disposable view. Repeated occurrences remain ambiguous, including repeats within one operation. Invalid typed namespace throws SdkError. */
   resolveOperation(name: string): OperationSelection {
     scalar(name);
     const selection = sdkCall(() => documentRaw(this).resolveOperation(name));
@@ -545,6 +760,7 @@ export class ParsedDocument extends Managed {
     }
   }
 
+  /** Return undefined for absent dependency; otherwise test its kind filter. Absent kinds accepts all and empty accepts none. This helper does not establish normative conformance. */
   dependencyAcceptsKind(dependency: string, kind: string): boolean | undefined {
     scalar(dependency);
     scalar(kind);
@@ -552,6 +768,7 @@ export class ParsedDocument extends Managed {
       handle<wasm.WasmDocument>(this).dependencyAcceptsKind(dependency, kind),
     );
   }
+  /** Inspect schema references with explicit resources and cooperative cancellation. Returns plain data, including incomplete traversal and per-reference refusal; no acquisition or normative proof. */
   references(options: ReferenceOptions = {}): ReferenceReport {
     const resources = options.resources,
       empty = resources ? undefined : new SchemaResources();
@@ -568,6 +785,7 @@ export class ParsedDocument extends Managed {
       empty?.dispose();
     }
   }
+  /** Create a NEW disposable immutable evaluator/resource context. Eagerly validates the whole operation namespace, including unrelated aliases, throwing a specific interpretation error for malformed entries. Unrelated metadata may remain a draft. A later value verdict concerns only the selected schema; use validate() first when accepting a normative document. */
   contracts(options: ContractOptions = {}): ValueContracts {
     if (
       options.cacheCapacity !== undefined &&
@@ -597,15 +815,20 @@ export class ParsedDocument extends Managed {
     }
   }
 }
+/** Document proof acquisition: validated transfers an independent ValidatedDocument owner and report. Otherwise the original Assessment explains refusal, nonconformance or uncertainty; no proof owner is created. */
 export type ValidationResult =
   | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
       status: "validated";
+      /** Caller-owned document handle for this branch; dispose independently. */
       document: ValidatedDocument;
+      /** Plain normative report for the exact snapshot. */
       report: ConformanceReport;
     }
   | Assessment;
 const conformanceToken = Symbol("established conformance");
 let validateParsed: (document: ParsedDocument) => ValidationResult;
+/** Retained proof for one immutable snapshot whose normative OBI rules were established. Obtain via ParsedDocument.validate(); preparation remains evaluator-dependent. It inherits exact inspection methods and deterministic disposal from ParsedDocument. */
 export class ValidatedDocument extends ParsedDocument {
   declare private readonly validatedDocumentBrand: void;
   private constructor(raw: wasm.WasmDocument, token: symbol) {
@@ -631,6 +854,7 @@ export class ValidatedDocument extends ParsedDocument {
         : result;
     };
   }
+  /** Create an independently disposable owner preserving the same established normative proof. */
   override retain(): ValidatedDocument {
     return new ValidatedDocument(
       handle<wasm.WasmDocument>(this).retain(),
@@ -638,25 +862,28 @@ export class ValidatedDocument extends ParsedDocument {
     );
   }
 }
+/** Retained operation selected by primary key or alias. It survives parent disposal; dispose it independently. Exact value inspection is not normative proof or a prepared schema. */
 export class OperationView extends Managed {
   /** @internal */ constructor(raw: wasm.WasmOperation) {
     super(raw);
   }
+  /** Allocate the selected primary key, even when lookup used an alias. */
   get key(): string {
     return handle<wasm.WasmOperation>(this).key();
   }
+  /** Return a NEW independently disposable ExactJson owner on every access. It survives operation/document disposal and can retain the original arena. */
   get value(): ExactJson {
     return new ExactJson(handle<wasm.WasmOperation>(this).value());
   }
+  /** Allocate a plain array of binding keys in lexical order. No owner disposal, ranking or invocation is involved. */
   get bindings(): readonly string[] {
     return decode(sdkCall(() => handle<wasm.WasmOperation>(this).bindings()));
   }
 }
 const resourceToken = Symbol("retained resource set");
-/** Immutable explicit resources. Batch failure releases partial state and preserves supplied owners.
- * Duplicate normalized URIs are refused, including equal-byte duplicates.
- */
+/** Immutable explicit resource set. URIs must be absolute without a nonempty fragment; normalized duplicate identities are refused even for equal bytes. Resources are retained, never fetched. Batch failure releases partial state and leaves supplied owners usable. Distinct contexts may associate the same URI with different snapshots. */
 export class SchemaResources extends Managed {
+  /** Create an empty set or retain explicit [URI, exact document] pairs. Does not consume supplied owners. Invalid/duplicate URI or duplicate-member document throws SdkError; partial construction is released. */
   constructor(entries?: Iterable<readonly [uri: string, document: ExactJson]>);
   /** @internal */ constructor(raw: wasm.WasmResources, token: symbol);
   constructor(
@@ -690,7 +917,7 @@ export class SchemaResources extends Managed {
   private static fromRaw(raw: wasm.WasmResources): SchemaResources {
     return new SchemaResources(raw, resourceToken);
   }
-  /** Return a new immutable context; the original remains usable. */
+  /** Return a NEW independently disposable resource-set owner with one added resource; the original and supplied document stay usable. Invalid/duplicate identity throws; no acquisition. */
   with(uri: string, document: ExactJson): SchemaResources {
     scalar(uri);
     return SchemaResources.fromRaw(
@@ -699,14 +926,17 @@ export class SchemaResources extends Managed {
       ),
     );
   }
+  /** Return a NEW independently disposable owner of this immutable set. */
   retain(): SchemaResources {
     return SchemaResources.fromRaw(handle<wasm.WasmResources>(this).retain());
   }
 }
+/** Disposable immutable document/resource/evaluator context with entry-bounded preparation reuse. Replacing an active context does not mutate existing prepared owners. Dispose the context to release its cache owners; independently retained PreparedContract handles remain valid. */
 export class ValueContracts extends Managed {
   /** @internal */ constructor(raw: wasm.WasmContracts) {
     super(raw);
   }
+  /** Select the named operation/alias and requested side, then return the complete ContractPreparation partition. Ready transfers a new disposable contract independent of this context/cache. Deterministic preparations can be reused; cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
   prepare(
     operation: string,
     side: Side,
@@ -799,6 +1029,7 @@ function cancelledValue(): ValueOutcome {
     },
   };
 }
+/** Disposable retained selected-schema validator, independent of document/context lifetime and cache eviction. Repeated validation borrows exact input; ordinary inputs are admitted and temporary owners released within the call. No verdict here proves whole-document conformance. */
 export class PreparedContract extends Managed {
   /** @internal */ constructor(raw: wasm.WasmPrepared) {
     super(raw);
@@ -863,22 +1094,32 @@ export class PreparedContract extends Managed {
     }
   }
 
+  /** Return a NEW independently disposable owner sharing compiled state; it remains valid after the context or prior contract owner is disposed. */
   retain(): PreparedContract {
     return new PreparedContract(handle<wasm.WasmPrepared>(this).retain());
   }
 }
+/** Pinned HTTP discovery companion identity and wire defaults, independent of package/spec core versions. */
 export interface DiscoveryPolicy {
+  /** Applied companion version. */
   version: string;
+  /** Exact companion specification Git revision. */
   revision: string;
+  /** Fixed route /.well-known/openbindings. */
   wellKnownPath: string;
+  /** OpenBindings JSON response media type. */
   mediaType: string;
+  /** Companion request Accept header value. */
   accept: string;
+  /** Default decoded-body byte limit: 1,048,576 (1 MiB). */
   defaultMaxDocumentBytes: number;
 }
+/** Return a fresh plain-data copy of the pinned companion version/revision, route, media types and default decoded-body limit; requires initialization. */
 export function discoveryPolicy(): DiscoveryPolicy {
   requireReady();
   return decode(wasm.discoveryPolicy());
 }
+/** Construct the fixed discovery URL from an absolute HTTP(S) origin. Refuses credentials, resource paths, query and fragment; accepts an optional root slash. Does not fetch. The transport owns connection and redirect policy. */
 export function discoveryEndpoint(origin: string): string {
   requireReady();
   scalar(origin);
@@ -889,39 +1130,93 @@ export type DiscoveryFetch = (
   url: string,
   init: RequestInit,
 ) => Promise<Response>;
+/** One discovery attempt: decoded-body bound, cancellation and optional local Fetch callback. The SDK creates no global fetch override or response cache; the application owns credentials, redirects and network policy. */
 export interface DiscoveryOptions {
+  /** Decoded-body byte limit; omitted or zero selects 1 MiB. Must be a nonnegative safe integer; one extra byte may be read to establish overflow. */
   maxDocumentBytes?: number;
+  /** Caller cancellation; aborts I/O and is checked around synchronous assessment. */
   signal?: AbortSignal;
+  /** Local asynchronous Fetch-compatible callback; omitted uses host fetch. Configure credentials, redirects and network restrictions here. */
   fetch?: DiscoveryFetch;
 }
+/** Observed response facts retained even when body reading or document assessment fails. The final URL is metadata only, not an implicit schema base. */
 export interface DiscoveryMetadata {
+  /** Constructed discovery URL requested from the transport. */
   requestedUrl: string;
+  /** Final URL when exposed by the host, otherwise null; not a schema base. */
   finalUrl: string | null;
+  /** Observed HTTP status. */
   status: number;
+  /** Host Fetch response visibility/type. */
   responseType: ResponseType;
+  /** Frozen observed header strings under host Fetch combining/visibility rules. */
   headers: Readonly<Record<string, string>>;
 }
+/** Assessment of a complete bounded discovery body. Found owns proof; other document handles, when present, remain unproved parsed snapshots. */
 type DiscoveryBodyResult =
-  | { status: "found"; document: ValidatedDocument; report: ConformanceReport }
   | {
-      status: "non-conformant" | "undetermined";
-      document?: ParsedDocument;
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "found";
+      /** Caller-owned document handle for this branch; dispose independently. */
+      document: ValidatedDocument;
+      /** Plain normative report for the exact snapshot. */
       report: ConformanceReport;
     }
   | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "non-conformant" | "undetermined";
+      /** Caller-owned document handle for this branch; dispose independently. */
+      document?: ParsedDocument;
+      /** Plain normative report for the exact snapshot. */
+      report: ConformanceReport;
+    }
+  | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
       status: "version-refused";
-      refusal: { declared: string; supported: string };
+      /** Declared/supported version refusal, distinct from normative evidence. */
+      refusal: {
+        /** Original unsupported declared version. */
+        declared: string;
+        /** Supported specification line. */
+        supported: string;
+      };
     };
+/** Finite discovery receipt. Only found carries normative proof. Only HTTP 404 means absent; 401/403 are gated; other non-200 statuses are http-status. Complete bounded 200 bytes can accompany refused/invalid documents; partial bodies are never returned. Dispose any returned document owner independently. */
 export type DiscoveryResult = (
   | DiscoveryBodyResult
-  | { status: "absent" | "gated" | "http-status" }
-  | { status: "body-limit"; limit: number }
-  | { status: "cancelled"; reason: "aborted" | "timeout" }
   | {
-      status: "transport-error" | "body-error";
-      error: { kind: "network" | "timeout" | "other"; message: string };
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "absent" | "gated" | "http-status";
     }
-) & { metadata?: DiscoveryMetadata; body?: Uint8Array };
+  | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "body-limit";
+      /** Effective decoded-body byte limit. */
+      limit: number;
+    }
+  | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "cancelled";
+      /** Observed cancellation classification. */
+      reason: "aborted" | "timeout";
+    }
+  | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "transport-error" | "body-error";
+      /** Structured expected failure for this branch. */
+      error: {
+        /** Stable category describing the observed value or failure. */
+        kind: "network" | "timeout" | "other";
+        /** Human-readable explanation; use structured discriminants/codes for logic. */
+        message: string;
+      };
+    }
+) & {
+  /** Observed response metadata, present once a response was obtained. */
+  metadata?: DiscoveryMetadata;
+  /** Complete bounded decoded 200 body copy when available; never a partial prefix. */
+  body?: Uint8Array;
+};
 const aborted = Symbol("discovery cancelled");
 function interruptible<T>(
   promise: Promise<T>,
@@ -1094,11 +1389,15 @@ export async function discover(
     controller.abort();
   }
 }
-/** A copied immutable publication snapshot; no listener or server is created. */
+/** Disposable immutable copy of a proved discovery document. Creates no listener or server; authorization and request routing remain caller-owned. Existing publication remains usable after the original proof is disposed. */
 export class DiscoveryPublication extends Managed {
+  /** Copy a ValidatedDocument into an independently owned publication. allowOrigin defaults to omission; accepts *, null or one ASCII HTTP(S) origin without credentials/path/query/fragment. Invalid configuration throws; the source proof remains caller-owned. */
   constructor(
     document: ValidatedDocument,
-    options: { allowOrigin?: string } = {},
+    options: {
+      /** Optional CORS allow-origin spelling; empty/omitted omits the header. Authentication, credentials and preflight remain application-owned. */
+      allowOrigin?: string;
+    } = {},
   ) {
     requireReady();
     const allow = options.allowOrigin ?? "";
@@ -1107,6 +1406,7 @@ export class DiscoveryPublication extends Managed {
       sdkCall(() => new wasm.WasmPublication(documentRaw(document), allow)),
     );
   }
+  /** Create a detached Response for the decoded route and method. GET returns exact bytes; HEAD returns no body with the original Content-Length; unsupported route is 404 and unsupported method 405. Creates no server and does not perform authentication or preflight handling. */
   respond(request: Request): Response {
     const url = new URL(request.url);
     let path: string;
@@ -1287,57 +1587,117 @@ function encodeOrdinary(value: unknown, authoring?: AuthorContext): string {
   return parts.join("");
 }
 
+/** Editable normative operation fields. Typed optional undefined means absence; opaque JSON fields preserve explicit null and reject undefined. A built draft still requires normative assessment and separate schema preparation. */
 export interface OperationDraft {
+  /** Optional operation description. */
   description?: string;
+  /** Optional deprecation annotation. */
   deprecated?: boolean;
+  /** Optional ordered application-facing tags. */
   tags?: readonly string[];
+  /** Optional names in the shared operation namespace. */
   aliases?: readonly string[];
+  /** Optional exact input schema; absence differs from present false or null. */
   input?: JsonInput;
+  /** Optional exact output schema; absence differs from present false or null. */
   output?: JsonInput;
+  /** Named exact example instances. */
   examples?: Readonly<Record<string, ExampleDraft>>;
+  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
+/** Exact input/output example instances, not schemas or proof that an operation accepts them. */
 export interface ExampleDraft {
+  /** Optional example explanation. */
   description?: string;
+  /** Optional exact input instance, including explicit null. */
   input?: JsonInput;
+  /** Optional exact output instance, including explicit null. */
   output?: JsonInput;
+  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
+/** Binding source vocabulary; kind-specific content is exact opaque JSON and is never executed or acquired by core. */
 export interface SourceDraft {
+  /** Source-kind identifier selecting external interpretation. */
   kind: string;
+  /** Optional exact kind-specific content; not interpreted by core. */
   content?: JsonInput;
+  /** Optional source explanation. */
   description?: string;
+  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
+/** Link from an operation to a source with opaque kind-specific content and annotations. Core does not rank or invoke bindings. */
 export interface BindingDraft {
+  /** Referenced primary operation name. */
   operation: string;
+  /** Referenced source key. */
   source: string;
+  /** Optional exact kind-specific binding content. */
   content?: JsonInput;
+  /** Optional interoperable integer in inclusive ±9,007,199,254,740,991; no ranking is performed. */
   preference?: number;
+  /** Optional idempotence annotation; does not trigger retries. */
   idempotent?: boolean;
+  /** Optional binding deprecation annotation. */
   deprecated?: boolean;
+  /** Optional binding explanation. */
   description?: string;
+  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
+/** Dependency declaration with an optional exact source-kind filter; absent kinds accepts all and an empty array accepts none. */
 export interface DependencyDraft {
+  /** Referenced operation name. */
   operation: string;
+  /** Exact permitted source kinds; absence accepts all, empty array accepts none. */
   kinds?: readonly string[];
+  /** Optional dependency explanation. */
   description?: string;
+  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
+/** Editable normative document shape. authorDocument supplies the default version when openbindings is omitted, checks typed representability and returns a new independent parsed snapshot. It does not establish conformance. */
 export interface DocumentDraft {
+  /** Declared specification version; omission defaults to 0.2.0. */
   openbindings?: string;
+  /** Primary operation map; namespace/shape checks and normative assessment remain separate stages. */
   operations: Readonly<Record<string, OperationDraft>>;
+  /** Optional interface name. */
   name?: string;
+  /** Optional interface-defined version, independent of openbindings. */
   version?: string;
+  /** Optional interface explanation. */
   description?: string;
+  /** Named exact JSON Schema values. */
   schemas?: Readonly<Record<string, JsonInput>>;
+  /** Named source declarations. */
   sources?: Readonly<Record<string, SourceDraft>>;
+  /** Named operation-to-source bindings. */
   bindings?: Readonly<Record<string, BindingDraft>>;
+  /** Named operation dependencies. */
   dependencies?: Readonly<Record<string, DependencyDraft>>;
+  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
-/** Stable expected-invalid-draft categories; messages are explanatory, not identifiers. */
+/**
+ * Extensible expected-invalid-draft codes. Messages explain; codes identify.
+ * - field-collision: additionalFields shadows a typed member.
+ * - duplicate-field: a draft represents the same emitted field more than once.
+ * - non-finite-number: NaN or infinity cannot enter JSON.
+ * - unsupported-value: undefined, bigint, function or symbol appears in opaque JSON.
+ * - sparse-array / array-property: an array has holes or extra named properties.
+ * - cyclic-value: an object refers to an active ancestor.
+ * - non-plain-object: an object has a custom prototype.
+ * - accessor-property / non-enumerable-property / symbol-key: admission would require
+ *   executing or silently dropping a property, so the value is refused.
+ * - invalid-authoring-object: a typed draft container or known field is not representable.
+ * - authoring-limit: encoded output exceeds a finite character/byte/node/depth limit.
+ * - invalid-draft: the checked Rust authoring boundary refuses the encoded draft.
+ * A draftPointer addresses the caller's draft, including additionalFields, rather
+ * than the emitted JSON. Initialization/owner misuse and unexpected exceptions throw.
+ */
 export type AuthoringErrorCode =
   | "field-collision"
   | "duplicate-field"
@@ -1353,15 +1713,29 @@ export type AuthoringErrorCode =
   | "invalid-authoring-object"
   | "authoring-limit"
   | "invalid-draft";
+/** Expected invalid-draft diagnostic. code supports branching, draftPointer locates the original caller draft (including additionalFields), and message is explanatory. No generated JSON byte location is substituted. */
 export interface AuthoringFailure {
+  /** Stable expected-draft failure category. */
   code: AuthoringErrorCode;
   /** JSON Pointer into the caller's draft; empty means root, null means unavailable. Never a byte offset. */
   draftPointer: string | null;
+  /** Human-readable guidance; use code and draftPointer for logic. */
   message: string;
 }
+/** Authoring admission result. Authored transfers one disposable ParsedDocument without normative proof; authoring-error returns a logical draft diagnostic and owns no handle. */
 export type AuthoringResult =
-  | { status: "authored"; document: ParsedDocument }
-  | { status: "authoring-error"; error: AuthoringFailure };
+  | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "authored";
+      /** Caller-owned document handle for this branch; dispose independently. */
+      document: ParsedDocument;
+    }
+  | {
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "authoring-error";
+      /** Structured expected failure for this branch. */
+      error: AuthoringFailure;
+    };
 class DraftFailure extends Error {
   constructor(
     readonly code: AuthoringErrorCode,

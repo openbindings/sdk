@@ -12,46 +12,73 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
+/// Stable rule identifiers OBI-01 through OBI-13, in specification order.
 pub const DOCUMENT_RULES: [&str; 13] = [
     "OBI-01", "OBI-02", "OBI-03", "OBI-04", "OBI-05", "OBI-06", "OBI-07", "OBI-08", "OBI-09",
     "OBI-10", "OBI-11", "OBI-12", "OBI-13",
 ];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
+/// Evidence for one normative document rule. This closed partition may be exhaustively matched; it is separate from explanatory findings.
 pub enum Evidence {
+    /// The rule was established for this snapshot.
     Satisfied,
+    /// A rule violation was established, even if other work is inconclusive.
     Violated,
+    /// The implementation could not establish satisfaction or violation.
     Inconclusive,
+    /// The rule does not apply after an earlier prerequisite fails.
     NotApplicable,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
+/// Overall normative document conclusion. This is a closed semantic partition, not a schema-instance validation result.
 pub enum Conformance {
+    /// Every applicable document rule was established; a validated document can be obtained.
     Conformant,
+    /// At least one document rule was established as violated.
     NonConformant,
+    /// No violation was established, but evidence is insufficient to prove conformance.
     Undetermined,
 }
 #[derive(Clone, Debug, Serialize)]
+/// One explanatory normative-rule finding. Findings may be bounded; the report's independent rule evidence determines its conclusion.
 pub struct Finding {
+    /// Normative rule identifier, such as `OBI-01`.
     pub rule: &'static str,
+    /// Evidence expressed by this finding, not necessarily the final aggregate for its rule.
     pub status: Evidence,
+    /// Stable machine-readable diagnostic identifier; prefer it over message matching.
     pub code: &'static str,
+    /// Original-source coordinates when available. Pointers are data and must be escaped for display; byte columns are not UTF-16 editor columns.
     pub location: Option<SourceLocation>,
+    /// Human-facing explanation; display as text and use `rule`, `code` and `status` for logic.
     pub message: String,
 }
 #[derive(Clone, Debug, Serialize)]
+/// Assessment of all normative document rules at the pinned specification revision. At most 4096 findings and 8 MiB of aggregate generated-pointer UTF-8 bytes are retained. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source.
 pub struct ConformanceReport {
+    /// Applied specification release, independent of package version.
     pub release: &'static str,
+    /// Exact applied specification Git revision.
     pub revision: &'static str,
+    /// Identifier of the assessment policy used for this report.
     pub policy: &'static str,
+    /// Aggregate normative conclusion derived from all rule evidence.
     pub conclusion: Conformance,
+    /// One entry for every [`DOCUMENT_RULES`] identifier, including inconclusive and not-applicable rules.
     pub evidence: BTreeMap<&'static str, Evidence>,
+    /// Retained explanatory findings; an empty or truncated list alone does not prove conformance.
     pub findings: Vec<Finding>,
+    /// True when findings exceed the 4096-entry or 8 MiB aggregate generated-pointer byte cap. Omission never changes rule evidence or fabricates a shortened source pointer.
     pub findings_truncated: bool,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+/// A well-formed declared version outside this implementation's supported line. This is separate from conformance evidence.
 pub struct VersionRefusal {
+    /// Original declared version string.
     pub declared: String,
+    /// Supported specification line used for the refusal.
     pub supported: &'static str,
 }
 impl fmt::Display for VersionRefusal {
@@ -65,6 +92,7 @@ impl fmt::Display for VersionRefusal {
 }
 impl std::error::Error for VersionRefusal {}
 #[derive(Clone)]
+/// Immutable retained exact JSON snapshot, without a conformance claim. Clones share storage and lazily cached interpretation/assessment. Dropping all owners releases storage; it does not promise an immediate process RSS decrease.
 pub struct ParsedDocument {
     pub(crate) inner: Arc<DocumentInner>,
 }
@@ -83,23 +111,33 @@ impl fmt::Debug for ParsedDocument {
     }
 }
 #[derive(Clone, Debug)]
+/// Normative evidence plus the parsed snapshot when one was admitted. Invalid JSON can still produce a report without a parsed document.
 pub struct DocumentAssessment {
     document: Option<ParsedDocument>,
     report: Arc<ConformanceReport>,
 }
 #[derive(Clone, Debug)]
+/// Retained proof that this immutable snapshot satisfied every applicable normative document rule. Obtain it through [`DocumentAssessment::validated`]; contract preparation is still a separate evaluator-dependent step.
 pub struct ValidatedDocument {
     document: ParsedDocument,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
+/// Structured refusal to interpret typed fields. Causes are extensible; match specific cases or `code()` and retain a fallback. Exact parsed JSON remains available after this error.
 #[non_exhaustive]
 pub enum InterpretationError {
+    /// The declaration is unsupported; contains the distinct version refusal.
     Version(VersionRefusal),
+    /// The required version declaration is absent, malformed or not a scalar string.
     MalformedVersion,
+    /// Duplicate member names make typed interpretation ambiguous.
     DuplicateMembers,
+    /// A retained JSON string contains an unpaired UTF-16 unit that typed interpretation cannot represent.
     UnpairedString,
+    /// A typed field has an invalid shape, with an original source location.
     InvalidField {
+        /// Specific stable identifier for the invalid typed field.
         code: &'static str,
+        /// Original coordinate of the offending field/value, not a generated schema location.
         location: SourceLocation,
     },
 }
@@ -110,6 +148,7 @@ impl fmt::Display for InterpretationError {
 }
 impl std::error::Error for InterpretationError {}
 impl InterpretationError {
+    /// Return the specific stable interpretation code; messages are not identifiers.
     pub fn code(&self) -> &'static str {
         match self {
             Self::Version(_) => "unsupported-version",
@@ -119,6 +158,7 @@ impl InterpretationError {
             Self::InvalidField { code, .. } => code,
         }
     }
+    /// Borrow a located field error's original coordinates; global interpretation refusals have no invented location.
     pub fn source_location(&self) -> Option<&SourceLocation> {
         match self {
             Self::InvalidField { location, .. } => Some(location),
@@ -141,6 +181,7 @@ impl ParsedDocument {
     pub fn parse(input: impl AsRef<[u8]>) -> Result<Self, InputError> {
         JsonValue::parse(input).map(Self::from_json)
     }
+    /// Create a document snapshot from an exact value without assessment. A subtree is made standalone so subsequent document coordinates refer to its independent source.
     pub fn from_json(value: JsonValue) -> Self {
         let value = backend::standalone(value);
         Self {
@@ -153,12 +194,15 @@ impl ParsedDocument {
             }),
         }
     }
+    /// Borrow the exact document value; no new owner or conformance proof is created.
     pub fn value(&self) -> &JsonValue {
         &self.inner.value
     }
+    /// Borrow the complete immutable source bytes, including whitespace.
     pub fn original_bytes(&self) -> &[u8] {
         self.value().original_source()
     }
+    /// Copy representable normative fields into an editable draft. Refuses duplicates and invalid typed shapes; exact opaque fields retain their values. This conversion does not establish conformance.
     pub fn to_authoring(&self) -> Result<DocumentBuilder, AuthoringError> {
         DocumentBuilder::from_json(self.value())
     }
@@ -254,7 +298,8 @@ impl ParsedDocument {
             value: value.clone(),
         })
     }
-    /// Primary operation objects in lexical key order. Malformed entries refuse
+    /// Allocate retained operation views in lexical key order. Each view remains
+    /// valid after this handle is dropped. Malformed entries refuse
     /// typed enumeration; `value()` remains available for exact inspection.
     pub fn operations(&self) -> Result<Vec<OperationView>, InterpretationError> {
         self.interpretable()?;
@@ -273,6 +318,7 @@ impl ParsedDocument {
         }
         Ok(index.bindings.get(key).cloned().unwrap_or_default())
     }
+    /// Return `None` when the dependency is absent, otherwise test its kind filter. Absence of `kinds` accepts all; an empty list accepts none. Interpretation may refuse the document; this method is not normative proof.
     pub fn dependency_accepts_kind(
         &self,
         dependency: &str,
@@ -359,10 +405,17 @@ impl NameIndex {
     }
 }
 #[derive(Clone, Debug)]
+/// Name-resolution result after successful interpretation; missing and ambiguous names are not schema verdicts.
 pub enum OperationSelection {
+    /// One retained operation view selected by primary key or alias; the view must still be assessed/prepared as needed.
     Found(OperationView),
+    /// No occurrence of the requested name exists.
     Missing,
-    Ambiguous { candidates: Vec<String> },
+    /// The name occurs more than once, including a repeated alias in one operation.
+    Ambiguous {
+        #[doc = "Distinct primary keys in lexical order; a single key can still represent repeated occurrences."]
+        candidates: Vec<String>,
+    },
 }
 /// Immutable retained operation object. Its exact value is not conformance proof.
 #[derive(Clone, Debug)]
@@ -372,9 +425,11 @@ pub struct OperationView {
     value: JsonValue,
 }
 impl OperationView {
+    /// Borrow the selected primary key, even when selection used an alias.
     pub fn key(&self) -> &str {
         &self.key
     }
+    /// Borrow the original exact operation object without creating a proof or evaluating schemas.
     pub fn value(&self) -> JsonRef<'_> {
         self.value.view()
     }
@@ -423,17 +478,21 @@ impl OperationView {
             })
             .transpose()
     }
+    /// Allocate binding keys in lexical presentation order; does not rank or invoke bindings.
     pub fn bindings(&self) -> Result<Vec<String>, InterpretationError> {
         self.document.operation_bindings(&self.key)
     }
 }
 impl DocumentAssessment {
+    /// Borrow complete per-rule evidence and the bounded findings list.
     pub fn report(&self) -> &ConformanceReport {
         &self.report
     }
+    /// Borrow the admitted snapshot, or `None` when input could not be parsed within admission limits.
     pub fn parsed(&self) -> Option<&ParsedDocument> {
         self.document.as_ref()
     }
+    /// Return a retained proof only for a conformant report; nonconformant and undetermined reports return `None`.
     pub fn validated(&self) -> Option<ValidatedDocument> {
         if self.report.conclusion == Conformance::Conformant {
             self.document
@@ -445,14 +504,17 @@ impl DocumentAssessment {
     }
 }
 impl ValidatedDocument {
+    /// Borrow the exact snapshot certified by this proof, for interpretation or contract setup.
     pub fn parsed(&self) -> &ParsedDocument {
         &self.document
     }
+    /// Borrow the exact bytes certified by this proof, including original formatting.
     pub fn original_bytes(&self) -> &[u8] {
         self.document.original_bytes()
     }
 }
 impl DocumentBuilder {
+    /// Encode the current draft into a fresh independent parsed snapshot. May refuse collisions, unrepresentable fields or limits; does not establish conformance.
     pub fn build(&self) -> Result<ParsedDocument, AuthoringError> {
         self.to_json().map(ParsedDocument::from_json)
     }
@@ -661,6 +723,7 @@ impl<'a> Checks<'a> {
     }
 }
 const NAME_GRAMMAR_MESSAGE: &str = "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens";
+/// Test the normative name grammar: ASCII letter, digit or underscore first, followed by ASCII letters, digits, underscores, dots or hyphens. No Unicode normalization or case folding is performed.
 pub fn valid_name(name: &str) -> bool {
     !name.is_empty()
         && name.bytes().enumerate().all(|(i, c)| {

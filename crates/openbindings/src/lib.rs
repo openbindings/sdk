@@ -12,6 +12,7 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 mod uri;
 mod version;
 pub use openbindings_internal_json::{

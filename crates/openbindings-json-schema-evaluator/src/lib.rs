@@ -1,5 +1,6 @@
 //! Optional JSON Schema 2020-12 evaluation. Resources are explicit; no I/O.
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 mod literals;
 use openbindings::*;
 use openbindings_internal_json::{
@@ -11,13 +12,21 @@ use std::sync::Arc;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]
+/// Finite default-evaluator budgets. Work counts are implementation units, not milliseconds; exhaustion yields no verdict unless an established failure only loses diagnostic completeness. Zero is literal, except `max_problems` has a minimum of one retained problem.
 pub struct Limits {
+    /// Evaluation work units per verdict/diagnostic pass; default 2,000,000.
     pub evaluation_steps: usize,
+    /// Nested evaluation depth; default 1024, distinct from source JSON nesting.
     pub evaluation_depth: usize,
+    /// Regular-expression work/backtracking budget per evaluation; default 2,000,000.
     pub regex_steps: usize,
+    /// Maximum retained failure diagnostics; default 256, effective minimum one. Truncation sets `problems_complete` false without changing an established failure.
     pub max_problems: usize,
+    /// Maximum projected JSON nesting admitted to evaluator compilation; default 512.
     pub compile_json_depth: usize,
+    /// Maximum UTF-8 bytes in each schema regular expression; default 1 MiB (1,048,576 bytes).
     pub pattern_bytes: usize,
+    /// Maximum parenthesis nesting in a schema regular expression; default 256.
     pub pattern_depth: usize,
 }
 impl Default for Limits {
@@ -34,16 +43,20 @@ impl Default for Limits {
     }
 }
 #[derive(Clone, Debug, Default)]
+/// Optional JSON Schema 2020-12 companion with exact numeric semantics and explicit resources only. It performs no network/filesystem acquisition. Format is annotation, Unicode property-escape matching is not qualified, and potential non-progressing cycles can conservatively refuse. Use a custom [`SchemaEvaluator`] when different qualified capabilities are required.
 pub struct DefaultEvaluator {
     limits: Limits,
 }
 impl DefaultEvaluator {
+    /// Construct the companion with [`Limits::default`]; no schemas are compiled or resources acquired yet.
     pub fn new() -> Self {
         Self::default()
     }
+    /// Construct the companion with explicit budgets; limits apply during preparation/evaluation, not as wall-clock deadlines.
     pub fn with_limits(limits: Limits) -> Self {
         Self { limits }
     }
+    /// Borrow this evaluator's configured budgets without allocation.
     pub fn limits(&self) -> &Limits {
         &self.limits
     }

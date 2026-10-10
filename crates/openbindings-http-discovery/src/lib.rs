@@ -4,6 +4,7 @@
 //! for the reusable reqwest adapter. Publication returns ordinary response data,
 //! so applications keep ownership of their HTTP server and authorization policy.
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 mod client;
 mod publication;
 pub use client::*;
@@ -11,16 +12,25 @@ pub use publication::*;
 #[cfg(all(feature = "native", not(target_arch = "wasm32")))]
 pub mod native;
 
+/// Fixed HTTP discovery route, `/.well-known/openbindings`.
 pub const WELL_KNOWN_PATH: &str = "/.well-known/openbindings";
+/// OpenBindings discovery media type, `application/vnd.openbindings+json`.
 pub const MEDIA_TYPE: &str = "application/vnd.openbindings+json";
+/// Request Accept value for the companion route, including JSON fallback.
 pub const ACCEPT: &str = "application/vnd.openbindings+json, application/json";
+/// Applied HTTP discovery companion version, independent of the SDK crate version.
 pub const COMPANION_VERSION: &str = "0.1.0";
+/// Exact specification revision defining this companion's behavior.
 pub const APPLIED_COMPANION_REVISION: &str = "2f7d754dc2da374058cd517064c17e50f7d95d99";
+/// Default decoded discovery-body limit: 1 MiB (1,048,576 bytes).
 pub const DEFAULT_MAX_DOCUMENT_BYTES: usize = 1 << 20;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+/// Caller configuration rejected before acquisition/publication; contains stable code and fixed explanation.
 pub struct ConfigurationError {
+    /// Stable configuration failure identifier.
     pub code: &'static str,
+    /// Human-readable explanation; branch on `code` instead.
     pub message: &'static str,
 }
 impl std::fmt::Display for ConfigurationError {

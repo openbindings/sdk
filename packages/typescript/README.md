@@ -421,3 +421,6 @@ widened to arbitrary strings. Rust's cause enums are non-exhaustive so adding a
 cause does not invalidate external wildcard matches. During pre-1.0 development,
 a new minor release may change source compatibility; review the changelog before
 upgrading. Neither language adds an `unknown` semantic outcome.
+
+Definition-level reference contracts, rendered documentation and maintained checks
+are described in the [API reference guide](../../docs/api-reference.md).

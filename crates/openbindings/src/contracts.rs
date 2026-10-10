@@ -9,11 +9,15 @@ use std::{
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "kebab-case")]
+/// Closed choice of the operation's input or output contract.
 pub enum Side {
+    /// Select the operation's `input` schema.
     Input,
+    /// Select the operation's `output` schema.
     Output,
 }
 impl Side {
+    /// Return the normative field spelling, `input` or `output`.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Input => "input",
@@ -23,29 +27,46 @@ impl Side {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
+/// Extensible cause of an unavailable schema verdict. Refusal is neither satisfaction nor failure; consumers should retain an unknown-cause fallback.
 #[non_exhaustive]
 pub enum NoVerdictReason {
+    /// The evaluator does not implement a required capability.
     UnsupportedCapability,
+    /// Sound preparation or evaluation could not be established, for example a potential non-progressing cycle. This does not prove semantic undefinedness.
     ConservativePreparation,
+    /// A required resource is absent from the explicitly supplied context; no network retrieval is attempted.
     ResourceUnavailable,
+    /// A configured work or representation limit prevented a verdict.
     LimitExceeded,
+    /// The caller's cooperative cancellation was observed.
     Cancelled,
+    /// The evaluator encountered an internal or operational failure; retry policy belongs to the caller.
     EvaluatorFailure,
+    /// Semantic undefinedness was established. Potential cycles or incomplete analysis alone must use a conservative refusal instead.
     Undefined,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+/// Location in an original schema source; generated evaluation-program identities are mapped back before exposure.
 pub struct SchemaLocation {
+    /// Original supplied-resource URI, or `None` for the OpenBindings document. A URI is an identity, never an instruction to fetch.
     pub resource: Option<String>,
+    /// RFC 6901 JSON Pointer within the original source; the empty string denotes its root. Escape for presentation without changing `~0`/`~1` semantics.
     pub pointer: String,
 }
 #[derive(Clone, Debug, Serialize)]
+/// Structured explanation for why no schema verdict was established. This public record may be constructed by custom evaluators.
 pub struct NoVerdict {
+    /// Extensible broad refusal category.
     pub reason: NoVerdictReason,
+    /// Evaluator-specific stable detail code; use with the broad reason for branching.
     pub code: String,
+    /// Explanatory text. Custom evaluators own its content and should avoid echoing source or instance data.
     pub message: String,
+    /// Original schema location when known; no generated or guessed location is substituted.
     pub location: Option<SchemaLocation>,
 }
 impl NoVerdict {
+    /// Construct an unlocated refusal; callers may set its public `location` when original-source evidence is available.
     pub fn new(
         reason: NoVerdictReason,
         code: impl Into<String>,
@@ -76,28 +97,43 @@ impl fmt::Display for NoVerdict {
 }
 impl std::error::Error for NoVerdict {}
 #[derive(Clone, Debug, Serialize)]
+/// One established instance failure with an optional original schema coordinate. Custom evaluators can construct this public record.
 pub struct ValueProblem {
+    /// RFC 6901 pointer to an existing location in the input instance; empty means the root.
     pub instance_pointer: String,
+    /// Original schema keyword location when mapping is available.
     pub schema_location: Option<SchemaLocation>,
+    /// Stable evaluator-defined problem code, commonly the failed JSON Schema keyword.
     pub code: String,
+    /// Explanatory text; custom evaluators should avoid exposing instance values or source-controlled strings by default.
     pub message: String,
 }
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
+/// Closed semantic partition for the selected schema and instance: satisfies, fails, or no verdict. Neither established verdict proves that the surrounding OpenBindings document conforms.
 pub enum ValueOutcome {
+    /// The instance was established to satisfy the selected schema.
     Satisfies,
+    /// The instance was established to fail the selected schema; diagnostic completeness is separate from the verdict.
     Fails {
+        /// Retained actual failing instance locations; diagnostics may be bounded after failure is established.
         problems: Vec<ValueProblem>,
+        /// Whether all available failure diagnostics were collected. False does not weaken the established failure verdict.
         problems_complete: bool,
     },
+    /// No satisfaction/failure verdict was established.
     NoVerdict {
+        /// Structured cause of refusal, including an original schema location when known.
         detail: NoVerdict,
     },
 }
 
 #[derive(Clone, Debug)]
+/// An explicit immutable schema resource associated with its retrieval identity. Supplying it performs no I/O.
 pub struct SchemaResource {
+    /// Absolute retrieval URI without a nonempty fragment; [`ResourceSet::new`] validates and normalizes identity.
     pub uri: String,
+    /// Exact resource JSON retained by the context; duplicate-member resources are refused.
     pub document: JsonValue,
 }
 /// Immutable caller-supplied resources. Separate contexts can use the same URI
@@ -107,8 +143,11 @@ pub struct ResourceSet {
     resources: Arc<Vec<SchemaResource>>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
+/// Invalid supplied-resource configuration, separate from schema preparation and value outcomes.
 pub struct ResourceError {
+    /// Caller-supplied resource identifier associated with the error; treat it as untrusted display data.
     pub uri: String,
+    /// Explanation of the configuration failure; not a schema verdict.
     pub message: String,
 }
 impl fmt::Display for ResourceError {
@@ -151,6 +190,7 @@ impl ResourceSet {
             resources: Arc::new(by_uri.into_values().collect()),
         })
     }
+    /// Borrow supplied resources in deterministic normalized-URI order; no allocation or acquisition.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &SchemaResource> {
         self.resources.iter()
     }
@@ -164,18 +204,23 @@ pub struct SchemaRequest {
     pub(crate) entry: usize,
 }
 impl SchemaRequest {
+    /// Borrow the original immutable OpenBindings snapshot, which may be a draft rather than normative proof.
     pub fn document(&self) -> &ParsedDocument {
         &self.space.document
     }
+    /// Borrow the immutable explicit resources for this context; evaluators must not substitute global URI caches.
     pub fn supplied_resources(&self) -> &ResourceSet {
         &self.space.supplied
     }
+    /// Borrow the selected exact input/output schema in its original context.
     pub fn entry(&self) -> &JsonValue {
         &self.space.nodes[self.entry].value
     }
+    /// Allocate the selected schema's original document location.
     pub fn entry_location(&self) -> SchemaLocation {
         self.space.location(self.entry)
     }
+    /// Build a finite evaluator projection with private resource identities, original-location mapping and cooperative cancellation. Refuses unsupported/ambiguous/unavailable references instead of retrieving data.
     pub fn evaluation_program(
         &self,
         control: &WorkControl,
@@ -187,11 +232,14 @@ impl SchemaRequest {
 /// to this program; consumers must not rely on their spelling or numbering.
 #[derive(Clone, Debug)]
 pub struct EvaluationProgram {
+    /// Private absolute URI selecting the projected entry; never expose it as an original diagnostic location.
     pub entry_uri: String,
+    /// Owned projected schema resources sufficient for this program; an evaluator may release them after compilation retains its required state.
     pub resources: Vec<SchemaResource>,
     pub(crate) locations: BTreeMap<String, SchemaLocation>,
 }
 impl EvaluationProgram {
+    /// Map a generated absolute keyword URI back to original source, or return `None` if no mapping exists. Never invent coordinates for an unmapped diagnostic.
     pub fn original_location(&self, generated_uri: &str) -> Option<SchemaLocation> {
         let normalized = if let Some((base, fragment)) = generated_uri.split_once('#') {
             format!("{base}#{}", crate::uri::decode_fragment(fragment)?)
@@ -211,13 +259,57 @@ impl EvaluationProgram {
         }
     }
 }
+/// Thread-safe preparation extension point. Respect immutable original context, explicit resources and [`WorkControl`]; perform no implicit I/O. Return a refusal when required capabilities, soundness or limits prevent preparation. Prepared objects must own everything they need after the request is dropped.
+///
+/// A deliberately small evaluator can truthfully support just the boolean `true`
+/// schema. Unsupported requests remain refusals; no source is fetched.
+///
+/// ```
+/// use openbindings::*;
+/// use std::sync::Arc;
+/// struct TrueOnly;
+/// impl SchemaEvaluator for TrueOnly {
+///     fn prepare(&self, request: &SchemaRequest, control: &WorkControl)
+///         -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+///         control.check()?;
+///         if request.entry().view().as_bool() == Some(true) {
+///             Ok(Arc::new(TrueOnly))
+///         } else {
+///             Err(NoVerdict {
+///                 reason: NoVerdictReason::UnsupportedCapability,
+///                 code: "true-only".into(),
+///                 message: "this evaluator supports only the true schema".into(),
+///                 location: Some(request.entry_location()),
+///             })
+///         }
+///     }
+/// }
+/// impl PreparedSchema for TrueOnly {
+///     fn validate(&self, _: &JsonValue, control: &WorkControl) -> ValueOutcome {
+///         match control.check() {
+///             Ok(()) => ValueOutcome::Satisfies,
+///             Err(detail) => ValueOutcome::NoVerdict { detail },
+///         }
+///     }
+/// }
+/// let document = ParsedDocument::parse(
+///     r#"{"openbindings":"0.2.0","operations":{"run":{"input":true}}}"#)?;
+/// let context = document.value_contracts(Arc::new(TrueOnly), ResourceSet::default())?;
+/// let ContractPreparation::Ready(contract) = context.prepare("run", Side::Input) else {
+///     panic!("the true schema must be supported");
+/// };
+/// assert!(matches!(contract.validate(&JsonValue::null()), ValueOutcome::Satisfies));
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub trait SchemaEvaluator: Send + Sync {
+    /// Prepare this selected schema only, borrowing the request and control for the call. Return a shareable immutable [`PreparedSchema`] or truthful [`NoVerdict`]; never turn preparation refusal into instance failure.
     fn prepare(
         &self,
         request: &SchemaRequest,
         control: &WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict>;
 }
+/// Thread-safe retained validator returned by a [`SchemaEvaluator`]. Repeated calls must preserve caller input and retain no accidental borrow of a completed request. Only claim established semantic verdicts; bound diagnostic work separately and report incompleteness.
 pub trait PreparedSchema: Send + Sync {
     /// Return only established verdicts. Resource/capability/work failures are NoVerdict.
     fn validate(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome;
@@ -236,7 +328,7 @@ pub struct ValueContracts {
 #[derive(Clone, Copy, Debug)]
 pub struct ValueContractOptions {
     /// Most-recently-used preparation entries retained by this context.
-    /// Zero disables retention. This limits entries, not total allocation bytes.
+    /// Default is four. Zero disables retention. This limits entries, not total allocation bytes.
     pub cache_capacity: usize,
 }
 impl Default for ValueContractOptions {
@@ -280,11 +372,22 @@ enum ContractState {
 /// Setup result. Only Ready owns a successfully prepared contract.
 #[derive(Clone, Debug)]
 pub enum ContractPreparation {
+    /// A retained prepared contract, independently usable after context drop or cache eviction.
     Ready(PreparedContract),
+    /// The selected operation exists but has no field for this side; this is distinct from the present boolean schema `false`.
     NoContract,
+    /// No primary key or alias matches the request.
     OperationMissing,
-    OperationAmbiguous { candidates: Vec<String> },
-    NoVerdict { detail: NoVerdict },
+    /// Multiple occurrences of the requested primary key or alias prevent selection.
+    OperationAmbiguous {
+        #[doc = "Distinct matching primary keys in lexical order; repeated aliases can yield one candidate key."]
+        candidates: Vec<String>,
+    },
+    /// Selection found a contract, but preparation did not establish readiness.
+    NoVerdict {
+        #[doc = "Truthful preparation refusal; no instance was judged."]
+        detail: NoVerdict,
+    },
 }
 /// A ready contract that retains its required compiled state independently of
 /// document/context lifetime and cache eviction. Cloning shares immutable state;
@@ -334,6 +437,11 @@ impl ParsedDocument {
     /// change this one. This does not establish whole-document conformance: use
     /// [`Self::assess`] if your application requires that before accepting a document.
     ///
+    /// Context construction validates the complete operation namespace, including
+    /// unrelated aliases, and returns a located [`InterpretationError`] for malformed
+    /// entries. Unrelated metadata may still be a draft: an established value verdict
+    /// concerns only the selected schema, not normative OBI conformance.
+    ///
     /// The default cache retains four most-recent preparation entries. Match
     /// [`ContractPreparation`] after [`ValueContracts::prepare`]; only its ready
     /// branch exposes validation. The optional `openbindings-json-schema-evaluator`
@@ -373,7 +481,7 @@ impl ParsedDocument {
 impl ValueContracts {
     /// Select a primary operation name or alias and prepare one side's contract.
     /// Match every [`ContractPreparation`] branch: missing/ambiguous operation,
-    /// absent contract and preparation refusal are setup states, not value failures.
+    /// absent contract and preparation refusal are setup states, not instance failures.
     /// Ready contracts can be retained beyond this context and validated repeatedly.
     /// Deterministic preparations may be reused within the bounded context cache;
     /// concurrent first requests may prepare more than once.
