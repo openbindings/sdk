@@ -1,0 +1,26 @@
+{
+  "healthy": {
+    "bytes": 156,
+    "sha256": "dd1758450c822bca77ea4f00f57f24af361d4cd6947fa958f6311781f023c015"
+  },
+  "duplicates-root": {
+    "bytes": 30007,
+    "sha256": "0f694361b976fb1720df5a9d4021eb1f77c4b5cf8faada36ae252ebd41b80177"
+  },
+  "duplicates-prefix": {
+    "bytes": 1078651,
+    "sha256": "8b5aa590505a3637ff8f28c32b29eb2b4c5993a2cf994141addf5c681d0dc0f0"
+  },
+  "names-prefix": {
+    "bytes": 1136560,
+    "sha256": "c05b534bab98b19642f04c4a56f605c830a7007f0c71c5e9d1a389e27b89f8a8"
+  },
+  "duplicates-wide-key": {
+    "bytes": 28725,
+    "sha256": "be8dd2b15d4dc0ee68b2480477b642be713746ed9ec2efb4fe3c62130b89f2e3"
+  },
+  "contract-wide": {
+    "bytes": 191,
+    "sha256": "f12748ff1f14f90af16f49a36be01c0bc2c2b78ed1f835de89148b6e053f65e3"
+  }
+}

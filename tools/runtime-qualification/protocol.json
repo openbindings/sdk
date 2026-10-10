@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "scope": "Controlled assisted-pilot local desktop qualification; no universal performance grade",
+  "sampling": {
+    "coldTrials": 7,
+    "warmups": 2,
+    "samples": 7,
+    "tierRepetitions": {
+      "small": 100,
+      "representative": 20,
+      "near": 1
+    },
+    "concurrency": 1,
+    "hotLifetimeCalls": 1000,
+    "replacements": 200,
+    "ownerCheckpoints": [20, 50, 100, 200],
+    "statistic": "median of seven batch-per-call samples; nearest-rank p95 is descriptive maximum only, with no tail confidence claim",
+    "noise": "retain all samples; max/min > 3 for stages >=1ms is inconclusive. Visible compilation or unrelated benchmark invalidates campaign. One entire-campaign rerun allowed; otherwise inconclusive. No outlier removal.",
+    "timeoutSeconds": 120
+  },
+  "absoluteMedianMs": {
+    "native": {
+      "complete": [25, 100, 2000],
+      "hot": [1, 5, 500],
+      "invalidAndSerialize": [100, 250, 5000]
+    },
+    "node": {
+      "complete": [75, 250, 5000],
+      "hot": [5, 20, 2000],
+      "invalidAndSerialize": [100, 250, 5000],
+      "coldSetup": 1000,
+      "discovery": [150, 500, 6000]
+    },
+    "browser-worker": {
+      "complete": [75, 250, 5000],
+      "hot": [5, 20, 2000],
+      "invalidAndSerialize": [100, 250, 5000],
+      "coldSetup": 2000,
+      "editorRoundtrip": [100, 500, 6000],
+      "discovery": [150, 500, 6000]
+    },
+    "workerd": {
+      "coldFirstRequest": 5000,
+      "hot": [5, 20, 2000],
+      "invalidAndSerialize": [100, 250, 5000]
+    }
+  },
+  "newMetricRegression": {
+    "ratio": 1.2,
+    "orAddedMs": 1,
+    "hotOrAddedMs": 0.1,
+    "nearOrAddedMs": 50
+  },
+  "historicalRegression": {
+    "ratio": 1.15,
+    "healthyAndContractOrAddedNs": 10000,
+    "diagnosticOrAddedNs": 1000000,
+    "rawAndGzipWasmRatio": 1.15,
+    "scope": "six fixtures, two lanes each; exact original twelve jobs"
+  },
+  "browserResponsiveness": {
+    "intervalMs": 10,
+    "maxDescriptiveP95GapMs": 50,
+    "startupExclusion": "start after Worker ready, stop after all three workload tiers; retain every interval; startup/module loading excluded",
+    "simulation": false
+  },
+  "transferModel": {
+    "compressedAsset": "gzip9",
+    "megabitsPerSecond": 10,
+    "roundTripMs": 100,
+    "simulation": true,
+    "formula": "100 + compressedBytes * 8 / 10000 milliseconds; one payload, no cache, one RTT; not observed internet latency"
+  },
+  "ownership": "Warm parse/assess/prepare/valid/invalid/serialize/dispose and explicit-resource replacement first; released exact-JSON arena count must equal warmed count at every checkpoint. Retained old contract survives new resource snapshot/context release and cache eviction. RSS and heap are separate observations; Wasm capacity unavailable through public facade.",
+  "outputEquivalence": "Compare verdict and meaningful locations/codes. Record diagnostic count/completeness/wire bytes. Reduced diagnostics after a new cap are an intentional workload-output change, never an equivalent-output speedup.",
+  "rationale": "Ordinary local CLI should finish below perceptible 0.1s; representative editor edits should respond within0.5s after debounce; near-admission work is allowed seconds and needs progress/cancellation UI. Prepared service allowances reserve time for application work. These are product allowances frozen before baseline timing, not targets inferred from baseline speed. Cold local setup permits explicit loading UX. Discovery is loopback or injected transport, not WAN.",
+  "support": "Measured macOS native and Node22; named desktop Chromium/WebKit only. Native Linux/Windows remain required CI evidence, not measured here. Local workerd correctness/request observations do not establish deployed Cloudflare CPU quota or latency. No Firefox, Bun, Deno, mobile or second-device claim. Simulated transfer alone does not qualify a broad browser/device claim.",
+  "amplification": {
+    "keyBytes": 32768,
+    "invalidProperties": 257,
+    "warmups": 2,
+    "samples": 7,
+    "repetitions": 1,
+    "absoluteMedianMs": 250,
+    "scope": "supplementary invalid witness; native/Node/browser validate+serialize admitted exact value; workerd external complete request includes preparation; output volume changes explicitly reported"
+  },
+  "preTimingAmendments": [
+    "Near valid/hot case is admitted but returns evaluation-work-limit no-verdict under defaults; report refusal cost, not successful throughput.",
+    "Discovery+inspection medians150/500/6000ms accepted for Node/browser local processing; native C4 timing unqualified.",
+    "Owner accepted amplification witness250ms representative diagnostic allowance before baseline timing."
+  ]
+}
