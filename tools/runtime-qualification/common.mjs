@@ -18,6 +18,7 @@ export async function fixtureSet(root) {
       repetitions: row.repetitions,
       validOutcome: row.validOutcome,
       hotBatchRepetitions: protocol.hotBatchRepetitions[tier],
+      invalidBatchRepetitions: protocol.invalidBatchRepetitions[tier],
     };
     for (const [kind, identity] of Object.entries(row.files)) {
       const raw = await fs.readFile(path.join(root, identity.name));

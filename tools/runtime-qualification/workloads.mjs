@@ -58,6 +58,30 @@ export function retainedBatch(
   check(Number.isFinite(elapsed) && elapsed >= 0, "invalid timer duration");
   return { elapsedMs: elapsed, perCallMs: elapsed / repetitions };
 }
+// The budgeted diagnostic job includes validate, an outcome guard, and exactly
+// one JSON.stringify per call. No per-call JSON inspection or parsing is added.
+export function invalidSerializedBatch(contract, value, repetitions, clock) {
+  check(
+    Number.isSafeInteger(repetitions) && repetitions > 0,
+    "positive batch count",
+  );
+  let lastResult, lastWire;
+  const start = clock();
+  for (let n = 0; n < repetitions; n++) {
+    lastResult = contract.validate(value);
+    if (lastResult.outcome !== "fails")
+      throw Error("diagnostic batch changed verdict: " + lastResult.outcome);
+    lastWire = JSON.stringify(lastResult);
+  }
+  const elapsed = clock() - start;
+  check(Number.isFinite(elapsed) && elapsed >= 0, "invalid timer duration");
+  return {
+    elapsedMs: elapsed,
+    perCallMs: elapsed / repetitions,
+    lastResult,
+    serializedCodeUnits: lastWire.length,
+  };
+}
 export function runTier(sdk, fixture, timed = true) {
   const clock = timed ? () => performance.now() : () => 0;
   const stages = [
@@ -72,7 +96,7 @@ export function runTier(sdk, fixture, timed = true) {
     "serialize",
     "cleanup",
     "complete",
-    "invalidAndSerialize",
+    "invalidAndSerializeDescriptive",
   ];
   let last;
   function once() {
@@ -136,7 +160,7 @@ export function runTier(sdk, fixture, timed = true) {
       row.contextAndPrepare +
       row.parseValue +
       row.firstValidation;
-    row.invalidAndSerialize = row.invalid + row.serialize;
+    row.invalidAndSerializeDescriptive = row.invalid + row.serialize;
     return row;
   }
   // Full job warms lazy process-global fixed schema owners before comparison.
@@ -182,6 +206,31 @@ export function runTier(sdk, fixture, timed = true) {
     hotContract.dispose();
   }
   check(sdk.liveStorageOwners() === warmedOwners, "retained batch cleanup");
+  const invalidContract = prepare(sdk, fixture.document);
+  let invalidValue;
+  const invalidBatchTotalsMs = [];
+  samples.invalidAndSerialize = [];
+  try {
+    invalidValue = parsed(sdk, fixture.invalid);
+    const batch = () =>
+      invalidSerializedBatch(
+        invalidContract,
+        invalidValue,
+        fixture.invalidBatchRepetitions,
+        clock,
+      );
+    batch();
+    batch();
+    for (let n = 0; n < (timed ? 7 : 1); n++) {
+      const row = batch();
+      samples.invalidAndSerialize.push(row.perCallMs);
+      invalidBatchTotalsMs.push(row.elapsedMs);
+    }
+  } finally {
+    invalidValue?.dispose();
+    invalidContract.dispose();
+  }
+  check(sdk.liveStorageOwners() === warmedOwners, "diagnostic batch cleanup");
   return {
     samplesMs: timed ? samples : null,
     repetitions,
@@ -193,6 +242,12 @@ export function runTier(sdk, fixture, timed = true) {
     hotBatchTotalsMs: timed ? hotBatchTotalsMs : null,
     hotMeasurement:
       "one outer timer around retained calls; exact admission and preparation excluded; per-call verdict guard included",
+    invalidBatchRepetitions: fixture.invalidBatchRepetitions,
+    invalidBatchTotalsMs: timed ? invalidBatchTotalsMs : null,
+    invalidMeasurement:
+      "one outer timer around retained invalid validations; verdict guard and exactly one JSON.stringify per call inside; prepare/admit and result inspection outside",
+    invalidClockResolutionLimited:
+      timed && samples.invalidAndSerialize.some((ms) => ms <= 0),
     clockResolutionLimited: timed && samples.hot.some((ms) => ms <= 0),
     throughputMeaning:
       fixture.validOutcome === "satisfies"

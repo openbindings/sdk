@@ -22,7 +22,7 @@ await fs.writeFile(
   path.join(runRoot, "worker.mjs"),
   `import module from 'asset';
 import * as sdk from 'sdk/index.js';
-import {runTier,lifetime,prepare,parsed,describe,amplification} from './workloads.mjs';
+import {runTier,lifetime,prepare,parsed,describe,amplification,invalidSerializedBatch} from './workloads.mjs';
 let contract,valid,invalid;
 export default {async fetch(request){
  if(new URL(request.url).pathname==='/health')return new Response('ready');
@@ -31,7 +31,8 @@ export default {async fetch(request){
  if(job.kind==='check')return Response.json({tier:runTier(sdk,job.fixture,false)});
  if(job.kind==='lifetime')return Response.json(lifetime(sdk,job.fixture,false));
  if(job.kind==='prepare'){contract?.dispose();valid?.dispose();invalid?.dispose();contract=prepare(sdk,job.fixture.document);valid=parsed(sdk,job.fixture.valid);invalid=parsed(sdk,job.fixture.invalid);return Response.json({ready:true,owners:sdk.liveStorageOwners()});}
- if(job.kind==='hot'||job.kind==='invalid'){let result;for(let n=0;n<job.repetitions;n++){result=contract.validate(job.kind==='hot'?valid:invalid);if(result.outcome!==job.expectedOutcome)throw Error('retained batch changed verdict');}return Response.json(describe(result));}
+ if(job.kind==='invalid'){const batch=invalidSerializedBatch(contract,invalid,job.repetitions,()=>0);return Response.json(describe(batch.lastResult));}
+ if(job.kind==='hot'){let result;for(let n=0;n<job.repetitions;n++){result=contract.validate(valid);if(result.outcome!==job.expectedOutcome)throw Error('retained batch changed verdict');}return Response.json(describe(result));}
  if(job.kind==='dispose'){contract?.dispose();valid?.dispose();invalid?.dispose();contract=valid=invalid=undefined;return Response.json({owners:sdk.liveStorageOwners()});}
  return Response.json({initialized:true,owners:sdk.liveStorageOwners()});
  }catch(error){return Response.json({error:String(error),stack:error.stack},{status:500});}
@@ -114,6 +115,7 @@ try {
       samplesMs: { hot: [], invalidAndSerialize: [] },
       concurrency: 1,
       hotBatchRepetitions: fixture.hotBatchRepetitions,
+      invalidBatchRepetitions: fixture.invalidBatchRepetitions,
       measurement:
         "external loopback HTTP per-call batch average; includes request overhead; workerd internal CPU clock is not used",
     };
@@ -121,7 +123,10 @@ try {
       ["hot", "hot"],
       ["invalid", "invalidAndSerialize"],
     ]) {
-      const repetitions = kind === "hot" ? fixture.hotBatchRepetitions : 1;
+      const repetitions =
+        kind === "hot"
+          ? fixture.hotBatchRepetitions
+          : fixture.invalidBatchRepetitions;
       for (let n = 0; n < (timed ? 9 : 1); n++) {
         const before = timed ? performance.now() : 0;
         const result = await call(origin, {
