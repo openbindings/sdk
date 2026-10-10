@@ -1,12 +1,14 @@
 --- a/.cargo_vcs_info.json
-+++ b/.cargo_vcs_info.json
++++ /dev/null
 @@ -1,6 +0,0 @@
 -{
 -  "git": {
 -    "sha1": "55ac1664384793c5d3b20745d3f9c169dfe2c06f"
 -  },
 -  "path_in_vcs": "crates/jsonschema"
--}--- a/Cargo.toml
+-}
+\ No newline at end of file
+--- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -10,10 +10,11 @@
  # See Cargo.toml.orig for the original contents.
@@ -66,7 +68,7 @@
 +path = "../openbindings-internal-regress"
 +features = ["utf16", "prohibit-unsafe"]
 --- a/Cargo.toml.orig
-+++ b/Cargo.toml.orig
++++ /dev/null
 @@ -1,173 +0,0 @@
 -[package]
 -name = "jsonschema"
@@ -241,7 +243,7 @@
 -harness = false
 -name = "jsonb"
 -required-features = ["jsonb"]
---- a/OPENBINDINGS-PATCH.md
+--- /dev/null
 +++ b/OPENBINDINGS-PATCH.md
 @@ -0,0 +1,16 @@
 +# Internal dependency fork
@@ -260,7 +262,7 @@
 +before allocation, omits unused nested/payload diagnostics and records deterministic
 +usage counters. It is active only during the default evaluator's post-verdict
 +diagnostic pass. See the root maintenance contract and evaluator resource guide.
---- a/UPSTREAM-Cargo.toml
+--- /dev/null
 +++ b/UPSTREAM-Cargo.toml
 @@ -0,0 +1,173 @@
 +[package]
@@ -436,7 +438,7 @@
 +harness = false
 +name = "jsonb"
 +required-features = ["jsonb"]
---- a/UPSTREAM-VCS.json
+--- /dev/null
 +++ b/UPSTREAM-VCS.json
 @@ -0,0 +1,6 @@
 +{
@@ -444,7 +446,9 @@
 +    "sha1": "55ac1664384793c5d3b20745d3f9c169dfe2c06f"
 +  },
 +  "path_in_vcs": "crates/jsonschema"
-+}--- a/src/canonical/context.rs
++}
+\ No newline at end of file
+--- a/src/canonical/context.rs
 +++ b/src/canonical/context.rs
 @@ -26,7 +26,7 @@
  
@@ -1659,7 +1663,7 @@
          match &self.inner.validators {
              NodeValidators::Array { ref validators } => Self::evaluate_subschemas(
                  instance,
---- a/src/ob_ecma.rs
+--- /dev/null
 +++ b/src/ob_ecma.rs
 @@ -0,0 +1,117 @@
 +//! Internal ECMA-262 11th-edition and bounded-work adapter.
@@ -1779,7 +1783,7 @@
 +    }
 +    false
 +}
---- a/src/ob_work.rs
+--- /dev/null
 +++ b/src/ob_work.rs
 @@ -0,0 +1,326 @@
 +//! OpenBindings qualification patch: evaluator entry work/depth accounting.

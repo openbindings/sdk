@@ -1,12 +1,14 @@
 --- a/.cargo_vcs_info.json
-+++ b/.cargo_vcs_info.json
++++ /dev/null
 @@ -1,6 +0,0 @@
 -{
 -  "git": {
 -    "sha1": "55ac1664384793c5d3b20745d3f9c169dfe2c06f"
 -  },
 -  "path_in_vcs": "crates/jsonschema-value"
--}--- a/Cargo.toml
+-}
+\ No newline at end of file
+--- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -10,10 +10,11 @@
  # See Cargo.toml.orig for the original contents.
@@ -34,7 +36,7 @@
  
  [dependencies.zmij]
 --- a/Cargo.toml.orig
-+++ b/Cargo.toml.orig
++++ /dev/null
 @@ -1,56 +0,0 @@
 -[package]
 -name = "jsonschema-value"
@@ -92,7 +94,7 @@
 -
 -[lints]
 -workspace = true
---- a/LICENSE
+--- /dev/null
 +++ b/LICENSE
 @@ -0,0 +1,21 @@
 +MIT License
@@ -116,7 +118,7 @@
 +LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 +OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 +SOFTWARE.
---- a/OPENBINDINGS-PATCH.md
+--- /dev/null
 +++ b/OPENBINDINGS-PATCH.md
 @@ -0,0 +1,11 @@
 +# Internal dependency fork
@@ -130,7 +132,7 @@
 +The repository maintenance contract is DEPENDENCY-MAINTENANCE.md. Original
 +upstream identity and manifest are retained as UPSTREAM-VCS.json and
 +UPSTREAM-Cargo.toml; these names avoid Cargo-reserved packaging metadata.
---- a/UPSTREAM-Cargo.toml
+--- /dev/null
 +++ b/UPSTREAM-Cargo.toml
 @@ -0,0 +1,56 @@
 +[package]
@@ -189,7 +191,7 @@
 +
 +[lints]
 +workspace = true
---- a/UPSTREAM-VCS.json
+--- /dev/null
 +++ b/UPSTREAM-VCS.json
 @@ -0,0 +1,6 @@
 +{
@@ -197,7 +199,9 @@
 +    "sha1": "55ac1664384793c5d3b20745d3f9c169dfe2c06f"
 +  },
 +  "path_in_vcs": "crates/jsonschema-value"
-+}--- a/src/cmp.rs
++}
+\ No newline at end of file
+--- a/src/cmp.rs
 +++ b/src/cmp.rs
 @@ -1,6 +1,8 @@
 +#[cfg(not(feature = "arbitrary-precision"))]
@@ -283,7 +287,7 @@
 +
 +#[cfg(feature = "arbitrary-precision")]
 +pub mod ob_decimal;
---- a/src/ob_decimal.rs
+--- /dev/null
 +++ b/src/ob_decimal.rs
 @@ -0,0 +1,307 @@
 +//! OpenBindings qualification patch: compact exact decimal operations.

@@ -1,12 +1,14 @@
 --- a/.cargo_vcs_info.json
-+++ b/.cargo_vcs_info.json
++++ /dev/null
 @@ -1,6 +0,0 @@
 -{
 -  "git": {
 -    "sha1": "de8500740cdcabffb9734f503e4889def823cf10"
 -  },
 -  "path_in_vcs": ""
--}--- a/Cargo.toml
+-}
+\ No newline at end of file
+--- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -10,10 +10,11 @@
  # See Cargo.toml.orig for the original contents.
@@ -23,7 +25,7 @@
      "Erick Tryzelaar <erick.tryzelaar@gmail.com>",
      "David Tolnay <dtolnay@gmail.com>",
 --- a/Cargo.toml.orig
-+++ b/Cargo.toml.orig
++++ /dev/null
 @@ -1,95 +0,0 @@
 -[package]
 -name = "serde_json"
@@ -120,7 +122,7 @@
 -# overflow the stack after deserialization has completed, including, but not
 -# limited to, Display and Debug and Drop impls.
 -unbounded_depth = []
---- a/OPENBINDINGS-PATCH.md
+--- /dev/null
 +++ b/OPENBINDINGS-PATCH.md
 @@ -0,0 +1,5 @@
 +# Internal package identity fork
@@ -128,7 +130,7 @@
 +Based on serde_json 1.0.151; upstream Rust source is byte-identical. Only package identity and internal dependency wiring change. This package isolates the SDK arbitrary-precision JSON feature graph from consumer serde_json. It is unpublished and not a supported SDK extension API.
 +
 +Original licenses, UPSTREAM-Cargo.toml and UPSTREAM-VCS.json are retained. See the root DEPENDENCY-MAINTENANCE.md and tools/verify-dependency-isolation.py for the update procedure and source identity gate.
---- a/UPSTREAM-Cargo.toml
+--- /dev/null
 +++ b/UPSTREAM-Cargo.toml
 @@ -0,0 +1,95 @@
 +[package]
@@ -226,7 +228,7 @@
 +# overflow the stack after deserialization has completed, including, but not
 +# limited to, Display and Debug and Drop impls.
 +unbounded_depth = []
---- a/UPSTREAM-VCS.json
+--- /dev/null
 +++ b/UPSTREAM-VCS.json
 @@ -0,0 +1,6 @@
 +{
@@ -235,3 +237,4 @@
 +  },
 +  "path_in_vcs": ""
 +}
+\ No newline at end of file
