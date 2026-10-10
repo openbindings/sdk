@@ -35,12 +35,36 @@ When optional bounds planning declines, the default evaluator restores its origi
 strict located ResourceUnavailable detail for exactly these reason/code pairs:
 ConservativePreparation with `partial-nonpositive-influence` or
 `partial-annotation-or-dynamic`, and LimitExceeded with `partial-program-byte-limit`,
-`partial-scratch-limit`, `schema-edge-limit`, `schema-hole-limit`,
+`partial-scratch-limit`, `schema-hole-limit`,
 `partial-generated-node-limit` or `partial-generated-edge-limit`. Known-closure
-defects, cancellation, shared schema-node/depth limits and compile failures preserve
+defects, cancellation, known schema-node/edge/depth limits and compile failures preserve
 their actual causes. This is a finite fallback policy, not a broad error-category catch.
 The explicitly requested `evaluation_bounds()` utility retains its direct planner
 errors; it neither reruns strict projection nor applies this application recovery rule.
+
+At the fixed 200,000 edge and 100,000 node caps, `schema-edge-limit` already
+establishes too many known schema positions: each reached node contributes at most
+one reference/hole edge, and every other edge selects a distinct child position.
+Admitting 200,000 edges requires at least 100,000 such children plus the entry.
+Supplying absent resources cannot make that closure fit. The actual edge refusal
+is retained; it is not relabeled as a node refusal. This rationale must be revisited
+if the cap relationship changes. The missing-reference cap is shadowed by the
+node cap at the defaults; private small-cap tests exercise its internal boundary.
+
+Planner refusals identify original sources where safely representable. Malformed
+missing-reference fragments mark the holder's `/$ref`; unsupported keywords and
+nonpositive influence mark the rejecting keyword or operand boundary. Node and
+edge limits mark the position that would exceed admission, with a safely bounded
+parent or selected-schema boundary if that position is too large to copy.
+Aggregate projection text, generated graph and parse failures mark the selected
+schema as a preparation boundary, not a uniquely offending leaf. Hole influence
+starts in discovery order; known cycle checks start in node-index order so these
+refusal choices are stable for fixed input/resource order.
+
+Existing strict resolver refusals continue to mark the holder schema, including
+the original `resource-unavailable` detail restored after an optional decline.
+Reference facts, Incomplete evidence and malformed-fragment planner diagnostics
+mark the reference keyword. Existing precise locations are preserved.
 
 ## Adapter contract
 
@@ -222,7 +246,7 @@ only to this new fragment and are prospective, unmeasured admission choices.
 The combined plan admits **64 MiB logical retained UTF-8 text**: both projected JSON
 resources including generated wrappers and separately owned decoded strings,
 every resource URI and entry string, generated/original mapping strings, and owned
-refusal code/message/location text. An escaped JSON string owns its complete
+Incomplete-evidence code/message/location text. An escaped JSON string owns its complete
 decoded UTF-8 value in addition to its serialized token; both count. This applies
 to member names and strings anywhere inside copied annotations or exact literals.
 The two programs share one immutable source map, counted once; copied text is
@@ -240,8 +264,20 @@ the admitted serialized length. The check does not parse a speculative projectio
 
 A separate **64 MiB scratch-input guard** applies before invoking resolution or
 copying full source pointers: reference plus base length, each full source pointer,
-and each source resource URI must fit. This can be narrower than the final relative
-mapping length when a caller supplies a nested value. It is explicit and tested.
+and each source resource URI must fit. Full pointer admission precedes any source-
+prefix stripping. ResourceSet currently rebases supplied subtrees; a private source-
+construction control also checks prefix stripping defensively.
+Optional refusal locations are separate retained objects (including cached
+preparation refusals), outside the successful paired-program text admission.
+Before copying one, its full source pointer plus keyword suffix and its source URI
+must each fit the scratch guard. An overlong location is omitted or replaced by a
+safely bounded original boundary; pointers are never truncated and the original
+reason, code and message are retained. Cancellation can remain unlocated.
+Private small-cap controls cover these allocation boundaries and generated/text
+admission; they do not establish production reachability. Routine native and
+Node/browser checks exercise the actual node/edge caps. The ignored 64 MiB
+projection stress witness remains an explicit opt-in; aggregate parse admission
+and the defensive fragment UTF-8 branch have no new end-to-end witness here.
 These are logical text and graph limits, not total heap, transient allocator
 capacity, original caller snapshot, compiled memory or RSS promises. The existing
 complete-resource projection limits and error precedence are preserved.

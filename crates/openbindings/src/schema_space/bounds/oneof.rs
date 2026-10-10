@@ -746,13 +746,11 @@ mod tests {
                     "partial-generated-edge-limit",
                 ),
             ] {
-                assert_eq!(
-                    space
-                        .bounds_admitted(entry, &control, cap)
-                        .unwrap_err()
-                        .code,
-                    expected
-                );
+                // Internal small-cap aggregate boundary controls, not
+                // production-cap stress witnesses.
+                let detail = space.bounds_admitted(entry, &control, cap).unwrap_err();
+                assert_eq!(detail.code, expected);
+                assert_eq!(detail.location.unwrap().pointer, "/operations/op/input");
             }
             let plan = space.partial_reach(entry, &control, cap).unwrap();
             let mut counted =

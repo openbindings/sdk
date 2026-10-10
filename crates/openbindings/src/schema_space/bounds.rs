@@ -19,6 +19,7 @@ const UNAVAILABLE_MESSAGE: &str = "validity could depend on a resource that was 
 #[derive(Clone, Copy)]
 struct Admission {
     text: usize,
+    scratch: usize,
     nodes: usize,
     edges: usize,
     holes: usize,
@@ -29,6 +30,7 @@ impl Default for Admission {
     fn default() -> Self {
         Self {
             text: TEXT_LIMIT,
+            scratch: TEXT_LIMIT,
             nodes: NODE_LIMIT,
             edges: EDGE_LIMIT,
             holes: HOLE_LIMIT,
@@ -54,6 +56,7 @@ struct Plan {
     reach: Reach,
     dependencies: Vec<Edge>,
     holes: HashSet<usize>,
+    hole_order: Vec<usize>,
     first_hole: Option<usize>,
     edge_count: usize,
     // Numeric namespace segments only: original resolved identities remain borrowed.
@@ -143,21 +146,32 @@ impl Plan {
         queue.push_back(to);
         Ok(())
     }
-    fn qualify(&mut self, control: &WorkControl) -> Result<(), NoVerdict> {
+    fn qualify(
+        &mut self,
+        space: &SchemaSpace,
+        control: &WorkControl,
+        cap: Admission,
+    ) -> Result<(), NoVerdict> {
         let mut reverse: HashMap<usize, Vec<&Edge>> = HashMap::new();
         for edge in &self.dependencies {
             reverse.entry(edge.to).or_default().push(edge);
         }
         let mut dependent = self.holes.clone();
-        let mut queue: VecDeque<_> = self.holes.iter().copied().collect();
+        let mut queue: VecDeque<_> = self.hole_order.iter().copied().collect();
         while let Some(id) = queue.pop_front() {
             control.check()?;
             for edge in reverse.get(&id).into_iter().flatten() {
                 if edge.influence == Influence::Excluded {
-                    return Err(NoVerdict::new(
-                        NoVerdictReason::ConservativePreparation,
-                        "partial-nonpositive-influence",
-                        "an unavailable reference influences an unqualified applicator",
+                    return Err(space.bounds_failure(
+                        NoVerdict::new(
+                            NoVerdictReason::ConservativePreparation,
+                            "partial-nonpositive-influence",
+                            "an unavailable reference influences an unqualified applicator",
+                        ),
+                        edge.to,
+                        "",
+                        Some(edge.from),
+                        cap,
                     ));
                 }
                 if edge.influence == Influence::OneOf {
@@ -173,6 +187,38 @@ impl Plan {
     }
 }
 impl SchemaSpace {
+    // Refusal locations are retained independently of a successful paired plan.
+    // Measure the full pointer before location() allocates it (including a
+    // supplied value's stripped prefix), and account for a keyword suffix too.
+    fn bounds_location(&self, id: usize, suffix: &str, cap: Admission) -> Option<SchemaLocation> {
+        let node = &self.nodes[id];
+        let source = &self.sources[node.source];
+        let full = pointer_size(node.value.view(), cap.scratch)?;
+        pointer_size(source.value.view(), cap.scratch)?;
+        if full.checked_add(suffix.len())? > cap.scratch
+            || source.uri.as_ref().is_some_and(|s| s.len() > cap.scratch)
+        {
+            return None;
+        }
+        let mut location = self.location(id);
+        location.pointer.push_str(suffix);
+        Some(location)
+    }
+    fn bounds_failure(
+        &self,
+        mut detail: NoVerdict,
+        id: usize,
+        suffix: &str,
+        fallback: Option<usize>,
+        cap: Admission,
+    ) -> NoVerdict {
+        if detail.location.is_none() {
+            detail.location = self
+                .bounds_location(id, suffix, cap)
+                .or_else(|| fallback.and_then(|boundary| self.bounds_location(boundary, "", cap)));
+        }
+        detail
+    }
     pub(crate) fn bounds(
         &self,
         entry: usize,
@@ -182,15 +228,15 @@ impl SchemaSpace {
     }
     // Scratch guard is separate from retained text. Resolver errors allocate
     // original locations; measure before calling the unchanged strict resolver.
-    fn bounds_scratch(&self, id: usize, reference: &str) -> Result<(), NoVerdict> {
+    fn bounds_scratch(&self, id: usize, reference: &str, cap: Admission) -> Result<(), NoVerdict> {
         let node = &self.nodes[id];
         let base = self.resources[node.resource].base.as_deref().unwrap_or("");
-        if reference.len().saturating_add(base.len()) > TEXT_LIMIT
-            || pointer_size(node.value.view(), TEXT_LIMIT).is_none()
+        if reference.len().saturating_add(base.len()) > cap.scratch
+            || pointer_size(node.value.view(), cap.scratch).is_none()
             || self.sources[node.source]
                 .uri
                 .as_ref()
-                .is_some_and(|s| s.len() > TEXT_LIMIT)
+                .is_some_and(|s| s.len() > cap.scratch)
         {
             return Err(limit(
                 "partial-scratch-limit",
@@ -213,13 +259,20 @@ impl SchemaSpace {
                 continue;
             }
             if out.reach.nodes.len() >= cap.nodes {
-                return Err(limit(
-                    "schema-node-limit",
-                    "preparation reached more than 100,000 schema nodes",
+                return Err(self.bounds_failure(
+                    limit(
+                        "schema-node-limit",
+                        "preparation reached more than 100,000 schema nodes",
+                    ),
+                    id,
+                    "",
+                    Some(entry),
+                    cap,
                 ));
             }
             out.reach.nodes.insert(id);
-            self.bounds_scratch(id, "")?;
+            self.bounds_scratch(id, "", cap)
+                .map_err(|detail| self.bounds_failure(detail, id, "", Some(entry), cap))?;
             self.check_known_node(id)?;
             let node = &self.nodes[id];
             out.reach.resources.insert(node.resource);
@@ -230,15 +283,17 @@ impl SchemaSpace {
                     keyword,
                     "unevaluatedProperties" | "unevaluatedItems" | "$dynamicRef" | "$dynamicAnchor"
                 ) {
-                    return Err(NoVerdict::new(
+                    return Err(self.bounds_failure(NoVerdict::new(
                         NoVerdictReason::ConservativePreparation,
                         "partial-annotation-or-dynamic",
                         "partial bounds do not support evaluated unevaluated or dynamic keywords",
-                    ));
+                    ), id, &format!("/{keyword}"), Some(id), cap));
                 }
                 if keyword == "$ref" {
                     let reference = member.value.as_str().expect("known meta-schema check");
-                    self.bounds_scratch(id, reference)?;
+                    self.bounds_scratch(id, reference, cap).map_err(|detail| {
+                        self.bounds_failure(detail, id, "/$ref", Some(id), cap)
+                    })?;
                     let mut occupied_suffix = None;
                     let resolved = self.resolve_with_missing(id, reference, &mut |name| {
                         occupied_suffix = private_namespace(name);
@@ -255,7 +310,10 @@ impl SchemaSpace {
                                 },
                                 &mut queue,
                                 cap,
-                            )?;
+                            )
+                            .map_err(|detail| {
+                                self.bounds_failure(detail, id, "/$ref", Some(id), cap)
+                            })?;
                             out.reach.targets.insert((id, "$ref".into()), target);
                         }
                         Err(detail)
@@ -266,30 +324,39 @@ impl SchemaSpace {
                             let fragment =
                                 uri::decode_fragment(uri::fragment(reference).unwrap_or(""))
                                     .ok_or_else(|| {
-                                        NoVerdict::new(
-                                            NoVerdictReason::ConservativePreparation,
-                                            "fragment-encoding",
-                                            "reference fragment is not UTF-8",
+                                        self.bounds_failure(
+                                            NoVerdict::new(
+                                                NoVerdictReason::ConservativePreparation,
+                                                "fragment-encoding",
+                                                "reference fragment is not UTF-8",
+                                            ),
+                                            id,
+                                            "/$ref",
+                                            Some(id),
+                                            cap,
                                         )
                                     })?;
                             if !valid_unknown_fragment(&fragment) {
-                                return Err(NoVerdict::new(
+                                return Err(self.bounds_failure(NoVerdict::new(
                                     NoVerdictReason::ConservativePreparation,
                                     "invalid-reference-fragment",
                                     "missing-resource reference has invalid pointer or anchor syntax",
-                                ));
+                                ), id, "/$ref", Some(id), cap));
                             }
                             if out.holes.len() >= cap.holes {
-                                return Err(limit(
+                                return Err(self.bounds_failure(limit(
                                     "schema-hole-limit",
                                     "partial preparation exceeds 100,000 missing-reference edges",
-                                ));
+                                ), id, "/$ref", Some(id), cap));
                             }
-                            out.edge(cap)?;
+                            out.edge(cap).map_err(|detail| {
+                                self.bounds_failure(detail, id, "/$ref", Some(id), cap)
+                            })?;
                             if let Some(suffix) = occupied_suffix {
                                 out.occupied_namespaces.insert(suffix);
                             }
                             out.holes.insert(id);
+                            out.hole_order.push(id);
                             out.first_hole.get_or_insert(id);
                         }
                         Err(detail) => return Err(detail),
@@ -312,6 +379,7 @@ impl SchemaSpace {
                             )
                         })?;
                     out.child(id, target, policy, &mut queue, cap)
+                        .map_err(|detail| self.bounds_failure(detail, target, "", Some(id), cap))
                 };
                 // The strict and partial walks borrow the same child-selection
                 // primitive; no wide child list is collected before edge admission.
@@ -326,7 +394,7 @@ impl SchemaSpace {
             out.namespace += 1;
         }
         self.check_cycles(&out.reach, control)?;
-        out.qualify(control)?;
+        out.qualify(self, control, cap)?;
         Ok(out)
     }
     fn location_bytes(&self, id: usize) -> Result<usize, NoVerdict> {
@@ -339,6 +407,31 @@ impl SchemaSpace {
             .saturating_add(source.uri.as_ref().map_or(0, String::len)))
     }
     fn bounds_admitted(
+        &self,
+        entry: usize,
+        control: &WorkControl,
+        cap: Admission,
+    ) -> Result<EvaluationBounds, NoVerdict> {
+        self.project_bounds(entry, control, cap).map_err(|detail| {
+            // These aggregate failures identify the selected preparation
+            // boundary, not a uniquely offending leaf. Do not remap precise
+            // resolver locations or invent a location for cancellation.
+            if matches!(
+                detail.code.as_str(),
+                "partial-program-byte-limit"
+                    | "partial-generated-node-limit"
+                    | "partial-generated-edge-limit"
+                    | "partial-generated-cycle"
+                    | "program-json-limit"
+                    | "projection-target"
+            ) {
+                self.bounds_failure(detail, entry, "", None, cap)
+            } else {
+                detail
+            }
+        })
+    }
+    fn project_bounds(
         &self,
         entry: usize,
         control: &WorkControl,
@@ -784,6 +877,7 @@ mod tests {
                 )
                 .unwrap_err();
             assert_eq!(refused.code, "partial-program-byte-limit");
+            assert_eq!(refused.location.unwrap().pointer, "/operations/op/input");
             if schema == "true" {
                 assert!(bounds.unavailable.is_none());
             }
@@ -878,6 +972,8 @@ mod tests {
     }
     #[test]
     fn graph_admission_precedes_each_append_including_shared_and_hole_edges() {
+        // Internal small-cap controls. The hole boundary is shadowed by the
+        // reached-node cap in production; this is not a default-cap witness.
         assert_eq!(
             (NODE_LIMIT, EDGE_LIMIT, HOLE_LIMIT, TEXT_LIMIT),
             (100_000, 200_000, 100_000, 64 * 1024 * 1024)
@@ -892,13 +988,14 @@ mod tests {
         assert_eq!(plan.reach.nodes.len(), 4);
         assert_eq!(plan.edge_count, 5);
         assert_eq!(plan.holes.len(), 1);
-        for (cap, code) in [
+        for (cap, code, pointer) in [
             (
                 Admission {
                     nodes: 3,
                     ..Admission::default()
                 },
                 "schema-node-limit",
+                "/operations/op/input/$defs/shared",
             ),
             (
                 Admission {
@@ -906,6 +1003,7 @@ mod tests {
                     ..Admission::default()
                 },
                 "schema-edge-limit",
+                "/operations/op/input/$defs/shared/$ref",
             ),
             (
                 Admission {
@@ -913,15 +1011,12 @@ mod tests {
                     ..Admission::default()
                 },
                 "schema-hole-limit",
+                "/operations/op/input/$defs/shared/$ref",
             ),
         ] {
-            assert_eq!(
-                space
-                    .bounds_admitted(entry, &control, cap)
-                    .unwrap_err()
-                    .code,
-                code
-            );
+            let detail = space.bounds_admitted(entry, &control, cap).unwrap_err();
+            assert_eq!(detail.code, code);
+            assert_eq!(detail.location.unwrap().pointer, pointer);
         }
         assert!(
             space
@@ -936,6 +1031,156 @@ mod tests {
                     }
                 )
                 .is_ok()
+        );
+    }
+    #[test]
+    fn default_edge_limit_establishes_known_node_overflow_and_hole_limit_is_shadowed() {
+        let cap = Admission::default();
+        // Every reached node has at most one reference/hole edge. All other
+        // edges select distinct children. At edge refusal there are therefore
+        // at least cap.edges - cap.nodes children plus the entry: too many
+        // known positions even if every absent resource is supplied. Changing
+        // this relationship requires revisiting evaluator recovery policy.
+        assert!(cap.edges >= 2 * cap.nodes);
+        assert!(cap.holes >= cap.nodes);
+    }
+    #[test]
+    fn internal_small_caps_guard_unvisited_locations_and_preserve_refusal_causes() {
+        let key = "~/".repeat(64);
+        let (space, entry) = space(&format!(r#"{{"properties":{{"{key}":true}}}}"#));
+        let child = space
+            .nodes
+            .iter()
+            .position(|node| node.value.kind() == JsonKind::Boolean)
+            .unwrap();
+        let cap = Admission {
+            scratch: 32,
+            ..Admission::default()
+        };
+        // This full escaped pointer cannot pass admission. bounds_location
+        // returns before location() can copy it; no clipped pointer is made.
+        assert_eq!(
+            pointer_size(space.nodes[child].value.view(), cap.scratch),
+            None
+        );
+        assert!(space.bounds_location(child, "", cap).is_none());
+        for (cap, code) in [
+            (Admission { nodes: 1, ..cap }, "schema-node-limit"),
+            (Admission { edges: 0, ..cap }, "schema-edge-limit"),
+            (cap, "partial-scratch-limit"),
+        ] {
+            let detail = space
+                .bounds_admitted(entry, &WorkControl::new(), cap)
+                .unwrap_err();
+            assert_eq!(detail.reason, NoVerdictReason::LimitExceeded);
+            assert_eq!(detail.code, code); // location admission cannot replace the cause
+            assert_eq!(detail.location.unwrap().pointer, "/operations/op/input");
+        }
+        let original = limit("schema-edge-limit", "original message");
+        let omitted = space.bounds_failure(
+            original.clone(),
+            child,
+            "",
+            Some(entry),
+            Admission { scratch: 0, ..cap },
+        );
+        assert!(omitted.location.is_none());
+        assert_eq!(omitted.code, original.code);
+        assert_eq!(omitted.message, original.message);
+        let precise = original.located(SchemaLocation {
+            resource: Some("https://original.invalid/R".into()),
+            pointer: "/precise".into(),
+        });
+        let retained = space.bounds_failure(
+            precise.clone(),
+            child,
+            "",
+            Some(entry),
+            Admission { scratch: 0, ..cap },
+        );
+        assert_eq!(
+            serde_json::to_value(retained).unwrap(),
+            serde_json::to_value(precise).unwrap()
+        );
+        let cancelled = WorkControl::new();
+        cancelled.cancel();
+        assert!(
+            space
+                .bounds_admitted(entry, &cancelled, cap)
+                .unwrap_err()
+                .location
+                .is_none()
+        );
+    }
+    #[test]
+    fn internal_small_caps_measure_suffix_uri_and_full_supplied_prefix_before_copy() {
+        let (space, entry) = space(r#"{"$ref":"https://absent.invalid/U#/~2"}"#);
+        let size = pointer_size(space.nodes[entry].value.view(), usize::MAX).unwrap();
+        let cap = Admission {
+            scratch: size,
+            ..Admission::default()
+        };
+        assert!(space.bounds_location(entry, "/$ref", cap).is_none());
+        assert_eq!(
+            space.bounds_location(entry, "", cap).unwrap().pointer,
+            "/operations/op/input"
+        );
+        // Private source-construction control: ResourceSet currently rebases
+        // supplied subtrees, but location() itself can strip a source prefix.
+        // Even then it must admit the full prefix before allocating it.
+        let text = format!(
+            r#"{{"{}":{{"$ref":"https://absent.invalid/U#/~2"}}}}"#,
+            "x".repeat(64)
+        );
+        let value = JsonValue::parse(text).unwrap();
+        let nested = value.get(&"x".repeat(64)).unwrap().to_owned();
+        let doc =
+            ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":true}}}"#)
+                .unwrap();
+        let mut supplied = SchemaSpace::new(doc, ResourceSet::default());
+        let source = supplied.sources.len();
+        let index = SchemaIndex::supplied(&nested, "https://known.invalid/R");
+        supplied.add_source(
+            Some("https://known.invalid/R".into()),
+            nested,
+            &index,
+            false,
+        );
+        let id = supplied
+            .nodes
+            .iter()
+            .position(|node| node.source == source)
+            .unwrap();
+        assert!(
+            supplied
+                .bounds_location(id, "", Admission { scratch: 32, ..cap })
+                .is_none()
+        );
+        assert_eq!(
+            supplied
+                .bounds_location(id, "", Admission::default())
+                .unwrap()
+                .pointer,
+            ""
+        );
+        assert!(
+            supplied
+                .bounds_location(id, "", Admission { scratch: 8, ..cap })
+                .is_none()
+        );
+        // An overlong source URI also omits optional text without copying it.
+        supplied.sources[source].uri = Some("r".repeat(129));
+        assert!(
+            supplied
+                .bounds_location(
+                    id,
+                    "",
+                    Admission {
+                        scratch: 128,
+                        ..cap
+                    }
+                )
+                .is_none()
         );
     }
     #[test]
@@ -1003,7 +1248,7 @@ mod tests {
         let (space, entry) = space("true");
         assert_eq!(
             space
-                .bounds_scratch(entry, &"x".repeat(TEXT_LIMIT + 1))
+                .bounds_scratch(entry, &"x".repeat(TEXT_LIMIT + 1), Admission::default())
                 .unwrap_err()
                 .code,
             "partial-scratch-limit"

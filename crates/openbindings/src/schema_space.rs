@@ -827,7 +827,9 @@ impl SchemaSpace {
         // A cycle in potentially reachable in-place applicators is conservative
         // preparation failure. Static reach does not prove semantic undefinedness.
         let mut colors = HashMap::new();
-        for &root in &reach.nodes {
+        let mut roots: Vec<_> = reach.nodes.iter().copied().collect();
+        roots.sort_unstable();
+        for root in roots {
             if colors.get(&root) == Some(&2) {
                 continue;
             }

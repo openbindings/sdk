@@ -281,6 +281,10 @@ impl SchemaRequest {
     /// change the strict [`Self::evaluation_program`] contract. Direct calls
     /// retain actual planner refusals; only the default evaluator's optional
     /// fallback can restore its original strict resource-unavailable detail.
+    /// Refusals identify original keyword/node boundaries when safely bounded;
+    /// aggregate projection failures identify the selected schema. Existing
+    /// resolver locations are retained. Optional location text is guarded
+    /// separately from successful paired-program text; cancellation may be unlocated.
     pub fn evaluation_bounds(&self, control: &WorkControl) -> Result<EvaluationBounds, NoVerdict> {
         self.space.bounds(self.entry, control)
     }
@@ -315,7 +319,9 @@ impl SchemaRequest {
 /// reference/applicator-edge occurrences across both independently closed copies.
 /// Wrappers, ordinary bodies, constants and branch refs count. These are unmeasured
 /// admission choices, not heap, allocator-capacity, compiled-memory or runtime bounds. Reference-resolution scratch inputs and full original
-/// pointers also have a separate 64 MiB pre-copy guard. No I/O occurs. Later
+/// pointers also have a separate 64 MiB pre-copy guard. Refusal locations outside
+/// successful plans use that guard too (including any keyword suffix), and can
+/// be omitted or identify a bounded original preparation boundary. No I/O occurs. Later
 /// resource replacements require a new context; these bounds never change.
 #[derive(Debug)]
 pub struct EvaluationBounds {

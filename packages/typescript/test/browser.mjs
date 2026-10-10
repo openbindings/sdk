@@ -75,6 +75,10 @@ files.set(
   await fs.readFile(path.join(packageRoot, "test/partial-resource-cases.mjs")),
 );
 files.set(
+  "/planner-location-cases.mjs",
+  await fs.readFile(path.join(packageRoot, "test/planner-location-cases.mjs")),
+);
+files.set(
   "/observer.mjs",
   await fs.readFile(
     path.join(root, "tools/qualification/replay/sdk-observe.mjs"),
@@ -132,7 +136,8 @@ try {
           "/diagnostic-budget-cases.mjs"
         ),
         { partialResourceCases } = await import("/partial-resource-cases.mjs"),
-        { oneOfCases } = await import("/oneof-cases.mjs");
+        { oneOfCases } = await import("/oneof-cases.mjs"),
+        { plannerLocationCases } = await import("/planner-location-cases.mjs");
       await sdk.initialize();
       const run = (list) =>
         list.map((request) => {
@@ -148,6 +153,7 @@ try {
         fixedDiagnostics: fixedDiagnosticCases(sdk),
         partialResources: partialResourceCases(sdk),
         oneOf: oneOfCases(sdk, oneOfFixtures),
+        plannerLocations: plannerLocationCases(sdk),
         ...diagnosticBudgetCases(sdk),
       };
     },
@@ -188,6 +194,7 @@ try {
         ...firstUse,
         fixedDiagnostics: result.fixedDiagnostics,
         partialResources: result.partialResources,
+        plannerLocations: result.plannerLocations,
         diagnosticBudget: result.diagnosticBudget,
         diagnosticBudgetWorker: result.diagnosticBudgetWorker,
         loadingFailures,

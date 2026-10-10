@@ -152,6 +152,9 @@ impl SchemaEvaluator for DefaultEvaluator {
 // Finite optional-planner declines only. Known-closure defects, shared admission
 // limits, cancellation and compiler errors retain their actual classifications.
 // Direct SchemaRequest::evaluation_bounds callers still receive planner errors.
+// With the planner's edge cap >= twice its node cap, schema-edge-limit already
+// establishes too many known positions; supplying missing resources cannot cure
+// it. The core cap-relationship regression pins this recovery-policy premise.
 fn recover_partial_decline(strict: NoVerdict, planner: NoVerdict) -> NoVerdict {
     let optional_decline = matches!(
         (planner.reason, planner.code.as_str()),
@@ -162,7 +165,6 @@ fn recover_partial_decline(strict: NoVerdict, planner: NoVerdict) -> NoVerdict {
             NoVerdictReason::LimitExceeded,
             "partial-program-byte-limit"
                 | "partial-scratch-limit"
-                | "schema-edge-limit"
                 | "schema-hole-limit"
                 | "partial-generated-node-limit"
                 | "partial-generated-edge-limit"
@@ -816,7 +818,6 @@ mod partial_budget_tests {
             ),
             (NoVerdictReason::LimitExceeded, "partial-program-byte-limit"),
             (NoVerdictReason::LimitExceeded, "partial-scratch-limit"),
-            (NoVerdictReason::LimitExceeded, "schema-edge-limit"),
             (NoVerdictReason::LimitExceeded, "schema-hole-limit"),
             (
                 NoVerdictReason::LimitExceeded,
@@ -845,6 +846,7 @@ mod partial_budget_tests {
         for (reason, code) in [
             (NoVerdictReason::Cancelled, "cancelled"),
             (NoVerdictReason::LimitExceeded, "schema-node-limit"),
+            (NoVerdictReason::LimitExceeded, "schema-edge-limit"),
             (NoVerdictReason::LimitExceeded, "schema-depth-limit"),
             (NoVerdictReason::LimitExceeded, "program-json-limit"),
             (NoVerdictReason::ConservativePreparation, "invalid-schema"),
