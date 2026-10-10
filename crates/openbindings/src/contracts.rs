@@ -259,8 +259,10 @@ impl EvaluationProgram {
     }
     /// Map an original location when its resource URI plus complete pointer fit
     /// `max_bytes` UTF-8 bytes. Admission precedes copying original strings.
-    /// URI percent-decoding uses a separate scratch allowance of `max_bytes`;
-    /// its encoded input length is a conservative upper bound on decoded bytes.
+    /// URI fragment percent-decoding uses one normalized-string buffer with a
+    /// separate logical UTF-8 allowance of `max_bytes`. Its encoded input length
+    /// is a conservative preallocation bound; allocator capacity/reallocation is
+    /// not measured. Percent escapes in the URI base are preserved verbatim.
     /// `Ok(None)` means no mapping or an invalid percent-encoded fragment;
     /// [`LocationBudgetExceeded`] means either allowance was insufficient.
     /// This helper establishes neither a verdict nor a total heap bound.
@@ -280,19 +282,22 @@ impl EvaluationProgram {
         generated_uri: &str,
         max_bytes: usize,
     ) -> Result<Option<SchemaLocation>, LocationBudgetExceeded> {
-        let normalized = if generated_uri.contains('%') {
-            if generated_uri.len() > max_bytes {
-                return Err(LocationBudgetExceeded);
+        let normalized = match generated_uri.split_once('#') {
+            Some((base, fragment)) if fragment.contains('%') => {
+                if generated_uri.len() > max_bytes {
+                    return Err(LocationBudgetExceeded);
+                }
+                let Some(mut decoded) = crate::uri::decode_fragment(fragment) else {
+                    return Ok(None);
+                };
+                // Grow this admitted buffer instead of retaining both decoded
+                // and formatted URI strings. Logical length never exceeds the
+                // encoded URI length admitted above.
+                decoded.insert(0, '#');
+                decoded.insert_str(0, base);
+                std::borrow::Cow::Owned(decoded)
             }
-            let Some((base, fragment)) = generated_uri.split_once('#') else {
-                return Ok(None);
-            };
-            let Some(decoded) = crate::uri::decode_fragment(fragment) else {
-                return Ok(None);
-            };
-            std::borrow::Cow::Owned(format!("{base}#{decoded}"))
-        } else {
-            std::borrow::Cow::Borrowed(generated_uri)
+            _ => std::borrow::Cow::Borrowed(generated_uri),
         };
         let generated_uri = normalized.as_ref();
         let mut end = generated_uri.len();
@@ -695,6 +700,49 @@ mod location_budget_tests {
                 .original_location_bounded("https://unmapped.test/#/x", 0)
                 .unwrap(),
             None
+        );
+    }
+    #[test]
+    fn percent_bearing_base_lookup_preserves_original_mapping_contract() {
+        let at = SchemaLocation {
+            resource: None,
+            pointer: String::new(),
+        };
+        for base in [
+            "https://example.test/%61",
+            "https://example.test/%61#/$defs/n0",
+        ] {
+            let program = EvaluationProgram {
+                entry_uri: base.into(),
+                resources: vec![],
+                locations: BTreeMap::from([(base.into(), at.clone())]),
+            };
+            assert_eq!(program.original_location(base), Some(at.clone()));
+            assert_eq!(
+                program.original_location_bounded(base, 0),
+                Ok(Some(at.clone()))
+            );
+            assert_eq!(
+                program.original_location_bounded(&(base.to_owned() + "/type"), 5),
+                Ok(Some(SchemaLocation {
+                    resource: None,
+                    pointer: "/type".into()
+                }))
+            );
+        }
+        let uri = "https://example.test/%61#/%74ype";
+        let program = EvaluationProgram {
+            entry_uri: uri.into(),
+            resources: vec![],
+            locations: BTreeMap::from([("https://example.test/%61#/type".into(), at.clone())]),
+        };
+        assert_eq!(
+            program.original_location_bounded(uri, uri.len() - 1),
+            Err(LocationBudgetExceeded)
+        );
+        assert_eq!(
+            program.original_location_bounded(uri, uri.len()),
+            Ok(Some(at))
         );
     }
 }
