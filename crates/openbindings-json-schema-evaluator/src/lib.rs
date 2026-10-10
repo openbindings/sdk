@@ -15,11 +15,11 @@ use std::sync::Arc;
 #[serde(default, deny_unknown_fields)]
 /// Finite default-evaluator budgets. Work counts are implementation units, not milliseconds; exhaustion yields no verdict unless an established failure only loses diagnostic completeness. Zero is literal, except `max_problems` has a minimum count allowance of one. A byte budget may admit no complete problems.
 pub struct Limits {
-    /// Evaluation work units per verdict/diagnostic pass; default 2,000,000.
+    /// Evaluation work units per verdict/diagnostic pass; default 2,000,000. A partial verdict shares this allowance across upper and lower evaluations.
     pub evaluation_steps: usize,
     /// Nested evaluation depth; default 1024, distinct from source JSON nesting.
     pub evaluation_depth: usize,
-    /// Regular-expression work/backtracking budget per evaluation; default 2,000,000.
+    /// Regular-expression work/backtracking budget per verdict/diagnostic pass; default 2,000,000. Upper and lower share one verdict allowance.
     pub regex_steps: usize,
     /// Maximum retained failure diagnostics; default 256, effective minimum count allowance one; byte admission may retain none. Truncation sets `problems_complete` false without changing an established failure.
     pub max_problems: usize,
@@ -125,7 +125,34 @@ impl SchemaEvaluator for DefaultEvaluator {
         control: &WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         control.check()?;
-        let mut program = request.evaluation_program(control)?;
+        match request.evaluation_program(control) {
+            Ok(program) => Ok(Arc::new(self.compile(program, request, control)?)),
+            Err(detail)
+                if detail.reason == NoVerdictReason::ResourceUnavailable
+                    && detail.code == "resource-unavailable" =>
+            {
+                let (lower, upper, unavailable) = request.evaluation_bounds(control)?.into_parts();
+                let upper = self.compile(upper, request, control)?;
+                control.check()?;
+                let lower = self.compile(lower, request, control)?;
+                control.check()?;
+                Ok(Arc::new(PartialCompiled {
+                    upper,
+                    lower,
+                    unavailable,
+                }))
+            }
+            Err(detail) => Err(detail),
+        }
+    }
+}
+impl DefaultEvaluator {
+    fn compile(
+        &self,
+        mut program: EvaluationProgram,
+        request: &SchemaRequest,
+        control: &WorkControl,
+    ) -> Result<Compiled, NoVerdict> {
         let mut registry = jsonschema::Registry::new().retriever(NoRetrieval);
         let mut literals = literals::Literals::default();
         for resource in &program.resources {
@@ -178,12 +205,12 @@ impl SchemaEvaluator for DefaultEvaluator {
         // Compilation owns the state it needs. Keep the original-location map,
         // but release the intermediate source-backed projection arenas.
         program.resources.clear();
-        Ok(Arc::new(Compiled {
+        Ok(Compiled {
             validator,
             program,
             limits: self.limits.clone(),
             detail_source: self.include_schema_details.then(|| request.clone()),
-        }))
+        })
     }
 }
 struct Compiled {
@@ -194,59 +221,24 @@ struct Compiled {
 }
 impl PreparedSchema for Compiled {
     fn validate(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
-        if let Err(detail) = control.check() {
+        if let Err(detail) = admit_instance(value, control) {
             return ValueOutcome::NoVerdict { detail };
         }
-        if backend::has_unpaired(value) {
-            return ValueOutcome::NoVerdict {
-                detail: no_verdict(
-                    NoVerdictReason::UnsupportedCapability,
-                    "lone-surrogate-instance",
-                    "instance interpretation requires Unicode scalar strings",
-                ),
-            };
+        let valid = verdict_pass(&self.limits, || {
+            Ok(self.validator.is_valid(backend::view(value)))
+        });
+        match valid.and_then(|valid| {
+            control.check()?;
+            Ok(valid)
+        }) {
+            Err(detail) => ValueOutcome::NoVerdict { detail },
+            Ok(true) => ValueOutcome::Satisfies,
+            Ok(false) => self.diagnostics(value, control),
         }
-        let result = jsonschema::ob_work::bounded(
-            self.limits.evaluation_steps,
-            self.limits.evaluation_depth,
-            || {
-                jsonschema::ob_ecma::top_level(self.limits.regex_steps, || {
-                    self.validator.is_valid(backend::view(value))
-                })
-            },
-        );
-        let valid = match result {
-            Ok(Ok(valid)) => valid,
-            Ok(Err(jsonschema::ob_ecma::Exhausted::UnsupportedProperty)) => {
-                return ValueOutcome::NoVerdict {
-                    detail: no_verdict(
-                        NoVerdictReason::UnsupportedCapability,
-                        "unicode-property-matching",
-                        "Unicode property-escape matching is outside the qualified evaluator capability",
-                    ),
-                };
-            }
-            Ok(Err(_)) => {
-                return ValueOutcome::NoVerdict {
-                    detail: no_verdict(
-                        NoVerdictReason::LimitExceeded,
-                        "regex-work-limit",
-                        "regular-expression work limit reached",
-                    ),
-                };
-            }
-            Err(reason) => {
-                return ValueOutcome::NoVerdict {
-                    detail: evaluation_stop(reason),
-                };
-            }
-        };
-        if let Err(detail) = control.check() {
-            return ValueOutcome::NoVerdict { detail };
-        }
-        if valid {
-            return ValueOutcome::Satisfies;
-        }
+    }
+}
+impl Compiled {
+    fn diagnostics(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
         let mut problems = Vec::new();
         let mut complete = true;
         let mut remaining = self.limits.diagnostic_bytes;
@@ -416,6 +408,88 @@ impl PreparedSchema for Compiled {
         }
     }
 }
+struct PartialCompiled {
+    upper: Compiled,
+    lower: Compiled,
+    unavailable: Option<NoVerdict>,
+}
+impl PreparedSchema for PartialCompiled {
+    fn validate(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
+        if let Err(detail) = admit_instance(value, control) {
+            return ValueOutcome::NoVerdict { detail };
+        }
+        // One outer work AND regex allowance covers both Boolean evaluations.
+        // Diagnostics start after this scope and never evaluate synthetic lower failures.
+        let result = verdict_pass(&self.upper.limits, || {
+            bounded_decision(
+                || self.upper.validator.is_valid(backend::view(value)),
+                || self.lower.validator.is_valid(backend::view(value)),
+                control,
+            )
+        });
+        match result {
+            Err(detail) => ValueOutcome::NoVerdict { detail },
+            Ok(Some(false)) => self.upper.diagnostics(value, control),
+            Ok(Some(true)) => ValueOutcome::Satisfies,
+            Ok(None) => ValueOutcome::NoVerdict {
+                detail: self.unavailable.clone().unwrap_or_else(|| {
+                    no_verdict(
+                        NoVerdictReason::EvaluatorFailure,
+                        "inconsistent-exact-bounds",
+                        "the evaluator disagreed on two exact projections",
+                    )
+                }),
+            },
+        }
+    }
+}
+fn bounded_decision(
+    upper: impl FnOnce() -> bool,
+    lower: impl FnOnce() -> bool,
+    control: &WorkControl,
+) -> Result<Option<bool>, NoVerdict> {
+    let upper = upper();
+    control.check()?;
+    if !upper {
+        return Ok(Some(false));
+    }
+    let lower = lower();
+    control.check()?;
+    Ok(lower.then_some(true))
+}
+fn admit_instance(value: &JsonValue, control: &WorkControl) -> Result<(), NoVerdict> {
+    control.check()?;
+    if backend::has_unpaired(value) {
+        return Err(no_verdict(
+            NoVerdictReason::UnsupportedCapability,
+            "lone-surrogate-instance",
+            "instance interpretation requires Unicode scalar strings",
+        ));
+    }
+    Ok(())
+}
+fn verdict_pass<T>(
+    limits: &Limits,
+    evaluate: impl FnOnce() -> Result<T, NoVerdict>,
+) -> Result<T, NoVerdict> {
+    match jsonschema::ob_work::bounded(limits.evaluation_steps, limits.evaluation_depth, || {
+        jsonschema::ob_ecma::top_level(limits.regex_steps, evaluate)
+    }) {
+        Ok(Ok(result)) => result,
+        Ok(Err(jsonschema::ob_ecma::Exhausted::UnsupportedProperty)) => Err(no_verdict(
+            NoVerdictReason::UnsupportedCapability,
+            "unicode-property-matching",
+            "Unicode property-escape matching is outside the qualified evaluator capability",
+        )),
+        Ok(Err(_)) => Err(no_verdict(
+            NoVerdictReason::LimitExceeded,
+            "regex-work-limit",
+            "regular-expression work limit reached",
+        )),
+        Err(reason) => Err(evaluation_stop(reason)),
+    }
+}
+
 fn check_patterns(
     value: JsonRef<'_>,
     limits: &Limits,
@@ -663,5 +737,92 @@ mod diagnostic_tests {
             assert_eq!(stopped.reason, NoVerdictReason::LimitExceeded);
             assert_ne!(stopped.code, cycle.code);
         }
+    }
+}
+
+#[cfg(test)]
+mod partial_budget_tests {
+    use super::*;
+    #[test]
+    fn cancellation_between_passes_never_enters_lower() {
+        let control = WorkControl::new();
+        let result = bounded_decision(
+            || {
+                control.cancel();
+                true
+            },
+            || panic!("lower must not run"),
+            &control,
+        );
+        assert_eq!(result.unwrap_err().reason, NoVerdictReason::Cancelled);
+    }
+    #[test]
+    fn both_verdict_passes_share_work_and_an_exhausted_pass_never_decides() {
+        let limits = Limits {
+            evaluation_steps: 10,
+            ..Limits::default()
+        };
+        for (upper_cost, lower_cost, upper) in [(6, 6, true), (11, 0, false), (0, 11, true)] {
+            let result = verdict_pass(&limits, || {
+                bounded_decision(
+                    || {
+                        jsonschema::ob_work::charge(upper_cost);
+                        upper
+                    },
+                    || {
+                        jsonschema::ob_work::charge(lower_cost);
+                        true
+                    },
+                    &WorkControl::new(),
+                )
+            });
+            assert_eq!(result.unwrap_err().reason, NoVerdictReason::LimitExceeded);
+        }
+        assert_eq!(
+            verdict_pass(&limits, || bounded_decision(
+                || false,
+                || panic!("failure uses no lower pass"),
+                &WorkControl::new()
+            ))
+            .unwrap(),
+            Some(false)
+        );
+    }
+    #[test]
+    fn upper_and_lower_regex_work_share_one_allowance() {
+        let regex = jsonschema::ob_ecma::Regex::new("^a+$").unwrap();
+        let input = "a".repeat(100);
+        let needed = (0..10000)
+            .find(|&n| {
+                jsonschema::ob_ecma::top_level(n, || regex.is_match(&input))
+                    .is_ok_and(|r| matches!(r, Ok(true)))
+            })
+            .unwrap();
+        assert!(needed > 0);
+        let limits = Limits {
+            regex_steps: needed,
+            ..Limits::default()
+        };
+        let result = verdict_pass(&limits, || {
+            bounded_decision(
+                || regex.is_match(&input).unwrap_or(false),
+                || regex.is_match(&input).unwrap_or(false),
+                &WorkControl::new(),
+            )
+        });
+        assert_eq!(result.unwrap_err().code, "regex-work-limit");
+        let healthy = Limits {
+            regex_steps: needed * 2,
+            ..Limits::default()
+        };
+        assert_eq!(
+            verdict_pass(&healthy, || bounded_decision(
+                || regex.is_match(&input).unwrap_or(false),
+                || regex.is_match(&input).unwrap_or(false),
+                &WorkControl::new()
+            ))
+            .unwrap(),
+            Some(true)
+        );
     }
 }

@@ -189,9 +189,24 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
             references.references[0].spelling.as_deref(),
             Some(reference.as_str())
         );
-        let ContractPreparation::NoVerdict { detail } = context(&doc).prepare("op", Side::Input)
-        else {
-            panic!()
+        // Valid absent carriers now defer refusal to validation; malformed URI
+        // syntax still refuses during preparation. Privacy applies in both phases.
+        let detail = match context(&doc).prepare("op", Side::Input) {
+            ContractPreparation::Ready(contract) => {
+                assert!(!reference.contains('\n'));
+                let ValueOutcome::NoVerdict { detail } =
+                    contract.validate(&JsonValue::parse("null").unwrap())
+                else {
+                    panic!()
+                };
+                assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
+                detail
+            }
+            ContractPreparation::NoVerdict { detail } => {
+                assert!(reference.contains('\n'));
+                detail
+            }
+            other => panic!("unexpected setup: {other:?}"),
         };
         safe(&detail.message);
     }

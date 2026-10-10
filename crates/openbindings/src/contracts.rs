@@ -35,9 +35,11 @@ pub enum NoVerdictReason {
     /// Sound preparation or evaluation could not be established, for example a potential non-progressing cycle. This does not prove semantic undefinedness.
     ConservativePreparation,
     /// A resource required by the evaluator's preparation or evaluation is absent;
-    /// no network retrieval is attempted. The default evaluator prepares resources
-    /// statically, including references in branches an instance may not visit.
-    /// This does not claim the resource is necessary to that instance's semantic verdict.
+    /// no network retrieval is attempted. The default evaluator can prepare paired
+    /// bounds for qualified missing static references and return this cause during
+    /// validation when those bounds do not decide the instance. Other partial
+    /// schemas can refuse at preparation. This does not prove that missing content
+    /// is necessary to the instance's semantic verdict.
     /// Use [`ParsedDocument::references`] to inspect document-wide reference spellings
     /// and original keyword locations, then create a new context with supplied resources.
     /// That inventory is not an exact per-contract missing-resource list.
@@ -273,6 +275,77 @@ impl SchemaRequest {
     ) -> Result<EvaluationProgram, NoVerdict> {
         self.space.program(self.entry, control)
     }
+    /// Build paired closed validity bounds for the qualified static-reference
+    /// fragment, without acquiring resources. See [`EvaluationBounds`] for the
+    /// proof, admission limits and adapter responsibilities. This does not
+    /// change the strict [`Self::evaluation_program`] contract.
+    pub fn evaluation_bounds(&self, control: &WorkControl) -> Result<EvaluationBounds, NoVerdict> {
+        self.space.bounds(self.entry, control)
+    }
+}
+/// Paired, owned JSON Schema validity bounds for one immutable resource snapshot.
+///
+/// For every admitted instance and every admissible completion that preserves
+/// known resource identities, `lower(value) <= actual(value) <= upper(value)`.
+/// **Neither program alone is an equivalent of the original partial schema.**
+/// Adapters may establish failure from upper failure, satisfaction from upper
+/// and lower success, and otherwise return [`Self::unavailable`] as no verdict.
+/// They must not promote an incomplete, cancelled or unsupported evaluation.
+/// There is no annotation-output guarantee, nor a promise that arbitrary later
+/// resources (for example colliding identities or unsupported dialects) prepare.
+///
+/// Hole influence is permitted through static `$ref`, `allOf`, `anyOf`,
+/// `properties`, `patternProperties`, `additionalProperties`, `propertyNames`,
+/// `dependentSchemas`, `prefixItems` and `items`. Closed `not`, `oneOf`, effective
+/// conditionals and `contains` are retained; holes beneath them refuse.
+/// Evaluated `unevaluated*`, `$dynamicRef` and `$dynamicAnchor` refuse this helper.
+/// Ignored/opaque positions remain ignored. Potential in-place cycles refuse;
+/// advancing recursion is bounded by the admitted finite instance.
+///
+/// Admission: depth 256, 100,000 reached nodes, 200,000 dependency edges (including
+/// holes), 100,000 holes, and 64 MiB combined retained UTF-8 text. Text includes
+/// both projected JSON resources and their URI/entry strings, shared original
+/// maps once, and evidence strings. This is not a heap, allocator-capacity or
+/// compiled-memory bound. Reference-resolution scratch inputs and full original
+/// pointers also have a separate 64 MiB pre-copy guard. No I/O occurs. Later
+/// resource replacements require a new context; these bounds never change.
+#[derive(Debug)]
+pub struct EvaluationBounds {
+    pub(crate) lower: EvaluationProgram,
+    pub(crate) upper: EvaluationProgram,
+    pub(crate) unavailable: Option<NoVerdict>,
+}
+impl EvaluationBounds {
+    /// Borrow the closed lower projection. Its failures alone prove nothing
+    /// about the original partial schema and must not become diagnostics.
+    pub fn lower_program(&self) -> &EvaluationProgram {
+        &self.lower
+    }
+    /// Borrow the closed upper projection. Established failure proves failure
+    /// of the original, with diagnostics only from mapped known constraints.
+    pub fn upper_program(&self) -> &EvaluationProgram {
+        &self.upper
+    }
+    /// Borrow conservative refusal evidence at an original missing `$ref`.
+    /// `None` means both projections are exact (there are no holes).
+    pub fn unavailable(&self) -> Option<&NoVerdict> {
+        self.unavailable.as_ref()
+    }
+    /// Transfer the programs and evidence without cloning their owned storage.
+    /// Tuple order is `(lower, upper, unavailable)`.
+    ///
+    /// ```
+    /// # use openbindings::{SchemaRequest, WorkControl, NoVerdict};
+    /// # fn adapter(request: &SchemaRequest) -> Result<(), NoVerdict> {
+    /// let (lower, upper, unavailable) = request
+    ///     .evaluation_bounds(&WorkControl::new())?.into_parts();
+    /// // Compile upper first; compare complete verdicts under one shared budget.
+    /// # let _ = (lower, upper, unavailable);
+    /// # Ok(()) }
+    /// ```
+    pub fn into_parts(self) -> (EvaluationProgram, EvaluationProgram, Option<NoVerdict>) {
+        (self.lower, self.upper, self.unavailable)
+    }
 }
 /// A closed JSON Schema projection with an original-source map. Names are private
 /// to this program; consumers must not rely on their spelling or numbering.
@@ -282,7 +355,7 @@ pub struct EvaluationProgram {
     pub entry_uri: String,
     /// Owned projected schema resources sufficient for this program; an evaluator may release them after compilation retains its required state.
     pub resources: Vec<SchemaResource>,
-    pub(crate) locations: BTreeMap<String, SchemaLocation>,
+    pub(crate) locations: Arc<BTreeMap<String, SchemaLocation>>,
 }
 /// Original schema location or URI-decoding scratch exceeds the caller's UTF-8
 /// byte allowance. No partial location is returned.
@@ -700,7 +773,7 @@ mod location_budget_tests {
         let program = EvaluationProgram {
             entry_uri: uri.into(),
             resources: vec![],
-            locations: BTreeMap::from([(uri.into(), location.clone())]),
+            locations: Arc::new(BTreeMap::from([(uri.into(), location.clone())])),
         };
         let generated = uri.to_owned() + "/type";
         let required = location.resource.as_ref().unwrap().len() + location.pointer.len() + 5;
@@ -759,7 +832,7 @@ mod location_budget_tests {
             let program = EvaluationProgram {
                 entry_uri: base.into(),
                 resources: vec![],
-                locations: BTreeMap::from([(base.into(), at.clone())]),
+                locations: Arc::new(BTreeMap::from([(base.into(), at.clone())])),
             };
             assert_eq!(program.original_location(base), Some(at.clone()));
             assert_eq!(
@@ -778,7 +851,10 @@ mod location_budget_tests {
         let program = EvaluationProgram {
             entry_uri: uri.into(),
             resources: vec![],
-            locations: BTreeMap::from([("https://example.test/%61#/type".into(), at.clone())]),
+            locations: Arc::new(BTreeMap::from([(
+                "https://example.test/%61#/type".into(),
+                at.clone(),
+            )])),
         };
         assert_eq!(
             program.original_location_bounded(uri, uri.len() - 1),

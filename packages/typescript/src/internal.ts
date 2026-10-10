@@ -148,7 +148,7 @@ export interface SchemaLocation {
   /** RFC 6901 pointer within that original source; empty string denotes root. */
   pointer: string;
 }
-/** Known refusal causes for this facade and its bundled engine. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. Undefined is reserved for proved semantic undefinedness; a potential cycle alone is conservative-preparation. Later package versions may add causes. For unavailable resources, ParsedDocument.references() exposes document-wide reference spellings and original keyword locations, not an exact per-contract missing-resource list; apply an application disclosure policy before logging them. */
+/** Known refusal causes for this facade and its bundled engine. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. Undefined is reserved for proved semantic undefinedness; a potential cycle alone is conservative-preparation. Later package versions may add causes. Qualified partial contracts can prepare ready; values whose result depends on missing content return resource-unavailable during validation. For unavailable resources, ParsedDocument.references() exposes document-wide reference spellings and original keyword locations, not an exact per-contract missing-resource list; apply an application disclosure policy before logging them. */
 export type NoVerdictReason =
   | "unsupported-capability"
   | "conservative-preparation"
@@ -255,7 +255,7 @@ export type OperationSelection =
       /** Distinct primary keys in lexical order; repeated occurrences can yield one key. */
       candidates: readonly string[];
     };
-/** Setup partition: ready transfers a disposable PreparedContract; no-contract means the selected side is absent; operation-missing/operation-ambiguous are selection outcomes; no-verdict is preparation refusal. Present false is a contract. None of these setup refusals judges an instance. */
+/** Setup partition: ready transfers a disposable PreparedContract; no-contract means the selected side is absent; operation-missing/operation-ambiguous are selection outcomes; no-verdict is preparation refusal. Present false is a contract. Ready can include qualified missing-resource contracts whose values may return no-verdict during validation. None of these setup refusals judges an instance. */
 export type ContractPreparation =
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
@@ -1376,7 +1376,7 @@ export class ValueContracts extends Managed {
   /** @internal */ constructor(raw: wasm.WasmContracts) {
     super(raw);
   }
-  /** Select the named operation/alias and requested side, then return the complete ContractPreparation partition. Ready transfers a new disposable contract independent of this context/cache. The default evaluator requires all external resources reached during static preparation, even under branches a later instance would not visit; supply resources in a new context to recover. Deterministic preparations can be reused; cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
+  /** Select the named operation/alias and requested side, then return the complete ContractPreparation partition. Ready transfers a new disposable contract independent of this context/cache and does not promise every value is decidable. The default evaluator can prepare qualified positive missing-resource contracts, including a bare missing $ref. Validation establishes a verdict when independent of missing content, or returns resource-unavailable when dependent. Known errors and unsupported partial contexts still refuse preparation. Supply resources in a new context to recover; existing prepared owners retain their original snapshot. Deterministic preparations can be reused; cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
   prepare(
     operation: string,
     side: Side,

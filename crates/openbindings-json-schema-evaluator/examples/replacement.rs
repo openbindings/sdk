@@ -144,12 +144,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         other => panic!("expected malformed-field rejection: {other:?}"),
     }
     satisfies(&active, &new_value); // failure never assigns to the active slot
-    match candidate(DOCUMENT, ResourceSet::default(), &healthy) {
-        Err(LoadFailure::Preparation(ContractPreparation::NoVerdict { detail })) => {
-            assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
+    // A qualified missing-resource candidate is ready. Ready does not promise
+    // decidability; this application's demonstration keeps the active owner.
+    let partial = candidate(DOCUMENT, ResourceSet::default(), &healthy)?;
+    assert!(matches!(
+        partial.validate(&new_value),
+        ValueOutcome::NoVerdict {
+            detail: NoVerdict {
+                reason: NoVerdictReason::ResourceUnavailable,
+                ..
+            }
         }
-        other => panic!("expected missing resource: {other:?}"),
-    }
+    ));
+    drop(partial);
+    satisfies(&active, &new_value);
     let cancelled = WorkControl::new();
     cancelled.cancel();
     match candidate(DOCUMENT, resources(r#"{"const":7}"#)?, &cancelled) {

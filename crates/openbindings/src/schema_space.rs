@@ -1,4 +1,5 @@
 //! Original-context resource graph. No URI here acquires bytes.
+mod bounds;
 use crate::{
     schema_index::{DIALECT, SchemaIndex},
     uri, *,
@@ -225,6 +226,14 @@ impl SchemaSpace {
         NoVerdict::new(reason, code, message).located(self.location(node))
     }
     fn resolve(&self, holder: usize, reference: &str) -> Result<Target, NoVerdict> {
+        self.resolve_with_missing(holder, reference, &mut |_| {})
+    }
+    fn resolve_with_missing(
+        &self,
+        holder: usize,
+        reference: &str,
+        missing: &mut impl FnMut(&str),
+    ) -> Result<Target, NoVerdict> {
         let at = &self.nodes[holder];
         let resource = &self.resources[at.resource];
         let fail = |code: &str, message: String| {
@@ -302,6 +311,7 @@ impl SchemaSpace {
         let carriers = self.names.get(name).map(Vec::as_slice).unwrap_or(&[]);
         let resource = match carriers {
             [] => {
+                missing(name);
                 return Err(self.failure(
                     holder,
                     NoVerdictReason::ResourceUnavailable,
@@ -645,8 +655,51 @@ impl SchemaSpace {
         Ok(EvaluationProgram {
             entry_uri,
             resources,
-            locations,
+            locations: std::sync::Arc::new(locations),
         })
+    }
+    fn check_known_node(&self, id: usize) -> Result<(), NoVerdict> {
+        let node = &self.nodes[id];
+        let resource = &self.resources[node.resource];
+        if node.depth > 256 {
+            return Err(self.failure(
+                id,
+                NoVerdictReason::LimitExceeded,
+                "schema-depth-limit",
+                "preparation reached a schema deeper than 256 levels",
+            ));
+        }
+        if !matches!(
+            resource.dialect.as_deref(),
+            Some(DIALECT) | Some("https://json-schema.org/draft/2020-12/schema#")
+        ) {
+            return Err(self.failure(
+                id,
+                NoVerdictReason::UnsupportedCapability,
+                "schema-dialect",
+                "the resource does not use the supported 2020-12 dialect",
+            ));
+        }
+        if has_unpaired(&node.value) {
+            return Err(self.failure(
+                id,
+                NoVerdictReason::UnsupportedCapability,
+                "lone-surrogate-schema",
+                "schema interpretation requires Unicode scalar strings",
+            ));
+        }
+        let checks = crate::fixed_schema::check(&node.value, true, 1).map_err(|e| {
+            self.failure(id, NoVerdictReason::LimitExceeded, "meta-schema-check", e)
+        })?;
+        if checks.violated {
+            return Err(self.failure(
+                id,
+                NoVerdictReason::ConservativePreparation,
+                "invalid-schema",
+                "the reached schema is not well formed under the 2020-12 meta-schemas",
+            ));
+        }
+        Ok(())
     }
     fn reach(&self, entry: usize, control: &WorkControl) -> Result<Reach, NoVerdict> {
         let mut out = Reach::default();
@@ -664,46 +717,9 @@ impl SchemaSpace {
                     "preparation reached more than 100,000 schema nodes",
                 ));
             }
+            self.check_known_node(id)?;
             let node = &self.nodes[id];
             let resource = &self.resources[node.resource];
-            if node.depth > 256 {
-                return Err(self.failure(
-                    id,
-                    NoVerdictReason::LimitExceeded,
-                    "schema-depth-limit",
-                    "preparation reached a schema deeper than 256 levels",
-                ));
-            }
-            if !matches!(
-                resource.dialect.as_deref(),
-                Some(DIALECT) | Some("https://json-schema.org/draft/2020-12/schema#")
-            ) {
-                return Err(self.failure(
-                    id,
-                    NoVerdictReason::UnsupportedCapability,
-                    "schema-dialect",
-                    "the resource does not use the supported 2020-12 dialect",
-                ));
-            }
-            if has_unpaired(&node.value) {
-                return Err(self.failure(
-                    id,
-                    NoVerdictReason::UnsupportedCapability,
-                    "lone-surrogate-schema",
-                    "schema interpretation requires Unicode scalar strings",
-                ));
-            }
-            let checks = crate::fixed_schema::check(&node.value, true, 1).map_err(|e| {
-                self.failure(id, NoVerdictReason::LimitExceeded, "meta-schema-check", e)
-            })?;
-            if checks.violated {
-                return Err(self.failure(
-                    id,
-                    NoVerdictReason::ConservativePreparation,
-                    "invalid-schema",
-                    "the reached schema is not well formed under the 2020-12 meta-schemas",
-                ));
-            }
             if out.resources.insert(node.resource) {
                 for (name, holders) in &out.dynamic {
                     if let Some(declarations) = resource.anchors.get(name) {
@@ -801,10 +817,14 @@ impl SchemaSpace {
                 }
             }
         }
+        self.check_cycles(&out, control)?;
+        Ok(out)
+    }
+    fn check_cycles(&self, reach: &Reach, control: &WorkControl) -> Result<(), NoVerdict> {
         // A cycle in potentially reachable in-place applicators is conservative
         // preparation failure. Static reach does not prove semantic undefinedness.
         let mut colors = HashMap::new();
-        for &root in &out.nodes {
+        for &root in &reach.nodes {
             if colors.get(&root) == Some(&2) {
                 continue;
             }
@@ -829,12 +849,12 @@ impl SchemaSpace {
                 }
                 colors.insert(id, 1);
                 stack.push((id, true));
-                for &next in out.edges.get(&id).map(Vec::as_slice).unwrap_or(&[]) {
+                for &next in reach.edges.get(&id).map(Vec::as_slice).unwrap_or(&[]) {
                     stack.push((next, false));
                 }
             }
         }
-        Ok(out)
+        Ok(())
     }
 }
 fn quoted(text: &str) -> String {
@@ -856,18 +876,22 @@ fn declared_dialect(value: JsonRef<'_>, inherited: Option<&str>) -> Option<Strin
         None => inherited.map(str::to_owned),
     }
 }
-fn keyword_children<'a>(keyword: &str, value: JsonRef<'a>) -> Vec<JsonRef<'a>> {
-    match keyword {
-        "properties" | "patternProperties" | "dependentSchemas" => value
-            .members()
-            .map(|m| m.map(|v| v.value).collect())
-            .unwrap_or_default(),
-        "allOf" | "anyOf" | "oneOf" | "prefixItems" => {
-            value.elements().map(Iterator::collect).unwrap_or_default()
-        }
-        _ => vec![value],
-    }
+fn keyword_children<'a>(keyword: &str, value: JsonRef<'a>) -> impl Iterator<Item = JsonRef<'a>> {
+    let map = matches!(
+        keyword,
+        "properties" | "patternProperties" | "dependentSchemas"
+    );
+    let list = matches!(keyword, "allOf" | "anyOf" | "oneOf" | "prefixItems");
+    let members = if map { value.members() } else { None };
+    let elements = if list { value.elements() } else { None };
+    members
+        .into_iter()
+        .flatten()
+        .map(|member| member.value)
+        .chain(elements.into_iter().flatten())
+        .chain((!map && !list).then_some(value))
 }
+
 #[derive(Default)]
 struct Reach {
     nodes: HashSet<usize>,

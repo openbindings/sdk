@@ -330,24 +330,18 @@ fn cancellation_during_preparation_is_not_cached() {
 }
 #[test]
 fn review_f01_f06_conservative_preparation_is_not_semantic_undefinedness() {
-    for schema in [
-        r#"{"anyOf":[true,{"pattern":"["}]}"#,
-        r#"{"anyOf":[true,{"$ref":"https://absent.invalid/x"}]}"#,
-    ] {
-        let result = contracts(schema)
-            .prepare("op", Side::Input)
-            .validate(&value(r#""secret""#));
-        assert!(matches!(
-            result,
-            ValueOutcome::NoVerdict {
-                detail: NoVerdict {
-                    reason: NoVerdictReason::ConservativePreparation
-                        | NoVerdictReason::ResourceUnavailable,
-                    ..
-                }
+    let result = contracts(r#"{"anyOf":[true,{"pattern":"["}]}"#)
+        .prepare("op", Side::Input)
+        .validate(&value(r#""secret""#));
+    assert!(matches!(
+        result,
+        ValueOutcome::NoVerdict {
+            detail: NoVerdict {
+                reason: NoVerdictReason::ConservativePreparation,
+                ..
             }
-        ));
-    }
+        }
+    ));
     // Passing anyOf annotations still matter despite a true branch.
     let prepared = contracts(
         r#"{"anyOf":[{"properties":{"x":{"type":"string"}}},true],"unevaluatedProperties":false}"#,
@@ -360,6 +354,16 @@ fn review_f01_f06_conservative_preparation_is_not_semantic_undefinedness() {
     assert!(matches!(
         prepared.validate(&value(r#"{"x":7}"#)),
         ValueOutcome::Fails { .. }
+    ));
+}
+#[test]
+fn review_f06_positive_missing_disjunct_now_establishes_satisfaction() {
+    // Intentionally expanded capability: missing positive disjuncts now use bounds.
+    assert!(matches!(
+        contracts(r#"{"anyOf":[true,{"$ref":"https://absent.invalid/x"}]}"#)
+            .prepare("op", Side::Input)
+            .validate(&value(r#""secret""#)),
+        ValueOutcome::Satisfies
     ));
 }
 #[test]

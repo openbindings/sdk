@@ -102,6 +102,12 @@ Failure problems identify instance pointers and original schema locations when a
 
 The replacement example owns an `active: PreparedContract` slot. Its `candidate` helper parses a prospective document, establishes conformance, constructs immutable resources, and requires a ready input. Only a successful result is assigned to `active`. The helper retains distinct parse, version, conformance, interpretation and preparation failures with their diagnostics.
 
+A qualified bare missing `$ref` also yields a ready candidate, but every admitted
+value returns `NoVerdict(ResourceUnavailable)`. The example checks this validation
+result explicitly and keeps its previous active owner. Ready means prepared, not
+that values are guaranteed decidable. Missing-resource recovery requires a new
+context; it cannot update an old partial owner.
+
 The old job clones the ready owner before the application changes the slot. It can still use its original document/resource context after replacement, even when the new context supplies a different schema at exactly the same URI. A channel makes the example's scheduling deterministic; it does not claim to interrupt an evaluation already executing. Applications can use their own threads, queues or other scheduling policy.
 
 Contexts retain four most-recent preparation entries by default. A separate fixture block in `main` uses `ValueContractOptions { cache_capacity: 1 }` to make its second preparation evict its first cache entry; zero disables caching. The reusable `candidate` helper uses the conformance proof and requires only the requested input contract, with no assumption that an output is present. Explicitly retained owners survive eviction and context drop. Cache capacity limits entries, not bytes. Use Rust scopes and `drop` to release obsolete owners; a released owner does not imply lower allocator RSS.

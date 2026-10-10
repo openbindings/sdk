@@ -1,0 +1,115 @@
+{
+  "openbindings": "0.2.0+settlement-pilot",
+  "name": "Northbank settlement contract",
+  "version": "2026-October",
+  "description": "Reusable value contracts for importing signed settlement records, reconciling a batch, and attaching an annotation. Numeric record identifiers are opaque mathematical integers, and amounts are exact decimal JSON numbers. Currency policy is supplied by the reader. This document publishes no realization.",
+  "x-accounting": {"scale": 0.01, "sampleLedgerSequence": 1000000000000000128},
+  "schemas": {
+    "Record": {
+      "$id": "https://northbank.example.invalid/contracts/record.json",
+      "$schema": "https://json-schema.org/draft/2020-12/schema#",
+      "type": "object",
+      "$defs": {
+        "Identifier": {"type": "integer", "minimum": 1, "description": "Opaque ledger integer; preserve its exact value and never infer order from it."},
+        "Amount": {"type": "number", "multipleOf": 0.01, "description": "Signed exact decimal amount in units of the named currency; at most two fractional decimal places mathematically."}
+      },
+      "properties": {
+        "recordId": {"$ref": "#/$defs/Identifier"},
+        "amount": {"$ref": "#/$defs/Amount"},
+        "currency": {"$ref": "https://northbank.example.invalid/reference/currency.json"},
+        "reference": {"type": "string", "minLength": 1},
+        "postedAt": {"type": "string", "format": "date-time"},
+        "memo": {"type": ["string", "null"]}
+      },
+      "required": ["recordId", "amount", "currency", "reference"],
+      "additionalProperties": false
+    },
+    "Acknowledgment": {
+      "type": "object",
+      "properties": {
+        "recordId": {"$ref": "https://northbank.example.invalid/contracts/record.json#/$defs/Identifier"},
+        "disposition": {"enum": ["recorded", "already_recorded", "conflict"]}
+      },
+      "required": ["recordId", "disposition"],
+      "additionalProperties": false
+    },
+    "Batch": {
+      "type": "object",
+      "properties": {
+        "records": {"type": "array", "minItems": 1, "items": {"$ref": "https://northbank.example.invalid/contracts/record.json"}},
+        "statementBalance": {"$ref": "https://northbank.example.invalid/contracts/record.json#/$defs/Amount"}
+      },
+      "required": ["records", "statementBalance"],
+      "additionalProperties": false
+    },
+    "Reconciliation": {
+      "type": "object",
+      "properties": {
+        "settlementId": {"type": "string", "pattern": "^stl_[0-9]{20}$"},
+        "recordIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "https://northbank.example.invalid/contracts/record.json#/$defs/Identifier"}},
+        "netAmount": {"$ref": "https://northbank.example.invalid/contracts/record.json#/$defs/Amount"},
+        "currency": {"$ref": "https://northbank.example.invalid/reference/currency.json"},
+        "balanced": {"type": "boolean"},
+        "difference": {"$ref": "https://northbank.example.invalid/contracts/record.json#/$defs/Amount"}
+      },
+      "required": ["settlementId", "recordIds", "netAmount", "currency", "balanced", "difference"],
+      "additionalProperties": false
+    }
+  },
+  "operations": {
+    "northbank.settlement.record": {
+      "description": "Import one signed settlement record using its exact record identifier for deduplication; report recorded, already_recorded, or conflict.",
+      "aliases": ["recordSettlement"],
+      "input": {"$ref": "https://northbank.example.invalid/contracts/record.json"},
+      "output": {"$ref": "#/schemas/Acknowledgment"},
+      "examples": {
+        "small-fee": {
+          "input": {"recordId": 1000000000000000128, "amount": 0.29, "currency": "USD", "reference": "merchant/fee/17", "memo": null},
+          "output": {"recordId": 1000000000000000128, "disposition": "recorded"},
+          "x-currency-profile": "default"
+        },
+        "credit": {
+          "input": {"recordId": 9007199254740993, "amount": -0.30, "currency": "CAD", "reference": "refund/6"},
+          "output": {"recordId": 9007199254740993, "disposition": "already_recorded"}
+        }
+      }
+    },
+    "northbank.settlement.reconcile": {
+      "description": "Compare a nonempty batch of same-currency records with a statement balance and return their net, difference and retained record identifiers. Arithmetic relationships and currency agreement are behavior claims, not additional JSON Schema constraints.",
+      "aliases": ["reconcileBatch", "northbank.ledger.close"],
+      "tags": ["settlement", "shared contract"],
+      "input": {"$ref": "#/schemas/Batch"},
+      "output": {"$ref": "#/schemas/Reconciliation"},
+      "examples": {
+        "adjacent-identifiers": {
+          "input": {
+            "records": [
+              {"recordId": 9007199254740992, "amount": 0.29, "currency": "USD", "reference": "sale/first"},
+              {"recordId": 9007199254740993, "amount": -0.30, "currency": "USD", "reference": "sale/second"}
+            ],
+            "statementBalance": -0.01
+          },
+          "output": {"settlementId": "stl_00000000000000000412", "recordIds": [9007199254740992, 9007199254740993], "netAmount": -0.01, "currency": "USD", "balanced": true, "difference": 0.00}
+        }
+      },
+      "x-owner": "ledger interoperability"
+    },
+    "annotate": {
+      "description": "Attach caller-supplied JSON metadata to an existing record. Acknowledgment values are intentionally left without an output contract in this draft.",
+      "aliases": ["northbank.settlement.annotate"],
+      "input": {
+        "type": "object",
+        "properties": {
+          "recordId": {"$ref": "https://northbank.example.invalid/contracts/record.json#/$defs/Identifier"},
+          "annotation": {}
+        },
+        "required": ["recordId", "annotation"],
+        "additionalProperties": false
+      },
+      "examples": {
+        "clear-note": {"input": {"recordId": 9007199254740993, "annotation": null}},
+        "null-acknowledgment": {"input": {"recordId": 9007199254740993, "annotation": {"reviewer": "desk-4"}}, "output": null}
+      }
+    }
+  }
+}

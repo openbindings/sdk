@@ -83,12 +83,17 @@ test("source editor diagnoses a wrong field and commits only a ready corrected s
     const refused = editor.update(
       '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"$ref":"https://schema.example/missing"}}}}',
     );
-    assert.equal(refused.status, "no-verdict");
-    assert.equal(refused.detail.reason, "resource-unavailable");
-    assert.match(formatEditorResult(refused), /input setup was refused/);
+    // Qualified bare holes intentionally move refusal from setup to validation.
+    assert.equal(refused.status, "updated");
+    assert.equal(refused.result.outcome, "no-verdict");
+    assert.equal(refused.result.detail.reason, "resource-unavailable");
+    assert.match(formatEditorResult(refused), /Input verdict unavailable/);
     const current = editor.snapshot();
     try {
-      assert.equal(new TextDecoder().decode(current.originalBytes), corrected);
+      assert.match(
+        new TextDecoder().decode(current.originalBytes),
+        /schema.example\/missing/,
+      );
     } finally {
       current.dispose();
     }

@@ -73,6 +73,17 @@ Custom evaluator authors can call `EvaluationProgram::original_location_bounded`
 and match `LocationBudgetExceeded` separately from an unmapped location; its
 point-of-definition Rustdoc demonstrates the complete match.
 
+Rust adapter authors can call `SchemaRequest::evaluation_bounds(control)` for the
+qualified static-reference fragment. The opaque owned `EvaluationBounds` exposes
+`lower_program()`, `upper_program()`, `unavailable()` and consuming `into_parts()`
+in `(lower, upper, unavailable)` order. **Neither closed projection alone is an
+equivalent of the original partial schema.** Adapters must apply the paired verdict
+rule, preserve incomplete-pass refusals and keep lower synthetic failures private.
+The [proof and admission contract](partial-resource-bounds.md) covers influence,
+identity, immutable ownership, combined text/graph limits and diagnostic scope.
+Core custom-evaluator dispatch and strict `evaluation_program()` stay unchanged.
+No TypeScript application API or configuration variant is added.
+
 ## Inspection and exact editing additions
 
 Rust `ParsedDocument` enumerates and looks up retained binding, source and

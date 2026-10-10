@@ -102,6 +102,16 @@ try {
     service.dispose();
   }
 }
+// Missing static content can prepare ready; a bare hole remains undecidable.
+const partial = prepareService(document, []);
+assert.equal(partial.status, "ready");
+try {
+  outcomes.missingResource = partial.contract.validate(7);
+  assert.equal(outcomes.missingResource.outcome, "no-verdict");
+  assert.equal(outcomes.missingResource.detail.reason, "resource-unavailable");
+} finally {
+  partial.contract.dispose();
+}
 const releasedArenas = liveStorageOwners();
 assert.equal(releasedArenas, warmedArenas);
 console.log(

@@ -95,15 +95,26 @@ validation, prepare once and keep the ready contract. The [retained service](exa
 does that; [replacement and recovery](examples/service-lifecycle.mjs) adds explicit
 resources and asynchronous request ownership after the initialization instructions.
 
-The default evaluator prepares resources statically: every external schema resource
-reached while preparing the selected contract must be supplied before validating
-any instance. A missing reference under an optional property or an unused instance
-branch therefore refuses preparation, even if that instance's verdict could be
-established independently. Inspect `document.references()` for document-wide
-reference spellings and locations, apply your application's acquisition policy,
-then supply resources in a new context and retry. The inventory is not an exact
-per-contract missing-resource list. The SDK does not fetch references, and existing
-prepared owners retain their original snapshots.
+The default evaluator first tries complete-resource preparation. Missing static
+references in a qualified positive fragment can prepare `ready`: an absent optional
+property, independent known failure, or known passing `anyOf` branch can make a value
+decidable. Values that depend on missing content return `no-verdict` with reason
+`resource-unavailable` from validation. Even a bare missing `$ref` now prepares
+ready and returns no verdict for every admitted value. Keep handling both phases.
+
+Missing influence through `not`, `oneOf`, conditionals or `contains` refuses, while
+closed subgraphs remain supported. Evaluated `unevaluated*` and dynamic keywords
+reject partial bounds. Known invalid/unsupported schemas remain refusals. Both
+internal bounds share one verdict work/regex allowance; failures retain separately
+bounded known-source diagnostics. There is no new application validation mode.
+The [proof and limits](https://github.com/openbindings/sdk/blob/main/docs/partial-resource-bounds.md)
+include a 64 MiB combined projection-text cap and explicit graph/scratch guards.
+
+Inspect `document.references()` for document-wide spellings and locations, apply
+your application's acquisition policy, then supply resources in a new context.
+The inventory is not an exact per-contract missing-resource list. The SDK never
+fetches references. Existing prepared owners retain their original snapshots; a
+new context with colliding or unsupported supplied resources can itself refuse.
 
 ## Initialization
 

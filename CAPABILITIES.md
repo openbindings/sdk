@@ -61,16 +61,24 @@ undefinedness. Exact-case declarations and the full suite distinguish these
 limits from wrong verdicts. The implementation does not promise a complete
 irrelevance decision procedure for `anyOf(true, problematic-schema)`.
 
-The default evaluator uses **static resource preparation**: every external schema
-resource reached while preparing the selected contract must be supplied before
-any instance is evaluated. This includes references under optional properties or
-branches that a particular instance would not visit. Missing one produces
-`ResourceUnavailable`, even when that instance's semantic verdict could be
-established independently. This is a decision-coverage limit, not a value failure
-or a claim that the specification requires that resource for every instance.
-Inspect document-wide reference spellings, apply application acquisition policy,
-and create a new resource set/context to retry; the SDK never fetches a reference.
-An existing prepared owner continues to use its original resource snapshot.
+The default evaluator first tries complete-resource preparation. For missing
+static-reference carriers in a qualified positive fragment, it prepares lower/upper
+validity bounds. An absent optional property can satisfy, a known failed conjunct
+can fail despite an active unknown, and a known passing `anyOf` branch can satisfy.
+Dependent values return `ResourceUnavailable` at validation. Even a qualified bare
+missing `$ref` prepares ready; ready does not promise decidability. Hole influence
+through `not`, `oneOf`, effective conditionals or `contains` refuses; closed
+subgraphs remain supported. Evaluated `unevaluated*` and dynamic keywords reject
+partial bounds. Known invalid targets, dialects, patterns and cycles remain refusals.
+
+Partial admission adds 200,000 dependency edges, 100,000 missing edges and a
+64 MiB combined text allowance for both programs, URIs, entries, shared mapping and
+evidence. A separate 64 MiB resolver/full-pointer scratch guard applies. These are
+not compiled-memory or RSS bounds. Upper/lower share one verdict work/regex budget;
+failure diagnostics retain a separate bounded pass. The
+[proof and adapter contract](docs/partial-resource-bounds.md) specifies exact
+eligibility, counting and limitations. The SDK never fetches references. Supply
+resources in a new context to retry; old owners keep their original snapshots.
 
 Failure diagnostics are bounded, omit instance values and identify original
 schema/instance locations. `problems_complete`/`problemsComplete` describes the

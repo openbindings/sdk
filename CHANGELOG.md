@@ -15,6 +15,12 @@
 
 ### Added
 
+- Rust adapter utility `SchemaRequest::evaluation_bounds` and opaque owned
+  `EvaluationBounds`, with borrowed lower/upper/evidence access and consuming
+  `into_parts()`. The two closed programs are validity bounds, not individually
+  equivalent schemas. Combined text/graph admission and immutable context ownership
+  are explicit; the strict projection helper and custom evaluator dispatch remain.
+
 - Rust binding, source, dependency and operation-example views, with retained
   ownership, typed metadata and exact opaque content. The TypeScript facade adds
   matching keyed views and frozen metadata inventories.
@@ -49,6 +55,14 @@
 
 ### Changed
 
+- The default evaluator can decide values independently of missing static resources
+  within a qualified positive fragment, using shared-budget lower/upper evaluation
+  and known-source upper diagnostics. Qualified partial contracts, including a bare
+  missing `$ref`, now prepare ready; dependent values return `ResourceUnavailable`
+  at validation. This is an intentional phase change and decision-coverage expansion.
+  Hole-dependent nonpositive applicators and evaluated annotation/dynamic hazards
+  refuse. Complete-resource preparation retains its existing path.
+
 - TypeScript operation inventories now interpret `tags` and `deprecated` along
   with the other metadata. Malformed values, including those on an unrelated
   operation, make the inventory throw an interpretation error; raw exact
@@ -67,9 +81,8 @@
 - Exact duplicate-name queries use the existing source-ordered evidence: scalar
   queries are constant work and container queries use binary search, without a
   new retained index or changes to duplicate diagnostic ordering.
-- Clarify the default evaluator's static resource preparation and the requirement
-  that conformant dependency kind filters be nonempty. These documented limits
-  do not change evaluation or draft interpretation behavior.
+- Clarify that conformant dependency kind filters must be nonempty; this does not
+  change draft interpretation behavior.
 - Conformance diagnostics deduplicate repeated findings for the same original
   occurrence before count and pointer-byte limits. Identical schema text at
   different source positions remains distinct. Duplicate-member findings now
