@@ -1047,6 +1047,7 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
 #[cfg(test)]
 mod name_index_storage_tests {
     use super::*;
+    use std::collections::HashSet;
 
     #[test]
     fn alias_occurrences_share_primary_storage_without_scaling_its_bytes() {
