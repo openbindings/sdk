@@ -269,15 +269,19 @@ impl ParsedDocument {
             return Ok(OperationSelection::Missing);
         };
         if matches.len() > 1 {
-            let candidates = matches
+            // Deduplicate cheap operation indices before copying public names.
+            // Repeated aliases of a long primary key must not copy it per occurrence.
+            let mut candidates = matches
                 .iter()
-                .cloned()
+                .copied()
                 .collect::<std::collections::BTreeSet<_>>()
                 .into_iter()
-                .collect();
+                .map(|id| index.primary_keys[id].to_string())
+                .collect::<Vec<_>>();
+            candidates.sort();
             return Ok(OperationSelection::Ambiguous { candidates });
         }
-        let key = &matches[0];
+        let key = &index.primary_keys[matches[0]];
         self.operation_view(key, &index.operations[key])
             .map(OperationSelection::Found)
     }
@@ -342,8 +346,10 @@ impl ParsedDocument {
 }
 #[derive(Default)]
 pub(crate) struct NameIndex {
-    operations: BTreeMap<String, JsonValue>,
-    names: HashMap<String, Vec<String>>,
+    operations: BTreeMap<Arc<str>, JsonValue>,
+    // Operation identities share primary bytes; alias occurrences store only indices.
+    primary_keys: Vec<Arc<str>>,
+    names: HashMap<String, Vec<usize>>,
     bindings: HashMap<String, Vec<String>>,
 }
 impl NameIndex {
@@ -366,8 +372,13 @@ impl NameIndex {
                         member.value,
                     ));
                 }
-                index.operations.insert(key.into(), member.value.to_owned());
-                index.add_name(key, key);
+                let primary = Arc::<str>::from(key);
+                let id = index.primary_keys.len();
+                index
+                    .operations
+                    .insert(primary.clone(), member.value.to_owned());
+                index.primary_keys.push(primary);
+                index.add_name(key, id);
                 if let Some(aliases) = member.value.get("aliases") {
                     let values = aliases.elements().ok_or_else(|| {
                         InterpretationError::invalid("invalid-operation-aliases", aliases)
@@ -376,7 +387,7 @@ impl NameIndex {
                         let name = alias.as_str().ok_or_else(|| {
                             InterpretationError::invalid("invalid-operation-alias", alias)
                         })?;
-                        index.add_name(name, key);
+                        index.add_name(name, id);
                     }
                 }
             }
@@ -400,8 +411,8 @@ impl NameIndex {
         }
         Ok(index)
     }
-    fn add_name(&mut self, name: &str, key: &str) {
-        self.names.entry(name.into()).or_default().push(key.into());
+    fn add_name(&mut self, name: &str, primary: usize) {
+        self.names.entry(name.into()).or_default().push(primary);
     }
 }
 #[derive(Clone, Debug)]
@@ -956,4 +967,86 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
         }
     }
     Ok(c.finish())
+}
+
+#[cfg(test)]
+mod name_index_storage_tests {
+    use super::*;
+
+    #[test]
+    fn alias_occurrences_share_primary_storage_without_scaling_its_bytes() {
+        // Small, deterministic representation check, not a peak-memory benchmark.
+        let primary = "p".repeat(4096);
+        for count in [0, 1, 64, 256] {
+            let aliases: Vec<_> = (0..count).map(|i| format!("a{i}")).collect();
+            let source = serde_json::json!({
+                "openbindings": "0.2.0",
+                "operations": { &primary: { "aliases": aliases } },
+            });
+            let document = ParsedDocument::parse(source.to_string()).unwrap();
+            let index = document.names().unwrap();
+            assert_eq!(index.primary_keys.len(), 1);
+            let key = &index.primary_keys[0];
+            assert!(Arc::ptr_eq(index.operations.keys().next().unwrap(), key));
+            assert_eq!(index.names.len(), count + 1);
+            let occurrences: Vec<_> = index.names.values().flatten().copied().collect();
+            assert_eq!(occurrences.len(), count + 1);
+            assert!(occurrences.iter().all(|&id| id == 0));
+
+            // Count distinct retained primary allocations reached by all index
+            // owners/occurrences, plus its independent namespace lookup string.
+            let mut addresses = HashSet::new();
+            let primary_bytes: usize = index
+                .operations
+                .keys()
+                .chain(&index.primary_keys)
+                .chain(occurrences.iter().map(|&id| &index.primary_keys[id]))
+                .filter(|key| addresses.insert(Arc::as_ptr(key)))
+                .map(|key| key.len())
+                .sum();
+            assert_eq!(addresses.len(), 1);
+            assert_eq!(primary_bytes, primary.len());
+            let lookup_bytes = index.names.get_key_value(&primary).unwrap().0.len();
+            assert_eq!(primary_bytes + lookup_bytes, 2 * primary.len());
+
+            let selected = aliases.last().map(String::as_str).unwrap_or(&primary);
+            let OperationSelection::Found(operation) =
+                document.resolve_operation(selected).unwrap()
+            else {
+                panic!("every unique alias selects its primary")
+            };
+            assert_eq!(operation.key(), primary);
+        }
+    }
+
+    #[test]
+    fn repeated_aliases_stay_ambiguous_with_distinct_lexical_candidates() {
+        let primary = "p".repeat(4096);
+        let mut aliases = vec!["shared"; 256];
+        aliases.push(&primary); // primary/alias collision is another occurrence.
+        let source = serde_json::json!({
+            "openbindings": "0.2.0",
+            "operations": {
+                &primary: { "aliases": aliases },
+                "z": { "aliases": ["shared"] },
+                "a": { "aliases": ["shared"] },
+            },
+        });
+        let document = ParsedDocument::parse(source.to_string()).unwrap();
+        let OperationSelection::Ambiguous { candidates } =
+            document.resolve_operation("shared").unwrap()
+        else {
+            panic!("repeated declarations stay ambiguous")
+        };
+        assert_eq!(
+            candidates,
+            ["a".to_owned(), primary.clone(), "z".to_owned()]
+        );
+        let OperationSelection::Ambiguous { candidates } =
+            document.resolve_operation(&primary).unwrap()
+        else {
+            panic!("primary/alias collision stays ambiguous")
+        };
+        assert_eq!(candidates, [primary]);
+    }
 }
