@@ -9,6 +9,14 @@ import sys
 PROTOCOL=json.loads((Path(__file__).parent/'protocol.json').read_text())
 TIERS=['small','representative','near']
 
+def require_runtime_identity(host, data, prior):
+    if host=='node':
+        current,previous=data['host']['node'],prior['host']['node']
+    elif host in ['chromium','webkit','workerd']:
+        current,previous=data['version'],prior['version']
+    else:return
+    if current!=previous:raise ValueError('runtime version mismatch '+host)
+
 def evaluate(samples, baseline, allowance, absolute=None):
     if not samples or (baseline is not None and not baseline): raise ValueError('missing samples')
     if any(not isinstance(value,(int,float)) or not math.isfinite(value) for value in samples + (baseline or [])): raise ValueError('nonfinite or missing duration')
@@ -29,13 +37,14 @@ def compare(directory, baseline=None):
     if receipt['mode']!='measure' or receipt['status']!='complete': raise ValueError('only complete measurement campaigns qualify')
     if baseline:
         old=json.loads((baseline/'campaign.json').read_text())
-        for field in ['protocolSha256','fixtureManifestSha256','host']:
+        for field in ['protocolSha256','fixtureManifestSha256','host','nodeVersion']:
             if receipt[field]!=old[field]:raise ValueError('campaign identity mismatch: '+field)
     rows=[]
     for host in ['native','node','chromium','webkit','workerd']:
         data=json.loads((directory/(host+'.json')).read_text())
         prior=json.loads((baseline/(host+'.json')).read_text()) if baseline else None
-        if prior and host in ['chromium','webkit','workerd'] and data['version']!=prior['version']:raise ValueError('runtime version mismatch '+host)
+        if host=='node' and data['host']['node']!=receipt['nodeVersion']:raise ValueError('Node host receipt differs from campaign runtime')
+        if prior:require_runtime_identity(host,data,prior)
         budgetHost='browser-worker' if host in ['chromium','webkit'] else host
         budgets=PROTOCOL['absoluteMedianMs'][budgetHost]
         for tierIndex,tier in enumerate(TIERS):
@@ -96,6 +105,10 @@ if __name__=='__main__':
         try:evaluate([],None,1)
         except ValueError:pass
         else:raise AssertionError('empty samples cannot pass')
+        require_runtime_identity('node',{'host':{'node':'v22.19.0'}},{'host':{'node':'v22.19.0'}})
+        try:require_runtime_identity('node',{'host':{'node':'v24.19.0'}},{'host':{'node':'v22.19.0'}})
+        except ValueError as error:assert str(error)=='runtime version mismatch node'
+        else:raise AssertionError('changed Node version cannot pass')
         print('Comparator negative controls passed')
     else:
         directory=Path(sys.argv[1]);baseline=Path(sys.argv[2]) if len(sys.argv)>2 else None

@@ -35,6 +35,10 @@ def main():
     receipt = args.output/'campaign.json'
     if receipt.exists(): raise RuntimeError('Refusing to overwrite a prior campaign; use a fresh output directory')
     source = subprocess.check_output(['git','rev-parse','HEAD'],cwd=args.source,text=True).strip()
+    node_bin = os.environ.get('NODE_BIN','node')
+    node_identity = json.loads(subprocess.check_output([node_bin,'-p','JSON.stringify({executable:process.execPath,version:process.version})'],text=True))
+    if os.environ.get('NODE_VERSION') and node_identity['version']!=os.environ['NODE_VERSION']:
+        raise ValueError('Node version differs from requested NODE_VERSION')
     assets = {str(p.relative_to(HERE)):sha(p) for p in HERE.rglob('*') if p.is_file() and not any(x in p.parts for x in ['target','__pycache__']) and 'out' not in p.parts}
     status = subprocess.check_output(['git','status','--short'],cwd=args.source,text=True)
     # Binding a tarball hash is useful only if the consumed files match it.
@@ -48,7 +52,7 @@ def main():
     record = {'source':source,'sourceStatus':status,'protocolSha256':sha(HERE/'protocol.json'),'harnessFiles':assets,'fixtureManifestSha256':sha(args.fixtures/'manifest.json'),
               'nativeSha256':sha(args.native),'regressionSha256':sha(args.regression),'archiveSha256':sha(args.archive),'archive':str(args.archive.resolve()),
               'mode':args.mode,'quietWindow':args.quiet_window,'host':platform.platform(),'commands':[], 'status':'started',
-              'nodeVersion':subprocess.check_output(['node','--version'],text=True).strip(),
+              'nodeVersion':node_identity['version'],'nodeExecutable':node_identity['executable'],
               'rustcVersion':subprocess.check_output([os.environ.get('RUSTC','rustc'),'--version','--verbose'],text=True).strip()}
     receipt.write_text(json.dumps(record,indent=2)+'\n')
     if args.mode == 'measure':
@@ -81,7 +85,7 @@ def main():
         (args.output/'regression.json').write_text(json.dumps(regressions,indent=2)+'\n')
         for host in ['node','chromium','webkit','workerd']:
             runner='browser' if host in ['chromium','webkit'] else host
-            command=['node',HERE/(runner+'.mjs'),args.package,args.fixtures,args.output/(host+'.json')]
+            command=[node_identity['executable'],HERE/(runner+'.mjs'),args.package,args.fixtures,args.output/(host+'.json')]
             if runner=='browser':command.append(host)
             command.append(args.mode)
             record['commands'].append([str(x) for x in command])

@@ -70,6 +70,7 @@ export const host = () => ({
   cpus: os.cpus()[0]?.model,
   memoryBytes: os.totalmem(),
   node: process.version,
+  nodeExecutable: process.execPath,
 });
 export async function save(file, data) {
   await fs.mkdir(path.dirname(file), { recursive: true });

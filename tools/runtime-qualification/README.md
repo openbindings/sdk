@@ -10,6 +10,8 @@ Use Node22+, Python3, Rust1.99.0, an unpacked `npm pack` archive, its original `
 python3 tools/runtime-qualification/fixtures.py /tmp/sdk-fixtures
 cargo build --release --locked --manifest-path tools/runtime-qualification/native/Cargo.toml
 export PLAYWRIGHT_MODULE=/absolute/path/to/playwright-core/index.mjs
+export NODE_BIN=/absolute/path/to/node
+export NODE_VERSION=v22.19.0
 export WORKERD_BIN=/absolute/path/to/workerd
 export WORKERD_CAPNP=/absolute/path/to/workerd.capnp
 python3 tools/runtime-qualification/compare.py --self-test
@@ -50,6 +52,6 @@ The six byte-identical historical fixtures regenerate to their preserved SHA256 
 
 ## Evidence contract
 
-Each campaign records source commit/status, archive/native/harness/protocol/fixture hashes, host information, commands, stdout/stderr/exit receipts, all samples, verdict/count/completeness/wire-size observations, cleanup checkpoints, and limitations. Missing or incompatible inputs fail; noisy metrics remain inconclusive. A zero-duration sample is below the host clock resolution, never instantaneous work or infinite throughput; that metric remains inconclusive until a separately frozen batched timing protocol resolves it. At most one complete rerun may follow a declared inconclusive campaign, preserving both. Comparisons reject differing fixture/protocol/host identities and browser/workerd versions. The owner still reviews semantic differences and final candidate identity.
+Each campaign records source commit/status, archive/native/harness/protocol/fixture hashes, host information, commands, stdout/stderr/exit receipts, all samples, verdict/count/completeness/wire-size observations, cleanup checkpoints, and limitations. Missing or incompatible inputs fail; noisy metrics remain inconclusive. A zero-duration sample is below the host clock resolution, never instantaneous work or infinite throughput; that metric remains inconclusive until a separately frozen batched timing protocol resolves it. At most one complete rerun may follow a declared inconclusive campaign, preserving both. Campaigns use NODE_BIN (default: node from PATH), record its resolved executable and version, and enforce NODE_VERSION when supplied. Comparisons reject differing fixture/protocol/host identities and Node/browser/workerd versions. The owner still reviews semantic differences and final candidate identity.
 
 This harness measures macOS native, Node22, named Chromium/WebKit desktop Workers, and local workerd. Linux/Windows native CI remains required; their timings are unmeasured here. Firefox, other JS hosts, mobile/second-device behavior, arbitrary custom evaluators, and deployed Cloudflare are unqualified. No broad performance grade is generated.
