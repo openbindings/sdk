@@ -131,7 +131,10 @@ impl SchemaEvaluator for DefaultEvaluator {
                 if detail.reason == NoVerdictReason::ResourceUnavailable
                     && detail.code == "resource-unavailable" =>
             {
-                let (lower, upper, unavailable) = request.evaluation_bounds(control)?.into_parts();
+                let bounds = request
+                    .evaluation_bounds(control)
+                    .map_err(|decline| recover_partial_decline(detail, decline))?;
+                let (lower, upper, unavailable) = bounds.into_parts();
                 let upper = self.compile(upper, request, control)?;
                 control.check()?;
                 let lower = self.compile(lower, request, control)?;
@@ -145,6 +148,25 @@ impl SchemaEvaluator for DefaultEvaluator {
             Err(detail) => Err(detail),
         }
     }
+}
+// Finite optional-planner declines only. Known-closure defects, shared admission
+// limits, cancellation and compiler errors retain their actual classifications.
+// Direct SchemaRequest::evaluation_bounds callers still receive planner errors.
+fn recover_partial_decline(strict: NoVerdict, planner: NoVerdict) -> NoVerdict {
+    let optional_decline = matches!(
+        (planner.reason, planner.code.as_str()),
+        (
+            NoVerdictReason::ConservativePreparation,
+            "partial-nonpositive-influence" | "partial-annotation-or-dynamic"
+        ) | (
+            NoVerdictReason::LimitExceeded,
+            "partial-program-byte-limit"
+                | "partial-scratch-limit"
+                | "schema-edge-limit"
+                | "schema-hole-limit"
+        )
+    );
+    if optional_decline { strict } else { planner }
 }
 impl DefaultEvaluator {
     fn compile(
@@ -220,6 +242,9 @@ struct Compiled {
     limits: Limits,
 }
 impl PreparedSchema for Compiled {
+    fn resource_completeness(&self) -> ResourceCompleteness<'_> {
+        ResourceCompleteness::Complete
+    }
     fn validate(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
         if let Err(detail) = admit_instance(value, control) {
             return ValueOutcome::NoVerdict { detail };
@@ -414,6 +439,12 @@ struct PartialCompiled {
     unavailable: Option<NoVerdict>,
 }
 impl PreparedSchema for PartialCompiled {
+    fn resource_completeness(&self) -> ResourceCompleteness<'_> {
+        self.unavailable.as_ref().map_or(
+            ResourceCompleteness::Complete,
+            ResourceCompleteness::incomplete,
+        )
+    }
     fn validate(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
         if let Err(detail) = admit_instance(value, control) {
             return ValueOutcome::NoVerdict { detail };
@@ -743,6 +774,75 @@ mod diagnostic_tests {
 #[cfg(test)]
 mod partial_budget_tests {
     use super::*;
+    #[test]
+    fn optional_decline_classification_is_finite_and_preserves_exact_strict_evidence() {
+        let mut strict = NoVerdict::new(
+            NoVerdictReason::ResourceUnavailable,
+            "resource-unavailable",
+            "original strict message",
+        );
+        strict.location = Some(SchemaLocation {
+            resource: Some("https://original.invalid/R".into()),
+            pointer: "/properties/long~0name".into(),
+        });
+        for (reason, code) in [
+            (
+                NoVerdictReason::ConservativePreparation,
+                "partial-nonpositive-influence",
+            ),
+            (
+                NoVerdictReason::ConservativePreparation,
+                "partial-annotation-or-dynamic",
+            ),
+            (NoVerdictReason::LimitExceeded, "partial-program-byte-limit"),
+            (NoVerdictReason::LimitExceeded, "partial-scratch-limit"),
+            (NoVerdictReason::LimitExceeded, "schema-edge-limit"),
+            (NoVerdictReason::LimitExceeded, "schema-hole-limit"),
+        ] {
+            let declined = no_verdict(reason, code, "irrelevant planner message");
+            assert_eq!(
+                serde_json::to_value(recover_partial_decline(strict.clone(), declined)).unwrap(),
+                serde_json::to_value(&strict).unwrap()
+            );
+            let wrong_reason = no_verdict(
+                NoVerdictReason::EvaluatorFailure,
+                code,
+                "same code, actual defect",
+            );
+            assert_eq!(
+                recover_partial_decline(strict.clone(), wrong_reason).reason,
+                NoVerdictReason::EvaluatorFailure
+            );
+        }
+        for (reason, code) in [
+            (NoVerdictReason::Cancelled, "cancelled"),
+            (NoVerdictReason::LimitExceeded, "schema-node-limit"),
+            (NoVerdictReason::LimitExceeded, "schema-depth-limit"),
+            (NoVerdictReason::LimitExceeded, "program-json-limit"),
+            (NoVerdictReason::ConservativePreparation, "invalid-schema"),
+            (
+                NoVerdictReason::ConservativePreparation,
+                "invalid-reference-fragment",
+            ),
+            (NoVerdictReason::ConservativePreparation, "in-place-cycle"),
+            (
+                NoVerdictReason::ConservativePreparation,
+                "schema-pattern-compilation",
+            ),
+            (NoVerdictReason::UnsupportedCapability, "schema-dialect"),
+            (
+                NoVerdictReason::UnsupportedCapability,
+                "lone-surrogate-schema",
+            ),
+        ] {
+            let actual = no_verdict(reason, code, "actual refusal");
+            assert_eq!(
+                serde_json::to_value(recover_partial_decline(strict.clone(), actual.clone()))
+                    .unwrap(),
+                serde_json::to_value(actual).unwrap()
+            );
+        }
+    }
     #[test]
     fn cancellation_between_passes_never_enters_lower() {
         let control = WorkControl::new();

@@ -14,6 +14,7 @@ export {
   SchemaLocation,
   NoVerdictReason,
   NoVerdict,
+  ResourceCompleteness,
   ValueProblem,
   ValueProblemDetails,
   ValueOutcome,

@@ -100,13 +100,15 @@ Failure problems identify instance pointers and original schema locations when a
 
 ## Retained work and replacement
 
-The replacement example owns an `active: PreparedContract` slot. Its `candidate` helper parses a prospective document, establishes conformance, constructs immutable resources, and requires a ready input. Only a successful result is assigned to `active`. The helper retains distinct parse, version, conformance, interpretation and preparation failures with their diagnostics.
+The replacement example owns an `active: PreparedContract` slot. Its `candidate` helper parses a prospective document, establishes conformance, constructs immutable resources, and requires a ready input declaring `ResourceCompleteness::Complete`. Only a successful result is assigned to `active`. The helper retains distinct parse, version, conformance, interpretation and preparation failures with their diagnostics.
 
-A qualified bare missing `$ref` also yields a ready candidate, but every admitted
-value returns `NoVerdict(ResourceUnavailable)`. The example checks this validation
-result explicitly and keeps its previous active owner. Ready means prepared, not
-that values are guaranteed decidable. Missing-resource recovery requires a new
-context; it cannot update an old partial owner.
+A qualified missing-resource contract can be ready and declare Incomplete. The
+example's candidate helper checks borrowed completeness evidence before accepting it,
+returns a distinct missing-resources error, and keeps the active owner. Undeclared
+custom evaluators require caller policy. A partial preview can deliberately retain
+an Incomplete owner instead. Complete does not guarantee decidability: budgets,
+cancellation and unsupported instances can still return no verdict. Recovery creates
+a new context; it cannot update an old owner's evidence.
 
 The old job clones the ready owner before the application changes the slot. It can still use its original document/resource context after replacement, even when the new context supplies a different schema at exactly the same URI. A channel makes the example's scheduling deterministic; it does not claim to interrupt an evaluation already executing. Applications can use their own threads, queues or other scheduling policy.
 

@@ -1,5 +1,5 @@
 // node node_modules/@openbindings/sdk/examples/service-lifecycle.mjs
-// This application's replacement policy commits only a ready candidate.
+// This application's replacement policy requires complete schema resources.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { initialize, liveStorageOwners, parseJson } from "@openbindings/sdk";
@@ -27,6 +27,11 @@ function prepare(schemaText, documentBytes = document) {
 function replace(service, schemaText, documentBytes = document) {
   const next = prepare(schemaText, documentBytes);
   if (next.status !== "ready") return next;
+  const completeness = next.contract.resourceCompleteness;
+  if (completeness.status !== "complete") {
+    next.contract.dispose();
+    return { status: "resources-missing", evidence: completeness.evidence };
+  }
   try {
     service.replace(next.contract); // ownership transfers only on success
     return { status: "replaced" };
@@ -76,6 +81,12 @@ try {
   assert.equal(outcomes.invalidReplacement.report.conclusion, "non-conformant");
   outcomes.stillCurrent = service.check("replacement was refused");
   assert.equal(outcomes.stillCurrent.outcome, "satisfies");
+  outcomes.incompleteReplacement = replace(
+    service,
+    '{"$ref":"https://schema.example/missing"}',
+  );
+  assert.equal(outcomes.incompleteReplacement.status, "resources-missing");
+  assert.equal(service.check("still complete").outcome, "satisfies");
 
   const cancellation = new AbortController();
   cancellation.abort();
@@ -106,6 +117,11 @@ try {
 const partial = prepareService(document, []);
 assert.equal(partial.status, "ready");
 try {
+  assert.equal(partial.contract.resourceCompleteness.status, "incomplete");
+  assert.throws(
+    () => new ValidationService(partial.contract),
+    /complete schema resources/,
+  );
   outcomes.missingResource = partial.contract.validate(7);
   assert.equal(outcomes.missingResource.outcome, "no-verdict");
   assert.equal(outcomes.missingResource.detail.reason, "resource-unavailable");

@@ -52,6 +52,26 @@ fn refusal(schema: &str, supplied: ResourceSet) -> NoVerdict {
         other => panic!("expected preparation refusal: {other:?}"),
     }
 }
+fn strict_refusal(schema: &str) -> NoVerdict {
+    struct Strict;
+    impl SchemaEvaluator for Strict {
+        fn prepare(
+            &self,
+            request: &SchemaRequest,
+            control: &WorkControl,
+        ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+            Err(request.evaluation_program(control).unwrap_err())
+        }
+    }
+    match document(schema)
+        .value_contracts(Arc::new(Strict), ResourceSet::default())
+        .unwrap()
+        .prepare("op", Side::Input)
+    {
+        ContractPreparation::NoVerdict { detail } => detail,
+        other => panic!("{other:?}"),
+    }
+}
 #[test]
 fn uniform_ready_phase_including_bare_holes_and_static_aliases() {
     for schema in [
@@ -285,8 +305,8 @@ fn nonpositive_hole_influence_and_annotation_dynamic_hazards_refuse() {
         format!(r#"{{"oneOf":[{{"properties":{{"a":{hole}}}}},{{"properties":{{"b":{hole}}}}}]}}"#),
     ] {
         assert_eq!(
-            refusal(&schema, ResourceSet::default()).reason,
-            NoVerdictReason::ConservativePreparation,
+            serde_json::to_value(refusal(&schema, ResourceSet::default())).unwrap(),
+            serde_json::to_value(strict_refusal(&schema)).unwrap(),
             "{schema}"
         );
     }
@@ -622,8 +642,8 @@ fn negative_alias_into_advancing_recursive_graph_is_hole_dependent() {
         r##"{{"$id":"https://review.invalid/root","$defs":{{"recursive":{{"type":"object","properties":{{"next":{{"$ref":"#/$defs/recursive"}},"external":{{"$ref":"{U}"}}}}}}}},"properties":{{"branch":{{"oneOf":[{{"$ref":"#/$defs/recursive"}},false]}}}}}}"##
     );
     assert_eq!(
-        refusal(&schema, ResourceSet::default()).code,
-        "partial-nonpositive-influence"
+        serde_json::to_value(refusal(&schema, ResourceSet::default())).unwrap(),
+        serde_json::to_value(strict_refusal(&schema)).unwrap()
     );
     // A closed negative keyword on the same object is a fixed conjunct.
     let sibling =

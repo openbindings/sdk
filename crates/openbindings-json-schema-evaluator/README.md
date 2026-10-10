@@ -201,3 +201,13 @@ is at least one byte, so at most `B` entries add at most `3*B` bytes of quotes a
 commas. The fixed envelope and base/detail field framing fit the remaining terms;
 type lists use a fixed seven-name vocabulary. This bounds serialization, not total
 heap, vector headers/capacity, the retained source snapshots, or transport copies.
+
+Prepared owners declare resource completeness through
+`PreparedContract::resource_completeness()`: Complete for strict preparation,
+Incomplete with borrowed missing-reference evidence for qualified partial preparation.
+Complete does not promise total decidability. Services may require Complete before
+replacement; partial previews may accept Incomplete. The evidence is one contract
+witness, not necessarily the reference activated by a particular value. Optional
+planner qualification/admission declines restore the original strict located
+ResourceUnavailable detail in this default evaluator. Explicit `evaluation_bounds()`
+callers receive the original planner cause. See the [recovery policy](../../docs/partial-resource-bounds.md).

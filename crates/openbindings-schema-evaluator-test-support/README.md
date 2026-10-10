@@ -20,3 +20,9 @@ Version 0.2.0-alpha.1 is an unpublished candidate requiring Rust 1.99. Package p
 
 Definition-level reference contracts, rendered documentation and maintained checks
 are described in the [API reference guide](../../docs/api-reference.md).
+
+The kit checks explicit resource declarations: Complete must not return
+ResourceUnavailable, and Incomplete must carry located ResourceUnavailable evidence.
+The default trait declaration is Undeclared; the kit assigns no default-evaluator
+completeness policy to an undeclared custom evaluator. All existing semantic and
+refusal checks still apply.

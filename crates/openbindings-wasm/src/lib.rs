@@ -620,6 +620,9 @@ pub struct WasmPrepared {
 }
 #[wasm_bindgen]
 impl WasmPrepared {
+    pub fn resource_completeness(&self) -> String {
+        encoded(self.prepared.resource_completeness())
+    }
     pub fn validate(&self, value: &WasmJson, cancelled: bool) -> String {
         encoded(
             self.prepared

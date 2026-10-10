@@ -12,9 +12,34 @@ property plus an independently failed `required` can fail; and `anyOf(true, U)`
 can satisfy. If the result could depend on U, validation returns no verdict. A
 missing carrier is the only fallback trigger. Known malformed schemas, invalid
 references/targets, ambiguity, unsupported dialects, invalid patterns, Unicode
-limitations, limits and cancellation retain their refusal classifications. A known
+limitations, shared limits and cancellation retain their refusal classifications. A known
 error after the first hole is still checked. The strict `evaluation_program()`
 helper and core dispatch to custom evaluators retain their contracts.
+
+Prepared owners expose `resource_completeness()` in Rust and the immutable cached
+`resourceCompleteness` getter in TypeScript. The default evaluator declares Complete
+for supplied evaluation-relevant resources and Incomplete when bounds retain holes.
+This concerns the selected contract, including transitive supplied-resource references;
+unselected contracts and ignored positions do not create missing-resource evidence.
+Complete does not promise a verdict for every value. Evidence names one missing
+reference of this contract, not necessarily one activated by the current instance or
+an exhaustive list. It contains no instance data; original locations retain the same
+source-disclosure policy as diagnostics. Rust borrows evidence without cloning its
+location. TypeScript caches deeply frozen plain data per owner without a new Wasm
+owner, checks disposal on access, and shares cached data on retain. New contexts do
+not change old prepared owners. Services/editors can require Complete before swapping;
+deliberate partial previews can accept Incomplete. Custom Rust evaluators default to
+Undeclared and require caller policy; core never infers completeness for them.
+
+When optional bounds planning declines, the default evaluator restores its original
+strict located ResourceUnavailable detail for exactly these reason/code pairs:
+ConservativePreparation with `partial-nonpositive-influence` or
+`partial-annotation-or-dynamic`, and LimitExceeded with `partial-program-byte-limit`,
+`partial-scratch-limit`, `schema-edge-limit` or `schema-hole-limit`. Known-closure
+defects, cancellation, shared schema-node/depth limits and compile failures preserve
+their actual causes. This is a finite fallback policy, not a broad error-category catch.
+The explicitly requested `evaluation_bounds()` utility retains its direct planner
+errors; it neither reruns strict projection nor applies this application recovery rule.
 
 ## Adapter contract
 

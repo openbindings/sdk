@@ -221,6 +221,12 @@ pub fn run(evaluator: Arc<dyn SchemaEvaluator>, options: &Options) -> Report {
                 used.insert(case.id.clone());
             }
             let mut failures = judge(case, &value, &outcome, allowed.is_some());
+            if let ContractPreparation::Ready(contract) = &prepared
+                && let Some(failure) =
+                    judge_resource_declaration(contract.resource_completeness(), &outcome)
+            {
+                failures.push(failure.into());
+            }
             if value.text() != original {
                 failures.push("evaluator changed an immutable input".into());
             }
@@ -346,4 +352,76 @@ pub fn judge(
         }
     }
     failures
+}
+
+// Only explicit declarations impose these obligations. Undeclared custom evaluators
+// keep their existing verdict/refusal contract without inheriting default policy.
+fn judge_resource_declaration(
+    declaration: ResourceCompleteness<'_>,
+    outcome: &ValueOutcome,
+) -> Option<&'static str> {
+    match declaration {
+        ResourceCompleteness::Complete if matches!(outcome, ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::ResourceUnavailable) => {
+            Some("complete resource declaration returned ResourceUnavailable")
+        }
+        ResourceCompleteness::Incomplete { evidence, .. }
+            if evidence.reason != NoVerdictReason::ResourceUnavailable
+                || evidence.location.is_none() =>
+        {
+            Some("incomplete declaration requires located ResourceUnavailable evidence")
+        }
+        _ => None,
+    }
+}
+#[cfg(test)]
+mod resource_declaration_tests {
+    use super::*;
+    #[test]
+    fn declarations_are_checked_without_assigning_policy_to_undeclared_evaluators() {
+        let detail = NoVerdict::new(NoVerdictReason::ResourceUnavailable, "missing", "missing");
+        let missing = ValueOutcome::NoVerdict {
+            detail: detail.clone(),
+        };
+        assert!(judge_resource_declaration(ResourceCompleteness::Undeclared, &missing).is_none());
+        assert!(judge_resource_declaration(ResourceCompleteness::Complete, &missing).is_some());
+        assert!(
+            judge_resource_declaration(
+                ResourceCompleteness::incomplete(&detail),
+                &ValueOutcome::Satisfies
+            )
+            .is_some()
+        );
+        let mut located = detail;
+        located.location = Some(SchemaLocation {
+            resource: None,
+            pointer: "/input".into(),
+        });
+        assert!(
+            judge_resource_declaration(
+                ResourceCompleteness::incomplete(&located),
+                &ValueOutcome::Satisfies
+            )
+            .is_none()
+        );
+        assert!(
+            judge_resource_declaration(ResourceCompleteness::incomplete(&located), &missing)
+                .is_none()
+        );
+        let mut wrong = NoVerdict::new(NoVerdictReason::Cancelled, "cancelled", "cancelled");
+        wrong.location = Some(SchemaLocation {
+            resource: None,
+            pointer: "/input".into(),
+        });
+        assert!(
+            judge_resource_declaration(ResourceCompleteness::incomplete(&wrong), &missing)
+                .is_some()
+        );
+        assert!(
+            judge_resource_declaration(
+                ResourceCompleteness::Complete,
+                &ValueOutcome::NoVerdict { detail: wrong }
+            )
+            .is_none()
+        );
+    }
 }

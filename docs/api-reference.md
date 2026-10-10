@@ -53,6 +53,14 @@ and transport traits document their additional SDK obligations explicitly.
   For a missing resource, Rust `ParsedDocument::references()` and TypeScript
   `ParsedDocument.references()` expose explicit reference spellings and keyword
   locations; apply an application disclosure policy before logging these source facts.
+- `PreparedContract::resource_completeness()` borrows evaluator-declared Complete,
+  Incomplete evidence, or Undeclared. Existing custom `PreparedSchema` implementations
+  default to Undeclared. TypeScript's bundled evaluator exposes the complete/incomplete
+  states through a frozen cached `resourceCompleteness` getter with no additional
+  Wasm owner. Complete is a resource claim, not a promise that every value is decidable.
+  Evidence names one missing reference of this contract and follows diagnostic
+  disclosure policy. Require Complete before replacing an active snapshot when your
+  application needs that policy; deliberate partial previews can accept Incomplete.
 - Limits state their units and defaults in definitions. Cancellation is cooperative,
   not a deadline or preemptive interrupt. A same-thread `AbortSignal` cannot run while
   synchronous Wasm occupies that thread. HTTP discovery can interrupt asynchronous

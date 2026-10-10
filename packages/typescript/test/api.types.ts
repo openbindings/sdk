@@ -285,3 +285,21 @@ const readonlyRoundOneInput = {
 authorDocument(readonlyRoundOneInput);
 void roundOneTypes;
 void inaccessibleConstructors;
+
+function preparedResources(
+  contract: import("../dist/index.js").PreparedContract,
+) {
+  const metadata: import("../dist/index.js").ResourceCompleteness =
+    contract.resourceCompleteness;
+  if (metadata.status === "incomplete") {
+    // @ts-expect-error evidence fields are immutable
+    metadata.evidence.message = "changed";
+    if (metadata.evidence.location) {
+      // @ts-expect-error original locations are immutable
+      metadata.evidence.location.pointer = "changed";
+    }
+  }
+  // @ts-expect-error resource metadata is immutable
+  metadata.status = "complete";
+}
+void preparedResources;

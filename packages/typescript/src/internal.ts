@@ -1469,10 +1469,41 @@ function cancelledValue(): ValueOutcome {
     },
   };
 }
+/** Immutable resource evidence from the bundled evaluator for a selected prepared contract. Complete is not a decidability promise. The evidence contains original schema identities but no instance data. */
+export type ResourceCompleteness =
+  | {
+      /** All resources reached by evaluation-relevant preparation were supplied. */
+      readonly status: "complete";
+    }
+  | {
+      /** Prepared without at least one evaluation-relevant resource. */
+      readonly status: "incomplete";
+      /** One missing reference of this contract; not an exhaustive list or necessarily the cause for a particular value. */
+      readonly evidence: Readonly<Omit<NoVerdict, "location">> & {
+        /** Frozen original schema coordinate; contains no instance data. */
+        readonly location: Readonly<SchemaLocation> | null;
+      };
+    };
 /** Disposable retained selected-schema validator, independent of document/context lifetime and cache eviction. Repeated validation borrows exact input; ordinary inputs are admitted and temporary owners released within the call. No verdict here proves whole-document conformance. */
 export class PreparedContract extends Managed {
+  #resourceCompleteness?: ResourceCompleteness;
   /** @internal */ constructor(raw: wasm.WasmPrepared) {
     super(raw);
+  }
+  /** Frozen cached resource evidence for this selected contract, with no new Wasm owner. Complete does not promise every value is decidable. Incomplete names one missing reference, not necessarily one activated by a value or an exhaustive list. Original locations require the same disclosure policy as diagnostics. Throws disposed-handle after disposal. */
+  get resourceCompleteness(): ResourceCompleteness {
+    const prepared = handle<wasm.WasmPrepared>(this);
+    if (!this.#resourceCompleteness) {
+      const result = decode<ResourceCompleteness>(
+        prepared.resource_completeness(),
+      );
+      if (result.status === "incomplete") {
+        if (result.evidence.location) Object.freeze(result.evidence.location);
+        Object.freeze(result.evidence);
+      }
+      this.#resourceCompleteness = Object.freeze(result);
+    }
+    return this.#resourceCompleteness;
   }
   /** Borrow an exact root; cancellation cannot preempt synchronous Wasm. */
   validate(value: ExactJson, options?: WorkOptions): ValueOutcome;
@@ -1536,7 +1567,11 @@ export class PreparedContract extends Managed {
 
   /** Return a NEW independently disposable owner sharing compiled state; it remains valid after the context or prior contract owner is disposed. */
   retain(): PreparedContract {
-    return new PreparedContract(handle<wasm.WasmPrepared>(this).retain());
+    const retained = new PreparedContract(
+      handle<wasm.WasmPrepared>(this).retain(),
+    );
+    retained.#resourceCompleteness = this.#resourceCompleteness;
+    return retained;
   }
 }
 /** Pinned HTTP discovery companion identity and wire defaults, independent of package/spec core versions. */

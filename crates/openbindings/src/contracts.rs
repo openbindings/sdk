@@ -278,7 +278,9 @@ impl SchemaRequest {
     /// Build paired closed validity bounds for the qualified static-reference
     /// fragment, without acquiring resources. See [`EvaluationBounds`] for the
     /// proof, admission limits and adapter responsibilities. This does not
-    /// change the strict [`Self::evaluation_program`] contract.
+    /// change the strict [`Self::evaluation_program`] contract. Direct calls
+    /// retain actual planner refusals; only the default evaluator's optional
+    /// fallback can restore its original strict resource-unavailable detail.
     pub fn evaluation_bounds(&self, control: &WorkControl) -> Result<EvaluationBounds, NoVerdict> {
         self.space.bounds(self.entry, control)
     }
@@ -496,10 +498,45 @@ pub trait SchemaEvaluator: Send + Sync {
         control: &WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict>;
 }
+/// What the evaluator declared about resources reached for this prepared contract.
+/// Complete does not promise decidability: budgets, cancellation and unsupported
+/// instances may still prevent a verdict. Evidence borrows the immutable prepared
+/// owner; inspection does not clone its potentially long original location.
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(tag = "status", rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum ResourceCompleteness<'a> {
+    /// All evaluation-relevant schema resources were supplied for preparation.
+    Complete,
+    /// Preparation succeeded without at least one evaluation-relevant resource.
+    #[non_exhaustive]
+    Incomplete {
+        /// One located missing-reference witness, not an exhaustive list or
+        /// necessarily a reference activated by a particular instance. Original
+        /// source identities require the same disclosure policy as diagnostics.
+        evidence: &'a NoVerdict,
+    },
+    /// The evaluator made no declaration; applications choose their own policy.
+    Undeclared,
+}
+impl<'a> ResourceCompleteness<'a> {
+    /// Declare incomplete resources with borrowed, located ResourceUnavailable
+    /// evidence retained by the prepared owner. Does not allocate or clone it.
+    pub fn incomplete(evidence: &'a NoVerdict) -> Self {
+        Self::Incomplete { evidence }
+    }
+}
 /// Thread-safe retained validator returned by a [`SchemaEvaluator`]. Repeated calls must preserve caller input and retain no accidental borrow of a completed request. Only claim established semantic verdicts; bound diagnostic work separately and report incompleteness.
 pub trait PreparedSchema: Send + Sync {
     /// Return only established verdicts. Resource/capability/work failures are NoVerdict.
     fn validate(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome;
+    /// Declare immutable resource evidence for this owner. The default makes no
+    /// claim, preserving existing custom evaluators. Complete declarations must
+    /// not return ResourceUnavailable; incomplete evidence must be located and
+    /// have that reason. Other no-verdict causes remain possible in either state.
+    fn resource_completeness(&self) -> ResourceCompleteness<'_> {
+        ResourceCompleteness::Undeclared
+    }
 }
 /// An immutable document/resource/evaluator context with bounded preparation reuse.
 /// Select a contract using [`Self::prepare`], then retain its ready owner for
@@ -589,6 +626,12 @@ impl fmt::Debug for PreparedContract {
     }
 }
 impl PreparedContract {
+    /// Borrow the selected evaluator's immutable resource declaration without
+    /// evaluating an instance. Core never infers completeness for custom evaluators.
+    /// Retained clones preserve this evidence after context drop or replacement.
+    pub fn resource_completeness(&self) -> ResourceCompleteness<'_> {
+        self.schema.resource_completeness()
+    }
     /// Validate an admitted exact value, distinguishing satisfies, fails and
     /// no-verdict. For ordinary Rust data first use [`JsonValue::from_serializable`];
     /// for exact JSON text/bytes use [`JsonValue::parse`]. Admission failure is

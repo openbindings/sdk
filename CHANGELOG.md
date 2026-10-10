@@ -55,6 +55,14 @@
 
 ### Changed
 
+- Prepared contracts expose borrowed Rust `ResourceCompleteness` and a frozen,
+  cached TypeScript `resourceCompleteness` getter. Existing custom evaluators default
+  to Undeclared. Complete describes resources, not guaranteed value decidability.
+  Retained service/editor examples now require Complete before replacing a snapshot.
+- Declined optional partial planning again preserves the default evaluator's original
+  located ResourceUnavailable refusal. Direct `evaluation_bounds()` retains planner
+  errors; known defects, shared limits, cancellation and compilation keep their causes.
+
 - The default evaluator can decide values independently of missing static resources
   within a qualified positive fragment, using shared-budget lower/upper evaluation
   and known-source upper diagnostics. Qualified partial contracts, including a bare

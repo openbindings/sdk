@@ -78,7 +78,9 @@ resolver/full-pointer scratch guard applies. These are
 not compiled-memory or RSS bounds. Upper/lower share one verdict work/regex budget;
 failure diagnostics retain a separate bounded pass. The
 [proof and adapter contract](docs/partial-resource-bounds.md) specifies exact
-eligibility, counting and limitations. The SDK never fetches references. Supply
+eligibility, counting and limitations. Prepared owners expose evaluator-declared
+resource completeness, distinct from value decidability. Rust custom evaluators
+default to Undeclared. The SDK never fetches references. Supply
 resources in a new context to retry; old owners keep their original snapshots.
 
 Failure diagnostics are bounded, omit instance values and identify original

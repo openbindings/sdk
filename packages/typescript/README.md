@@ -101,6 +101,18 @@ property, independent known failure, or known passing `anyOf` branch can make a 
 decidable. Values that depend on missing content return `no-verdict` with reason
 `resource-unavailable` from validation. Even a bare missing `$ref` now prepares
 ready and returns no verdict for every admitted value. Keep handling both phases.
+Inspect `contract.resourceCompleteness`: its frozen, cached plain data is `complete`
+or `incomplete` with one missing-reference `evidence`. This is selected-contract
+preparation evidence, including transitive supplied-resource holes, not an exhaustive
+list or necessarily the reference activated by a value. Inspection creates no Wasm
+owner; access after disposal throws `disposed-handle`. Complete does not promise every
+value is decidable. The retained service/editor examples require complete resources
+before replacing an active snapshot; partial previews can deliberately keep incomplete
+contracts.
+
+When the default evaluator declines optional partial planning, it preserves the
+original located `resource-unavailable` refusal. Known-closure defects, cancellation,
+shared limits and compilation failures keep their actual classifications.
 
 Missing influence through `not`, `oneOf`, conditionals or `contains` refuses, while
 closed subgraphs remain supported. Evaluated `unevaluated*` and dynamic keywords
@@ -362,6 +374,18 @@ if (setup.status === 'ready') {
 }
 // Other setup states: no-contract | operation-missing | operation-ambiguous | no-verdict
 ```
+
+For an application-owned replacement candidate:
+
+```ts
+const completeness = candidate.resourceCompleteness;
+if (completeness.status === 'complete') service.replace(candidate);
+else {
+  candidate.dispose();
+  return { status: 'resources-missing', evidence: completeness.evidence };
+}
+```
+
 
 `resolveOperation(name)` returns `found` with an independently owned operation,
 `missing`, or `ambiguous` with lexically ordered primary keys. The returned

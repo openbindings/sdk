@@ -45,7 +45,7 @@ test("first-use caller keeps setup refusals separate and releases its owners", (
   assert.equal(liveStorageOwners(), baseline);
 });
 
-test("source editor diagnoses a wrong field and commits only a ready corrected snapshot", () => {
+test("source editor diagnoses a wrong field and commits only a corrected snapshot with complete resources", () => {
   const corrected = exampleDraft.replace('"inputSchema":', '"input":');
   const warm = new DocumentEditor();
   warm.update(corrected);
@@ -83,17 +83,24 @@ test("source editor diagnoses a wrong field and commits only a ready corrected s
     const refused = editor.update(
       '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"$ref":"https://schema.example/missing"}}}}',
     );
-    // Qualified bare holes intentionally move refusal from setup to validation.
-    assert.equal(refused.status, "updated");
-    assert.equal(refused.result.outcome, "no-verdict");
-    assert.equal(refused.result.detail.reason, "resource-unavailable");
-    assert.match(formatEditorResult(refused), /Input verdict unavailable/);
+    // Ready partial owners remain usable, but the editor requires complete resources.
+    assert.equal(refused.status, "resources-missing");
+    assert.equal(refused.evidence.reason, "resource-unavailable");
+    assert.match(
+      formatEditorResult(refused),
+      /Previous complete snapshot kept/,
+    );
+    const declined = editor.update(
+      '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"not":{"$ref":"https://schema.example/missing"}}}}}',
+    );
+    assert.equal(declined.status, "resources-missing");
+    assert.equal(
+      declined.evidence.message,
+      "static preparation requires a resource that was not supplied",
+    );
     const current = editor.snapshot();
     try {
-      assert.match(
-        new TextDecoder().decode(current.originalBytes),
-        /schema.example\/missing/,
-      );
+      assert.equal(new TextDecoder().decode(current.originalBytes), corrected);
     } finally {
       current.dispose();
     }
