@@ -28,10 +28,11 @@ Before a separately authorized release:
    hashes and supported specification identity. Application migration, existing
    SDK retirement and verified-cohort promotion require separate decisions.
 
-For local consumption now, use the accompanying delivery's extracted Cargo archive
-consumer (registry-version dependencies patched to adjacent archive sources) or
-install its npm tarball. Cargo archive manifests contain no development path
-dependencies. Neither route requires publishing these packages.
+For local consumption, build Cargo archives or an npm tarball from the intended
+commit. Test a fresh Cargo consumer with registry-version dependencies patched to
+the extracted archives, or install the npm tarball into a fresh project. Cargo
+archive manifests contain no development path dependencies. Neither route requires
+publishing these packages.
 
 ## SDK release readiness evidence
 

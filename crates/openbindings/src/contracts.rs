@@ -35,6 +35,8 @@ pub enum NoVerdictReason {
     /// Sound preparation or evaluation could not be established, for example a potential non-progressing cycle. This does not prove semantic undefinedness.
     ConservativePreparation,
     /// A required resource is absent from the explicitly supplied context; no network retrieval is attempted.
+    /// Use [`ParsedDocument::references`] to inspect explicit reference spellings
+    /// and original keyword locations. Apply your disclosure policy before logging them.
     ResourceUnavailable,
     /// A configured work or representation limit prevented a verdict.
     LimitExceeded,

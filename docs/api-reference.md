@@ -44,6 +44,9 @@ and transport traits document their additional SDK obligations explicitly.
   disables implicit retention. Caller-retained contracts survive context drop and
   eviction. Resource sets are immutable, explicit and scoped to each context; URI
   identity never authorizes I/O. Core and default schema evaluation do no acquisition.
+  For a missing resource, Rust `ParsedDocument::references()` and TypeScript
+  `ParsedDocument.references()` expose explicit reference spellings and keyword
+  locations; apply an application disclosure policy before logging these source facts.
 - Limits state their units and defaults in definitions. Cancellation is cooperative,
   not a deadline or preemptive interrupt. A same-thread `AbortSignal` cannot run while
   synchronous Wasm occupies that thread. HTTP discovery can interrupt asynchronous

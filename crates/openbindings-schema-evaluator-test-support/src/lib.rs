@@ -19,7 +19,7 @@ pub struct Case {
     pub id: String,
     /// Exact instance JSON text parsed independently for this case.
     pub value: String,
-    /// Expected wire outcome spelling for the pinned fixture.
+    /// Expected current outcome tag; frozen fixture spellings are translated at load.
     pub expected: String,
     /// Alternative complete sets of instance pointers accepted for an established failure; absent means no specific set constraint.
     pub acceptable_paths: Option<Vec<Vec<String>>>,

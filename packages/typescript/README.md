@@ -1,6 +1,6 @@
 # OpenBindings SDK
 
-An unpublished migration candidate with Rust semantics and a first-class
+An unpublished development build with Rust semantics and a first-class
 TypeScript API. Document parsing, authoring, conformance, exact values, names,
 references, prepared contracts, and optional HTTP discovery are included.
 Invocation, binding adaptation, and synthesis are separate work.
@@ -395,7 +395,9 @@ and the package lock. Run `npm ci`, `npm run build:wasm`, `npm run build`,
 `npm test`, and `npm run test:types`. `WASM_BINDGEN` may name an explicit CLI path.
 The build checks that generated Wasm matches current Rust source and records its
 source/artifact identities. Consumers of a packed package need only its included
-JavaScript, declarations and Wasm asset. The accompanying migration delivery records final source-bound qualification.
+JavaScript, declarations and Wasm asset. The bundled `dist/wasm/build-info.json`
+records the engine source and artifact hashes; [component CI](https://github.com/openbindings/sdk/actions/workflows/ci.yml)
+records checks for each tested commit.
 Dependency notices and compiler attribution are included; this candidate is not published.
 
 ### Interpretation errors and diagnostic text

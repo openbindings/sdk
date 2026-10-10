@@ -150,7 +150,7 @@ backends, legacy drafts and old engine-failure behavior are not supported SDK AP
 The 435-case normative corpus, 1,566-case evaluator kit, explicit public regression
 witnesses and no-I/O controls govern the supported product behavior.
 
-## Precise witness attribution (SDK-A01)
+## Precise witness attribution
 
 [The per-test mapping](docs/upstream-disposition-witnesses.json) supplements the
 historical 17-entry disposition ledger without changing old receipts. Two Draft4
