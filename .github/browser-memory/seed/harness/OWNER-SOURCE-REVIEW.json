@@ -1,0 +1,28 @@
+{
+  "reviewedAt": "2026-10-10T20:16:56.638472+00:00",
+  "reviewer": "Prime SDK coherence owner; independent of harness implementation, author of measurement policy",
+  "sourceFreezeSha256": "361ee880e6def05e826ecef1f800a4347b59de2e70ac954da7859cb0ff858825",
+  "status": "source accepted for Linux environment preparation; final binding review and real controls pending",
+  "sourceFilesVerified": 15,
+  "independentTests": {
+    "command": "python3 -B -m unittest -v test_harness",
+    "count": 13,
+    "exitCode": 0,
+    "kind": "SDK-free local instrument controls, not Linux/cgroup/browser validation"
+  },
+  "reviewed": [
+    "Dedicated root-owned group and authenticated pre-browser-exec enrollment, ancestry/PID identity and inherited no-new-privileges; driver/server remain outside.",
+    "Strict raw counter parsing, lifetime memory.peak and conservative warmed-idle subtraction; group and parent safety events prevent pass.",
+    "Fixed42SDKtrials and3realprerequisitecontrols, immutable source/archive/runtime bindings, no SDK attempt before controls and revalidation.",
+    "Retained public owner semantics, asynchronous phase handshake, complete snapshots, exact served bytes and Wasm attribution.",
+    "Cleanup confined to created root-owned inode-bound groups and created driver process, failures retained.",
+    "48\u2013160MiB held growth criterion prospectively accepted for64MiBcontrols; actual observed outcomes remain pending.",
+    "Fully released200/400 snapshots with two disclosed retained-owner epochs accepted: same original const0 snapshot semantics exercised independently through each equal200replacementinterval. This changes instrument lifecycle, not old receipts."
+  ],
+  "limitations": [
+    "No real Linux process launch, browser/cgroup controls, package/environment bundle, timings or SDK resource measurements performed here.",
+    "Kernel charges differ from summed RSS, physical total heap and Wasm capacity; no macOS/mobile/Cloudflare claim.",
+    "This source acceptance is not OWNER-REVIEW.json and cannot authorize a campaign with unbound final artifacts.",
+    "The standalone workflow remains uninstalled; exact runner image, apt packages, browser/version and source/archive chain require binding review."
+  ]
+}

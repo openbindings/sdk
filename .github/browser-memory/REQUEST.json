@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "mode": "prepare",
+  "ownerLogin": "clevengermatt",
+  "sdkRepository": "openbindings/sdk",
+  "canonicalRoot": "/opt/ob-memory-inputs",
+  "baseline": {
+    "commit": "346da6523e2c87a7f2eb1b415ddeb77def7aab6c",
+    "tree": "86ca4a150675ef4ea286c726409d98e6f18c1633",
+    "expectedRustSourceSha256": "32a94299a2adfe9c14288a29cc8584777bba27002192d6ddcbb961f46ce712f6",
+    "referencePackagedCommit": "ba38c94c0da436f16cc9b4630d9d2ee2b896709b",
+    "referenceArchiveSha256": "80bceb3e1c71b5c6d6366c7aab5f8aae4481aed513df1cb1f4cdb3a496148994",
+    "expectedArchiveSha256": null
+  },
+  "candidate": {
+    "commit": "96a2380fba61b9aec42fabc21f8bc815cf2ab93f",
+    "tree": "c2f16b991a2f91e9a38977858600a89a69660a21",
+    "expectedRustSourceSha256": "cb32e9f958469270c07c37bcb2e7ef9aa6f84ecf69bab06c7048b5ed3c1c4865",
+    "expectedArchiveSha256": null
+  },
+  "node": {
+    "version": "22.19.0",
+    "archiveSha256": "c0649af18e6a24f6fe5535a3e86b341dd49a8e71117c8b68bde973ef834f16f2"
+  },
+  "playwright": {
+    "version": "1.64.0",
+    "archiveSha256": "90c8b6b19da0a1b1e9a004cd6ff3e49e82668a0856e01efcc0e2d9c2b4466bb6"
+  },
+  "rustToolchain": "1.99.0",
+  "wasmBindgen": "0.2.129"
+}
