@@ -113,6 +113,8 @@ pub struct Arena {
     positions: Mutex<PositionIndex>,
     #[cfg(test)]
     position_scanned: std::sync::atomic::AtomicUsize,
+    #[cfg(test)]
+    pub duplicate_query_probes: std::sync::atomic::AtomicUsize,
     pub nodes: Vec<Node>,
     pub duplicates: Vec<(Id, Id)>,
     pub unpaired: Vec<Id>,
@@ -136,6 +138,8 @@ impl Arena {
                 positions: Mutex::default(),
                 #[cfg(test)]
                 position_scanned: std::sync::atomic::AtomicUsize::new(0),
+                #[cfg(test)]
+                duplicate_query_probes: std::sync::atomic::AtomicUsize::new(0),
                 nodes: Vec::new(),
                 duplicates: Vec::new(),
                 unpaired: Vec::new(),
@@ -224,6 +228,24 @@ impl Arena {
     }
     pub fn raw(&self, id: Id) -> &str {
         &self.source[self.nodes[id].span.clone()]
+    }
+    pub fn has_duplicate_names(&self, id: Id) -> bool {
+        let node = &self.nodes[id];
+        if !matches!(node.kind, Kind::Array(_) | Kind::Object(_)) {
+            return false;
+        }
+        // Parsing records duplicate key tokens in source order. Object IDs are
+        // not ordered here: a nested duplicate can precede its parent's next
+        // duplicate. A key inside a container belongs to it or a descendant.
+        let first = self.duplicates.partition_point(|&(_, key)| {
+            #[cfg(test)]
+            self.duplicate_query_probes
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            self.nodes[key].span.start < node.span.start
+        });
+        self.duplicates
+            .get(first)
+            .is_some_and(|&(_, key)| self.nodes[key].span.start < node.span.end)
     }
     pub fn string(&self, id: Id) -> Option<&str> {
         match &self.nodes[id].kind {

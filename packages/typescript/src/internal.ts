@@ -148,7 +148,7 @@ export interface SchemaLocation {
   /** RFC 6901 pointer within that original source; empty string denotes root. */
   pointer: string;
 }
-/** Known refusal causes for this facade and its bundled engine. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. Undefined is reserved for proved semantic undefinedness; a potential cycle alone is conservative-preparation. Later package versions may add causes. For unavailable resources, ParsedDocument.references() exposes explicit reference spellings and original keyword locations; apply an application disclosure policy before logging them. */
+/** Known refusal causes for this facade and its bundled engine. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. Undefined is reserved for proved semantic undefinedness; a potential cycle alone is conservative-preparation. Later package versions may add causes. For unavailable resources, ParsedDocument.references() exposes document-wide reference spellings and original keyword locations, not an exact per-contract missing-resource list; apply an application disclosure policy before logging them. */
 export type NoVerdictReason =
   | "unsupported-capability"
   | "conservative-preparation"
@@ -457,7 +457,7 @@ export interface DependencyMetadata {
   /** Declared description or null for absence. */ readonly description:
     | string
     | null;
-  /** Frozen declared kind strings; null accepts all, an empty list accepts none. */ readonly kinds:
+  /** Frozen declared kind strings; null accepts all. An empty list matches none but is nonconformant: a present kinds list must be nonempty. */ readonly kinds:
     | readonly string[]
     | null;
 }
@@ -1047,7 +1047,7 @@ export class ParsedDocument extends Managed {
     }
   }
 
-  /** Return undefined for absent dependency; otherwise test its kind filter. Absent kinds accepts all and empty accepts none. This helper does not establish normative conformance. */
+  /** Return undefined for absent dependency; otherwise test its kind filter. Absent kinds accepts all; an empty list matches none but is nonconformant. This helper does not establish normative conformance. */
   dependencyAcceptsKind(dependency: string, kind: string): boolean | undefined {
     scalar(dependency);
     scalar(kind);
@@ -1376,7 +1376,7 @@ export class ValueContracts extends Managed {
   /** @internal */ constructor(raw: wasm.WasmContracts) {
     super(raw);
   }
-  /** Select the named operation/alias and requested side, then return the complete ContractPreparation partition. Ready transfers a new disposable contract independent of this context/cache. Deterministic preparations can be reused; cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
+  /** Select the named operation/alias and requested side, then return the complete ContractPreparation partition. Ready transfers a new disposable contract independent of this context/cache. The default evaluator requires all external resources reached during static preparation, even under branches a later instance would not visit; supply resources in a new context to recover. Deterministic preparations can be reused; cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
   prepare(
     operation: string,
     side: Side,
@@ -2087,11 +2087,11 @@ export interface BindingDraft {
   /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
-/** Dependency declaration with an optional exact source-kind filter; absent kinds accepts all and an empty array accepts none. */
+/** Dependency declaration with an optional exact source-kind filter. Absence accepts all; a conformant present filter must be nonempty. */
 export interface DependencyDraft {
   /** Referenced operation name. */
   operation: string;
-  /** Exact permitted source kinds; absence accepts all, empty array accepts none. */
+  /** Exact permitted source kinds; absence accepts all. An empty array is representable for draft inspection but fails normative assessment. */
   kinds?: readonly string[];
   /** Optional dependency explanation. */
   description?: string;

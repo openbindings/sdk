@@ -69,7 +69,21 @@ or retained views directly instead of admitting them again through Serde.
 
 A prepared contract retains its resources after the document/context is dropped. Preparation reuses deterministic results within a context. The context retains four most-recent prepared entries by default; `ValueContractOptions.cache_capacity` controls this count, including zero to disable caching. Caller-retained contracts survive eviction; this is an entry cap, not a byte cap. Concurrent first calls may perform duplicate preparation before one result is retained. Cancellation and transient evaluator failures are not cached. Different contexts never share resource identities or compiled contracts.
 
-`NoVerdict` distinguishes unsupported capabilities, conservative preparation, missing resources, limits and cancellation. A missing reference or invalid pattern in a potentially visited branch may cause a conservative refusal even if another branch would establish validity. Such a refusal does not claim semantic undefinedness. Unicode property-escape *syntax* follows ECMA-262 edition 11; actual property matching is explicitly unsupported and declined only when applied. `format` remains an annotation. Custom/historical dialects are not interpreted as 2020-12.
+`NoVerdict` distinguishes unsupported capabilities, conservative preparation,
+missing resources, limits and cancellation. The default evaluator uses static
+resource preparation: every external resource reached while preparing the selected
+contract must be supplied before evaluating any instance. A missing reference under
+an optional property or an unused instance branch therefore refuses preparation,
+even if the instance's semantic verdict could be established independently.
+This limits decision coverage; it does not establish failure or semantic undefinedness.
+`ParsedDocument::references()` exposes document-wide reference spellings and
+locations, not an exact per-contract list of missing resources. Apply application
+acquisition policy, supply resources in a new context, and retry preparation.
+Existing prepared owners retain their original snapshots. Invalid patterns and
+some recursive branches can also cause conservative refusal. Unicode property-escape
+*syntax* follows ECMA-262 edition 11; actual property matching is explicitly
+unsupported and declined only when applied. `format` remains an annotation.
+Custom/historical dialects are not interpreted as 2020-12.
 
 Regex compilation refusals use `schema-pattern-compilation` with bounded guidance
 to inspect `pattern` and `patternProperties`. They do not echo patterns or resource

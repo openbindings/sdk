@@ -278,7 +278,8 @@ impl DependencyView {
         )
     }
     /// Read all declared kinds after checking every item. None accepts every kind;
-    /// an empty iterator accepts none. This does not select a provider.
+    /// an empty iterator matches none but is nonconformant: a present list must be
+    /// nonempty. This does not establish conformance or select a provider.
     pub fn kinds(
         &self,
     ) -> Result<Option<impl ExactSizeIterator<Item = &str>>, InterpretationError> {

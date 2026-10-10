@@ -54,12 +54,23 @@ blanket refused because of that arithmetic limit. The pinned Go 4,096-token /
 exponent ±10,000 arithmetic floor is qualified separately.
 
 Selected Unicode-property regex matching, external old/custom dialects and
-lone-surrogate interpretation are declared unsupported cases. Invalid patterns,
-missing external resources and some in-place recursion or dominating branches can
+lone-surrogate interpretation are declared unsupported cases. Invalid patterns
+and some in-place recursion or dominating branches can
 cause conservative no-verdict; preparation failure does not prove semantic
 undefinedness. Exact-case declarations and the full suite distinguish these
 limits from wrong verdicts. The implementation does not promise a complete
 irrelevance decision procedure for `anyOf(true, problematic-schema)`.
+
+The default evaluator uses **static resource preparation**: every external schema
+resource reached while preparing the selected contract must be supplied before
+any instance is evaluated. This includes references under optional properties or
+branches that a particular instance would not visit. Missing one produces
+`ResourceUnavailable`, even when that instance's semantic verdict could be
+established independently. This is a decision-coverage limit, not a value failure
+or a claim that the specification requires that resource for every instance.
+Inspect document-wide reference spellings, apply application acquisition policy,
+and create a new resource set/context to retry; the SDK never fetches a reference.
+An existing prepared owner continues to use its original resource snapshot.
 
 Failure diagnostics are bounded, omit instance values and identify original
 schema/instance locations. `problems_complete`/`problemsComplete` describes the

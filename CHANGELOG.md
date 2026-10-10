@@ -64,6 +64,12 @@
 - Exact source coordinates share a lazy, bounded index within each retained
   document arena. Repeated metadata reads no longer rescan the complete source
   prefix; original byte offsets, lines, byte columns and pointers are unchanged.
+- Exact duplicate-name queries use the existing source-ordered evidence: scalar
+  queries are constant work and container queries use binary search, without a
+  new retained index or changes to duplicate diagnostic ordering.
+- Clarify the default evaluator's static resource preparation and the requirement
+  that conformant dependency kind filters be nonempty. These documented limits
+  do not change evaluation or draft interpretation behavior.
 - Conformance diagnostics deduplicate repeated findings for the same original
   occurrence before count and pointer-byte limits. Identical schema text at
   different source positions remains distinct. Duplicate-member findings now

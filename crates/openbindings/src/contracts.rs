@@ -34,9 +34,14 @@ pub enum NoVerdictReason {
     UnsupportedCapability,
     /// Sound preparation or evaluation could not be established, for example a potential non-progressing cycle. This does not prove semantic undefinedness.
     ConservativePreparation,
-    /// A required resource is absent from the explicitly supplied context; no network retrieval is attempted.
-    /// Use [`ParsedDocument::references`] to inspect explicit reference spellings
-    /// and original keyword locations. Apply your disclosure policy before logging them.
+    /// A resource required by the evaluator's preparation or evaluation is absent;
+    /// no network retrieval is attempted. The default evaluator prepares resources
+    /// statically, including references in branches an instance may not visit.
+    /// This does not claim the resource is necessary to that instance's semantic verdict.
+    /// Use [`ParsedDocument::references`] to inspect document-wide reference spellings
+    /// and original keyword locations, then create a new context with supplied resources.
+    /// That inventory is not an exact per-contract missing-resource list.
+    /// Apply your disclosure policy before logging it.
     ResourceUnavailable,
     /// A configured work or representation limit prevented a verdict.
     LimitExceeded,

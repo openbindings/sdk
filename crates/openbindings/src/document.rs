@@ -333,7 +333,9 @@ impl ParsedDocument {
         }
         Ok(index.bindings.get(key).cloned().unwrap_or_default())
     }
-    /// Return `None` when the dependency is absent, otherwise test its kind filter. Absence of `kinds` accepts all; an empty list accepts none. Interpretation may refuse the document; this method is not normative proof.
+    /// Return `None` when the dependency is absent, otherwise test its kind filter.
+    /// Absence of `kinds` accepts all; an empty list matches none but is nonconformant.
+    /// Interpretation may refuse the document; this method is not normative proof.
     pub fn dependency_accepts_kind(
         &self,
         dependency: &str,

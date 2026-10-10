@@ -499,7 +499,8 @@ impl Read for OperationExample {
 pub struct Dependency {
     /// Referenced operation name; document assessment checks the applicable normative constraints.
     pub operation: String,
-    /// Allowed source kinds. Absence accepts every kind; an empty list accepts none.
+    /// Allowed source kinds. Absence accepts every kind; a conformant present list
+    /// must be nonempty. An empty list is representable but fails normative assessment.
     pub kinds: Option<Vec<String>>,
     /// Optional human-facing dependency description.
     pub description: Option<String>,
@@ -793,7 +794,9 @@ impl DocumentBuilder {
     }
 }
 impl Dependency {
-    /// Test the declared kind filter with exact string equality; absence accepts all and an empty list accepts none. This does not resolve or execute a dependency.
+    /// Test the declared kind filter with exact string equality; absence accepts all.
+    /// An empty list matches none but is nonconformant. This does not establish
+    /// conformance or resolve or execute a dependency.
     pub fn accepts_kind(&self, kind: &str) -> bool {
         self.kinds
             .as_ref()

@@ -95,6 +95,16 @@ validation, prepare once and keep the ready contract. The [retained service](exa
 does that; [replacement and recovery](examples/service-lifecycle.mjs) adds explicit
 resources and asynchronous request ownership after the initialization instructions.
 
+The default evaluator prepares resources statically: every external schema resource
+reached while preparing the selected contract must be supplied before validating
+any instance. A missing reference under an optional property or an unused instance
+branch therefore refuses preparation, even if that instance's verdict could be
+established independently. Inspect `document.references()` for document-wide
+reference spellings and locations, apply your application's acquisition policy,
+then supply resources in a new context and retry. The inventory is not an exact
+per-contract missing-resource list. The SDK does not fetch references, and existing
+prepared owners retain their original snapshots.
+
 ## Initialization
 
 Initialization is asynchronous and explicit. Browser modules can load the Wasm
