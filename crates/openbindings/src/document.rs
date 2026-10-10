@@ -10,7 +10,7 @@ mod read_views;
 use read_views::NamespaceCache;
 pub use read_views::{BindingView, DependencyView, ExampleView, SourceView};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap},
     fmt,
     sync::{Arc, OnceLock},
 };
@@ -941,7 +941,8 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
         }
     }
     let schemas = document.schemas();
-    let mut meta_seen = HashSet::new();
+    // The index visits each contained schema occurrence once. Equal text at
+    // different positions must still be checked at each original location.
     for node in &schemas.nodes {
         let schema = node.value.view();
         if node.depth > 256 {
@@ -952,7 +953,7 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
                 "schema-depth-limit",
                 "schema depth exceeds 256",
             );
-        } else if meta_seen.insert(fixed_schema::occurrence(schema)) {
+        } else {
             c.fixed(&node.value, 9, true);
         }
         if let Some(dialect) = schema.get("$schema")

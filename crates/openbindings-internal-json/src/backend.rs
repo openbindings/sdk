@@ -4,6 +4,26 @@ use jsonschema::json::{Array, Json, JsonNumber, Node, NodeIdentity, Object};
 use jsonschema_value::{LazyInstance, ob_decimal::Decimal, types::JsonType};
 use serde_json::Value;
 use std::{borrow::Cow, sync::OnceLock};
+
+/// Borrow one object member by source position, without visiting preceding members.
+/// This internal bridge helper preserves duplicate names and exact name tokens.
+pub fn member_at(value: crate::JsonRef<'_>, index: usize) -> Option<crate::JsonMember<'_>> {
+    let Kind::Object(members) = &value.owner.nodes[value.id].kind else {
+        return None;
+    };
+    let member = members.get(index)?;
+    Some(crate::JsonMember {
+        name: crate::JsonRef {
+            owner: value.owner,
+            id: member.key,
+        },
+        value: crate::JsonRef {
+            owner: value.owner,
+            id: member.value,
+        },
+    })
+}
+
 pub struct FlatJson;
 #[derive(Clone, Copy)]
 pub enum View<'a> {
@@ -606,6 +626,39 @@ pub fn live_arenas() -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn indexed_members_preserve_each_exact_occurrence() {
+        let source = r#"{"z":9007199254740993,"\ud800":null,"z":0.29000000000000001}"#;
+        let value = crate::JsonValue::parse(source).unwrap();
+        for (index, (name, text)) in [
+            (r#""z""#, "9007199254740993"),
+            (r#""\ud800""#, "null"),
+            (r#""z""#, "0.29000000000000001"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let member = member_at(value.view(), index).unwrap();
+            assert_eq!(member.name.text(), name);
+            assert_eq!(member.value.text(), text);
+        }
+        let first = member_at(value.view(), 0).unwrap();
+        let last = member_at(value.view(), 2).unwrap();
+        assert_ne!(
+            first.name.location().byte_offset,
+            last.name.location().byte_offset
+        );
+        let retained = last.value.to_owned();
+        assert!(member_at(value.view(), 3).is_none());
+        assert!(member_at(value.view(), usize::MAX).is_none());
+        drop(value);
+        assert_eq!(retained.text(), "0.29000000000000001");
+        for source in ["{}", "[]", "[1]", "null", "1", "true", r#""text""#] {
+            let value = crate::JsonValue::parse(source).unwrap();
+            assert!(member_at(value.view(), 0).is_none());
+        }
+    }
+
     #[test]
     fn duplicate_member_names_keep_each_original_token_occurrence() {
         let source = r#"{"a/~":{"k":0,"k":1,"k":2},"\ud800":{"j":0,"j":1}}"#;

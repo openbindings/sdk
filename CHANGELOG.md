@@ -49,6 +49,18 @@
 
 ### Changed
 
+- TypeScript operation inventories now interpret `tags` and `deprecated` along
+  with the other metadata. Malformed values, including those on an unrelated
+  operation, make the inventory throw an interpretation error; raw exact
+  document access remains available.
+- TypeScript authoring now accepts an unknown source field literally named
+  `additionalFields` through the draft's additional-field map. Collisions with
+  actual typed source fields are still refused.
+- Abandoning an undisposed TypeScript editing scope keeps reachable converted
+  exact leaves usable. Explicit scope disposal still releases every converted
+  leaf, including removed or replaced leaves; retain leaves that must survive it.
+- Exact object cursors use direct indexed access to each member, avoiding a
+  repeated prefix walk. This is a structural work bound, not a measured speedup.
 - Conformance diagnostics deduplicate repeated findings for the same original
   occurrence before count and pointer-byte limits. Identical schema text at
   different source positions remains distinct. Duplicate-member findings now

@@ -578,9 +578,9 @@ const finalizer =
     ? undefined
     : new FinalizationRegistry<Raw>((raw) => raw.free());
 const handles = new WeakMap<object, Raw>();
-function registerHandle(owner: object, raw: Raw): void {
+function registerHandle(owner: object, raw: Raw, finalize: boolean): void {
   handles.set(owner, raw);
-  finalizer?.register(owner, raw, owner);
+  if (finalize) finalizer?.register(owner, raw, owner);
 }
 function handle<T extends Raw>(owner: Managed): T {
   const raw = handles.get(owner);
@@ -589,8 +589,10 @@ function handle<T extends Raw>(owner: Managed): T {
   return raw as T;
 }
 abstract class Managed {
-  protected constructor(raw: Raw) {
-    registerHandle(this, raw);
+  protected constructor(raw: Raw);
+  /** @internal */ protected constructor(raw: Raw, finalize: boolean);
+  protected constructor(raw: Raw, finalize = true) {
+    registerHandle(this, raw, finalize);
   }
   /** Whether this handle has been released. Safe to inspect after disposal. */
   get disposed(): boolean {
@@ -2154,17 +2156,22 @@ type DraftWire =
   | { kind: "plain"; value: JsonPrimitive | string[] }
   | { kind: "exact"; value: number }
   | { kind: "object"; value: [string, DraftWire][] };
-/** Disposable scope owning the exact leaves created during native typed conversion, including leaves later removed or replaced. Caller-inserted external handles remain caller-owned. Retain a borrowed leaf before it outlives this scope. */
+/** Disposable scope owning the exact leaves created during native typed conversion, including leaves later removed or replaced. Caller-inserted external handles remain caller-owned. Retain a borrowed leaf before explicitly disposing this scope. Abandoning an undisposed scope does not invalidate reachable leaves; unreachable leaves have their own best-effort finalizers. */
 export class OwnedDocumentDraft extends Managed {
   private constructor(
     private readonly graph: EditableDocumentDraft,
     registry: ExactJson[],
   ) {
-    super({
-      free() {
-        for (const owner of registry.splice(0)) owner.dispose();
+    super(
+      {
+        free() {
+          for (const owner of registry.splice(0)) owner.dispose();
+        },
       },
-    });
+      // This aggregate owns no native allocation. Its leaves have individual
+      // finalizers; a scope finalizer would revoke still-reachable leaf wrappers.
+      false,
+    );
     scopedDrafts.set(graph, this);
   }
   /** @internal */ static fromRaw(raw: wasm.WasmDraft): OwnedDocumentDraft {

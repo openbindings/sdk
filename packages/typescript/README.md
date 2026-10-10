@@ -5,6 +5,10 @@ TypeScript API. Document parsing, authoring, conformance, exact values, names,
 references, prepared contracts, and optional HTTP discovery are included.
 Invocation, binding adaptation, and synthesis are separate work.
 
+The declarations and examples are qualified with TypeScript 5.9.3. Include
+`ESNext.Disposable` in your compiler `lib` configuration for disposable handles
+and `using`. An older compiler minimum has not been qualified.
+
 ## First useful result
 
 Install a locally built archive of this unpublished candidate, then run its Node
@@ -205,10 +209,17 @@ if (converted.status === 'drafted') {
 Exact leaves supplied by conversion belong to the editing scope. Removing or
 replacing a field does not leak its old leaf: the owner retains its acquisition
 registry until disposal. Narrow a leaf with `instanceof ExactJson`, then call
-`retain()` if it must outlive editing. Caller-inserted exact values remain
+`retain()` if it must survive explicit scope disposal. Abandoning an undisposed
+scope does not invalidate still-reachable leaf wrappers; unreachable leaves have
+their own best-effort finalizers. Use `using` or `dispose()` for timely cleanup.
+Caller-inserted exact values remain
 caller-owned and must be live through the build. The scoped draft root cannot be
 built after disposal. Keep editing scopes short; a retained leaf may keep its
 original source arena alive. Renaming operations never rewrites references.
+
+Typed fields are re-encoded according to their declared types: for example, an
+integer `preference` written as `1.0` or `1e0` becomes `1`, and `-0` becomes `0`.
+Opaque exact leaves retain their original numeric tokens.
 
 The [complete inspection/edit example](examples/inspect-edit.ts) uses a named
 `EditableDocumentDraft` helper, returns plain output, and disposes every acquired

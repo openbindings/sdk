@@ -125,9 +125,8 @@ pub struct WasmMembers {
 impl WasmMembers {
     #[wasm_bindgen(js_name = next)]
     pub fn advance(&mut self) -> Option<WasmMember> {
-        // JsonRef::members maps a slice iterator; nth skips in constant time.
-        // It does not walk or clone the preceding members or their contents.
-        let member = self.source.view().members()?.nth(self.index)?;
+        let member =
+            openbindings_internal_json::backend::member_at(self.source.view(), self.index)?;
         let result = WasmMember {
             index: self.index,
             name: member.name.to_owned(),

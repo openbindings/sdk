@@ -41,7 +41,9 @@ and transport traits document their additional SDK obligations explicitly.
   New binding/source/dependency/example views follow this same exact-getter rule;
   their frozen metadata is plain data. A traversal cursor and each yielded owner
   have independent lifetimes. Scoped editable drafts own their converted exact
-  leaves; caller-inserted exact handles stay caller-owned.
+  leaves; caller-inserted exact handles stay caller-owned. Explicit draft disposal
+  releases converted leaves; abandoning an undisposed draft does not revoke leaves
+  that are still reachable. Individual leaf finalizers provide best-effort cleanup.
   Byte/text copies are ordinary host values. Dispose owners deterministically; release
   does not promise lower process RSS or reduced Wasm capacity.
 - Preparation cache capacity counts entries, not bytes. Its default is four; zero
