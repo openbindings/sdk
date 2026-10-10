@@ -5,8 +5,8 @@ an exported-symbol inventory and rendered TypeScript reference. This is an omiss
 regression gate, not a quality percentage or a substitute for examples/review.
 """
 from pathlib import Path
+import argparse
 import subprocess
-import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_CRATES = (
@@ -22,7 +22,7 @@ def run(arguments):
     subprocess.run(list(map(str, arguments)), cwd=ROOT, check=True)
 
 
-def main():
+def rust_reference():
     for crate in PUBLIC_CRATES:
         arguments = ["cargo", "rustdoc", "--locked", "--lib", "-p", crate]
         if crate == "openbindings-http-discovery":
@@ -44,9 +44,12 @@ def main():
         "cargo", "test", "--locked", "--doc", *packages,
         "--features", "openbindings-http-discovery/native",
     ])
+
+
+def typescript_reference(output):
     command = ["node", ROOT / "packages/typescript/scripts/check-api-reference.mjs"]
-    if len(sys.argv) > 1:
-        command.append(Path(sys.argv[1]).resolve())
+    if output:
+        command.append(Path(output).resolve())
     run(command)
     run([
         "node", ROOT / "packages/typescript/node_modules/typescript/bin/tsc",
@@ -54,6 +57,19 @@ def main():
         "--lib", "ES2022,DOM,DOM.Iterable,ESNext.Disposable", "--skipLibCheck",
         ROOT / "packages/typescript/test/reference.types.ts",
     ])
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("output", nargs="?")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--rust-only", action="store_true")
+    mode.add_argument("--typescript-only", action="store_true")
+    args = parser.parse_args()
+    if not args.typescript_only:
+        rust_reference()
+    if not args.rust_only:
+        typescript_reference(args.output)
 
 
 if __name__ == "__main__":

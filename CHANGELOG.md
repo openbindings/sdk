@@ -4,6 +4,11 @@
 
 ### Added
 
+- Definition-level Rust and TypeScript API reference contracts, compiled reference
+  examples, and required checks for missing documentation and broken Rust links.
+- Consumer feature-matrix and source-identity guards for the private exact-number
+  dependency graph.
+
 - Focused Rust and TypeScript first-use and retained-replacement guides with
   runnable packaged examples and explicit host initialization.
 - Exact Rust document model, typed authoring, all 13 document rules, indexed
@@ -16,6 +21,15 @@
   corpus replay, dependency attribution and Linux/macOS/Windows CI definitions.
 
 ### Changed
+
+- Isolate the exact-number engine's Serde JSON features under private package
+  identities so ordinary consumer `serde_json` decimals keep their own feature
+  behavior. Shared application dependencies now allow compatible updates; tightly
+  coupled internal packages remain exact. Two additional private packages contain
+  byte-identical upstream Rust sources, with maintained provenance checks.
+- Bound diagnostic location materialization before collection, batch original-source
+  coordinate lookup, and cap all retained conformance pointers at 8 MiB total.
+  Truncation never suppresses the computation of normative rule evidence.
 
 - Rename the established value-failure outcome to Rust `ValueOutcome::Fails` and
   TypeScript `outcome: "fails"`, including serialized results. The old `Mismatch` /
