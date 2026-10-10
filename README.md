@@ -19,6 +19,9 @@ Existing registry releases of `@openbindings/sdk` belong to the legacy TypeScrip
 implementation and do not install this Rust-backed API. Build from an exact source
 revision or install a locally built archive as described in [source replay](docs/REPLAY.md).
 See [the migration boundaries](docs/migration.md) before moving an existing caller.
+The [support policy](docs/support.md) names qualified hosts and compatibility
+limits. Maintainers can [prepare verified local archives and API references](docs/release-candidate.md)
+before a separate publication decision.
 
 ## Rust
 
