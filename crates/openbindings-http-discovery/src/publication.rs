@@ -130,7 +130,7 @@ pub struct PublicationResponse {
     pub body: Arc<[u8]>,
 }
 
-/// Validate empty (omit), `*`, `null`, or one ASCII HTTP(S) origin without credentials, path, query, fragment or controls. The accepted spelling is emitted unchanged.
+/// Validate empty (omit), `*`, `null`, or one ASCII URI origin with a scheme and host, without credentials, path, query, fragment or controls. Schemes are not restricted to HTTP(S); the accepted spelling is emitted unchanged.
 pub fn validate_allow_origin(origin: &str) -> Result<(), ConfigurationError> {
     let invalid = || ConfigurationError {
         code: "invalid-allow-origin",

@@ -69,7 +69,7 @@ function record(name, declaration, symbol) {
     failures.push(`${name}: missing or empty reference contract (${line})`);
 }
 function fields(node, scope) {
-  if (ts.isPropertySignature(node))
+  if (ts.isPropertySignature(node) || ts.isMethodSignature(node))
     record(
       `${scope}.${node.name.getText()}`,
       node,

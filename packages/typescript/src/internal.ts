@@ -1132,7 +1132,7 @@ export type DiscoveryFetch = (
 ) => Promise<Response>;
 /** One discovery attempt: decoded-body bound, cancellation and optional local Fetch callback. The SDK creates no global fetch override or response cache; the application owns credentials, redirects and network policy. */
 export interface DiscoveryOptions {
-  /** Decoded-body byte limit; omitted or zero selects 1 MiB. Must be a nonnegative safe integer; one extra byte may be read to establish overflow. */
+  /** Decoded-body byte limit; omitted or zero selects 1 MiB. Must be a nonnegative safe integer. Bounds accepted/retained document bytes; Fetch may deliver a larger chunk before overflow is detected, so this does not bound host buffering. */
   maxDocumentBytes?: number;
   /** Caller cancellation; aborts I/O and is checked around synchronous assessment. */
   signal?: AbortSignal;
@@ -1391,7 +1391,7 @@ export async function discover(
 }
 /** Disposable immutable copy of a proved discovery document. Creates no listener or server; authorization and request routing remain caller-owned. Existing publication remains usable after the original proof is disposed. */
 export class DiscoveryPublication extends Managed {
-  /** Copy a ValidatedDocument into an independently owned publication. allowOrigin defaults to omission; accepts *, null or one ASCII HTTP(S) origin without credentials/path/query/fragment. Invalid configuration throws; the source proof remains caller-owned. */
+  /** Copy a ValidatedDocument into an independently owned publication. allowOrigin defaults to omission; accepts *, null or one ASCII URI origin with a scheme and host, without credentials/path/query/fragment. Schemes are not restricted to HTTP(S). Invalid configuration throws; the source proof remains caller-owned. */
   constructor(
     document: ValidatedDocument,
     options: {

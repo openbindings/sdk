@@ -11,10 +11,16 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const checker = path.join(root, "scripts/check-api-reference.mjs");
 // Mutate only temporary emitted declarations. Verify definitions, nested fields
 // and inherited contracts are all protected by the actual exported-graph gate.
-for (const [owner, member, expected] of [
+for (const [owner, member, expected, insertion] of [
   ["NoVerdict", undefined, "NoVerdict"],
   ["SourceLocation", "byteColumn", "SourceLocation.byteColumn"],
   ["Managed", "dispose", "ExactJson.dispose"],
+  [
+    "SourceLocation",
+    undefined,
+    "SourceLocation.undocumentedMethod",
+    "undocumentedMethod(): void;",
+  ],
 ]) {
   test(`reference check rejects missing ${expected} documentation`, async () => {
     const temporary = await mkdtemp(
@@ -35,16 +41,24 @@ for (const [owner, member, expected] of [
       const declaration = ast.statements.find(
         (node) => node.name?.text === owner,
       );
-      const node = member
-        ? declaration.members.find((node) => node.name?.text === member)
-        : declaration;
-      const documentation = ts.getJSDocCommentsAndTags(node).filter(ts.isJSDoc);
-      assert.ok(
-        documentation.length > 0,
-        "control requires existing real documentation",
-      );
-      for (const comment of documentation.reverse())
-        source = source.slice(0, comment.pos) + source.slice(comment.end);
+      if (insertion) {
+        const end = declaration.end - 1;
+        assert.equal(source[end], "}");
+        source = source.slice(0, end) + insertion + source.slice(end);
+      } else {
+        const node = member
+          ? declaration.members.find((node) => node.name?.text === member)
+          : declaration;
+        const documentation = ts
+          .getJSDocCommentsAndTags(node)
+          .filter(ts.isJSDoc);
+        assert.ok(
+          documentation.length > 0,
+          "control requires existing real documentation",
+        );
+        for (const comment of documentation.reverse())
+          source = source.slice(0, comment.pos) + source.slice(comment.end);
+      }
       await writeFile(filename, source);
       const result = spawnSync(process.execPath, [checker], {
         encoding: "utf8",

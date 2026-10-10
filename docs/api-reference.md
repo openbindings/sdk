@@ -65,10 +65,11 @@ node --test packages/typescript/test/api-reference.test.mjs
 
 The standalone verifier denies missing Rust reference documentation and broken
 intra-doc links, compiles Rustdoc examples, checks actual emitted TypeScript exports
-and public/inherited members, and strictly compiles the reference consumer. It does
-run only as an optional local check: component CI requires the Rust checks through
+and public/inherited members, and strictly compiles the reference consumer.
+Component CI requires the Rust checks through
 `tools/verify.py` and the TypeScript checks after building the package. Pass
-`--rust-only` or `--typescript-only` to run the corresponding half. A docs-only developer check may emit declarations with `tsc -p
+`--rust-only` or `--typescript-only` to run the corresponding half.
+A docs-only developer check may emit declarations with `tsc -p
 packages/typescript/tsconfig.json` using existing generated binding declarations;
 that checks types and documentation, not a source-bound Wasm artifact.
 
