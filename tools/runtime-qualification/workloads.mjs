@@ -32,6 +32,32 @@ export function describe(result) {
     firstProblem: result.problems?.[0] ?? null,
   };
 }
+export function callsPerSecond(perCallMs) {
+  return Number.isFinite(perCallMs) && perCallMs > 0 ? 1000 / perCallMs : null;
+}
+// Preparation/admission stay outside this one outer timer. The in-loop verdict
+// guard is deliberate caller overhead, present identically on both candidates.
+export function retainedBatch(
+  contract,
+  value,
+  expectedOutcome,
+  repetitions,
+  clock,
+) {
+  check(
+    Number.isSafeInteger(repetitions) && repetitions > 0,
+    "positive batch count",
+  );
+  const start = clock();
+  for (let n = 0; n < repetitions; n++) {
+    const result = contract.validate(value);
+    if (result.outcome !== expectedOutcome)
+      throw Error("retained batch changed verdict: " + result.outcome);
+  }
+  const elapsed = clock() - start;
+  check(Number.isFinite(elapsed) && elapsed >= 0, "invalid timer duration");
+  return { elapsedMs: elapsed, perCallMs: elapsed / repetitions };
+}
 export function runTier(sdk, fixture, timed = true) {
   const clock = timed ? () => performance.now() : () => 0;
   const stages = [
@@ -40,7 +66,7 @@ export function runTier(sdk, fixture, timed = true) {
     "contextAndPrepare",
     "parseValue",
     "firstValidation",
-    "hot",
+    "hotSingleDescriptive",
     "parseInvalid",
     "invalid",
     "serialize",
@@ -82,7 +108,7 @@ export function runTier(sdk, fixture, timed = true) {
           first.detail.code === "evaluation-work-limit",
           "expected near-admission evaluation refusal",
         );
-      const hot = take("hot", () => contract.validate(value));
+      const hot = take("hotSingleDescriptive", () => contract.validate(value));
       check(hot.outcome === fixture.validOutcome, JSON.stringify(hot));
       invalid = take("parseInvalid", () => parsed(sdk, fixture.invalid));
       const failed = take("invalid", () => contract.validate(invalid));
@@ -131,13 +157,43 @@ export function runTier(sdk, fixture, timed = true) {
       "tier cleanup must match fully warmed owners",
     );
   }
+  const hotContract = prepare(sdk, fixture.document);
+  const hotValue = parsed(sdk, fixture.valid);
+  const hotBatchTotalsMs = [];
+  samples.hot = [];
+  try {
+    const batch = () =>
+      retainedBatch(
+        hotContract,
+        hotValue,
+        fixture.validOutcome,
+        fixture.hotBatchRepetitions,
+        clock,
+      );
+    batch();
+    batch();
+    for (let n = 0; n < (timed ? 7 : 1); n++) {
+      const row = batch();
+      samples.hot.push(row.perCallMs);
+      hotBatchTotalsMs.push(row.elapsedMs);
+    }
+  } finally {
+    hotValue.dispose();
+    hotContract.dispose();
+  }
+  check(sdk.liveStorageOwners() === warmedOwners, "retained batch cleanup");
   return {
     samplesMs: timed ? samples : null,
     repetitions,
     observation: last,
     owners: { warmed: warmedOwners, released: sdk.liveStorageOwners() },
     concurrency: 1,
-    hotCallsPerSecond: timed ? samples.hot.map((ms) => 1000 / ms) : null,
+    hotCallsPerSecond: timed ? samples.hot.map(callsPerSecond) : null,
+    hotBatchRepetitions: fixture.hotBatchRepetitions,
+    hotBatchTotalsMs: timed ? hotBatchTotalsMs : null,
+    hotMeasurement:
+      "one outer timer around retained calls; exact admission and preparation excluded; per-call verdict guard included",
+    clockResolutionLimited: timed && samples.hot.some((ms) => ms <= 0),
     throughputMeaning:
       fixture.validOutcome === "satisfies"
         ? "successful retained validations"

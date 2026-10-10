@@ -6,6 +6,9 @@ import os from "node:os";
 export const hash = (data) =>
   crypto.createHash("sha256").update(data).digest("hex");
 export async function fixtureSet(root) {
+  const protocol = JSON.parse(
+    await fs.readFile(new URL("./protocol.json", import.meta.url)),
+  );
   const manifest = JSON.parse(
     await fs.readFile(path.join(root, "manifest.json")),
   );
@@ -14,6 +17,7 @@ export async function fixtureSet(root) {
     fixtures[tier] = {
       repetitions: row.repetitions,
       validOutcome: row.validOutcome,
+      hotBatchRepetitions: protocol.hotBatchRepetitions[tier],
     };
     for (const [kind, identity] of Object.entries(row.files)) {
       const raw = await fs.readFile(path.join(root, identity.name));
@@ -83,9 +87,11 @@ export function summaries(samples) {
           maximumMs: sorted.at(-1),
           descriptiveP95Ms: sorted[Math.ceil(sorted.length * 0.95) - 1],
           status:
-            medianMs >= 1 && sorted.at(-1) / sorted[0] > 3
-              ? "inconclusive-noise"
-              : "measured",
+            sorted[0] <= 0
+              ? "inconclusive-resolution"
+              : medianMs >= 1 && sorted.at(-1) / sorted[0] > 3
+                ? "inconclusive-noise"
+                : "measured",
         },
       ];
     }),

@@ -88,5 +88,12 @@
     "Near valid/hot case is admitted but returns evaluation-work-limit no-verdict under defaults; report refusal cost, not successful throughput.",
     "Discovery+inspection medians150/500/6000ms accepted for Node/browser local processing; native C4 timing unqualified.",
     "Owner accepted amplification witness250ms representative diagnostic allowance before baseline timing."
-  ]
+  ],
+  "measurementRevision": 2,
+  "hotBatchRepetitions": {
+    "small": 10000,
+    "representative": 10000,
+    "near": 1
+  },
+  "measurementCorrection": "Revision2 freezes one outer timer around retained JavaScript validation batches, with2 warmups and7 measured batches. Prepare/admit outside; in-loop verdict guard included. Workerd uses same counts and external HTTP clock. Corrects invalid coarse-clock single-call differencing observed in baseline1; numerical budgets and fixture bytes unchanged. Old subresolution phase/hot observations remain invalid for throughput. Baseline reruns with candidate in a new quiet window; this is a measurement correction, not selecting a noisy sample."
 }

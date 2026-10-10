@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Evaluate frozen absolute budgets and compare exact host/fixture campaigns."""
 import json
+import math
 from pathlib import Path
 import statistics
 import sys
@@ -10,6 +11,7 @@ TIERS=['small','representative','near']
 
 def evaluate(samples, baseline, allowance, absolute=None):
     if not samples or (baseline is not None and not baseline): raise ValueError('missing samples')
+    if any(not isinstance(value,(int,float)) or not math.isfinite(value) for value in samples + (baseline or [])): raise ValueError('nonfinite or missing duration')
     median=statistics.median(samples)
     noise=median>=1 and max(samples)>3*min(samples)
     result={'medianMs':median,'minimumMs':min(samples),'maximumMs':max(samples),'descriptiveP95Ms':sorted(samples)[__import__('math').ceil(len(samples)*.95)-1],
@@ -18,7 +20,8 @@ def evaluate(samples, baseline, allowance, absolute=None):
         base=statistics.median(baseline)
         noise=noise or (base>=1 and max(baseline)>3*min(baseline))
         result.update({'baselineMedianMs':base,'ratio':None if not base else median/base,'addedMs':median-base,'regressionPassed':median<=base*1.2 or median-base<=allowance})
-    result['status']='inconclusive-noise' if noise else 'failed' if result['absolutePassed'] is False or result.get('regressionPassed') is False else 'within-frozen-budget'
+    resolution_limited=any(value<=0 for value in samples) or (baseline is not None and any(value<=0 for value in baseline))
+    result['status']='inconclusive-resolution' if resolution_limited else 'inconclusive-noise' if noise else 'failed' if result['absolutePassed'] is False or result.get('regressionPassed') is False else 'within-frozen-budget'
     return result
 
 def compare(directory, baseline=None):
@@ -86,6 +89,10 @@ if __name__=='__main__':
         assert evaluate([100]*7,[10]*7,1,250)['status']=='failed'
         assert evaluate([10]*7,None,1,5)['status']=='failed'
         assert evaluate([1,1,1,1,1,1,4],None,1,10)['status']=='inconclusive-noise'
+        assert evaluate([0]*7,None,1,10)['status']=='inconclusive-resolution'
+        try:evaluate([float('nan')]*7,None,1)
+        except ValueError:pass
+        else:raise AssertionError('nonfinite samples cannot pass')
         try:evaluate([],None,1)
         except ValueError:pass
         else:raise AssertionError('empty samples cannot pass')

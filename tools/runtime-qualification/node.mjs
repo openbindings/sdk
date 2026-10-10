@@ -60,6 +60,15 @@ if (timed)
     if (child.status !== 0) throw Error(child.stderr);
     cold.push(JSON.parse(child.stdout));
   }
+// Capture workload memory before gzip/Brotli asset inspection allocates its own
+// compression buffers. These remain whole-process, not SDK-only, observations.
+const memory = {
+  before,
+  after: process.memoryUsage(),
+  maxRSSKiB: process.resourceUsage().maxRSS,
+  meaning:
+    "Whole Node process after workloads/cold orchestration, before asset compression; RSS/heap/external buffers are not live SDK bytes. Wasm capacity unavailable through public facade.",
+};
 await save(output, {
   host: host(),
   kind: "node",
@@ -71,13 +80,7 @@ await save(output, {
   discovery: found,
   amplification: witness,
   cold,
-  memory: {
-    before,
-    after: process.memoryUsage(),
-    maxRSSKiB: process.resourceUsage().maxRSS,
-    meaning:
-      "RSS/process heap/external ArrayBuffers are observations, not live SDK bytes; Wasm capacity unavailable through public facade",
-  },
+  memory,
 });
 console.log(
   JSON.stringify({
