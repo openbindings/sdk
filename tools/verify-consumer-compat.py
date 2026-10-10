@@ -44,7 +44,7 @@ def consumer_manifest(template, checkout):
     return re.sub(
         r'path = "\.\./\.\./(crates|vendor)/([^"\n]+)"',
         lambda match: 'path = ' + json.dumps(
-            (checkout / match[1] / match[2]).as_posix(), ensure_ascii=False),
+            (checkout / match[1] / match[2]).as_posix(), ensure_ascii=False).replace('\x7f', '\\u007f'),
         template,
     )
 
@@ -53,6 +53,8 @@ def consumer_manifest(template, checkout):
 # In particular, D:\a is not a valid unescaped TOML basic string.
 for checkout in [PureWindowsPath(r'D:\a\sdk\sdk'),
                  PureWindowsPath('C:/Users/Ünicode/sdk'),
+                 PureWindowsPath('C:/Users/😀/sdk'),
+                 PurePosixPath('/tmp/user\x7fname/sdk'),
                  PurePosixPath('/tmp/quote"and\\slash/sdk')]:
     template = '[dependencies]\nx = { path = "../../crates/x" }\ny = { path = "../../vendor/y" }\n'
     parsed = tomllib.loads(consumer_manifest(template, checkout))
