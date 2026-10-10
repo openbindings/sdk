@@ -31,8 +31,9 @@ and transport traits document their additional SDK obligations explicitly.
 - The semantic partitions `Evidence`, `Conformance`, `ValueOutcome`,
   `ContractPreparation` and `Side` are closed, supporting exhaustive handling.
   Interpretation and no-verdict cause families are extensible. Rust matchers need a
-  fallback for these causes; TypeScript callers should preserve unrecognized causes
-  across independently deployed versions. Public report/problem records remain
+  fallback for these causes. TypeScript exposes the known reason union for its
+  version and is distributed with the matching Wasm engine; it does not add an
+  arbitrary-string or unknown-outcome branch. Public report/problem records remain
   constructible by custom evaluator authors.
 - Rust borrowed views do not create new owners. Rust clones and TypeScript `retain()`
   share immutable state. TypeScript `ParsedDocument.value`, `OperationView.value`,
@@ -65,8 +66,9 @@ node --test packages/typescript/test/api-reference.test.mjs
 The standalone verifier denies missing Rust reference documentation and broken
 intra-doc links, compiles Rustdoc examples, checks actual emitted TypeScript exports
 and public/inherited members, and strictly compiles the reference consumer. It does
-not edit `tools/verify.py`; that qualification entry point can invoke it after the
-package build. A docs-only developer check may emit declarations with `tsc -p
+run only as an optional local check: component CI requires the Rust checks through
+`tools/verify.py` and the TypeScript checks after building the package. Pass
+`--rust-only` or `--typescript-only` to run the corresponding half. A docs-only developer check may emit declarations with `tsc -p
 packages/typescript/tsconfig.json` using existing generated binding declarations;
 that checks types and documentation, not a source-bound Wasm artifact.
 
