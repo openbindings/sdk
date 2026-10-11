@@ -202,6 +202,7 @@ async fn source_indices_names_and_projection_identity() {
         .await
         .unwrap();
     assert_eq!(result.coverage().entries().len(), 2);
+    assert_eq!(result.coverage().source_keys(), ["api", "api"]);
     assert_eq!(
         result
             .document()
@@ -265,7 +266,7 @@ async fn source_indices_names_and_projection_identity() {
 #[tokio::test]
 async fn every_boundary_failure_retains_a_repairable_candidate() {
     let (s, c) = complete();
-    for mutation in 0..14 {
+    for mutation in 0..15 {
         let mut bad = c.clone();
         match mutation {
             0 => bad.coverage.entries[0].source_index = 4,
@@ -311,6 +312,11 @@ async fn every_boundary_failure_retains_a_repairable_candidate() {
                 bad.document =
                     ParsedDocument::parse(r#"{"openbindings":"1.0.0","operations":{}}"#).unwrap()
             }
+            14 => {
+                bad.coverage
+                    .additional_fields
+                    .insert("sourceKeys".into(), json(r#"["forged"]"#));
+            }
             _ => unreachable!(),
         }
         let e = deliver(&s, bad).await.unwrap_err();
@@ -318,8 +324,13 @@ async fn every_boundary_failure_retains_a_repairable_candidate() {
         assert!(e.partial().is_none());
         let rejected = e.into_rejected().unwrap();
         assert!(rejected.assessment.is_some() || mutation == 13);
-        if mutation < 12 {
+        if mutation < 12 || mutation == 14 {
             assert!(rejected.finding.is_some());
+        }
+        if mutation == 14 {
+            let finding = rejected.finding.as_ref().unwrap();
+            assert_eq!(finding.code, "shadowed-field");
+            assert_eq!(finding.path, "/coverage/sourceKeys");
         }
         let _editable = rejected.candidate.document.to_authoring();
     }
@@ -366,6 +377,7 @@ async fn exact_persistence_budgets_and_editing_do_not_reassign_evidence() {
         .insert("opaque".into(), json(r#"{"a":1,"a":9007199254740993}"#));
     let result = deliver(&s, c).await.unwrap();
     drop(s);
+    assert_eq!(result.coverage().source_keys(), ["api"]);
     let encoded = result.to_json().unwrap();
     assert!(encoded.text().contains("9007199254740993"));
     assert_eq!(
@@ -429,6 +441,86 @@ async fn exact_persistence_budgets_and_editing_do_not_reassign_evidence() {
             .unwrap()
             .text()
             .contains("9007199254740993")
+    );
+}
+
+#[tokio::test]
+async fn synthesis_requires_a_realization_path_without_tightening_core_or_inventory() {
+    let s = source(None);
+    let mut c = candidate(&s);
+    let mut draft = c.document.to_authoring().unwrap();
+    draft.operations.insert("orphan".into(), Default::default());
+    c.document = draft.build().unwrap();
+    // An unbound contract is legitimate core authoring, but not a synthesized path.
+    assert!(c.document.assess().unwrap().validated().is_some());
+    let inputs = [SynthesisSource {
+        name: Some("api"),
+        source: &s,
+    }];
+    let request = SynthesisRequest {
+        sources: &inputs,
+        ..Default::default()
+    };
+    let provider = Fixed::new(c.clone());
+    let facade = Synthesizer::new(&provider);
+    for result in [
+        facade.synthesize_with_coverage(&request).await,
+        facade.synthesize(&request).await.map(|_| unreachable!()),
+    ] {
+        let error = result.unwrap_err();
+        assert_eq!(error.kind(), SynthesisErrorKind::InvalidResult);
+        assert!(error.partial().is_none());
+        let rejected = error.rejected().unwrap();
+        assert!(rejected.assessment.as_ref().unwrap().validated().is_some());
+        let finding = rejected.finding.as_ref().unwrap();
+        assert_eq!(finding.code, "unrealized-operation");
+        assert_eq!(finding.path, "/interface/operations/orphan");
+    }
+    // Structural realizability does not add a binding-to-coverage bijection.
+    draft.bindings = Some(BTreeMap::from([(
+        "path".into(),
+        openbindings::Binding {
+            operation: "orphan".into(),
+            source: "api".into(),
+            ..Default::default()
+        },
+    )]));
+    c.document = draft.build().unwrap();
+    assert!(
+        Synthesizer::new(Fixed::new(c))
+            .synthesize(&request)
+            .await
+            .is_ok()
+    );
+}
+
+#[tokio::test]
+async fn unnamed_source_mapping_is_stable_without_restricting_equal_binding_aliases() {
+    let (s, mut c) = complete();
+    let mut draft = c.document.to_authoring().unwrap();
+    // Binding uses "api"; the mapping may use the first of its equal aliases.
+    draft
+        .sources
+        .as_mut()
+        .unwrap()
+        .insert("alias".into(), s.clone());
+    c.document = draft.build().unwrap();
+    let inputs = [SynthesisSource {
+        name: None,
+        source: &s,
+    }];
+    let request = SynthesisRequest {
+        sources: &inputs,
+        ..Default::default()
+    };
+    let result = Synthesizer::new(Fixed::new(c))
+        .synthesize_with_coverage(&request)
+        .await
+        .unwrap();
+    assert_eq!(result.coverage().source_keys(), ["alias"]);
+    assert_eq!(
+        result.coverage().entries()[0].source_key.as_deref(),
+        Some("api")
     );
 }
 

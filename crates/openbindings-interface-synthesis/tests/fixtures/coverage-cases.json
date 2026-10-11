@@ -41,7 +41,10 @@
       "expected": {
         "valid": true,
         "fullyRepresented": true,
-        "strictEligible": true
+        "strictEligible": true,
+        "sourceKeys": [
+          "api"
+        ]
       },
       "request": {
         "sources": [
@@ -86,7 +89,10 @@
       "expected": {
         "valid": true,
         "fullyRepresented": false,
-        "strictEligible": true
+        "strictEligible": true,
+        "sourceKeys": [
+          "api"
+        ]
       },
       "request": {
         "sources": [
@@ -142,7 +148,10 @@
       "expected": {
         "valid": true,
         "fullyRepresented": false,
-        "strictEligible": false
+        "strictEligible": false,
+        "sourceKeys": [
+          "api"
+        ]
       },
       "limitation": {
         "code": "example.inventory-incomplete",
@@ -335,7 +344,10 @@
       "expected": {
         "valid": true,
         "fullyRepresented": false,
-        "strictEligible": true
+        "strictEligible": true,
+        "sourceKeys": [
+          "api"
+        ]
       },
       "request": {
         "sources": [
@@ -539,7 +551,10 @@
       "expected": {
         "valid": true,
         "fullyRepresented": false,
-        "strictEligible": true
+        "strictEligible": true,
+        "sourceKeys": [
+          "api"
+        ]
       },
       "request": {
         "sources": [
@@ -618,7 +633,10 @@
       "expected": {
         "valid": true,
         "fullyRepresented": true,
-        "strictEligible": true
+        "strictEligible": true,
+        "sourceKeys": [
+          "api"
+        ]
       },
       "request": {
         "sources": [
@@ -882,7 +900,10 @@
       "expected": {
         "valid": true,
         "fullyRepresented": true,
-        "strictEligible": true
+        "strictEligible": true,
+        "sourceKeys": [
+          "api"
+        ]
       },
       "request": {
         "sources": [
@@ -927,7 +948,10 @@
       "expected": {
         "valid": true,
         "fullyRepresented": false,
-        "strictEligible": true
+        "strictEligible": true,
+        "sourceKeys": [
+          "api"
+        ]
       },
       "request": {
         "sources": [
@@ -985,7 +1009,10 @@
       "expected": {
         "valid": true,
         "fullyRepresented": false,
-        "strictEligible": true
+        "strictEligible": true,
+        "sourceKeys": [
+          "api"
+        ]
       },
       "request": {
         "sources": [
@@ -1029,7 +1056,10 @@
       "expected": {
         "valid": true,
         "fullyRepresented": false,
-        "strictEligible": false
+        "strictEligible": false,
+        "sourceKeys": [
+          "api"
+        ]
       },
       "request": {
         "sources": [
@@ -1040,6 +1070,388 @@
               "content": {
                 "location": "https://example.com/openapi.json"
               }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "orphan generated operation refuses even with exhaustive evidence",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "orphan": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1"
+          }
+        }
+      },
+      "entries": [],
+      "exhaustive": true,
+      "expected": {
+        "valid": false,
+        "errorContains": "requires a binding or dependency",
+        "strictEligible": false
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "orphan generated operation refuses even with partial evidence",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "orphan": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1"
+          }
+        }
+      },
+      "entries": [],
+      "exhaustive": false,
+      "expected": {
+        "valid": false,
+        "errorContains": "requires a binding or dependency",
+        "strictEligible": false
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1"
+            }
+          }
+        ]
+      },
+      "limitation": {
+        "code": "example.unknown",
+        "message": "Inventory incomplete."
+      }
+    },
+    {
+      "description": "a dependency-only operation remains a valid synthesis result",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "onEvent": {}
+        },
+        "dependencies": {
+          "event": {
+            "operation": "onEvent"
+          }
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1"
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceRef": "dependency:event",
+          "scope": "dependency",
+          "status": "represented",
+          "dependencyKey": "event"
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": true,
+        "strictEligible": true,
+        "sourceKeys": [
+          "api"
+        ]
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "source-free skeleton retains an empty source mapping",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {}
+      },
+      "entries": [],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": true,
+        "strictEligible": true,
+        "sourceKeys": []
+      },
+      "request": {
+        "sources": []
+      }
+    },
+    {
+      "description": "excluded sources retain request ordering: alpha, beta",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "alpha": {
+            "kind": "example.coverage@1",
+            "description": "Tenant A"
+          },
+          "beta": {
+            "kind": "example.coverage@1",
+            "description": "Tenant B"
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceRef": "#/webhooks/onEvent/post",
+          "scope": "target",
+          "status": "excluded",
+          "reasonCode": "example.excluded",
+          "message": "Kind exclusion.",
+          "rule": "example.coverage@1 fixture definition"
+        },
+        {
+          "sourceIndex": 1,
+          "sourceRef": "#/webhooks/onEvent/post",
+          "scope": "target",
+          "status": "excluded",
+          "reasonCode": "example.excluded",
+          "message": "Kind exclusion.",
+          "rule": "example.coverage@1 fixture definition"
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": false,
+        "strictEligible": true,
+        "sourceKeys": [
+          "alpha",
+          "beta"
+        ]
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "alpha",
+            "source": {
+              "kind": "example.coverage@1",
+              "description": "Tenant A"
+            }
+          },
+          {
+            "name": "beta",
+            "source": {
+              "kind": "example.coverage@1",
+              "description": "Tenant B"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "excluded sources retain request ordering: beta, alpha",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "alpha": {
+            "kind": "example.coverage@1",
+            "description": "Tenant A"
+          },
+          "beta": {
+            "kind": "example.coverage@1",
+            "description": "Tenant B"
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceRef": "#/webhooks/onEvent/post",
+          "scope": "target",
+          "status": "excluded",
+          "reasonCode": "example.excluded",
+          "message": "Kind exclusion.",
+          "rule": "example.coverage@1 fixture definition"
+        },
+        {
+          "sourceIndex": 1,
+          "sourceRef": "#/webhooks/onEvent/post",
+          "scope": "target",
+          "status": "excluded",
+          "reasonCode": "example.excluded",
+          "message": "Kind exclusion.",
+          "rule": "example.coverage@1 fixture definition"
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": false,
+        "strictEligible": true,
+        "sourceKeys": [
+          "beta",
+          "alpha"
+        ]
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "beta",
+            "source": {
+              "kind": "example.coverage@1",
+              "description": "Tenant B"
+            }
+          },
+          {
+            "name": "alpha",
+            "source": {
+              "kind": "example.coverage@1",
+              "description": "Tenant A"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "equal unnamed inputs may share one emitted source key",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "shared": {
+            "kind": "example.coverage@1"
+          }
+        }
+      },
+      "entries": [],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": true,
+        "strictEligible": true,
+        "sourceKeys": [
+          "shared",
+          "shared"
+        ]
+      },
+      "request": {
+        "sources": [
+          {
+            "source": {
+              "kind": "example.coverage@1"
+            }
+          },
+          {
+            "source": {
+              "kind": "example.coverage@1"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "equal explicitly named inputs preserve their distinct emitted keys",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "alpha": {
+            "kind": "example.coverage@1"
+          },
+          "beta": {
+            "kind": "example.coverage@1"
+          }
+        }
+      },
+      "entries": [],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": true,
+        "strictEligible": true,
+        "sourceKeys": [
+          "beta",
+          "alpha"
+        ]
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "beta",
+            "source": {
+              "kind": "example.coverage@1"
+            }
+          },
+          {
+            "name": "alpha",
+            "source": {
+              "kind": "example.coverage@1"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "unnamed absent and null source content map to distinct preserved values",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "absent": {
+            "kind": "example.coverage@1"
+          },
+          "null": {
+            "kind": "example.coverage@1",
+            "content": null
+          }
+        }
+      },
+      "entries": [],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": true,
+        "strictEligible": true,
+        "sourceKeys": [
+          "null",
+          "absent"
+        ]
+      },
+      "request": {
+        "sources": [
+          {
+            "source": {
+              "kind": "example.coverage@1",
+              "content": null
+            }
+          },
+          {
+            "source": {
+              "kind": "example.coverage@1"
             }
           }
         ]

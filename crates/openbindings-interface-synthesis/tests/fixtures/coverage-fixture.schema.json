@@ -58,6 +58,13 @@
               },
               "strictEligible": {
                 "type": "boolean"
+              },
+              "sourceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
               }
             },
             "allOf": [
@@ -74,7 +81,8 @@
                 },
                 "then": {
                   "required": [
-                    "fullyRepresented"
+                    "fullyRepresented",
+                    "sourceKeys"
                   ]
                 },
                 "else": {

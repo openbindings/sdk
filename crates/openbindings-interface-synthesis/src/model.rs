@@ -163,15 +163,25 @@ pub struct SynthesisCandidate {
 }
 /// Checked immutable report. Its flags express evidence, not proof of provider honesty.
 #[derive(Clone, Debug)]
-pub struct SynthesisCoverage(pub(crate) CoverageDraft);
+pub struct SynthesisCoverage {
+    pub(crate) draft: CoverageDraft,
+    pub(crate) source_keys: Vec<String>,
+}
 impl SynthesisCoverage {
+    /// Emitted source key for every input, in original request order.
+    /// Equal inputs may share a key. Unnamed inputs with multiple equal emitted
+    /// sources use the lexicographically first key; binding paths may use another
+    /// equal source. Supplied names are always preserved.
+    pub fn source_keys(&self) -> &[String] {
+        &self.source_keys
+    }
     /// Borrow all dispositions in provider order.
     pub fn entries(&self) -> &[CoverageEntry] {
-        &self.0.entries
+        &self.draft.entries
     }
     /// Whether the provider established its complete inventory.
     pub fn exhaustive(&self) -> bool {
-        self.0.exhaustive
+        self.draft.exhaustive
     }
     /// Derived full upstream representation, distinct from strict eligibility.
     pub fn fully_represented(&self) -> bool {
@@ -193,11 +203,11 @@ impl SynthesisCoverage {
     }
     /// Evidence for an unknown remainder, if provided.
     pub fn limitation(&self) -> Option<&CoverageLimitation> {
-        self.0.limitation.as_ref()
+        self.draft.limitation.as_ref()
     }
     /// Additional exact report evidence.
     pub fn additional_fields(&self) -> &BTreeMap<String, JsonValue> {
-        &self.0.additional_fields
+        &self.draft.additional_fields
     }
 }
 /// Conformant document and checked coverage derived from the same provider call.
@@ -251,6 +261,7 @@ impl Serialize for SynthesisCoverage {
             }
         }
         let mut m = serializer.serialize_map(None)?;
+        m.serialize_entry("sourceKeys", self.source_keys())?;
         m.serialize_entry("entries", &Entries(self.entries()))?;
         m.serialize_entry("exhaustive", &self.exhaustive())?;
         m.serialize_entry("fullyRepresented", &self.fully_represented())?;

@@ -66,6 +66,14 @@ async fn portable_cases_and_pinned_role_are_independent_oracles() {
             case.get("description").unwrap().text()
         );
         if let Ok(result) = result {
+            let expected_keys: Vec<_> = expected
+                .get("sourceKeys")
+                .unwrap()
+                .elements()
+                .unwrap()
+                .map(|v| v.as_str().unwrap())
+                .collect();
+            assert_eq!(result.coverage().source_keys(), expected_keys);
             assert_eq!(
                 result.coverage().fully_represented(),
                 expected.get("fullyRepresented").unwrap().as_bool().unwrap()
@@ -80,7 +88,7 @@ async fn portable_cases_and_pinned_role_are_independent_oracles() {
             ));
         }
     }
-    assert!(total >= 17);
+    assert!(total >= 26);
 }
 
 #[test]

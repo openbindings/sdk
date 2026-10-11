@@ -2,7 +2,7 @@
 
 Implementation is on `codex/sdk-interface-synthesis`; the coordinated draft role
 is on `codex/interface-synthesis-contract` in `openbindings/interfaces`, revision
-`9e8fcff80643ff4ef30415dc782489db65789ef9`. This is a local, provisional Rust foundation
+`56aadc07aef362d1bbe1f42dd3081f4a750555f6`. This is a local, provisional Rust foundation
 slice. These branches have not been merged, published or deployed to the website.
 The TypeScript/Wasm consumer is a qualification bridge, not a released role API.
 
@@ -29,9 +29,17 @@ The role was clarified before implementing its checks:
   is preserved, every output source corresponds to an input, explicit names are
   honored, and conflicting names refuse before work. Equal values may share a key
   where names permit, while retaining each input's coverage index.
+- **C5:** `coverage.sourceKeys` preserves the input-index-to-emitted-source mapping,
+  including empty, excluded and dependency-only inventories. The facade derives it
+  from checked source preservation; providers cannot shadow it. Equal inputs may
+  share keys, and unnamed equal aliases remain legitimate.
+- **C6:** each generated operation requires at least one emitted binding or
+  dependency, even with partial coverage. Orphans retain a located
+  `unrealized-operation` finding. Core authoring freedom and dependency-only
+  operations are unchanged; this rule adds no binding-to-coverage bijection.
 
 The [crate documentation](../crates/openbindings-interface-synthesis/README.md)
-maps all four role operations and fields to Rust. Role JSON, 17 portable coverage
+maps all four role operations and fields to Rust. Role JSON, 26 portable coverage
 cases, fixture schema, authority revision and SHA-256 hashes are retained under
 [tests/fixtures](../crates/openbindings-interface-synthesis/tests/fixtures/README.md).
 
@@ -84,6 +92,8 @@ retained. Opaque report evidence can preserve those units without rewriting them
 | S20 | Envelope reparse and authoring edit test; original evidence remains attached to its immutable snapshot |
 | S21 | Core alone; synthesis-only resolved graph excludes inspection; external archive consumption |
 | S22 | Fixed 0/100/1,000/10,000-unit release measurements, one-call counters and indexed correspondence |
+| S23 | Reversed-source external consumer regression, source-owner drop, exact envelope persistence, native/Wasm mapping access, forged mapping rejection |
+| S24 | Strict/partial orphan rejection, retained located finding, dependency-only and skeleton positives; core authoring remains permissive |
 
 The catalog's independently stated soundness/admission rules and deterministic
 naming policy are in its [README](../examples/interface-synthesis-consumer/README.md).
@@ -100,12 +110,12 @@ material blocker. A subsequent narrow review of the measured core optimization
 and source-name admission also found no semantic regression or blocker. It did
 not independently rerun the archive, host or performance measurements.
 
-Local checks cover crate tests/doctest, the pinned output schema and portable fixture
+The initial slice's local checks covered crate tests/doctest, the pinned output schema and portable fixture
 schema, external consumers/recovery, workspace Clippy/tests, rustdoc missing-doc and
 broken-link gates, independent core build, prior inspection consumer, verifier
-receipt regressions and dependency isolation. The workspace run passed 271 tests with two existing ignored tests. The existing
+receipt regressions and dependency isolation. That workspace run passed 271 tests with two existing ignored tests. The existing
 HTTP discovery tests passed after rerunning with permission for local listening
-sockets. The final synthesis suite passed 12 checks including its doctest; the
+sockets. That synthesis suite passed 12 checks including its doctest; the
 external dual-role consumer passed six tests, and the isolated synthesis-only
 consumer passed its metadata/ownership test.
 CI wiring was updated, but local execution is not a claim that remote CI has run.
@@ -115,6 +125,31 @@ support. There is no new runtime/HTTP dependency. Tokio/evaluator are dev-only.
 Final archive receipts include SDK HEAD, cleanliness, applied interface revision,
 archive hashes, toolchain and successful commands in
 `target/interface-synthesis-qualification/archives/receipt.json`.
+
+## Focused synthesis review repairs
+
+A subsequent three-perspective review found two contract/checker gaps: persisted
+coverage did not preserve request source order, and an orphan operation could pass
+strict synthesis. C5 and C6 above repair those gaps without changing the provider
+trait or the document core. The portable corpus now contains 26 cases. The
+immutable report exposes the derived mapping through `source_keys()` and exact
+serialization; old draft envelopes without `sourceKeys` do not satisfy the revised
+role schema.
+
+Two independent GPT-6 Astra xhigh reviewers verified these repairs and reported no
+remaining blocker in this scope. The contract reviewer reran 10 boundary tests,
+two role tests (including the 26-case corpus), and the original orphan-operation
+probe. The consumer reviewer ran four independent public-consumer probes plus the
+maintained persistence regression, including source attribution after all caller
+owners were dropped and the envelope reloaded, forged mapping rejection, equal
+aliases, explicit names and empty skeletons.
+
+Primary targeted checks passed 14 synthesis tests including its doctest, seven
+external consumer tests and recovery, the synthesis-only consumer, Clippy and
+rustdoc gates, interface schema/profile/alignment checks, and the strict TypeScript
+and real Wasm probe. This repair did not rerun the full workspace or performance
+campaign; the earlier measurements below are not new performance claims. Package
+qualification receipts remain at the paths documented above.
 
 ## Measured core repair
 

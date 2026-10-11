@@ -6,6 +6,7 @@ async function main() {
   // Keep result unchanged for persistence; this parsed view is display-only.
   const summary = JSON.parse(result).coverage;
   if (!summary.exhaustive || !summary.fullyRepresented || summary.entries.length !== 1) throw Error('incorrect coverage');
+  if (summary.sourceKeys.length !== 1 || summary.sourceKeys[summary.entries[0].sourceIndex] !== 'catalog') throw Error('source attribution lost');
   try { await synthesizeDocumentSource('{"openbindings":"0.2.0","operations":{},"sources":{"catalog":{"kind":"unknown"}}}'); throw Error('unsupported accepted'); }
   catch (error) { if (!String(error).includes('unsupported-kind')) throw error; }
   console.log('synthesis local Rc/Promise Wasm, exact values and refusal probe passed');

@@ -243,7 +243,7 @@ fn no_shadow(
 fn check(
     request: &SynthesisRequest<'_>,
     candidate: &SynthesisCandidate,
-) -> Result<(), SynthesisFinding> {
+) -> Result<Vec<String>, SynthesisFinding> {
     let root = candidate.document.value().view();
     for (k, wanted) in [
         (
@@ -314,25 +314,31 @@ fn check(
         }
         output_hashes.entry(hash).or_default().push(key);
     }
+    let mut source_keys = Vec::with_capacity(request.sources.len());
     for (i, input) in request.sources.iter().enumerate() {
-        let matches = if let Some(name) = input.name {
+        let matched_key = if let Some(name) = input.name {
             sources
                 .get(name)
-                .is_some_and(|s| source_matches(input.source, *s))
+                .filter(|s| source_matches(input.source, **s))
+                .map(|_| name)
         } else {
-            output_hashes.get(&keys[i]).is_some_and(|names| {
+            output_hashes.get(&keys[i]).and_then(|names| {
+                // Output keys were indexed in sorted order. Choose a stable
+                // representative without imposing a naming policy on providers.
                 names
                     .iter()
-                    .any(|n| source_matches(input.source, sources[n]))
+                    .copied()
+                    .find(|n| source_matches(input.source, sources[n]))
             })
         };
-        if !matches {
+        let Some(key) = matched_key else {
             return Err(issue(
                 "source-preservation",
                 format!("/request/sources/{i}"),
                 "supplied source was dropped, renamed or changed",
             ));
-        }
+        };
+        source_keys.push(key.to_owned());
     }
     if request.sources.is_empty()
         && (!operations.is_empty()
@@ -347,10 +353,31 @@ fn check(
             "source-free synthesis requires an empty exhaustive skeleton",
         ));
     }
+    // Core permits unbound authoring operations. Synthesis promises a realization
+    // path, including dependency consumption points. This structural prerequisite
+    // does not establish kind-specific soundness or truthful coverage inventory.
+    let realized: HashSet<_> = bindings
+        .values()
+        .chain(dependencies.values())
+        .filter_map(|v| v.get("operation").and_then(|v| v.as_str()))
+        .collect();
+    if let Some(key) = operations.keys().find(|key| !realized.contains(**key)) {
+        return Err(issue(
+            "unrealized-operation",
+            format!("/interface/operations/{}", ptr(key)),
+            "synthesized operation requires a binding or dependency",
+        ));
+    }
     let c = &candidate.coverage;
     no_shadow(
         &c.additional_fields,
-        &["entries", "exhaustive", "fullyRepresented", "limitation"],
+        &[
+            "sourceKeys",
+            "entries",
+            "exhaustive",
+            "fullyRepresented",
+            "limitation",
+        ],
         "/coverage",
     )?;
     if !c.exhaustive && c.limitation.is_none() {
@@ -577,7 +604,7 @@ fn check(
             ),
         ));
     }
-    Ok(())
+    Ok(source_keys)
 }
 pub(crate) fn validate(
     request: &SynthesisRequest<'_>,
@@ -595,17 +622,23 @@ pub(crate) fn validate(
             None,
         ));
     };
-    if let Err(f) = check(request, &candidate) {
-        return Err(SynthesisError::invalid(
-            candidate,
-            Some(assessment),
-            Some(f),
-            None,
-        ));
-    }
+    let source_keys = match check(request, &candidate) {
+        Ok(keys) => keys,
+        Err(f) => {
+            return Err(SynthesisError::invalid(
+                candidate,
+                Some(assessment),
+                Some(f),
+                None,
+            ));
+        }
+    };
     Ok(Synthesis {
         document,
-        coverage: SynthesisCoverage(candidate.coverage),
+        coverage: SynthesisCoverage {
+            draft: candidate.coverage,
+            source_keys,
+        },
     })
 }
 

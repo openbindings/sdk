@@ -1,17 +1,17 @@
 # Pinned synthesis role and portable cases
 
 Verbatim copies from `openbindings/interfaces` revision
-`9e8fcff80643ff4ef30415dc782489db65789ef9` on `codex/interface-synthesis-contract`.
+`56aadc07aef362d1bbe1f42dd3081f4a750555f6` on `codex/interface-synthesis-contract`.
 The role is Interface Synthesizer 0.2.0, independent of SDK alpha package versions.
 
 | SDK fixture | Interfaces source | SHA-256 |
 | --- | --- | --- |
-| `interface-synthesizer-0.2.json` | `interface-synthesizer/0.2.json` | `54456dcf621d8a12e04b2e4a36ab5e1ab3af1bbb3c7bbbf3001b23b9cddf1d0c` |
-| `coverage-cases.json` | `conformance/synthesis-coverage/cases.json` | `01f9bc37e4ddbc947af59331c4e0bdb5582636ad1d20ec66a50b1acddf59d3aa` |
-| `coverage-fixture.schema.json` | `conformance/synthesis-coverage/fixture.schema.json` | `9a65a2b07a79a8d7242a253163a60cc772c42ecdad0bb5fdbd73f84ae986ea93` |
+| `interface-synthesizer-0.2.json` | `interface-synthesizer/0.2.json` | `b26691a0cae345eb1b22093526d99125f38f47c97c9626abf22371bb150468bc` |
+| `coverage-cases.json` | `conformance/synthesis-coverage/cases.json` | `a9fdd0612a5ff261e934b2f8d8cb6b491b0aec5c74296a19e4bba90f1dd397ff` |
+| `coverage-fixture.schema.json` | `conformance/synthesis-coverage/fixture.schema.json` | `647f76212ff42907e983fc27d39dc65024e14c8161841c0fce023d6f64d4df68` |
 
-The output schema is an independent wire-shape oracle. The 17 portable cases
+The output schema is an independent wire-shape oracle. The 26 portable cases
 also check prose requirements including dependency correspondence and derived
 completeness. Native boundary and external consumer tests cover request context,
-provider ownership and remaining C1–C4 obligations. No schema alone proves truthful
+provider ownership and remaining C1–C6 obligations. No schema alone proves truthful
 source enumeration or kind soundness.

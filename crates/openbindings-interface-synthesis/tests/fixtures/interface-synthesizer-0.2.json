@@ -99,7 +99,7 @@
                 "sourceIndex": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "Zero-based index of the input source containing the interaction unit."
+                    "description": "Zero-based index of the input source containing the interaction unit. It also indexes coverage.sourceKeys, which preserves the input-to-emitted-source mapping after the request is gone."
                 },
                 "sourceKey": {
                     "type": "string",
@@ -353,6 +353,14 @@
             "type": "object",
             "description": "Durable accounting of the source interaction units observed by one synthesis call.",
             "properties": {
+                "sourceKeys": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "description": "One emitted source key per supplied input, in original request order. Length MUST equal the input sources length (zero when omitted). Each key MUST resolve to the unchanged corresponding input source; a supplied name MUST be used. Repeated keys are allowed for equal inputs where names permit. An unnamed input may map to any equal preserved emitted source; its binding paths may use another equal emitted source. Every entry sourceIndex indexes this array, including non-emitted and dependency entries."
+                },
                 "entries": {
                     "type": "array",
                     "items": {
@@ -372,6 +380,7 @@
                 }
             },
             "required": [
+                "sourceKeys",
                 "entries",
                 "exhaustive",
                 "fullyRepresented"
@@ -532,7 +541,7 @@
             }
         },
         "openbindings.interface-synthesizer.synthesizeInterface": {
-            "description": "Synthesize a creation-time-sound OpenBindings interface, optionally from binding source artifacts. Every emitted binding resolves to a supported target and admits a faithful invocation path. For every accepted source input, represent every callable target admitted by its source's kind; an implementation may refuse an unsupported artifact as a whole but MUST refuse instead of silently returning a partial interface when one admitted target cannot be represented faithfully. This operation is idempotent: repeating it with the same input in context that does not change its intended effects produces no additional intended operation-level effects after the first application. This does not promise identical results or authorize retries. Every emitted source is exactly the corresponding supplied source, including extensions and content presence. When name is supplied, use it as the source key. Refuse a supplied openbindingsVersion outside the 0.2 line. The carried-values rule applies. After a caller substitutes source content, the resulting document and the validity of affected bindings are the caller's claim. If the complete admitted inventory cannot be established, strict synthesis MUST refuse instead of returning a partial interface. Strict success requires exhaustive coverage and no implementation-unsupported disposition in any scope, including dependencies, alternatives and projections. Sound lossy representation and invalid or kind-excluded units do not independently prohibit strict success. Strict eligibility is distinct from fullyRepresented.",
+            "description": "Synthesize a creation-time-sound OpenBindings interface, optionally from binding source artifacts. Every emitted binding resolves to a supported target and admits a faithful invocation path. For every accepted source input, represent every callable target admitted by its source's kind; an implementation may refuse an unsupported artifact as a whole but MUST refuse instead of silently returning a partial interface when one admitted target cannot be represented faithfully. This operation is idempotent: repeating it with the same input in context that does not change its intended effects produces no additional intended operation-level effects after the first application. This does not promise identical results or authorize retries. Every emitted source is exactly the corresponding supplied source, including extensions and content presence. When name is supplied, use it as the source key. Refuse a supplied openbindingsVersion outside the 0.2 line. The carried-values rule applies. After a caller substitutes source content, the resulting document and the validity of affected bindings are the caller's claim. If the complete admitted inventory cannot be established, strict synthesis MUST refuse instead of returning a partial interface. Strict success requires exhaustive coverage and no implementation-unsupported disposition in any scope, including dependencies, alternatives and projections. Sound lossy representation and invalid or kind-excluded units do not independently prohibit strict success. Strict eligibility is distinct from fullyRepresented. Every emitted operation MUST be referenced by at least one emitted binding or dependency. Dependency-only operations are permitted. This structural requirement is necessary but does not prove kind-specific soundness; it does not require a binding-to-coverage bijection.",
             "input": {
                 "$ref": "#/schemas/SynthesizeInterfaceInput"
             },
@@ -541,7 +550,7 @@
             }
         },
         "openbindings.interface-synthesizer.synthesizeInterfaceWithCoverage": {
-            "description": "Synthesize a creation-time-sound OpenBindings interface and return durable dispositions plus an explicit exhaustiveness claim for the source interaction units considered by the same call. The result distinguishes kind-defined exclusions, invalid source units, lossy projections, and implementation gaps. Coverage is evidence that consumers may verify independently, not proof. This operation is idempotent: repeating it with the same input in context that does not change its intended effects produces no additional intended operation-level effects after the first application. This does not promise identical results or authorize retries. Every emitted source is exactly the corresponding supplied source, including extensions and content presence. When name is supplied, use it as the source key. Refuse a supplied openbindingsVersion outside the 0.2 line. The carried-values rule applies. After a caller substitutes source content, the resulting document and the validity of affected bindings are the caller's claim. A wholly unreadable source MUST be refused. When only part of its inventory can be established, synthesis with coverage MAY return a sound partial interface with exhaustive: false and limitation evidence; every established admitted unit the implementation cannot represent is disclosed as implementation-unsupported. Strict synthesis MUST refuse such partial work.",
+            "description": "Synthesize a creation-time-sound OpenBindings interface and return durable dispositions plus an explicit exhaustiveness claim for the source interaction units considered by the same call. The result distinguishes kind-defined exclusions, invalid source units, lossy projections, and implementation gaps. Coverage is evidence that consumers may verify independently, not proof. This operation is idempotent: repeating it with the same input in context that does not change its intended effects produces no additional intended operation-level effects after the first application. This does not promise identical results or authorize retries. Every emitted source is exactly the corresponding supplied source, including extensions and content presence. When name is supplied, use it as the source key. Refuse a supplied openbindingsVersion outside the 0.2 line. The carried-values rule applies. After a caller substitutes source content, the resulting document and the validity of affected bindings are the caller's claim. A wholly unreadable source MUST be refused. When only part of its inventory can be established, synthesis with coverage MAY return a sound partial interface with exhaustive: false and limitation evidence; every established admitted unit the implementation cannot represent is disclosed as implementation-unsupported. Strict synthesis MUST refuse such partial work. Every emitted operation MUST be referenced by at least one emitted binding or dependency. Dependency-only operations are permitted. This structural requirement is necessary but does not prove kind-specific soundness; it does not require a binding-to-coverage bijection.",
             "input": {
                 "$ref": "#/schemas/SynthesizeInterfaceInput"
             },

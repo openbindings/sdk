@@ -60,6 +60,18 @@ Coverage uses source index, scope and source reference as identity, with emitted
 path keys included for projections. Represented/lossy dependencies name dependencyKey;
 every emitted dependency has exactly one corresponding entry. Equal sources may
 share emitted keys when supplied names permit; each input index is still accounted for.
+`coverage().source_keys()` retains one emitted key per input in request order and
+serializes as `coverage.sourceKeys`. Use it to resolve any entry's `source_index`,
+including exclusions and dependencies, after the request is gone. The facade derives
+this mapping; providers do not supply it. An unnamed input with multiple equal emitted
+sources maps to the lexicographically first key; its binding paths may use another
+equal source. Explicit names are preserved.
+
+Every generated operation must be referenced by a binding or dependency, including
+in partial results. A missing path produces `InvalidResult` with an
+`unrealized-operation` finding at the emitted operation. Dependency-only operations
+remain valid. The document core continues to allow unbound authoring contracts;
+this synthesis check does not establish kind soundness or a binding-to-coverage bijection.
 
 Only checked success objects serialize. Ordinary Serde requires a RawValue-aware
 serializer; bounded `to_json_with_limits` additionally applies byte/node/depth limits.
@@ -83,6 +95,7 @@ See the repository synthesis checkpoint for acceptance coverage and remaining li
 | `openbindingsVersion`, source entries, metadata overrides | Borrowed `SynthesisRequest` / `SynthesisSource` |
 | `interface`, `coverage` | Immutable `Synthesis::document()` / `coverage()`; exact envelope encoding |
 | Coverage `fullyRepresented` | Derived `SynthesisCoverage::fully_represented()` |
+| Coverage `sourceKeys` | Derived `SynthesisCoverage::source_keys()`, indexed by each entry's `source_index` |
 
 `strict_eligible()` exposes the separate strict policy; it is not an added wire
 field. Cancellation, error categories, retained rejected candidates and typed core

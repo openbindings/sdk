@@ -314,3 +314,106 @@ async fn malformed_catalog_never_turns_into_empty_or_defaulted_success() {
         );
     }
 }
+
+#[tokio::test]
+async fn persisted_coverage_identifies_sources_after_request_and_provider_drop() {
+    async fn synthesize(reverse: bool) -> Synthesis {
+        let mut a = source(
+            r#"{"units":[{"id":"private","status":"excluded"},{"id":"callback","scope":"dependency"}]}"#,
+        );
+        a.description = Some("Tenant A".into());
+        let mut b = a.clone();
+        b.description = Some("Tenant B".into());
+        let mut inputs = [
+            SynthesisSource {
+                name: Some("alpha"),
+                source: &a,
+            },
+            SynthesisSource {
+                name: Some("beta"),
+                source: &b,
+            },
+        ];
+        if reverse {
+            inputs.reverse();
+        }
+        Synthesizer::new(Catalog::default())
+            .synthesize_with_coverage(&SynthesisRequest {
+                sources: &inputs,
+                ..Default::default()
+            })
+            .await
+            .unwrap()
+    }
+    let ab = synthesize(false).await;
+    let ba = synthesize(true).await;
+    assert_eq!(ab.coverage().source_keys(), ["alpha", "beta"]);
+    assert_eq!(ba.coverage().source_keys(), ["beta", "alpha"]);
+    for result in [ab, ba] {
+        let (document, coverage) = result.into_parts();
+        // The checked report stays attributable even after splitting the owners.
+        assert_eq!(coverage.entries().len(), 4);
+        for entry in coverage.entries() {
+            assert!(entry.source_key.is_none());
+            let key = &coverage.source_keys()[entry.source_index];
+            assert!(
+                document
+                    .parsed()
+                    .value()
+                    .get("sources")
+                    .unwrap()
+                    .get(key)
+                    .is_some()
+            );
+        }
+    }
+    // Repeat with identical excluded-only inventories: before the repair these
+    // two complete envelopes were byte-identical despite opposite source indices.
+    let mut a = source(r#"{"units":[{"id":"private","status":"excluded"}]}"#);
+    a.description = Some("Tenant A".into());
+    let mut b = a.clone();
+    b.description = Some("Tenant B".into());
+    let mut inputs = [
+        SynthesisSource {
+            name: Some("alpha"),
+            source: &a,
+        },
+        SynthesisSource {
+            name: Some("beta"),
+            source: &b,
+        },
+    ];
+    let provider = Synthesizer::new(Catalog::default());
+    let ab = provider
+        .synthesize_with_coverage(&SynthesisRequest {
+            sources: &inputs,
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .to_json()
+        .unwrap();
+    inputs.reverse();
+    let ba = provider
+        .synthesize_with_coverage(&SynthesisRequest {
+            sources: &inputs,
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .to_json()
+        .unwrap();
+    assert_ne!(ab.text(), ba.text());
+    for (envelope, first) in [(&ab, "beta"), (&ba, "alpha")] {
+        let reloaded = openbindings::JsonValue::parse(envelope.text()).unwrap();
+        let coverage = reloaded.get("coverage").unwrap();
+        let keys: Vec<_> = coverage
+            .get("sourceKeys")
+            .unwrap()
+            .elements()
+            .unwrap()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert_eq!(keys[1], first);
+    }
+}
