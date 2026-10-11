@@ -16,3 +16,5 @@
 /examples/rust-consumer/target/
 /examples/rust-consumer/Cargo.lock
 /tools/conformance-observer/target/
+/examples/source-inspection-consumer/target/
+/examples/source-inspection-consumer/Cargo.lock

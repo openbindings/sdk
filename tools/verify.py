@@ -20,6 +20,7 @@ run([sys.executable, 'tools/verify-consumer-compat.py'])
 for example in ['first_use', 'replacement']:
     run(['cargo', 'run', '--locked', '-p', 'openbindings-json-schema-evaluator', '--example', example])
 run([sys.executable, 'tools/verify-rust-snippets.py'])
+run([sys.executable, 'tools/verify-source-inspection.py'])
 run(['cargo', 'build', '--locked', '--release', '--workspace'])
 run(['cargo', 'build', '--locked', '--manifest-path', 'tools/conformance-observer/Cargo.toml'])
 run([sys.executable, 'tools/qualification/replay/corpus.py'])
@@ -31,6 +32,7 @@ if a.browser:
     for command in ['build:wasm', 'build', 'test', 'test:types', 'format:check', 'test:package']:
         run([npm, 'run', command], package)
     run([sys.executable, 'tools/verify-api-reference.py', '--typescript-only'])
+    run([sys.executable, 'tools/verify-source-inspection.py', '--archives', '--wasm'])
     run([sys.executable, 'tools/qualification/replay/prepare-browser-fixtures.py'])
     for engine in ['chromium', 'webkit']:
         run(['node', 'packages/typescript/test/browser.mjs', engine])

@@ -31,7 +31,15 @@ caller-provided transport and immutable publication from its optional native HTT
 client. The TypeScript companion uses ordinary Fetch callbacks. No acquisition URL
 is injected into document/schema interpretation.
 
-`openbindings-wasm` is a private bridge behind the first-class TypeScript facade.
+`openbindings-source-inspection` is a separate optional Rust role companion. Kind
+providers implement an associated-future trait; callers use a checked `Inspector`.
+It reuses core authoring values while enforcing the role's narrower carrier rules.
+Acquisition stays in providers. Binding fragments omit author-owned keys. It adds
+no dependency from core to role behavior; its narrow Wasm probe does not extend the
+published TypeScript surface. See the [role mapping](../crates/openbindings-source-inspection/README.md).
+
+`openbindings-wasm` is a private bridge behind the first-class TypeScript facade,
+separate from this new Rust companion.
 Rust owns semantic work and exact values. The facade exposes discriminated outcomes,
 checked JS conveniences, immutable resource sets and disposable retained handles.
 Repeated UI metadata reads use cached JS snapshots. It performs no second schema
