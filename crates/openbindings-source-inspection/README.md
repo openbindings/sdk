@@ -23,7 +23,7 @@ impl SourceInspector for EchoInspector {
     fn supports_kind(&self, kind: &str) -> bool {
         kind == "urn:example:echo"
     }
-    fn inspect<'a>(&'a self, source: &'a Source, _: &'a WorkControl)
+    fn inspect<'a>(&'a self, source: &'a Source, _: WorkControl)
         -> Self::Inspection<'a>
     {
         ready(Ok(SourceInspection::complete(vec![BindableTarget {
@@ -39,7 +39,8 @@ impl SourceInspector for EchoInspector {
 }
 
 async fn select(source: Source) -> Result<openbindings::Binding, InspectionError> {
-    let inspector = Inspector::new(EchoInspector);
+    let provider = EchoInspector;
+    let inspector = Inspector::new(&provider);
     let inventory = inspector.inspect(&source).await?;
     let target = inventory.targets.into_iter().next().expect("echo has one target");
     target.binding.bind("my.operation", "my.source")
@@ -55,8 +56,8 @@ is valid; the author can supply it. Assess the final document after authoring.
 ## Role mapping
 
 Authority: `openbindings/interfaces` at
-`0e37f9fb1ce96c8334a45fd5d091952af825be68`,
-[`source-inspector/0.1.json`](https://github.com/openbindings/interfaces/blob/0e37f9fb1ce96c8334a45fd5d091952af825be68/source-inspector/0.1.json)
+`8ff5d9d913cb525dacb347a29e534af278ed88f6`,
+[`source-inspector/0.1.json`](https://github.com/openbindings/interfaces/blob/8ff5d9d913cb525dacb347a29e534af278ed88f6/source-inspector/0.1.json)
 and its README. Role, SDK package and OBI versions are independent.
 
 | Role concept | Rust mapping and responsibility |
@@ -65,7 +66,7 @@ and its README. Role, SDK package and OBI versions are independent.
 | `listSupportedKinds` | `Inspector::list_supported_kinds`; validates listed kinds against support. Omission has no negative implication. |
 | `inspectSource` | `Inspector::inspect`, or `inspect_with_control` for cancellation. Unsupported kinds and invalid carrier members are refused before the provider hook. |
 | Source carrier | Core `Source`; typed fields establish their types. Non-`x-` additional fields are refused, including shadowed typed fields. Core itself continues retaining unknown fields. |
-| Target identity | Nonempty `BindableTarget::source_ref`. Stability and ordering are provider obligations. Cross-provider equality requires a kind-level rule. |
+| Target identity | Nonempty `BindableTarget::source_ref`, unique by exact string equality within one inspection. Duplicate identifiers are refused, including identical rows. Stability and ordering are provider obligations. Cross-provider equality requires a kind-level rule. |
 | Author-owned keys | `BindingFragment` omits `operation` and `source`. Facade, serialization and `bind` reject illegal extension keys. The caller assigns keys through `bind`. |
 | Completeness | `SourceInspection::complete` or `partial`; incomplete results require a nonempty limitation code/message. Complete empty results are valid. The role also permits evidence on complete results. |
 | Framing | Core `Operation`; rejects `idempotent` and shadowed typed members. Sound projection is the provider's claim; conformance belongs to final document assessment. |
@@ -79,20 +80,30 @@ filter, acquisition policy, identity normalization or automatic retry policy.
 
 ## Async, ownership and serialization decisions
 
-The associated future preserves a native provider's `Send` capability without
-requiring it of browser-local providers. Return `Ready` for synchronous work or
+A checked native call is `Send` when the provider is `Sync` and its associated
+future is `Send`. Neither bound is required for local providers. A `Send` provider
+future alone does not make a borrowed non-`Sync` provider shareable across threads.
+Return `Ready` for synchronous work or
 `Pin<Box<dyn Future<Output = Result<SourceInspection, InspectionError>> + Send + 'a>>`
 for native async work. Omit `Send` for local host handles. This costs one associated
 type in implementations; the trait imposes no allocation or executor. It does not
 provide `dyn SourceInspector` dispatch. Applications can compose providers with an
 explicit enum; revisit erasure against a real registry requirement.
 
-`Inspector` owns a provider and borrows sources during calls. Results own their
+`Inspector::new(&provider)`, `Inspector::new(Arc::clone(&provider))`, and
+`Inspector::new(Rc::clone(&provider))` use the same checked API while letting
+independent roles and application methods access one provider's state. Forwarding
+does not box futures, add executor requirements or require the provider to be
+`Clone`. Applications choose native shared ownership or local ownership as usual.
+
+`Inspector` owns its provider value or handle and borrows sources during calls. Results own their
 strings and retain exact JSON owners. Dropping or replacing a source cannot invalidate
 them. Retaining a small subtree can retain its larger backing arena; there is no
 automatic cache or implicit document copy.
 
-`WorkControl` reuses core cancellation. Cancellation drops pending work; providers
+`WorkControl` reuses core cancellation. Consumers pass a borrowed control; the
+provider hook receives an owned clone sharing the same cancellation state. Checked
+calls remain lazy until polled. Cancellation drops pending work; providers
 must check between bounded synchronous units. It cannot preempt a blocking poll or
 undo detached work. Credentials, resource budgets and acquisition stay in provider
 configuration.
@@ -102,7 +113,9 @@ core JSON byte/node/depth admission limits. `to_json_with_limits` changes these
 limits. These are not limits on existing result owners or process memory.
 Serialization allocates separately and is unnecessary for Rust-to-Rust use.
 Ordinary Serde is also supported with a RawValue-aware serializer (enable `raw_value`
-for `serde_json`). Core `JsonValue::from_serializable` intentionally rejects nested
+for `serde_json`). Serializing an inventory or standalone target enforces the same
+structural validation as checked inspection and exact encoding. Serde does not apply
+the exact encoder's byte/node/depth limits. Core `JsonValue::from_serializable` intentionally rejects nested
 exact values; use `to_json()` for this inventory. Exact JSON text is also the narrow
 Wasm probe's host boundary, avoiding JavaScript-number rounding.
 
@@ -123,13 +136,17 @@ python3 tools/verify-source-inspection.py --archives --wasm
 The probe needs the pinned Rust/wasm-bindgen tools and TypeScript compiler;
 `--tsc` accepts an installed compiler path. Archive mode compiles extracted `.crate`
 files with version-only consumer dependencies. It allows uncommitted work and
-records that fact and archive hashes; this is not a publication receipt.
+records that fact and archive hashes; this is not a publication receipt. Each replay
+invalidates the previous success receipt before work, so a failed rerun cannot
+leave a stale success certificate beside its failure logs.
 
 Cases cover exact support and carrier refusal before work, inconsistent advisory
 lists, complete/partial/empty inventories, unreadable sources, author-key injection,
 retained exact values, malformed framing, native `Send`, cancellation/drop, encoding
 budgets and local async Wasm delivery.
 
-No abstract-interface amendment was needed. Inspection/synthesis identity
-consistency, provenance after source replacement, and portable OpenAPI binding
-semantics require later adapter work.
+The amended role explicitly requires unique `sourceRef` values within an inspection;
+uniqueness is a behavioral rule because ordinary JSON Schema cannot express
+uniqueness of one member across target objects. It neither makes identities global
+nor promises correspondence after source replacement. Cross-role identity and
+portable OpenAPI binding semantics require later adapter work.

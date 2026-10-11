@@ -6,7 +6,11 @@ use std::{
     future::{Future, Ready, ready},
     pin::{Pin, pin},
     rc::Rc,
-    task::{Context, Poll, Waker},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    task::{Context, Poll, Wake, Waker},
 };
 
 const KIND: &str = "urn:example:echo";
@@ -44,7 +48,7 @@ impl SourceInspector for Echo {
             })
             .collect()
     }
-    fn inspect<'a>(&'a self, source: &'a Source, _: &'a WorkControl) -> Self::Inspection<'a> {
+    fn inspect<'a>(&'a self, source: &'a Source, _: WorkControl) -> Self::Inspection<'a> {
         self.calls.set(self.calls.get() + 1);
         ready(Ok(self.result.clone().unwrap_or_else(|| {
             let mut item = target();
@@ -365,7 +369,7 @@ impl SourceInspector for Waiting {
     fn supports_kind(&self, kind: &str) -> bool {
         kind == KIND
     }
-    fn inspect<'a>(&'a self, _: &'a Source, _: &'a WorkControl) -> Self::Inspection<'a> {
+    fn inspect<'a>(&'a self, _: &'a Source, _: WorkControl) -> Self::Inspection<'a> {
         self.started.set(true);
         Wait {
             dropped: self.dropped.clone(),
@@ -389,6 +393,24 @@ async fn pre_cancelled_work_never_calls_provider() {
     assert_eq!(calls.get(), 0);
 }
 
+#[tokio::test]
+async fn constructing_or_dropping_unpolled_work_does_not_call_provider() {
+    let (inspector, calls) = inspector(None);
+    let source = source();
+    let control = WorkControl::new();
+    let ordinary = inspector.inspect(&source);
+    let controlled = inspector.inspect_with_control(&source, &control);
+    assert_eq!(calls.get(), 0);
+    drop(ordinary);
+    assert_eq!(calls.get(), 0);
+    control.cancel();
+    assert_eq!(
+        controlled.await.unwrap_err().kind(),
+        InspectionErrorKind::Cancelled
+    );
+    assert_eq!(calls.get(), 0);
+}
+
 #[test]
 fn cancellation_drops_pending_local_provider_future() {
     let dropped = Rc::new(Cell::new(false));
@@ -400,13 +422,120 @@ fn cancellation_drops_pending_local_provider_future() {
     let source = source();
     let control = WorkControl::new();
     let mut future = pin!(inspector.inspect_with_control(&source, &control));
-    let mut cx = Context::from_waker(Waker::noop());
+    let wakes = Arc::new(WakeCounter(AtomicUsize::new(0)));
+    let waker = Waker::from(wakes.clone());
+    let mut cx = Context::from_waker(&waker);
     assert!(future.as_mut().poll(&mut cx).is_pending());
     assert!(started.get());
+    let other_dropped = Rc::new(Cell::new(false));
+    let other = Inspector::new(Waiting {
+        dropped: other_dropped.clone(),
+        started: Rc::new(Cell::new(false)),
+    });
+    let mut other_future = pin!(other.inspect_with_control(&source, &control));
+    assert!(other_future.as_mut().poll(&mut cx).is_pending());
     control.cancel();
+    assert_eq!(
+        wakes.0.load(Ordering::SeqCst),
+        2,
+        "each pending facade must be woken"
+    );
     let Poll::Ready(Err(error)) = future.as_mut().poll(&mut cx) else {
         panic!("cancellation did not finish")
     };
     assert_eq!(error.kind(), InspectionErrorKind::Cancelled);
     assert!(dropped.get());
+    assert!(
+        matches!(other_future.as_mut().poll(&mut cx), Poll::Ready(Err(error)) if error.kind() == InspectionErrorKind::Cancelled)
+    );
+    assert!(other_dropped.get());
+}
+
+struct WakeCounter(AtomicUsize);
+impl Wake for WakeCounter {
+    fn wake(self: Arc<Self>) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+#[tokio::test]
+async fn local_rc_provider_is_forwarded_without_send_requirements() {
+    let calls = Rc::new(Cell::new(0));
+    let provider = Rc::new(Echo {
+        calls: calls.clone(),
+        result: None,
+        listed: Some(KIND.into()),
+    });
+    let inspector = Inspector::new(provider.clone());
+    assert!(inspector.check_kind_support([KIND]).unwrap()[0].supported);
+    assert_eq!(inspector.list_supported_kinds().unwrap()[0].kind, KIND);
+    inspector.inspect(&source()).await.unwrap();
+    assert_eq!(calls.get(), 1);
+}
+
+#[tokio::test]
+async fn every_inventory_output_path_refuses_the_same_invalid_results() {
+    let mut forbidden_framing = target();
+    forbidden_framing.operation = Some(Operation {
+        additional_fields: BTreeMap::from([(
+            "idempotent".into(),
+            JsonValue::parse("true").unwrap(),
+        )]),
+        ..Default::default()
+    });
+    let empty_id = BindableTarget {
+        source_ref: "".into(),
+        ..target()
+    };
+    for item in [&forbidden_framing, &empty_id] {
+        assert!(
+            serde_json_compat::to_string(item).is_err(),
+            "standalone target bypassed validation"
+        );
+    }
+    let invalid = [
+        SourceInspection {
+            exhaustive: false,
+            limitation: None,
+            targets: vec![],
+        },
+        SourceInspection::partial(
+            vec![],
+            InspectionLimitation {
+                code: "".into(),
+                message: "why".into(),
+                details: None,
+            },
+        ),
+        SourceInspection::complete(vec![forbidden_framing]),
+        SourceInspection::complete(vec![empty_id]),
+        SourceInspection::complete(vec![target(), target()]),
+    ];
+    for inventory in invalid {
+        assert!(inventory.validate().is_err());
+        assert!(inventory.to_json().is_err());
+        assert!(serde_json_compat::to_string(&inventory).is_err());
+        let (inspector, _) = inspector(Some(inventory));
+        assert_eq!(
+            inspector.inspect(&source()).await.unwrap_err().kind(),
+            InspectionErrorKind::InvalidResult
+        );
+    }
+}
+
+#[test]
+fn source_ref_uniqueness_is_exact_and_valid_serializers_agree() {
+    let mut targets = Vec::new();
+    for id in ["target", "TARGET", "é", "e\u{301}"] {
+        let mut item = target();
+        item.source_ref = id.into();
+        item.binding.content = Some(JsonValue::parse("9007199254740993").unwrap());
+        targets.push(item);
+    }
+    let inventory = SourceInspection::complete(targets);
+    assert!(inventory.validate().is_ok());
+    assert_eq!(
+        inventory.to_json().unwrap().text(),
+        serde_json_compat::to_string(&inventory).unwrap()
+    );
 }

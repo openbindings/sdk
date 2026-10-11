@@ -26,7 +26,7 @@ impl SourceInspector for CatalogInspector {
         kind == CATALOG_KIND
     }
 
-    fn inspect<'a>(&'a self, source: &'a Source, control: &'a WorkControl) -> Self::Inspection<'a> {
+    fn inspect<'a>(&'a self, source: &'a Source, control: WorkControl) -> Self::Inspection<'a> {
         Box::pin(async move {
             // Exercise actual suspension without selecting a runtime dependency.
             let mut yielded = false;
@@ -40,7 +40,7 @@ impl SourceInspector for CatalogInspector {
                 }
             })
             .await;
-            inspect_catalog(source, control)
+            inspect_catalog(source, &control)
         })
     }
 }
@@ -56,7 +56,9 @@ fn unreadable(message: &str) -> InspectionError {
 /// Kind semantics: the entire content is an array. Each record has a unique
 /// nonempty `id` and `status`: `admitted`, `excluded`, or `unavailable` (admitted
 /// but not inspectable by this implementation). Optional binding content is an
-/// exact JSON value. Missing framing is valid. No acquisition is performed.
+/// exact JSON value. An optional `input` is only a framing hint: this fixture
+/// establishes framing for boolean declarations; other hints are left unprojected.
+/// Target admission does not depend on that hint. No acquisition is performed.
 pub fn inspect_catalog(
     source: &Source,
     control: &WorkControl,
@@ -101,12 +103,16 @@ pub fn inspect_catalog(
                     .ok_or_else(|| unreadable("idempotent must be boolean"))
             })
             .transpose()?;
-        // Framing is intentionally optional. `input` is an exact schema value;
-        // the final document assessment establishes its core conformance.
-        let operation = entry.get("input").map(|input| Operation {
-            input: Some(input.to_owned()),
-            ..Default::default()
-        });
+        // Only project declarations this fixture can establish as sound. An
+        // unrecognized hint does not justify an invented operation contract or
+        // omission of an otherwise admitted target.
+        let operation = entry
+            .get("input")
+            .filter(|input| input.as_bool().is_some())
+            .map(|input| Operation {
+                input: Some(input.to_owned()),
+                ..Default::default()
+            });
         targets.push(BindableTarget {
             source_ref: id.into(),
             operation_key: Some(id.into()),
@@ -135,33 +141,91 @@ pub fn inspect_catalog(
     })
 }
 
-/// Choose one inspected target, assign author-owned keys, and assess a full OBI.
-pub async fn author_selected(source: Source) -> Result<JsonValue, Box<dyn std::error::Error>> {
-    let inspector = Inspector::new(CatalogInspector);
-    let inspection = inspector.inspect(&source).await?;
-    if !inspection.exhaustive {
-        return Err("selection requires an explicit decision about partial inspection".into());
+/// Application outcomes; partial inventories and repair evidence stay available.
+#[derive(Debug)]
+pub enum AuthoringOutcome {
+    Ready(JsonValue),
+    Partial(SourceInspection),
+    Empty,
+    NeedsRepair {
+        draft: Box<DocumentBuilder>,
+        assessment: openbindings::DocumentAssessment,
+    },
+}
+
+/// Application failures retain the typed SDK error rather than replacing it with prose.
+#[derive(Debug)]
+pub enum AuthoringFailure {
+    Inspection(InspectionError),
+    Draft(openbindings::AuthoringError),
+    Version(openbindings::VersionRefusal),
+}
+impl std::fmt::Display for AuthoringFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Inspection(error) => error.fmt(f),
+            Self::Draft(error) => error.fmt(f),
+            Self::Version(error) => error.fmt(f),
+        }
     }
-    let target = inspection
-        .targets
-        .into_iter()
-        .next()
-        .ok_or("no admitted target")?;
+}
+impl std::error::Error for AuthoringFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(match self {
+            Self::Inspection(error) => error,
+            Self::Draft(error) => error,
+            Self::Version(error) => error,
+        })
+    }
+}
+
+/// Choose a first target only after complete inspection. The caller retains the
+/// source, including when an incomplete inventory needs an explicit selection.
+pub async fn author_selected(source: &Source) -> Result<AuthoringOutcome, AuthoringFailure> {
+    let inspector = Inspector::new(CatalogInspector);
+    let inspection = inspector
+        .inspect(source)
+        .await
+        .map_err(AuthoringFailure::Inspection)?;
+    if !inspection.exhaustive {
+        return Ok(AuthoringOutcome::Partial(inspection));
+    }
+    let Some(target) = inspection.targets.into_iter().next() else {
+        return Ok(AuthoringOutcome::Empty);
+    };
+    author_target(source, target)
+}
+
+/// Author a target explicitly selected by the application. This also supports an
+/// informed selection from a partial inventory; it never upgrades completeness.
+pub fn author_target(
+    source: &Source,
+    target: BindableTarget,
+) -> Result<AuthoringOutcome, AuthoringFailure> {
     let mut draft = DocumentBuilder::new();
     draft.operations.insert(
         "chosen.operation".into(),
         target.operation.unwrap_or_default(),
     );
-    draft.sources = Some(BTreeMap::from([("chosen.source".into(), source)]));
+    draft.sources = Some(BTreeMap::from([("chosen.source".into(), source.clone())]));
     draft.bindings = Some(BTreeMap::from([(
         "chosen.binding".into(),
-        target.binding.bind("chosen.operation", "chosen.source")?,
+        target
+            .binding
+            .bind("chosen.operation", "chosen.source")
+            .map_err(AuthoringFailure::Inspection)?,
     )]));
-    let parsed = draft.build()?;
-    if parsed.assess()?.validated().is_none() {
-        return Err("authored document is nonconformant".into());
+    let parsed = draft.build().map_err(AuthoringFailure::Draft)?;
+    let assessment = parsed.assess().map_err(AuthoringFailure::Version)?;
+    if assessment.validated().is_none() {
+        return Ok(AuthoringOutcome::NeedsRepair {
+            draft: Box::new(draft),
+            assessment,
+        });
     }
-    Ok(draft.to_json()?)
+    Ok(AuthoringOutcome::Ready(
+        draft.to_json().map_err(AuthoringFailure::Draft)?,
+    ))
 }
 
 #[cfg(all(target_arch = "wasm32", feature = "wasm-probe"))]
@@ -177,11 +241,7 @@ mod wasm {
         fn supports_kind(&self, kind: &str) -> bool {
             kind == CATALOG_KIND
         }
-        fn inspect<'a>(
-            &'a self,
-            source: &'a Source,
-            control: &'a WorkControl,
-        ) -> Self::Inspection<'a> {
+        fn inspect<'a>(&'a self, source: &'a Source, control: WorkControl) -> Self::Inspection<'a> {
             Box::pin(async move {
                 // A local Rc and JavaScript Promise deliberately cross an await.
                 let local = self.0.clone();
@@ -189,7 +249,7 @@ mod wasm {
                     .await
                     .map_err(|_| unreadable("host promise failed"))?;
                 assert_eq!(local.as_str(), "local host");
-                inspect_catalog(source, control)
+                inspect_catalog(source, &control)
             })
         }
     }
@@ -205,10 +265,13 @@ mod wasm {
                 .sources
                 .and_then(|mut sources| sources.remove("catalog"))
                 .ok_or("missing catalog source")?;
-            let inspector = Inspector::new(LocalCatalog(Rc::new("local host".into())));
+            let provider = Rc::new(LocalCatalog(Rc::new("local host".into())));
+            let inspector = Inspector::new(provider.clone());
             let result = inspector.inspect(&source).await?;
             drop(source);
             drop(inspector);
+            assert_eq!(provider.0.as_str(), "local host");
+            drop(provider);
             Ok(result.to_json()?.text().to_owned())
         }
         run(document_json)

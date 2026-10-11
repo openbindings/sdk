@@ -1,9 +1,9 @@
 # Contract fixture
 
 Verbatim `openbindings/interfaces/source-inspector/0.1.json` from commit
-`0e37f9fb1ce96c8334a45fd5d091952af825be68`.
+`8ff5d9d913cb525dacb347a29e534af278ed88f6`.
 
-SHA-256: `5214db7062343d7cea2e4dc11eb5b7bd7e589ba5db3de33ec9107b40b64f36d7`.
+SHA-256: `72a5639b460842e196ce460858a6a4a94d1158549924acef8d08b507bcfa5542`.
 
 The output-schema test supplements the behavioral boundary tests. The schema
 intentionally leaves carriers open; it does not replace the role prose concerning

@@ -72,7 +72,7 @@
                 "sourceRef": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Stable identifier for this target within the source. An implementation offering both inspection and synthesis uses the same identifier for the same target-scope unit. Cross-producer equality is promised only where the kind defines it."
+                    "description": "Stable identifier for this target within the source. An implementation offering both inspection and synthesis uses the same identifier for the same target-scope unit. Cross-producer equality is promised only where the kind defines it. Unique within this inspection by exact whole-string equality. A producer MUST NOT reuse an identifier for distinct target-scope units in the same observed source state; consumers reject duplicate identifiers."
                 },
                 "binding": {
                     "$ref": "#/schemas/Binding"
@@ -104,7 +104,7 @@
         },
         "SourceInspection": {
             "type": "object",
-            "description": "Inventory of targets the kind admits. Excluded targets are not listed; an admitted target the implementation cannot establish or represent makes the result non-exhaustive with a limitation. If the source cannot be read at all, refuse the call.",
+            "description": "Inventory of targets the kind admits. Excluded targets are not listed; an admitted target the implementation cannot establish or represent makes the result non-exhaustive with a limitation. If the source cannot be read at all, refuse the call. Within one inspection each sourceRef MUST occur at most once, using exact whole-string equality without normalization. Consumers MUST reject duplicate identifiers, including identical repeated target rows; they MUST NOT silently select, merge or deduplicate them.",
             "properties": {
                 "targets": {
                     "type": "array",

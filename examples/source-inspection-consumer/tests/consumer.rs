@@ -1,6 +1,9 @@
 use openbindings::{DocumentBuilder, JsonValue, Source};
 use openbindings_source_inspection::{InspectionErrorKind, Inspector};
-use source_inspection_consumer::{CATALOG_KIND, CatalogInspector, author_selected};
+use source_inspection_consumer::{
+    AuthoringFailure, AuthoringOutcome, CATALOG_KIND, CatalogInspector, author_selected,
+    author_target,
+};
 
 fn source(content: &str) -> Source {
     Source {
@@ -52,7 +55,9 @@ async fn inventory_authoring_and_retained_values() {
         "null"
     );
     assert!(first.targets[2].binding.content.is_none());
-    let authored = author_selected(source.clone()).await.unwrap();
+    let AuthoringOutcome::Ready(authored) = author_selected(&source).await.unwrap() else {
+        panic!("expected a ready document")
+    };
     let draft = DocumentBuilder::from_json(&authored).unwrap();
     let binding = &draft.bindings.unwrap()["chosen.binding"];
     assert_eq!(binding.operation, "chosen.operation");
@@ -102,4 +107,188 @@ async fn incomplete_excluded_empty_and_unreadable_are_distinct() {
         inspector.inspect(&unsupported).await.unwrap_err().kind(),
         InspectionErrorKind::UnsupportedKind
     );
+}
+
+#[tokio::test]
+async fn authoring_preserves_partial_inventory_and_document_repair_evidence() {
+    let source = source(
+        r#"[{"id":"known","status":"admitted","binding":9007199254740993},
+        {"id":"unknown","status":"unavailable"}]"#,
+    );
+    let AuthoringOutcome::Partial(inspection) = author_selected(&source).await.unwrap() else {
+        panic!("expected selection decision")
+    };
+    assert!(!inspection.exhaustive);
+    let limitation = inspection.limitation.as_ref().unwrap();
+    assert_eq!(limitation.code, "example.catalog.unavailable");
+    assert_eq!(limitation.details.as_ref().unwrap()["omitted"].text(), "1");
+    assert_eq!(inspection.targets.len(), 1);
+    let selected = inspection.targets.into_iter().next().unwrap();
+    assert!(matches!(
+        author_target(&source, selected.clone()).unwrap(),
+        AuthoringOutcome::Ready(_)
+    ));
+    // A caller can edit framing after inspection. Retain the resulting assessment
+    // and editable draft if that edit makes the final OBI invalid.
+    let mut edited = selected;
+    edited.operation = Some(openbindings::Operation {
+        input: Some(JsonValue::parse("42").unwrap()),
+        ..Default::default()
+    });
+    let AuthoringOutcome::NeedsRepair { draft, assessment } =
+        author_target(&source, edited).unwrap()
+    else {
+        panic!("expected repair evidence")
+    };
+    assert_eq!(
+        draft.operations["chosen.operation"]
+            .input
+            .as_ref()
+            .unwrap()
+            .text(),
+        "42"
+    );
+    assert!(!assessment.report().findings.is_empty());
+    assert!(assessment.validated().is_none());
+    let unsupported = Source {
+        kind: "urn:other".into(),
+        ..Default::default()
+    };
+    let Err(AuthoringFailure::Inspection(error)) = author_selected(&unsupported).await else {
+        panic!("expected typed inspection refusal")
+    };
+    assert_eq!(error.kind(), InspectionErrorKind::UnsupportedKind);
+}
+
+#[tokio::test]
+async fn unestablished_framing_is_omitted_without_losing_admitted_targets() {
+    for hint in ["42", "null", "[]", r#"{"type":42}"#] {
+        let source = source(&format!(
+            r#"[{{"id":"one","status":"admitted","input":{hint}}}]"#
+        ));
+        let inspection = Inspector::new(CatalogInspector)
+            .inspect(&source)
+            .await
+            .unwrap();
+        assert!(inspection.exhaustive);
+        assert_eq!(inspection.targets.len(), 1);
+        assert!(inspection.targets[0].operation.is_none());
+        assert!(matches!(
+            author_selected(&source).await.unwrap(),
+            AuthoringOutcome::Ready(_)
+        ));
+    }
+}
+
+#[tokio::test]
+async fn borrowed_and_shared_non_clone_provider_keep_the_same_state_and_send_future() {
+    use openbindings::WorkControl;
+    use openbindings_source_inspection::{
+        InspectionError, SourceInspection, SourceInspector, SupportedKind,
+    };
+    use std::{
+        future::Future,
+        pin::Pin,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+    };
+    struct StatefulCatalog {
+        calls: AtomicUsize,
+    }
+    impl StatefulCatalog {
+        fn calls(&self) -> usize {
+            self.calls.load(Ordering::Relaxed)
+        }
+    }
+    impl SourceInspector for StatefulCatalog {
+        type Inspection<'a> =
+            Pin<Box<dyn Future<Output = Result<SourceInspection, InspectionError>> + Send + 'a>>;
+        fn supports_kind(&self, kind: &str) -> bool {
+            kind == CATALOG_KIND
+        }
+        fn supported_kinds(&self) -> Vec<SupportedKind> {
+            vec![SupportedKind {
+                kind: CATALOG_KIND.into(),
+                description: None,
+            }]
+        }
+        fn inspect<'a>(&'a self, source: &'a Source, control: WorkControl) -> Self::Inspection<'a> {
+            Box::pin(async move {
+                self.calls.fetch_add(1, Ordering::Relaxed);
+                CatalogInspector.inspect(source, control).await
+            })
+        }
+    }
+    let provider = Arc::new(StatefulCatalog {
+        calls: AtomicUsize::new(0),
+    });
+    let borrowed = Inspector::new(provider.as_ref());
+    let shared = Inspector::new(provider.clone());
+    let source = source("[]");
+    fn assert_send<T: Send>(_: &T) {}
+    let future = borrowed.inspect(&source);
+    assert_send(&future);
+    future.await.unwrap();
+    let future = shared.inspect(&source);
+    assert_send(&future);
+    future.await.unwrap();
+    for listing in [
+        borrowed.list_supported_kinds(),
+        shared.list_supported_kinds(),
+    ] {
+        assert_eq!(listing.unwrap()[0].kind, CATALOG_KIND);
+    }
+    assert!(shared.check_kind_support([CATALOG_KIND]).unwrap()[0].supported);
+    assert_eq!(provider.calls(), 2);
+}
+
+#[tokio::test]
+async fn stack_borrowed_provider_has_an_unboxed_send_future() {
+    use openbindings::WorkControl;
+    use openbindings_source_inspection::{InspectionError, SourceInspection, SourceInspector};
+    use std::{
+        future::Future,
+        pin::Pin,
+        sync::atomic::{AtomicUsize, Ordering},
+        task::{Context, Poll},
+    };
+    struct Adapter<'env>(&'env AtomicUsize);
+    struct Work<'a>(&'a AtomicUsize);
+    impl Future for Work<'_> {
+        type Output = Result<SourceInspection, InspectionError>;
+        fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Self::Output> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Poll::Ready(Ok(SourceInspection::complete(vec![])))
+        }
+    }
+    impl SourceInspector for Adapter<'_> {
+        type Inspection<'a>
+            = Work<'a>
+        where
+            Self: 'a;
+        fn supports_kind(&self, kind: &str) -> bool {
+            kind == CATALOG_KIND
+        }
+        fn inspect<'a>(&'a self, _: &'a Source, _: WorkControl) -> Self::Inspection<'a> {
+            Work(self.0)
+        }
+    }
+    fn send<T: Send>(_: &T) {}
+    let calls = AtomicUsize::new(0);
+    let adapter = Adapter(&calls);
+    let inspector = Inspector::new(&adapter);
+    let source = source("[]");
+    let future = inspector.inspect(&source);
+    send(&future);
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    future.await.unwrap();
+    let control = WorkControl::new();
+    let future = inspector.inspect_with_control(&source, &control);
+    send(&future);
+    // The future retains shared cancellation state without borrowing this handle.
+    drop(control);
+    future.await.unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
 }

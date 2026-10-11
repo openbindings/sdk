@@ -27,6 +27,17 @@ LOCAL = [
 ]
 
 
+def extract_fresh(archive, destination):
+    with tarfile.open(archive) as packed:
+        packed.extractall(destination, filter="data")
+        # Cargo archives normalize source timestamps into the past. Re-extracting
+        # a changed package at the same path can otherwise reuse an older build
+        # from the shared target tree. Make every extracted input freshly visible.
+        for member in packed.getmembers():
+            if member.isfile():
+                os.utime(destination / member.name, None)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archives", action="store_true", help="Compile extracted .crate sources, including uncommitted work")
@@ -38,7 +49,11 @@ def main():
     env["CARGO_TARGET_DIR"] = str(target)
     out = target / "source-inspection-qualification" / ("archives" if args.archives else "source")
     out.mkdir(parents=True, exist_ok=True)
+    # A receipt certifies this completed run, never an earlier run at the same
+    # revision. Invalidate it before any operation that can fail.
+    (out / "receipt.json").unlink(missing_ok=True)
     commands = []
+    (out / "commands.json").write_text("[]\n")
 
     def run(label, command, cwd=ROOT):
         print("+ " + " ".join(map(str, command)), flush=True)
@@ -65,8 +80,7 @@ def main():
             source = out / "cargo" / archive.stem
             if source.exists():
                 shutil.rmtree(source)
-            with tarfile.open(archive) as packed:
-                packed.extractall(out / "cargo", filter="data")
+            extract_fresh(archive, out / "cargo")
             normalized = tomllib.loads((source / "Cargo.toml").read_text())
             for section in [normalized, *normalized.get("target", {}).values()]:
                 for kind in ["dependencies", "dev-dependencies", "build-dependencies"]:
@@ -77,13 +91,14 @@ def main():
 
     consumer = out / "consumer"
     consumer.mkdir(exist_ok=True)
-    for directory in ["src", "tests"]:
+    for directory in ["src", "tests", "examples"]:
         shutil.copytree(FIXTURE / directory, consumer / directory, dirs_exist_ok=True)
     patches = "\n[patch.crates-io]\n" + "".join(f"{name}={{path={json.dumps(str(source))}}}\n" for name, source in sources.items())
     (consumer / "Cargo.toml").write_text((FIXTURE / "Cargo.toml").read_text() + patches)
     shutil.copyfile(ROOT / "Cargo.lock", consumer / "Cargo.lock")
     # Preserve the root lock's selected versions, adding only the external fixture.
     run("consumer-test", ["cargo", "test"], consumer)
+    run("consumer-recovery", ["cargo", "run", "--locked", "--example", "recovery"], consumer)
     run("consumer-lint", ["cargo", "clippy", "--locked", "--all-targets", "--", "-D", "warnings"], consumer)
     metadata = json.loads(run("consumer-metadata", ["cargo", "metadata", "--locked", "--format-version", "1"], consumer))
     for package in metadata["packages"]:

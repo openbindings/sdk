@@ -16,14 +16,16 @@ use std::{
 /// Inspection must not intentionally mutate the source or external state, and
 /// must preserve ordering for the same observed source state/configuration.
 ///
-/// The associated future preserves a native provider's `Send` capability without
-/// requiring it of browser-local providers. Use `Ready` for synchronous work, or
+/// A checked call is `Send` when the provider is `Sync` and its associated future
+/// is `Send`; neither bound is required of browser-local providers.
+/// Use `Ready` for synchronous work, or
 /// `Pin<Box<dyn Future<Output = Result<SourceInspection, InspectionError>> + Send + 'a>>`
 /// for ordinary native async implementations; omit `Send` for local host handles.
 /// No allocation or executor is imposed by this trait.
 pub trait SourceInspector {
     /// Future returned by this implementation. It may borrow the provider,
-    /// source and cancellation control for the duration of inspection.
+    /// and source for the duration of inspection. The cancellation control is
+    /// owned and shares cancellation state with the caller.
     type Inspection<'a>: Future<Output = Result<SourceInspection, InspectionError>>
     where
         Self: 'a;
@@ -41,14 +43,40 @@ pub trait SourceInspector {
     ///
     /// Refuse unreadable sources. Omit unhandled admitted targets only with an
     /// explicit partial result. Observe `control` between bounded synchronous
-    /// units of work. The facade drops a pending future on cancellation, but
+    /// units of work. The owned control shares state with the caller; it can be
+    /// retained across suspension without borrowing a facade-local token.
+    /// The facade drops a pending future on cancellation, but
     /// cannot preempt a blocking poll or undo detached work started by a provider.
-    fn inspect<'a>(&'a self, source: &'a Source, control: &'a WorkControl) -> Self::Inspection<'a>;
+    fn inspect<'a>(&'a self, source: &'a Source, control: WorkControl) -> Self::Inspection<'a>;
 }
+
+// Preserve the underlying future rather than boxing or changing its Send bounds.
+macro_rules! forward_inspector {
+    ($($wrapper:ty),+ $(,)?) => {$ (
+        impl<P: SourceInspector + ?Sized> SourceInspector for $wrapper {
+            type Inspection<'a> = P::Inspection<'a> where Self: 'a;
+
+            fn supports_kind(&self, kind: &str) -> bool {
+                (**self).supports_kind(kind)
+            }
+
+            fn supported_kinds(&self) -> Vec<SupportedKind> {
+                (**self).supported_kinds()
+            }
+
+            fn inspect<'a>(&'a self, source: &'a Source, control: WorkControl) -> Self::Inspection<'a> {
+                (**self).inspect(source, control)
+            }
+        }
+    )+};
+}
+forward_inspector!(&P, std::sync::Arc<P>, std::rc::Rc<P>);
 
 /// Checked consumer entry point around a source-inspection provider.
 ///
-/// Own one per provider configuration and reuse it. This is not a registry or a
+/// Own one per provider configuration and reuse it. Wrap `&P`, `Arc<P>` or `Rc<P>`
+/// to reuse an existing provider and its state across independent roles.
+/// This is not a registry or a
 /// transport. The source is borrowed during work; returned inventories own their
 /// values and remain valid after the source/provider are dropped.
 #[derive(Clone, Debug)]
@@ -99,54 +127,85 @@ impl<P: SourceInspector> Inspector<P> {
         Ok(kinds)
     }
 
-    /// Inspect a source with a fresh, uncancelled control.
-    pub async fn inspect(&self, source: &Source) -> Result<SourceInspection, InspectionError> {
-        self.inspect_with_control(source, &WorkControl::new()).await
+    /// Inspect a source with a fresh, uncancelled control. Work begins when the
+    /// returned future is polled.
+    pub fn inspect<'a>(
+        &'a self,
+        source: &'a Source,
+    ) -> impl Future<Output = Result<SourceInspection, InspectionError>> + 'a {
+        self.inspect_owned(source, WorkControl::new())
     }
-
-    /// Inspect with caller-owned cancellation. Carrier admission and support
-    /// checks finish before the provider hook is called. Results are structurally
+    /// Inspect with caller-owned cancellation. The control is cloned, sharing
+    /// its cancellation state; the future does not borrow the caller's handle.
+    /// Carrier admission and support checks finish before the provider hook is
+    /// called. All work begins when the future is polled. Results are structurally
     /// checked before delivery. Kind-specific semantic claims remain the provider's.
-    pub async fn inspect_with_control(
-        &self,
-        source: &Source,
+    pub fn inspect_with_control<'a>(
+        &'a self,
+        source: &'a Source,
         control: &WorkControl,
-    ) -> Result<SourceInspection, InspectionError> {
-        if control.is_cancelled() {
-            return Err(InspectionError::cancelled());
-        }
-        if source.kind.is_empty() {
-            return Err(InspectionError::input("source kind must be nonempty"));
-        }
-        if let Some(key) = source
-            .additional_fields
-            .keys()
-            .find(|key| !key.starts_with("x-"))
-        {
-            return Err(InspectionError::input(format!(
-                "source member {key:?} is not an x- extension"
-            )));
-        }
-        if !self.provider.supports_kind(&source.kind) {
-            return Err(InspectionError::new(
-                InspectionErrorKind::UnsupportedKind,
-                "openbindings.inspection.unsupported-kind",
-                "provider does not support this exact kind for inspection",
-            ));
-        }
-        let mut future = pin!(self.provider.inspect(source, control));
-        let mut cancelled = pin!(control.cancelled());
-        let result = poll_fn(|cx| {
-            if cancelled.as_mut().poll(cx).is_ready() {
-                return Poll::Ready(Err(InspectionError::cancelled()));
-            }
-            future.as_mut().poll(cx)
-        })
-        .await?;
-        if control.is_cancelled() {
-            return Err(InspectionError::cancelled());
-        }
-        result.validate()?;
-        Ok(result)
+    ) -> impl Future<Output = Result<SourceInspection, InspectionError>> + 'a {
+        self.inspect_owned(source, control.clone())
     }
+    fn inspect_owned<'a>(
+        &'a self,
+        source: &'a Source,
+        control: WorkControl,
+    ) -> impl Future<Output = Result<SourceInspection, InspectionError>> + 'a {
+        let provider_control = control.clone();
+        run_checked(
+            move || {
+                if provider_control.is_cancelled() {
+                    return Err(InspectionError::cancelled());
+                }
+                if source.kind.is_empty() {
+                    return Err(InspectionError::input("source kind must be nonempty"));
+                }
+                if let Some(key) = source
+                    .additional_fields
+                    .keys()
+                    .find(|key| !key.starts_with("x-"))
+                {
+                    return Err(InspectionError::input(format!(
+                        "source member {key:?} is not an x- extension"
+                    )));
+                }
+                if !self.provider.supports_kind(&source.kind) {
+                    return Err(InspectionError::new(
+                        InspectionErrorKind::UnsupportedKind,
+                        "openbindings.inspection.unsupported-kind",
+                        "provider does not support this exact kind for inspection",
+                    ));
+                }
+                Ok(self.provider.inspect(source, provider_control))
+            },
+            control,
+        )
+    }
+}
+// Keep the provider future generic here: a GAT projection inside the facade
+// coroutine can otherwise impose an unintended static lifetime when callers
+// require a borrowed provider's checked future to be Send. The start closure
+// also keeps admission and provider invocation lazy.
+async fn run_checked<F>(
+    start: impl FnOnce() -> Result<F, InspectionError>,
+    control: WorkControl,
+) -> Result<SourceInspection, InspectionError>
+where
+    F: Future<Output = Result<SourceInspection, InspectionError>>,
+{
+    let mut future = pin!(start()?);
+    let mut cancelled = pin!(control.cancelled());
+    let result = poll_fn(|cx| {
+        if cancelled.as_mut().poll(cx).is_ready() {
+            return Poll::Ready(Err(InspectionError::cancelled()));
+        }
+        future.as_mut().poll(cx)
+    })
+    .await?;
+    if control.is_cancelled() {
+        return Err(InspectionError::cancelled());
+    }
+    result.validate()?;
+    Ok(result)
 }

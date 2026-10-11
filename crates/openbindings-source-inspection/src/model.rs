@@ -1,7 +1,10 @@
 use crate::{InspectionError, InspectionErrorKind};
 use openbindings::{Binding, JsonLimits, JsonValue, Operation, Preference};
-use serde::{Serialize, Serializer, ser::SerializeMap};
-use std::collections::BTreeMap;
+use serde::{
+    Serialize, Serializer,
+    ser::{SerializeMap, SerializeSeq},
+};
+use std::collections::{BTreeMap, HashSet};
 
 /// Advisory description of a supported exact kind; omission implies nothing.
 #[derive(Clone, Debug, Serialize)]
@@ -104,20 +107,18 @@ impl Serialize for BindingFragment {
 }
 
 /// One target admitted by the source's kind, with optional operation framing.
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug)]
 pub struct BindableTarget {
-    /// Stable source-local identity. Cross-provider equality exists only if the
+    /// Stable source-local identity, unique within this inspection by exact string
+    /// equality. Cross-provider equality exists only if the
     /// kind defines it; synthesis in this same provider must use the same identity.
     pub source_ref: String,
     /// Binding data without author-owned operation/source keys.
     pub binding: BindingFragment,
     /// Optional suggestion; the author owns the actual operation key.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub operation_key: Option<String>,
     /// Optional sound projection of this target. It must not carry `idempotent`.
     /// This is authoring data, not an already validated operation contract.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub operation: Option<Operation>,
 }
 
@@ -138,7 +139,7 @@ pub struct InspectionLimitation {
 /// Complete empty inventories are valid. Excluded upstream interactions are not
 /// targets. An admitted target that cannot be established or represented requires
 /// `exhaustive: false` and a limitation. An unreadable source is a refusal instead.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct SourceInspection {
     /// Bindable targets; this inventory does not silently apply a relevance filter.
     pub targets: Vec<BindableTarget>,
@@ -146,7 +147,6 @@ pub struct SourceInspection {
     pub exhaustive: bool,
     /// Required for an incomplete inventory. The role also permits evidence on a
     /// complete result; consumers use `exhaustive` as the completeness signal.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub limitation: Option<InspectionLimitation>,
 }
 
@@ -188,7 +188,7 @@ impl SourceInspection {
             bytes: Vec::new(),
             max: limits.max_bytes,
         };
-        serde_json_compat::to_writer(&mut output, self)
+        serde_json_compat::to_writer(&mut output, &InspectionFields(self))
             .map_err(|error| encoding(error.to_string()))?;
         JsonValue::parse_with_limits(output.bytes, limits)
             .map_err(|error| encoding(error.to_string()))
@@ -225,49 +225,116 @@ impl SourceInspection {
                 "limitation code and message must be nonempty",
             ));
         }
+        let mut identities = HashSet::with_capacity(self.targets.len());
         for (index, target) in self.targets.iter().enumerate() {
-            if target.source_ref.is_empty() {
-                return Err(InspectionError::result(format!(
-                    "target {index} requires a nonempty sourceRef"
-                )));
-            }
-            target.binding.validate().map_err(|error| {
+            target.validate().map_err(|error| {
                 InspectionError::result(format!("target {index}: {}", error.message()))
             })?;
-            if let Some(operation) = &target.operation {
-                for key in operation.additional_fields.keys() {
-                    if [
-                        "idempotent",
-                        "description",
-                        "deprecated",
-                        "tags",
-                        "aliases",
-                        "input",
-                        "output",
-                        "examples",
-                    ]
-                    .contains(&key.as_str())
+            if !identities.insert(target.source_ref.as_str()) {
+                return Err(InspectionError::result(format!(
+                    "target {index}: duplicate sourceRef {:?}",
+                    target.source_ref
+                )));
+            }
+        }
+        Ok(())
+    }
+}
+
+impl BindableTarget {
+    fn validate(&self) -> Result<(), InspectionError> {
+        if self.source_ref.is_empty() {
+            return Err(InspectionError::result("requires a nonempty sourceRef"));
+        }
+        self.binding.validate()?;
+        if let Some(operation) = &self.operation {
+            for key in operation.additional_fields.keys() {
+                if [
+                    "idempotent",
+                    "description",
+                    "deprecated",
+                    "tags",
+                    "aliases",
+                    "input",
+                    "output",
+                    "examples",
+                ]
+                .contains(&key.as_str())
+                {
+                    return Err(InspectionError::result(format!(
+                        "operation framing has forbidden or shadowed member {key:?}"
+                    )));
+                }
+            }
+            if let Some(examples) = &operation.examples {
+                for (name, example) in examples {
+                    if let Some(key) = example
+                        .additional_fields
+                        .keys()
+                        .find(|key| ["description", "input", "output"].contains(&key.as_str()))
                     {
                         return Err(InspectionError::result(format!(
-                            "target {index}: operation framing has forbidden or shadowed member {key:?}"
+                            "operation example {name:?} shadows typed member {key:?}"
                         )));
-                    }
-                }
-                if let Some(examples) = &operation.examples {
-                    for (name, example) in examples {
-                        if let Some(key) = example
-                            .additional_fields
-                            .keys()
-                            .find(|key| ["description", "input", "output"].contains(&key.as_str()))
-                        {
-                            return Err(InspectionError::result(format!(
-                                "target {index}: operation example {name:?} shadows typed member {key:?}"
-                            )));
-                        }
                     }
                 }
             }
         }
         Ok(())
+    }
+}
+
+impl Serialize for BindableTarget {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.validate().map_err(serde::ser::Error::custom)?;
+        TargetFields(self).serialize(serializer)
+    }
+}
+impl Serialize for SourceInspection {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.validate().map_err(serde::ser::Error::custom)?;
+        InspectionFields(self).serialize(serializer)
+    }
+}
+
+// Private wire views are used only after validation. They share one field mapping
+// across public Serde and bounded exact encoding without rechecking the full
+// inventory or allocating a second target collection during serialization.
+struct TargetFields<'a>(&'a BindableTarget);
+impl Serialize for TargetFields<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let target = self.0;
+        let mut map = serializer.serialize_map(None)?;
+        map.serialize_entry("sourceRef", &target.source_ref)?;
+        map.serialize_entry("binding", &target.binding)?;
+        if let Some(value) = &target.operation_key {
+            map.serialize_entry("operationKey", value)?;
+        }
+        if let Some(value) = &target.operation {
+            map.serialize_entry("operation", value)?;
+        }
+        map.end()
+    }
+}
+struct TargetFieldsList<'a>(&'a [BindableTarget]);
+impl Serialize for TargetFieldsList<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
+        for target in self.0 {
+            sequence.serialize_element(&TargetFields(target))?;
+        }
+        sequence.end()
+    }
+}
+struct InspectionFields<'a>(&'a SourceInspection);
+impl Serialize for InspectionFields<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(None)?;
+        map.serialize_entry("targets", &TargetFieldsList(&self.0.targets))?;
+        map.serialize_entry("exhaustive", &self.0.exhaustive)?;
+        if let Some(value) = &self.0.limitation {
+            map.serialize_entry("limitation", value)?;
+        }
+        map.end()
     }
 }
