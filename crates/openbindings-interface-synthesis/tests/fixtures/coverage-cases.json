@@ -1,0 +1,1049 @@
+{
+  "format": "openbindings.interface-synthesis-coverage-cases@1",
+  "tests": [
+    {
+      "description": "complete represented evidence links input source, emitted source, binding, operation",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getUser": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceKey": "api",
+          "sourceRef": "#/paths/~1users~1{id}/get",
+          "scope": "target",
+          "status": "represented",
+          "operationKey": "getUser",
+          "bindingKey": "getUser.api"
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": true,
+        "strictEligible": true
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "an exhaustive kind exclusion is honest but not fully represented",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceRef": "#/webhooks/onEvent/post",
+          "scope": "target",
+          "status": "excluded",
+          "reasonCode": "example.excluded",
+          "rule": "example.coverage@1: conformance/README.md#coverage-harness-kind",
+          "message": "The illustrative kind explicitly excludes this webhook unit."
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": false,
+        "strictEligible": true
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "non-exhaustive evidence can never claim full representation",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getUser": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceKey": "api",
+          "sourceRef": "#/paths/~1users~1{id}/get",
+          "scope": "target",
+          "status": "represented",
+          "operationKey": "getUser",
+          "bindingKey": "getUser.api"
+        }
+      ],
+      "exhaustive": false,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": false,
+        "strictEligible": false
+      },
+      "limitation": {
+        "code": "example.inventory-incomplete",
+        "message": "The producer could not inspect the complete declared inventory."
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "represented evidence is rejected when its binding key names no emitted binding",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getUser": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceKey": "api",
+          "sourceRef": "#/paths/~1users~1{id}/get",
+          "scope": "target",
+          "status": "represented",
+          "operationKey": "getUser",
+          "bindingKey": "getUser.missing"
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": false,
+        "errorContains": "no matching binding",
+        "strictEligible": false
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "lossy evidence must identify the represented path whose projection is incomplete",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getUser": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceRef": "#/paths/~1users~1{id}/get::projection::response",
+          "scope": "projection",
+          "status": "lossy",
+          "reasonCode": "openapi.schema_projection",
+          "message": "one upstream schema constraint has no exact OBI projection"
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": false,
+        "errorContains": "requires operationKey",
+        "strictEligible": false
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "a dependency unit an exclusion removed keeps dependency scope and carries the reason",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createJob": {},
+          "onJobDone": {}
+        },
+        "dependencies": {
+          "jobDone": {
+            "operation": "onJobDone"
+          }
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "createJob.api": {
+            "operation": "createJob",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1jobs/post"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceKey": "api",
+          "sourceRef": "#/paths/~1jobs/post",
+          "scope": "target",
+          "status": "represented",
+          "operationKey": "createJob",
+          "bindingKey": "createJob.api"
+        },
+        {
+          "sourceIndex": 0,
+          "sourceRef": "#/paths/~1jobs/post/callbacks/done/{$request.body#~1url}/post",
+          "scope": "dependency",
+          "status": "represented",
+          "dependencyKey": "jobDone"
+        },
+        {
+          "sourceIndex": 0,
+          "sourceRef": "#/webhooks/jobFailed/post",
+          "scope": "dependency",
+          "status": "excluded",
+          "reasonCode": "example.excluded",
+          "message": "The illustrative kind explicitly excludes this webhook unit.",
+          "rule": "example.coverage@1: conformance/README.md#coverage-harness-kind"
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": false,
+        "strictEligible": true
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "a represented dependency entry carrying emitted binding identity is rejected",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createJob": {},
+          "onJobDone": {}
+        },
+        "dependencies": {
+          "jobDone": {
+            "operation": "onJobDone"
+          }
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "createJob.api": {
+            "operation": "createJob",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1jobs/post"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceKey": "api",
+          "sourceRef": "#/paths/~1jobs/post",
+          "scope": "target",
+          "status": "represented",
+          "operationKey": "createJob",
+          "bindingKey": "createJob.api"
+        },
+        {
+          "sourceIndex": 0,
+          "sourceRef": "#/paths/~1jobs/post/callbacks/done/{$request.body#~1url}/post",
+          "scope": "dependency",
+          "status": "represented",
+          "operationKey": "onJobDone",
+          "bindingKey": "createJob.api",
+          "dependencyKey": "jobDone"
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": false,
+        "errorContains": "must not carry operation or binding identity",
+        "strictEligible": false
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "an emitted dependency with no represented or lossy dependency entry is rejected",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createJob": {},
+          "onJobDone": {}
+        },
+        "dependencies": {
+          "jobDone": {
+            "operation": "onJobDone"
+          }
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "createJob.api": {
+            "operation": "createJob",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1jobs/post"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceKey": "api",
+          "sourceRef": "#/paths/~1jobs/post",
+          "scope": "target",
+          "status": "represented",
+          "operationKey": "createJob",
+          "bindingKey": "createJob.api"
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": false,
+        "errorContains": "for 1 emitted dependencies",
+        "strictEligible": false
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "a lossy dependency counts as emitted while disclosing its incomplete contract",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createJob": {},
+          "onJobDone": {}
+        },
+        "dependencies": {
+          "jobDone": {
+            "operation": "onJobDone"
+          }
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "createJob.api": {
+            "operation": "createJob",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1jobs/post"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceKey": "api",
+          "sourceRef": "#/paths/~1jobs/post",
+          "scope": "target",
+          "status": "represented",
+          "operationKey": "createJob",
+          "bindingKey": "createJob.api"
+        },
+        {
+          "sourceIndex": 0,
+          "sourceRef": "dependency:lossy",
+          "scope": "dependency",
+          "status": "lossy",
+          "reasonCode": "example.loss",
+          "message": "The dependency contract is a lossy projection.",
+          "dependencyKey": "jobDone"
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": false,
+        "strictEligible": true
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "two dependencies have distinct corresponding evidence",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createJob": {},
+          "onJobDone": {}
+        },
+        "dependencies": {
+          "jobDone": {
+            "operation": "onJobDone"
+          },
+          "second": {
+            "operation": "onJobDone"
+          }
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "createJob.api": {
+            "operation": "createJob",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1jobs/post"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceKey": "api",
+          "sourceRef": "#/paths/~1jobs/post",
+          "scope": "target",
+          "status": "represented",
+          "operationKey": "createJob",
+          "bindingKey": "createJob.api"
+        },
+        {
+          "sourceIndex": 0,
+          "sourceRef": "#/paths/~1jobs/post/callbacks/done/{$request.body#~1url}/post",
+          "scope": "dependency",
+          "status": "represented",
+          "dependencyKey": "jobDone"
+        },
+        {
+          "sourceIndex": 0,
+          "sourceRef": "second",
+          "scope": "dependency",
+          "status": "represented",
+          "dependencyKey": "second"
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": true,
+        "strictEligible": true
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "matching counts with duplicate dependency evidence refuse",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createJob": {},
+          "onJobDone": {}
+        },
+        "dependencies": {
+          "jobDone": {
+            "operation": "onJobDone"
+          },
+          "second": {
+            "operation": "onJobDone"
+          }
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "createJob.api": {
+            "operation": "createJob",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1jobs/post"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceKey": "api",
+          "sourceRef": "#/paths/~1jobs/post",
+          "scope": "target",
+          "status": "represented",
+          "operationKey": "createJob",
+          "bindingKey": "createJob.api"
+        },
+        {
+          "sourceIndex": 0,
+          "sourceRef": "#/paths/~1jobs/post/callbacks/done/{$request.body#~1url}/post",
+          "scope": "dependency",
+          "status": "represented",
+          "dependencyKey": "jobDone"
+        },
+        {
+          "sourceIndex": 0,
+          "sourceRef": "second",
+          "scope": "dependency",
+          "status": "represented",
+          "dependencyKey": "jobDone"
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": false,
+        "errorContains": "dependency"
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "nonexistent dependency evidence refuses",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createJob": {},
+          "onJobDone": {}
+        },
+        "dependencies": {
+          "jobDone": {
+            "operation": "onJobDone"
+          },
+          "second": {
+            "operation": "onJobDone"
+          }
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "createJob.api": {
+            "operation": "createJob",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1jobs/post"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceKey": "api",
+          "sourceRef": "#/paths/~1jobs/post",
+          "scope": "target",
+          "status": "represented",
+          "operationKey": "createJob",
+          "bindingKey": "createJob.api"
+        },
+        {
+          "sourceIndex": 0,
+          "sourceRef": "#/paths/~1jobs/post/callbacks/done/{$request.body#~1url}/post",
+          "scope": "dependency",
+          "status": "represented",
+          "dependencyKey": "jobDone"
+        },
+        {
+          "sourceIndex": 0,
+          "sourceRef": "second",
+          "scope": "dependency",
+          "status": "represented",
+          "dependencyKey": "missing"
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": false,
+        "errorContains": "dependency"
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "duplicate unit dispositions refuse",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getUser": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceKey": "api",
+          "sourceRef": "#/paths/~1users~1{id}/get",
+          "scope": "target",
+          "status": "represented",
+          "operationKey": "getUser",
+          "bindingKey": "getUser.api"
+        },
+        {
+          "sourceIndex": 0,
+          "sourceKey": "api",
+          "sourceRef": "#/paths/~1users~1{id}/get",
+          "scope": "target",
+          "status": "represented",
+          "operationKey": "getUser",
+          "bindingKey": "getUser.api"
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": false,
+        "errorContains": "duplicate"
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "strict and full representation with invalid",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceRef": "#/paths/~1users~1{id}/get",
+          "scope": "target",
+          "status": "invalid",
+          "reasonCode": "example.reason",
+          "message": "Illustrative disposition."
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": true,
+        "strictEligible": true
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "strict and full representation with excluded",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceRef": "#/paths/~1users~1{id}/get",
+          "scope": "target",
+          "status": "excluded",
+          "reasonCode": "example.reason",
+          "message": "Illustrative disposition.",
+          "rule": "example.coverage@1: conformance/README.md#coverage-harness-kind"
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": false,
+        "strictEligible": true
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "strict and full representation with lossy",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getUser": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceKey": "api",
+          "sourceRef": "#/paths/~1users~1{id}/get",
+          "scope": "target",
+          "status": "lossy",
+          "operationKey": "getUser",
+          "bindingKey": "getUser.api",
+          "reasonCode": "example.reason",
+          "message": "Illustrative disposition."
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": false,
+        "strictEligible": true
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "strict and full representation with implementation-unsupported",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceRef": "#/paths/~1users~1{id}/get",
+          "scope": "target",
+          "status": "implementation-unsupported",
+          "reasonCode": "example.reason",
+          "message": "Illustrative disposition."
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": false,
+        "strictEligible": false
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

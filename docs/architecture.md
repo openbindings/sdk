@@ -51,3 +51,10 @@ The six public Rust workflows and TypeScript tests are architecture witnesses,
 not sample applications to be migrated. Broad invoker/synthesizer APIs, arbitrary
 JavaScript evaluator callbacks, a Node native addon, source retrieval and CLI/Panjir
 migration remain separate design work.
+
+`openbindings-interface-synthesis` is a separate optional role companion, with no
+dependency on inspection. Providers return editable candidates; the `Synthesizer`
+facade checks core conformance, source preservation and coverage correspondence
+before delivering immutable results. Strict refusal retains the checked document
+and evidence from that same call. Concrete source analysis and kind soundness
+remain provider responsibilities. See the [synthesis checkpoint](interface-synthesis-checkpoint.md).

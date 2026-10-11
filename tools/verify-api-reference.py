@@ -15,6 +15,7 @@ PUBLIC_CRATES = (
     "openbindings-http-discovery",
     "openbindings-schema-evaluator-test-support",
     "openbindings-source-inspection",
+    "openbindings-interface-synthesis",
 )
 
 
