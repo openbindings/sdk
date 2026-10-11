@@ -1,0 +1,521 @@
+{
+  "openbindings": "0.2.0",
+  "name": "Palette sketch assistant",
+  "version": "October study",
+  "description": "Synthetic design-workflow contracts grounded in Color Pizza: discover naming lists, find named colors, and request an SVG swatch. No adapter has been implemented or checked live.",
+  "operations": {
+    "findColorNames": {
+      "description": "Find color suggestions from a name of at least three characters, optionally in one naming list.",
+      "aliases": [
+        "palette.searchByName"
+      ],
+      "tags": [
+        "discovery",
+        "color"
+      ],
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 3
+          },
+          "list": {
+            "$ref": "https://example.invalid/dev/c02/list-name"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "output": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "palette": {
+                "$ref": "https://example.invalid/dev/c02/palette-types#/$defs/Palette"
+              }
+            },
+            "required": [
+              "palette"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "failure": {
+                "$ref": "https://example.invalid/dev/c02/palette-types#/$defs/Failure"
+              }
+            },
+            "required": [
+              "failure"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "examples": {
+        "indigoInBasic": {
+          "input": {
+            "name": "indigo",
+            "list": "basic"
+          },
+          "output": {
+            "palette": {
+              "colors": [
+                {
+                  "name": "Indigo",
+                  "hex": "#4B0082"
+                }
+              ]
+            }
+          }
+        },
+        "noNameFound": {
+          "output": {
+            "failure": {
+              "status": "404",
+              "message": "No color match"
+            }
+          }
+        }
+      },
+      "x-ui": {
+        "placeholder": "Try indigo"
+      }
+    },
+    "listColorLibraries": {
+      "description": "Discover available naming lists and their descriptive metadata.",
+      "tags": [
+        "discovery"
+      ],
+      "input": {
+        "type": "object",
+        "maxProperties": 0
+      },
+      "output": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "catalog": {
+                "$ref": "https://example.invalid/dev/c02/palette-types#/$defs/Catalog"
+              }
+            },
+            "required": [
+              "catalog"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "failure": {
+                "$ref": "https://example.invalid/dev/c02/palette-types#/$defs/Failure"
+              }
+            },
+            "required": [
+              "failure"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "examples": {
+        "basicOnly": {
+          "input": {},
+          "output": {
+            "catalog": {
+              "localAvailableColorNameLists": [
+                "basic"
+              ],
+              "listDescriptions": {
+                "basic": {
+                  "title": "Basic",
+                  "colorCount": 1
+                }
+              }
+            }
+          },
+          "description": "Illustrative payload, not the measured library contents."
+        }
+      }
+    },
+    "makeSwatch": {
+      "description": "Create a swatch as SVG text from the supplied color string and optional display name.",
+      "aliases": [
+        "palette.swatch"
+      ],
+      "tags": [
+        "preview"
+      ],
+      "deprecated": false,
+      "input": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "type": "string",
+            "description": "Provider describes hex without #; its schema does not assert a hex pattern."
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "color"
+        ],
+        "additionalProperties": false
+      },
+      "output": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "svg": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "svg"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "failure": {
+                "$ref": "https://example.invalid/dev/c02/palette-types#/$defs/Failure"
+              }
+            },
+            "required": [
+              "failure"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "examples": {
+        "tinySwatch": {
+          "input": {
+            "color": "4b0082",
+            "name": "Indigo"
+          },
+          "output": {
+            "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"1\" height=\"1\" fill=\"#4b0082\"/></svg>"
+          },
+          "x-render": "Text sample only; not executed or displayed."
+        }
+      }
+    }
+  },
+  "schemas": {
+    "PaletteTypes": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://example.invalid/dev/c02/palette-types",
+      "$defs": {
+        "Color": {
+          "properties": {
+            "distance": {
+              "type": "number"
+            },
+            "hex": {
+              "type": "string"
+            },
+            "hsl": {
+              "properties": {
+                "h": {
+                  "type": "number"
+                },
+                "l": {
+                  "type": "number"
+                },
+                "s": {
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            },
+            "lab": {
+              "properties": {
+                "a": {
+                  "type": "number"
+                },
+                "b": {
+                  "type": "number"
+                },
+                "l": {
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            },
+            "luminance": {
+              "type": "number"
+            },
+            "luminanceWCAG": {
+              "type": "number"
+            },
+            "name": {
+              "type": "string"
+            },
+            "requestedHex": {
+              "type": "string"
+            },
+            "rgb": {
+              "properties": {
+                "b": {
+                  "type": "integer"
+                },
+                "g": {
+                  "type": "integer"
+                },
+                "r": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            },
+            "svg": {
+              "type": "string"
+            },
+            "svgNamed": {
+              "type": "string"
+            },
+            "swatchImg": {
+              "type": "object"
+            }
+          },
+          "type": "object"
+        },
+        "Failure": {
+          "properties": {
+            "message": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "ListDescription": {
+          "properties": {
+            "colorCount": {
+              "type": "integer"
+            },
+            "description": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
+            },
+            "license": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Palette": {
+          "type": "object",
+          "properties": {
+            "colors": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Color"
+              }
+            },
+            "paletteTitle": {
+              "type": "string"
+            }
+          }
+        },
+        "Catalog": {
+          "type": "object",
+          "properties": {
+            "listDescriptions": {
+              "type": "object",
+              "properties": {
+                "default": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "bestOf": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "wikipedia": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "french": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "ridgway": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "risograph": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "basic": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "chineseTraditional": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "html": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "japaneseTraditional": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "leCorbusier": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "nbsIscc": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "ntc": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "osxcrayons": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "ral": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "sanzoWadaI": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "thesaurus": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "werner": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "windows": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "x11": {
+                  "$ref": "#/$defs/ListDescription"
+                },
+                "xkcd": {
+                  "$ref": "#/$defs/ListDescription"
+                }
+              }
+            },
+            "localAvailableColorNameLists": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "sources": {
+    "pizza": {
+      "kind": "palette-pizza-plan:1",
+      "content": [
+        "https://api.apis.guru/v2/specs/color.pizza/1.0.0/openapi.json",
+        "OpenAPI 3.0.3",
+        {
+          "base": "https://api.color.pizza/v1/"
+        }
+      ],
+      "description": "Private tuple form: [artifact address, dialect label, runtime context]."
+    },
+    "previewBridge": {
+      "kind": "palette-preview-callback:1",
+      "content": null,
+      "description": "Null means an application injects a callback registry. No callback is supplied here."
+    }
+  },
+  "bindings": {
+    "pizza.name": {
+      "operation": "findColorNames",
+      "source": "pizza",
+      "idempotent": true,
+      "content": {
+        "get": "/names/",
+        "queryFields": [
+          "name",
+          "list"
+        ],
+        "successBox": "palette"
+      },
+      "preference": 20
+    },
+    "pizza.lists": {
+      "operation": "listColorLibraries",
+      "source": "pizza",
+      "idempotent": true,
+      "content": {
+        "get": "/lists/",
+        "queryFields": [],
+        "successBox": "catalog"
+      }
+    },
+    "pizza.svg": {
+      "operation": "makeSwatch",
+      "source": "pizza",
+      "idempotent": true,
+      "content": {
+        "get": "/swatch/",
+        "queryFields": [
+          "color",
+          "name"
+        ],
+        "successBox": "svg",
+        "bodyEncoding": "UTF-8 text"
+      },
+      "preference": 20,
+      "deprecated": false
+    },
+    "app.svg": {
+      "operation": "makeSwatch",
+      "source": "previewBridge",
+      "content": "svgSwatch",
+      "preference": 0,
+      "description": "Hypothetical application callback implementing the same complete operation contract.",
+      "x-context": {
+        "timeoutMs": 1500
+      }
+    }
+  },
+  "dependencies": {
+    "suggestions": {
+      "operation": "findColorNames",
+      "kinds": [
+        "palette-pizza-plan:1"
+      ],
+      "description": "Name entry consumes successful suggestions and failure payloads."
+    },
+    "swatchPreview": {
+      "operation": "makeSwatch",
+      "kinds": [
+        "palette-preview-callback:1",
+        "palette-pizza-plan:1"
+      ],
+      "description": "Either exact kind is acceptable; this does not select an available target.",
+      "x-owner": "preview panel"
+    }
+  },
+  "x-study": [
+    "private development",
+    {
+      "$ref": "../this-is-opaque",
+      "bindingState": "hypothetical"
+    }
+  ]
+}

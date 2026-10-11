@@ -4,6 +4,26 @@ use jsonschema::json::{Array, Json, JsonNumber, Node, NodeIdentity, Object};
 use jsonschema_value::{LazyInstance, ob_decimal::Decimal, types::JsonType};
 use serde_json::Value;
 use std::{borrow::Cow, sync::OnceLock};
+
+/// Borrow one object member by source position, without visiting preceding members.
+/// This internal bridge helper preserves duplicate names and exact name tokens.
+pub fn member_at(value: crate::JsonRef<'_>, index: usize) -> Option<crate::JsonMember<'_>> {
+    let Kind::Object(members) = &value.owner.nodes[value.id].kind else {
+        return None;
+    };
+    let member = members.get(index)?;
+    Some(crate::JsonMember {
+        name: crate::JsonRef {
+            owner: value.owner,
+            id: member.key,
+        },
+        value: crate::JsonRef {
+            owner: value.owner,
+            id: member.value,
+        },
+    })
+}
+
 pub struct FlatJson;
 #[derive(Clone, Copy)]
 pub enum View<'a> {
@@ -378,6 +398,30 @@ pub fn view(value: &crate::JsonValue) -> View<'_> {
 pub fn pointer(value: &crate::JsonValue) -> Option<String> {
     value.owner.pointer(value.id)
 }
+/// Measure separately owned decoded UTF-8 strings in a borrowed exact subtree,
+/// including member names. Raw source bytes are excluded. Unescaped strings borrow
+/// their source; escaped scalar strings own their complete decoded value. This
+/// visits the existing flat nodes without parsing or allocating. `None` means the
+/// byte limit is exceeded or the subtree contains non-scalar UTF-16 strings.
+pub fn decoded_string_size(value: crate::JsonRef<'_>, limit: usize) -> Option<usize> {
+    let end = value.owner.nodes[value.id].span.end;
+    let mut size = 0usize;
+    for node in value.owner.nodes[value.id..]
+        .iter()
+        .take_while(|node| node.span.start < end)
+    {
+        if let Kind::String { decoded, unpaired } = &node.kind {
+            if unpaired.is_some() {
+                return None;
+            }
+            size = size.checked_add(decoded.as_ref().map_or(0, |s| s.len()))?;
+            if size > limit {
+                return None;
+            }
+        }
+    }
+    Some(size)
+}
 /// Measure an escaped source pointer before allocating it. `None` means that
 /// the pointer is unavailable or would exceed the caller's remaining byte budget.
 pub fn pointer_size(value: crate::JsonRef<'_>, limit: usize) -> Option<usize> {
@@ -560,6 +604,22 @@ pub fn duplicate_nodes(
     })
 }
 
+/// Borrow each offending repeated member-name token in parse order. Distinct
+/// occurrences can share a JSON Pointer but retain distinct original byte spans.
+/// This exposes the parser's existing key identities without rescanning objects.
+pub fn duplicate_member_names(
+    value: &crate::JsonValue,
+) -> impl ExactSizeIterator<Item = crate::JsonRef<'_>> {
+    value
+        .owner
+        .duplicates
+        .iter()
+        .map(|(_, key)| crate::JsonRef {
+            owner: &value.owner,
+            id: *key,
+        })
+}
+
 pub fn depth(value: &crate::JsonValue) -> usize {
     let span = &value.owner.nodes[value.id].span;
     let end = value
@@ -590,6 +650,76 @@ pub fn live_arenas() -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn decoded_string_size_counts_owned_subtree_strings_without_ancestors_or_siblings() {
+        let value = crate::JsonValue::parse(
+            r#"{"outside\n":"sibling\t","nested":{"key\"":"raw雪","list":["a\/b","\uD83D\uDE00",{"\u006b":"end\n"}]},"after":"other\r"}"#,
+        ).unwrap();
+        let nested = value.at("/nested").unwrap();
+        // key\" (4), a\/b (3), emoji (4 UTF-8), \u006b (1), end\n (4).
+        assert_eq!(decoded_string_size(nested, 16), Some(16));
+        assert_eq!(decoded_string_size(nested, 15), None);
+        assert_eq!(
+            decoded_string_size(value.at("/nested/key\"").unwrap(), 0),
+            Some(0)
+        );
+        assert_eq!(
+            decoded_string_size(value.at("/nested/list/1").unwrap(), 4),
+            Some(4)
+        );
+        assert_eq!(decoded_string_size(value.view(), 38), Some(38));
+        let unsupported = crate::JsonValue::parse(r#"["\ud800"]"#).unwrap();
+        assert_eq!(decoded_string_size(unsupported.view(), usize::MAX), None);
+    }
+    #[test]
+    fn indexed_members_preserve_each_exact_occurrence() {
+        let source = r#"{"z":9007199254740993,"\ud800":null,"z":0.29000000000000001}"#;
+        let value = crate::JsonValue::parse(source).unwrap();
+        for (index, (name, text)) in [
+            (r#""z""#, "9007199254740993"),
+            (r#""\ud800""#, "null"),
+            (r#""z""#, "0.29000000000000001"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let member = member_at(value.view(), index).unwrap();
+            assert_eq!(member.name.text(), name);
+            assert_eq!(member.value.text(), text);
+        }
+        let first = member_at(value.view(), 0).unwrap();
+        let last = member_at(value.view(), 2).unwrap();
+        assert_ne!(
+            first.name.location().byte_offset,
+            last.name.location().byte_offset
+        );
+        let retained = last.value.to_owned();
+        assert!(member_at(value.view(), 3).is_none());
+        assert!(member_at(value.view(), usize::MAX).is_none());
+        drop(value);
+        assert_eq!(retained.text(), "0.29000000000000001");
+        for source in ["{}", "[]", "[1]", "null", "1", "true", r#""text""#] {
+            let value = crate::JsonValue::parse(source).unwrap();
+            assert!(member_at(value.view(), 0).is_none());
+        }
+    }
+
+    #[test]
+    fn duplicate_member_names_keep_each_original_token_occurrence() {
+        let source = r#"{"a/~":{"k":0,"k":1,"k":2},"\ud800":{"j":0,"j":1}}"#;
+        let value = crate::JsonValue::parse(source).unwrap();
+        assert_eq!(duplicate_member_names(&value).len(), 3);
+        let nodes: Vec<_> = duplicate_member_names(&value).collect();
+        let at = locations(&nodes);
+        assert_eq!(at[0].pointer.as_deref(), Some("/a~1~0/k"));
+        assert_eq!(at[1].pointer, at[0].pointer);
+        assert_eq!(at[0].byte_offset, source.find("\"k\":1").unwrap());
+        assert_eq!(at[1].byte_offset, source.find("\"k\":2").unwrap());
+        assert_eq!(at[2].pointer, None);
+        assert_eq!(at[2].byte_offset, source.find("\"j\":1").unwrap());
+        assert_eq!(duplicate_member_names(&value).take(1).count(), 1);
+    }
+
     #[test]
     fn duplicate_locations_are_materialized_only_for_retained_nodes() {
         let source = format!(

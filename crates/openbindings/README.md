@@ -36,6 +36,21 @@ source locations. Use its text/bytes for values such as 9007199254740993. Typed
 unknown members but cannot shadow typed fields. Building is separate from checking
 conformance. JSON input defaults to 64 MiB, 10,000 containers and 1,000,000 nodes.
 
+To edit an existing document, call `ParsedDocument::to_authoring()`, update the
+builder, then `build()` and assess the new snapshot. Typed fields are re-encoded:
+integer preferences such as `1.0` or `1e0` become `1`, and `-0` becomes `0`.
+Opaque exact values keep their numeric tokens. Operation renaming leaves reference
+updates to the caller.
+
+The packaged [exact object editing example](examples/exact_edit.rs) replaces one
+opaque member using public traversal, exact `JsonValue` children and their Serde
+representation. It uses the same builder path and verifies the result after the
+input owners are dropped. Its generic application helper requires unique names
+throughout the subtree and UTF-8-representable member names; it refuses absent
+members. It serializes/parses the entire changed object and orders its immediate
+names in a `BTreeMap`. Formatting, ordering and member-name escaping may change.
+This helper is example code, not another SDK export or a general JSON Patch API.
+
 Operation validation uses explicit `ResourceSet`, `SchemaEvaluator` and immutable
 `ValueContracts`. Select the separate `openbindings-json-schema-evaluator` companion
 or implement the trait. Prepared contracts retain required owners after document
@@ -57,6 +72,20 @@ are advisory; use rule/code fields for classification and quote pointers when
 rendering caller-controlled text.
 Resources are immutable and caller supplied; acquisition URLs do not change schema
 bases. Anonymous document and dynamic scope remain part of interpretation.
+
+The bundled resolver and default evaluator give a unique contained declared ID
+priority over supplied names; packaged standards are the final fallback. Supplied
+retrieval aliases and declared IDs compete equally when no contained ID owns the
+name. A reached carrier must itself own its canonical ID: aliases, pointers and
+direct applicators into a competing carrier conservatively refuse preparation.
+Unused conflicts do not poison other contracts, and an independently named nested
+resource retains its original base and dialect. No schema-body comparison, alias
+transfer or missing-fragment fallback occurs. `SchemaRequest::supplied_resources()`
+retains the original catalog. `SchemaLocation.resource` records original retrieval
+provenance, which need not be the winning lookup association for that URI. Replacing
+resources requires a new immutable context; retained contracts keep their inputs.
+Name comparison remains exact after RFC resolution, literal-dot removal and empty
+fragment removal, without added case folding or percent-encoding equivalence.
 
 Version 0.2.0-alpha.1 is an unpublished candidate requiring Rust 1.99. Applied
 specification revision: 2f7d754dc2da374058cd517064c17e50f7d95d99. Package publication

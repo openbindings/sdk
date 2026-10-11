@@ -240,7 +240,7 @@ export function fixedDiagnosticCases(sdk) {
       const expected = Math.min(
         count,
         4096,
-        Math.floor((8 * 1024 * 1024) / (name.length + 1)),
+        Math.floor((8 * 1024 * 1024) / (name.length + 3)),
       );
       check(
         report.findings.length === expected,
@@ -255,18 +255,32 @@ export function fixedDiagnosticCases(sdk) {
           report.evidence["OBI-02"] === "not-applicable",
         "duplicate evidence is independent of retention",
       );
+      // The first occurrence is valid; every later occurrence names its own
+      // offending key token, even though all occurrences share one pointer.
+      let tokenOffset = text.indexOf('"k":0');
+      const offsets = new Set();
       for (const finding of report.findings) {
+        tokenOffset = text.indexOf('"k":0', tokenOffset + 1);
         check(finding.code === "duplicate-member", "duplicate code preserved");
         check(
-          finding.location.pointer === "/" + name,
-          "containing-object pointer preserved",
+          finding.location.pointer === "/" + name + "/k",
+          "offending-name pointer preserved",
         );
         check(
-          finding.location.byteOffset === text.indexOf('{"k":'),
-          "original containing-object offset preserved",
+          finding.location.byteOffset === tokenOffset,
+          "original offending-name offset preserved in ASCII fixture",
         );
         check(finding.location.line === 2, "original line preserved");
+        check(
+          finding.location.byteColumn === tokenOffset - text.indexOf("\n"),
+          "original offending-name byte column preserved",
+        );
+        offsets.add(finding.location.byteOffset);
       }
+      check(
+        offsets.size === expected,
+        "duplicate occurrences have distinct offsets",
+      );
       results.push({
         name: `duplicate bounds ${name.length} ${count}`,
         findings: report.findings.length,

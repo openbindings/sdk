@@ -54,6 +54,27 @@ Ready owners survive document/context drop and cache eviction. Cancellation of
 preparation yields no ready owner; retry uses a healthy context. Cancellation of a
 value check leaves a retained ready contract usable.
 
+Qualified missing-resource contracts now prepare ready under the default evaluator,
+including bare missing `$ref` and known alias chains. Resource-dependent values
+return `ResourceUnavailable` during validation. Existing code must handle no verdict
+in both phases. Known branch-independent values can now satisfy or fail with the
+original resource set; `anyOf(true, missing-U)` is a declared capability expansion.
+`anyOf(true, invalid-known-pattern)` still refuses. Ready owners remain bound to
+their original snapshots; supplying resources means creating a new context.
+Inspect `PreparedContract::resource_completeness()` / `resourceCompleteness` before
+replacing a service/editor snapshot if the application requires complete resources.
+Ready plus Incomplete is usable for partial preview. Complete still allows budget,
+cancellation and unsupported-instance no verdicts. Rust evidence is borrowed;
+TypeScript evidence is frozen, cached and checked for disposed-handle access.
+Existing custom PreparedSchema implementations default to Undeclared and require
+caller policy; the new defaulted method is source-compatible, although a same-named
+extension-trait method may need qualification. Custom evaluators still receive
+original requests and keep their own refusal policy. Declined default bounds planning
+again returns the original located ResourceUnavailable for fragment qualification and
+bounds-only admission. Direct evaluation_bounds calls retain the actual planner cause. Their strict projection helper has not changed. The optional Rust adapter
+addition is [paired evaluation bounds](partial-resource-bounds.md), with consuming
+`into_parts()` in `(lower, upper, unavailable)` order.
+
 `AuthoringError` fields are private: use `kind()`, `draft_pointer()`,
 `source_location()` and `message()`. Native draft paths spell `additional_fields`;
 TypeScript paths spell `additionalFields`; neither is an original source pointer.

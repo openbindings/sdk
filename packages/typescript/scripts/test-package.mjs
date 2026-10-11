@@ -31,6 +31,7 @@ try {
     "first-use-node.mjs",
     "first-use.html",
     "service-lifecycle.mjs",
+    "inspect-edit.ts",
   ])
     assert(
       packed[0].files.some((file) => file.path === "examples/" + name),
@@ -59,6 +60,10 @@ try {
     readFileSync(join(installed, "README.md"), "utf8"),
   );
   writeFileSync(join(temporary, "readme.ts"), snippet);
+  copyFileSync(
+    join(installed, "examples/inspect-edit.ts"),
+    join(temporary, "inspect-edit.ts"),
+  );
   execFileSync(
     process.execPath,
     [
@@ -75,6 +80,7 @@ try {
       "--outDir",
       join(temporary, "readme-build"),
       join(temporary, "readme.ts"),
+      join(temporary, "inspect-edit.ts"),
     ],
     { cwd: temporary, stdio: "inherit" },
   );
@@ -123,6 +129,10 @@ console.log("Installed README TypeScript first-use block compiled and ran verbat
     join(root, "test/diagnostic-details-cases.mjs"),
     join(temporary, "diagnostic-details-cases.mjs"),
   );
+  copyFileSync(
+    join(root, "test/inspect-edit-example-cases.mjs"),
+    join(temporary, "inspect-edit-example-cases.mjs"),
+  );
   const declaration = readFileSync(
     join(installed, "dist/internal.d.ts"),
     "utf8",
@@ -142,6 +152,8 @@ import { fixedDiagnosticCases } from "./fixed-diagnostic-cases.mjs";
 import { diagnosticPolicyCases } from "./diagnostic-policy-cases.mjs";
 import { diagnosticBudgetCases } from "./diagnostic-budget-cases.mjs";
 import { diagnosticDetailsCases } from "./diagnostic-details-cases.mjs";
+import { inspectEditExampleCases } from "./inspect-edit-example-cases.mjs";
+import * as inspectionEditing from "./readme-build/inspect-edit.js";
 const { initialize, parseDocument } = sdk;
 const resolved = fileURLToPath(import.meta.resolve("@openbindings/sdk"));
 assert.equal(await realpath(resolved), resolved, "Package must not resolve through a workspace symlink");
@@ -157,6 +169,7 @@ try {
   parsed.value.dispose();
 }
 console.log(JSON.stringify({ installedPackage: true, ...await apiQualityCases(sdk, http), fixedDiagnostics: fixedDiagnosticCases(sdk), ...diagnosticPolicyCases(sdk), ...diagnosticBudgetCases(sdk), ...diagnosticDetailsCases(sdk) }));
+console.log(JSON.stringify(inspectEditExampleCases(sdk, inspectionEditing)));
 `,
   );
   execFileSync(process.execPath, [join(temporary, "consumer.mjs")], {

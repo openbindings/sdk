@@ -17,7 +17,7 @@ fn pinned_suite_and_adversarial_contracts() {
     }
     assert!(report.is_success(), "{:?}", report.configuration_failures);
     assert_eq!(report.observations.len(), 1566);
-    assert_eq!(report.refusal_count(), 43);
+    assert_eq!(report.refusal_count(), 42);
 }
 #[test]
 fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {

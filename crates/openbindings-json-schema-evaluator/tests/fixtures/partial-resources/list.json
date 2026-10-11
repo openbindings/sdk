@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dev/c02/list-name",
+  "title": "Pinned Color Pizza list choices",
+  "enum": [
+    "default",
+    "bestOf",
+    "wikipedia",
+    "french",
+    "ridgway",
+    "risograph",
+    "basic",
+    "chineseTraditional",
+    "html",
+    "japaneseTraditional",
+    "leCorbusier",
+    "nbsIscc",
+    "ntc",
+    "osxcrayons",
+    "ral",
+    "sanzoWadaI",
+    "thesaurus",
+    "werner",
+    "windows",
+    "x11",
+    "xkcd"
+  ],
+  "type": "string"
+}

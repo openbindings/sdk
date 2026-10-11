@@ -207,10 +207,10 @@ export function diagnosticPolicyCases(sdk) {
         }
       }
     }
-    for (const reference of [
-      secret,
-      secret + "\nSECRET-control",
-      "https://example.invalid/" + "SECRET-long".repeat(2000),
+    for (const [reference, qualified] of [
+      [secret, true],
+      [secret + "\nSECRET-control", false],
+      ["https://example.invalid/" + "SECRET-long".repeat(2000), true],
     ]) {
       const doc = withSchema({ $ref: reference });
       const report = doc.references();
@@ -220,11 +220,19 @@ export function diagnosticPolicyCases(sdk) {
       );
       safe(report.references[0].resolution.detail.message);
       const state = own(doc.contracts()).prepare("op", "input");
-      check(
-        state.status === "no-verdict",
-        "unresolved reference refuses preparation",
-      );
-      safe(state.detail.message);
+      if (qualified) {
+        check(state.status === "ready", "qualified missing reference prepares");
+        const result = own(state.contract).validate(null);
+        check(
+          result.outcome === "no-verdict" &&
+            result.detail.reason === "resource-unavailable",
+          "bare missing reference refuses dependent validation",
+        );
+        safe(result.detail.message);
+      } else {
+        check(state.status === "no-verdict", "invalid reference refuses setup");
+        safe(state.detail.message);
+      }
     }
     const ambiguous = withSchema({
       $ref: "https://example.invalid/SECRET-id",

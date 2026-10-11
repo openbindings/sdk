@@ -1,0 +1,1538 @@
+//! Compositional validity bounds. Strict and positive-only encodings stay separate.
+mod oneof;
+use super::*;
+use crate::contracts::ProgramOrigin;
+use openbindings_internal_json::backend::{decoded_string_size, pointer_size};
+use std::{
+    fmt::{self, Write},
+    sync::Arc,
+};
+
+const TEXT_LIMIT: usize = 64 * 1024 * 1024;
+const NODE_LIMIT: usize = 100_000;
+const EDGE_LIMIT: usize = 200_000;
+const HOLE_LIMIT: usize = 100_000;
+const NAMESPACE: &str = "https://sdk-bounds.openbindings.invalid/";
+const UNAVAILABLE_CODE: &str = "resource-unavailable";
+const UNAVAILABLE_MESSAGE: &str = "validity could depend on a resource that was not supplied";
+
+#[derive(Clone, Copy)]
+struct Admission {
+    text: usize,
+    scratch: usize,
+    nodes: usize,
+    edges: usize,
+    holes: usize,
+    generated_nodes: usize,
+    generated_edges: usize,
+    #[cfg(test)]
+    output_fault: OutputFault,
+}
+impl Default for Admission {
+    fn default() -> Self {
+        Self {
+            text: TEXT_LIMIT,
+            scratch: TEXT_LIMIT,
+            nodes: NODE_LIMIT,
+            edges: EDGE_LIMIT,
+            holes: HOLE_LIMIT,
+            generated_nodes: 100_000,
+            generated_edges: 200_000,
+            #[cfg(test)]
+            output_fault: OutputFault::default(),
+        }
+    }
+}
+// Private fault injection after count admission; absent from production builds.
+#[cfg(test)]
+#[derive(Clone, Copy, Default)]
+struct OutputFault {
+    size: isize,
+    decoded: isize,
+    nodes: isize,
+    edges: isize,
+    cancel: bool,
+}
+#[cfg(test)]
+impl OutputFault {
+    fn bytes(self, size: usize, decoded: usize, control: &WorkControl) -> (usize, usize) {
+        if self.cancel {
+            control.cancel();
+        }
+        (
+            size.checked_add_signed(self.size)
+                .expect("test byte perturbation"),
+            decoded
+                .checked_add_signed(self.decoded)
+                .expect("test decoded perturbation"),
+        )
+    }
+}
+#[derive(Clone, Copy, PartialEq)]
+enum Influence {
+    Positive,
+    OneOf,
+    Excluded,
+}
+#[derive(Clone, Copy)]
+struct Edge {
+    from: usize,
+    to: usize,
+    influence: Influence,
+}
+#[derive(Default)]
+struct Plan {
+    reach: Reach,
+    dependencies: Vec<Edge>,
+    holes: HashSet<usize>,
+    hole_order: Vec<usize>,
+    first_hole: Option<usize>,
+    edge_count: usize,
+    // Numeric namespace segments only: original resolved identities remain borrowed.
+    occupied_namespaces: HashSet<usize>,
+    namespace: usize,
+    dependent: HashSet<usize>,
+    oneofs: HashSet<usize>,
+}
+#[derive(Clone, Copy)]
+enum Children {
+    Map,
+    List,
+    Single,
+}
+#[derive(Clone, Copy)]
+struct Policy {
+    shape: Children,
+    inplace: bool,
+    influence: Influence,
+}
+// This is the only partial influence policy. $defs/annotations are not edges.
+fn policy(keyword: &str, has_if: bool) -> Option<Policy> {
+    use Children::*;
+    use Influence::*;
+    let (shape, inplace, influence) = match keyword {
+        "properties" | "patternProperties" => (Map, false, Positive),
+        "dependentSchemas" => (Map, true, Positive),
+        "allOf" | "anyOf" => (List, true, Positive),
+        "prefixItems" => (List, false, Positive),
+        "additionalProperties" | "propertyNames" | "items" => (Single, false, Positive),
+        "oneOf" => (List, true, OneOf),
+        "not" => (Single, true, Excluded),
+        "if" | "then" | "else" if has_if => (Single, true, Excluded),
+        "contains" => (Single, false, Excluded),
+        _ => return None,
+    };
+    Some(Policy {
+        shape,
+        inplace,
+        influence,
+    })
+}
+fn limit(code: &str, message: &str) -> NoVerdict {
+    NoVerdict::new(NoVerdictReason::LimitExceeded, code, message)
+}
+fn text_limit() -> NoVerdict {
+    limit(
+        "partial-program-byte-limit",
+        "paired projection text exceeds 64 MiB",
+    )
+}
+fn output_mismatch() -> NoVerdict {
+    NoVerdict::new(
+        NoVerdictReason::EvaluatorFailure,
+        "projection-output-mismatch",
+        "projection output does not match the admitted counts",
+    )
+}
+fn output_failure(control: &WorkControl) -> NoVerdict {
+    control.check().err().unwrap_or_else(output_mismatch)
+}
+fn add_bytes(total: &mut usize, size: usize, cap: usize) -> Result<(), NoVerdict> {
+    *total = total
+        .checked_add(size)
+        .filter(|n| *n <= cap)
+        .ok_or_else(text_limit)?;
+    Ok(())
+}
+impl Plan {
+    fn edge(&mut self, cap: Admission) -> Result<(), NoVerdict> {
+        if self.edge_count >= cap.edges {
+            return Err(limit(
+                "schema-edge-limit",
+                "partial preparation exceeds 200,000 dependency edges",
+            ));
+        }
+        self.edge_count += 1;
+        Ok(())
+    }
+    fn child(
+        &mut self,
+        from: usize,
+        to: usize,
+        policy: Policy,
+        queue: &mut VecDeque<usize>,
+        cap: Admission,
+    ) -> Result<(), NoVerdict> {
+        self.edge(cap)?;
+        self.dependencies.push(Edge {
+            from,
+            to,
+            influence: policy.influence,
+        });
+        if policy.inplace {
+            self.reach.edges.entry(from).or_default().push(to);
+        }
+        queue.push_back(to);
+        Ok(())
+    }
+    fn qualify(
+        &mut self,
+        space: &SchemaSpace,
+        control: &WorkControl,
+        cap: Admission,
+    ) -> Result<(), NoVerdict> {
+        let mut reverse: HashMap<usize, Vec<&Edge>> = HashMap::new();
+        for edge in &self.dependencies {
+            reverse.entry(edge.to).or_default().push(edge);
+        }
+        let mut dependent = self.holes.clone();
+        let mut queue: VecDeque<_> = self.hole_order.iter().copied().collect();
+        while let Some(id) = queue.pop_front() {
+            control.check()?;
+            for edge in reverse.get(&id).into_iter().flatten() {
+                if edge.influence == Influence::Excluded {
+                    return Err(space.bounds_failure(
+                        NoVerdict::new(
+                            NoVerdictReason::ConservativePreparation,
+                            "partial-nonpositive-influence",
+                            "an unavailable reference influences an unqualified applicator",
+                        ),
+                        edge.to,
+                        "",
+                        Some(edge.from),
+                        cap,
+                    ));
+                }
+                if edge.influence == Influence::OneOf {
+                    self.oneofs.insert(edge.from);
+                }
+                if dependent.insert(edge.from) {
+                    queue.push_back(edge.from);
+                }
+            }
+        }
+        self.dependent = dependent;
+        Ok(())
+    }
+}
+impl SchemaSpace {
+    // Refusal locations are retained independently of a successful paired plan.
+    // Measure the full pointer before location() allocates it (including a
+    // supplied value's stripped prefix), and account for a keyword suffix too.
+    fn bounds_location(&self, id: usize, suffix: &str, cap: Admission) -> Option<SchemaLocation> {
+        let node = &self.nodes[id];
+        let source = &self.sources[node.source];
+        let full = pointer_size(node.value.view(), cap.scratch)?;
+        pointer_size(source.value.view(), cap.scratch)?;
+        if full.checked_add(suffix.len())? > cap.scratch
+            || source.uri.as_ref().is_some_and(|s| s.len() > cap.scratch)
+        {
+            return None;
+        }
+        let mut location = self.location(id);
+        location.pointer.push_str(suffix);
+        Some(location)
+    }
+    fn bounds_failure(
+        &self,
+        mut detail: NoVerdict,
+        id: usize,
+        suffix: &str,
+        fallback: Option<usize>,
+        cap: Admission,
+    ) -> NoVerdict {
+        if detail.location.is_none() {
+            detail.location = self
+                .bounds_location(id, suffix, cap)
+                .or_else(|| fallback.and_then(|boundary| self.bounds_location(boundary, "", cap)));
+        }
+        detail
+    }
+    pub(crate) fn bounds(
+        &self,
+        entry: usize,
+        control: &WorkControl,
+    ) -> Result<EvaluationBounds, NoVerdict> {
+        self.bounds_admitted(entry, control, Admission::default())
+    }
+    // Scratch guard is separate from retained text. Resolver errors allocate
+    // original locations; measure before calling the unchanged strict resolver.
+    fn bounds_scratch(&self, id: usize, reference: &str, cap: Admission) -> Result<(), NoVerdict> {
+        let node = &self.nodes[id];
+        let base = self.resources[node.resource].base.as_deref().unwrap_or("");
+        if reference.len().saturating_add(base.len()) > cap.scratch
+            || pointer_size(node.value.view(), cap.scratch).is_none()
+            || self.sources[node.source]
+                .uri
+                .as_ref()
+                .is_some_and(|s| s.len() > cap.scratch)
+        {
+            return Err(limit(
+                "partial-scratch-limit",
+                "reference inputs or full source pointer exceed the 64 MiB scratch guard",
+            ));
+        }
+        Ok(())
+    }
+    fn partial_reach(
+        &self,
+        entry: usize,
+        control: &WorkControl,
+        cap: Admission,
+    ) -> Result<Plan, NoVerdict> {
+        let mut out = Plan::default();
+        let mut queue = VecDeque::from([entry]);
+        while let Some(id) = queue.pop_front() {
+            control.check()?;
+            if out.reach.nodes.contains(&id) {
+                continue;
+            }
+            if out.reach.nodes.len() >= cap.nodes {
+                return Err(self.bounds_failure(
+                    limit(
+                        "schema-node-limit",
+                        "preparation reached more than 100,000 schema nodes",
+                    ),
+                    id,
+                    "",
+                    Some(entry),
+                    cap,
+                ));
+            }
+            out.reach.nodes.insert(id);
+            self.bounds_scratch(id, "", cap)
+                .map_err(|detail| self.bounds_failure(detail, id, "", Some(entry), cap))?;
+            self.check_known_node(id)?;
+            let node = &self.nodes[id];
+            out.reach.resources.insert(node.resource);
+            let has_if = node.value.get("if").is_some();
+            for member in node.value.view().members().into_iter().flatten() {
+                let keyword = member.name.as_str().unwrap_or("");
+                if matches!(
+                    keyword,
+                    "unevaluatedProperties" | "unevaluatedItems" | "$dynamicRef" | "$dynamicAnchor"
+                ) {
+                    return Err(self.bounds_failure(NoVerdict::new(
+                        NoVerdictReason::ConservativePreparation,
+                        "partial-annotation-or-dynamic",
+                        "partial bounds do not support evaluated unevaluated or dynamic keywords",
+                    ), id, &format!("/{keyword}"), Some(id), cap));
+                }
+                if keyword == "$ref" {
+                    let reference = member.value.as_str().expect("known meta-schema check");
+                    self.bounds_scratch(id, reference, cap).map_err(|detail| {
+                        self.bounds_failure(detail, id, "/$ref", Some(id), cap)
+                    })?;
+                    let mut occupied_suffix = None;
+                    let resolved = self.resolve_with_missing(id, reference, &mut |name| {
+                        occupied_suffix = private_namespace(name);
+                    });
+                    match resolved {
+                        Ok(target) => {
+                            out.child(
+                                id,
+                                target.node,
+                                Policy {
+                                    shape: Children::Single,
+                                    inplace: true,
+                                    influence: Influence::Positive,
+                                },
+                                &mut queue,
+                                cap,
+                            )
+                            .map_err(|detail| {
+                                self.bounds_failure(detail, id, "/$ref", Some(id), cap)
+                            })?;
+                            out.reach.targets.insert((id, "$ref".into()), target);
+                        }
+                        Err(detail)
+                            if detail.reason == NoVerdictReason::ResourceUnavailable
+                                && detail.code == UNAVAILABLE_CODE =>
+                        {
+                            // The missing carrier cannot hide independently invalid fragment grammar.
+                            let fragment =
+                                uri::decode_fragment(uri::fragment(reference).unwrap_or(""))
+                                    .ok_or_else(|| {
+                                        self.bounds_failure(
+                                            NoVerdict::new(
+                                                NoVerdictReason::ConservativePreparation,
+                                                "fragment-encoding",
+                                                "reference fragment is not UTF-8",
+                                            ),
+                                            id,
+                                            "/$ref",
+                                            Some(id),
+                                            cap,
+                                        )
+                                    })?;
+                            if !valid_unknown_fragment(&fragment) {
+                                return Err(self.bounds_failure(NoVerdict::new(
+                                    NoVerdictReason::ConservativePreparation,
+                                    "invalid-reference-fragment",
+                                    "missing-resource reference has invalid pointer or anchor syntax",
+                                ), id, "/$ref", Some(id), cap));
+                            }
+                            if out.holes.len() >= cap.holes {
+                                return Err(self.bounds_failure(limit(
+                                    "schema-hole-limit",
+                                    "partial preparation exceeds 100,000 missing-reference edges",
+                                ), id, "/$ref", Some(id), cap));
+                            }
+                            out.edge(cap).map_err(|detail| {
+                                self.bounds_failure(detail, id, "/$ref", Some(id), cap)
+                            })?;
+                            if let Some(suffix) = occupied_suffix {
+                                out.occupied_namespaces.insert(suffix);
+                            }
+                            out.holes.insert(id);
+                            out.hole_order.push(id);
+                            out.first_hole.get_or_insert(id);
+                        }
+                        Err(detail) => return Err(detail),
+                    }
+                    continue;
+                }
+                let Some(policy) = policy(keyword, has_if) else {
+                    continue;
+                };
+                let mut child = |value: JsonRef<'_>| -> Result<(), NoVerdict> {
+                    let target = self.sources[node.source]
+                        .positions
+                        .get(&node_id(&value.to_owned()))
+                        .copied()
+                        .ok_or_else(|| {
+                            NoVerdict::new(
+                                NoVerdictReason::ConservativePreparation,
+                                "projection-target",
+                                "an evaluated child is outside the schema index",
+                            )
+                        })?;
+                    out.child(id, target, policy, &mut queue, cap)
+                        .map_err(|detail| self.bounds_failure(detail, target, "", Some(id), cap))
+                };
+                // The strict and partial walks borrow the same child-selection
+                // primitive; no wide child list is collected before edge admission.
+                for value in keyword_children(keyword, member.value) {
+                    child(value)?;
+                }
+            }
+        }
+        // At most one occupied namespace per hole, so a free namespace exists by
+        // holes.len(). No source-controlled text is copied to choose it.
+        while out.occupied_namespaces.contains(&out.namespace) {
+            out.namespace += 1;
+        }
+        self.check_cycles(&out.reach, control)?;
+        out.qualify(self, control, cap)?;
+        Ok(out)
+    }
+    fn location_bytes(&self, id: usize) -> Result<usize, NoVerdict> {
+        let node = &self.nodes[id];
+        let source = &self.sources[node.source];
+        let full = pointer_size(node.value.view(), TEXT_LIMIT).ok_or_else(text_limit)?;
+        let prefix = pointer_size(source.value.view(), TEXT_LIMIT).ok_or_else(text_limit)?;
+        Ok(full
+            .saturating_sub(prefix)
+            .saturating_add(source.uri.as_ref().map_or(0, String::len)))
+    }
+    fn bounds_admitted(
+        &self,
+        entry: usize,
+        control: &WorkControl,
+        cap: Admission,
+    ) -> Result<EvaluationBounds, NoVerdict> {
+        self.project_bounds(entry, control, cap).map_err(|detail| {
+            // These aggregate failures identify the selected preparation
+            // boundary, not a uniquely offending leaf. Do not remap precise
+            // resolver locations or invent a location for cancellation.
+            if matches!(
+                detail.code.as_str(),
+                "partial-program-byte-limit"
+                    | "partial-generated-node-limit"
+                    | "partial-generated-edge-limit"
+                    | "partial-generated-cycle"
+                    | "program-json-limit"
+                    | "projection-target"
+                    | "projection-output-mismatch"
+            ) {
+                self.bounds_failure(detail, entry, "", None, cap)
+            } else {
+                detail
+            }
+        })
+    }
+    fn project_bounds(
+        &self,
+        entry: usize,
+        control: &WorkControl,
+        cap: Admission,
+    ) -> Result<EvaluationBounds, NoVerdict> {
+        let plan = self.partial_reach(entry, control, cap)?;
+        if !plan.oneofs.is_empty() {
+            return self.oneof_bounds(entry, control, cap, &plan);
+        }
+        let mut groups: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+        let mut nodes: Vec<_> = plan.reach.nodes.iter().copied().collect();
+        nodes.sort_unstable();
+        let mut total = 0;
+        // Shared source map, copied only once after the entire text plan passes.
+        for &id in &nodes {
+            control.check()?;
+            let mut count = Sink::count(cap.text);
+            address(&mut count, plan.namespace, self.nodes[id].resource, id)
+                .map_err(|_| text_limit())?;
+            add_bytes(&mut total, count.size, cap.text)?;
+            add_bytes(&mut total, self.location_bytes(id)?, cap.text)?;
+            groups.entry(self.nodes[id].resource).or_default().push(id);
+        }
+        if let Some(id) = plan.first_hole {
+            add_bytes(&mut total, self.location_bytes(id)?, cap.text)?;
+            add_bytes(
+                &mut total,
+                "/$ref".len() + UNAVAILABLE_CODE.len() + UNAVAILABLE_MESSAGE.len(),
+                cap.text,
+            )?;
+        }
+        let mut sizes = [Vec::new(), Vec::new()];
+        for (pass, lower) in [true, false].into_iter().enumerate() {
+            let mut entry_count = Sink::count(cap.text);
+            resource_uri(&mut entry_count, plan.namespace, self.nodes[entry].resource)
+                .map_err(|_| text_limit())?;
+            add_bytes(&mut total, entry_count.size, cap.text)?;
+            for (&resource, ids) in &groups {
+                let mut count = Sink::count(cap.text - total);
+                self.write_resource(&mut count, resource, ids, entry, &plan, control)
+                    .map_err(|_| control.check().err().unwrap_or_else(text_limit))?;
+                add_bytes(&mut total, count.size + count.decoded, cap.text)?;
+                sizes[pass].push((count.size, count.decoded));
+                let mut uri_count = Sink::count(cap.text);
+                resource_uri(&mut uri_count, plan.namespace, resource).map_err(|_| text_limit())?;
+                add_bytes(&mut total, uri_count.size, cap.text)?;
+            }
+            if !plan.holes.is_empty() {
+                let text = if lower { "false" } else { "true" };
+                add_bytes(
+                    &mut total,
+                    text.len() + hole_uri_size(plan.namespace),
+                    cap.text,
+                )?;
+            }
+        }
+        control.check()?;
+        let mut locations = BTreeMap::new();
+        for id in nodes {
+            control.check()?;
+            let mut uri = String::new();
+            address(&mut uri, plan.namespace, self.nodes[id].resource, id).expect("String writer");
+            locations.insert(uri, ProgramOrigin::Prefix(self.location(id)));
+        }
+        let locations = Arc::new(locations);
+        let unavailable = plan.first_hole.map(|id| {
+            let mut location = self.location(id);
+            location.pointer.push_str("/$ref");
+            NoVerdict::new(
+                NoVerdictReason::ResourceUnavailable,
+                UNAVAILABLE_CODE,
+                UNAVAILABLE_MESSAGE,
+            )
+            .located(location)
+        });
+        let mut programs = Vec::with_capacity(2);
+        for (pass, lower) in [true, false].into_iter().enumerate() {
+            let mut resources =
+                Vec::with_capacity(groups.len() + usize::from(!plan.holes.is_empty()));
+            for ((&resource, ids), &(size, decoded)) in groups.iter().zip(&sizes[pass]) {
+                control.check()?;
+                #[cfg(test)]
+                let (size, decoded) = cap.output_fault.bytes(size, decoded, control);
+                let mut sink = Sink::output(size, decoded);
+                self.write_resource(&mut sink, resource, ids, entry, &plan, control)
+                    .map_err(|_| output_failure(control))?;
+                let mut uri = String::new();
+                resource_uri(&mut uri, plan.namespace, resource).expect("String writer");
+                let document = JsonValue::parse(sink.finish(control)?).map_err(|_| {
+                    limit(
+                        "program-json-limit",
+                        "projected resource exceeds JSON admission",
+                    )
+                })?;
+                resources.push(SchemaResource { uri, document });
+            }
+            if !plan.holes.is_empty() {
+                resources.push(SchemaResource {
+                    uri: format!("{NAMESPACE}{}/hole", plan.namespace),
+                    document: JsonValue::parse(if lower { "false" } else { "true" })
+                        .expect("boolean JSON"),
+                });
+            }
+            let mut entry_uri = String::new();
+            resource_uri(&mut entry_uri, plan.namespace, self.nodes[entry].resource)
+                .expect("String writer");
+            programs.push(EvaluationProgram {
+                entry_uri,
+                resources,
+                locations: locations.clone(),
+            });
+        }
+        let upper = programs.pop().expect("upper");
+        let lower = programs.pop().expect("lower");
+        Ok(EvaluationBounds {
+            lower,
+            upper,
+            unavailable,
+        })
+    }
+    fn write_resource(
+        &self,
+        sink: &mut Sink,
+        resource: usize,
+        ids: &[usize],
+        entry: usize,
+        plan: &Plan,
+        control: &WorkControl,
+    ) -> fmt::Result {
+        sink.write_str("{\"$id\":\"")?;
+        resource_uri(sink, plan.namespace, resource)?;
+        sink.write_str("\",\"$schema\":")?;
+        quote(sink, DIALECT)?;
+        sink.write_str(",\"$defs\":{")?;
+        for (index, &id) in ids.iter().enumerate() {
+            if control.is_cancelled() {
+                return Err(fmt::Error);
+            }
+            if index != 0 {
+                sink.write_char(',')?;
+            }
+            write!(sink, "\"n{id}\":")?;
+            self.write_node(sink, id, plan)?;
+        }
+        sink.write_char('}')?;
+        if resource == self.nodes[entry].resource {
+            sink.write_str(",\"$ref\":\"")?;
+            address(sink, plan.namespace, resource, entry)?;
+            sink.write_char('"')?;
+        }
+        sink.write_char('}')
+    }
+    fn write_child(
+        &self,
+        sink: &mut Sink,
+        namespace: usize,
+        source: usize,
+        value: JsonRef<'_>,
+    ) -> fmt::Result {
+        let target = self.sources[source].positions[&node_id(&value.to_owned())];
+        sink.write_str("{\"$ref\":\"")?;
+        address(sink, namespace, self.nodes[target].resource, target)?;
+        sink.write_str("\"}")
+    }
+    fn write_node(&self, sink: &mut Sink, id: usize, plan: &Plan) -> fmt::Result {
+        let node = &self.nodes[id];
+        if node.value.kind() == JsonKind::Boolean {
+            return sink.write_str(node.value.text());
+        }
+        sink.write_char('{')?;
+        let mut first = true;
+        let has_if = node.value.get("if").is_some();
+        for member in node.value.view().members().expect("checked object") {
+            let keyword = member.name.as_str().expect("checked Unicode");
+            if matches!(
+                keyword,
+                "$id"
+                    | "$schema"
+                    | "$defs"
+                    | "definitions"
+                    | "dependencies"
+                    | "contentSchema"
+                    | "$anchor"
+            ) || (matches!(keyword, "then" | "else") && !has_if)
+            {
+                continue;
+            }
+            if !first {
+                sink.write_char(',')?;
+            }
+            first = false;
+            quote(sink, keyword)?;
+            sink.write_char(':')?;
+            if keyword == "$ref" {
+                sink.write_char('"')?;
+                if plan.holes.contains(&id) {
+                    write!(sink, "{NAMESPACE}{}/hole", plan.namespace)?;
+                } else {
+                    let target = &plan.reach.targets[&(id, "$ref".into())];
+                    address(
+                        sink,
+                        plan.namespace,
+                        self.nodes[target.node].resource,
+                        target.node,
+                    )?;
+                }
+                sink.write_char('"')?;
+            } else if let Some(policy) = policy(keyword, has_if) {
+                match policy.shape {
+                    Children::Map => {
+                        sink.write_char('{')?;
+                        for (i, m) in member.value.members().expect("checked map").enumerate() {
+                            if i != 0 {
+                                sink.write_char(',')?;
+                            }
+                            quote(sink, m.name.as_str().expect("checked Unicode"))?;
+                            sink.write_char(':')?;
+                            self.write_child(sink, plan.namespace, node.source, m.value)?;
+                        }
+                        sink.write_char('}')?;
+                    }
+                    Children::List => {
+                        sink.write_char('[')?;
+                        for (i, v) in member.value.elements().expect("checked list").enumerate() {
+                            if i != 0 {
+                                sink.write_char(',')?;
+                            }
+                            self.write_child(sink, plan.namespace, node.source, v)?;
+                        }
+                        sink.write_char(']')?;
+                    }
+                    Children::Single => {
+                        self.write_child(sink, plan.namespace, node.source, member.value)?
+                    }
+                }
+            } else {
+                sink.raw(member.value)?;
+            }
+        }
+        sink.write_char('}')
+    }
+}
+fn private_namespace(name: &str) -> Option<usize> {
+    let (suffix, _) = name.strip_prefix(NAMESPACE)?.split_once('/')?;
+    if suffix.len() > 1 && suffix.starts_with('0') {
+        return None;
+    }
+    if !suffix.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    suffix.parse().ok()
+}
+fn hole_uri_size(suffix: usize) -> usize {
+    NAMESPACE.len()
+        + "/hole".len()
+        + if suffix == 0 {
+            1
+        } else {
+            suffix.ilog10() as usize + 1
+        }
+}
+fn valid_unknown_fragment(fragment: &str) -> bool {
+    if fragment.is_empty() {
+        return true;
+    }
+    if !fragment.starts_with('/') {
+        return crate::schema_index::plain_name(fragment);
+    }
+    let mut bytes = fragment.bytes();
+    while let Some(b) = bytes.next() {
+        if b == b'~' && !matches!(bytes.next(), Some(b'0' | b'1')) {
+            return false;
+        }
+    }
+    true
+}
+fn resource_uri(sink: &mut impl Write, namespace: usize, resource: usize) -> fmt::Result {
+    write!(sink, "{NAMESPACE}{namespace}/r{resource}")
+}
+fn address(sink: &mut impl Write, namespace: usize, resource: usize, node: usize) -> fmt::Result {
+    resource_uri(sink, namespace, resource)?;
+    write!(sink, "#/$defs/n{node}")
+}
+fn quote(sink: &mut Sink, text: &str) -> fmt::Result {
+    // The parser owns a complete decoded string if any emitted character is
+    // escaped. Count the actual output spelling, not the original token spelling.
+    if text.bytes().any(|b| b < b' ' || matches!(b, b'"' | b'\\')) {
+        sink.add_decoded(text.len())?;
+    }
+    sink.write_char('"')?;
+    for c in text.chars() {
+        match c {
+            '"' => sink.write_str("\\\"")?,
+            '\\' => sink.write_str("\\\\")?,
+            '\n' => sink.write_str("\\n")?,
+            '\r' => sink.write_str("\\r")?,
+            '\t' => sink.write_str("\\t")?,
+            '\u{8}' => sink.write_str("\\b")?,
+            '\u{c}' => sink.write_str("\\f")?,
+            c if c < ' ' => write!(sink, "\\u{:04x}", c as u32)?,
+            _ => sink.write_char(c)?,
+        }
+    }
+    sink.write_char('"')
+}
+// Count both arena source and separately owned decoded strings without copying.
+// Allocate the serialized buffer only after the complete paired plan is admitted.
+struct Sink {
+    text: Option<String>,
+    size: usize,
+    decoded: usize,
+    cap: usize,
+    expected: Option<(usize, usize)>,
+}
+impl Sink {
+    fn count(cap: usize) -> Self {
+        Self {
+            text: None,
+            size: 0,
+            decoded: 0,
+            cap,
+            expected: None,
+        }
+    }
+    fn output(size: usize, decoded: usize) -> Self {
+        Self {
+            text: Some(String::with_capacity(size)),
+            size: 0,
+            decoded: 0,
+            cap: size + decoded,
+            expected: Some((size, decoded)),
+        }
+    }
+    fn finish(self, control: &WorkControl) -> Result<String, NoVerdict> {
+        control.check()?;
+        if self.expected != Some((self.size, self.decoded)) {
+            return Err(output_mismatch());
+        }
+        self.text
+            .filter(|text| text.len() == self.size)
+            .ok_or_else(output_mismatch)
+    }
+    fn add_decoded(&mut self, bytes: usize) -> fmt::Result {
+        self.decoded = self
+            .decoded
+            .checked_add(bytes)
+            .filter(|n| *n <= self.cap - self.size)
+            .filter(|n| self.expected.is_none_or(|(_, decoded)| *n <= decoded))
+            .ok_or(fmt::Error)?;
+        Ok(())
+    }
+    fn raw(&mut self, value: JsonRef<'_>) -> fmt::Result {
+        let remaining = (self.cap - self.size - self.decoded)
+            .checked_sub(value.text().len())
+            .ok_or(fmt::Error)?;
+        // Unchanged subtrees retain identical encoded tokens. Borrow the existing
+        // flat parser's decoded storage lengths, including nested member names.
+        let decoded = decoded_string_size(value, remaining).ok_or(fmt::Error)?;
+        self.add_decoded(decoded)?;
+        self.write_str(value.text())
+    }
+}
+impl Write for Sink {
+    fn write_str(&mut self, value: &str) -> fmt::Result {
+        let size = self
+            .size
+            .checked_add(value.len())
+            .filter(|n| *n <= self.cap - self.decoded)
+            .filter(|n| self.expected.is_none_or(|(size, _)| *n <= size))
+            .ok_or(fmt::Error)?;
+        if let Some(text) = &mut self.text {
+            text.push_str(value);
+        }
+        self.size = size;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    pub(super) fn space(schema: &str) -> (SchemaSpace, usize) {
+        let document = ParsedDocument::parse(format!(
+            r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
+        ))
+        .unwrap();
+        let space = SchemaSpace::new(document, ResourceSet::default());
+        let entry = space
+            .document_node(
+                &space
+                    .document
+                    .value()
+                    .at("/operations/op/input")
+                    .unwrap()
+                    .to_owned(),
+            )
+            .unwrap();
+        (space, entry)
+    }
+    pub(super) fn text_size(bounds: &EvaluationBounds) -> usize {
+        let mut size = 0;
+        for program in [&bounds.lower, &bounds.upper] {
+            size += program.entry_uri.len();
+            for resource in &program.resources {
+                size += resource.uri.len() + resource.document.text().len();
+                size += decoded_string_size(resource.document.view(), usize::MAX).unwrap();
+            }
+        }
+        assert!(Arc::ptr_eq(
+            &bounds.lower.locations,
+            &bounds.upper.locations
+        ));
+        for (generated, origin) in bounds.lower.locations.iter() {
+            size += generated.len();
+            if let ProgramOrigin::Prefix(at) | ProgramOrigin::Exact(at) = origin {
+                size += at.pointer.len() + at.resource.as_ref().map_or(0, String::len);
+            }
+        }
+        if let Some(e) = &bounds.unavailable {
+            size += e.code.len() + e.message.len();
+            if let Some(at) = &e.location {
+                size += at.pointer.len() + at.resource.as_ref().map_or(0, String::len);
+            }
+        }
+        size
+    }
+    const POSITIVE_OUTPUT: &str =
+        r#"{"description":"quoted\"","properties":{"x":{"$ref":"https://absent.invalid/U"}}}"#;
+    const ONEOF_OUTPUT: &str =
+        r#"{"description":"quoted\"","oneOf":[true,{"$ref":"https://absent.invalid/U"}]}"#;
+    fn output_mismatch(schema: &str, fault: OutputFault) {
+        let (space, entry) = space(schema);
+        let control = WorkControl::new();
+        let detail = space
+            .bounds_admitted(
+                entry,
+                &control,
+                Admission {
+                    output_fault: fault,
+                    ..Admission::default()
+                },
+            )
+            .unwrap_err();
+        assert_eq!(detail.reason, NoVerdictReason::EvaluatorFailure);
+        assert_eq!(detail.code, "projection-output-mismatch");
+        assert_eq!(
+            detail.message,
+            "projection output does not match the admitted counts"
+        );
+        assert_eq!(
+            detail.location.unwrap(),
+            SchemaLocation {
+                resource: None,
+                pointer: "/operations/op/input".into(),
+            }
+        );
+        assert!(space.bounds(entry, &WorkControl::new()).is_ok());
+    }
+    #[test]
+    fn positive_output_undercount_is_an_internal_failure() {
+        for fault in [
+            OutputFault {
+                size: -1,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                decoded: -1,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                size: -1,
+                decoded: 1,
+                ..OutputFault::default()
+            },
+        ] {
+            output_mismatch(POSITIVE_OUTPUT, fault);
+        }
+    }
+    #[test]
+    fn positive_output_overcount_is_an_internal_failure() {
+        for fault in [
+            OutputFault {
+                size: 1,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                decoded: 1,
+                ..OutputFault::default()
+            },
+        ] {
+            output_mismatch(POSITIVE_OUTPUT, fault);
+        }
+    }
+    #[test]
+    fn oneof_output_undercount_is_an_internal_failure() {
+        for fault in [
+            OutputFault {
+                size: -1,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                decoded: -1,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                size: -1,
+                decoded: 1,
+                ..OutputFault::default()
+            },
+        ] {
+            output_mismatch(ONEOF_OUTPUT, fault);
+        }
+    }
+    #[test]
+    fn oneof_output_overcount_is_an_internal_failure() {
+        for fault in [
+            OutputFault {
+                size: 1,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                decoded: 1,
+                ..OutputFault::default()
+            },
+        ] {
+            output_mismatch(ONEOF_OUTPUT, fault);
+        }
+    }
+    #[test]
+    fn oneof_output_occurrence_mismatches_are_internal_failures() {
+        for fault in [
+            OutputFault {
+                nodes: -2,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                nodes: 2,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                edges: -2,
+                ..OutputFault::default()
+            },
+            OutputFault {
+                edges: 2,
+                ..OutputFault::default()
+            },
+        ] {
+            output_mismatch(ONEOF_OUTPUT, fault);
+        }
+    }
+    #[test]
+    fn output_guards_precede_copy_and_completion_checks_preserve_cancellation() {
+        let mut serialized = Sink::output(1, 2);
+        assert!(serialized.write_str("ab").is_err());
+        assert_eq!(serialized.text.as_deref(), Some(""));
+        assert_eq!(serialized.size, 0);
+        let mut decoded = Sink::output(2, 1);
+        assert!(decoded.add_decoded(2).is_err());
+        assert_eq!(decoded.decoded, 0);
+        // A different encoded/decoded split cannot borrow unused allowance.
+        let mut exact = Sink::output(2, 1);
+        exact.write_str("ab").unwrap();
+        exact.add_decoded(1).unwrap();
+        assert_eq!(exact.finish(&WorkControl::new()).unwrap(), "ab");
+        let stopped = WorkControl::new();
+        stopped.cancel();
+        let detail = Sink::output(1, 0).finish(&stopped).unwrap_err();
+        assert_eq!(detail.reason, NoVerdictReason::Cancelled);
+        assert!(detail.location.is_none());
+        let (space, entry) = space("true");
+        let detail = space.bounds_failure(
+            super::output_mismatch(),
+            entry,
+            "",
+            None,
+            Admission {
+                scratch: 0,
+                ..Admission::default()
+            },
+        );
+        assert_eq!(detail.code, "projection-output-mismatch");
+        assert!(detail.location.is_none());
+    }
+    #[test]
+    fn output_faults_do_not_change_count_limits_or_cancellation_priority() {
+        for schema in [POSITIVE_OUTPUT, ONEOF_OUTPUT] {
+            let (space, entry) = space(schema);
+            for size in [-1, 1] {
+                let control = WorkControl::new();
+                let cap = Admission {
+                    output_fault: OutputFault {
+                        size,
+                        cancel: true,
+                        ..OutputFault::default()
+                    },
+                    ..Admission::default()
+                };
+                let detail = space.bounds_admitted(entry, &control, cap).unwrap_err();
+                assert_eq!(detail.reason, NoVerdictReason::Cancelled);
+                assert!(detail.location.is_none());
+                let control = WorkControl::new();
+                let detail = space
+                    .bounds_admitted(entry, &control, Admission { text: 1, ..cap })
+                    .unwrap_err();
+                assert_eq!(detail.reason, NoVerdictReason::LimitExceeded);
+                assert_eq!(detail.code, "partial-program-byte-limit");
+                assert!(!control.is_cancelled()); // refused before the injected output fault
+            }
+        }
+        let (space, entry) = space(ONEOF_OUTPUT);
+        for (nodes, edges, code) in [
+            (0, 200_000, "partial-generated-node-limit"),
+            (100_000, 0, "partial-generated-edge-limit"),
+        ] {
+            let control = WorkControl::new();
+            let detail = space
+                .bounds_admitted(
+                    entry,
+                    &control,
+                    Admission {
+                        generated_nodes: nodes,
+                        generated_edges: edges,
+                        output_fault: OutputFault {
+                            cancel: true,
+                            ..OutputFault::default()
+                        },
+                        ..Admission::default()
+                    },
+                )
+                .unwrap_err();
+            assert_eq!(detail.reason, NoVerdictReason::LimitExceeded);
+            assert_eq!(detail.code, code);
+            assert!(!control.is_cancelled());
+        }
+    }
+    #[test]
+    fn exact_combined_text_admission_includes_wrappers_entries_maps_and_evidence() {
+        for schema in [
+            r#"{"properties":{"quote\"/tilde~雪":{"$ref":"https://absent.invalid/U"}},"description":"line\nline"}"#,
+            r#"{"$ref":"https://absent.invalid/U","const":{"nested\n":["\u0061","\uD83D\uDE00"]},"description":"escaped\""}"#,
+            r#"{"\u0070roperties":{"\u0061":{"$ref":"https://absent.invalid/U"},"x\"\\\n":true},"x\u002dopaque":{"\u006b":["raw雪","\uD83D\uDE00",{"q\"":"a\/b"}]}}"#,
+            r#"{"type":"number","const":0.290000000000000000001}"#,
+            "true",
+        ] {
+            let (space, entry) = space(schema);
+            let bounds = space.bounds(entry, &WorkControl::new()).unwrap();
+            let size = text_size(&bounds);
+            let cap = Admission {
+                text: size,
+                ..Admission::default()
+            };
+            assert_eq!(
+                text_size(
+                    &space
+                        .bounds_admitted(entry, &WorkControl::new(), cap)
+                        .unwrap()
+                ),
+                size
+            );
+            let refused = space
+                .bounds_admitted(
+                    entry,
+                    &WorkControl::new(),
+                    Admission {
+                        text: size - 1,
+                        ..cap
+                    },
+                )
+                .unwrap_err();
+            assert_eq!(refused.code, "partial-program-byte-limit");
+            assert_eq!(refused.location.unwrap().pointer, "/operations/op/input");
+            if schema == "true" {
+                assert!(bounds.unavailable.is_none());
+            }
+        }
+    }
+    #[test]
+    fn decoded_projection_storage_uses_actual_emitted_spelling_before_copying() {
+        for (source, decoded) in [
+            (r#""raw雪""#, 0),
+            (r#""\u0061""#, 1),
+            (r#""a\/b""#, 3),
+            (r#""\uD83D\uDE00""#, 4),
+            (r#"{"k\n":["x\"",{"\u0061":"z\\"}]}"#, 7),
+        ] {
+            let value = JsonValue::parse(source).unwrap();
+            let total = source.len() + decoded;
+            let mut count = Sink::count(total);
+            count.raw(value.view()).unwrap();
+            assert_eq!((count.size, count.decoded), (source.len(), decoded));
+            assert!(count.text.is_none());
+            let mut refused = Sink::count(total - 1);
+            assert!(refused.raw(value.view()).is_err());
+            assert_eq!((refused.size, refused.decoded), (0, 0));
+            assert!(refused.text.is_none());
+            let mut output = Sink::output(count.size, count.decoded);
+            output.raw(value.view()).unwrap();
+            let parsed = JsonValue::parse(output.text.unwrap()).unwrap();
+            assert_eq!(decoded_string_size(parsed.view(), decoded), Some(decoded));
+            if let Some(text) = value.view().as_str() {
+                let mut rewritten = Sink::count(1024);
+                quote(&mut rewritten, text).unwrap();
+                let mut output = Sink::output(rewritten.size, rewritten.decoded);
+                quote(&mut output, text).unwrap();
+                let parsed = JsonValue::parse(output.text.unwrap()).unwrap();
+                assert_eq!(
+                    decoded_string_size(parsed.view(), usize::MAX),
+                    Some(rewritten.decoded)
+                );
+                // Rewriting unnecessary Unicode/slash escapes does not retain a
+                // decoded copy, while copying the original raw token above does.
+                assert_eq!(rewritten.decoded, 0);
+            }
+        }
+        for text in ["quote\"", "back\\slash", "\n\t\r\u{8}\u{c}\0雪"] {
+            let mut count = Sink::count(1024);
+            quote(&mut count, text).unwrap();
+            assert_eq!(count.decoded, text.len());
+            let mut output = Sink::output(count.size, count.decoded);
+            quote(&mut output, text).unwrap();
+            let parsed = JsonValue::parse(output.text.unwrap()).unwrap();
+            assert_eq!(
+                decoded_string_size(parsed.view(), usize::MAX),
+                Some(text.len())
+            );
+            let mut refused = Sink::count(count.size + count.decoded - 1);
+            assert!(quote(&mut refused, text).is_err());
+            assert!(refused.text.is_none());
+        }
+    }
+    #[test]
+    #[ignore = "real 64 MiB admission boundary; run explicitly under an external memory ceiling"]
+    fn escaped_text_real_64_mib_boundary_and_frozen_twenty_mib_witness() {
+        let witness = |n: usize| {
+            space(&format!(
+                r#"{{"description":"{}\"","properties":{{"x":{{"$ref":"https://sol-review.invalid/U"}}}}}}"#,
+                "a".repeat(n)
+            ))
+        };
+        let (small, entry) = witness(0);
+        let base = text_size(&small.bounds(entry, &WorkControl::new()).unwrap());
+        assert_eq!(base, 1273); // Frozen independent review witness.
+        let largest = (TEXT_LIMIT - base) / 4;
+        for (n, admitted) in [
+            (largest, true),
+            (largest + 1, false),
+            (20 * 1024 * 1024, false),
+        ] {
+            let (space, entry) = witness(n);
+            let expected = base + 4 * n;
+            let result = space.bounds(entry, &WorkControl::new());
+            if admitted {
+                let actual = text_size(&result.unwrap());
+                assert_eq!(actual, expected);
+                assert!(actual <= TEXT_LIMIT);
+                println!("repeat={n}; retained_utf8={actual}; admitted");
+            } else {
+                assert!(expected > TEXT_LIMIT);
+                assert_eq!(result.unwrap_err().code, "partial-program-byte-limit");
+                println!("repeat={n}; retained_utf8_would_be={expected}; refused");
+            }
+        }
+    }
+    #[test]
+    fn graph_admission_precedes_each_append_including_shared_and_hole_edges() {
+        // Internal small-cap controls. The hole boundary is shadowed by the
+        // reached-node cap in production; this is not a default-cap witness.
+        assert_eq!(
+            (NODE_LIMIT, EDGE_LIMIT, HOLE_LIMIT, TEXT_LIMIT),
+            (100_000, 200_000, 100_000, 64 * 1024 * 1024)
+        );
+        let (space, entry) = space(
+            r##"{"$id":"https://review.invalid/root","$defs":{"shared":{"$ref":"https://absent.invalid/U"}},"allOf":[{"$ref":"#/$defs/shared"},{"$ref":"#/$defs/shared"}]}"##,
+        );
+        let control = WorkControl::new();
+        let plan = space
+            .partial_reach(entry, &control, Admission::default())
+            .unwrap();
+        assert_eq!(plan.reach.nodes.len(), 4);
+        assert_eq!(plan.edge_count, 5);
+        assert_eq!(plan.holes.len(), 1);
+        for (cap, code, pointer) in [
+            (
+                Admission {
+                    nodes: 3,
+                    ..Admission::default()
+                },
+                "schema-node-limit",
+                "/operations/op/input/$defs/shared",
+            ),
+            (
+                Admission {
+                    edges: 4,
+                    ..Admission::default()
+                },
+                "schema-edge-limit",
+                "/operations/op/input/$defs/shared/$ref",
+            ),
+            (
+                Admission {
+                    holes: 0,
+                    ..Admission::default()
+                },
+                "schema-hole-limit",
+                "/operations/op/input/$defs/shared/$ref",
+            ),
+        ] {
+            let detail = space.bounds_admitted(entry, &control, cap).unwrap_err();
+            assert_eq!(detail.code, code);
+            assert_eq!(detail.location.unwrap().pointer, pointer);
+        }
+        assert!(
+            space
+                .bounds_admitted(
+                    entry,
+                    &control,
+                    Admission {
+                        nodes: 4,
+                        edges: 5,
+                        holes: 1,
+                        ..Admission::default()
+                    }
+                )
+                .is_ok()
+        );
+    }
+    #[test]
+    fn default_edge_limit_establishes_known_node_overflow_and_hole_limit_is_shadowed() {
+        let cap = Admission::default();
+        // Every reached node has at most one reference/hole edge. All other
+        // edges select distinct children. At edge refusal there are therefore
+        // at least cap.edges - cap.nodes children plus the entry: too many
+        // known positions even if every absent resource is supplied. Changing
+        // this relationship requires revisiting evaluator recovery policy.
+        assert!(cap.edges >= 2 * cap.nodes);
+        assert!(cap.holes >= cap.nodes);
+    }
+    #[test]
+    fn internal_small_caps_guard_unvisited_locations_and_preserve_refusal_causes() {
+        let key = "~/".repeat(64);
+        let (space, entry) = space(&format!(r#"{{"properties":{{"{key}":true}}}}"#));
+        let child = space
+            .nodes
+            .iter()
+            .position(|node| node.value.kind() == JsonKind::Boolean)
+            .unwrap();
+        let cap = Admission {
+            scratch: 32,
+            ..Admission::default()
+        };
+        // This full escaped pointer cannot pass admission. bounds_location
+        // returns before location() can copy it; no clipped pointer is made.
+        assert_eq!(
+            pointer_size(space.nodes[child].value.view(), cap.scratch),
+            None
+        );
+        assert!(space.bounds_location(child, "", cap).is_none());
+        for (cap, code) in [
+            (Admission { nodes: 1, ..cap }, "schema-node-limit"),
+            (Admission { edges: 0, ..cap }, "schema-edge-limit"),
+            (cap, "partial-scratch-limit"),
+        ] {
+            let detail = space
+                .bounds_admitted(entry, &WorkControl::new(), cap)
+                .unwrap_err();
+            assert_eq!(detail.reason, NoVerdictReason::LimitExceeded);
+            assert_eq!(detail.code, code); // location admission cannot replace the cause
+            assert_eq!(detail.location.unwrap().pointer, "/operations/op/input");
+        }
+        let original = limit("schema-edge-limit", "original message");
+        let omitted = space.bounds_failure(
+            original.clone(),
+            child,
+            "",
+            Some(entry),
+            Admission { scratch: 0, ..cap },
+        );
+        assert!(omitted.location.is_none());
+        assert_eq!(omitted.code, original.code);
+        assert_eq!(omitted.message, original.message);
+        let precise = original.located(SchemaLocation {
+            resource: Some("https://original.invalid/R".into()),
+            pointer: "/precise".into(),
+        });
+        let retained = space.bounds_failure(
+            precise.clone(),
+            child,
+            "",
+            Some(entry),
+            Admission { scratch: 0, ..cap },
+        );
+        assert_eq!(
+            serde_json::to_value(retained).unwrap(),
+            serde_json::to_value(precise).unwrap()
+        );
+        let cancelled = WorkControl::new();
+        cancelled.cancel();
+        assert!(
+            space
+                .bounds_admitted(entry, &cancelled, cap)
+                .unwrap_err()
+                .location
+                .is_none()
+        );
+    }
+    #[test]
+    fn internal_small_caps_measure_suffix_uri_and_full_supplied_prefix_before_copy() {
+        let (space, entry) = space(r#"{"$ref":"https://absent.invalid/U#/~2"}"#);
+        let size = pointer_size(space.nodes[entry].value.view(), usize::MAX).unwrap();
+        let cap = Admission {
+            scratch: size,
+            ..Admission::default()
+        };
+        assert!(space.bounds_location(entry, "/$ref", cap).is_none());
+        assert_eq!(
+            space.bounds_location(entry, "", cap).unwrap().pointer,
+            "/operations/op/input"
+        );
+        // Private source-construction control: ResourceSet currently rebases
+        // supplied subtrees, but location() itself can strip a source prefix.
+        // Even then it must admit the full prefix before allocating it.
+        let text = format!(
+            r#"{{"{}":{{"$ref":"https://absent.invalid/U#/~2"}}}}"#,
+            "x".repeat(64)
+        );
+        let value = JsonValue::parse(text).unwrap();
+        let nested = value.get(&"x".repeat(64)).unwrap().to_owned();
+        let doc =
+            ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":true}}}"#)
+                .unwrap();
+        let mut supplied = SchemaSpace::new(doc, ResourceSet::default());
+        let source = supplied.sources.len();
+        let index = SchemaIndex::supplied(&nested, "https://known.invalid/R");
+        supplied.add_source(
+            Some("https://known.invalid/R".into()),
+            nested,
+            &index,
+            ResourceOrigin::Supplied,
+        );
+        let id = supplied
+            .nodes
+            .iter()
+            .position(|node| node.source == source)
+            .unwrap();
+        assert!(
+            supplied
+                .bounds_location(id, "", Admission { scratch: 32, ..cap })
+                .is_none()
+        );
+        assert_eq!(
+            supplied
+                .bounds_location(id, "", Admission::default())
+                .unwrap()
+                .pointer,
+            ""
+        );
+        assert!(
+            supplied
+                .bounds_location(id, "", Admission { scratch: 8, ..cap })
+                .is_none()
+        );
+        // An overlong source URI also omits optional text without copying it.
+        supplied.sources[source].uri = Some("r".repeat(129));
+        assert!(
+            supplied
+                .bounds_location(
+                    id,
+                    "",
+                    Admission {
+                        scratch: 128,
+                        ..cap
+                    }
+                )
+                .is_none()
+        );
+    }
+    #[test]
+    fn generated_resources_never_use_an_original_missing_carrier_identity() {
+        let refs = (0..12)
+            .map(|i| {
+                let uri = if i % 2 == 0 {
+                    format!("{NAMESPACE}{i}/r0#missing")
+                } else {
+                    format!("{i}/hole#/$defs/unknown")
+                };
+                format!(r#"{{"$ref":"{uri}"}}"#)
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        let schema = format!(r#"{{"$id":"{NAMESPACE}base","anyOf":[true,{refs}]}}"#);
+        let (space, entry) = space(&schema);
+        let bounds = space.bounds(entry, &WorkControl::new()).unwrap();
+        for program in [&bounds.lower, &bounds.upper] {
+            for resource in &program.resources {
+                for i in 0..12 {
+                    assert!(!resource.uri.starts_with(&format!("{NAMESPACE}{i}/")));
+                }
+            }
+            let constant = program
+                .resources
+                .iter()
+                .find(|r| r.document.kind() == JsonKind::Boolean)
+                .unwrap();
+            assert_eq!(constant.uri, format!("{NAMESPACE}12/hole"));
+            assert!(program.original_location(&constant.uri).is_none());
+        }
+        let size = text_size(&bounds);
+        assert!(
+            space
+                .bounds_admitted(
+                    entry,
+                    &WorkControl::new(),
+                    Admission {
+                        text: size,
+                        ..Admission::default()
+                    }
+                )
+                .is_ok()
+        );
+        assert!(
+            space
+                .bounds_admitted(
+                    entry,
+                    &WorkControl::new(),
+                    Admission {
+                        text: size - 1,
+                        ..Admission::default()
+                    }
+                )
+                .is_err()
+        );
+    }
+    #[test]
+    fn count_sink_and_separate_scratch_guard_refuse_before_copying() {
+        let mut count = Sink::count(3);
+        assert!(count.write_str("four").is_err());
+        assert_eq!(count.size, 0);
+        assert!(count.text.is_none());
+        let (space, entry) = space("true");
+        assert_eq!(
+            space
+                .bounds_scratch(entry, &"x".repeat(TEXT_LIMIT + 1), Admission::default())
+                .unwrap_err()
+                .code,
+            "partial-scratch-limit"
+        );
+    }
+    #[test]
+    fn wide_shared_graph_is_finite_and_keeps_all_influence_paths() {
+        let refs = vec![r##"{"$ref":"#/$defs/shared"}"##; 2000].join(",");
+        let schema = format!(
+            r##"{{"$id":"https://review.invalid/root","$defs":{{"shared":{{"$ref":"https://absent.invalid/U"}}}},"anyOf":[true,{refs}]}}"##
+        );
+        let (space, entry) = space(&schema);
+        let plan = space
+            .partial_reach(entry, &WorkControl::new(), Admission::default())
+            .unwrap();
+        assert_eq!(plan.holes.len(), 1);
+        assert_eq!(plan.reach.nodes.len(), 2003);
+        assert_eq!(plan.edge_count, 4002);
+        assert!(space.bounds(entry, &WorkControl::new()).is_ok());
+    }
+}

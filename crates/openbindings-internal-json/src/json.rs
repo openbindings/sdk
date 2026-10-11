@@ -151,8 +151,9 @@ impl JsonValue {
         self.owner.raw(self.id)
     }
     /// The original snapshot cannot be mutated through a borrowed byte slice.
-    /// ```compile_fail
-    /// let value = openbindings_internal_json::JsonValue::parse("7").unwrap();
+    /// ```compile_fail,E0594
+    /// # use openbindings_internal_json as openbindings;
+    /// let value = openbindings::JsonValue::parse("7").unwrap();
     /// value.bytes()[0] = b'8';
     /// ```
     pub fn bytes(&self) -> &[u8] {
@@ -197,15 +198,7 @@ impl JsonValue {
     }
     /// Duplicate names are retained for inspection, never silently overwritten.
     pub fn has_duplicate_names(&self) -> bool {
-        self.owner
-            .duplicates
-            .iter()
-            .any(|(object, _)| self.contains(*object))
-    }
-    fn contains(&self, id: Id) -> bool {
-        let outer = &self.owner.nodes[self.id].span;
-        let inner = &self.owner.nodes[id].span;
-        outer.start <= inner.start && inner.end <= outer.end
+        self.owner.has_duplicate_names(self.id)
     }
     /// Exact semantic equality; ambiguous duplicate-member values have no equality verdict.
     pub fn semantic_eq(&self, other: &Self) -> Option<bool> {
@@ -492,6 +485,52 @@ mod tests {
         assert_eq!(a.get("y").unwrap().len(), Some(0));
         assert!(a.has_duplicate_names());
         assert_eq!(a.semantic_eq(&a), None);
+    }
+    #[test]
+    fn duplicate_queries_match_container_membership_and_bound_search_work() {
+        use std::sync::atomic::Ordering;
+
+        let nested = r#"{"a":{"n":0,"n":1},"a":2,"b":[{}, {"\ud800":0,"\ud800":1}],"c":{"\u0061":0,"a":1},"tail":[]}"#;
+        let wide = format!(
+            "[{},{{\"clean\":true}}]",
+            std::iter::repeat_n(r#"{"a":0,"a":1}"#, 4096)
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        for source in [nested, wide.as_str(), "[]", "null", r#"{"a":1}"#] {
+            let root = JsonValue::parse(source).unwrap();
+            let arena = &root.owner;
+            assert!(arena.duplicates.windows(2).all(|pair| {
+                arena.nodes[pair[0].1].span.start < arena.nodes[pair[1].1].span.start
+            }));
+            for id in 0..arena.nodes.len() {
+                let node = &arena.nodes[id];
+                // Independent slow oracle: an entire duplicate-containing
+                // object must lie within this value. Includes member-name
+                // string nodes, which must never claim nested duplicates.
+                let expected = arena.duplicates.iter().any(|&(object, _)| {
+                    let inner = &arena.nodes[object].span;
+                    node.span.start <= inner.start && inner.end <= node.span.end
+                });
+                arena.duplicate_query_probes.store(0, Ordering::Relaxed);
+                let value = JsonValue {
+                    owner: arena.clone(),
+                    id,
+                };
+                assert_eq!(value.has_duplicate_names(), expected, "node {id}");
+                let probes = arena.duplicate_query_probes.load(Ordering::Relaxed);
+                if matches!(node.kind, Kind::Array(_) | Kind::Object(_)) {
+                    let bound = if arena.duplicates.is_empty() {
+                        0
+                    } else {
+                        arena.duplicates.len().ilog2() as usize + 2
+                    };
+                    assert!(probes <= bound, "{probes} probes exceeds {bound}");
+                } else {
+                    assert_eq!(probes, 0);
+                }
+            }
+        }
     }
     #[test]
     fn limits_are_not_syntax() {

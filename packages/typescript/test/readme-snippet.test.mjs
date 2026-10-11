@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { firstUseSnippet } from "../scripts/readme-snippet.mjs";
+import {
+  browserBootstrapSnippet,
+  firstUseSnippet,
+} from "../scripts/readme-snippet.mjs";
 
 const original = readFileSync(new URL("../README.md", import.meta.url), "utf8");
 // Normalize the mutation fixture, never the code compiled by test:package.
@@ -22,12 +25,12 @@ test("README guard rejects missing, duplicate, and unclosed example fences", () 
   for (const changed of [
     readme.replace("```ts\n", ""),
     readme.replace(
-      "## Initialization",
-      "```ts\nconst extra = true;\n```\n\n## Initialization",
+      "## Browser resource management",
+      "```ts\nconst extra = true;\n```\n\n## Browser resource management",
     ),
     readme.replace(
-      "## Initialization",
-      "```ts\nconst unclosed = true;\n\n## Initialization",
+      "## Browser resource management",
+      "```ts\nconst unclosed = true;\n\n## Browser resource management",
     ),
     readme.replace(
       'console.log(checkInput("seven"));\n```',
@@ -35,6 +38,20 @@ test("README guard rejects missing, duplicate, and unclosed example fences", () 
     ),
   ])
     assert.throws(() => firstUseSnippet(changed));
+});
+
+test("browser bootstrap remains a single verbatim executable README block", () => {
+  const bootstrap = browserBootstrapSnippet(original);
+  assert(original.includes(bootstrap));
+  assert(bootstrap.endsWith('await import("./app.js");\n'));
+  assert.throws(() =>
+    browserBootstrapSnippet(
+      readme.replace(
+        "## Initialization",
+        "```js\nawait import('./other.js');\n```\n\n## Initialization",
+      ),
+    ),
+  );
 });
 
 test("README guard rejects an example swallowed by the preceding shell fence", () => {

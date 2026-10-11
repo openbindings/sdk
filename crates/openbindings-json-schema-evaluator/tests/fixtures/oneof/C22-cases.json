@@ -1,0 +1,817 @@
+[
+  {
+    "root": "C22",
+    "documentState": "original",
+    "independentRoot": true,
+    "caseId": "thumbnail-output-local",
+    "family": "valueCases",
+    "authorPointer": "/valueCases/14",
+    "authorExpected": "satisfies",
+    "document": "authors/c/C22/document.json",
+    "documentSha256": "dfd8cd330b83f183445284ba97fcab626ee2edd6b0a689d50a5691554d79f03b",
+    "operation": "2x.thumbnail",
+    "side": "output",
+    "valueText": "{\"blob\":\"blob:17\",\"width\":128,\"height\":96,\"quality\":0.95}",
+    "examplePointer": null,
+    "setup": "none",
+    "resources": {},
+    "expected": "satisfies",
+    "stage": "value-assessment",
+    "status": "accepted",
+    "proof": {
+      "authority": "OpenBindings 5.1, 5.2, 7; JSON Schema 2020-12 validation",
+      "contractPointer": "/operations/2x.thumbnail/output",
+      "corroboration": {
+        "outcome": "satisfies",
+        "errors": [],
+        "boundedCompletions": {
+          "false": {
+            "outcome": "satisfies",
+            "errors": []
+          },
+          "true": {
+            "outcome": "satisfies",
+            "errors": []
+          }
+        },
+        "proof": "See manual bounded propositional proof: external sites occur only as assertions on a present property in closed/disjoint branches; no annotation-sensitive keyword consumes external annotations."
+      }
+    }
+  },
+  {
+    "root": "C22",
+    "documentState": "original",
+    "independentRoot": true,
+    "caseId": "thumbnail-profile-unknown",
+    "family": "valueCases",
+    "authorPointer": "/valueCases/15",
+    "authorExpected": "no-verdict",
+    "document": "authors/c/C22/document.json",
+    "documentSha256": "dfd8cd330b83f183445284ba97fcab626ee2edd6b0a689d50a5691554d79f03b",
+    "operation": "2x.thumbnail",
+    "side": "output",
+    "valueText": "{\"blob\":\"blob:17\",\"width\":128,\"height\":96,\"quality\":0.95,\"profile\":\"sRGB\"}",
+    "examplePointer": null,
+    "setup": "none",
+    "resources": {},
+    "expected": "no-verdict",
+    "stage": "value-assessment",
+    "status": "accepted",
+    "proof": {
+      "authority": "OpenBindings 5.1, 5.2, 7; JSON Schema 2020-12 validation",
+      "contractPointer": "/operations/2x.thumbnail/output",
+      "corroboration": {
+        "outcome": "no-verdict",
+        "exception": "_WrappedReferencingError",
+        "message": "Unresolvable: https://challenge.invalid/round02/c22/profile.json",
+        "boundedCompletions": {
+          "false": {
+            "outcome": "fails",
+            "errors": [
+              {
+                "instancePointer": "",
+                "schemaPath": [
+                  "oneOf"
+                ],
+                "keyword": "oneOf",
+                "message": "{'blob': 'blob:17', 'width': 128, 'height': 96, 'quality': Fraction(19, 20), 'profile': 'sRGB'} is not valid under any of the given schemas",
+                "context": [
+                  {
+                    "instancePointer": "/profile",
+                    "schemaPath": [
+                      "oneOf",
+                      0,
+                      "properties",
+                      "profile",
+                      "allOf"
+                    ],
+                    "keyword": null,
+                    "message": "False schema does not allow 'sRGB'",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      1,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'failure' is a required property",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      1,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'detail' is a required property",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      1,
+                      "additionalProperties"
+                    ],
+                    "keyword": "additionalProperties",
+                    "message": "Additional properties are not allowed ('blob', 'height', 'profile', 'quality', 'width' were unexpected)",
+                    "context": []
+                  }
+                ]
+              }
+            ]
+          },
+          "true": {
+            "outcome": "satisfies",
+            "errors": []
+          }
+        },
+        "proof": "Two explicit supplied completions give different validity. Missing external content is material (OpenBindings 5.2)."
+      }
+    }
+  },
+  {
+    "root": "C22",
+    "documentState": "original",
+    "independentRoot": true,
+    "caseId": "thumbnail-fixed-failure",
+    "family": "valueCases",
+    "authorPointer": "/valueCases/19",
+    "authorExpected": "fails",
+    "document": "authors/c/C22/document.json",
+    "documentSha256": "dfd8cd330b83f183445284ba97fcab626ee2edd6b0a689d50a5691554d79f03b",
+    "operation": "2x.thumbnail",
+    "side": "output",
+    "valueText": "{\"blob\":\"blob:17\",\"width\":0,\"height\":96,\"quality\":0.95,\"profile\":\"sRGB\"}",
+    "examplePointer": null,
+    "setup": "none",
+    "resources": {},
+    "expected": "fails",
+    "stage": "value-assessment",
+    "status": "accepted",
+    "proof": {
+      "authority": "OpenBindings 5.1, 5.2, 7; JSON Schema 2020-12 validation",
+      "contractPointer": "/operations/2x.thumbnail/output",
+      "corroboration": {
+        "outcome": "fails",
+        "exception": "_WrappedReferencingError",
+        "message": "Unresolvable: https://challenge.invalid/round02/c22/profile.json",
+        "boundedCompletions": {
+          "false": {
+            "outcome": "fails",
+            "errors": [
+              {
+                "instancePointer": "",
+                "schemaPath": [
+                  "oneOf"
+                ],
+                "keyword": "oneOf",
+                "message": "{'blob': 'blob:17', 'width': 0, 'height': 96, 'quality': Fraction(19, 20), 'profile': 'sRGB'} is not valid under any of the given schemas",
+                "context": [
+                  {
+                    "instancePointer": "/width",
+                    "schemaPath": [
+                      "oneOf",
+                      0,
+                      "properties",
+                      "width",
+                      "minimum"
+                    ],
+                    "keyword": "minimum",
+                    "message": "0 is less than the minimum of 1",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "/profile",
+                    "schemaPath": [
+                      "oneOf",
+                      0,
+                      "properties",
+                      "profile",
+                      "allOf"
+                    ],
+                    "keyword": null,
+                    "message": "False schema does not allow 'sRGB'",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      1,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'failure' is a required property",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      1,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'detail' is a required property",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      1,
+                      "additionalProperties"
+                    ],
+                    "keyword": "additionalProperties",
+                    "message": "Additional properties are not allowed ('blob', 'height', 'profile', 'quality', 'width' were unexpected)",
+                    "context": []
+                  }
+                ]
+              }
+            ]
+          },
+          "true": {
+            "outcome": "fails",
+            "errors": [
+              {
+                "instancePointer": "",
+                "schemaPath": [
+                  "oneOf"
+                ],
+                "keyword": "oneOf",
+                "message": "{'blob': 'blob:17', 'width': 0, 'height': 96, 'quality': Fraction(19, 20), 'profile': 'sRGB'} is not valid under any of the given schemas",
+                "context": [
+                  {
+                    "instancePointer": "/width",
+                    "schemaPath": [
+                      "oneOf",
+                      0,
+                      "properties",
+                      "width",
+                      "minimum"
+                    ],
+                    "keyword": "minimum",
+                    "message": "0 is less than the minimum of 1",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      1,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'failure' is a required property",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      1,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'detail' is a required property",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      1,
+                      "additionalProperties"
+                    ],
+                    "keyword": "additionalProperties",
+                    "message": "Additional properties are not allowed ('blob', 'height', 'profile', 'quality', 'width' were unexpected)",
+                    "context": []
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "proof": "See manual bounded propositional proof: external sites occur only as assertions on a present property in closed/disjoint branches; no annotation-sensitive keyword consumes external annotations."
+      }
+    }
+  },
+  {
+    "root": "C22",
+    "documentState": "original",
+    "independentRoot": true,
+    "caseId": "thumbnail-returned-failure",
+    "family": "valueCases",
+    "authorPointer": "/valueCases/20",
+    "authorExpected": "satisfies",
+    "document": "authors/c/C22/document.json",
+    "documentSha256": "dfd8cd330b83f183445284ba97fcab626ee2edd6b0a689d50a5691554d79f03b",
+    "operation": "2x.thumbnail",
+    "side": "output",
+    "valueText": "{\"failure\":\"decode-failed\",\"detail\":null}",
+    "examplePointer": null,
+    "setup": "none",
+    "resources": {},
+    "expected": "satisfies",
+    "stage": "value-assessment",
+    "status": "accepted",
+    "proof": {
+      "authority": "OpenBindings 5.1, 5.2, 7; JSON Schema 2020-12 validation",
+      "contractPointer": "/operations/2x.thumbnail/output",
+      "corroboration": {
+        "outcome": "satisfies",
+        "errors": [],
+        "boundedCompletions": {
+          "false": {
+            "outcome": "satisfies",
+            "errors": []
+          },
+          "true": {
+            "outcome": "satisfies",
+            "errors": []
+          }
+        },
+        "proof": "See manual bounded propositional proof: external sites occur only as assertions on a present property in closed/disjoint branches; no annotation-sensitive keyword consumes external annotations."
+      }
+    }
+  },
+  {
+    "root": "C22",
+    "documentState": "original",
+    "independentRoot": true,
+    "caseId": "thumbnail-absent-detail",
+    "family": "valueCases",
+    "authorPointer": "/valueCases/21",
+    "authorExpected": "fails",
+    "document": "authors/c/C22/document.json",
+    "documentSha256": "dfd8cd330b83f183445284ba97fcab626ee2edd6b0a689d50a5691554d79f03b",
+    "operation": "2x.thumbnail",
+    "side": "output",
+    "valueText": "{\"failure\":\"decode-failed\"}",
+    "examplePointer": null,
+    "setup": "none",
+    "resources": {},
+    "expected": "fails",
+    "stage": "value-assessment",
+    "status": "accepted",
+    "proof": {
+      "authority": "OpenBindings 5.1, 5.2, 7; JSON Schema 2020-12 validation",
+      "contractPointer": "/operations/2x.thumbnail/output",
+      "corroboration": {
+        "outcome": "fails",
+        "errors": [
+          {
+            "instancePointer": "",
+            "schemaPath": [
+              "oneOf"
+            ],
+            "keyword": "oneOf",
+            "message": "{'failure': 'decode-failed'} is not valid under any of the given schemas",
+            "context": [
+              {
+                "instancePointer": "",
+                "schemaPath": [
+                  "oneOf",
+                  0,
+                  "required"
+                ],
+                "keyword": "required",
+                "message": "'blob' is a required property",
+                "context": []
+              },
+              {
+                "instancePointer": "",
+                "schemaPath": [
+                  "oneOf",
+                  0,
+                  "required"
+                ],
+                "keyword": "required",
+                "message": "'width' is a required property",
+                "context": []
+              },
+              {
+                "instancePointer": "",
+                "schemaPath": [
+                  "oneOf",
+                  0,
+                  "required"
+                ],
+                "keyword": "required",
+                "message": "'height' is a required property",
+                "context": []
+              },
+              {
+                "instancePointer": "",
+                "schemaPath": [
+                  "oneOf",
+                  0,
+                  "required"
+                ],
+                "keyword": "required",
+                "message": "'quality' is a required property",
+                "context": []
+              },
+              {
+                "instancePointer": "",
+                "schemaPath": [
+                  "oneOf",
+                  0,
+                  "additionalProperties"
+                ],
+                "keyword": "additionalProperties",
+                "message": "Additional properties are not allowed ('failure' was unexpected)",
+                "context": []
+              },
+              {
+                "instancePointer": "",
+                "schemaPath": [
+                  "oneOf",
+                  1,
+                  "required"
+                ],
+                "keyword": "required",
+                "message": "'detail' is a required property",
+                "context": []
+              }
+            ]
+          }
+        ],
+        "boundedCompletions": {
+          "false": {
+            "outcome": "fails",
+            "errors": [
+              {
+                "instancePointer": "",
+                "schemaPath": [
+                  "oneOf"
+                ],
+                "keyword": "oneOf",
+                "message": "{'failure': 'decode-failed'} is not valid under any of the given schemas",
+                "context": [
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      0,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'blob' is a required property",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      0,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'width' is a required property",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      0,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'height' is a required property",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      0,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'quality' is a required property",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      0,
+                      "additionalProperties"
+                    ],
+                    "keyword": "additionalProperties",
+                    "message": "Additional properties are not allowed ('failure' was unexpected)",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      1,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'detail' is a required property",
+                    "context": []
+                  }
+                ]
+              }
+            ]
+          },
+          "true": {
+            "outcome": "fails",
+            "errors": [
+              {
+                "instancePointer": "",
+                "schemaPath": [
+                  "oneOf"
+                ],
+                "keyword": "oneOf",
+                "message": "{'failure': 'decode-failed'} is not valid under any of the given schemas",
+                "context": [
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      0,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'blob' is a required property",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      0,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'width' is a required property",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      0,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'height' is a required property",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      0,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'quality' is a required property",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      0,
+                      "additionalProperties"
+                    ],
+                    "keyword": "additionalProperties",
+                    "message": "Additional properties are not allowed ('failure' was unexpected)",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      1,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'detail' is a required property",
+                    "context": []
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "proof": "See manual bounded propositional proof: external sites occur only as assertions on a present property in closed/disjoint branches; no annotation-sensitive keyword consumes external annotations."
+      }
+    }
+  },
+  {
+    "root": "C22",
+    "documentState": "original",
+    "independentRoot": true,
+    "caseId": "example:2x.thumbnail:with-profile:output:none",
+    "family": "exampleCases",
+    "authorPointer": "/exampleCases/4",
+    "authorExpected": "no-verdict",
+    "document": "authors/c/C22/document.json",
+    "documentSha256": "dfd8cd330b83f183445284ba97fcab626ee2edd6b0a689d50a5691554d79f03b",
+    "operation": "2x.thumbnail",
+    "side": "output",
+    "valueText": "{\"blob\":\"blob:thumb-17\",\"width\":128,\"height\":96,\"quality\":0.95,\"profile\":\"sRGB\"}",
+    "examplePointer": "/operations/2x.thumbnail/examples/with-profile/output",
+    "setup": "none",
+    "resources": {},
+    "expected": "no-verdict",
+    "stage": "value-assessment",
+    "status": "accepted",
+    "proof": {
+      "authority": "OpenBindings 5.1, 5.2, 7; JSON Schema 2020-12 validation",
+      "contractPointer": "/operations/2x.thumbnail/output",
+      "corroboration": {
+        "outcome": "no-verdict",
+        "exception": "_WrappedReferencingError",
+        "message": "Unresolvable: https://challenge.invalid/round02/c22/profile.json",
+        "boundedCompletions": {
+          "false": {
+            "outcome": "fails",
+            "errors": [
+              {
+                "instancePointer": "",
+                "schemaPath": [
+                  "oneOf"
+                ],
+                "keyword": "oneOf",
+                "message": "{'blob': 'blob:thumb-17', 'width': 128, 'height': 96, 'quality': Fraction(19, 20), 'profile': 'sRGB'} is not valid under any of the given schemas",
+                "context": [
+                  {
+                    "instancePointer": "/profile",
+                    "schemaPath": [
+                      "oneOf",
+                      0,
+                      "properties",
+                      "profile",
+                      "allOf"
+                    ],
+                    "keyword": null,
+                    "message": "False schema does not allow 'sRGB'",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      1,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'failure' is a required property",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      1,
+                      "required"
+                    ],
+                    "keyword": "required",
+                    "message": "'detail' is a required property",
+                    "context": []
+                  },
+                  {
+                    "instancePointer": "",
+                    "schemaPath": [
+                      "oneOf",
+                      1,
+                      "additionalProperties"
+                    ],
+                    "keyword": "additionalProperties",
+                    "message": "Additional properties are not allowed ('blob', 'height', 'profile', 'quality', 'width' were unexpected)",
+                    "context": []
+                  }
+                ]
+              }
+            ]
+          },
+          "true": {
+            "outcome": "satisfies",
+            "errors": []
+          }
+        },
+        "proof": "Two explicit supplied completions give different validity. Missing external content is material (OpenBindings 5.2)."
+      }
+    }
+  },
+  {
+    "root": "C22",
+    "documentState": "original",
+    "independentRoot": true,
+    "caseId": "example:2x.thumbnail:failed:output:none",
+    "family": "exampleCases",
+    "authorPointer": "/exampleCases/7",
+    "authorExpected": "satisfies",
+    "document": "authors/c/C22/document.json",
+    "documentSha256": "dfd8cd330b83f183445284ba97fcab626ee2edd6b0a689d50a5691554d79f03b",
+    "operation": "2x.thumbnail",
+    "side": "output",
+    "valueText": "{\"failure\":\"decode-failed\",\"detail\":null}",
+    "examplePointer": "/operations/2x.thumbnail/examples/failed/output",
+    "setup": "none",
+    "resources": {},
+    "expected": "satisfies",
+    "stage": "value-assessment",
+    "status": "accepted",
+    "proof": {
+      "authority": "OpenBindings 5.1, 5.2, 7; JSON Schema 2020-12 validation",
+      "contractPointer": "/operations/2x.thumbnail/output",
+      "corroboration": {
+        "outcome": "satisfies",
+        "errors": [],
+        "boundedCompletions": {
+          "false": {
+            "outcome": "satisfies",
+            "errors": []
+          },
+          "true": {
+            "outcome": "satisfies",
+            "errors": []
+          }
+        },
+        "proof": "See manual bounded propositional proof: external sites occur only as assertions on a present property in closed/disjoint branches; no annotation-sensitive keyword consumes external annotations."
+      }
+    }
+  },
+  {
+    "root": "C22",
+    "documentState": "original",
+    "independentRoot": true,
+    "caseId": "example:2x.thumbnail:exact-tenth:output:none",
+    "family": "additionalExampleCases",
+    "authorPointer": null,
+    "authorExpected": null,
+    "document": "authors/c/C22/document.json",
+    "documentSha256": "dfd8cd330b83f183445284ba97fcab626ee2edd6b0a689d50a5691554d79f03b",
+    "operation": "2x.thumbnail",
+    "side": "output",
+    "valueText": "{\"blob\":\"blob:thumb-17\",\"width\":128,\"height\":96,\"quality\":0.10}",
+    "examplePointer": "/operations/2x.thumbnail/examples/exact-tenth/output",
+    "setup": "none",
+    "resources": {},
+    "expected": "satisfies",
+    "stage": "value-assessment",
+    "status": "accepted",
+    "proof": {
+      "authority": "OpenBindings 5.1, 5.2, 7; JSON Schema 2020-12 validation",
+      "contractPointer": "/operations/2x.thumbnail/output",
+      "corroboration": {
+        "outcome": "satisfies",
+        "errors": [],
+        "boundedCompletions": {
+          "false": {
+            "outcome": "satisfies",
+            "errors": []
+          },
+          "true": {
+            "outcome": "satisfies",
+            "errors": []
+          }
+        },
+        "proof": "See manual bounded propositional proof: external sites occur only as assertions on a present property in closed/disjoint branches; no annotation-sensitive keyword consumes external annotations."
+      }
+    }
+  },
+  {
+    "root": "C22",
+    "documentState": "original",
+    "independentRoot": true,
+    "caseId": "example:2x.thumbnail:false-precision-claim:output:none",
+    "family": "additionalExampleCases",
+    "authorPointer": null,
+    "authorExpected": null,
+    "document": "authors/c/C22/document.json",
+    "documentSha256": "dfd8cd330b83f183445284ba97fcab626ee2edd6b0a689d50a5691554d79f03b",
+    "operation": "2x.thumbnail",
+    "side": "output",
+    "valueText": null,
+    "examplePointer": "/operations/2x.thumbnail/examples/false-precision-claim/output",
+    "setup": "none",
+    "resources": {},
+    "expected": "absent",
+    "stage": "example-presence",
+    "status": "accepted",
+    "proof": {
+      "authority": "OpenBindings 5.1, 5.2, 7; JSON Schema 2020-12 validation",
+      "contractPointer": "/operations/2x.thumbnail/output",
+      "corroboration": {
+        "outcome": "absent",
+        "proof": "No example member supplies this side; OpenBindings 5 Presence and 5.1 Examples."
+      }
+    }
+  }
+]

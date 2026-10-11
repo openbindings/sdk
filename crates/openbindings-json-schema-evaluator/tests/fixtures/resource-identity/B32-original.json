@@ -1,0 +1,459 @@
+{
+  "openbindings": "0.2.0+queue.b32",
+  "name": "Workshop build queue",
+  "version": "night shift / 3",
+  "description": "A queue that receives build requests, reports scheduling state, and consumes a reusable runner capability. Per-value contracts do not impose event cadence or completion.",
+  "operations": {
+    "enqueue_build": {
+      "description": "Submit one build specification with a request key and an optional earliest start.",
+      "aliases": [
+        "workshop.queue.submit"
+      ],
+      "tags": [
+        "queue",
+        "write"
+      ],
+      "examples": {
+        "nightly": {
+          "input": {
+            "requestKey": "nightly-47",
+            "source": "urn:repo:build-kit",
+            "steps": [
+              {
+                "kind": "command",
+                "argv": [
+                  "make",
+                  "check"
+                ]
+              }
+            ],
+            "notBefore": null
+          },
+          "output": {
+            "job": "q47",
+            "accepted": true
+          }
+        }
+      },
+      "input": {
+        "$ref": "#/schemas/build_request"
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string",
+            "minLength": 1
+          },
+          "accepted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "job",
+          "accepted"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "observe_build": {
+      "description": "Observe a build by job key; each returned value is scheduling state for that build.",
+      "examples": {
+        "paused": {
+          "output": {
+            "phase": "paused",
+            "revision": 9007199254740993,
+            "resumeAt": null
+          }
+        }
+      },
+      "input": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "job"
+        ],
+        "additionalProperties": false
+      },
+      "output": {
+        "$ref": "#schedule-state"
+      }
+    },
+    "set_schedule": {
+      "description": "Pause a queue with null or configure a not-before instant and an optional dispatch window.",
+      "deprecated": false,
+      "examples": {
+        "pause": {
+          "input": null,
+          "output": {
+            "phase": "paused",
+            "revision": 48,
+            "resumeAt": null
+          }
+        },
+        "fractional-window": {
+          "input": {
+            "notBefore": null,
+            "windowSeconds": 0.3
+          }
+        }
+      },
+      "input": {
+        "oneOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "notBefore": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "windowSeconds": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 60,
+                "multipleOf": 0.1
+              }
+            },
+            "required": [
+              "notBefore"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "output": {
+        "$ref": "#schedule-state"
+      }
+    },
+    "run_job": {
+      "description": "Execute one named attempt of a build, reporting progress and terminal results as individual values.",
+      "aliases": [
+        "workshop.runner.execute"
+      ],
+      "examples": {
+        "started": {
+          "output": {
+            "status": "running",
+            "job": "q47"
+          }
+        },
+        "finished": {
+          "output": {
+            "status": "finished",
+            "job": "q47",
+            "exitCode": 0,
+            "artifacts": []
+          }
+        }
+      },
+      "input": {
+        "$ref": "https://schemas.challenge03.example.invalid/build/runner-packet.json"
+      },
+      "output": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "running"
+              },
+              "job": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "status",
+              "job"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "$ref": "https://schemas.challenge03.example.invalid/build/runner-result.json"
+          }
+        ]
+      }
+    },
+    "poke_scheduler": {
+      "description": "Ask the scheduler to reconsider runnable work using a null marker; migrate producers toward set_schedule for explicit state changes.",
+      "deprecated": true,
+      "examples": {
+        "nudge": {
+          "input": null,
+          "output": null
+        }
+      },
+      "input": {
+        "type": "null"
+      }
+    }
+  },
+  "schemas": {
+    "build_request": {
+      "type": "object",
+      "properties": {
+        "requestKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "format": "uri"
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "https://schemas.challenge03.example.invalid/build/runner-packet.json#/$defs/step"
+          }
+        },
+        "notBefore": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "required": [
+        "requestKey",
+        "source",
+        "steps"
+      ],
+      "additionalProperties": false
+    },
+    "schedule_state": {
+      "type": "object",
+      "properties": {
+        "phase": {
+          "enum": [
+            "paused",
+            "ready",
+            "dispatching"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
+        },
+        "resumeAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "phase",
+        "revision",
+        "resumeAt"
+      ],
+      "additionalProperties": false,
+      "$anchor": "schedule-state",
+      "if": {
+        "properties": {
+          "phase": {
+            "const": "paused"
+          }
+        },
+        "required": [
+          "phase"
+        ]
+      },
+      "then": {
+        "properties": {
+          "resumeAt": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    "runner_packet": {
+      "$id": "https://schemas.challenge03.example.invalid/build/runner-packet.json",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "job": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        }
+      },
+      "required": [
+        "job",
+        "attempt",
+        "steps"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "step": {
+          "$anchor": "step",
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "command"
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "working directory": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "argv"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "group"
+                },
+                "children": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "$ref": "#step"
+                  }
+                }
+              },
+              "required": [
+                "kind",
+                "children"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    }
+  },
+  "sources": {
+    "queue_events": {
+      "kind": "https://kinds.challenge03.example.invalid/build-events/v1",
+      "content": {
+        "channel": "build.queue",
+        "delivery": "at-least-once",
+        "deadLetter": null,
+        "$ref": "./deployment-owned-routing.json",
+        "metadata": {
+          "$schema": "not-a-schema-dialect",
+          "type": 17
+        }
+      }
+    },
+    "runner_local": {
+      "kind": "runner/stdio@1",
+      "content": null
+    }
+  },
+  "bindings": {
+    "enqueue-deduplicated": {
+      "operation": "enqueue_build",
+      "source": "queue_events",
+      "content": {
+        "event": "queue.requested",
+        "deduplicateBy": "requestKey"
+      },
+      "idempotent": true,
+      "preference": 20
+    },
+    "enqueue-raw": {
+      "operation": "enqueue_build",
+      "source": "queue_events",
+      "content": {
+        "event": "queue.requested.unchecked"
+      },
+      "idempotent": false,
+      "preference": 20,
+      "deprecated": true
+    },
+    "observe-events": {
+      "operation": "observe_build",
+      "source": "queue_events",
+      "content": {
+        "event": "queue.state",
+        "mode": "subscription"
+      },
+      "idempotent": true
+    },
+    "schedule-events": {
+      "operation": "set_schedule",
+      "source": "queue_events",
+      "content": {
+        "event": "queue.schedule"
+      },
+      "idempotent": true,
+      "preference": -4
+    },
+    "run-local": {
+      "operation": "run_job",
+      "source": "runner_local"
+    },
+    "poke-events": {
+      "operation": "poke_scheduler",
+      "source": "queue_events",
+      "content": "queue.nudge",
+      "idempotent": false
+    }
+  },
+  "dependencies": {
+    "primary_runner": {
+      "operation": "run_job",
+      "kinds": [
+        "runner/stdio@1",
+        "runner/événement@1"
+      ],
+      "description": "The production executor consumption point; accepts each progress or terminal result admitted by run_job."
+    },
+    "diagnostic_runner": {
+      "operation": "run_job",
+      "description": "An independently wired diagnostic execution point without a kind constraint."
+    }
+  },
+  "x-routing-note": {
+    "$ref": "relative-diagnostic-note",
+    "sequence": 9007199254740993
+  }
+}

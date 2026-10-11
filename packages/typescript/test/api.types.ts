@@ -156,3 +156,150 @@ const obsoleteOutcome: ValueOutcome = {
   problemsComplete: true,
 };
 void obsoleteOutcome;
+
+// Round 1: actual emitted declarations, not declaration-only proposal stubs.
+import {
+  ExactMember,
+  OwnedDocumentDraft,
+  BindingView,
+  SourceView,
+  DependencyView,
+  ExampleView,
+  type EditableDocumentDraft,
+  type DocumentDraft,
+  type JsonInput,
+  type ExactIterator,
+} from "../dist/index.js";
+function roundOneTypes(document: ParsedDocument) {
+  using root = document.value;
+  using members = root.members();
+  if (members) {
+    members satisfies ExactIterator<ExactMember>;
+    members.return() satisfies IteratorResult<ExactMember, undefined>;
+    for (using member of members) {
+      using name = member.name;
+      using value = member.value;
+      member.index satisfies number;
+      name.text satisfies string;
+      value.metadata.kind satisfies string;
+      using retained = member.retain();
+    }
+  }
+  using elements = root.elements();
+  if (elements) for (using element of elements) element.text satisfies string;
+  for (const metadata of document.operations) {
+    metadata.tags satisfies readonly string[] | null;
+    metadata.deprecated satisfies boolean | null;
+    // @ts-expect-error Immutable metadata is not editable draft data.
+    metadata.tags?.push("x");
+  }
+  using source = document.source("a");
+  using binding = document.binding("b");
+  using dependency = document.dependency("d");
+  if (source) {
+    source.metadata.kind satisfies string;
+    using content = source.content;
+  }
+  if (binding) {
+    binding.metadata.preference satisfies number | null;
+    using retained = binding.retain();
+  }
+  if (dependency) dependency.metadata.kinds satisfies readonly string[] | null;
+  const selected = document.resolveOperation("run");
+  if (selected.status === "found") {
+    using operation = selected.operation;
+    using example = operation.example("example");
+    if (example) {
+      using value = example.input;
+      example.metadata.hasInput satisfies boolean;
+    }
+  }
+  const conversion = document.toDraft();
+  if (conversion.status !== "drafted") {
+    conversion.error.sourceLocation?.byteOffset satisfies number | undefined;
+    return;
+  }
+  using editing = conversion.draft;
+  const draft: EditableDocumentDraft = editing.value;
+  editWritableDraft(draft);
+  const input: DocumentDraft = draft;
+  authorDocument(input);
+  const leaf = draft.schemas?.a;
+  if (leaf instanceof ExactJson) {
+    using retained = leaf.retain();
+    draft.additionalFields = {
+      ...draft.additionalFields,
+      "x-retained": retained,
+    };
+  }
+  // @ts-expect-error Opaque JsonInput does not promise an exact owner.
+  leaf?.retain();
+  // @ts-expect-error No second convenience authoring surface.
+  editing.clone();
+  // @ts-expect-error No implicit aggregate capture convenience.
+  editing.keep(root);
+}
+function editWritableDraft(draft: EditableDocumentDraft) {
+  draft.operations.added = { aliases: ["alias"], tags: ["tag"], examples: {} };
+  draft.operations.added.aliases?.push("alias2");
+  draft.operations.added.tags?.splice(0, 1);
+  draft.operations.added.examples!.newExample = { input: null };
+  delete draft.operations.added.examples!.newExample;
+  draft.dependencies ??= {};
+  draft.dependencies.newDependency = { operation: "added", kinds: [] };
+  draft.dependencies.newDependency.kinds?.push("a");
+  delete draft.dependencies.newDependency;
+  draft.sources ??= {};
+  draft.sources.newSource = { kind: "a" };
+  delete draft.sources.newSource;
+  draft.bindings ??= {};
+  draft.bindings.newBinding = { operation: "added", source: "x" };
+  delete draft.bindings.newBinding;
+  draft.schemas ??= {};
+  draft.schemas.a = true;
+  delete draft.schemas.a;
+  delete draft.operations.added;
+  const opaque: JsonInput = { nested: [1, 2] as const };
+  draft.schemas.a = opaque;
+}
+function inaccessibleConstructors() {
+  // @ts-expect-error Acquire through exact members().
+  new ExactMember();
+  // @ts-expect-error Acquire through toDraft().
+  new OwnedDocumentDraft();
+  // @ts-expect-error Acquire through keyed lookup.
+  new BindingView();
+  // @ts-expect-error Acquire through keyed lookup.
+  new SourceView();
+  // @ts-expect-error Acquire through keyed lookup.
+  new DependencyView();
+  // @ts-expect-error Acquire through example lookup.
+  new ExampleView();
+}
+const readonlyRoundOneInput = {
+  operations: {
+    run: { aliases: ["a"], tags: ["t"], examples: { e: { input: 1 } } },
+  },
+  dependencies: { d: { operation: "run", kinds: ["k"] } },
+} as const;
+authorDocument(readonlyRoundOneInput);
+void roundOneTypes;
+void inaccessibleConstructors;
+
+function preparedResources(
+  contract: import("../dist/index.js").PreparedContract,
+) {
+  const metadata: import("../dist/index.js").ResourceCompleteness =
+    contract.resourceCompleteness;
+  if (metadata.status === "incomplete") {
+    // @ts-expect-error evidence fields are immutable
+    metadata.evidence.message = "changed";
+    if (metadata.evidence.location) {
+      // @ts-expect-error original locations are immutable
+      metadata.evidence.location.pointer = "changed";
+    }
+  }
+  // @ts-expect-error resource metadata is immutable
+  metadata.status = "complete";
+}
+void preparedResources;

@@ -171,9 +171,8 @@ impl Preference {
     pub fn get(self) -> i64 {
         self.0
     }
-}
-impl Read for Preference {
-    fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
+    // Shared exact conversion for authoring and retained normative read views.
+    pub(crate) fn from_json_value(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
         let text = v
             .number_text()
             .ok_or_else(|| error(v, "expected a preference integer"))?;
@@ -194,6 +193,12 @@ impl Read for Preference {
             .parse::<f64>()
             .map_err(|_| error(v, "preference conversion failed"))? as i64;
         Ok(Self(n))
+    }
+}
+
+impl Read for Preference {
+    fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
+        Self::from_json_value(v)
     }
 }
 
@@ -494,7 +499,8 @@ impl Read for OperationExample {
 pub struct Dependency {
     /// Referenced operation name; document assessment checks the applicable normative constraints.
     pub operation: String,
-    /// Allowed source kinds. Absence accepts every kind; an empty list accepts none.
+    /// Allowed source kinds. Absence accepts every kind; a conformant present list
+    /// must be nonempty. An empty list is representable but fails normative assessment.
     pub kinds: Option<Vec<String>>,
     /// Optional human-facing dependency description.
     pub description: Option<String>,
@@ -788,7 +794,9 @@ impl DocumentBuilder {
     }
 }
 impl Dependency {
-    /// Test the declared kind filter with exact string equality; absence accepts all and an empty list accepts none. This does not resolve or execute a dependency.
+    /// Test the declared kind filter with exact string equality; absence accepts all.
+    /// An empty list matches none but is nonconformant. This does not establish
+    /// conformance or resolve or execute a dependency.
     pub fn accepts_kind(&self, kind: &str) -> bool {
         self.kinds
             .as_ref()

@@ -1,0 +1,689 @@
+{
+  "root": "B32",
+  "document": "document.json",
+  "conformance": {
+    "expected": "conforms",
+    "rationale": {
+      "OBI-01": "The text is UTF-8 JSON without BOM or duplicate keys, and large integers are literal decimal tokens.",
+      "OBI-02": "Only specified fields and x-routing-note appear at the OBI layer; null source content, string binding content and omitted binding content are permitted.",
+      "OBI-03": "0.2.0+queue.b32 is SemVer and has 0.2 line semantics; build metadata adds no core semantics.",
+      "OBI-04": "All operation, schema, source, dependency, binding, example and alias names match the whole-name grammar. The working directory property is schema data, not an OBI map name.",
+      "OBI-05": "Five primary operation keys and two aliases form a unique identifier namespace.",
+      "OBI-06": "All six bindings name existing primary operation keys.",
+      "OBI-07": "All bindings refer to queue_events or runner_local.",
+      "OBI-08": "Both dependencies reference the primary operation key run_job.",
+      "OBI-09": "Only runner_packet declares $schema among contained schemas, and it declares 2020-12 at its own resource root. Content metadata is not a contained schema.",
+      "OBI-10": "Each contained schema is a valid 2020-12 object; recursive reference structure does not invalidate schema syntax. The supplied external schema is separate from document conformance.",
+      "OBI-11": "Document-resource references are same-document or absolute; runner_packet has an absolute $id. Its internal local references are governed by its own resource.",
+      "OBI-12": "#/schemas/build_request and #schedule-state reach OBI-position schemas in the embedding document. References into runner_packet use its absolute resource URI.",
+      "OBI-13": "schedule-state is the only document-resource plain name; step belongs only to runner_packet. The single contained $id is unique."
+    }
+  },
+  "setups": {
+    "document-only": {
+      "resources": {}
+    },
+    "runner-result-supplied": {
+      "resources": {
+        "https://schemas.challenge03.example.invalid/build/runner-result.json": "resources/runner-result.json"
+      }
+    }
+  },
+  "aliases": {
+    "workshop.queue.submit": "enqueue_build",
+    "workshop.runner.execute": "run_job"
+  },
+  "bindings": {
+    "enqueue_build": [
+      "enqueue-deduplicated",
+      "enqueue-raw"
+    ],
+    "observe_build": [
+      "observe-events"
+    ],
+    "set_schedule": [
+      "schedule-events"
+    ],
+    "run_job": [
+      "run-local"
+    ],
+    "poke_scheduler": [
+      "poke-events"
+    ]
+  },
+  "dependencies": {
+    "primary_runner": {
+      "operation": "run_job",
+      "acceptedKinds": [
+        "runner/stdio@1",
+        "runner/événement@1"
+      ],
+      "rejectedKinds": [
+        "Runner/stdio@1",
+        "runner/stdio@2",
+        "runner/événement@1",
+        "https://kinds.challenge03.example.invalid/build-events/v1"
+      ]
+    },
+    "diagnostic_runner": {
+      "operation": "run_job",
+      "acceptedKinds": [
+        "runner/stdio@1",
+        "runner/événement@1",
+        "https://kinds.challenge03.example.invalid/build-events/v1",
+        "Runner/stdio@1",
+        "arbitrary private kind"
+      ],
+      "rejectedKinds": [],
+      "constraint": "Every possible non-empty source kind is accepted; the list contains illustrative probes only."
+    }
+  },
+  "valueCases": [
+    {
+      "id": "B32-V01",
+      "operation": "enqueue_build",
+      "side": "input",
+      "valueText": "{\"requestKey\":\"r1\",\"source\":\"urn:repo:a\",\"steps\":[{\"kind\":\"command\",\"argv\":[\"make\"]}]}",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "notBefore and labels can be absent."
+    },
+    {
+      "id": "B32-V02",
+      "operation": "enqueue_build",
+      "side": "input",
+      "valueText": "{\"requestKey\":\"r1\",\"source\":\"urn:repo:a\",\"steps\":[{\"kind\":\"command\",\"argv\":[\"make\"]}],\"notBefore\":null,\"labels\":{\"owner\":null}}",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "Null scheduling and label values are explicit domain values."
+    },
+    {
+      "id": "B32-V03",
+      "operation": "enqueue_build",
+      "side": "input",
+      "valueText": "{\"requestKey\":\"r1\",\"source\":\"urn:repo:a\",\"steps\":[]}",
+      "expected": "fails",
+      "setup": "document-only",
+      "reason": "At least one runner step is required."
+    },
+    {
+      "id": "B32-V04",
+      "operation": "enqueue_build",
+      "side": "input",
+      "valueText": "{\"requestKey\":\"r1\",\"source\":\"urn:repo:a\",\"steps\":[{\"kind\":\"group\",\"children\":[{\"kind\":\"command\",\"argv\":[\"make\",\"check\"],\"working directory\":\"src\"}]}]}",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "Recursion consumes child instances in the identified runner resource."
+    },
+    {
+      "id": "B32-V05",
+      "operation": "enqueue_build",
+      "side": "input",
+      "valueText": "{\"requestKey\":\"r1\",\"source\":\"urn:repo:a\",\"steps\":[{\"kind\":\"group\",\"children\":[{\"kind\":\"command\",\"argv\":[]}]}]}",
+      "expected": "fails",
+      "setup": "document-only",
+      "reason": "Nested commands still require nonempty argv."
+    },
+    {
+      "id": "B32-V06",
+      "operation": "enqueue_build",
+      "side": "output",
+      "valueText": "{\"job\":\"q47\",\"accepted\":false}",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "A rejected submission is a valid output value."
+    },
+    {
+      "id": "B32-V07",
+      "operation": "observe_build",
+      "side": "input",
+      "valueText": "{\"job\":\"\"}",
+      "expected": "fails",
+      "setup": "document-only",
+      "reason": "A job key must be nonempty."
+    },
+    {
+      "id": "B32-V08",
+      "operation": "observe_build",
+      "side": "output",
+      "valueText": "{\"phase\":\"paused\",\"revision\":18446744073709551615,\"resumeAt\":null}",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "The exact uint64 ceiling is admitted, independent of binary64."
+    },
+    {
+      "id": "B32-V09",
+      "operation": "observe_build",
+      "side": "output",
+      "valueText": "{\"phase\":\"paused\",\"revision\":18446744073709551616,\"resumeAt\":null}",
+      "expected": "fails",
+      "setup": "document-only",
+      "reason": "The next exact integer exceeds the authored revision maximum."
+    },
+    {
+      "id": "B32-V10",
+      "operation": "observe_build",
+      "side": "output",
+      "valueText": "{\"phase\":\"paused\",\"revision\":1,\"resumeAt\":\"2026-10-11T00:00:00Z\"}",
+      "expected": "fails",
+      "setup": "document-only",
+      "reason": "A paused state requires a null resumeAt by the conditional schema."
+    },
+    {
+      "id": "B32-V11",
+      "operation": "observe_build",
+      "side": "output",
+      "valueText": "{\"phase\":\"ready\",\"revision\":9007199254740993,\"resumeAt\":\"not-a-date\"}",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "The ready branch permits a string; format does not assert date-time validity."
+    },
+    {
+      "id": "B32-V12",
+      "operation": "set_schedule",
+      "side": "input",
+      "valueText": "null",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "Null is the explicit pause command."
+    },
+    {
+      "id": "B32-V13",
+      "operation": "set_schedule",
+      "side": "input",
+      "valueText": "{}",
+      "expected": "fails",
+      "setup": "document-only",
+      "reason": "The object variant requires notBefore; empty object does not mean pause."
+    },
+    {
+      "id": "B32-V14",
+      "operation": "set_schedule",
+      "side": "input",
+      "valueText": "{\"notBefore\":null,\"windowSeconds\":0.3}",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "Exact decimal 0.3 is a multiple of exact decimal 0.1."
+    },
+    {
+      "id": "B32-V15",
+      "operation": "set_schedule",
+      "side": "input",
+      "valueText": "{\"notBefore\":null,\"windowSeconds\":0.30000000000000004}",
+      "expected": "fails",
+      "setup": "document-only",
+      "reason": "This exact decimal token is not a multiple of 0.1."
+    },
+    {
+      "id": "B32-V16",
+      "operation": "set_schedule",
+      "side": "input",
+      "valueText": "{\"notBefore\":null,\"windowSeconds\":3e-1}",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "Scientific notation has the same exact decimal value as 0.3."
+    },
+    {
+      "id": "B32-V17",
+      "operation": "set_schedule",
+      "side": "output",
+      "valueText": "{\"phase\":\"dispatching\",\"revision\":7,\"resumeAt\":null}",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "Only paused adds the stricter null condition; dispatching also permits null."
+    },
+    {
+      "id": "B32-V18",
+      "operation": "run_job",
+      "side": "input",
+      "valueText": "{\"job\":\"q47\",\"attempt\":1,\"steps\":[{\"kind\":\"command\",\"argv\":[\"true\"]}]}",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "The identified runner packet is contained in the document, requiring no external resource."
+    },
+    {
+      "id": "B32-V19",
+      "operation": "run_job",
+      "side": "input",
+      "valueText": "{\"job\":\"q47\",\"attempt\":0,\"steps\":[{\"kind\":\"command\",\"argv\":[\"true\"]}]}",
+      "expected": "fails",
+      "setup": "document-only",
+      "reason": "Attempts start at one."
+    },
+    {
+      "id": "B32-V20",
+      "operation": "run_job",
+      "side": "output",
+      "valueText": "{\"status\":\"running\",\"job\":\"q47\"}",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "The local anyOf branch settles validity independently of an absent external result schema."
+    },
+    {
+      "id": "B32-V21",
+      "operation": "run_job",
+      "side": "output",
+      "valueText": "{\"status\":\"finished\",\"job\":\"q47\",\"exitCode\":0,\"artifacts\":[]}",
+      "expected": "no-verdict",
+      "setup": "document-only",
+      "reason": "The local branch fails and the absent external schema could accept or reject the terminal value."
+    },
+    {
+      "id": "B32-V22",
+      "operation": "run_job",
+      "side": "output",
+      "valueText": "{\"status\":\"finished\",\"job\":\"q47\",\"exitCode\":0,\"artifacts\":[]}",
+      "expected": "satisfies",
+      "setup": "runner-result-supplied",
+      "reason": "The explicitly supplied terminal result resource admits this value."
+    },
+    {
+      "id": "B32-V23",
+      "operation": "run_job",
+      "side": "output",
+      "valueText": "{\"status\":\"finished\",\"job\":\"q47\",\"exitCode\":256,\"artifacts\":[]}",
+      "expected": "fails",
+      "setup": "runner-result-supplied",
+      "reason": "Both branches fail with the supplied external resource: the terminal exit code is out of range."
+    },
+    {
+      "id": "B32-V24",
+      "operation": "run_job",
+      "side": "output",
+      "valueText": "null",
+      "expected": "no-verdict",
+      "setup": "document-only",
+      "reason": "An absent external schema could be true or false; null is not excluded from the document alone."
+    },
+    {
+      "id": "B32-V25",
+      "operation": "run_job",
+      "side": "output",
+      "valueText": "null",
+      "expected": "fails",
+      "setup": "runner-result-supplied",
+      "reason": "The supplied external resource and local progress branch both require objects."
+    },
+    {
+      "id": "B32-V26",
+      "operation": "poke_scheduler",
+      "side": "input",
+      "valueText": "null",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "The nudge marker is explicitly null."
+    },
+    {
+      "id": "B32-V27",
+      "operation": "poke_scheduler",
+      "side": "input",
+      "valueText": "{}",
+      "expected": "fails",
+      "setup": "document-only",
+      "reason": "The null contract differs from an empty object contract."
+    },
+    {
+      "id": "B32-V28",
+      "operation": "poke_scheduler",
+      "side": "output",
+      "valueText": "null",
+      "expected": "no-contract",
+      "setup": "document-only",
+      "reason": "The output schema is omitted; no output contract is stated."
+    },
+    {
+      "id": "B32-V29",
+      "operation": "poke_scheduler",
+      "side": "output",
+      "valueText": "{\"unexpected\":\"ack\"}",
+      "expected": "no-contract",
+      "setup": "document-only",
+      "reason": "Omitted output is not true, false or a null-only schema."
+    },
+    {
+      "id": "B32-V30",
+      "operation": "run_job",
+      "side": "output",
+      "valueText": "{\"status\":\"finished\",\"job\":\"q47\",\"exitCode\":0,\"artifacts\":[\"not a URI\"]}",
+      "expected": "satisfies",
+      "setup": "runner-result-supplied",
+      "reason": "The external resource receives the same format-as-annotation rule."
+    }
+  ],
+  "exampleCases": [
+    {
+      "operation": "enqueue_build",
+      "example": "nightly",
+      "side": "input",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "The nightly build has one command and explicit no-delay null."
+    },
+    {
+      "operation": "enqueue_build",
+      "example": "nightly",
+      "side": "output",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "A job key and boolean are supplied."
+    },
+    {
+      "operation": "observe_build",
+      "example": "paused",
+      "side": "output",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "The exact large revision and explicit null meet the state contract."
+    },
+    {
+      "operation": "set_schedule",
+      "example": "pause",
+      "side": "input",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "Explicit null pause marker."
+    },
+    {
+      "operation": "set_schedule",
+      "example": "pause",
+      "side": "output",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "Paused state has resumeAt null."
+    },
+    {
+      "operation": "set_schedule",
+      "example": "fractional-window",
+      "side": "input",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "0.3 is an exact multiple of 0.1."
+    },
+    {
+      "operation": "run_job",
+      "example": "started",
+      "side": "output",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "The local branch settles the positive claim without an external schema."
+    },
+    {
+      "operation": "run_job",
+      "example": "finished",
+      "side": "output",
+      "expected": "no-verdict",
+      "setup": "document-only",
+      "reason": "Terminal example claim rests on the missing result resource."
+    },
+    {
+      "operation": "run_job",
+      "example": "finished",
+      "side": "output",
+      "expected": "satisfies",
+      "setup": "runner-result-supplied",
+      "reason": "Terminal example meets the supplied result schema."
+    },
+    {
+      "operation": "poke_scheduler",
+      "example": "nudge",
+      "side": "input",
+      "expected": "satisfies",
+      "setup": "document-only",
+      "reason": "The explicit null value satisfies the input schema."
+    },
+    {
+      "operation": "poke_scheduler",
+      "example": "nudge",
+      "side": "output",
+      "expected": "no-contract",
+      "setup": "document-only",
+      "reason": "Explicit null output is present, but its direction has no value contract."
+    }
+  ],
+  "inventory": {
+    "operationKeys": [
+      "enqueue_build",
+      "observe_build",
+      "set_schedule",
+      "run_job",
+      "poke_scheduler"
+    ],
+    "sourceKeys": [
+      "queue_events",
+      "runner_local"
+    ],
+    "bindingKeys": [
+      "enqueue-deduplicated",
+      "enqueue-raw",
+      "observe-events",
+      "schedule-events",
+      "run-local",
+      "poke-events"
+    ],
+    "dependencyKeys": [
+      "primary_runner",
+      "diagnostic_runner"
+    ],
+    "schemaKeys": [
+      "build_request",
+      "schedule_state",
+      "runner_packet"
+    ]
+  },
+  "coverage": [
+    {
+      "dimension": "contract-state",
+      "cell": "absent-versus-null",
+      "pointers": [
+        "/operations/poke_scheduler",
+        "/operations/set_schedule/input"
+      ],
+      "reason": "Null is a marker value; omitted output states no contract."
+    },
+    {
+      "dimension": "references",
+      "cell": "embedded-resource",
+      "pointers": [
+        "/schemas/runner_packet"
+      ],
+      "reason": "An absolute $id preserves internal recursive pointer and anchor meaning."
+    },
+    {
+      "dimension": "references",
+      "cell": "external-resource-dependency",
+      "pointers": [
+        "/operations/run_job/output"
+      ],
+      "reason": "Terminal results require a supplied resource; running progress can already be settled locally."
+    },
+    {
+      "dimension": "value",
+      "cell": "exact-decimal-and-uint64",
+      "pointers": [
+        "/operations/set_schedule/input",
+        "/schemas/schedule_state/properties/revision"
+      ],
+      "reason": "Exact decimal arithmetic distinguishes adjacent large integers and near-multiple decimals."
+    },
+    {
+      "dimension": "dependency",
+      "cell": "constrained-and-unconstrained",
+      "pointers": [
+        "/dependencies"
+      ],
+      "reason": "Two consumption points share one operation but have distinct any-of kind constraints."
+    },
+    {
+      "dimension": "kind",
+      "cell": "unicode-exactness",
+      "pointers": [
+        "/dependencies/primary_runner/kinds"
+      ],
+      "reason": "Composed and decomposed spellings are unequal strings."
+    },
+    {
+      "dimension": "claims",
+      "cell": "binding-specific-idempotency",
+      "pointers": [
+        "/bindings/enqueue-deduplicated",
+        "/bindings/enqueue-raw"
+      ],
+      "reason": "The same operation may have opposing idempotency claims."
+    },
+    {
+      "dimension": "kind-boundary",
+      "cell": "opaque-schema-shaped-content",
+      "pointers": [
+        "/sources/queue_events/content/metadata",
+        "/x-routing-note"
+      ],
+      "reason": "Schema-looking data outside OBI schema positions is not subjected to schema rules."
+    },
+    {
+      "dimension": "catalogue",
+      "cell": "five-operation-contract",
+      "pointers": [
+        "/operations"
+      ],
+      "reason": "The queue offers four capabilities and consumes one runner contract also bound to a local harness."
+    }
+  ],
+  "referenceCases": [
+    {
+      "id": "B32-R01",
+      "at": "/operations/observe_build/output/$ref",
+      "reference": "#schedule-state",
+      "target": "/schemas/schedule_state",
+      "resource": "document",
+      "expectation": "the anchor at an OBI position belongs to the embedding document"
+    },
+    {
+      "id": "B32-R02",
+      "at": "/operations/run_job/input/$ref",
+      "reference": "https://schemas.challenge03.example.invalid/build/runner-packet.json",
+      "target": "/schemas/runner_packet",
+      "resource": "https://schemas.challenge03.example.invalid/build/runner-packet.json",
+      "expectation": "resolve the resource contained at an absolute $id before considering any host fetch"
+    },
+    {
+      "id": "B32-R03",
+      "at": "/schemas/runner_packet/properties/steps/items/$ref",
+      "reference": "#/$defs/step",
+      "target": "/schemas/runner_packet/$defs/step",
+      "resource": "https://schemas.challenge03.example.invalid/build/runner-packet.json",
+      "expectation": "the $id creates a new resource, so its own root is the pointer base"
+    },
+    {
+      "id": "B32-R04",
+      "at": "/schemas/runner_packet/$defs/step/oneOf/1/properties/children/items/$ref",
+      "reference": "#step",
+      "target": "/schemas/runner_packet/$defs/step",
+      "resource": "https://schemas.challenge03.example.invalid/build/runner-packet.json",
+      "expectation": "the anchor belongs to the identified resource, not the OBI document resource"
+    },
+    {
+      "id": "B32-R05",
+      "at": "/schemas/build_request/properties/steps/items/$ref",
+      "reference": "https://schemas.challenge03.example.invalid/build/runner-packet.json#/$defs/step",
+      "target": "/schemas/runner_packet/$defs/step",
+      "resource": "https://schemas.challenge03.example.invalid/build/runner-packet.json",
+      "expectation": "absolute URI reaches into the contained identified schema resource legally"
+    },
+    {
+      "id": "B32-R06",
+      "at": "/operations/run_job/output/anyOf/1/$ref",
+      "reference": "https://schemas.challenge03.example.invalid/build/runner-result.json",
+      "target": "resources/runner-result.json",
+      "resource": "https://schemas.challenge03.example.invalid/build/runner-result.json",
+      "expectation": "external schema is absent in document-only and explicitly supplied in runner-result-supplied; no network retrieval"
+    },
+    {
+      "id": "B32-R07",
+      "at": "/sources/queue_events/content/$ref",
+      "reference": "./deployment-owned-routing.json",
+      "target": null,
+      "resource": "kind-defined",
+      "expectation": "opaque kind content, not a schema reference or OBI-11 violation"
+    }
+  ],
+  "locationCases": [
+    {
+      "id": "B32-L01",
+      "document": "document.json",
+      "originalLocations": [
+        "https://deploy.example.invalid/a/queue.json",
+        "file:///tmp/queue.json",
+        null
+      ],
+      "expected": "identical embedding-document references, contained runner resource resolution, and external result URI; fetching location supplies no core base"
+    }
+  ],
+  "selectionCases": [
+    {
+      "id": "B32-S01",
+      "lookup": "workshop.runner.execute",
+      "expectedOperation": "run_job",
+      "expectedBindings": [
+        "run-local"
+      ],
+      "expectedDependencies": [
+        "primary_runner",
+        "diagnostic_runner"
+      ],
+      "reason": "The alias resolves to one primary operation while dependencies remain independent consumption points."
+    },
+    {
+      "id": "B32-S02",
+      "operation": "enqueue_build",
+      "expected": "equal preference 20 gives no order; raw is separately deprecated; neither signal mandates a winner",
+      "reason": "Consumer policy must not be attributed to the core."
+    },
+    {
+      "id": "B32-S03",
+      "dependency": "primary_runner",
+      "candidateBinding": "run-local",
+      "expected": "kind constraint matches, but dependency is not wired to that binding by the document",
+      "reason": "Dependencies carry no target."
+    },
+    {
+      "id": "B32-S04",
+      "source": "queue_events",
+      "expected": "URI-shaped kind is one opaque exact string; no registry lookup or dereference is implied",
+      "reason": "Kind spelling has no address semantics."
+    }
+  ],
+  "claimAssessments": [
+    {
+      "claim": "the queue sends runner inputs and accepts every admitted runner output at both dependency points",
+      "status": "author claim; scheduler execution is not tested"
+    },
+    {
+      "claim": "enqueue-deduplicated is idempotent and enqueue-raw is not",
+      "status": "independent private binding claims; same requestKey deduplicates only through the first binding"
+    },
+    {
+      "claim": "finished example satisfies run_job output",
+      "status": "resource-dependent from the document alone; true with the supplied resource"
+    },
+    {
+      "claim": "workshop.queue.submit and workshop.runner.execute correspondence",
+      "status": "author-assigned reusable names; no external publication or compatibility proof asserted"
+    }
+  ],
+  "editCases": [
+    {
+      "id": "B32-E01",
+      "brief": "edits/embed-runner-result/brief.json",
+      "original": "edits/embed-runner-result/original.json",
+      "result": "edits/embed-runner-result/result.json",
+      "derivative": true
+    }
+  ],
+  "negativeCases": [
+    {
+      "document": "negatives/pointer-crosses-resource.json",
+      "expectations": "negatives/expectations.json",
+      "derivative": true
+    }
+  ]
+}
