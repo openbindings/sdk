@@ -1,0 +1,118 @@
+{
+  "small": {
+    "file": "fixtures/small.json",
+    "sha256": "5673adfe378335571f283a407010176680b38529af5a74f852c60f2d2938f7b8",
+    "bytes": 12647,
+    "expectedFacts": {
+      "documentConformance": "conformant",
+      "operations": 32,
+      "aliases": 32,
+      "bindings": 32,
+      "sources": 1,
+      "dependencies": 1,
+      "examples": 32,
+      "exampleValues": 64,
+      "schemaReferenceEdges": 32,
+      "selectedReferenceHops": 1,
+      "selectedOperation": "alias0",
+      "selectedPrimary": "op0",
+      "selectedSide": "input",
+      "validOutcome": "satisfies",
+      "invalidOutcome": "fails",
+      "validText": "{\"n\":7,\"mode\":\"read\"}",
+      "invalidText": "{\"n\":-1,\"mode\":\"read\"}",
+      "edit": {
+        "pointer": "/description",
+        "before": "before",
+        "after": "after!",
+        "oldTokenBytes": 8,
+        "newTokenBytes": 8
+      },
+      "opaquePayloadBytes": 1024,
+      "kindIsPrivateAndUnimplemented": true,
+      "nodesIncludingMemberNames": 1538,
+      "containerDepth": 6
+    },
+    "oracleStatus": "analytic_proposal_independent_review_pending",
+    "materialized": true
+  },
+  "catalog": {
+    "file": "fixtures/catalog.json",
+    "sha256": "cf2d1ace439b04f20b9d590738d70a26c662ce152d1b4a5efb7b4c2ec3aa01fb",
+    "bytes": 418523,
+    "expectedFacts": {
+      "documentConformance": "conformant",
+      "operations": 1000,
+      "aliases": 1000,
+      "bindings": 1000,
+      "sources": 1,
+      "dependencies": 1,
+      "examples": 1000,
+      "exampleValues": 2000,
+      "schemaReferenceEdges": 1000,
+      "selectedReferenceHops": 1,
+      "selectedOperation": "alias0",
+      "selectedPrimary": "op0",
+      "selectedSide": "input",
+      "validOutcome": "satisfies",
+      "invalidOutcome": "fails",
+      "validText": "{\"n\":7,\"mode\":\"read\"}",
+      "invalidText": "{\"n\":-1,\"mode\":\"read\"}",
+      "edit": {
+        "pointer": "/description",
+        "before": "before",
+        "after": "after!",
+        "oldTokenBytes": 8,
+        "newTokenBytes": 8
+      },
+      "opaquePayloadBytes": 65536,
+      "kindIsPrivateAndUnimplemented": true,
+      "nodesIncludingMemberNames": 46066,
+      "containerDepth": 6
+    },
+    "oracleStatus": "analytic_proposal_independent_review_pending",
+    "materialized": true
+  },
+  "large": {
+    "file": "fixtures/large.json",
+    "sha256": "8672c44824299b2f9c0c22157cf0723538941d350f1047ef6525602acc68e940",
+    "bytes": 4623563,
+    "expectedFacts": {
+      "documentConformance": "conformant",
+      "operations": 10000,
+      "aliases": 10000,
+      "bindings": 10000,
+      "sources": 1,
+      "dependencies": 1,
+      "examples": 10000,
+      "exampleValues": 20000,
+      "schemaReferenceEdges": 10000,
+      "selectedReferenceHops": 1,
+      "selectedOperation": "alias0",
+      "selectedPrimary": "op0",
+      "selectedSide": "input",
+      "validOutcome": "satisfies",
+      "invalidOutcome": "fails",
+      "validText": "{\"n\":7,\"mode\":\"read\"}",
+      "invalidText": "{\"n\":-1,\"mode\":\"read\"}",
+      "edit": {
+        "pointer": "/description",
+        "before": "before",
+        "after": "after!",
+        "oldTokenBytes": 8,
+        "newTokenBytes": 8
+      },
+      "opaquePayloadBytes": 1048576,
+      "kindIsPrivateAndUnimplemented": true,
+      "nodesIncludingMemberNames": 460066,
+      "containerDepth": 6
+    },
+    "oracleStatus": "analytic_proposal_independent_review_pending",
+    "materialized": true
+  },
+  "replacement": {
+    "sha256": "d0b14ad47681fbfd0a7392aa5234b8168308054af13b39a76721b0cfac8e0984",
+    "bytes": 305,
+    "origin": "../browser-resource-candidate04/replacement-fixture.json"
+  }
+}

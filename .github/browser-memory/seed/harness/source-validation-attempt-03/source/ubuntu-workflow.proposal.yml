@@ -1,0 +1,70 @@
+# PROPOSAL ONLY. Not installed. Dispatch only after bindings + owner review exist.
+# Preparation produces a reviewed Linux bundle at canonical /opt/ob-memory-inputs
+# with this harness, SDK archives/extractions, fixtures, Node, Playwright and browsers.
+# Inputs must point to that exact already-reviewed artifact, not a branch/latest job.
+name: Prospective Linux browser group memory
+on:
+  workflow_dispatch:
+    inputs:
+      bundle_run_id:
+        description: Exact completed preparation run holding approved-browser-memory-inputs
+        type: string
+        required: true
+      bundle_sha256:
+        description: Owner-reviewed SHA256 of approved-inputs.tar.gz
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 165
+    env:
+      BUNDLE_RUN_ID: ${{ inputs.bundle_run_id }}
+      BUNDLE_SHA256: ${{ inputs.bundle_sha256 }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Retrieve exact reviewed preparation artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$BUNDLE_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$BUNDLE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          gh run download "$BUNDLE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name approved-browser-memory-inputs --dir "$RUNNER_TEMP/incoming"
+          cd "$RUNNER_TEMP/incoming"
+          printf '%s  approved-inputs.tar.gz\n' "$BUNDLE_SHA256" | sha256sum --check -
+          sudo -n mkdir /opt/ob-memory-inputs
+          sudo -n chown "$(id -u):$(id -g)" /opt/ob-memory-inputs
+          python3 - <<'PY'
+          import tarfile
+          with tarfile.open('approved-inputs.tar.gz', 'r:gz') as archive:
+              archive.extractall('/opt/ob-memory-inputs', filter='data')
+          PY
+      - name: Install browser OS prerequisites before host admission
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This path and entire Playwright tree belong to the reviewed bundle.
+          # This mutates only this prospective job VM. No SDK build or package publication.
+          # Exact resulting dpkg versions + runner image must match frozen bindings.
+          /opt/ob-memory-inputs/node/bin/node /opt/ob-memory-inputs/playwright/cli.js install-deps chromium webkit
+      - name: Admission then controls then one complete campaign
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n --preserve-env=ImageOS,ImageVersion,RUNNER_OS,RUNNER_ARCH,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT \
+            /usr/bin/python3 /opt/ob-memory-inputs/harness/campaign.py \
+            --bindings /opt/ob-memory-inputs/BINDINGS.json \
+            --review /opt/ob-memory-inputs/OWNER-REVIEW.json \
+            --uid "$(id -u)" --gid "$(id -g)" \
+            --output "$RUNNER_TEMP/browser-memory-result"
+      - name: Preserve every outcome, including preparation/control failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: browser-memory-result-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/browser-memory-result
+          if-no-files-found: error
+          retention-days: 30

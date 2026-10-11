@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "host": {"imageVersion": null, "dpkgSha256": null},
+  "artifacts": {"baseline": null, "candidate": null},
+  "node": {"path": null, "sha256": null, "version": null},
+  "python": {"path": null, "sha256": null, "version": null},
+  "playwright": {"root": null, "treeSha256": null, "version": null},
+  "browsers": {
+    "chromium": {"root": null, "treeSha256": null, "registryName": "chromium-headless-shell", "revision": null, "version": null, "launcher": {"path": null, "sha256": null}, "actualExecutable": {"path": null, "sha256": null}},
+    "webkit": {"root": null, "treeSha256": null, "registryName": "webkit", "revision": null, "version": null, "launcher": {"path": null, "sha256": null}, "actualExecutable": {"path": null, "sha256": null}}
+  },
+  "fixtures": {
+    "small": {"path": null, "sha256": "5673adfe378335571f283a407010176680b38529af5a74f852c60f2d2938f7b8"},
+    "catalog": {"path": null, "sha256": "cf2d1ace439b04f20b9d590738d70a26c662ce152d1b4a5efb7b4c2ec3aa01fb"},
+    "large": {"path": null, "sha256": "8672c44824299b2f9c0c22157cf0723538941d350f1047ef6525602acc68e940"},
+    "replacement": {"path": null, "sha256": "d0b14ad47681fbfd0a7392aa5234b8168308054af13b39a76721b0cfac8e0984"}
+  }
+}

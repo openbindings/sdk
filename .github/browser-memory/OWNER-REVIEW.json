@@ -1,0 +1,20 @@
+{
+  "status": "approved",
+  "reviewer": "Prime SDK coherence owner; independent of harness implementation; author of measurement policy",
+  "independentOfHarnessImplementation": true,
+  "sourceFreezeSha256": "5239eb8a20ba7bb0f6265bfb0a8584f2c8f8c7b40cc7ccbcdf249c2af4892885",
+  "bindingsSha256": "64226f0adaaf5bec6ca8bc07b90ce6f98b9818da0842c64c1527b309a164909d",
+  "acceptsKernelChargeScope": true,
+  "acceptsAdmissionAndCleanup": true,
+  "reviewedAt": "2026-10-10T23:20:31.046205+00:00",
+  "notes": "Root reviewed accepted repair12 and Sol source review, all6908downloaded bundle members, npm archive/package byte equality, all41buildcommands/rawstreams, exactGit commits/trees/locks, expectedRust input/Wasm chain and runtime/browser identities. Same Linux package artifacts as previous preparation; new short-scratch source is separately frozen. One new prospective activation. Original consumed activation176d6ecbd95c44f4affe35287302f872 and failed38092184913remain unchanged. FinalLinuxhost/Python/dpkg/cgroupadmission and3realcontrols remain mandatory before42fixedSDKtrials. Kernel charges are not summedRSS/heap/physical totals; no timing or automatic retry claim.",
+  "evidence": {
+    "preparationRunId": 38094055142,
+    "artifactId": 11685072434,
+    "bundleSha256": "a53428486d14590e9d9d0aa5fd461ce487703bf004d01cd32c560d0a7348ee86",
+    "bundleReviewSha256": "9c60876619fd121d736632188d9fb614cc6d5a9a6391cc3a0e567577d2cff9ef",
+    "sourceChainReviewSha256": "774b2667392dcc68787dccf2aa837f117d35507af4c8b7c2bf27c2647e6804ba",
+    "sourceApprovalSha256": "96b92aeeb04b2d3562f9c865b523da5b52c84a8f79d5b934625bbb03a8821852",
+    "repairOwnerAcceptanceSha256": "cb41266a49d4fba3e336ae42073f228f21b75d7e8da5cbae69ab94e089f176fb"
+  }
+}
