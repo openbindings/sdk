@@ -188,7 +188,24 @@ pub fn derive(
                         Binding {
                             operation: key.clone(),
                             source: name.clone(),
-                            content: Some(JsonValue::string(&unit.id).unwrap()),
+                            content: Some(match unit.scope {
+                                CoverageScope::Target => JsonValue::string(&unit.id).unwrap(),
+                                CoverageScope::Alternative | CoverageScope::Projection => {
+                                    let scope = if unit.scope == CoverageScope::Alternative {
+                                        "alternative"
+                                    } else {
+                                        "projection"
+                                    };
+                                    JsonValue::parse(format!(
+                                        r#"{{"scope":"{scope}","id":{}}}"#,
+                                        JsonValue::string(&unit.id).unwrap().text()
+                                    ))
+                                    .unwrap()
+                                }
+                                CoverageScope::Dependency => {
+                                    unreachable!("dependency branch above")
+                                }
+                            }),
                             ..Default::default()
                         },
                     );

@@ -316,6 +316,37 @@ async fn malformed_catalog_never_turns_into_empty_or_defaulted_success() {
 }
 
 #[tokio::test]
+async fn binding_content_preserves_scope_when_literal_ids_collide() {
+    let source = source(
+        r#"{"units":[{"id":"same","scope":"dependency"},{"id":"same"},{"id":"same","scope":"alternative"},{"id":"same","scope":"projection"}]}"#,
+    );
+    let inputs = [SynthesisSource {
+        name: None,
+        source: &source,
+    }];
+    let document = Synthesizer::new(Catalog::default())
+        .synthesize(&SynthesisRequest {
+            sources: &inputs,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let authored = document.parsed().to_authoring().unwrap();
+    let bindings = authored.bindings.unwrap();
+    assert_eq!(bindings.len(), 3);
+    assert!(!bindings.contains_key("s0.u0"));
+    assert_eq!(
+        bindings["s0.u1"].content.as_ref().unwrap().view().as_str(),
+        Some("same")
+    );
+    for (key, scope) in [("s0.u2", "alternative"), ("s0.u3", "projection")] {
+        let content = bindings[key].content.as_ref().unwrap();
+        assert_eq!(content.get("id").unwrap().as_str(), Some("same"));
+        assert_eq!(content.get("scope").unwrap().as_str(), Some(scope));
+    }
+}
+
+#[tokio::test]
 async fn persisted_coverage_identifies_sources_after_request_and_provider_drop() {
     async fn synthesize(reverse: bool) -> Synthesis {
         let mut a = source(

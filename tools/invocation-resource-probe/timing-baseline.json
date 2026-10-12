@@ -1,0 +1,79 @@
+{
+  "recorded_at": "2026-10-12T16:05:33.995600+00:00",
+  "host": {
+    "system": "Darwin",
+    "release": "25.6.0",
+    "machine": "arm64"
+  },
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "git_head": "6c08a44bf1b9dc412782ea0aff897435d94ff3d9",
+  "source_sha256": {
+    "tools/invocation-resource-probe/Cargo.toml": "8c0495890501696f5ab0b6ae4d0d94a8f900423f97cc5921f6c878e4582aa5ed",
+    "tools/invocation-resource-probe/Cargo.lock": "38c5528a160a676ec7bbe603b29c3aa1702076b3aacef75a4fdceab5c475784c",
+    "tools/invocation-resource-probe/src/main.rs": "bd35efce92c1422051c28d98c2ab2aaf25cff67eb68baf0d36e19257380e7f1b",
+    "crates/openbindings-invocation/src/binding.rs": "ce01c695602cea1fadf828f5f75d514fa5ee4ec8a6b2c8a0382a8d20d1e250ec",
+    "crates/openbindings-invocation/src/error.rs": "f9ef2b987f0b9a74fa7ed0b72fb7159e304b20f0ded3ad6a51f1234678911264",
+    "crates/openbindings-invocation/src/lib.rs": "2e90ecebb37b9b5b648b5ae1cb7d0a15062897ffc7c6e67342dc0d23781687c1",
+    "crates/openbindings-invocation/src/lifecycle.rs": "5188479b5dbc9ea186020f27d6ee3dda550a42107800f27dfb922e16e8430c61",
+    "crates/openbindings-invocation/src/value.rs": "ca816c730ed55280ae7b34adaa286c33b37f615e1fbbb7f149689cb183e7b7df"
+  },
+  "budget_policy": "Provisional same-host ns/call ceiling: max(3 times initial ns/call, initial ns/call + 2000 ns); timing enforcement is opt-in",
+  "measurements": {
+    "direct_zero": {
+      "ns_per_call": 6.2,
+      "budget_ns_per_call": 2006.2
+    },
+    "handle_creation_release": {
+      "ns_per_call": 1255.9417,
+      "budget_ns_per_call": 3767.8251
+    },
+    "checked_zero": {
+      "ns_per_call": 2018.0792,
+      "budget_ns_per_call": 6054.2375999999995
+    },
+    "direct_unary_1_byte": {
+      "ns_per_call": 9.8334,
+      "budget_ns_per_call": 2009.8334
+    },
+    "checked_unary_1_byte": {
+      "ns_per_call": 3010.6666,
+      "budget_ns_per_call": 9031.9998
+    },
+    "direct_unary_64_kib": {
+      "ns_per_call": 1758.575,
+      "budget_ns_per_call": 5275.725
+    },
+    "checked_unary_64_kib": {
+      "ns_per_call": 4853.0334,
+      "budget_ns_per_call": 14559.1002
+    },
+    "direct_unary_subtree": {
+      "ns_per_call": 10.2209,
+      "budget_ns_per_call": 2010.2209
+    },
+    "checked_unary_subtree": {
+      "ns_per_call": 2896.9791,
+      "budget_ns_per_call": 8690.9373
+    },
+    "direct_stream_1_byte": {
+      "ns_per_call": 648.042,
+      "budget_ns_per_call": 2648.042
+    },
+    "checked_stream_1_byte": {
+      "ns_per_call": 60385.208,
+      "budget_ns_per_call": 181155.624
+    },
+    "direct_stream_64_kib": {
+      "ns_per_call": 110392.917,
+      "budget_ns_per_call": 331178.751
+    },
+    "checked_stream_64_kib": {
+      "ns_per_call": 189206.125,
+      "budget_ns_per_call": 567618.375
+    },
+    "checked_cancel_release": {
+      "ns_per_call": 2577.5416,
+      "budget_ns_per_call": 7732.6248
+    }
+  }
+}

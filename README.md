@@ -89,6 +89,7 @@ shows retained in-flight work and a replacement that is installed only when read
 | `openbindings-http-discovery` | Optional portable discovery policy/publication; native HTTP feature |
 | `openbindings-source-inspection` | Optional inspector provider trait and checked consumer API; Rust only, provisional |
 | `openbindings-interface-synthesis` | Optional synthesizer provider trait, checked document/coverage and strict recovery; Rust only, provisional |
+| `openbindings-invocation` | Optional binding invoker provider and bounded input/output lifecycle; Rust only, provisional |
 | `openbindings-wasm` | Internal bridge used by the supported TypeScript facade |
 | `@openbindings/sdk` | First-class TypeScript API and included Wasm asset |
 

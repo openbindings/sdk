@@ -1110,6 +1110,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "openbindings-invocation"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "futures-core",
+ "openbindings",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "openbindings-json-schema-evaluator"
 version = "0.2.0-alpha.1"
 dependencies = [

@@ -36,6 +36,13 @@ Source names honor caller-supplied names exactly. Unnamed input `i` gets `source
 adding underscores until it avoids all reserved explicit/generated names. Emitted
 operation/binding/dependency keys are `s{i}.u{ordinal}`. Source references retain
 original unit IDs, so Unicode identifiers never become illegal operation names.
+Target binding content remains the plain ID string. Alternative and projection
+binding content is an object with `scope` (`alternative` or `projection`) and
+`id`. Execution of the shared fixture exposed why that distinction is required:
+the same ID may occur in several scopes with different semantics, so a string
+alone cannot identify all three. This preserves default target echo bindings
+while making every generated executable scope identifiable without operation-key
+inference or source-order selection. Dependencies remain without bindings.
 For fixed input order and source state naming is deterministic. Equal explicit
 source names with equal carriers may share the emitted source; both input indices
 still have distinct coverage. A single-source provider refuses arity before analysis.

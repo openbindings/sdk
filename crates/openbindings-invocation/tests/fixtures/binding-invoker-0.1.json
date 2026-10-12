@@ -1,0 +1,418 @@
+{
+    "openbindings": "0.2.0",
+    "name": "Binding Invoker",
+    "version": "0.1.0",
+    "description": "Interface for invoking bindings by value across a service boundary. A binding invoker reads sources and bindings under their exact kinds; a kind may be defined in writing, privately, or only in code. This contract is the project's published wire form of binding invocation, for remote invokers that adopt it (delegates, hosted invokers, anything reached over a transport wanting a shared frame shape). In-process implementations (the SDKs' invocation handles) realize the same semantics natively and are not required to expose frames; the frame protocol is the handle, serialized. invokeBinding is a typed bidirectional I/O operation: the caller streams BindingInvokerInputFrame messages in (starting with an `open` frame that carries the BindingInvocationInput, followed by zero or more `input` frames and an optional caller half-close (`close`)), and the service streams BindingInvokerOutputFrame messages back (zero or more `output` / `input_closed` frames plus a single terminal `complete` or `error` frame). The same shape covers unary, server-streaming, client-streaming, and bidirectional bindings; cardinality is observed by how the caller drives the frames, not declared in the contract. Authentication and other runtime prerequisites are not carried in the OBI document; instead, when a binding cannot proceed because required context is missing, invokeBinding fails with a CONTEXT_REQUIRED error enumerating what must be satisfied, and the runtime resolves it into context and retries. This keeps prerequisites out of the static interface and uniform across kinds.\n\nCarried-values rule: sources and bindings are read under the OpenBindings 0.2 line named by this contract. A source may carry only kind, content, description and x- members. A binding may carry only operation, source, content, idempotent, preference, description, deprecated and x- members, each core member with its core type. The implementation MUST refuse a call carrying any other member or a core member of the wrong type before doing its work. Open carrier schemas preserve extensions; their openness does not waive this rule. Binding operation/source members are forwarded verbatim; this interface neither interprets them nor forbids a kind from reading them. Other binding metadata is information, not an instruction. Kinds are best served identifying targets through content.\n\nFor a kind answered false, invokeBinding and preflightBinding refuse with ERR_REFUSED before work. For a kind answered true, invocation still refuses an unhandled case before dispatch; preflight is advisory and invocation remains authoritative.",
+    "schemas": {
+        "SupportedKind": {
+            "type": "object",
+            "description": "A kind supported for the work this interface performs.",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Exact, opaque kind as carried by a source."
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Human-readable description of the kind."
+                }
+            },
+            "required": [
+                "kind"
+            ]
+        },
+        "KindSupportVerdict": {
+            "type": "object",
+            "description": "Authoritative support verdict for one exact kind. Future optional fields may annotate the verdict but never qualify or soften supported.",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The exact kind supplied by the caller."
+                },
+                "supported": {
+                    "type": "boolean",
+                    "description": "True warrants that this implementation knows how to read sources of this exact kind, and their bindings, for its job and never presents a case it cannot handle as handled: it refuses before work or, where the operation defines disclosure, omits and discloses the case. False means every call on this kind is refused before work."
+                }
+            },
+            "required": [
+                "kind",
+                "supported"
+            ]
+        },
+        "Source": {
+            "type": "object",
+            "description": "A source as an OpenBindings 0.2 document carries it: an exact kind and optional content read under that kind. Absent content and present JSON null are distinct. Only core source fields and x- extensions may appear; the carried-values rule requires refusal of other members before work.",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The source's kind, compared by exact equality."
+                },
+                "content": {
+                    "description": "Content read under the source's kind: any JSON value, absent when the source has none."
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Human-readable description for this source."
+                }
+            },
+            "required": [
+                "kind"
+            ],
+            "additionalProperties": true
+        },
+        "BindingContext": {
+            "type": "object",
+            "description": "Opaque context supplied by value for one binding invocation. The contract neither requires nor exposes a context store; callers may assemble this object from per-call values, durable state, a credential broker, or any other source before invocation. The general named-credential field is 'credentials': an object keyed by a requirement's nonempty 'name'. For auth.bearer and auth.apiKey its named value is a string; for auth.basic it is an object with username and password; for auth.oauth2 it is an object whose accessToken is the applying credential and whose refreshToken, expiresAt, and clientSecret are optional lifecycle values. Unnamed or unambiguous single-scheme conveniences remain 'bearerToken', 'apiKey', 'basic', and 'accessToken' / 'refreshToken' / 'expiresAt'; the historical 'apiKeys' named map remains accepted for auth.apiKey. Well-known transport fields: 'headers' / 'cookies' / 'environment' (objects with string values) and 'metadata' (object with arbitrary values). Well-known configuration field: 'configuration' (object), keyed by configuration-point name and interpreted by the authority that defines each point. A config.value requirement's relative JSON Pointer path addresses within configuration[point]; an empty path addresses the entire point. Implementations and callers MAY add fields for session state, consent, or other runtime data; consumers SHOULD ignore fields they do not recognize unless the source's kind says otherwise. Every value in credentials and the single-scheme credential fields is secret, and any other field may also be secret according to its requirement family, source's kind, or application policy.",
+            "additionalProperties": true
+        },
+        "ContextRequirement": {
+            "type": "object",
+            "description": "One prerequisite that must be satisfied before a binding can be invoked. `type` names the requirement family; the remaining fields are type-specific. A named well-known `auth.*` requirement resolves at BindingContext.credentials[name]: a string for `auth.bearer` and `auth.apiKey`, a username/password object for `auth.basic`, or an OAuth object beginning with accessToken for `auth.oauth2`. Unnamed or unambiguous single-scheme requirements use the corresponding bearerToken, apiKey, basic, or flat OAuth conveniences; historical apiKeys[name] remains accepted for `auth.apiKey`. OAuth requirements may carry flow fields such as grantType, authorizeUrl, tokenUrl, and scopes. The `config.value` family carries a configuration value a binding needs but the artifact does not supply: it carries 'point' and a relative JSON Pointer 'path' (plus an optional engine-asserted 'schema') and resolves within BindingContext.configuration. Other families (e.g. 'approval.user', 'account.link') resolve into their own context fields. Resolution architecture and value secrecy beyond the always-secret credential fields are determined by the requirement family, source's kind, and caller.",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Requirement type identifier, e.g. 'auth.bearer', 'auth.oauth2', 'auth.basic', 'auth.apiKey', 'approval.user', 'config.value'. An unrecognized type is unsatisfiable by a runtime that has no way to satisfy it. An invoker may surface an artifact-defined scheme as an extension requirement only when it knows how the resulting context will be applied faithfully; an invoker that cannot represent or apply a prerequisite refuses before dispatch rather than emitting a satisfiable-looking challenge or attempting the interaction without it."
+                },
+                "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The scheme name as the source artifact declares it (e.g. an OpenAPI securitySchemes key). Distinguishes multiple requirements of the same family and keys scheme-scoped lookup in BindingContext.credentials."
+                },
+                "point": {
+                    "type": "string",
+                    "description": "config.value only: the configuration point the source's kind defines ('server', 'address', a kind's decode point, …)."
+                },
+                "path": {
+                    "type": "string",
+                    "description": "config.value only: RFC 6901 JSON Pointer relative to configuration[point]. The empty pointer addresses the whole point; '/variables/region' addresses a nested member; '/value' addresses a member literally named value."
+                },
+                "schema": {
+                    "type": [
+                        "object",
+                        "boolean"
+                    ],
+                    "description": "config.value only: an engine-asserted JSON Schema in object or Boolean form for the value addressed by point and path. Derived from the source artifact where the artifact speaks, supplied by the implementation where the kind defines a shape, and absent where nothing does; absence means the value is unconstrained. An 'enum' declares the closed admissible set and satisfaction validates against it; 'examples' are advisory suggestions and an off-list value remains valid."
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Human-readable description shown to a user or operator during resolution (e.g. an approval prompt message)."
+                },
+                "durable": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Whether resolved context for this requirement MAY be persisted and reused for later invocations (true), or MUST be satisfied freshly and MUST NOT be persisted or reused (false). Defaults to false. This permission does not require persistence or prescribe a store, key, or reuse policy."
+                }
+            },
+            "required": [
+                "type"
+            ],
+            "additionalProperties": true
+        },
+        "ContextRequiredDetails": {
+            "type": "object",
+            "description": "The `data` value of an InvocationError whose `code` is CONTEXT_REQUIRED, and the return shape of this contract's preflight operation. Enumerates the context the invoker needs before it can proceed. `alternatives` are disjunctive: satisfying ANY one suffices. The `requirements` within a single alternative are conjunctive: ALL must be satisfied. This OR-of-AND shape captures real authentication semantics such as 'OAuth2 OR (apiKey AND clientCert)', which a flat list cannot. A challenge is a scope, not a hint: a caller that resolves it MUST provision only the context needed for one selected alternative and MUST NOT disclose unrelated credentials. The interface supplies context by value and exposes no context-store access.",
+            "properties": {
+                "target": {
+                    "type": "string",
+                    "description": "Opaque identifier for the concrete destination or context scope asserted by the invoker. A runtime MAY use it to scope resolution or reuse. Before releasing a reusable secret on an assertion from outside its trust boundary, a resolver MUST validate that assertion against independently derived information; an in-process resolver MAY deliberately include its co-located invoker in the trust boundary. Interpretation, normalization, hierarchy, key derivation, and persistence policy are otherwise outside this contract."
+                },
+                "alternatives": {
+                    "type": "array",
+                    "minItems": 1,
+                    "description": "Disjunctive set of ways to satisfy the requirement. A resolving caller selects one alternative whose every requirement it can resolve and provisions only the context needed for that alternative, never unrelated credentials.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "requirements": {
+                                "type": "array",
+                                "minItems": 1,
+                                "description": "Conjunctive set: every requirement in this alternative must be resolved for the alternative to be satisfied.",
+                                "items": {
+                                    "$ref": "#/schemas/ContextRequirement"
+                                }
+                            }
+                        },
+                        "required": [
+                            "requirements"
+                        ],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "required": [
+                "target",
+                "alternatives"
+            ],
+            "additionalProperties": false
+        },
+        "InvocationError": {
+            "type": "object",
+            "description": "Minimal unsuccessful-completion record carried by an `error` output frame. The frame kind is the portable failure signal. Only codes named by a rule of either invocation interface or the source's kind have portable semantics; other strings are open extension or implementation identifiers. Codes defined by either invocation interface are reserved to their defined meanings and MUST NOT be redefined by a binding or implementation. Other governed codes SHOULD use collision-resistant identifiers. ERR_EXECUTION_FAILED is the generic fallback when no more specific governed meaning exists; it means only that the interaction completed unsuccessfully, and carries no protocol category, blame, retryability, side-effect, authentication, authorization, or availability semantics. Dispatch state is carried by the code space itself: ERR_REFUSED (and CONTEXT_REQUIRED, its special case with a resolution path) guarantees that no observable effect of the requested operation occurred, while ERR_EXECUTION_FAILED makes no dispatch-state claim and MUST be treated as possibly dispatched. An implementation MUST NOT emit ERR_REFUSED unless the guarantee holds. Codes encode interaction-boundary facts of this kind, never cause, blame, or protocol category.",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Machine-readable error code. The binding-invoker interface owns CONTEXT_REQUIRED, ERR_CANCELLED, ERR_FRAME_PROTOCOL, ERR_TRANSPORT_CLOSED, ERR_REFUSED, and ERR_EXECUTION_FAILED. The operation-invoker interface owns exactly ERR_OPERATION_NOT_FOUND, ERR_BINDING_NOT_FOUND, ERR_BINDING_SELECTION_REQUIRED, ERR_UNKNOWN_SOURCE, ERR_OPERATION_VALIDATION_FAILED, and ERR_SCHEMA_UNRESOLVED."
+                },
+                "data": {
+                    "description": "Optional portable JSON data associated with the unsuccessful completion. A rule defining `code` may define its structure and semantics; otherwise, the source's kind may use it to preserve an opaque application-authored failure value. For CONTEXT_REQUIRED, this is a ContextRequiredDetails object. Presence is significant: an absent member means no portable associated value, while an explicit null is a present JSON null value. Statuses, headers, trailers, envelopes, raw debugging bytes, exception prose, stacks, and implementation evidence do not belong here unless they are themselves application data under an explicit governing rule."
+                }
+            },
+            "required": [
+                "code"
+            ],
+            "additionalProperties": false
+        },
+        "BindingInvocationInput": {
+            "type": "object",
+            "description": "Initial open-frame payload: source and binding by value, and context to apply.",
+            "properties": {
+                "source": {
+                    "$ref": "#/schemas/Source"
+                },
+                "binding": {
+                    "$ref": "#/schemas/Binding"
+                },
+                "context": {
+                    "$ref": "#/schemas/BindingContext"
+                }
+            },
+            "required": [
+                "source",
+                "binding"
+            ],
+            "additionalProperties": false
+        },
+        "BindingInvokerInputFrame": {
+            "description": "One frame from the caller into invokeBinding. Exactly one `open` frame comes first (carrying the BindingInvocationInput), followed by zero or more `input` frames and an optional logical caller half-close (`close`). A caller need not send `close` when the binding closes input or the invocation terminates first. Repeated `close` frames are harmless; input closure does not stop control or protocol-error processing while the invocation remains live. Valid late `input` frames are ignored under rule 3; a second `open` remains invalid.",
+            "discriminator": {
+                "propertyName": "kind"
+            },
+            "oneOf": [
+                {
+                    "title": "open",
+                    "type": "object",
+                    "description": "Open the invocation. MUST be the first frame on the input stream.",
+                    "properties": {
+                        "kind": {
+                            "const": "open"
+                        },
+                        "input": {
+                            "$ref": "#/schemas/BindingInvocationInput"
+                        }
+                    },
+                    "required": [
+                        "kind",
+                        "input"
+                    ],
+                    "additionalProperties": false
+                },
+                {
+                    "title": "input",
+                    "type": "object",
+                    "description": "Write one input value to the underlying binding. The value's schema is determined by the underlying binding's operation, not by this contract.",
+                    "properties": {
+                        "kind": {
+                            "const": "input"
+                        },
+                        "value": {
+                            "description": "One caller-facing operation input value."
+                        }
+                    },
+                    "required": [
+                        "kind",
+                        "value"
+                    ],
+                    "additionalProperties": false
+                },
+                {
+                    "title": "close",
+                    "type": "object",
+                    "description": "Caller signals that no more input values will be sent. Idempotent: repeated close frames are harmless. This closes only input; output and protocol-error processing continue.",
+                    "properties": {
+                        "kind": {
+                            "const": "close"
+                        }
+                    },
+                    "required": [
+                        "kind"
+                    ],
+                    "additionalProperties": false
+                }
+            ]
+        },
+        "BindingInvokerOutputFrame": {
+            "description": "One frame from the service back to the caller. The service streams a sequence: zero or more non-terminal frames (`output`, `input_closed`) followed by exactly one terminal frame (`complete` or `error`).",
+            "discriminator": {
+                "propertyName": "kind"
+            },
+            "oneOf": [
+                {
+                    "title": "output",
+                    "type": "object",
+                    "description": "One output value from the underlying binding. The value's schema is determined by the underlying binding's operation, not by this contract.",
+                    "properties": {
+                        "kind": {
+                            "const": "output"
+                        },
+                        "value": {
+                            "description": "One caller-facing operation output value."
+                        }
+                    },
+                    "required": [
+                        "kind",
+                        "value"
+                    ],
+                    "additionalProperties": false
+                },
+                {
+                    "title": "input_closed",
+                    "type": "object",
+                    "description": "Binding has closed the input side from its end (e.g., a unary binding closes input after the first read). Subsequent caller `input` frames are ignored (never written; see rule 3). The invocation continues; outputs may still flow.",
+                    "properties": {
+                        "kind": {
+                            "const": "input_closed"
+                        }
+                    },
+                    "required": [
+                        "kind"
+                    ],
+                    "additionalProperties": false
+                },
+                {
+                    "title": "complete",
+                    "type": "object",
+                    "description": "Terminal: the underlying binding completed normally. MUST be the last frame.",
+                    "properties": {
+                        "kind": {
+                            "const": "complete"
+                        }
+                    },
+                    "required": [
+                        "kind"
+                    ],
+                    "additionalProperties": false
+                },
+                {
+                    "title": "error",
+                    "type": "object",
+                    "description": "Terminal: the underlying binding failed. MUST be the last frame. Carries a structured InvocationError.",
+                    "properties": {
+                        "kind": {
+                            "const": "error"
+                        },
+                        "error": {
+                            "$ref": "#/schemas/InvocationError"
+                        }
+                    },
+                    "required": [
+                        "kind",
+                        "error"
+                    ],
+                    "additionalProperties": false
+                }
+            ]
+        },
+        "Binding": {
+            "type": "object",
+            "description": "A binding as an OpenBindings 0.2 document carries it, or would carry it, by value. It is interpreted under the accompanying source's kind. Absent content and present JSON null are distinct. Only core binding fields and x- extensions may appear; the carried-values rule requires refusal of other members before work.",
+            "properties": {
+                "operation": {
+                    "type": "string",
+                    "description": "The author's operation key, forwarded verbatim without interpretation by this interface."
+                },
+                "source": {
+                    "type": "string",
+                    "description": "The author's source key, forwarded verbatim without interpretation by this interface."
+                },
+                "content": {
+                    "description": "Content read under the source's kind: any JSON value, absent when the binding has none."
+                },
+                "idempotent": {
+                    "type": "boolean",
+                    "description": "The binding author's idempotency claim, carried as information."
+                },
+                "preference": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "The author's preference signal, carried as information."
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Human-readable description."
+                },
+                "deprecated": {
+                    "type": "boolean",
+                    "description": "The author's deprecation signal, carried as information."
+                }
+            },
+            "additionalProperties": true
+        }
+    },
+    "operations": {
+        "openbindings.binding-invoker.listSupportedKinds": {
+            "description": "Return an advisory list of kinds supported for this interface's job, for display, documentation and pickers. Every listed kind MUST receive supported: true from this interface's checkKindSupport. Absence carries no information and MUST NOT be treated as a negative support decision. This operation is idempotent: repeating it with the same input in context that does not change its intended effects produces no additional intended operation-level effects after the first application. This does not promise identical results or authorize retries.",
+            "output": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/schemas/SupportedKind"
+                }
+            }
+        },
+        "openbindings.binding-invoker.checkKindSupport": {
+            "description": "Authoritatively determine support for exact kinds for this interface's job. This is the only operation on which a consumer may base a support decision. Return one verdict per unique input kind in first-occurrence order. True warrants that the implementation knows how to read the kind for this job, whether its meaning is written, private or defined only in code. True does not promise every case is within reach; an unhandled case is never presented as handled. False means every call on the kind is refused before work. For a kind answered false, invokeBinding and preflightBinding refuse with ERR_REFUSED before work. For a kind answered true, invocation still refuses an unhandled case before dispatch; preflight is advisory and invocation remains authoritative. The result is deterministic for a given implementation version and configuration. Kinds compare by exact equality: no normalization, case folding, prefix matching, inferred version order or dereferencing. An internal pattern may compress the supported set but MUST NOT extend it. Future optional verdict fields may annotate a verdict but never qualify supported. This operation is idempotent: repeating it with the same input in context that does not change its intended effects produces no additional intended operation-level effects after the first application. This does not promise identical results or authorize retries. The check MUST have no side effects; it neither acquires nor modifies source artifacts or performs the interface job.",
+            "input": {
+                "type": "object",
+                "properties": {
+                    "kinds": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    }
+                },
+                "required": [
+                    "kinds"
+                ],
+                "additionalProperties": false
+            },
+            "output": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/schemas/KindSupportVerdict"
+                }
+            }
+        },
+        "openbindings.binding-invoker.invokeBinding": {
+            "description": "Invoke a resolved binding via a typed I/O frame stream. The caller writes a sequence of BindingInvokerInputFrame messages (starting with an `open` frame); the service emits a sequence of BindingInvokerOutputFrame messages ending in either a `complete` or `error` frame. The same shape covers all cardinalities of the underlying binding (unary, server-streaming, client-streaming, bidirectional).\n\n## Normative conformance rules\n\nService implementations of this operation MUST conform to the following rules. They describe the wire contract, not any particular transport; in-process implementations realize the same semantics through their SDK's native invocation handle, whose behavior these rules mirror.\n\n1. **First frame.** The first input frame received MUST be an `open` frame. If the first frame is any other kind, the implementation MUST emit a terminal `error` output frame with code `ERR_FRAME_PROTOCOL` and process no further input.\n\n2. **Single open.** Exactly one `open` frame is permitted per invocation. If a second `open` frame arrives after the first, the implementation MUST emit a terminal `error` output frame with code `ERR_FRAME_PROTOCOL`.\n\n3. **Input after input closure (either side).** Once input is closed from either side — the caller has sent its `close` frame, or the implementation has emitted an `input_closed` output frame — any subsequent structurally valid `input` frame MUST be ignored: it is not written to the underlying binding, the invocation continues, and outputs still flow. Late frames after `input_closed` are an inherent race (the frame may already be in flight when `input_closed` is emitted) and are never a protocol violation; this mirrors the SDK handles, where a write after input closure rejects non-terminally without affecting the invocation. Validate the frame envelope before applying this rule: closure does not excuse an unknown kind or member, a missing required member, or a second `open`. Repeated valid `close` frames are harmless, and control and protocol-error processing continue after input closure while the invocation remains live. A caller need not send `close` if the binding closes input or the invocation terminates first. A binding that accepts no input closes its input side at `open` (input is treated as closed from the start); a caller that nonetheless sends an `input` frame has it ignored under this rule, never refused — a kind's 'no input' declaration is realized as closed input, not a loud rejection.\n\n4. **Exactly one terminal output frame.** The output stream MUST end with exactly one terminal frame (`complete` or `error`). The implementation MUST NOT emit further output frames after a terminal frame. The first terminal transition wins: once a terminal outcome is settled, completion, failure or cancellation MUST NOT replace it. Output emission means committing a value to the invocation's ordered output sequence, independently of when the consumer reads it or a transport carries it. Values committed before the terminal transition precede its terminal frame; no further value may be committed afterward. Draining previously committed output does not create post-terminal frames.\n\n5. **Transport closure without a terminal frame.** If the underlying transport closes without a terminal output frame having been emitted, the consumer side MUST synthesize a terminal `error` frame with code `ERR_TRANSPORT_CLOSED` before propagating closure to its caller. When frames ride over an outer streaming transport (a remote invoker, or a delegate carrying them as ordinary stream values), the invoker emits the inner terminal frame first and only then closes the outer transport; a consumer synthesizes `ERR_TRANSPORT_CLOSED` under this rule only when the outer transport closes with no inner terminal seen.\n\n6. **Discriminator semantics.** The `discriminator` keyword in the frame schemas is informative under JSON Schema 2020-12; validators that don't recognize it MUST still validate frames correctly by evaluating `oneOf`. Implementations dispatch by matching the `kind` property's `const` value against the variant. An input frame whose `kind` matches no variant is a protocol violation: the implementation MUST emit a terminal `error` with code `ERR_FRAME_PROTOCOL`, as for an unknown property (rule 7).\n\n7. **`additionalProperties: false`.** Frame variants declare `additionalProperties: false`. Implementations MUST reject malformed input frame envelopes, including unknown properties, missing required members and non-object frames, using `ERR_FRAME_PROTOCOL`. An `open` envelope has exactly `kind: \"open\"` and a required `input` member; if that envelope is valid but its initial payload violates the operation's invocation-input schema or applicable carried-values rule, the result is `ERR_REFUSED` before work. A second `open` is a frame violation regardless of its payload. Output frames SHOULD likewise reject extra properties on the consumer side as a protocol violation.\n\n8. **Missing context (CONTEXT_REQUIRED).** If the binding cannot be invoked because required runtime context is missing (credentials, approvals, configuration, and the like), the implementation MUST emit a terminal `error` output frame with code `CONTEXT_REQUIRED` whose `data` is a ContextRequiredDetails object, and it MUST do so before emitting any `output` frame and before causing any observable effect of the requested operation on the target. This pre-execution guarantee makes a new attempt safe for non-idempotent operations.\n\n9. **Resolve and retry.** On receiving CONTEXT_REQUIRED, a caller MAY select one `alternative` whose every `requirement` it can resolve, resolve those requirements, and start a new invocation with augmented context. It MUST provision only the context needed for the selected alternative and MUST NOT disclose unrelated credentials. Context for a `durable: false` requirement MUST NOT be persisted or reused; `durable: true` permits but does not require persistence. The interface prescribes no store, storage key, resolver registry, or retry policy. If a caller retries, it SHOULD bound attempts. An invoker SHOULD NOT repeat a challenge already satisfied by context on the current attempt. It MAY issue a fresh CONTEXT_REQUIRED after supplied context proves unusable only when its governing rules can still guarantee that no output or observable effect of the requested operation occurred. A native failure status alone does not prove that boundary. Otherwise the attempt completes with an applicable non-CONTEXT_REQUIRED error; this rule does not authorize automatic replay.\n\n10. **Requirement types.** `auth.bearer`, `auth.basic`, `auth.apiKey`, and `auth.oauth2` are the first standard requirement families and resolve into the corresponding BindingContext credential fields. `config.value` is the second standard family: it carries a kind-defined configuration point and a relative JSON Pointer path, plus an optional JSON Schema in object or Boolean form, and resolves within BindingContext.configuration. Implementations MAY define further families (e.g. `approval.user`, `account.link`). An unrecognized requirement `type` is unsatisfiable by a caller that lacks a resolver for it; such a requirement makes its enclosing alternative unavailable to that caller.\n\n11. **Caller cancellation.** When caller cancellation reaches an in-flight invocation (via the SDK handle's `cancel()`, an `AbortSignal`, or a transport-level cancellation signal), the implementation MUST stop accepting new output emissions and settle exactly one terminal `error` with code `ERR_CANCELLED`, unless a terminal outcome is already settled, in which case cancellation is a no-op. Previously committed outputs retain their order before that terminal, as in rule 4; consumer reads or transport delivery of those values do not count as new emissions. Cancellation races completion and failure at the terminal transition, and never overwrites a settled outcome even when its terminal frame has not yet been read or carried by a transport. A cancellation request, the local terminal outcome, and external work actually stopping are distinct: cancellation makes no dispatch-state or rollback guarantee, and releasing an in-process handle does not by itself prove remote work stopped.\n\nFor invokeBinding, the initial payload MUST satisfy BindingInvocationInput and the carried-values rule. Otherwise complete unsuccessfully with ERR_REFUSED before work. The invoker applies the kind-defined adaptation to caller-facing input and output values. A failed adaptation before dispatch refuses with ERR_REFUSED; after dispatch it completes unsuccessfully with ERR_EXECUTION_FAILED unless a governing rule owns another code. The operation contract is not carried: adaptation requiring the operation input/output schemas cannot be served by value through this contract.",
+            "input": {
+                "$ref": "#/schemas/BindingInvokerInputFrame"
+            },
+            "output": {
+                "$ref": "#/schemas/BindingInvokerOutputFrame"
+            }
+        },
+        "openbindings.binding-invoker.preflightBinding": {
+            "description": "`preflightBinding` tells a binding that an invocation of this selection may follow, and lets it report context requirements it can already identify from the source and the supplied context. The result is a `ContextRequiredDetails` in the same shape a `CONTEXT_REQUIRED` challenge carries, or `null`. It is advisory: it may omit requirements, `null` is always conformant, and the live challenge remains authoritative. Invocation never requires a prior preflight. Context supplied to preflight is supplied for that call alone. Preflight never dispatches the requested operation, consumes its input, emits its outputs, or spends an approval for it; the source's kind defines the boundary of the requested operation, and anything else a binding does in response is for its kind to require and otherwise the implementation's. Requirements are reported only as the result; an unsuccessful completion means the binding could not answer and carries no prediction, except ERR_REFUSED, which means invocation would refuse the same input. This operation is idempotent: repeating it with the same input in context that does not change its intended effects produces no additional intended operation-level effects after the first application. This does not promise identical results or authorize retries. The input MUST satisfy BindingInvocationInput and the carried-values rule; otherwise complete unsuccessfully with ERR_REFUSED before work.",
+            "input": {
+                "$ref": "#/schemas/BindingInvocationInput"
+            },
+            "output": {
+                "oneOf": [
+                    {
+                        "$ref": "#/schemas/ContextRequiredDetails"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            }
+        }
+    }
+}

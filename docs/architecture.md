@@ -48,7 +48,7 @@ synchronous. Workers are the interruptible bulk-work route. workerd initializati
 occurs in an active request so host entropy is available, then is reused.
 
 The six public Rust workflows and TypeScript tests are architecture witnesses,
-not sample applications to be migrated. Broad invoker/synthesizer APIs, arbitrary
+not sample applications to be migrated. Generic operation invocation, arbitrary
 JavaScript evaluator callbacks, a Node native addon, source retrieval and CLI/Panjir
 migration remain separate design work.
 
@@ -58,3 +58,10 @@ facade checks core conformance, source preservation and coverage correspondence
 before delivering immutable results. Strict refusal retains the checked document
 and evidence from that same call. Concrete source analysis and kind soundness
 remain provider responsibilities. See the [synthesis checkpoint](interface-synthesis-checkpoint.md).
+
+`openbindings-invocation` adds the optional binding-kind provider seam and one
+checked input/output lifetime for all cardinalities. It depends on core only,
+without inspection, synthesis, HTTP or a mandatory executor. Caller polling
+drives bounded I/O; source interpretation and external effects remain provider
+responsibilities. The generic operation-selection layer and OpenAPI kind adapter
+remain separate slices. See the [binding checkpoint](binding-invocation-checkpoint.md).

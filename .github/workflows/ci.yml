@@ -89,6 +89,7 @@ jobs:
       - run: python tools/verify-api-reference.py --typescript-only
       - run: python tools/verify-source-inspection.py --archives --wasm
       - run: python tools/verify-interface-synthesis.py --archives --wasm
+      - run: python tools/verify-binding-invocation.py --archives --wasm
       - run: npx playwright-core install --with-deps chromium webkit
         working-directory: packages/typescript
       - run: python tools/qualification/replay/prepare-browser-fixtures.py

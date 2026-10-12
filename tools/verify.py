@@ -22,6 +22,8 @@ for example in ['first_use', 'replacement']:
 run([sys.executable, 'tools/verify-rust-snippets.py'])
 run([sys.executable, 'tools/verify-source-inspection.py'])
 run([sys.executable, 'tools/verify-interface-synthesis.py'])
+run([sys.executable, 'tools/verify-binding-invocation.py'])
+run([sys.executable, 'tools/verify-invocation-resources.py'])
 run([sys.executable, 'tools/test-source-inspection-verifier.py'])
 run(['cargo', 'build', '--locked', '--release', '--workspace'])
 run(['cargo', 'build', '--locked', '--manifest-path', 'tools/conformance-observer/Cargo.toml'])
@@ -36,6 +38,7 @@ if a.browser:
     run([sys.executable, 'tools/verify-api-reference.py', '--typescript-only'])
     run([sys.executable, 'tools/verify-source-inspection.py', '--archives', '--wasm'])
     run([sys.executable, 'tools/verify-interface-synthesis.py', '--archives', '--wasm'])
+    run([sys.executable, 'tools/verify-binding-invocation.py', '--archives', '--wasm'])
     run([sys.executable, 'tools/qualification/replay/prepare-browser-fixtures.py'])
     for engine in ['chromium', 'webkit']:
         run(['node', 'packages/typescript/test/browser.mjs', engine])
