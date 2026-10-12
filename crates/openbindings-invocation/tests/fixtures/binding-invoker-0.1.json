@@ -65,17 +65,17 @@
         },
         "BindingContext": {
             "type": "object",
-            "description": "Opaque context supplied by value for one binding invocation. The contract neither requires nor exposes a context store; callers may assemble this object from per-call values, durable state, a credential broker, or any other source before invocation. The general named-credential field is 'credentials': an object keyed by a requirement's nonempty 'name'. For auth.bearer and auth.apiKey its named value is a string; for auth.basic it is an object with username and password; for auth.oauth2 it is an object whose accessToken is the applying credential and whose refreshToken, expiresAt, and clientSecret are optional lifecycle values. Unnamed or unambiguous single-scheme conveniences remain 'bearerToken', 'apiKey', 'basic', and 'accessToken' / 'refreshToken' / 'expiresAt'; the historical 'apiKeys' named map remains accepted for auth.apiKey. Well-known transport fields: 'headers' / 'cookies' / 'environment' (objects with string values) and 'metadata' (object with arbitrary values). Well-known configuration field: 'configuration' (object), keyed by configuration-point name and interpreted by the authority that defines each point. A config.value requirement's relative JSON Pointer path addresses within configuration[point]; an empty path addresses the entire point. Implementations and callers MAY add fields for session state, consent, or other runtime data; fields without a meaning defined here or by the kind have implementation-specific interpretation. Every value in credentials and the single-scheme credential fields is secret, and any other field may also be secret according to its requirement family, source's kind, or application policy.",
+            "description": "Opaque context supplied by value for one binding invocation. The contract neither requires nor exposes a context store; callers may assemble this object from per-call values, durable state, a credential broker, or any other source before invocation. The general named-credential field is 'credentials': an object keyed by a requirement's nonempty 'name'. For auth.bearer and auth.apiKey its named value is a string; for auth.basic it is an object with username and password; for auth.oauth2 it is an object whose accessToken is the applying credential and whose refreshToken, expiresAt, and clientSecret are optional lifecycle values. Unnamed or unambiguous single-scheme conveniences remain 'bearerToken', 'apiKey', 'basic', and 'accessToken' / 'refreshToken' / 'expiresAt'; the historical 'apiKeys' named map remains accepted for auth.apiKey. Well-known transport fields: 'headers' / 'cookies' / 'environment' (objects with string values) and 'metadata' (object with arbitrary values). Well-known configuration field: 'configuration' (object), keyed by configuration-point name and interpreted by the authority that defines each point. A config.value requirement's JSON Pointer path addresses within configuration[point]; an empty path addresses the entire point. Implementations and callers MAY add fields for session state, consent, or other runtime data; fields without a meaning defined here or by the kind have implementation-specific interpretation. Every value in credentials and the single-scheme credential fields is secret, and any other field may also be secret according to its requirement family, source's kind, or application policy.",
             "additionalProperties": true
         },
         "ContextRequirement": {
             "type": "object",
-            "description": "One prerequisite that must be satisfied before a binding can be invoked. `type` names the requirement family; the remaining fields are type-specific. A named well-known `auth.*` requirement resolves at BindingContext.credentials[name]: a string for `auth.bearer` and `auth.apiKey`, a username/password object for `auth.basic`, or an OAuth object beginning with accessToken for `auth.oauth2`. Unnamed or unambiguous single-scheme requirements use the corresponding bearerToken, apiKey, basic, or flat OAuth conveniences; historical apiKeys[name] remains accepted for `auth.apiKey`. OAuth requirements may carry flow fields such as grantType, authorizeUrl, tokenUrl, and scopes. The `config.value` family carries a configuration value a binding needs but the artifact does not supply: it carries 'point' and a relative JSON Pointer 'path' (plus an optional engine-asserted 'schema') and resolves within BindingContext.configuration. Other families (e.g. 'approval.user', 'account.link') resolve into their own context fields. Resolution architecture and value secrecy beyond the always-secret credential fields are determined by the requirement family, source's kind, and caller.",
+            "description": "One prerequisite that must be satisfied before a binding can be invoked. `type` names the requirement family; the remaining fields are type-specific. A named well-known `auth.*` requirement resolves at BindingContext.credentials[name]: a string for `auth.bearer` and `auth.apiKey`, a username/password object for `auth.basic`, or an OAuth object beginning with accessToken for `auth.oauth2`. Unnamed or unambiguous single-scheme requirements use the corresponding bearerToken, apiKey, basic, or flat OAuth conveniences; historical apiKeys[name] remains accepted for `auth.apiKey`. OAuth requirements may carry flow fields such as grantType, authorizeUrl, tokenUrl, and scopes. The `config.value` family carries a configuration value a binding needs but the artifact does not supply: it carries 'point' and a JSON Pointer 'path' (plus an optional engine-asserted 'schema') and resolves within BindingContext.configuration. Other families (e.g. 'approval.user', 'account.link') resolve into their own context fields. Resolution architecture and value secrecy beyond the always-secret credential fields are determined by the requirement family, source's kind, and caller.",
             "properties": {
                 "type": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Requirement type identifier, e.g. 'auth.bearer', 'auth.oauth2', 'auth.basic', 'auth.apiKey', 'approval.user', 'config.value'. An unrecognized type is unsatisfiable by a runtime that has no way to satisfy it. An invoker may surface an artifact-defined scheme as an extension requirement only when it knows how the resulting context will be applied faithfully; an invoker that cannot represent or apply a prerequisite refuses before dispatch rather than emitting a satisfiable-looking challenge or attempting the interaction without it."
+                    "description": "Requirement family identifier, such as auth.bearer, auth.oauth2, auth.basic, auth.apiKey, approval.user or config.value. A challenge describes context the producer can apply to this interaction. Unknown families have only their independently defined meanings; the caller decides whether it can satisfy them."
                 },
                 "name": {
                     "type": "string",
@@ -88,14 +88,14 @@
                 },
                 "path": {
                     "type": "string",
-                    "description": "config.value only: RFC 6901 JSON Pointer relative to configuration[point]. The empty pointer addresses the whole point; '/variables/region' addresses a nested member; '/value' addresses a member literally named value."
+                    "description": "config.value only: RFC 6901 JSON Pointer evaluated from configuration[point]. The empty pointer addresses the whole point; '/variables/region' addresses a nested member; '/value' addresses a member literally named value."
                 },
                 "schema": {
                     "type": [
                         "object",
                         "boolean"
                     ],
-                    "description": "config.value only: an engine-asserted JSON Schema in object or Boolean form for the value addressed by point and path. Derived from the source artifact where the artifact speaks, supplied by the implementation where the kind defines a shape, and absent where nothing does; absence means the value is unconstrained. An 'enum' declares the closed admissible set and satisfaction validates against it; 'examples' are advisory suggestions and an off-list value remains valid."
+                    "description": "config.value only: optional JSON Schema (object or Boolean) describing the value at configuration[point] and path. Read as a standalone schema resource, using JSON Schema 2020-12 unless its root declares another dialect with $schema. References follow the applicable JSON Schema dialect, including resource boundaries introduced by $id. The source artifact and the OBI supply no implicit reference environment. Absence states no constraint. This describes the value, not a required validator, resource-fetching policy or resolution procedure."
                 },
                 "description": {
                     "type": "string",
@@ -123,7 +123,7 @@
                 "alternatives": {
                     "type": "array",
                     "minItems": 1,
-                    "description": "Disjunctive set of ways to satisfy the requirement. A resolving caller selects one alternative whose every requirement it can resolve and provisions only the context needed for that alternative, never unrelated credentials.",
+                    "description": "Alternative ways to satisfy the reported context requirement (OR). Each alternative describes the requirements needed together (AND). The challenge makes no trust or authorization decision for the caller.",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -156,7 +156,7 @@
                 "code": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Machine-readable error code. The binding-invoker interface owns CONTEXT_REQUIRED, ERR_CANCELLED, ERR_FRAME_PROTOCOL, ERR_TRANSPORT_CLOSED, ERR_REFUSED, and ERR_EXECUTION_FAILED. The operation-invoker interface owns exactly ERR_OPERATION_NOT_FOUND, ERR_BINDING_NOT_FOUND, ERR_BINDING_SELECTION_REQUIRED, ERR_UNKNOWN_SOURCE, ERR_OPERATION_VALIDATION_FAILED, and ERR_SCHEMA_UNRESOLVED."
+                    "description": "Machine-readable reason. Binding invocation owns CONTEXT_REQUIRED (context requested, no operation output or effects), ERR_REFUSED (no operation effects), ERR_EXECUTION_FAILED (failure making no claim about effects or dispatch), ERR_FRAME_PROTOCOL (reported frame-exchange violation), ERR_TRANSPORT_CLOSED (transport ended before a terminal outcome), and ERR_CANCELLED (caller cancellation, with no rollback or external-stop claim). Operation invocation additionally owns ERR_OPERATION_NOT_FOUND (unresolved operation), ERR_BINDING_NOT_FOUND (unresolved allowed binding), ERR_BINDING_SELECTION_REQUIRED (ambiguous binding choice), ERR_UNKNOWN_SOURCE (unresolved selected source), ERR_OPERATION_VALIDATION_FAILED (value violates a declared schema), and ERR_SCHEMA_UNRESOLVED (validity could not be determined). These meanings do not prescribe detection, recovery or precedence. Other codes have kind-defined or implementation-specific meanings."
                 },
                 "data": {
                     "description": "Optional portable JSON data associated with the unsuccessful completion. A rule defining `code` may define its structure and semantics; otherwise, the source's kind may use it to preserve an opaque application-authored failure value. For CONTEXT_REQUIRED, this is a ContextRequiredDetails object. Presence is significant: an absent member means no portable associated value, while an explicit null is a present JSON null value. Statuses, headers, trailers, envelopes, raw debugging bytes, exception prose, stacks, and implementation evidence do not belong here unless they are themselves application data under an explicit governing rule."
@@ -272,7 +272,7 @@
                 {
                     "title": "input_closed",
                     "type": "object",
-                    "description": "Binding has closed the input side from its end (e.g., a unary binding closes input after the first read). Subsequent caller `input` frames are ignored (never written; see rule 3). The invocation continues; outputs may still flow.",
+                    "description": "The invoked binding is no longer accepting input. This is not a terminal outcome; outputs may still follow. Handling subsequent caller frames is implementation policy.",
                     "properties": {
                         "kind": {
                             "const": "input_closed"
@@ -387,6 +387,22 @@
                 "items": {
                     "$ref": "#/schemas/KindSupportVerdict"
                 }
+            },
+            "examples": {
+                "oneKind": {
+                    "description": "Illustrative job-specific support query; the example kind is defined for these examples only.",
+                    "input": {
+                        "kinds": [
+                            "example.text@1"
+                        ]
+                    },
+                    "output": [
+                        {
+                            "kind": "example.text@1",
+                            "supported": true
+                        }
+                    ]
+                }
             }
         },
         "openbindings.binding-invoker.invokeBinding": {
@@ -396,6 +412,61 @@
             },
             "output": {
                 "$ref": "#/schemas/BindingInvokerOutputFrame"
+            },
+            "examples": {
+                "openText": {
+                    "description": "One opening frame for illustrative example.text@1. This kind uses absent source content and binding content echo to return its input string. Further input/output and a terminal outcome belong to this exchange.",
+                    "input": {
+                        "kind": "open",
+                        "input": {
+                            "source": {
+                                "kind": "example.text@1"
+                            },
+                            "binding": {
+                                "content": "echo"
+                            }
+                        }
+                    }
+                },
+                "textValue": {
+                    "description": "Individual value frames within that exchange; not the whole invocation.",
+                    "input": {
+                        "kind": "input",
+                        "value": "Hello"
+                    },
+                    "output": {
+                        "kind": "output",
+                        "value": "Hello"
+                    }
+                },
+                "completion": {
+                    "description": "One possible successful terminal outcome. A preceding output value alone would not report success.",
+                    "output": {
+                        "kind": "complete"
+                    }
+                },
+                "contextChallenge": {
+                    "description": "A separate illustrative protected service requests a bearer token. This terminal outcome claims no operation output or effects; target is a producer assertion, not authorization to disclose a token. Whether and how to make another attempt is the caller’s choice.",
+                    "output": {
+                        "kind": "error",
+                        "error": {
+                            "code": "CONTEXT_REQUIRED",
+                            "data": {
+                                "target": "example:text-service",
+                                "alternatives": [
+                                    {
+                                        "requirements": [
+                                            {
+                                                "type": "auth.bearer",
+                                                "durable": false
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
             }
         },
         "openbindings.binding-invoker.preflightBinding": {

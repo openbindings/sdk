@@ -66,8 +66,8 @@ is valid; the author can supply it. Assess the final document after authoring.
 ## Role mapping
 
 Authority: `openbindings/interfaces` at
-`8ff5d9d913cb525dacb347a29e534af278ed88f6`,
-[`source-inspector/0.1.json`](https://github.com/openbindings/interfaces/blob/8ff5d9d913cb525dacb347a29e534af278ed88f6/source-inspector/0.1.json)
+`f158f4f345301668ccb8fd555586b04ca823e732`,
+[`source-inspector/0.1.json`](https://github.com/openbindings/interfaces/blob/f158f4f345301668ccb8fd555586b04ca823e732/source-inspector/0.1.json)
 and its README. Role, SDK package and OBI versions are independent.
 
 | Role concept | Rust mapping and responsibility |

@@ -43,7 +43,7 @@
         },
         "SynthesizeInterfaceSource": {
             "type": "object",
-            "description": "A source to synthesize from, recorded unchanged, including extensions, in the emitted interface under name.",
+            "description": "A source to synthesize from. When emitted, its supplied value is preserved, including extensions and content presence; name, when supplied, is its emitted key. Unused sources need not be emitted.",
             "properties": {
                 "name": {
                     "type": "string",
@@ -129,7 +129,8 @@
                         "invalid",
                         "lossy",
                         "implementation-unsupported"
-                    ]
+                    ],
+                    "description": "represented: a represented path or dependency; excluded: omitted under a kind-defined rule; invalid: a malformed or contradictory source unit; lossy: representation with a disclosed projection limitation; implementation-unsupported: an admitted unit this implementation did not represent."
                 },
                 "operationKey": {
                     "type": "string",
@@ -334,7 +335,7 @@
                 },
                 "exhaustive": {
                     "type": "boolean",
-                    "description": "True only when every interaction unit in every accepted input source, under the kind's defined inventory, has exactly one disposition. False when the implementation cannot establish that claim."
+                    "description": "True describes an inventory covering every interaction unit in every accepted input source under the kind's defined inventory. False leaves a possible remainder, explained by limitation. Repeated evidence does not by itself change completeness."
                 },
                 "fullyRepresented": {
                     "type": "boolean",
@@ -502,6 +503,22 @@
                 "items": {
                     "$ref": "#/schemas/KindSupportVerdict"
                 }
+            },
+            "examples": {
+                "oneKind": {
+                    "description": "Illustrative job-specific support query; the example kind is defined for these examples only.",
+                    "input": {
+                        "kinds": [
+                            "example.text@1"
+                        ]
+                    },
+                    "output": [
+                        {
+                            "kind": "example.text@1",
+                            "supported": true
+                        }
+                    ]
+                }
             }
         },
         "openbindings.interface-synthesizer.synthesizeInterface": {
@@ -511,6 +528,64 @@
             },
             "output": {
                 "$ref": "#/schemas/OpenBindingsInterface"
+            },
+            "examples": {
+                "textTools": {
+                    "description": "Complete synthesis for illustrative example.text@1: echo returns its input string; length counts Unicode code points. Source content is absent and binding content names the target. Generated keys are example choices.",
+                    "input": {
+                        "sources": [
+                            {
+                                "name": "text",
+                                "source": {
+                                    "kind": "example.text@1"
+                                }
+                            }
+                        ],
+                        "name": "Text tools"
+                    },
+                    "output": {
+                        "openbindings": "0.2.0",
+                        "name": "Text tools",
+                        "operations": {
+                            "repeat": {
+                                "description": "Return the input string.",
+                                "input": {
+                                    "type": "string"
+                                },
+                                "output": {
+                                    "type": "string"
+                                }
+                            },
+                            "count": {
+                                "description": "Count Unicode code points in the input string.",
+                                "input": {
+                                    "type": "string"
+                                },
+                                "output": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                }
+                            }
+                        },
+                        "sources": {
+                            "text": {
+                                "kind": "example.text@1"
+                            }
+                        },
+                        "bindings": {
+                            "repeatText": {
+                                "operation": "repeat",
+                                "source": "text",
+                                "content": "echo"
+                            },
+                            "countText": {
+                                "operation": "count",
+                                "source": "text",
+                                "content": "length"
+                            }
+                        }
+                    }
+                }
             }
         },
         "openbindings.interface-synthesizer.synthesizeInterfaceWithCoverage": {
@@ -520,6 +595,74 @@
             },
             "output": {
                 "$ref": "#/schemas/SynthesizeInterfaceResult"
+            },
+            "examples": {
+                "partialTextTools": {
+                    "description": "The same illustrative two-target kind, with complete inventory but only echo represented. sourceIndex refers to the retained request; optional sourceKeys and dependencyKey are absent.",
+                    "input": {
+                        "sources": [
+                            {
+                                "name": "text",
+                                "source": {
+                                    "kind": "example.text@1"
+                                }
+                            }
+                        ],
+                        "name": "Text tools"
+                    },
+                    "output": {
+                        "interface": {
+                            "openbindings": "0.2.0",
+                            "name": "Text tools",
+                            "operations": {
+                                "repeat": {
+                                    "description": "Return the input string.",
+                                    "input": {
+                                        "type": "string"
+                                    },
+                                    "output": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "sources": {
+                                "text": {
+                                    "kind": "example.text@1"
+                                }
+                            },
+                            "bindings": {
+                                "repeatText": {
+                                    "operation": "repeat",
+                                    "source": "text",
+                                    "content": "echo"
+                                }
+                            }
+                        },
+                        "coverage": {
+                            "entries": [
+                                {
+                                    "sourceIndex": 0,
+                                    "sourceRef": "echo",
+                                    "scope": "target",
+                                    "status": "represented",
+                                    "sourceKey": "text",
+                                    "operationKey": "repeat",
+                                    "bindingKey": "repeatText"
+                                },
+                                {
+                                    "sourceIndex": 0,
+                                    "sourceRef": "length",
+                                    "scope": "target",
+                                    "status": "implementation-unsupported",
+                                    "reasonCode": "example.length-unavailable",
+                                    "message": "This synthesizer does not generate the length target."
+                                }
+                            ],
+                            "exhaustive": true,
+                            "fullyRepresented": false
+                        }
+                    }
+                }
             }
         }
     }

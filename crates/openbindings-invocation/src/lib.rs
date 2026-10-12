@@ -20,4 +20,4 @@ pub use value::{BindingInvocationInput, BindingRequest, BindingValue, ContextCha
 pub const ROLE_VERSION: &str = "0.1.0";
 
 /// Exact interfaces repository revision applied by this companion.
-pub const APPLIED_ROLE_REVISION: &str = "468bb83e5986de3ee490767bcb4b6630071bdec5";
+pub const APPLIED_ROLE_REVISION: &str = "f158f4f345301668ccb8fd555586b04ca823e732";

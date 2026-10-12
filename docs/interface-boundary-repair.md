@@ -85,3 +85,18 @@ passed against extracted Cargo archives from the clean SDK repair commit.
 No runtime algorithm changed, and no new performance claim is made. The next
 adapter slice can build on these provisional native APIs without promoting their
 implementation policies back into the published interfaces.
+
+## Landing synchronization — 2026-10-12
+
+Interfaces [PR #45](https://github.com/openbindings/interfaces/pull/45) landed as
+`f158f4f345301668ccb8fd555586b04ca823e732`. The three companions now pin that
+revision, and all four role JSON snapshots match its source bytes. Fixture hash
+tables and active README references have been synchronized. The earlier repair
+receipt above remains evidence for its original revision.
+
+The final interface revision includes the subsequent walkthroughs, invocation
+addressing correction, configuration-schema clarification and portable inspection
+framing examples. This synchronization changes no native API or runtime policy.
+The three companions' tests and doctests pass against the landed snapshots;
+fixture hashes and source-byte correspondence were also checked. Full repository
+CI qualifies the complete SDK checkpoint before merge.

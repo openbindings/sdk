@@ -257,7 +257,7 @@ this is a copy with a cost, not the default handoff.
 
 ## Contract mapping and evidence
 
-Pinned authority: interfaces `8b25ddccb477db31d7a507fe07227e08f544679d`;
+Pinned authority: interfaces `f158f4f345301668ccb8fd555586b04ca823e732`;
 `APPLIED_ROLE_REVISION` and `tests/fixtures` retain its version and byte hashes.
 
 | Role concept | Native API / responsibility |
