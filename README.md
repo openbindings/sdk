@@ -90,6 +90,7 @@ shows retained in-flight work and a replacement that is installed only when read
 | `openbindings-source-inspection` | Optional inspector provider trait and checked consumer API; Rust only, provisional |
 | `openbindings-interface-synthesis` | Optional synthesizer provider trait, checked document/coverage and strict recovery; Rust only, provisional |
 | `openbindings-invocation` | Optional binding provider, document-based operation invocation and bounded input/output lifecycle; Rust only, provisional |
+| `openbindings-openapi` | Optional real OpenAPI 3.1 source inspector using the independent client; unpublished and incomplete kind coverage |
 | `openbindings-wasm` | Internal bridge used by the supported TypeScript facade |
 | `@openbindings/sdk` | First-class TypeScript API and included Wasm asset |
 

@@ -1,0 +1,54 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "binarySha256": "1da65c1b54cc53e6670b2be48beebc211e83c780655444353e36451b4648b9f3",
+  "consumerLockSha256": "0be5ea110ee89946d0a92b2a4eb49f9bee2a7e7284912c34467273e5ca2604ac",
+  "harnessSha256": "f9647c2ba50e05871897eb38a8be9bbaae05af09f8e7c819e4bd3ace6317e6e2",
+  "consumer": "/Users/matt/Code/ob-pj/openbindings/sdk/target/openapi-inspection-qualification/archives/consumer",
+  "commands": [
+    {
+      "argv": [
+        "/Users/matt/Code/ob-pj/openbindings/sdk/target/release/examples/measure",
+        "baseline"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "/Users/matt/Code/ob-pj/openbindings/sdk/target/release/examples/measure",
+        "adapter"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "/Users/matt/Code/ob-pj/openbindings/sdk/target/release/examples/measure",
+        "adapter"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "/Users/matt/Code/ob-pj/openbindings/sdk/target/release/examples/measure",
+        "baseline"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "/Users/matt/Code/ob-pj/openbindings/sdk/target/release/examples/measure",
+        "baseline"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "/Users/matt/Code/ob-pj/openbindings/sdk/target/release/examples/measure",
+        "adapter"
+      ],
+      "exit": 0
+    }
+  ],
+  "cpu": "unavailable in this environment",
+  "memoryBytes": "unavailable in this environment"
+}
