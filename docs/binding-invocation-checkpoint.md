@@ -146,3 +146,34 @@ cleanup ended with zero live drivers, providers, commands and tokens.
 
 The checkpoint is committed on feature branches. Remote CI, merging, website
 updates and package publication have not been performed by this assignment.
+
+## Focused foundation review repair — 2026-10-12
+
+A subsequent whole-foundation review reproduced two gaps. Commit `d1c4532`
+repairs both while preserving the architecture, public API and role authority:
+
+- Shared core `WorkControl` could destroy registered wakers under its waiter
+  mutex during replacement or future drop. Waker cloning and destruction now
+  happen outside that mutex; a second locked cancellation check prevents late
+  registration after cancellation. The maintained destructor regression fails
+  against the previous code, and a concurrent registration test checks wakeups.
+- Catalog authoring ignored malformed `interaction` fields that its independent
+  execution reader refused. Inspection and both synthesis paths now validate
+  every unit against the same documented fixture authority. Cross-role negative
+  cases and 36 positive mode/scope/disposition combinations guard correspondence.
+  No kind-specific interpretation was added to the generic companions.
+
+Two fresh GPT-6 Astra xhigh reviewers independently verified the repairs with no
+remaining blocker in their assigned scopes. Cancellation verification included
+384 deterministic cases and a mutation removing the second check, which failed.
+Catalog verification covered 360 malformed cases, 72 positive cases with 144
+calls through synthesized bindings, and 72 valid non-emitted-unit cases.
+
+Core/role suites, the existing discovery and evaluator suites, strict workspace
+Clippy, and the no-default core build passed. Invocation and synthesis package
+qualification passed from clean commit `d1c4532`, including strict TypeScript and
+executed Node/Wasm. All resource gates passed; 10,000 completed plus 10,000 cancelled
+calls retained no additional live allocations, bytes or provider guards. The
+[repair receipt](qualification/binding-invocation/focused-repair.json) records
+source/archive identities, independent checks and remaining qualification limits.
+This is local branch verification; it does not claim a merge or remote CI result.

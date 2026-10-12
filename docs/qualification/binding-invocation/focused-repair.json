@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-12T17:25:55.188926+00:00",
+  "implementation_commit": "d1c4532f85502ec47d2e8e765ae46442238fde59",
+  "scope": [
+    "shared WorkControl reentrant waker cleanup and registration race",
+    "Catalog interaction admission correspondence"
+  ],
+  "architecture": "existing core/optional companions and public APIs preserved; no role authority amendment",
+  "source_sha256": {
+    "crates/openbindings/src/work_control.rs": "c137a8854367e151fdb0760b91081c91f3fb9ac0745005532282891923c33363",
+    "examples/binding-invocation-consumer/README.md": "57efe1dad399a5d76124e15f65dee04f47bb95312d587b5ca5f522d4b7e79046",
+    "examples/binding-invocation-consumer/tests/consumer.rs": "13eb737266ccfa2fffcb2888d669c518929a10fbe02e99960d62ffbe7485890b",
+    "examples/interface-synthesis-consumer/README.md": "162c1f7824e8e869d901cebb5a8e9d2f82772a566b13544909350870ccbc7e60",
+    "examples/interface-synthesis-consumer/src/lib.rs": "8aa345c34d40d02822cd720b7065c0fd93ff0d7b599f9be5177645b52898c0b0"
+  },
+  "regression_sensitivity": {
+    "old_cancellation": "maintained regression failed with bounded timeout; independent original probes timed out",
+    "old_catalog": "maintained cross-role admission regression failed because inspection accepted malformed interaction",
+    "missing_second_cancellation_check": "independent mutation probe failed"
+  },
+  "checks_passed": [
+    "core plus inspection/synthesis/invocation tests and doctests",
+    "workspace format and strict Clippy including native discovery",
+    "HTTP native/portable tests and doctest (localhost permission)",
+    "schema evaluator tests",
+    "core no-default-features build",
+    "extracted package consumers and executed strict TypeScript/Node-Wasm",
+    "invocation resource gates"
+  ],
+  "independent_reviews": {
+    "cancellation": {
+      "model": "GPT-6 Astra xhigh",
+      "result": "no remaining blocker",
+      "deterministic_cases": 384,
+      "checks": [
+        "original safe-Rust drop/replacement probes",
+        "clone-gap cancellation on current and other thread",
+        "reentrant clone/drop/wake",
+        "replacement and scoped release",
+        "same-waker fast path",
+        "baseline and missing-second-check sensitivity"
+      ]
+    },
+    "catalog": {
+      "model": "GPT-6 Astra xhigh",
+      "result": "no remaining blocker",
+      "malformed_cases": 360,
+      "positive_cases": 72,
+      "synthesized_binding_invocations": 144,
+      "valid_non_emitted_cases": 72,
+      "independent_execution_reader_unchanged": true
+    }
+  },
+  "package_qualification": {
+    "binding-invocation": {
+      "revision": "d1c4532f85502ec47d2e8e765ae46442238fde59",
+      "clean_checkout": true,
+      "successful_commands": 23,
+      "archives": {
+        "openbindings-0.2.0-alpha.1.crate": "935920a7b605d8b02a39692dbb9fb56e44bf7beffacae9c5a12e1020a2e7bf53",
+        "openbindings-internal-json-0.2.0-alpha.1.crate": "db89533e2ada32cafb52d6fd5b62bf665f2cbb7e51254a2b608b286b83eda4f1",
+        "openbindings-interface-synthesis-0.2.0-alpha.1.crate": "5cc07f38be683f49953a8cd9efe13cf0983ec9850d099b7ac5b86cba6043619c",
+        "openbindings-source-inspection-0.2.0-alpha.1.crate": "db09f27e913d3e4501c6bc51868c918b6d930006b77d82e276979b398fa5ee44",
+        "openbindings-invocation-0.2.0-alpha.1.crate": "730e948f90ab26968b536752dd1470786accdb8a4d19992eeaa66b42745d6781",
+        "openbindings-internal-jsonschema-0.58.6-ob.1.crate": "bc781a1031859677b12e4d9587f33d09563a858860b65ad087e5b5d101529d6a",
+        "openbindings-internal-jsonschema-value-0.58.6-ob.1.crate": "854a8caa465b760ad62400fa3f2b738745b1c83e0abe3843952d519fb7ad823d",
+        "openbindings-internal-serde-json-1.0.151-ob.1.crate": "b8c5a9a140644f86c58ce3ceeadc91dd8ede44e42431a5e52b967646703f40be",
+        "openbindings-internal-referencing-0.58.6-ob.1.crate": "d569dc30405ecec9d19454c7bd21ebeda0ab64d6971437ca5d56d00b7a8604f9",
+        "openbindings-internal-regress-0.12.0-ob.1.crate": "22da2959e505aadaa9e3303c8ddbf5efd8ec83caffcb8ab6034c09d916f04c43"
+      },
+      "wasm_probe": true,
+      "host": "Node/Wasm",
+      "input_files": 524,
+      "input_map_sha256": "26e9851235c09f48d26fb743d22fc309e1a9d62bbffd0d112497c2f27c3bb4ae"
+    },
+    "interface-synthesis": {
+      "revision": "d1c4532f85502ec47d2e8e765ae46442238fde59",
+      "clean_checkout": true,
+      "successful_commands": 22,
+      "archives": {
+        "openbindings-0.2.0-alpha.1.crate": "935920a7b605d8b02a39692dbb9fb56e44bf7beffacae9c5a12e1020a2e7bf53",
+        "openbindings-internal-json-0.2.0-alpha.1.crate": "db89533e2ada32cafb52d6fd5b62bf665f2cbb7e51254a2b608b286b83eda4f1",
+        "openbindings-interface-synthesis-0.2.0-alpha.1.crate": "5cc07f38be683f49953a8cd9efe13cf0983ec9850d099b7ac5b86cba6043619c",
+        "openbindings-source-inspection-0.2.0-alpha.1.crate": "db09f27e913d3e4501c6bc51868c918b6d930006b77d82e276979b398fa5ee44",
+        "openbindings-internal-jsonschema-0.58.6-ob.1.crate": "bc781a1031859677b12e4d9587f33d09563a858860b65ad087e5b5d101529d6a",
+        "openbindings-internal-jsonschema-value-0.58.6-ob.1.crate": "854a8caa465b760ad62400fa3f2b738745b1c83e0abe3843952d519fb7ad823d",
+        "openbindings-internal-serde-json-1.0.151-ob.1.crate": "b8c5a9a140644f86c58ce3ceeadc91dd8ede44e42431a5e52b967646703f40be",
+        "openbindings-internal-referencing-0.58.6-ob.1.crate": "d569dc30405ecec9d19454c7bd21ebeda0ab64d6971437ca5d56d00b7a8604f9",
+        "openbindings-internal-regress-0.12.0-ob.1.crate": "22da2959e505aadaa9e3303c8ddbf5efd8ec83caffcb8ab6034c09d916f04c43"
+      },
+      "wasm_probe": true,
+      "host": "Node/Wasm"
+    }
+  },
+  "resource_gates": {
+    "retention_10000_completed_and_10000_cancelled": true,
+    "no_live_allocation_or_byte_growth": true,
+    "provider_guards_released": true,
+    "at_most_one_active_provider": true,
+    "streams_exceed_queue_capacity": true,
+    "one_byte_subtree_retains_one_mib_backing": true,
+    "no_full_source_sized_allocation_per_call": true,
+    "default_capacities_one_and_four": true,
+    "source_stable_during_run": true
+  },
+  "retention": {
+    "completed": 10000,
+    "cancelled": 10000,
+    "completed_live_allocations_delta": 0,
+    "completed_live_bytes_delta": 0,
+    "cancelled_live_allocations_delta": 0,
+    "cancelled_live_bytes_delta": 0,
+    "all_backing_owners_released_allocations_delta": 0,
+    "all_backing_owners_released_bytes_delta": 0,
+    "live_provider_guards": 0
+  },
+  "node_wasm": {
+    "result": "passed",
+    "host": "Node/Wasm",
+    "checks": [
+      "Rc across Promise",
+      "exact texts",
+      "no-output versus null",
+      "input/output closure",
+      "output then failure",
+      "absent/null errors",
+      "pre/mid abort",
+      "iterator return",
+      "dispose outstanding commands",
+      "late Promise settlement"
+    ],
+    "final": {
+      "drivers": 0,
+      "providers": 0,
+      "commands": 0,
+      "tokens": 0,
+      "starts": 8
+    }
+  },
+  "limitations": [
+    "local verification only; no remote CI, merge or publication",
+    "Node/Wasm qualification does not establish browser/Cloudflare deployment",
+    "existing ignored real-memory-boundary and isolated TLS fixtures were not run; no new ignored tests",
+    "resource results are synthetic; timing budgets were not requalified"
+  ],
+  "raw_evidence_workspace_path": "/Users/matt/Code/ob-pj/design/openapi-adapter-development-loop-2026-10-11/work/binding-invocation/focused-repair"
+}
