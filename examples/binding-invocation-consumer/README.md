@@ -26,6 +26,11 @@ chooses by array order. The optional unit `interaction` field adds explicit test
 `unary` echoes one value and closes input; `server` repeats one input seven times;
 `count` counts inputs and returns one count; `empty` closes input and completes
 with zero outputs. These are fixture semantics, not an OpenAPI kind definition.
+The shared [fixture authority](../interface-synthesis-consumer/README.md#fixture-authority)
+requires all four role operations (inspection, strict/coverage synthesis and
+invocation) to refuse wrong-typed or unknown interactions throughout the artifact.
+Maintained consumer cases cover those refusals and all six omitted/explicit mode
+choices across represented/lossy target, alternative and projection bindings.
 
 `invoker-only` has no inspection, synthesis, HTTP, optional evaluator or executor
 dependency. The full consumer separately qualifies borrowed non-Clone providers,

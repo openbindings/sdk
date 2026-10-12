@@ -32,7 +32,7 @@ fn analyze(source: &Source) -> Result<(Vec<Unit>, bool), SynthesisError> {
     let unreadable = || {
         failure(
             SynthesisErrorKind::UnreadableSource,
-            "catalog requires unique unit IDs and known scopes/dispositions",
+            "catalog requires unique unit IDs and known scopes/dispositions/interactions",
         )
     };
     let content = source.content.as_ref().ok_or_else(unreadable)?;
@@ -73,6 +73,15 @@ fn analyze(source: &Source) -> Result<(Vec<Unit>, bool), SynthesisError> {
             "implementation-unsupported" => CoverageStatus::ImplementationUnsupported,
             _ => return Err(unreadable()),
         };
+        // All roles admit the same artifact, even when a unit is not emitted.
+        // Keep this authoring reader independent of the execution oracle.
+        let interaction = match u.get("interaction") {
+            Some(value) => value.as_str().ok_or_else(unreadable)?,
+            None => "echo",
+        };
+        if !matches!(interaction, "echo" | "unary" | "server" | "count" | "empty") {
+            return Err(unreadable());
+        }
         units.push(Unit {
             id: id.into(),
             scope,
@@ -88,8 +97,8 @@ fn analyze(source: &Source) -> Result<(Vec<Unit>, bool), SynthesisError> {
     ))
 }
 /// Derive with transparent fixture semantics and no I/O. Sources carry their
-/// fixture unit dispositions; represented units accept arbitrary JSON through
-/// a kind-defined echo interaction. Lossy framing is a sound restriction to null.
+/// fixture unit dispositions and supported interactions (echo by default).
+/// Lossy framing is a sound restriction to null for input-consuming interactions.
 pub fn derive(
     request: &SynthesisRequest<'_>,
     control: &WorkControl,

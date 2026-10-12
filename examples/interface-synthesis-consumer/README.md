@@ -23,11 +23,20 @@ five role dispositions. Unknown/non-string identifiers and unknown scope/status
 labels refuse as wholly unreadable. The optional `unknownRemainder: true` declares
 that the observed inventory cannot establish completeness.
 
-For this fixture, a represented unit offers a JSON echo interaction. Excluded
+An omitted `interaction` means `echo`. An explicitly supplied interaction must be
+one of `echo`, `unary`, `server`, `count`, or `empty`: echo returns each input,
+unary echoes one input and closes input, server repeats one input seven times,
+count returns the number of inputs after half-close, and empty closes input and
+completes without output. Wrong-typed or unknown interactions make the entire
+artifact unreadable for inspection, strict synthesis, coverage synthesis and
+invocation, including when the malformed unit would not be selected or emitted.
+Authoring and execution readers enforce this fixture authority independently.
+
+For this fixture, a represented unit offers its declared interaction. Excluded
 units are disallowed by this kind's own rule; invalid units declare malformed
 upstream units. Unsupported units admit an interaction the provider cannot emit.
 Lossy units retain a sound interaction while advertising only JSON null input,
-a deliberate narrowing of the upstream echo domain. Dependency units declare
+a deliberate narrowing of the upstream arbitrary-JSON input domain. Dependency units declare
 consumption points for the equivalent operation and have no binding. These literal
 semantics are tested independently of the facade's generic correspondence checks;
 the fixture makes no claim about arbitrary schema projection or execution.

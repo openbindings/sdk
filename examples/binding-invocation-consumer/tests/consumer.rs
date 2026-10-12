@@ -353,11 +353,18 @@ async fn malformed_kind_fields_and_duplicate_targets_refuse_without_effects() {
         r#"{"units":[{"id":"u","status":false}]}"#,
         r#"{"units":[{"id":"u","scope":false}]}"#,
         r#"{"units":[{"id":"u","interaction":false}]}"#,
+        r#"{"units":[{"id":"u","interaction":42}]}"#,
+        r#"{"units":[{"id":"u","interaction":null}]}"#,
+        r#"{"units":[{"id":"u","interaction":[]}]}"#,
+        r#"{"units":[{"id":"u","interaction":{}}]}"#,
+        r#"{"units":[{"id":"u","interaction":""}]}"#,
         r#"{"units":[{"id":"u","status":"unknown"}]}"#,
         r#"{"units":[{"id":"u","scope":"unknown"}]}"#,
         r#"{"units":[{"id":"u","interaction":"unknown"}]}"#,
         r#"{"units":[{"id":"u"},{"id":"u","scope":"target"}]}"#,
         r#"{"units":[{"id":"u"},{"id":"other","status":null}]}"#,
+        r#"{"units":[{"id":"u"},{"id":"other","interaction":42}]}"#,
+        r#"{"units":[{"id":"u"},{"id":"other","scope":"dependency","interaction":"unknown"}]}"#,
         r#"{"units":[{"id":"u"},{"id":""}]}"#,
         r#"{"units":[{"id":"u"}],"unknownRemainder":"yes"}"#,
     ] {
@@ -367,6 +374,38 @@ async fn malformed_kind_fields_and_duplicate_targets_refuse_without_effects() {
             ..Default::default()
         };
         let provider = Catalog::default();
+        let inspection = openbindings_source_inspection::Inspector::new(&provider)
+            .inspect(&source)
+            .await
+            .unwrap_err();
+        assert_eq!(
+            inspection.kind(),
+            openbindings_source_inspection::InspectionErrorKind::UnreadableSource,
+            "{text}"
+        );
+        let sources = [SynthesisSource {
+            name: Some("catalog"),
+            source: &source,
+        }];
+        let request = SynthesisRequest {
+            sources: &sources,
+            ..Default::default()
+        };
+        let synthesizer = Synthesizer::new(&provider);
+        for error in [
+            synthesizer.synthesize(&request).await.unwrap_err(),
+            synthesizer
+                .synthesize_with_coverage(&request)
+                .await
+                .unwrap_err(),
+        ] {
+            assert_eq!(
+                error.kind(),
+                openbindings_interface_synthesis::SynthesisErrorKind::UnreadableSource,
+                "{text}"
+            );
+            assert!(error.partial().is_none());
+        }
         let facade = Invoker::new(&provider);
         let mut call = facade.invoke(BindingRequest {
             source: &source,
@@ -382,5 +421,108 @@ async fn malformed_kind_fields_and_duplicate_targets_refuse_without_effects() {
         assert!(call.next().await.is_none());
         assert_eq!(provider.effects.load(Ordering::Relaxed), 0);
         assert!(provider.last_target.lock().unwrap().is_none());
+    }
+}
+
+#[tokio::test]
+async fn every_admitted_interaction_can_be_inspected_synthesized_and_invoked() {
+    // Literal mode/output expectations are independent of both source readers.
+    for mode in [
+        None,
+        Some("echo"),
+        Some("unary"),
+        Some("server"),
+        Some("count"),
+        Some("empty"),
+    ] {
+        for scope in ["target", "alternative", "projection"] {
+            for status in ["represented", "lossy"] {
+                let interaction =
+                    mode.map_or(String::new(), |m| format!(r#", "interaction":"{m}""#));
+                let source = source(&format!(
+                    r#"{{"units":[{{"id":"unit","scope":"{scope}","status":"{status}"{interaction}}}]}}"#
+                ));
+                let provider = Catalog::default();
+                let inventory = openbindings_source_inspection::Inspector::new(&provider)
+                    .inspect(&source)
+                    .await
+                    .unwrap();
+                assert!(inventory.exhaustive);
+                assert_eq!(inventory.targets.len(), usize::from(scope == "target"));
+                let sources = [SynthesisSource {
+                    name: Some("catalog"),
+                    source: &source,
+                }];
+                let request = SynthesisRequest {
+                    sources: &sources,
+                    ..Default::default()
+                };
+                let result = Synthesizer::new(&provider)
+                    .synthesize_with_coverage(&request)
+                    .await
+                    .unwrap();
+                assert!(result.coverage().strict_eligible());
+                assert_eq!(
+                    result.coverage().fully_represented(),
+                    status == "represented"
+                );
+                let authored = result.document().parsed().to_authoring().unwrap();
+                let chosen = &authored.bindings.as_ref().unwrap()["s0.u0"];
+                if let Some(target) = inventory.targets.first() {
+                    assert_eq!(target.source_ref, "unit");
+                    assert_eq!(
+                        target.binding.content.as_ref().unwrap().text(),
+                        chosen.content.as_ref().unwrap().text()
+                    );
+                }
+                let binding = BindingValue::from(chosen);
+                let emitted_source = &authored.sources.as_ref().unwrap()[&chosen.source];
+                let facade = Invoker::new(&provider);
+                let (mut input, mut output) = facade
+                    .invoke(BindingRequest {
+                        source: emitted_source,
+                        binding: &binding,
+                        context: None,
+                    })
+                    .split();
+                let value = if status == "lossy" {
+                    "null"
+                } else {
+                    "9007199254740993"
+                };
+                let count = match mode {
+                    Some("empty") => 0,
+                    Some("unary" | "server") => 1,
+                    _ => 3,
+                };
+                let send = async {
+                    for _ in 0..count {
+                        input.write(JsonValue::parse(value).unwrap()).await.unwrap();
+                    }
+                    input.close();
+                };
+                let receive = async {
+                    let mut values = Vec::new();
+                    while let Some(value) = output.next().await {
+                        values.push(value.unwrap().text().to_owned());
+                    }
+                    assert!(output.outcome().unwrap().is_ok());
+                    values
+                };
+                let ((), values) = tokio::join!(send, receive);
+                let expected = match mode {
+                    Some("empty") => vec![],
+                    Some("count") => vec!["3"],
+                    Some("server") => vec![value; 7],
+                    _ => vec![value; count],
+                };
+                assert_eq!(
+                    values, expected,
+                    "mode={mode:?}, scope={scope}, status={status}"
+                );
+                assert_eq!(provider.effects.load(Ordering::Relaxed), count);
+                assert_eq!(provider.last_scope.lock().unwrap().as_deref(), Some(scope));
+            }
+        }
     }
 }

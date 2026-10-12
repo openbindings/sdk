@@ -88,38 +88,60 @@ impl Future for Cancellation {
     type Output = ();
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         let this = self.get_mut();
-        let mut waiters = this.control.state.waiters.lock().unwrap();
-        if this.control.is_cancelled() {
-            return Poll::Ready(());
-        }
-        let id = *this.id.get_or_insert_with(|| {
-            loop {
-                let candidate = this.control.state.next_id.fetch_add(1, Ordering::Relaxed);
-                if !waiters.contains_key(&candidate) {
-                    break candidate;
-                }
+        let id = {
+            let waiters = this.control.state.waiters.lock().unwrap();
+            if this.control.is_cancelled() {
+                return Poll::Ready(());
             }
-        });
-        if waiters
-            .get(&id)
-            .is_none_or(|old| !old.will_wake(cx.waker()))
-        {
-            waiters.insert(id, cx.waker().clone());
+            let id = *this.id.get_or_insert_with(|| {
+                loop {
+                    let candidate = this.control.state.next_id.fetch_add(1, Ordering::Relaxed);
+                    if !waiters.contains_key(&candidate) {
+                        break candidate;
+                    }
+                }
+            });
+            if waiters
+                .get(&id)
+                .is_some_and(|old| old.will_wake(cx.waker()))
+            {
+                return Poll::Pending;
+            }
+            id
+        };
+        // RawWaker clone and last-reference destruction may reenter cancellation.
+        let waker = cx.waker().clone();
+        let old = {
+            let mut waiters = this.control.state.waiters.lock().unwrap();
+            // Cancellation may have run during clone. Register only while live,
+            // under the same lock used by cancel, so no wakeup can be lost.
+            if this.control.is_cancelled() {
+                drop(waiters);
+                drop(waker);
+                return Poll::Ready(());
+            }
+            waiters.insert(id, waker)
+        };
+        drop(old);
+        if this.control.is_cancelled() {
+            Poll::Ready(())
+        } else {
+            Poll::Pending
         }
-        Poll::Pending
     }
 }
 impl Drop for Cancellation {
     fn drop(&mut self) {
         if let Some(id) = self.id {
-            self.control.state.waiters.lock().unwrap().remove(&id);
+            let removed = self.control.state.waiters.lock().unwrap().remove(&id);
+            drop(removed);
         }
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::task::Wake;
+    use std::{sync::mpsc, task::Wake, time::Duration};
     #[derive(Default)]
     struct Counter(AtomicUsize);
     impl Wake for Counter {
@@ -147,5 +169,77 @@ mod tests {
         assert!(Pin::new(&mut a).poll(&mut cx).is_ready());
         assert!(Pin::new(&mut b).poll(&mut cx).is_ready());
         assert!(control.state.waiters.lock().unwrap().is_empty());
+    }
+
+    struct CancelOnDrop(WorkControl);
+    // The owned, reentrant destructor is the witness; Waker::noop cannot supply it.
+    #[allow(clippy::manual_noop_waker)]
+    impl Wake for CancelOnDrop {
+        fn wake(self: Arc<Self>) {}
+    }
+    impl Drop for CancelOnDrop {
+        fn drop(&mut self) {
+            self.0.cancel();
+        }
+    }
+
+    #[test]
+    fn last_waker_drop_and_replacement_can_reenter_cancellation() {
+        for replace in [false, true] {
+            let (done, result) = mpsc::channel();
+            let task = std::thread::spawn(move || {
+                let control = WorkControl::new();
+                let mut wait = control.cancelled();
+                let waker = Waker::from(Arc::new(CancelOnDrop(control.clone())));
+                assert!(
+                    Pin::new(&mut wait)
+                        .poll(&mut Context::from_waker(&waker))
+                        .is_pending()
+                );
+                drop(waker); // The registered waiter now owns the last reference.
+                if replace {
+                    let _ = Pin::new(&mut wait).poll(&mut Context::from_waker(Waker::noop()));
+                    assert!(
+                        Pin::new(&mut wait)
+                            .poll(&mut Context::from_waker(Waker::noop()))
+                            .is_ready()
+                    );
+                }
+                drop(wait);
+                assert!(control.is_cancelled());
+                assert!(control.state.waiters.lock().unwrap().is_empty());
+                done.send(()).unwrap();
+            });
+            result
+                .recv_timeout(Duration::from_secs(5))
+                .expect("waker destruction must not deadlock cancellation");
+            task.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn cancellation_racing_registration_never_loses_a_wakeup() {
+        for _ in 0..256 {
+            let control = WorkControl::new();
+            let cancel = control.clone();
+            let barrier = Arc::new(std::sync::Barrier::new(2));
+            let release = barrier.clone();
+            let task = std::thread::spawn(move || {
+                release.wait();
+                cancel.cancel();
+            });
+            let counter = Arc::new(Counter::default());
+            let waker = Waker::from(counter.clone());
+            let mut cx = Context::from_waker(&waker);
+            let mut wait = control.cancelled();
+            barrier.wait();
+            let result = Pin::new(&mut wait).poll(&mut cx);
+            task.join().unwrap();
+            if result.is_pending() {
+                assert_eq!(counter.0.load(Ordering::Relaxed), 1);
+            }
+            assert!(Pin::new(&mut wait).poll(&mut cx).is_ready());
+            assert!(control.state.waiters.lock().unwrap().is_empty());
+        }
     }
 }
