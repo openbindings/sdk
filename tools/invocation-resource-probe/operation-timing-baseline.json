@@ -1,0 +1,103 @@
+{
+  "recorded_at": "2026-10-12T18:01:21.180483+00:00",
+  "host": {
+    "system": "Darwin",
+    "release": "25.6.0",
+    "machine": "arm64"
+  },
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "git_head": "efcbfe9bee13437f56262c3aa620a93dafe670e5",
+  "source_sha256": {
+    "tools/verify-invocation-resources.py": "321ddb65f94b74c13163a3425813a23ad9be74cfa396f01dbbf69c5fd411605c",
+    "Cargo.toml": "1b6980cf57481bafeec96a5ca6e3a29af7e55dc18683551cb6624fc14a0484c0",
+    "tools/invocation-resource-probe/Cargo.toml": "8c0495890501696f5ab0b6ae4d0d94a8f900423f97cc5921f6c878e4582aa5ed",
+    "tools/invocation-resource-probe/Cargo.lock": "38c5528a160a676ec7bbe603b29c3aa1702076b3aacef75a4fdceab5c475784c",
+    "crates/openbindings-invocation/Cargo.toml": "64403ce8f92bd70e14bdd25e5473b37df723624fffb55399f8da863e6af6cead",
+    "tools/invocation-resource-probe/src/main.rs": "7057f962e0b920dfaa055785171b4ad2cd33e3787fc5d4eed73d80f39729bbf1",
+    "crates/openbindings-invocation/src/binding.rs": "d98a6a1dfd5866f5d7e767f9e3f6f8706345d0774e9f2a0f6c8f278126edd8b3",
+    "crates/openbindings-invocation/src/error.rs": "f9ef2b987f0b9a74fa7ed0b72fb7159e304b20f0ded3ad6a51f1234678911264",
+    "crates/openbindings-invocation/src/lib.rs": "cdf21f9a858a5d13a43b96f33d238f7b4e269b76c5f0488c16013cc35a554e72",
+    "crates/openbindings-invocation/src/lifecycle.rs": "e5649b2f22569e6fa3e0c6876ee7cab253055cd2c9df48bb35a98b502d3a24af",
+    "crates/openbindings-invocation/src/operation.rs": "5d4c448f99b859a44893c3c06366f3d0039f9f048c407429042951a5ae034c79",
+    "crates/openbindings-invocation/src/value.rs": "374f5a1a2cb2d2fe998c3e3efb2256cfd1ed376687bd2a251b92b4ee82d08561"
+  },
+  "budget_policy": "Provisional same-host ns/call ceiling: max(3 times initial ns/call, initial ns/call + 2000 ns); timing enforcement is opt-in",
+  "measurements": {
+    "direct_zero": {
+      "ns_per_call": 7.8916,
+      "budget_ns_per_call": 2007.8916
+    },
+    "handle_creation_release": {
+      "ns_per_call": 1632.8833,
+      "budget_ns_per_call": 4898.6499
+    },
+    "checked_zero": {
+      "ns_per_call": 1969.075,
+      "budget_ns_per_call": 5907.225
+    },
+    "direct_unary_1_byte": {
+      "ns_per_call": 13.5459,
+      "budget_ns_per_call": 2013.5459
+    },
+    "checked_unary_1_byte": {
+      "ns_per_call": 3080.775,
+      "budget_ns_per_call": 9242.325
+    },
+    "direct_unary_64_kib": {
+      "ns_per_call": 1749.6833,
+      "budget_ns_per_call": 5249.0499
+    },
+    "checked_unary_64_kib": {
+      "ns_per_call": 4258.5041,
+      "budget_ns_per_call": 12775.5123
+    },
+    "direct_unary_subtree": {
+      "ns_per_call": 10.2667,
+      "budget_ns_per_call": 2010.2667
+    },
+    "checked_unary_subtree": {
+      "ns_per_call": 2562.875,
+      "budget_ns_per_call": 7688.625
+    },
+    "direct_stream_1_byte": {
+      "ns_per_call": 659.583,
+      "budget_ns_per_call": 2659.583
+    },
+    "checked_stream_1_byte": {
+      "ns_per_call": 57069.333,
+      "budget_ns_per_call": 171207.999
+    },
+    "direct_stream_64_kib": {
+      "ns_per_call": 107531.625,
+      "budget_ns_per_call": 322594.875
+    },
+    "checked_stream_64_kib": {
+      "ns_per_call": 166161.625,
+      "budget_ns_per_call": 498484.875
+    },
+    "checked_cancel_release": {
+      "ns_per_call": 2286.4375,
+      "budget_ns_per_call": 6859.3125
+    },
+    "operation_unary_1_byte": {
+      "ns_per_call": 2737.0375,
+      "budget_ns_per_call": 8211.1125
+    },
+    "operation_stream_1_byte": {
+      "ns_per_call": 56076.125,
+      "budget_ns_per_call": 168228.375
+    },
+    "operation_unary_subtree": {
+      "ns_per_call": 2630.4083,
+      "budget_ns_per_call": 7891.2249
+    },
+    "operation_cancel_release": {
+      "ns_per_call": 2463.6834,
+      "budget_ns_per_call": 7391.0502
+    },
+    "operation_validation_failure_release": {
+      "ns_per_call": 3016.3042,
+      "budget_ns_per_call": 9048.9126
+    }
+  }
+}

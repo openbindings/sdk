@@ -296,7 +296,7 @@ impl Serialize for InputFields<'_> {
     }
 }
 
-fn source_from_json(value: JsonRef<'_>) -> Result<Source, BoundaryError> {
+pub(crate) fn source_from_json(value: JsonRef<'_>) -> Result<Source, BoundaryError> {
     object(value, &["kind", "content", "description"], true, "/source")?;
     let kind = string(required(value, "kind", "/source/kind")?, "/source/kind")?;
     if kind.is_empty() {

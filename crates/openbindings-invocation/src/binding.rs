@@ -76,8 +76,8 @@ forward!(&P, std::sync::Arc<P>, std::rc::Rc<P>);
 
 /// Reusable checked facade. No registry, operation selection, retries or executor.
 pub struct Invoker<P> {
-    provider: P,
-    limits: InvocationLimits,
+    pub(crate) provider: P,
+    pub(crate) limits: InvocationLimits,
 }
 impl<P: BindingInvoker> Invoker<P> {
     /// Wrap a provider with the default finite handoff policy.
@@ -183,6 +183,7 @@ impl<P: BindingInvoker> Invoker<P> {
             return Err(InvocationError::refused());
         }
         let local = WorkControl::new();
+        let _relay = cancellation_relay(control, &local);
         let mut cancelled = pin!(control.cancelled());
         let mut job = pin!(self.provider.preflight(request, local.clone()));
         let result = poll_fn(|cx| {
@@ -190,7 +191,13 @@ impl<P: BindingInvoker> Invoker<P> {
                 local.cancel();
                 return Poll::Ready(Err(InvocationError::cancelled()));
             }
-            job.as_mut().poll(cx)
+            let result = job.as_mut().poll(cx);
+            if control.is_cancelled() {
+                local.cancel();
+                Poll::Ready(Err(InvocationError::cancelled()))
+            } else {
+                result
+            }
         })
         .await;
         // Preflight reports requirements as its successful result, never as an
@@ -221,11 +228,15 @@ impl<P: BindingInvoker> Invoker<P> {
 
 // Keep the provider’s GAT projection outside this async state machine. This
 // preserves conditional Send for providers borrowing non-static configuration.
-async fn checked<F: Future<Output = Result<(), InvocationError>>>(
+pub(crate) async fn checked<F: Future<Output = Result<(), InvocationError>>>(
     start: impl FnOnce() -> Result<F, InvocationError>,
     external: WorkControl,
     local: WorkControl,
 ) -> Result<(), InvocationError> {
+    if external.is_cancelled() {
+        return Err(InvocationError::cancelled());
+    }
+    let _relay = cancellation_relay(&external, &local);
     if external.is_cancelled() {
         return Err(InvocationError::cancelled());
     }
@@ -236,7 +247,37 @@ async fn checked<F: Future<Output = Result<(), InvocationError>>>(
             local.cancel();
             return Poll::Ready(Err(InvocationError::cancelled()));
         }
-        job.as_mut().poll(cx)
+        let result = job.as_mut().poll(cx);
+        if external.is_cancelled() {
+            local.cancel();
+            Poll::Ready(Err(InvocationError::cancelled()))
+        } else {
+            result
+        }
     })
     .await
+}
+
+// Retain a scoped second registration so cancellation reaches synchronous
+// cooperative provider/evaluator work while its current poll is still running.
+// The ordinary cancelled() poll remains responsible for waking the driver.
+fn cancellation_relay(external: &WorkControl, local: &WorkControl) -> openbindings::Cancellation {
+    struct Cancel(WorkControl);
+    impl std::task::Wake for Cancel {
+        fn wake(self: std::sync::Arc<Self>) {
+            self.0.cancel();
+        }
+        fn wake_by_ref(self: &std::sync::Arc<Self>) {
+            self.0.cancel();
+        }
+    }
+    let waker = std::task::Waker::from(std::sync::Arc::new(Cancel(local.clone())));
+    let mut registration = external.cancelled();
+    if std::pin::Pin::new(&mut registration)
+        .poll(&mut std::task::Context::from_waker(&waker))
+        .is_ready()
+    {
+        local.cancel();
+    }
+    registration
 }

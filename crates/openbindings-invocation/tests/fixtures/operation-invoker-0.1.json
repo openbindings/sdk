@@ -1,0 +1,322 @@
+{
+    "openbindings": "0.2.0",
+    "name": "Operation Invoker",
+    "version": "0.1.0",
+    "description": "Interface for invoking operations described by an OpenBindings interface document. The operation invoker is the by-reference peer of binding-invoker: the caller supplies an interface and either an operation key or a specific binding key; the invoker dereferences the key, resolves a binding without inventing policy, validates against the operation's schemas, forwards the selected source and full binding object, and performs binding invocation. An explicit binding wins; an ordered caller selection chooses its first invocable entry and never falls back to a binding it does not list; a sole invocable candidate may be selected automatically; ambiguity is refused. Context is forwarded without reinterpretation and binding challenges propagate unchanged. Implementations may layer this contract over a binding-invoker component or fuse the behavior. Conformance is independent of core OpenBindings conformance and of every kind definition.",
+    "schemas": {
+        "OpenBindingsInterface": {
+            "type": "object",
+            "description": "An OpenBindings document snapshot to interpret. Whole-document conformance proof is not an invocation prerequisite. An implementation MAY admit a nonconformant snapshot when the selected operation, binding, source, and applicable schemas can be interpreted under the core rules; it MUST NOT invent a resolution for missing or ambiguous names. Structurally uninterpretable requests MAY be refused before effects. Accepting a call or validating a value does not certify document conformance.",
+            "additionalProperties": true
+        },
+        "BindingContext": {
+            "type": "object",
+            "description": "Opaque context supplied by value for one binding invocation. The contract neither requires nor exposes a context store; callers may assemble this object from per-call values, durable state, a credential broker, or any other source before invocation. The general named-credential field is 'credentials': an object keyed by a requirement's nonempty 'name'. For auth.bearer and auth.apiKey its named value is a string; for auth.basic it is an object with username and password; for auth.oauth2 it is an object whose accessToken is the applying credential and whose refreshToken, expiresAt, and clientSecret are optional lifecycle values. Unnamed or unambiguous single-scheme conveniences remain 'bearerToken', 'apiKey', 'basic', and 'accessToken' / 'refreshToken' / 'expiresAt'; the historical 'apiKeys' named map remains accepted for auth.apiKey. Well-known transport fields: 'headers' / 'cookies' / 'environment' (objects with string values) and 'metadata' (object with arbitrary values). Well-known configuration field: 'configuration' (object), keyed by configuration-point name and interpreted by the authority that defines each point. A config.value requirement's relative JSON Pointer path addresses within configuration[point]; an empty path addresses the entire point. Implementations and callers MAY add fields for session state, consent, or other runtime data; consumers SHOULD ignore fields they do not recognize unless the source's kind says otherwise. Every value in credentials and the single-scheme credential fields is secret, and any other field may also be secret according to its requirement family, source's kind, or application policy.",
+            "additionalProperties": true
+        },
+        "ContextRequirement": {
+            "type": "object",
+            "description": "One prerequisite that must be satisfied before a binding can be invoked. `type` names the requirement family; the remaining fields are type-specific. A named well-known `auth.*` requirement resolves at BindingContext.credentials[name]: a string for `auth.bearer` and `auth.apiKey`, a username/password object for `auth.basic`, or an OAuth object beginning with accessToken for `auth.oauth2`. Unnamed or unambiguous single-scheme requirements use the corresponding bearerToken, apiKey, basic, or flat OAuth conveniences; historical apiKeys[name] remains accepted for `auth.apiKey`. OAuth requirements may carry flow fields such as grantType, authorizeUrl, tokenUrl, and scopes. The `config.value` family carries a configuration value a binding needs but the artifact does not supply: it carries 'point' and a relative JSON Pointer 'path' (plus an optional engine-asserted 'schema') and resolves within BindingContext.configuration. Other families (e.g. 'approval.user', 'account.link') resolve into their own context fields. Resolution architecture and value secrecy beyond the always-secret credential fields are determined by the requirement family, source's kind, and caller.",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Requirement type identifier, e.g. 'auth.bearer', 'auth.oauth2', 'auth.basic', 'auth.apiKey', 'approval.user', 'config.value'. An unrecognized type is unsatisfiable by a runtime that has no way to satisfy it. An invoker may surface an artifact-defined scheme as an extension requirement only when it knows how the resulting context will be applied faithfully; an invoker that cannot represent or apply a prerequisite refuses before dispatch rather than emitting a satisfiable-looking challenge or attempting the interaction without it."
+                },
+                "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The scheme name as the source artifact declares it (e.g. an OpenAPI securitySchemes key). Distinguishes multiple requirements of the same family and keys scheme-scoped lookup in BindingContext.credentials."
+                },
+                "point": {
+                    "type": "string",
+                    "description": "config.value only: the configuration point the source's kind defines ('server', 'address', a kind's decode point, …)."
+                },
+                "path": {
+                    "type": "string",
+                    "description": "config.value only: RFC 6901 JSON Pointer relative to configuration[point]. The empty pointer addresses the whole point; '/variables/region' addresses a nested member; '/value' addresses a member literally named value."
+                },
+                "schema": {
+                    "type": [
+                        "object",
+                        "boolean"
+                    ],
+                    "description": "config.value only: an engine-asserted JSON Schema in object or Boolean form for the value addressed by point and path. Derived from the source artifact where the artifact speaks, supplied by the implementation where the kind defines a shape, and absent where nothing does; absence means the value is unconstrained. An 'enum' declares the closed admissible set and satisfaction validates against it; 'examples' are advisory suggestions and an off-list value remains valid."
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Human-readable description shown to a user or operator during resolution (e.g. an approval prompt message)."
+                },
+                "durable": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Whether resolved context for this requirement MAY be persisted and reused for later invocations (true), or MUST be satisfied freshly and MUST NOT be persisted or reused (false). Defaults to false. This permission does not require persistence or prescribe a store, key, or reuse policy."
+                }
+            },
+            "required": [
+                "type"
+            ],
+            "additionalProperties": true
+        },
+        "ContextRequiredDetails": {
+            "type": "object",
+            "description": "The `data` value of an InvocationError whose `code` is CONTEXT_REQUIRED, and the return shape of this contract's preflight operation. Enumerates the context the invoker needs before it can proceed. `alternatives` are disjunctive: satisfying ANY one suffices. The `requirements` within a single alternative are conjunctive: ALL must be satisfied. This OR-of-AND shape captures real authentication semantics such as 'OAuth2 OR (apiKey AND clientCert)', which a flat list cannot. A challenge is a scope, not a hint: a caller that resolves it MUST provision only the context needed for one selected alternative and MUST NOT disclose unrelated credentials. The interface supplies context by value and exposes no context-store access.",
+            "properties": {
+                "target": {
+                    "type": "string",
+                    "description": "Opaque identifier for the concrete destination or context scope asserted by the invoker. A runtime MAY use it to scope resolution or reuse. Before releasing a reusable secret on an assertion from outside its trust boundary, a resolver MUST validate that assertion against independently derived information; an in-process resolver MAY deliberately include its co-located invoker in the trust boundary. Interpretation, normalization, hierarchy, key derivation, and persistence policy are otherwise outside this contract."
+                },
+                "alternatives": {
+                    "type": "array",
+                    "minItems": 1,
+                    "description": "Disjunctive set of ways to satisfy the requirement. A resolving caller selects one alternative whose every requirement it can resolve and provisions only the context needed for that alternative, never unrelated credentials.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "requirements": {
+                                "type": "array",
+                                "minItems": 1,
+                                "description": "Conjunctive set: every requirement in this alternative must be resolved for the alternative to be satisfied.",
+                                "items": {
+                                    "$ref": "#/schemas/ContextRequirement"
+                                }
+                            }
+                        },
+                        "required": [
+                            "requirements"
+                        ],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "required": [
+                "target",
+                "alternatives"
+            ],
+            "additionalProperties": false
+        },
+        "InvocationError": {
+            "type": "object",
+            "description": "Minimal unsuccessful-completion record carried by an `error` output frame. The frame kind is the portable failure signal. Only codes named by a rule of either invocation interface or the source's kind have portable semantics; other strings are open extension or implementation identifiers. Codes defined by either invocation interface are reserved to their defined meanings and MUST NOT be redefined by a binding or implementation. Other governed codes SHOULD use collision-resistant identifiers. ERR_EXECUTION_FAILED is the generic fallback when no more specific governed meaning exists; it means only that the interaction completed unsuccessfully, and carries no protocol category, blame, retryability, side-effect, authentication, authorization, or availability semantics. Dispatch state is carried by the code space itself: ERR_REFUSED (and CONTEXT_REQUIRED, its special case with a resolution path) guarantees that no observable effect of the requested operation occurred, while ERR_EXECUTION_FAILED makes no dispatch-state claim and MUST be treated as possibly dispatched. An implementation MUST NOT emit ERR_REFUSED unless the guarantee holds. Codes encode interaction-boundary facts of this kind, never cause, blame, or protocol category.",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Machine-readable error code. The binding-invoker interface owns CONTEXT_REQUIRED, ERR_CANCELLED, ERR_FRAME_PROTOCOL, ERR_TRANSPORT_CLOSED, ERR_REFUSED, and ERR_EXECUTION_FAILED. The operation-invoker interface owns exactly ERR_OPERATION_NOT_FOUND, ERR_BINDING_NOT_FOUND, ERR_BINDING_SELECTION_REQUIRED, ERR_UNKNOWN_SOURCE, ERR_OPERATION_VALIDATION_FAILED, and ERR_SCHEMA_UNRESOLVED."
+                },
+                "data": {
+                    "description": "Optional portable JSON data associated with the unsuccessful completion. A rule defining `code` may define its structure and semantics; otherwise, the source's kind may use it to preserve an opaque application-authored failure value. For CONTEXT_REQUIRED, this is a ContextRequiredDetails object. Presence is significant: an absent member means no portable associated value, while an explicit null is a present JSON null value. Statuses, headers, trailers, envelopes, raw debugging bytes, exception prose, stacks, and implementation evidence do not belong here unless they are themselves application data under an explicit governing rule."
+                }
+            },
+            "required": [
+                "code"
+            ],
+            "additionalProperties": false
+        },
+        "OperationInvocationInput": {
+            "type": "object",
+            "description": "Initial payload carried by invokeOperation's open frame: the interface to act on and which operation to invoke (optionally with an ordered selection of its bindings) or which specific binding, plus context.",
+            "properties": {
+                "interface": {
+                    "$ref": "#/schemas/OpenBindingsInterface"
+                },
+                "operation": {
+                    "type": "string",
+                    "description": "Operation name to invoke, resolved against the interface's flat identifier namespace — an operation key or any of its aliases, equally (core §5.1). A binding is resolved by the caller's ordered selection or by sole-candidate inference; ambiguity is refused."
+                },
+                "binding": {
+                    "type": "string",
+                    "description": "Binding key to invoke; the operation is derived from it and selection is bypassed entirely. Mutually exclusive with operation and selection."
+                },
+                "selection": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "minItems": 1,
+                    "description": "The caller's ordered choice among the operation's bindings: binding keys in preference order. The first listed binding the invoker can act on is used. Every key must name a binding of the resolved operation; a key that does not, or a list naming none the invoker can act on, fails with ERR_BINDING_NOT_FOUND rather than falling back to an unlisted binding. Requires operation; mutually exclusive with binding."
+                },
+                "context": {
+                    "$ref": "#/schemas/BindingContext"
+                }
+            },
+            "required": [
+                "interface"
+            ],
+            "oneOf": [
+                {
+                    "required": [
+                        "operation"
+                    ]
+                },
+                {
+                    "required": [
+                        "binding"
+                    ],
+                    "properties": {
+                        "selection": false
+                    }
+                }
+            ],
+            "additionalProperties": false
+        },
+        "OperationInvokerInputFrame": {
+            "description": "One frame from the caller into invokeOperation. Same shape and rules as the binding-invoker input stream, with the open frame carrying an OperationInvocationInput: exactly one `open` first, then zero or more `input` frames and an optional logical caller half-close (`close`). Repeated `close` frames are harmless; input closure does not stop control or protocol-error processing while the invocation remains live. Valid late `input` frames are ignored; a second `open` remains invalid.",
+            "discriminator": {
+                "propertyName": "kind"
+            },
+            "oneOf": [
+                {
+                    "type": "object",
+                    "title": "open",
+                    "description": "Open the invocation. MUST be the first frame on the input stream.",
+                    "properties": {
+                        "kind": {
+                            "const": "open"
+                        },
+                        "input": {
+                            "$ref": "#/schemas/OperationInvocationInput"
+                        }
+                    },
+                    "required": [
+                        "kind",
+                        "input"
+                    ],
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "title": "input",
+                    "description": "Write one input value to the operation. Validated against the operation's input schema.",
+                    "properties": {
+                        "kind": {
+                            "const": "input"
+                        },
+                        "value": {
+                            "description": "One input value."
+                        }
+                    },
+                    "required": [
+                        "kind",
+                        "value"
+                    ],
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "title": "close",
+                    "description": "Caller signals that no more input values will be sent. Idempotent: repeated close frames are harmless. This closes only input; output and protocol-error processing continue.",
+                    "properties": {
+                        "kind": {
+                            "const": "close"
+                        }
+                    },
+                    "required": [
+                        "kind"
+                    ],
+                    "additionalProperties": false
+                }
+            ]
+        },
+        "OperationInvokerOutputFrame": {
+            "description": "One frame from invokeOperation back to the caller. Same shape as the binding-invoker output stream: zero or more `output`/`input_closed` frames, then exactly one terminal `complete` or `error`. Each output is validated against the operation's output schema.",
+            "discriminator": {
+                "propertyName": "kind"
+            },
+            "oneOf": [
+                {
+                    "type": "object",
+                    "title": "output",
+                    "description": "One output value from the operation.",
+                    "properties": {
+                        "kind": {
+                            "const": "output"
+                        },
+                        "value": {
+                            "description": "One output value."
+                        }
+                    },
+                    "required": [
+                        "kind",
+                        "value"
+                    ],
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "title": "input_closed",
+                    "description": "The operation has closed the input side from its end. Subsequent caller input frames are ignored. Outputs may still flow.",
+                    "properties": {
+                        "kind": {
+                            "const": "input_closed"
+                        }
+                    },
+                    "required": [
+                        "kind"
+                    ],
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "title": "complete",
+                    "description": "Terminal: the operation completed normally. MUST be the last frame.",
+                    "properties": {
+                        "kind": {
+                            "const": "complete"
+                        }
+                    },
+                    "required": [
+                        "kind"
+                    ],
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "title": "error",
+                    "description": "Terminal: the operation failed. MUST be the last frame. Carries a structured InvocationError.",
+                    "properties": {
+                        "kind": {
+                            "const": "error"
+                        },
+                        "error": {
+                            "$ref": "#/schemas/InvocationError"
+                        }
+                    },
+                    "required": [
+                        "kind",
+                        "error"
+                    ],
+                    "additionalProperties": false
+                }
+            ]
+        }
+    },
+    "operations": {
+        "openbindings.operation-invoker.invokeOperation": {
+            "description": "Invoke an operation on a supplied interface via a typed bidirectional I/O frame stream — the by-reference counterpart to binding-invoker's invokeBinding. The caller opens with an OperationInvocationInput that names a target `interface` plus either an `operation` key or a specific `binding` key. The invoker resolves the name to a concrete binding, validates values against the operation's declared input/output schemas, forwards the selected source and full binding object, and performs binding invocation. The frame protocol is identical to invokeBinding's, and every normative frame rule of binding-invoker.invokeBinding applies unchanged. Cardinality is observed through the frames, not declared.\n\n## Operation-specific rules\n\n1. **Binding resolution.** The candidate set is the operation's bindings whose sources have kinds the invoker can act on. An explicit `binding` MUST be used directly, without fallback or candidate filtering; an unsupported kind is then refused under the binding-invoker contract. The binding's `operation` MUST name a primary operation key, not merely an alias. A missing or ambiguous operation name fails with ERR_OPERATION_NOT_FOUND. A selected explicit binding whose source is absent fails with ERR_UNKNOWN_SOURCE; a binding without a resolvable source is not in the candidate set for automatic or ordered selection. When `selection` supplies an ordered list, every listed key MUST name a binding of the resolved operation, and the first listed key in the candidate set MUST be used; a listed key that names no binding of the operation, or a list naming no candidate, MUST fail with ERR_BINDING_NOT_FOUND and MUST NOT fall back to an unlisted binding. Without `binding` or `selection`, exactly one candidate MUST be selected automatically, zero candidates MUST fail with ERR_BINDING_NOT_FOUND, and several candidates MUST fail with ERR_BINDING_SELECTION_REQUIRED. `preference`, `deprecated`, key order, source order, and implementation registration order MUST NOT silently choose among alternatives. Applications MAY apply their own policy before invocation and express its result through an explicit binding or an ordered selection.\n\n2. **Schema validation.** Each input value is checked before forwarding and each successful output value before relaying, where that side declares a schema. Validity follows core §5.2: JSON Schema 2020-12, format as annotation where assertion is optional, ECMA-262 patterns with Unicode semantics, and references as core §7 resolves them. An established mismatch is ERR_OPERATION_VALIDATION_FAILED; a check that cannot give a verdict is ERR_SCHEMA_UNRESOLVED. Neither permits forwarding that value as validated. An absent schema states no contract: values on that side are forwarded without a validation claim. No whole-graph readiness check is required. Preparation MAY be deferred until an actual value needs checking; zero values impose no instance check. A later validation failure does not retract earlier relayed outputs or imply absence of observable effects. The selected source and full binding object, including content absence versus null, are forwarded unchanged to the binding invoker, which applies any kind-defined value adaptation. This layer does not apply a second transformation.\n\n3. **Context forwarding.** invokeOperation forwards supplied context to the resolved binding invocation without reinterpreting it. A CONTEXT_REQUIRED error originating during binding invocation propagates unchanged. This contract prescribes no context store, resolver location, process boundary, or retry architecture.\n\n4. **Owned unsuccessful completions.** This interface owns exactly ERR_OPERATION_NOT_FOUND, ERR_BINDING_NOT_FOUND, ERR_BINDING_SELECTION_REQUIRED, ERR_UNKNOWN_SOURCE, ERR_OPERATION_VALIDATION_FAILED, and ERR_SCHEMA_UNRESOLVED, with the meanings documented by the Operation Invoker interface. These outcomes are code-only: this interface defines no `data` for them. Binding-invoker-owned errors and errors owned by the source kind's defining document, if any, relay unchanged. Other codes have no portable meaning under this interface.",
+            "input": {
+                "$ref": "#/schemas/OperationInvokerInputFrame"
+            },
+            "output": {
+                "$ref": "#/schemas/OperationInvokerOutputFrame"
+            }
+        },
+        "openbindings.operation-invoker.preflightOperation": {
+            "description": "`preflightOperation` resolves the named operation or binding with invocation's selection rules and preflights the selected binding under the binding-invoker contract. A resolution failure completes with this interface's own resolution code and is not the binding's answer. Preflight does not pin a later selection.\n\n`preflightBinding` tells a binding that an invocation of this selection may follow, and lets it report context requirements it can already identify from the source and the supplied context. The result is a `ContextRequiredDetails` in the same shape a `CONTEXT_REQUIRED` challenge carries, or `null`. It is advisory: it may omit requirements, `null` is always conformant, and the live challenge remains authoritative. Invocation never requires a prior preflight. Context supplied to preflight is supplied for that call alone. Preflight never dispatches the requested operation, consumes its input, emits its outputs, or spends an approval for it; the source's kind defines the boundary of the requested operation, and anything else a binding does in response is for its kind to require and otherwise the implementation's. Requirements are reported only as the result; an unsuccessful completion means the binding could not answer and carries no prediction, except ERR_REFUSED, which means invocation would refuse the same input. This operation is idempotent: repeating it with the same input in context that does not change its intended effects produces no additional intended operation-level effects after the first application. This does not promise identical results or authorize retries.",
+            "input": {
+                "$ref": "#/schemas/OperationInvocationInput"
+            },
+            "output": {
+                "oneOf": [
+                    {
+                        "$ref": "#/schemas/ContextRequiredDetails"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            }
+        }
+    }
+}

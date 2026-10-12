@@ -1,11 +1,11 @@
 # OpenBindings invocation
 
-An optional Rust companion for **binding invocation**: a provider implements one
+An optional Rust companion for **binding and operation invocation**: a provider implements one
 ordinary asynchronous job; a checked `binding::Invoker` supplies the bounded
 input/output lifetime. The same path handles zero-value, unary, server-streaming,
 client-streaming and bidirectional interactions.
 
-This crate applies the project's Binding Invoker **0.1.0** role using
+This crate applies the project's Binding Invoker and Operation Invoker **0.1.0** roles using
 OpenBindings **0.2** carriers. It is provisional, separate from the normative
 core, and does not add invocation to the published TypeScript SDK.
 
@@ -84,9 +84,84 @@ both cardinality and terminal success; returning the first value can conceal a
 later failure. For bidi work, poll both halves concurrently. A fail-fast join can
 discard the authoritative output failure when a write first observes closure.
 
+## Call an operation in a document
+
+`operation::Invoker` retains a document and an explicit binding provider. It
+resolves names and pure support at call construction, then returns the **same
+`Invocation`** as the binding entry point. Provider execution remains lazy.
+
+```rust
+use openbindings::{JsonValue, ParsedDocument, ResourceSet};
+use openbindings_invocation::{binding::BindingInvoker, operation::{Invoker, Request}};
+use openbindings_json_schema_evaluator::DefaultEvaluator;
+use std::sync::Arc;
+
+async fn call<P: BindingInvoker>(document: ParsedDocument, provider: P)
+    -> Result<(), Box<dyn std::error::Error>>
+{
+    let invoker = Invoker::new(document, provider)
+        .with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default())?;
+    let mut invocation = invoker.invoke(Request::operation("echo"));
+    invocation.write(JsonValue::parse("42")?).await?;
+    invocation.close();
+    while let Some(result) = invocation.next().await {
+        let value = result?; // Observe the terminal too, even after receiving a value.
+        assert_eq!(value.text(), "42");
+    }
+    Ok(())
+}
+```
+
+The optional evaluator package is an explicit application dependency. Without
+`.with_evaluator`, absent schemas still forward values; a declared schema yields
+`ERR_SCHEMA_UNRESOLVED` on its first actual value. Supplying an evaluator builds
+one immutable document/resource context, with core's bounded preparation cache.
+Each used side prepares lazily once per attempt and retains that contract for
+its stream; zero values do not trigger preparation. There is no network retrieval
+or whole-graph readiness gate.
+
+Use `Request::operation("name-or-alias")` when exactly one supported binding
+exists, `Request::ordered("name", &["preferred", "fallback"])` for caller policy,
+or `Request::binding("exact-key")` to select directly. Every ordered key must
+belong to the operation, including entries after the first supported one.
+Unsupported automatic/ordered candidates are skipped; an unsupported explicit
+binding refuses. Metadata and provider registration order never choose a binding.
+Use `.with_context(&context)` to forward one opaque object unchanged.
+
+The retained snapshot need not have a whole-document conformance certificate.
+Core interpretation rules still apply: malformed interpreted structures refuse,
+missing or ambiguous operations remain unresolved, and a binding's operation must
+be a primary key. Accepting an invocation does not certify document conformance.
+Use core assessment separately when application policy requires that certificate.
+`preflight` uses the same selection rules and never prepares value contracts.
+
+Input is validated before delivery to the provider; successful output is validated
+before entering the committed output queue. Invalid input **does not become clean
+EOF**: the invocation ends and the pending provider read is abandoned. Providers
+polling split endpoints independently must also observe their supplied
+`WorkControl` and release those tasks on cancellation. A failed output emission
+returns an error. Already committed outputs precede the single terminal failure;
+earlier effects are not undone. Application errors and context challenges are
+forwarded without applying the successful-output schema.
+
+An established mismatch yields code-only `ERR_OPERATION_VALIDATION_FAILED`;
+preparation or evaluation without a verdict yields code-only `ERR_SCHEMA_UNRESOLVED`.
+`Invocation`, `Outputs` and `Control` expose `validation_failure()` for the winning
+terminal's local evidence: side, preparation/evaluation stage, and the original
+core `ValueOutcome`, including diagnostic completeness. The evidence is never
+portable error data. Debug redacts it; custom evaluator messages and locations
+require an application disclosure policy. Diagnostic limits come from the chosen
+evaluator, independently of invocation's portable-error byte limit.
+
+Carrier caches have slots only for declared source/binding keys; repeated unknown
+requests cannot grow them. Used carriers retain exact content and are decoded
+once, without serializing or copying a whole document per call. Drop the invoker
+to release its cache owners. Caller-retained documents, prepared contracts, and
+values can independently retain their own backing storage.
+
 ## Ownership and progress
 
-Construction is lazy. Polling a write, read or input-closure future drives the
+Provider execution is lazy. Polling a write, read or input-closure future drives the
 provider job; retaining the handle alone performs no background work. Providers
 must obey ordinary Rust future rules: polls return promptly, blocking work is
 arranged by the application, and pending work arranges a wakeup. No detached task,
@@ -116,7 +191,10 @@ work after output abandonment. Its **Rust lifetime still follows the borrowed
 invocation**; copy the owned `outcome()` snapshot to retain a result afterward.
 A caller `WorkControl` may cancel several attempts, but cancelling one invocation
 never cancels siblings sharing that external control. Cancellation cannot roll
-back effects or prove that detached external work stopped.
+back effects or prove that detached external work stopped. A scoped cancellation
+relay also reaches cooperative synchronous provider/evaluator work during its
+current poll. External cancellation observed before or after that poll wins its
+returned result; an already settled terminal stays authoritative.
 
 ## Exact values and boundaries
 
@@ -168,7 +246,7 @@ this is a copy with a cost, not the default handoff.
 
 ## Contract mapping and evidence
 
-Pinned authority: interfaces `3972eb977f419f792b92fd61d5afa5fba4946b04`;
+Pinned authority: interfaces `8b25ddccb477db31d7a507fe07227e08f544679d`;
 `APPLIED_ROLE_REVISION` and `tests/fixtures` retain its version and byte hashes.
 
 | Role concept | Native API / responsibility |
@@ -180,6 +258,8 @@ Pinned authority: interfaces `3972eb977f419f792b92fd61d5afa5fba4946b04`;
 | `input_closed` | `Input::is_closed`, `closed`, `Control::input_is_closed`; nonterminal. |
 | `complete` / `error` | Job return, fallible output sequence and owned outcome snapshot. |
 | `preflightBinding` | `Invoker::preflight`; no-prediction default, no operation I/O or dispatch. |
+| `invokeOperation`, `preflightOperation` | `operation::Invoker` with `operation::Request`; shared lifecycle and explicit evaluator. |
+| Declared schema failures | Code-only portable error plus local `validation_failure()` evidence. |
 | Context/effect semantics | Checked structure plus documented provider obligations; no resolver. |
 | Source interpretation | Kind adapter; the companion treats content as opaque. |
 
@@ -192,5 +272,9 @@ bridge, not a released TypeScript API or browser deployment. See the repository'
 [binding invocation checkpoint](https://github.com/openbindings/sdk/blob/main/docs/binding-invocation-checkpoint.md)
 for the acceptance map and qualification commands.
 
-Operation selection, declared operation-value validation, context provisioning,
-protocol transports and the real OpenAPI kind adapter remain subsequent work.
+Context provisioning, protocol transports and the real OpenAPI kind adapter
+remain subsequent work. Operation consumer and cancellation tests, the shared
+Catalog pipeline, and the expanded Node/Wasm probe qualify the operation layer.
+The resource probe records warmed binding-versus-operation overhead and owner
+release; it does not claim HTTP parity, browser memory bounds, or arbitrary schema
+throughput.

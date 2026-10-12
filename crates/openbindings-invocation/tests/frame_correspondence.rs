@@ -26,7 +26,7 @@ fn json(text: &str) -> JsonValue {
 }
 
 // These are the complete closed frame envelopes at interfaces revision
-// 3972eb977f419f792b92fd61d5afa5fba4946b04. An open payload has a distinct
+// 8b25ddccb477db31d7a507fe07227e08f544679d. An open payload has a distinct
 // admission boundary, checked only after first/single-open ordering.
 fn fields(kind: &str, output: bool) -> Option<&'static [&'static str]> {
     match (kind, output) {
@@ -675,4 +675,61 @@ fn malformed_output_and_invalid_safe_challenges_are_not_portable_successes() {
         .receive(&json(r#"{"kind":"output","value":null}"#))
         .unwrap();
     assert_eq!(consumer.receive(&json(r#"{"kind":"error","error":{"code":"CONTEXT_REQUIRED","data":{"target":"","alternatives":[{"requirements":[{"type":"extension"}]}]}}}"#)).unwrap_err().code(), "ERR_FRAME_PROTOCOL");
+}
+
+#[test]
+fn operation_role_reuses_the_same_closed_frame_protocol() {
+    use serde_json_compat::Value;
+    // Ignore explanatory annotations, retaining every executable schema keyword.
+    fn executable(value: &mut Value) {
+        match value {
+            Value::Object(object) => {
+                object.remove("description");
+                object.remove("title");
+                for value in object.values_mut() {
+                    executable(value);
+                }
+            }
+            Value::Array(items) => {
+                for value in items {
+                    executable(value);
+                }
+            }
+            _ => (),
+        }
+    }
+    let mut binding: Value = serde_json_compat::from_str(ROLE).unwrap();
+    let mut operation: Value =
+        serde_json_compat::from_str(include_str!("fixtures/operation-invoker-0.1.json")).unwrap();
+    executable(&mut binding);
+    executable(&mut operation);
+    assert_eq!(
+        binding["schemas"]["BindingInvokerOutputFrame"],
+        operation["schemas"]["OperationInvokerOutputFrame"]
+    );
+    binding["schemas"]["BindingInvokerInputFrame"]["oneOf"][0]["properties"]["input"]["$ref"] =
+        Value::String("#/schemas/OperationInvocationInput".into());
+    assert_eq!(
+        binding["schemas"]["BindingInvokerInputFrame"],
+        operation["schemas"]["OperationInvokerInputFrame"]
+    );
+    for schema in [
+        "InvocationError",
+        "BindingContext",
+        "ContextRequiredDetails",
+        "ContextRequirement",
+    ] {
+        assert_eq!(binding["schemas"][schema], operation["schemas"][schema]);
+    }
+    assert_eq!(
+        operation["schemas"]["OperationInvocationInput"]["additionalProperties"],
+        Value::Bool(false)
+    );
+    assert_eq!(
+        operation["schemas"]["OperationInvocationInput"]["oneOf"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
 }

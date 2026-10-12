@@ -209,102 +209,49 @@ impl InvocationBridge {
             };
             let facade = Invoker::new(Rc::new(provider));
             let call = facade.invoke(request.request());
-            let control = call.control();
-            if state.borrow().cancel || state.borrow().disposed {
-                control.cancel();
-            }
-            let (mut input, mut output) = call.split();
-            let writes = async {
-                loop {
-                    enum Command {
-                        Write(JsonValue, WriteReply),
-                        Close,
-                        Stop,
-                    }
-                    let command = poll_fn(|cx| {
-                        let mut s = state.borrow_mut();
-                        if s.disposed || s.finished {
-                            return Poll::Ready(Command::Stop);
-                        }
-                        if s.close {
-                            s.close = false;
-                            return Poll::Ready(Command::Close);
-                        }
-                        if let Some((value, reply)) = s.write.take() {
-                            return Poll::Ready(Command::Write(value, reply));
-                        }
-                        s.write_wake = Some(cx.waker().clone());
-                        Poll::Pending
-                    })
-                    .await;
-                    match command {
-                        Command::Stop => break,
-                        Command::Close => input.close(),
-                        Command::Write(value, reply) => {
-                            let result = input.write(value).await.map_err(|_| "INPUT_CLOSED");
-                            state.borrow_mut().input_closed = input.is_closed();
-                            reply.resolve(result);
-                        }
-                    }
-                }
-            };
-            let reads = async {
-                loop {
-                    let reply = poll_fn(|cx| {
-                        let mut s = state.borrow_mut();
-                        if s.disposed {
-                            return Poll::Ready(None);
-                        }
-                        if let Some(reply) = s.read.take() {
-                            return Poll::Ready(Some(reply));
-                        }
-                        s.read_wake = Some(cx.waker().clone());
-                        Poll::Pending
-                    })
-                    .await;
-                    let Some(reply) = reply else {
-                        break;
-                    };
-                    let value = output.next().await;
-                    let terminal = value.as_ref().is_none_or(Result::is_err);
-                    reply.resolve(value);
-                    if terminal {
-                        state.borrow_mut().finished = true;
-                        wake(&state);
-                        break;
-                    }
-                }
-            };
-            let cancellation = async {
-                let cancel = poll_fn(|cx| {
-                    let mut s = state.borrow_mut();
-                    if s.cancel || s.disposed {
-                        Poll::Ready(true)
-                    } else if s.finished {
-                        Poll::Ready(false)
-                    } else {
-                        s.cancel_wake = Some(cx.waker().clone());
-                        Poll::Pending
-                    }
-                })
-                .await;
-                if cancel {
-                    control.cancel();
-                }
-            };
-            join(join(writes, reads), cancellation).await;
-            let (write, read) = {
-                let mut s = state.borrow_mut();
-                s.finished = true;
-                (s.write.take(), s.read.take())
-            };
-            if let Some((_, reply)) = write {
-                reply.resolve(Err("INPUT_CLOSED"));
-            }
-            if let Some(reply) = read {
-                reply.resolve(Some(Err(InvocationError::cancelled())));
-            }
-            wake(&state);
+            drive(call, state).await;
+        });
+        Ok(Self { shared })
+    }
+
+    /// Qualification-only operation entry point using the same command bridge.
+    #[wasm_bindgen(js_name = forOperation)]
+    pub fn for_operation(
+        document: &str,
+        name: String,
+        mode: String,
+        gate: js_sys::Promise,
+        validate: bool,
+    ) -> Result<InvocationBridge, JsValue> {
+        let document = openbindings::ParsedDocument::parse(document)
+            .map_err(|_| JsValue::from_str("INVALID_DOCUMENT"))?;
+        let provider = Local {
+            token: Rc::new(Count::new(&TOKENS)),
+            gate,
+            mode,
+        };
+        let mut facade =
+            openbindings_invocation::operation::Invoker::new(document, Rc::new(provider));
+        if validate {
+            facade =
+                facade
+                    .with_evaluator(
+                        std::sync::Arc::new(
+                            openbindings_json_schema_evaluator::DefaultEvaluator::new(),
+                        ),
+                        openbindings::ResourceSet::default(),
+                    )
+                    .map_err(|_| JsValue::from_str("INVALID_DOCUMENT"))?;
+        }
+        let shared = Shared::default();
+        let state = shared.clone();
+        let driver_count = Count::new(&DRIVERS);
+        spawn_local(async move {
+            let _driver_count = driver_count;
+            let call = facade.invoke(openbindings_invocation::operation::Request::operation(
+                &name,
+            ));
+            drive(call, state).await;
         });
         Ok(Self { shared })
     }
@@ -398,4 +345,106 @@ pub fn stats() -> String {
         TOKENS.get(),
         STARTS.get()
     )
+}
+
+async fn drive<F: Future<Output = Result<(), InvocationError>>>(
+    call: openbindings_invocation::Invocation<F>,
+    state: Shared,
+) {
+    let control = call.control();
+    if state.borrow().cancel || state.borrow().disposed {
+        control.cancel();
+    }
+    let (mut input, mut output) = call.split();
+    let writes = async {
+        loop {
+            enum Command {
+                Write(JsonValue, WriteReply),
+                Close,
+                Stop,
+            }
+            let command = poll_fn(|cx| {
+                let mut s = state.borrow_mut();
+                if s.disposed || s.finished {
+                    return Poll::Ready(Command::Stop);
+                }
+                if s.close {
+                    s.close = false;
+                    return Poll::Ready(Command::Close);
+                }
+                if let Some((value, reply)) = s.write.take() {
+                    return Poll::Ready(Command::Write(value, reply));
+                }
+                s.write_wake = Some(cx.waker().clone());
+                Poll::Pending
+            })
+            .await;
+            match command {
+                Command::Stop => break,
+                Command::Close => input.close(),
+                Command::Write(value, reply) => {
+                    let result = input.write(value).await.map_err(|_| "INPUT_CLOSED");
+                    state.borrow_mut().input_closed = input.is_closed();
+                    reply.resolve(result);
+                }
+            }
+        }
+    };
+    let reads = async {
+        loop {
+            let reply = poll_fn(|cx| {
+                let mut s = state.borrow_mut();
+                if s.disposed {
+                    return Poll::Ready(None);
+                }
+                if let Some(reply) = s.read.take() {
+                    return Poll::Ready(Some(reply));
+                }
+                s.read_wake = Some(cx.waker().clone());
+                Poll::Pending
+            })
+            .await;
+            let Some(reply) = reply else {
+                break;
+            };
+            let value = output.next().await;
+            let terminal = value.as_ref().is_none_or(Result::is_err);
+            reply.resolve(value);
+            if terminal {
+                state.borrow_mut().finished = true;
+                wake(&state);
+                break;
+            }
+        }
+    };
+    let cancellation = async {
+        let cancel = poll_fn(|cx| {
+            let mut s = state.borrow_mut();
+            if s.cancel || s.disposed {
+                Poll::Ready(true)
+            } else if s.finished {
+                Poll::Ready(false)
+            } else {
+                s.cancel_wake = Some(cx.waker().clone());
+                Poll::Pending
+            }
+        })
+        .await;
+        if cancel {
+            control.cancel();
+        }
+    };
+    join(join(writes, reads), cancellation).await;
+    let (write, read) = {
+        let mut s = state.borrow_mut();
+        s.finished = true;
+        (s.write.take(), s.read.take())
+    };
+    if let Some((_, reply)) = write {
+        reply.resolve(Err("INPUT_CLOSED"));
+    }
+    if let Some(reply) = read {
+        reply.resolve(Some(Err(InvocationError::cancelled())));
+    }
+    wake(&state);
 }

@@ -20,7 +20,7 @@ FIXTURE = ROOT / "examples/binding-invocation-consumer"
 LOCAL = [
     "crates/openbindings", "crates/openbindings-internal-json",
     "crates/openbindings-interface-synthesis", "crates/openbindings-source-inspection",
-    "crates/openbindings-invocation",
+    "crates/openbindings-invocation", "crates/openbindings-json-schema-evaluator",
     "vendor/openbindings-internal-jsonschema",
     "vendor/openbindings-internal-jsonschema-value",
     "vendor/openbindings-internal-serde-json",

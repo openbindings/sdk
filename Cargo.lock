@@ -1115,6 +1115,7 @@ version = "0.2.0-alpha.1"
 dependencies = [
  "futures-core",
  "openbindings",
+ "openbindings-json-schema-evaluator",
  "serde",
  "serde_json",
  "tokio",

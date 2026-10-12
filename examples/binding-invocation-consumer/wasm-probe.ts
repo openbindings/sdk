@@ -60,7 +60,10 @@ type Stats = { drivers: number; providers: number; commands: number; tokens: num
 const stats = (): Stats => JSON.parse(bridgeStats()) as Stats;
 const tick = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
 function assert(value: unknown, message: string): asserts value { if (!value) throw Error(message); }
+let operationPath = false;
 function create(mode = 'echo', signal?: AbortSignal, gate: Promise<unknown> = Promise.resolve()): Invocation {
+  if (operationPath) return new Invocation(InvocationBridge.forOperation(
+    '{"openbindings":"0.2.0","operations":{"echo":{"aliases":["say"]}},"bindings":{"b":{"operation":"echo","source":"s"}},"sources":{"s":{"kind":"example.wasm-local"}}}', 'say', mode, gate, false), signal);
   return new Invocation(new InvocationBridge('{"source":{"kind":"example.wasm-local","content":9007199254740993},"binding":{},"context":{}}', mode, gate), signal);
 }
 async function released(): Promise<void> {
@@ -159,7 +162,23 @@ async function main(): Promise<void> {
   await released();
   held.resolve(); await tick(); await released();
 
-  console.log(JSON.stringify({ result: 'passed', host: 'Node/Wasm', checks: ['Rc across Promise', 'exact texts', 'no-output versus null', 'input/output closure', 'output then failure', 'absent/null errors', 'pre/mid abort', 'iterator return', 'dispose outstanding commands', 'late Promise settlement'], final: stats() }));
+  console.log(JSON.stringify({ result: 'passed', path: operationPath ? 'operation' : 'binding', host: 'Node/Wasm', checks: ['Rc across Promise', 'exact texts', 'no-output versus null', 'input/output closure', 'output then failure', 'absent/null errors', 'pre/mid abort', 'iterator return', 'dispose outstanding commands', 'late Promise settlement'], final: stats() }));
 }
 const timeout = setTimeout(() => { throw Error('Wasm qualification timed out'); }, 15000);
-void main().then(() => clearTimeout(timeout), error => { clearTimeout(timeout); console.error(error); throw error; });
+async function operationValidation(): Promise<void> {
+  const document = '{"openbindings":"0.2.0","operations":{"echo":{"input":{"type":"integer"},"output":{"type":"integer"}}},"bindings":{"b":{"operation":"echo","source":"s"}},"sources":{"s":{"kind":"example.wasm-local"}}}';
+  const call = new Invocation(InvocationBridge.forOperation(document, 'echo', 'echo', Promise.resolve(), true));
+  const out = call.outputs[Symbol.asyncIterator]();
+  await call.write('9007199254740993');
+  assert((await out.next()).value === '9007199254740993', 'Wasm validation rounded an exact integer');
+  await call.write('"bad"');
+  await failure(out.next(), 'ERR_OPERATION_VALIDATION_FAILED');
+  assert((await out.next()).done, 'Validation terminal repeated');
+  call.dispose(); await released();
+  const unresolved = new Invocation(InvocationBridge.forOperation(document, 'echo', 'echo', Promise.resolve(), false));
+  await unresolved.write('1');
+  await failure(unresolved.outputs[Symbol.asyncIterator]().next(), 'ERR_SCHEMA_UNRESOLVED');
+  unresolved.dispose(); await released();
+  console.log(JSON.stringify({result:'passed',checks:['operation exact integer validation', 'input mismatch terminal', 'missing evaluator no verdict'],final:stats()}));
+}
+void (async () => { await main(); operationPath = true; await main(); await operationValidation(); })().then(() => clearTimeout(timeout), error => { clearTimeout(timeout); console.error(error); throw error; });

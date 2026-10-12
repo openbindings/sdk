@@ -2,7 +2,7 @@
 //! The only unsafe code forwards allocator contracts unchanged to System.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use openbindings::{JsonValue, Source, WorkControl};
+use openbindings::{JsonValue, ParsedDocument, Source, WorkControl};
 use openbindings_invocation::{
     BindingRequest, BindingValue, InvocationError, InvocationLimits, ProviderIo, WriteError,
     binding::{BindingInvoker, Invoker},
@@ -256,7 +256,14 @@ fn zero(invoker: &Invoker<&Fixture>, request: BindingRequest<'_>) {
 }
 
 fn echo(invoker: &Invoker<&Fixture>, request: BindingRequest<'_>, value: &JsonValue, count: usize) {
-    let (mut input, mut outputs) = invoker.invoke(request).split();
+    echo_call(invoker.invoke(request), value, count);
+}
+fn echo_call<F: Future<Output = Result<(), InvocationError>>>(
+    call: openbindings_invocation::Invocation<F>,
+    value: &JsonValue,
+    count: usize,
+) {
+    let (mut input, mut outputs) = call.split();
     block_on(join(
         async {
             for _ in 0..count {
@@ -520,6 +527,77 @@ fn main() {
     measurements.push(measure("checked_cancel_release", iterations, 0, || {
         cancelled(&parked_invoker, request, &subtree)
     }));
+    let document = ParsedDocument::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"echo":{{"aliases":["say"]}}}},"bindings":{{"b":{{"operation":"echo","source":"s"}}}},"sources":{{"s":{{"kind":"resource.fixture","content":{}}}}}}}"#, parent.text())).unwrap();
+    let operation = openbindings_invocation::operation::Invoker::new(document.clone(), &fixture);
+    let operation_park = openbindings_invocation::operation::Invoker::new(document, &parked);
+    use openbindings_invocation::operation::Request as OperationRequest;
+    measurements.push(measure("operation_unary_1_byte", iterations, 1, || {
+        echo_call(
+            operation.invoke(OperationRequest::operation("say")),
+            &small,
+            1,
+        )
+    }));
+    measurements.push(measure("operation_stream_1_byte", 1_000, 64, || {
+        echo_call(
+            operation.invoke(OperationRequest::operation("say")),
+            &small,
+            64,
+        )
+    }));
+    measurements.push(measure("operation_unary_subtree", iterations, 1, || {
+        echo_call(
+            operation.invoke(OperationRequest::binding("b")),
+            &subtree,
+            1,
+        )
+    }));
+    measurements.push(measure("operation_cancel_release", iterations, 0, || {
+        let mut call = operation_park.invoke(OperationRequest::operation("say"));
+        block_on(async {
+            assert_eq!(call.write(subtree.clone()).await, Err(WriteError::Closed));
+            call.control().cancel();
+            assert_eq!(
+                call.next().await.unwrap().unwrap_err().code(),
+                "ERR_CANCELLED"
+            );
+        });
+    }));
+    // The missing-evaluator case exercises diagnostic release, without making
+    // the invocation companion depend on a particular evaluator implementation.
+    let declared = ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{"input":true}},"bindings":{"b":{"operation":"echo","source":"s"}},"sources":{"s":{"kind":"resource.fixture","content":null}}}"#).unwrap();
+    let unresolved = openbindings_invocation::operation::Invoker::new(declared, &fixture);
+    measurements.push(measure(
+        "operation_validation_failure_release",
+        iterations,
+        0,
+        || {
+            let mut call = unresolved.invoke(OperationRequest::operation("echo"));
+            block_on(async {
+                call.write(small.clone()).await.unwrap();
+                assert_eq!(
+                    call.next().await.unwrap().unwrap_err().code(),
+                    "ERR_SCHEMA_UNRESOLVED"
+                );
+                assert!(call.validation_failure().is_some());
+            });
+        },
+    ));
+    // Warming bounds cache growth; dropping its last facade must release all
+    // carrier slots, document indexes and backing owners as well.
+    let owners_before = Snapshot::now();
+    {
+        let document = ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{}},"bindings":{"b":{"operation":"echo","source":"s"}},"sources":{"s":{"kind":"resource.fixture","content":null}}}"#).unwrap();
+        let invoker = openbindings_invocation::operation::Invoker::new(document, &fixture);
+        echo_call(
+            invoker.invoke(OperationRequest::operation("echo")),
+            &small,
+            1,
+        );
+    }
+    let owners_after = Snapshot::now();
+    assert_eq!(owners_before.live, owners_after.live);
+    assert_eq!(owners_before.bytes, owners_after.bytes);
     let retention = retention();
     let defaults = InvocationLimits::default();
     let receipt = Receipt {

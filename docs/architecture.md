@@ -48,7 +48,7 @@ synchronous. Workers are the interruptible bulk-work route. workerd initializati
 occurs in an active request so host entropy is available, then is reused.
 
 The six public Rust workflows and TypeScript tests are architecture witnesses,
-not sample applications to be migrated. Generic operation invocation, arbitrary
+not sample applications to be migrated. Arbitrary
 JavaScript evaluator callbacks, a Node native addon, source retrieval and CLI/Panjir
 migration remain separate design work.
 
@@ -59,9 +59,14 @@ before delivering immutable results. Strict refusal retains the checked document
 and evidence from that same call. Concrete source analysis and kind soundness
 remain provider responsibilities. See the [synthesis checkpoint](interface-synthesis-checkpoint.md).
 
-`openbindings-invocation` adds the optional binding-kind provider seam and one
+`openbindings-invocation` adds the optional binding-kind provider seam, document-based operation invocation, and one
 checked input/output lifetime for all cardinalities. It depends on core only,
 without inspection, synthesis, HTTP or a mandatory executor. Caller polling
 drives bounded I/O; source interpretation and external effects remain provider
-responsibilities. The generic operation-selection layer and OpenAPI kind adapter
-remain separate slices. See the [binding checkpoint](binding-invocation-checkpoint.md).
+responsibilities. `operation::Invoker` adds explicit document-based selection and
+per-value validation through a caller-selected evaluator, returning that same
+lifecycle. A concrete OpenAPI kind adapter, context provisioning and remote
+transports remain separate work. The invocation companion's
+[public guide](../crates/openbindings-invocation/README.md) describes both entry
+points; the [binding checkpoint](binding-invocation-checkpoint.md) retains the
+underlying lifecycle qualification history.

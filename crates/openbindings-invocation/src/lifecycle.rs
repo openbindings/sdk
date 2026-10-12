@@ -1,4 +1,7 @@
-use crate::{BoundaryError, InvocationError};
+use crate::{
+    BoundaryError, InvocationError,
+    operation::{Gate, ValidationFailure},
+};
 use futures_core::Stream;
 use openbindings::{JsonLimits, JsonValue, WorkControl};
 use std::{
@@ -147,6 +150,7 @@ struct State {
     provider_closed: bool,
     terminal: Option<Outcome>,
     finding: Option<BoundaryError>,
+    validation_failure: Option<Arc<ValidationFailure>>,
     emitted: bool,
     abandoned: bool,
 }
@@ -168,6 +172,7 @@ impl Shared {
                 provider_closed: false,
                 terminal: None,
                 finding: None,
+                validation_failure: None,
                 emitted: false,
                 abandoned: false,
             }),
@@ -193,7 +198,25 @@ impl Shared {
     fn outcome(&self) -> Option<Outcome> {
         self.state.lock().unwrap().terminal.clone()
     }
-    fn settle(&self, mut outcome: Outcome) -> bool {
+    fn validation_failure(&self) -> Option<Arc<ValidationFailure>> {
+        self.state.lock().unwrap().validation_failure.clone()
+    }
+    fn fail_validation(&self, error: InvocationError, failure: Option<Arc<ValidationFailure>>) {
+        if self.settle_with_validation(Err(error), failure) {
+            self.local.cancel();
+            self.provider_read.notify();
+            self.provider_write.notify();
+            self.signal.notify();
+        }
+    }
+    fn settle(&self, outcome: Outcome) -> bool {
+        self.settle_with_validation(outcome, None)
+    }
+    fn settle_with_validation(
+        &self,
+        mut outcome: Outcome,
+        failure: Option<Arc<ValidationFailure>>,
+    ) -> bool {
         if self.state.lock().unwrap().terminal.is_some() {
             return false;
         }
@@ -224,6 +247,7 @@ impl Shared {
                     .get_or_insert(BoundaryError::new("challenge-after-output", "/error"));
                 outcome = Err(InvocationError::execution_failed());
             }
+            s.validation_failure = failure;
             s.terminal = Some(outcome);
             s.provider_closed = true;
             s.input.clear();
@@ -269,7 +293,11 @@ impl<F: Future<Output = Outcome>> Engine<F> {
         let generation = self.shared.signal.generation.load(Ordering::Acquire);
         let waker = Waker::from(self.shared.signal.clone());
         // No locks are held while polling provider code or invoking its wakers.
-        let result = future.as_mut().poll(&mut Context::from_waker(&waker));
+        let result = if self.shared.outcome().is_some() {
+            Poll::Pending
+        } else {
+            future.as_mut().poll(&mut Context::from_waker(&waker))
+        };
         if let Poll::Ready(outcome) = result {
             self.shared.settle(outcome);
         }
@@ -373,6 +401,11 @@ impl<F: Future<Output = Outcome>> Invocation<F> {
     pub fn boundary_error(&self) -> Option<BoundaryError> {
         self.outputs.boundary_error()
     }
+    /// Local operation-validation evidence for the winning terminal failure.
+    /// Binding-only invocation returns None. Evidence is never portable error data.
+    pub fn validation_failure(&self) -> Option<Arc<ValidationFailure>> {
+        self.outputs.validation_failure()
+    }
 }
 /// Independent cancellation/outcome observation. Its weak driver reference does
 /// not keep provider work alive after the output owner is released.
@@ -406,6 +439,11 @@ impl<F: Future<Output = Outcome>> Control<F> {
     /// Bounded value-free local finding; never a portable native-cause field.
     pub fn boundary_error(&self) -> Option<BoundaryError> {
         self.shared.boundary_error()
+    }
+    /// Local operation-validation evidence for the winning terminal failure.
+    /// Binding-only invocation returns None. Evidence is never portable error data.
+    pub fn validation_failure(&self) -> Option<Arc<ValidationFailure>> {
+        self.shared.validation_failure()
     }
     /// Whether either side has ended input acceptance. This is nonterminal.
     pub fn input_is_closed(&self) -> bool {
@@ -502,6 +540,11 @@ impl<F: Future<Output = Outcome>> Outputs<F> {
     pub fn boundary_error(&self) -> Option<BoundaryError> {
         self.engine.shared.boundary_error()
     }
+    /// Local operation-validation evidence for the winning terminal failure.
+    /// Binding-only invocation returns None. Evidence is never portable error data.
+    pub fn validation_failure(&self) -> Option<Arc<ValidationFailure>> {
+        self.engine.shared.validation_failure()
+    }
     /// Await one value or terminal failure. Subsequent reads are exhausted.
     /// Dropping a pending read consumes nothing and releases its task waker.
     #[allow(clippy::should_implement_trait)] // Async companion to Stream::poll_next.
@@ -568,11 +611,23 @@ pub struct ProviderIo {
 }
 impl ProviderIo {
     pub(crate) fn new(shared: Arc<Shared>) -> Self {
+        Self::with_gates(shared, None, None)
+    }
+    pub(crate) fn with_gates(
+        shared: Arc<Shared>,
+        input: Option<Gate>,
+        output: Option<Gate>,
+    ) -> Self {
         Self {
             input: ProviderInput {
                 shared: shared.clone(),
+                gate: input,
+                failed: false,
             },
-            output: ProviderOutput { shared },
+            output: ProviderOutput {
+                shared,
+                gate: output,
+            },
         }
     }
     /// Take the single reader and emitter for independently polled bidi work.
@@ -596,6 +651,8 @@ impl ProviderIo {
 /// Provider input owner. Closing or dropping discards unread input and stops writes.
 pub struct ProviderInput {
     shared: Arc<Shared>,
+    gate: Option<Gate>,
+    failed: bool,
 }
 impl ProviderInput {
     /// Receive one accepted input, or None after input closes and drains.
@@ -603,6 +660,9 @@ impl ProviderInput {
         let mut waiter = Waiter::new(self.shared.provider_read.clone());
         poll_fn(|cx| {
             waiter.register(cx.waker());
+            if self.failed {
+                return Poll::Pending;
+            }
             let result = {
                 let mut s = self.shared.state.lock().unwrap();
                 if s.provider_closed {
@@ -615,6 +675,21 @@ impl ProviderInput {
                     Poll::Pending
                 }
             };
+            // Evaluator callbacks run without any lifecycle lock. A rejected
+            // value is never a clean EOF: suspend this job so the driver can
+            // drop it on its now-settled terminal before provider code resumes.
+            if let Poll::Ready(Some(value)) = &result {
+                if let Some(gate) = &mut self.gate
+                    && let Err((error, failure)) = gate.check(value, &self.shared.local)
+                {
+                    self.failed = true;
+                    self.shared.fail_validation(error, failure);
+                    return Poll::Pending;
+                }
+                if self.shared.outcome().is_some() {
+                    return Poll::Pending;
+                }
+            }
             if result.is_ready() {
                 self.shared.signal.notify();
             }
@@ -635,6 +710,7 @@ impl Drop for ProviderInput {
 /// Provider output owner. Each awaited emit admits at most one exact value.
 pub struct ProviderOutput {
     shared: Arc<Shared>,
+    gate: Option<Gate>,
 }
 impl ProviderOutput {
     /// Commit one output with backpressure. Earlier committed outputs precede
@@ -646,6 +722,15 @@ impl ProviderOutput {
             self.shared.settle(Err(InvocationError::execution_failed()));
             self.shared.signal.notify();
             return Err(InvocationError::execution_failed());
+        }
+        if self.shared.outcome().is_some() {
+            return Err(InvocationError::cancelled());
+        }
+        if let Some(gate) = &mut self.gate
+            && let Err((error, failure)) = gate.check(&value, &self.shared.local)
+        {
+            self.shared.fail_validation(error.clone(), failure);
+            return Err(error);
         }
         let mut value = Some(value);
         let mut waiter = Waiter::new(self.shared.provider_write.clone());

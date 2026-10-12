@@ -19,7 +19,7 @@ PROBE = ROOT / "tools/invocation-resource-probe"
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, help="Receipt path (default: shared target/invocation-resources/receipt.json)")
-    parser.add_argument("--baseline", type=Path, default=PROBE / "timing-baseline.json")
+    parser.add_argument("--baseline", type=Path, default=PROBE / "operation-timing-baseline.json")
     parser.add_argument("--record-baseline", action="store_true", help="Record the first measured host-specific timing baseline and provisional budgets")
     parser.add_argument("--check-timing", action="store_true", help="Also enforce recorded host-specific timing budgets")
     args = parser.parse_args()
@@ -53,7 +53,7 @@ def main():
 
     retention = measurements["retention"]
     retention_deltas = [v for key, v in retention.items() if key.endswith("_delta")]
-    checked = [row for row in rows if row["name"].startswith("checked_") or row["name"] == "handle_creation_release"]
+    checked = [row for row in rows if row["name"].startswith(("checked_", "operation_")) or row["name"] == "handle_creation_release"]
     gates = {
         "retention_10000_completed_and_10000_cancelled": retention["completed"] >= 10_000 and retention["cancelled"] >= 10_000,
         "no_live_allocation_or_byte_growth": all(v == 0 for v in retention_deltas) and all(row["live_allocation_delta"] == 0 and row["live_byte_delta"] == 0 for row in rows),
@@ -62,6 +62,9 @@ def main():
         "streams_exceed_queue_capacity": measurements["stream_values_per_call"] > max(measurements["input_capacity"], measurements["output_capacity"]),
         "one_byte_subtree_retains_one_mib_backing": measurements["subtree_logical_bytes"] == 1 and measurements["subtree_backing_bytes"] == 1024 * 1024,
         "no_full_source_sized_allocation_per_call": all(row["max_single_allocation"] < measurements["source_logical_bytes"] and row["allocated_bytes"] / row["iterations"] < measurements["source_logical_bytes"] for row in checked),
+        "operation_complete_cancel_and_validation_failure_10000_each": all(
+            any(row["name"] == name and row["iterations"] >= 10_000 for row in rows)
+            for name in ["operation_unary_1_byte", "operation_cancel_release", "operation_validation_failure_release"]),
         "default_capacities_one_and_four": measurements["input_capacity"] == 1 and measurements["output_capacity"] == 4,
         "source_stable_during_run": hashes == {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in hashed},
     }
