@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_CRATES = {
     "openbindings", "openbindings-json-schema-evaluator",
     "openbindings-http-discovery", "openbindings-schema-evaluator-test-support",
+    "openbindings-source-inspection",
+    "openbindings-interface-synthesis",
 }
 
 

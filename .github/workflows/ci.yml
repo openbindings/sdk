@@ -71,6 +71,7 @@ jobs:
         with:
           toolchain: ${{ steps.rust-version.outputs.version }}
           targets: wasm32-unknown-unknown
+          components: clippy
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22.19.0'
@@ -87,6 +88,9 @@ jobs:
       - run: npm run build:wasm && npm run build && npm test && npm run test:types && npm run format:check && npm run test:package
         working-directory: packages/typescript
       - run: python tools/verify-api-reference.py --typescript-only
+      - run: python tools/verify-source-inspection.py --archives --wasm
+      - run: python tools/verify-interface-synthesis.py --archives --wasm
+      - run: python tools/verify-binding-invocation.py --archives --wasm
       - run: npx playwright-core install --with-deps chromium webkit
         working-directory: packages/typescript
       - run: python tools/qualification/replay/prepare-browser-fixtures.py

@@ -1,0 +1,87 @@
+{
+  "slice": "generic-operation-invocation",
+  "status": "locally-qualified-feature-branch",
+  "implementationCommit": "81e26e08b5da01a9a1d8d33f2919c775e5882127",
+  "sdkBranch": "codex/sdk-operation-invocation",
+  "interfacesRevision": "8b25ddccb477db31d7a507fe07227e08f544679d",
+  "interfacesBranch": "codex/operation-invocation-contract",
+  "publicEntryPoint": "openbindings_invocation::operation::Invoker",
+  "architecture": [
+    "Retained document, explicit binding provider and optional caller-selected evaluator/resources.",
+    "Pure synchronous resolution; lazy provider work on the existing Invocation lifecycle.",
+    "No production executor, default evaluator, registry, retries or context provisioning.",
+    "Exact selected source/binding/context, schema gates on actual values, winning-terminal-only local diagnostics."
+  ],
+  "checks": {
+    "invocationTests": 64,
+    "invocationDoctests": 2,
+    "externalConsumerTests": 13,
+    "newIndependentConsumerTests": 6,
+    "allPublicRustReferenceChecks": "passed",
+    "strictClippy": "passed",
+    "archiveCommands": 24,
+    "archives": 11,
+    "archiveTreeClean": true,
+    "strictTypeScriptAndExecutedNodeWasm": "passed for binding, operation and operation-validation paths",
+    "resourceGates": {
+      "retention_10000_completed_and_10000_cancelled": true,
+      "no_live_allocation_or_byte_growth": true,
+      "provider_guards_released": true,
+      "at_most_one_active_provider": true,
+      "streams_exceed_queue_capacity": true,
+      "one_byte_subtree_retains_one_mib_backing": true,
+      "no_full_source_sized_allocation_per_call": true,
+      "operation_complete_cancel_and_validation_failure_10000_each": true,
+      "default_capacities_one_and_four": true,
+      "source_stable_during_run": true,
+      "host_specific_timing_budgets": true
+    }
+  },
+  "independentReviews": [
+    {
+      "reviewer": "operation_contract_review",
+      "model": "gpt-6-astra",
+      "reasoning": "xhigh",
+      "scope": "Revised role correspondence, actual API, lifecycle gates and documentation; read-only final review, no test rerun",
+      "result": "No consequential contract/API discrepancy; approved within scope",
+      "initial_finding": "Role described only valid documents while reserving errors for nonconformant references; clarified admission and resolution authority."
+    },
+    {
+      "reviewer": "operation_consumer_review",
+      "model": "gpt-6-astra",
+      "reasoning": "xhigh",
+      "scope": "Six independently authored external consumer tests and strict Clippy",
+      "result": "All six tests and Clippy pass, no outstanding finding",
+      "initial_finding": "Borrowed Send handles/reads forced static lifetime; fixed using stable document-bounded carrier storage; both assertions remain in maintained tests."
+    },
+    {
+      "reviewer": "operation_lifecycle_review",
+      "model": "gpt-6-astra",
+      "reasoning": "xhigh",
+      "scope": "Operation, affected lifecycle, cancellation, first-terminal evidence and split I/O; excluded Wasm, docs and performance",
+      "result": "Approved with all five independent focused probes passing",
+      "initial_findings": [
+        "External cancellation did not reach synchronous cooperative validation until its poll returned; added scoped cancellation relay.",
+        "A rejected read could become clean EOF on repoll; added persistent failed-read latch.",
+        "Added explicit post-poll cancellation observation and regression coverage for invocation/preflight; previously settled validation outcome/evidence still wins."
+      ],
+      "maintained_probes": "crates/openbindings-invocation/tests/operation_cancellation.rs"
+    }
+  ],
+  "evidenceSha256": {
+    "archives-and-wasm-receipt.json": "6c4dd933e678428a25ae5948ca0764731cc8f5dfb57060a5ef04f5423651968a",
+    "clippy.log": "310f2534bde1f35817704997f52711c60d9af9cc4989c81511103fbb89f44a7a",
+    "independent-reviews.json": "7d8cf4c73c8fcc25c5acf948f3f94e3033c662402ce77953bf74ff58adba3668",
+    "native-tests.log": "eb5c3cdd168f2bc1ee540bc9c0bf3fac85c0a9760bbd57b31efd3845281eccd3",
+    "resources-receipt.json": "44c81c918c29b490daf5e56fa76a64c75228874ccd8d691ec1a124c85810400c",
+    "rustdoc.log": "6a742cb5ef09e488a990bb3b186c5ba4ea898aea390b8c3f8a7e0201ec36eb7f",
+    "wasm-host.log": "87cbf261d6c111485aabb23b3691064641eecc7edf3c8240aef5c2a5fffdf547"
+  },
+  "limits": [
+    "No package publication, merge or remote CI claim.",
+    "Node/Wasm qualification is not an actual browser or Cloudflare execution claim.",
+    "Timing and allocator results describe warmed synthetic invocation paths, not HTTP parity, RSS or arbitrary-schema throughput.",
+    "Role APIs remain provisional until a real OpenAPI adapter qualifies them."
+  ],
+  "nextSlice": "Real OpenAPI kind adapter using inspection, synthesis and binding invocation; generic operation invocation consumes that binding provider."
+}

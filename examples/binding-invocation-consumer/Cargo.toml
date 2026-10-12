@@ -1,0 +1,29 @@
+[package]
+name = "binding-invocation-consumer"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[features]
+wasm-probe = ["dep:openbindings-json-schema-evaluator", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys"]
+
+[dependencies]
+openbindings-json-schema-evaluator = { version = "=0.2.0-alpha.1", optional = true }
+openbindings = "=0.2.0-alpha.1"
+openbindings-source-inspection = "=0.2.0-alpha.1"
+openbindings-interface-synthesis = "=0.2.0-alpha.1"
+openbindings-invocation = "=0.2.0-alpha.1"
+interface-synthesis-consumer = "=0.0.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { version = "=0.2.129", optional = true }
+wasm-bindgen-futures = { version = "=0.4.79", optional = true }
+js-sys = { version = "=0.3.106", optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio = { version = "1.53.2", features = ["rt", "macros", "time"] }

@@ -10,7 +10,7 @@ mod read_views;
 use read_views::NamespaceCache;
 pub use read_views::{BindingView, DependencyView, ExampleView, SourceView};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt,
     sync::{Arc, OnceLock},
 };
@@ -919,18 +919,29 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
             }
         }
     }
+    // References name primary map keys, including keys whose values are
+    // independently malformed. Index once: JsonRef::get scans object members,
+    // so calling it per reference made large binding maps quadratic.
+    fn primary_keys(map: Option<JsonRef<'_>>) -> HashSet<&str> {
+        map.and_then(|v| v.members())
+            .into_iter()
+            .flatten()
+            .filter_map(|m| m.name.as_str())
+            .collect()
+    }
+    let operation_keys = primary_keys(operations);
+    let source_keys = primary_keys(sources);
     for (map, field, targets, rule) in [
-        ("bindings", "operation", operations, 5),
-        ("bindings", "source", sources, 6),
-        ("dependencies", "operation", operations, 7),
+        ("bindings", "operation", &operation_keys, 5),
+        ("bindings", "source", &source_keys, 6),
+        ("dependencies", "operation", &operation_keys, 7),
     ] {
         if let Some(entries) = value.get(map).and_then(|v| v.members()) {
             for entry in entries {
                 if let Some(reference) = entry.value.get(field)
                     && reference
                         .as_str()
-                        .and_then(|name| targets.and_then(|v| v.get(name)))
-                        .is_none()
+                        .is_none_or(|name| !targets.contains(name))
                 {
                     c.violation(
                         rule,

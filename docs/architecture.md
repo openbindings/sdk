@@ -31,7 +31,15 @@ caller-provided transport and immutable publication from its optional native HTT
 client. The TypeScript companion uses ordinary Fetch callbacks. No acquisition URL
 is injected into document/schema interpretation.
 
-`openbindings-wasm` is a private bridge behind the first-class TypeScript facade.
+`openbindings-source-inspection` is a separate optional Rust role companion. Kind
+providers implement an associated-future trait; callers use a checked `Inspector`.
+It reuses core authoring values while enforcing the role's narrower carrier rules.
+Acquisition stays in providers. Binding fragments omit author-owned keys. It adds
+no dependency from core to role behavior; its narrow Wasm probe does not extend the
+published TypeScript surface. See the [role mapping](../crates/openbindings-source-inspection/README.md).
+
+`openbindings-wasm` is a private bridge behind the first-class TypeScript facade,
+separate from this new Rust companion.
 Rust owns semantic work and exact values. The facade exposes discriminated outcomes,
 checked JS conveniences, immutable resource sets and disposable retained handles.
 Repeated UI metadata reads use cached JS snapshots. It performs no second schema
@@ -40,6 +48,25 @@ synchronous. Workers are the interruptible bulk-work route. workerd initializati
 occurs in an active request so host entropy is available, then is reused.
 
 The six public Rust workflows and TypeScript tests are architecture witnesses,
-not sample applications to be migrated. Broad invoker/synthesizer APIs, arbitrary
+not sample applications to be migrated. Arbitrary
 JavaScript evaluator callbacks, a Node native addon, source retrieval and CLI/Panjir
 migration remain separate design work.
+
+`openbindings-interface-synthesis` is a separate optional role companion, with no
+dependency on inspection. Providers return editable candidates; the `Synthesizer`
+facade checks core conformance, source preservation and coverage correspondence
+before delivering immutable results. Strict refusal retains the checked document
+and evidence from that same call. Concrete source analysis and kind soundness
+remain provider responsibilities. See the [synthesis checkpoint](interface-synthesis-checkpoint.md).
+
+`openbindings-invocation` adds the optional binding-kind provider seam, document-based operation invocation, and one
+checked input/output lifetime for all cardinalities. It depends on core only,
+without inspection, synthesis, HTTP or a mandatory executor. Caller polling
+drives bounded I/O; source interpretation and external effects remain provider
+responsibilities. `operation::Invoker` adds explicit document-based selection and
+per-value validation through a caller-selected evaluator, returning that same
+lifecycle. A concrete OpenAPI kind adapter, context provisioning and remote
+transports remain separate work. The invocation companion's
+[public guide](../crates/openbindings-invocation/README.md) describes both entry
+points; the [binding checkpoint](binding-invocation-checkpoint.md) retains the
+underlying lifecycle qualification history.

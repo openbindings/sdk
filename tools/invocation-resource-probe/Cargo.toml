@@ -1,0 +1,18 @@
+[package]
+name = "openbindings-invocation-resource-probe"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Isolate measurement-only allocator instrumentation from the safe SDK workspace.
+[workspace]
+
+[dependencies]
+openbindings = { path = "../../crates/openbindings" }
+openbindings-invocation = { path = "../../crates/openbindings-invocation" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.151", features = ["raw_value"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

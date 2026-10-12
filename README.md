@@ -8,9 +8,9 @@ version `0.2.0-alpha.1` is independent of the specification version.
 Core parses and preserves exact JSON, supports typed authoring, assesses all 13
 document rules, indexes operation names and aliases, inspects kinds and references,
 and creates value-contract contexts with explicit resources and evaluators. Optional
-companions provide a default evaluator, an evaluator qualification kit, and HTTP
-discovery. Invocation, synthesis, binding adaptation and application migration are
-outside the SDK.
+companions provide a default evaluator, an evaluator qualification kit, HTTP
+discovery, and provisional source-inspection and interface-synthesis provider/consumer
+APIs. Invocation, concrete binding adapters and application migration remain future work.
 
 ## Installation status
 
@@ -87,6 +87,9 @@ shows retained in-flight work and a replacement that is installed only when read
 | `openbindings-json-schema-evaluator` | Optional default JSON Schema 2020-12 value evaluator |
 | `openbindings-schema-evaluator-test-support` | Optional 1,566-case adapter qualification kit |
 | `openbindings-http-discovery` | Optional portable discovery policy/publication; native HTTP feature |
+| `openbindings-source-inspection` | Optional inspector provider trait and checked consumer API; Rust only, provisional |
+| `openbindings-interface-synthesis` | Optional synthesizer provider trait, checked document/coverage and strict recovery; Rust only, provisional |
+| `openbindings-invocation` | Optional binding provider, document-based operation invocation and bounded input/output lifecycle; Rust only, provisional |
 | `openbindings-wasm` | Internal bridge used by the supported TypeScript facade |
 | `@openbindings/sdk` | First-class TypeScript API and included Wasm asset |
 

@@ -1,0 +1,11 @@
+[package]
+name = "binding-invoker-only"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+openbindings = "=0.2.0-alpha.1"
+openbindings-invocation = "=0.2.0-alpha.1"

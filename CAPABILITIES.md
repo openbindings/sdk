@@ -16,6 +16,7 @@ independent. Unsupported or malformed versions are explicit refusals.
 | Custom evaluator interface and reusable qualification kit | Rust traits | Default evaluator; JS callbacks not exposed |
 | Default 2020-12 evaluator, format annotations | Yes | Same semantic engine |
 | Discovery client/publication | Portable transport trait; optional native client | Fetch and standard Request/Response |
+| Source inspection extension role | Provisional provider trait, checked consumer, exact binding fragments | Local async Wasm qualification probe only; no public TS role API yet |
 | Invocation, synthesis, binding adapters, protocol clients | Outside scope | Outside scope |
 
 ## Exact input and diagnostics

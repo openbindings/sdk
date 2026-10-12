@@ -122,3 +122,44 @@ fn immutable_snapshot_is_independent_of_authoring_mutation() {
     send_sync::<ValidatedDocument>();
     send_sync::<JsonValue>();
 }
+
+#[test]
+fn indexed_reference_checks_keep_primary_key_and_diagnostic_semantics() {
+    let checked = assessment(
+        r#"{
+      "openbindings":"0.2.0",
+      "operations":{"real":{"aliases":["alias"]},"present":null},
+      "sources":{"src":null},
+      "bindings":{
+        "exists":{"operation":"present","source":"src"},
+        "aliasOnly":{"operation":"alias","source":"src"},
+        "missing":{"operation":"absent","source":"absent"}
+      },
+      "dependencies":{"dep":{"operation":"alias"}}
+    }"#,
+    );
+    let missing: Vec<_> = checked
+        .report()
+        .findings
+        .iter()
+        .filter(|f| f.code == "missing-target")
+        .map(|f| {
+            (
+                f.rule,
+                f.location.as_ref().unwrap().pointer.as_deref().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        missing,
+        vec![
+            ("OBI-06", "/bindings/aliasOnly/operation"),
+            ("OBI-06", "/bindings/missing/operation"),
+            ("OBI-07", "/bindings/missing/source"),
+            ("OBI-08", "/dependencies/dep/operation"),
+        ]
+    );
+    assert_eq!(checked.report().evidence["OBI-02"], Evidence::Violated);
+    // An existing key counts even if the schema separately rejects its value;
+    // aliases never count as a primary key. Finding order/location is unchanged.
+}

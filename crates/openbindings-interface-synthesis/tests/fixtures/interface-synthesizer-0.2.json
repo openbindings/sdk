@@ -1,0 +1,669 @@
+{
+    "openbindings": "0.2.0",
+    "name": "Interface Synthesizer",
+    "version": "0.2.0",
+    "description": "Derive an OpenBindings interface from sources interpreted under their exact kinds. The strict operation describes complete synthesis of admitted targets; the coverage operation can describe partial synthesis with explicit accounting.\n\nThese operations are offered for voluntary adoption by name. Their schemas and descriptions identify the exchanged values and the capability they describe; they do not prescribe an SDK, internal algorithm, validation or recovery policy, or process architecture. Correspondence is an author claim, not verification of an implementation.\n\nSources and bindings are OpenBindings 0.2 values. Their core fields have their core meanings and types; x- members are extensions. Source and binding content preserve absence versus JSON null and are interpreted under the source's exact kind. The open carrier schemas are not complete document-conformance checks. Handling malformed carriers is implementation policy; it does not make those carriers conformant.",
+    "schemas": {
+        "SupportedKind": {
+            "type": "object",
+            "description": "A kind supported for the work this interface performs.",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Exact, opaque kind as carried by a source."
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Human-readable description of the kind."
+                }
+            },
+            "required": [
+                "kind"
+            ]
+        },
+        "KindSupportVerdict": {
+            "type": "object",
+            "description": "Authoritative support verdict for one exact kind. Future optional fields may annotate the verdict but never qualify or soften supported.",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The exact kind supplied by the caller."
+                },
+                "supported": {
+                    "type": "boolean",
+                    "description": "True reports that this implementation knows how to interpret this exact kind for its job; it does not promise that every case succeeds. False reports no support for that job."
+                }
+            },
+            "required": [
+                "kind",
+                "supported"
+            ]
+        },
+        "SynthesizeInterfaceSource": {
+            "type": "object",
+            "description": "A source to synthesize from. When emitted, its supplied value is preserved, including extensions and content presence; name, when supplied, is its emitted key. Unused sources need not be emitted.",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Key for this source in the emitted interface. Supply it when planning to edit the emitted source."
+                },
+                "source": {
+                    "$ref": "#/schemas/Source"
+                }
+            },
+            "required": [
+                "source"
+            ],
+            "additionalProperties": false
+        },
+        "SynthesizeInterfaceInput": {
+            "type": "object",
+            "properties": {
+                "openbindingsVersion": {
+                    "type": "string",
+                    "description": "Target specification version in the supported 0.2 line. Omission also targets that line."
+                },
+                "sources": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/schemas/SynthesizeInterfaceSource"
+                    },
+                    "description": "Sources to synthesize from. Omission or an empty array requests a source-free document skeleton. Composition capability and generated naming are implementation choices. A supplied source name names that source when emitted; an emitted source preserves its supplied value."
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Interface name override."
+                },
+                "version": {
+                    "type": "string",
+                    "description": "Interface contract version override."
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Interface description override."
+                }
+            },
+            "additionalProperties": false
+        },
+        "OpenBindingsInterface": {
+            "type": "object",
+            "description": "A valid OpenBindings interface document.",
+            "additionalProperties": true
+        },
+        "SynthesisCoverageEntry": {
+            "type": "object",
+            "description": "Disposition of a source target, alternative, dependency or projection considered by this synthesis. sourceIndex identifies its input source; sourceRef identifies the source-local unit and scope explains what is being described. Represented or lossy binding paths name their emitted source, operation and binding. A dependency disposition describes a consumption point rather than a binding path. The interface does not prescribe an internal identity tuple, duplicate-row policy or one-to-one mapping between source units and emitted dependencies.",
+            "properties": {
+                "sourceIndex": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Zero-based index of the input source containing this unit. When coverage.sourceKeys is present, the same index identifies its emitted source key."
+                },
+                "sourceKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Key of the corresponding emitted source. Required for represented/lossy target, alternative and projection units; absent on dependency units."
+                },
+                "sourceRef": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Stable source-local identifier for the interaction unit; independent of the shape of any emitted binding content."
+                },
+                "scope": {
+                    "type": "string",
+                    "enum": [
+                        "target",
+                        "alternative",
+                        "projection",
+                        "dependency"
+                    ],
+                    "description": "Whether the unit is an addressable target, an independently selectable alternative of a target, a schema/semantic projection whose fidelity is assessed separately, or a dependency the interface declares as a consumption point rather than binds. Scope names what the source unit is; status names what became of it, so every scope can carry every status. A dependency unit that was not emitted is scope dependency with the status that removed it, not a target."
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "represented",
+                        "excluded",
+                        "invalid",
+                        "lossy",
+                        "implementation-unsupported"
+                    ],
+                    "description": "represented: a represented path or dependency; excluded: omitted under a kind-defined rule; invalid: a malformed or contradictory source unit; lossy: representation with a disclosed projection limitation; implementation-unsupported: an admitted unit this implementation did not represent."
+                },
+                "operationKey": {
+                    "type": "string",
+                    "description": "Emitted operation key. Required when status is represented or lossy, except on a dependency unit, which is a consumption point and carries no emitted operation or binding identity."
+                },
+                "bindingKey": {
+                    "type": "string",
+                    "description": "Emitted binding key. Required when status is represented or lossy, except on a dependency unit, which carries no emitted binding identity."
+                },
+                "reasonCode": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Stable namespaced reason code for this kind or implementation. Required unless status is represented."
+                },
+                "rule": {
+                    "type": "string",
+                    "description": "Evidence identifying the kind-owned rule governing this disposition, including enough revision information to locate its defining document or code. Required for excluded. An implementation's restriction of a kind defined elsewhere is implementation-unsupported, not excluded.",
+                    "minLength": 1
+                },
+                "message": {
+                    "type": "string",
+                    "description": "Human-readable explanation."
+                },
+                "requirements": {
+                    "type": "array",
+                    "description": "Named runtime prerequisites for a represented unit, such as credentials or a required codec.",
+                    "items": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "details": {
+                    "type": "object",
+                    "description": "Kind-specific structured evidence.",
+                    "additionalProperties": true
+                },
+                "dependencyKey": {
+                    "type": "string",
+                    "description": "Optional emitted dependency key for a represented or lossy dependency disposition. When supplied, it identifies the corresponding entry in the returned interface dependencies map."
+                }
+            },
+            "required": [
+                "sourceIndex",
+                "sourceRef",
+                "scope",
+                "status"
+            ],
+            "oneOf": [
+                {
+                    "properties": {
+                        "status": {
+                            "const": "represented"
+                        },
+                        "scope": {
+                            "enum": [
+                                "target",
+                                "alternative",
+                                "projection"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "sourceKey",
+                        "operationKey",
+                        "bindingKey"
+                    ]
+                },
+                {
+                    "properties": {
+                        "status": {
+                            "const": "lossy"
+                        },
+                        "scope": {
+                            "enum": [
+                                "target",
+                                "alternative",
+                                "projection"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "sourceKey",
+                        "operationKey",
+                        "bindingKey",
+                        "reasonCode",
+                        "message"
+                    ]
+                },
+                {
+                    "properties": {
+                        "status": {
+                            "const": "excluded"
+                        },
+                        "scope": {
+                            "enum": [
+                                "target",
+                                "alternative",
+                                "projection"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "reasonCode",
+                        "message",
+                        "rule"
+                    ]
+                },
+                {
+                    "properties": {
+                        "status": {
+                            "enum": [
+                                "invalid",
+                                "implementation-unsupported"
+                            ]
+                        },
+                        "scope": {
+                            "enum": [
+                                "target",
+                                "alternative",
+                                "projection"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "reasonCode",
+                        "message"
+                    ]
+                },
+                {
+                    "properties": {
+                        "scope": {
+                            "const": "dependency"
+                        },
+                        "status": {
+                            "enum": [
+                                "represented"
+                            ]
+                        },
+                        "sourceKey": false,
+                        "operationKey": false,
+                        "bindingKey": false
+                    }
+                },
+                {
+                    "properties": {
+                        "scope": {
+                            "const": "dependency"
+                        },
+                        "status": {
+                            "const": "excluded"
+                        },
+                        "sourceKey": false,
+                        "operationKey": false,
+                        "bindingKey": false
+                    },
+                    "required": [
+                        "reasonCode",
+                        "message",
+                        "rule"
+                    ]
+                },
+                {
+                    "properties": {
+                        "scope": {
+                            "const": "dependency"
+                        },
+                        "status": {
+                            "enum": [
+                                "invalid",
+                                "lossy",
+                                "implementation-unsupported"
+                            ]
+                        },
+                        "sourceKey": false,
+                        "operationKey": false,
+                        "bindingKey": false
+                    },
+                    "required": [
+                        "reasonCode",
+                        "message"
+                    ]
+                }
+            ]
+        },
+        "SynthesisCoverage": {
+            "type": "object",
+            "description": "Durable accounting of the source interaction units observed by one synthesis call.",
+            "properties": {
+                "sourceKeys": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "description": "Optional attribution map: one emitted source key per input source, in request order. When present, each key identifies the preserved corresponding source in the returned interface. Equal inputs may name the same emitted source. Omission makes no durable input-to-source mapping claim; sourceIndex still indexes the request."
+                },
+                "entries": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/schemas/SynthesisCoverageEntry"
+                    }
+                },
+                "exhaustive": {
+                    "type": "boolean",
+                    "description": "True describes an inventory covering every interaction unit in every accepted input source under the kind's defined inventory. False leaves a possible remainder, explained by limitation. Repeated evidence does not by itself change completeness."
+                },
+                "fullyRepresented": {
+                    "type": "boolean",
+                    "description": "True means the inventory is exhaustive and every upstream-valid unit described by it is represented without exclusion, loss or an implementation gap. Invalid source units do not count as upstream-valid. The flag describes the report; no internal derivation algorithm is prescribed."
+                },
+                "limitation": {
+                    "$ref": "#/schemas/CoverageLimitation"
+                }
+            },
+            "required": [
+                "entries",
+                "exhaustive",
+                "fullyRepresented"
+            ],
+            "oneOf": [
+                {
+                    "properties": {
+                        "exhaustive": {
+                            "const": true
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "exhaustive": {
+                            "const": false
+                        }
+                    },
+                    "required": [
+                        "limitation"
+                    ]
+                }
+            ]
+        },
+        "CoverageLimitation": {
+            "type": "object",
+            "description": "Machine-readable evidence explaining why the synthesis inventory is not exhaustive.",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Stable namespaced reason code."
+                },
+                "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Human-readable explanation of what may be missing and why."
+                },
+                "details": {
+                    "type": "object",
+                    "description": "Optional implementation- or kind-specific structured evidence.",
+                    "additionalProperties": true
+                }
+            },
+            "required": [
+                "code",
+                "message"
+            ]
+        },
+        "SynthesizeInterfaceResult": {
+            "type": "object",
+            "description": "A creation-time-sound OBI and durable coverage evidence derived from the same synthesis observation.",
+            "properties": {
+                "interface": {
+                    "$ref": "#/schemas/OpenBindingsInterface"
+                },
+                "coverage": {
+                    "$ref": "#/schemas/SynthesisCoverage"
+                }
+            },
+            "required": [
+                "interface",
+                "coverage"
+            ]
+        },
+        "Source": {
+            "type": "object",
+            "description": "A source as an OpenBindings 0.2 document carries it: an exact kind and optional content read under that kind. Absent content and present JSON null are distinct. Only core source fields and x- extensions may appear; the open carrier schema does not fully check that boundary. Handling malformed carriers is implementation policy.",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The source's kind, compared by exact equality."
+                },
+                "content": {
+                    "description": "Content read under the source's kind: any JSON value, absent when the source has none."
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Human-readable description for this source."
+                }
+            },
+            "required": [
+                "kind"
+            ],
+            "additionalProperties": true
+        },
+        "Binding": {
+            "type": "object",
+            "description": "A binding as an OpenBindings 0.2 document carries it, or would carry it, by value. It is interpreted under the accompanying source's kind. Absent content and present JSON null are distinct. Only core binding fields and x- extensions may appear; the open carrier schema does not fully check that boundary. Handling malformed carriers is implementation policy.",
+            "properties": {
+                "operation": {
+                    "type": "string",
+                    "description": "The author's operation key, forwarded verbatim without interpretation by this interface."
+                },
+                "source": {
+                    "type": "string",
+                    "description": "The author's source key, forwarded verbatim without interpretation by this interface."
+                },
+                "content": {
+                    "description": "Content read under the source's kind: any JSON value, absent when the binding has none."
+                },
+                "idempotent": {
+                    "type": "boolean",
+                    "description": "The binding author's idempotency claim, carried as information."
+                },
+                "preference": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "The author's preference signal, carried as information."
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Human-readable description."
+                },
+                "deprecated": {
+                    "type": "boolean",
+                    "description": "The author's deprecation signal, carried as information."
+                }
+            },
+            "additionalProperties": true
+        }
+    },
+    "operations": {
+        "openbindings.interface-synthesizer.listSupportedKinds": {
+            "description": "Return an advisory list of kinds supported for this interface's job. Listed kinds have supported: true in checkKindSupport; absence from the list makes no support claim. This is a capability query, not performance of the job.",
+            "output": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/schemas/SupportedKind"
+                }
+            }
+        },
+        "openbindings.interface-synthesizer.checkKindSupport": {
+            "description": "Report support for this interface's job for the requested exact kind strings, with one verdict per distinct requested kind in first-occurrence order. supported: true means the implementation knows how to interpret that kind for this job, not that every artifact or case succeeds. supported: false reports no support for that job. Additional fields do not qualify the Boolean. The operation reports capability without performing the requested inspection, synthesis or invocation. Kind equality is the core's exact string equality. Capability detection and representation are implementation choices.",
+            "input": {
+                "type": "object",
+                "properties": {
+                    "kinds": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    }
+                },
+                "required": [
+                    "kinds"
+                ],
+                "additionalProperties": false
+            },
+            "output": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/schemas/KindSupportVerdict"
+                }
+            },
+            "examples": {
+                "oneKind": {
+                    "description": "Illustrative job-specific support query; the example kind is defined for these examples only.",
+                    "input": {
+                        "kinds": [
+                            "example.text@1"
+                        ]
+                    },
+                    "output": [
+                        {
+                            "kind": "example.text@1",
+                            "supported": true
+                        }
+                    ]
+                }
+            }
+        },
+        "openbindings.interface-synthesizer.synthesizeInterface": {
+            "description": "Return an OpenBindings interface representing all callable targets admitted by the kinds of the accepted input sources. A successful strict result describes complete synthesis, not a partial result disguised by a warning. Sound lossy schema projection need not prevent complete callable coverage. With no sources, return a source-free document skeleton. Emitted bindings describe faithful paths under their source kinds, and supplied source values are preserved where emitted, including extensions and content presence. A supplied name is the emitted source key. Requested openbindingsVersion selects the 0.2 line. Metadata overrides retain their input meanings. Editing a returned source or binding afterward creates a new author claim. Synthesis does not intentionally change the sources or perform their operations. The operation does not require generating an internal coverage report, using a particular checker, or assigning every additional operation declaration a binding or dependency. Naming, composition, duplicate handling and failure recovery are implementation choices.",
+            "input": {
+                "$ref": "#/schemas/SynthesizeInterfaceInput"
+            },
+            "output": {
+                "$ref": "#/schemas/OpenBindingsInterface"
+            },
+            "examples": {
+                "textTools": {
+                    "description": "Complete synthesis for illustrative example.text@1: echo returns its input string; length counts Unicode code points. Source content is absent and binding content names the target. Generated keys are example choices.",
+                    "input": {
+                        "sources": [
+                            {
+                                "name": "text",
+                                "source": {
+                                    "kind": "example.text@1"
+                                }
+                            }
+                        ],
+                        "name": "Text tools"
+                    },
+                    "output": {
+                        "openbindings": "0.2.0",
+                        "name": "Text tools",
+                        "operations": {
+                            "repeat": {
+                                "description": "Return the input string.",
+                                "input": {
+                                    "type": "string"
+                                },
+                                "output": {
+                                    "type": "string"
+                                }
+                            },
+                            "count": {
+                                "description": "Count Unicode code points in the input string.",
+                                "input": {
+                                    "type": "string"
+                                },
+                                "output": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                }
+                            }
+                        },
+                        "sources": {
+                            "text": {
+                                "kind": "example.text@1"
+                            }
+                        },
+                        "bindings": {
+                            "repeatText": {
+                                "operation": "repeat",
+                                "source": "text",
+                                "content": "echo"
+                            },
+                            "countText": {
+                                "operation": "count",
+                                "source": "text",
+                                "content": "length"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "openbindings.interface-synthesizer.synthesizeInterfaceWithCoverage": {
+            "description": "Return an OpenBindings interface and coverage evidence for the source units considered in the same synthesis. The report distinguishes represented, excluded, invalid, lossy and implementation-unsupported units. exhaustive describes inventory completeness; a non-exhaustive report includes limitation evidence. A partial result makes its gaps explicit without claiming complete synthesis, and disclosure does not make an unsound binding faithful. Coverage is an author claim that consumers may assess independently. Emitted bindings describe faithful paths under their source kinds, and supplied source values are preserved where emitted, including extensions and content presence. A supplied name is the emitted source key. Requested openbindingsVersion selects the 0.2 line. Metadata overrides retain their input meanings. Editing a returned source or binding afterward creates a new author claim. Synthesis does not intentionally change the sources or perform their operations. Optional attribution fields aid persistence and handoff. Report construction, duplicate handling, validation strategy and failure recovery remain implementation choices.",
+            "input": {
+                "$ref": "#/schemas/SynthesizeInterfaceInput"
+            },
+            "output": {
+                "$ref": "#/schemas/SynthesizeInterfaceResult"
+            },
+            "examples": {
+                "partialTextTools": {
+                    "description": "The same illustrative two-target kind, with complete inventory but only echo represented. sourceIndex refers to the retained request; optional sourceKeys and dependencyKey are absent.",
+                    "input": {
+                        "sources": [
+                            {
+                                "name": "text",
+                                "source": {
+                                    "kind": "example.text@1"
+                                }
+                            }
+                        ],
+                        "name": "Text tools"
+                    },
+                    "output": {
+                        "interface": {
+                            "openbindings": "0.2.0",
+                            "name": "Text tools",
+                            "operations": {
+                                "repeat": {
+                                    "description": "Return the input string.",
+                                    "input": {
+                                        "type": "string"
+                                    },
+                                    "output": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "sources": {
+                                "text": {
+                                    "kind": "example.text@1"
+                                }
+                            },
+                            "bindings": {
+                                "repeatText": {
+                                    "operation": "repeat",
+                                    "source": "text",
+                                    "content": "echo"
+                                }
+                            }
+                        },
+                        "coverage": {
+                            "entries": [
+                                {
+                                    "sourceIndex": 0,
+                                    "sourceRef": "echo",
+                                    "scope": "target",
+                                    "status": "represented",
+                                    "sourceKey": "text",
+                                    "operationKey": "repeat",
+                                    "bindingKey": "repeatText"
+                                },
+                                {
+                                    "sourceIndex": 0,
+                                    "sourceRef": "length",
+                                    "scope": "target",
+                                    "status": "implementation-unsupported",
+                                    "reasonCode": "example.length-unavailable",
+                                    "message": "This synthesizer does not generate the length target."
+                                }
+                            ],
+                            "exhaustive": true,
+                            "fullyRepresented": false
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

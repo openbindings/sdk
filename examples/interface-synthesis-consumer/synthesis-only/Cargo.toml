@@ -1,0 +1,11 @@
+[package]
+name = "synthesis-only-consumer"
+version = "0.0.0"
+edition = "2024"
+publish = false
+[workspace]
+[dependencies]
+openbindings = "=0.2.0-alpha.1"
+openbindings-interface-synthesis = "=0.2.0-alpha.1"
+[dev-dependencies]
+tokio = {version="1.53.2",features=["rt","macros"]}
