@@ -85,6 +85,7 @@ def main():
         commands.append({"label": label, "command": list(map(str, command)), "exit": result.returncode})
         (out / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")
         if result.returncode:
+            print(result.stdout + result.stderr, flush=True)
             raise SystemExit(f"Failed: {out / (label + '.log')}")
         return result.stdout
 
