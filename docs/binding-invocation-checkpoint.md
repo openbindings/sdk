@@ -121,3 +121,28 @@ settlement. It reports Node explicitly and adds no published TypeScript surface.
 
 Branch commits, remote CI, merging and publication are separate states. This
 checkpoint does not claim remote CI or release landing from local qualification.
+
+## Recorded local result
+
+Implementation commit `c69c0fbfb7e270ba7af9cc6d75506973d3be1627` passed the final
+extracted-package and executed Node/Wasm run from a clean checkout: 23 successful
+commands, 524 unchanged input hashes and 10 package hashes. The
+[compact receipt](qualification/binding-invocation/receipt.json) records the exact
+implementation revision, scope, checks and resource measurements. Later receipt
+commits do not change the qualified implementation inputs.
+
+All 49 maintained crate tests and its doctest passed, together with six external
+three-role tests, the invoker-only consumer, strict Clippy and Rust API reference
+gates. The modified synthesis fixture also passed its previous extracted-package
+and Wasm/TypeScript qualification. Both independent Astra reviews verified the
+consequential repairs and reported no remaining material finding in their scopes.
+
+The final synthetic run measured about 1.3 microseconds for zero-value completion,
+2.3 microseconds for one-byte unary echo and 4.3 microseconds for 64-KiB unary echo.
+These include measurement and fixture overhead. All fixed resource gates and the
+initial same-host timing budgets passed; 10,000 completed and 10,000 cancelled
+calls left zero additional live allocations, bytes or provider guards. Node/Wasm
+cleanup ended with zero live drivers, providers, commands and tokens.
+
+The checkpoint is committed on feature branches. Remote CI, merging, website
+updates and package publication have not been performed by this assignment.
