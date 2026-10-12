@@ -46,7 +46,7 @@ slice; there is no acquisition service or lookup of the entry among reference in
 ## Pins and interpretation decisions
 
 - SDK foundation: `3bdc5c7773a91494b7ebb23f7a660fdd0f14c4e7`.
-- Independent client: `7cec696f19259cffd411c96d4c50f68c4c313558`, exact Git dependency.
+- Independent client: `fe09522a9b99a6c6b4918e3de0467b5a638afa5e`, exact Git dependency.
 - Published role revision: `f158f4f345301668ccb8fd555586b04ca823e732`.
 - SDK-applied core: `2f7d754dc2da374058cd517064c17e50f7d95d99`, unchanged.
 - Kind candidate starts from the 3.1 document at that core pin; the companion spec
@@ -60,7 +60,9 @@ No effective-description call, credentials, server choice or schema projection i
 required for this task. Primitive method declarations are not Operation Objects.
 Unestablished mounts yield partial results with evidence; `discovery_complete()`
 is not used as a validity oracle. Method fields come from the resolved chain,
-not the client's cross-edition raw operation inventory.
+not the client's cross-edition raw operation inventory. Conflicting methods are
+excluded using the client's typed conflict evidence; this can still be a complete
+target inventory because those methods definitively are not candidate-kind targets.
 
 AD07 removes the candidate's rule that makes a source invalid merely because it
 declares operations but has no usable target. Adding/removing an unrelated final
@@ -100,16 +102,20 @@ is historical readiness evidence; current executable dispositions are in
 | Review regressions | No additionalOperations target leakage; exact openapi member required; partial diagnostic budget; URI userinfo classified as client limitation |
 | Structural/resources | Warm cache avoids preparation/serialization; content/base changes replace it; immutable resources/limits; 1,000 native and Node/Wasm prepare/use/drop cycles |
 
-Known client limitations are minimized in `unknown-path-field.json` and
-`method-conflict.json`. The client rejects unknown Path Item fields and rejects
-entire referenced mounts on overlapping method fields, whereas the candidate
-ignores unknown fields and preserves nonconflicting methods. The adapter reports
-those paths as incomplete analysis and preserves unrelated targets. Explicit
-layouts may also be required for untyped resource bundles. URI userinfo is a
-client admission limitation (`unsupported-location`), not invalid kind content.
+The minimized `unknown-path-field.json` and `method-conflict.json` cases now
+produce complete inventories. Unknown members do not hide operations; a conflicting
+method is excluded while nonconflicting methods remain targets. The client exposes
+`ResolvedReference::path_item_conflicts`; the adapter applies the candidate kind's
+target rule to that evidence without implementing reference resolution itself.
+The external consumer authors and reloads the healthy target, then selects and
+prepares it through the pinned client's public API. The conflicting method cannot
+be prepared. This is target correspondence evidence, not an adapter invoker.
 
-These are recorded client follow-ups, not exclusions added to the kind. No private
-resolver was written to work around them. Full 3.1 qualification remains open.
+Explicit layouts may still be required for untyped resource bundles. URI userinfo
+remains a client admission limitation (`unsupported-location`), not invalid kind
+content. Unresolved shared-field conflicts continue to yield partial analysis;
+missing references retain their resource needs. These limitations are not new kind
+exclusions. Full 3.1 qualification remains open.
 Synthesis, binding/operation invocation, transforms, other editions, automatic
 retrieval, production TypeScript packaging and browser/Worker/service qualification
 remain subsequent slices.
@@ -138,6 +144,9 @@ source adaptation, result checks and result destruction are included as appropri
 Warm adapter calls reuse prepared results; the baseline copies an inventory from
 the prepared client. These do different amounts of work, recorded deliberately.
 
+The following table preserves the original first-slice measurement. The current
+pin's follow-up results are linked below.
+
 | Operations | Direct cold | Adapter cold | Direct warm | Adapter warm |
 | --- | --- | --- | --- | --- |
 | 1 | 6.097 µs | 7.939 µs | 0.139 µs | 0.382 µs |
@@ -159,3 +168,18 @@ record files, commands and raw measurements. The separate Astra xhigh semantic
 and implementation review found four material issues; one repair pass and focused
 verification closed them, with no material finding remaining. That review covers
 this provisional first slice, not a complete-family approval.
+
+
+## Path Item client follow-up
+
+The two minimized resolution gaps are closed on the current client pin. Full client
+tests (366) and strict Clippy passed. The adapter, extracted-package consumer and
+Node/Wasm qualification passed with the repaired source; independent review and
+verification found no remaining bounded issue. The first follow-up performance
+run also passed unchanged gates: adapter cold/warm medians for 1/32/512 operations
+were 8.157 µs/0.391 µs, 147.366 µs/3.473 µs, and 2.323 ms/52.158 µs. Baseline spread
+was below 3.9%, and native/Node-Wasm logical owner deltas remained zero.
+
+[Repair report, review and receipts](evidence/openapi-inspection/path-item-repair/README.md)
+retain the exact measured hashes and raw results separately from the initial
+checkpoint. No kind or published role-interface change was needed for this repair.

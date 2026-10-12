@@ -1,0 +1,198 @@
+{
+  "status": "passed",
+  "budgets": "cold:2*B+50000+500*N; warm:2*B+25000+1000*N ns; baseline spread<=15%",
+  "workloads": [
+    {
+      "operations": 1,
+      "pairs": [
+        {
+          "cold": {
+            "baselineNs": 6044.444444444444,
+            "adapterNs": 8191.208285714286,
+            "ceilingNs": 62588.88888888889,
+            "overheadNs": 2146.7638412698416,
+            "marginNs": 54397.6806031746
+          },
+          "warm": {
+            "baselineNs": 141.57288732394366,
+            "adapterNs": 390.6532,
+            "ceilingNs": 26283.145774647888,
+            "overheadNs": 249.08031267605637,
+            "marginNs": 25892.492574647888
+          }
+        },
+        {
+          "cold": {
+            "baselineNs": 6053.666666666667,
+            "adapterNs": 8142.827428571429,
+            "ceilingNs": 62607.333333333336,
+            "overheadNs": 2089.160761904762,
+            "marginNs": 54464.50590476191
+          },
+          "warm": {
+            "baselineNs": 143.43095428571428,
+            "adapterNs": 393.8887846153846,
+            "ceilingNs": 26286.861908571427,
+            "overheadNs": 250.45783032967034,
+            "marginNs": 25892.973123956042
+          }
+        },
+        {
+          "cold": {
+            "baselineNs": 6076.203666666666,
+            "adapterNs": 8156.791714285714,
+            "ceilingNs": 62652.407333333336,
+            "overheadNs": 2080.5880476190478,
+            "marginNs": 54495.615619047625
+          },
+          "warm": {
+            "baselineNs": 142.44307605633801,
+            "adapterNs": 389.875,
+            "ceilingNs": 26284.886152112675,
+            "overheadNs": 247.43192394366199,
+            "marginNs": 25895.011152112675
+          }
+        }
+      ],
+      "baselineProcessSpread": {
+        "cold": 0.005246278655727434,
+        "warm": 0.013044277147144233
+      },
+      "medianMarginNs": {
+        "cold": 54464.50590476191,
+        "warm": 25892.973123956042
+      }
+    },
+    {
+      "operations": 32,
+      "pairs": [
+        {
+          "cold": {
+            "baselineNs": 101537.416,
+            "adapterNs": 147301.04,
+            "ceilingNs": 269074.832,
+            "overheadNs": 45763.62400000001,
+            "marginNs": 121773.79199999999
+          },
+          "warm": {
+            "baselineNs": 3735.027777777778,
+            "adapterNs": 3478.635103448276,
+            "ceilingNs": 64470.055555555555,
+            "overheadNs": -256.3926743295019,
+            "marginNs": 60991.42045210728
+          }
+        },
+        {
+          "cold": {
+            "baselineNs": 102048.418,
+            "adapterNs": 147804.6875,
+            "ceilingNs": 270096.836,
+            "overheadNs": 45756.269499999995,
+            "marginNs": 122292.14850000001
+          },
+          "warm": {
+            "baselineNs": 3600.7946428571427,
+            "adapterNs": 3472.635103448276,
+            "ceilingNs": 64201.58928571428,
+            "overheadNs": -128.15953940886675,
+            "marginNs": 60728.95418226601
+          }
+        },
+        {
+          "cold": {
+            "baselineNs": 101868.668,
+            "adapterNs": 147366.04,
+            "ceilingNs": 269737.336,
+            "overheadNs": 45497.372,
+            "marginNs": 122371.296
+          },
+          "warm": {
+            "baselineNs": 3594.9970714285714,
+            "adapterNs": 3472.103448275862,
+            "ceilingNs": 64189.99414285714,
+            "overheadNs": -122.89362315270955,
+            "marginNs": 60717.89069458128
+          }
+        }
+      ],
+      "baselineProcessSpread": {
+        "cold": 0.005016282337175624,
+        "warm": 0.03888883433743821
+      },
+      "medianMarginNs": {
+        "cold": 122292.14850000001,
+        "warm": 60728.95418226601
+      }
+    },
+    {
+      "operations": 512,
+      "pairs": [
+        {
+          "cold": {
+            "baselineNs": 1585087.5,
+            "adapterNs": 2337815.2666666666,
+            "ceilingNs": 3476175.0,
+            "overheadNs": 752727.7666666666,
+            "marginNs": 1138359.7333333334
+          },
+          "warm": {
+            "baselineNs": 62353.970588235294,
+            "adapterNs": 52331.208,
+            "ceilingNs": 661707.9411764706,
+            "overheadNs": -10022.762588235295,
+            "marginNs": 609376.7331764706
+          }
+        },
+        {
+          "cold": {
+            "baselineNs": 1577915.625,
+            "adapterNs": 2323422.2333333334,
+            "ceilingNs": 3461831.25,
+            "overheadNs": 745506.6083333334,
+            "marginNs": 1138409.0166666666
+          },
+          "warm": {
+            "baselineNs": 61238.62705882353,
+            "adapterNs": 52158.209,
+            "ceilingNs": 659477.2541176471,
+            "overheadNs": -9080.418058823525,
+            "marginNs": 607319.045117647
+          }
+        },
+        {
+          "cold": {
+            "baselineNs": 1587402.075,
+            "adapterNs": 2317406.933333333,
+            "ceilingNs": 3480804.15,
+            "overheadNs": 730004.8583333332,
+            "marginNs": 1163397.2166666668
+          },
+          "warm": {
+            "baselineNs": 61474.803529411765,
+            "adapterNs": 52119.583,
+            "ceilingNs": 659949.6070588236,
+            "overheadNs": -9355.220529411767,
+            "marginNs": 607830.0240588236
+          }
+        }
+      ],
+      "baselineProcessSpread": {
+        "cold": 0.005984811564030347,
+        "warm": 0.01814310034969279
+      },
+      "medianMarginNs": {
+        "cold": 1138409.0166666666,
+        "warm": 607830.0240588236
+      }
+    }
+  ],
+  "scope": "native release, exact same generated documents; adapter adds carrier admission, target translation, SDK result checks; logical owner counts do not measure heap or RSS",
+  "rawFiles": [
+    "1-baseline.json",
+    "2-baseline.json",
+    "1-adapter.json",
+    "2-adapter.json",
+    "3-adapter.json",
+    "3-baseline.json"
+  ]
+}

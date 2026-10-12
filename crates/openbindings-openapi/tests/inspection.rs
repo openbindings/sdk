@@ -238,20 +238,34 @@ async fn ai12_identity_cancellation_limits_ownership() {
 }
 
 #[tokio::test]
-async fn client_limits_do_not_become_kind_exclusions() {
+async fn unknown_fields_and_method_conflicts_have_complete_local_inventories() {
     let inspector = Inspector::new(OpenApi::default());
-    for (name, reason) in [
-        ("unknown-path-field.json", "WrongReferenceKind"),
-        ("method-conflict.json", "AmbiguousReference"),
-        ("invalid-paths.json", "InvalidPathsShape"),
+    for (name, expected) in [
+        (
+            "unknown-path-field.json",
+            BTreeSet::from(["/paths/~1ready/get", "/paths/~1limited/get"]),
+        ),
+        (
+            "method-conflict.json",
+            BTreeSet::from(["/paths/~1ready/get", "/paths/~1limited/post"]),
+        ),
     ] {
         let result = inspector.inspect(&source(&fixture(name))).await.unwrap();
-        assert!(!result.exhaustive, "{name}");
-        assert!(result.to_json().unwrap().text().contains(reason));
-        if name != "invalid-paths.json" {
-            assert_eq!(refs(&result), BTreeSet::from(["/paths/~1ready/get"]));
-        }
+        assert!(result.exhaustive, "{name}");
+        assert_eq!(refs(&result), expected, "{name}");
     }
+    let result = inspector
+        .inspect(&source(&fixture("invalid-paths.json")))
+        .await
+        .unwrap();
+    assert!(!result.exhaustive);
+    assert!(
+        result
+            .to_json()
+            .unwrap()
+            .text()
+            .contains("InvalidPathsShape")
+    );
 }
 
 #[tokio::test]

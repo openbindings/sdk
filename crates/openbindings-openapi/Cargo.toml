@@ -15,7 +15,7 @@ workspace = true
 [dependencies]
 openbindings = { version = "=0.2.0-alpha.1", path = "../openbindings" }
 openbindings-source-inspection = { version = "=0.2.0-alpha.1", path = "../openbindings-source-inspection" }
-dynamic-openapi-client = { git = "https://github.com/openbindings/openapi-client", rev = "7cec696f19259cffd411c96d4c50f68c4c313558", version = "=0.0.0" }
+dynamic-openapi-client = { git = "https://github.com/openbindings/openapi-client", rev = "fe09522a9b99a6c6b4918e3de0467b5a638afa5e", version = "=0.0.0" }
 serde_json_compat.workspace = true
 fluent-uri.workspace = true
 

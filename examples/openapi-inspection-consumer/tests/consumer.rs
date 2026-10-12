@@ -127,3 +127,57 @@ async fn real_resource_recovery_from_public_packages() {
         Some("/paths/~1mounted/get")
     );
 }
+
+#[tokio::test]
+async fn inspected_neighbors_remain_preparable_after_manual_authoring_and_reload() {
+    use dynamic_openapi_client::{Code, Input};
+    use openbindings_openapi::OpenApi;
+    use openbindings_source_inspection::Inspector;
+    for (path_item, target, method) in [
+        (
+            r#"{"get":{"operationId":"read"},"future":true}"#,
+            "/paths/~1x/get",
+            Method::Get,
+        ),
+        (
+            r##"{"$ref":"#/components/pathItems/P","get":{"operationId":"outer"}}"##,
+            "/paths/~1x/post",
+            Method::Post,
+        ),
+    ] {
+        let content = format!(
+            r#"{{"document":{{"openapi":"3.1.2","servers":[{{"url":"https://api.example"}}],"paths":{{"/x":{path_item}}},"components":{{"pathItems":{{"P":{{"get":{{"operationId":"inner"}},"post":{{"operationId":"create"}}}}}}}}}}}}"#
+        );
+        let inventory = Inspector::new(OpenApi::default())
+            .inspect(&source(&content).unwrap())
+            .await
+            .unwrap();
+        assert!(inventory.exhaustive);
+        assert_eq!(inventory.targets.len(), 1);
+        assert_eq!(inventory.targets[0].source_ref, target);
+        let authored = inspect_and_author(&content, target).await.unwrap();
+        let reloaded = DocumentBuilder::from_json(&authored).unwrap();
+        let document = reloaded.sources.as_ref().unwrap()["catalog-source"]
+            .content
+            .as_ref()
+            .unwrap()
+            .get("document")
+            .unwrap();
+        let client = Document::parse(document.text(), None, Limits::default()).unwrap();
+        let operation = client.operation("/x", method.clone()).unwrap();
+        let request = operation.prepare(&Input::default()).unwrap();
+        assert_eq!(request.method(), method);
+        assert_eq!(request.target(), "https://api.example/x");
+        if method == Method::Post {
+            assert_eq!(
+                client
+                    .operation("/x", Method::Get)
+                    .unwrap()
+                    .prepare(&Input::default())
+                    .unwrap_err()
+                    .code(),
+                Code::AmbiguousReference
+            );
+        }
+    }
+}

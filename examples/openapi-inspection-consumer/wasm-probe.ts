@@ -11,9 +11,15 @@ async function main() {
   assert(authored.includes('catalog.lookup'),'author key lost');
   try { await inspectSource(content,true); throw new Error('cancellation ignored'); }
   catch (e: unknown) { assert(String(e).includes('cancelled'),'wrong refusal'); }
+  const localConflict = JSON.stringify({document:{openapi:'3.1.2',paths:{'/x':{
+    $ref:'#/components/pathItems/P',get:{operationId:'outer'},future:true}},
+    components:{pathItems:{P:{get:{operationId:'inner'},post:{operationId:'create'},future:null}}}}});
+  const repaired = JSON.parse(await inspectSource(localConflict,false)) as {exhaustive:boolean; targets:{sourceRef:string}[]};
+  assert(repaired.exhaustive && repaired.targets.length===1 && repaired.targets[0].sourceRef==='/paths/~1x/post','method conflict hid neighbor or chose a winner');
+  assert((await authorSource(localConflict,'/paths/~1x/post')).includes('catalog.lookup'),'repaired target cannot be authored');
   const before=[liveClientOwners(),liveSdkOwners()];
   for(let i=0;i<1000;i++) { const value=await inspectSource(content,false); assert(value.includes('/paths/'),'lost output after owners released'); }
   assert(liveClientOwners()===before[0] && liveSdkOwners()===before[1], 'storage owner growth');
-  console.log(JSON.stringify({host:'Node/Wasm',cycles:1000,clientOwnerDelta:liveClientOwners()-before[0],sdkOwnerDelta:liveSdkOwners()-before[1],exactAuthoring:true,preCancelled:true}));
+  console.log(JSON.stringify({host:'Node/Wasm',cycles:1000,clientOwnerDelta:liveClientOwners()-before[0],sdkOwnerDelta:liveSdkOwners()-before[1],exactAuthoring:true,preCancelled:true,methodConflictLocality:true}));
 }
 void main().catch((e: unknown)=>{throw e;});

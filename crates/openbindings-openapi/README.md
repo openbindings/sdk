@@ -26,10 +26,13 @@ are valid. Duplicate operation IDs preserve both distinct mounted targets; this
 adapter never selects a winner by ID. The SDK's stable output and duplicate
 sourceRef checks are implementation policies, not new published role requirements.
 
-The pinned client currently rejects unknown Path Item fields and whole mounts
-with conflicting reference fields more broadly than the candidate permits.
-Those paths produce partial results, not new kind exclusions. Thus this package
-is **not a complete OpenAPI 3.1 implementation**. Other version kinds are declined.
+Unknown Path Item members remain inert. When a standard method appears in
+multiple reference layers, that method is not a target; unaffected methods remain
+available. The client supplies the resolved chain and typed conflict evidence.
+Missing dependencies and unresolved shared-field conflicts still produce partial
+analysis. Explicit layouts for untyped bundles and URI userinfo admission remain
+client limitations. This package is **not a complete OpenAPI 3.1 implementation**;
+synthesis and invocation are not implemented, and other version kinds are declined.
 
 One private prepared entry retains bounded carrier text, client graph, and result.
 Repeat calls compare carrier bytes and clone result metadata without reparsing or

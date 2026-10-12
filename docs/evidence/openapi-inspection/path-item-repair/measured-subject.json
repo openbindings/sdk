@@ -1,0 +1,18 @@
+{
+  "clientRevision": "fe09522a9b99a6c6b4918e3de0467b5a638afa5e",
+  "sdkParent": "cf481c699433b5961a0e21c59829c5ff2e7d9fb9",
+  "subject": "working tree repair after independently verified client commit; exact product/consumer hashes",
+  "sha256": {
+    "Cargo.lock": "c3e14960d12d55650a3cb64d78d844d2f1e6f34b2bb80f115460c4effbc1cd7f",
+    "crates/openbindings-openapi/Cargo.toml": "5cf1e69d780d016485baf90c48df7427c96627501000af2fdbf30701d12293a0",
+    "crates/openbindings-openapi/src/lib.rs": "04c0255bd3a2d4a36725490c6fd31ef76d752e33f314a6adf924b932b6ca4876",
+    "crates/openbindings-openapi/tests/inspection.rs": "e3e3a12323027d215b7237a925fb4168179c02972bb4511c19e28a365d5ce2fe",
+    "examples/openapi-inspection-consumer/Cargo.toml": "14c848d750d8a33af40ec1147c71675f49d049cb7d254d8bcc0143e305904cc5",
+    "examples/openapi-inspection-consumer/src/lib.rs": "d909a7a238dd2684daec0d4eb8be8a544a7b4f43b705e98b63bc5bb9fa2dc5c9",
+    "examples/openapi-inspection-consumer/tests/consumer.rs": "8350da3359129b1079db21b7f3be5c4e7bcd021ac296a5613e4bdcb4561676e4",
+    "examples/openapi-inspection-consumer/examples/measure.rs": "f9647c2ba50e05871897eb38a8be9bbaae05af09f8e7c819e4bd3ace6317e6e2",
+    "examples/openapi-inspection-consumer/wasm-probe.ts": "444e3a98d257ae46b21a4db31cc8b1c75ce55432fffba61086095adff72dd817",
+    "tools/verify-openapi-inspection.py": "3957fc5b48d49a05add92b17b21578dd96b9cddd8709afa3020cbc4756e04dfa",
+    "tools/measure-openapi-inspection.py": "f7c00344d9f5ab59344069d409b20238918a917a11c92dff97ca53d892ec7564"
+  }
+}

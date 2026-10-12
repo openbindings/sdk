@@ -12,7 +12,7 @@ wasm-probe = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
 openbindings = "=0.2.0-alpha.1"
 openbindings-source-inspection = "=0.2.0-alpha.1"
 openbindings-openapi = "=0.2.0-alpha.1"
-dynamic-openapi-client = { git = "https://github.com/openbindings/openapi-client", rev = "7cec696f19259cffd411c96d4c50f68c4c313558", version = "=0.0.0" }
+dynamic-openapi-client = { git = "https://github.com/openbindings/openapi-client", rev = "fe09522a9b99a6c6b4918e3de0467b5a638afa5e", version = "=0.0.0" }
 # Qualification counters only; consumer behavior uses public SDK APIs exclusively.
 openbindings-internal-json = "=0.2.0-alpha.1"
 serde_json = "1.0.151"

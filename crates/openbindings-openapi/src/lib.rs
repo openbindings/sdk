@@ -22,7 +22,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-use dynamic_openapi_client::{Code, Document, DocumentBuilder, ReferenceKind, ValueKind};
+use dynamic_openapi_client::{Code, Document, DocumentBuilder, Method, ReferenceKind, ValueKind};
 use openbindings::{JsonKind, JsonValue, Source, WorkControl};
 use openbindings_source_inspection::{
     BindableTarget, BindingFragment, InspectionError, InspectionErrorKind, InspectionLimitation,
@@ -333,6 +333,14 @@ fn inspect_document(
                                         | "trace"
                                 ) || operation.kind() != ValueKind::Object
                                 {
+                                    continue;
+                                }
+                                // The client retains every declaration, with method-local
+                                // ambiguity evidence. Under the candidate kind, no
+                                // conflicting method is a target; healthy neighbors are.
+                                if resolved.path_item_conflicts.iter().any(|conflict| {
+                                    Some(&conflict.method) == Method::parse(method).as_ref()
+                                }) {
                                     continue;
                                 }
                                 check_cancelled(control)?;

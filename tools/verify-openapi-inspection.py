@@ -17,7 +17,7 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "examples/openapi-inspection-consumer"
 CLIENT_URL = "https://github.com/openbindings/openapi-client"
-CLIENT_REV = "7cec696f19259cffd411c96d4c50f68c4c313558"
+CLIENT_REV = "fe09522a9b99a6c6b4918e3de0467b5a638afa5e"
 
 
 def check_client_pin(manifest):
@@ -112,7 +112,7 @@ def main():
             shutil.rmtree(consumer / directory)
         shutil.copytree(FIXTURE / directory, consumer / directory)
     patches = "\n[patch.crates-io]\n" + "".join(f"{name}={{path={json.dumps(str(source))}}}\n" for name, source in sources.items())
-    patches += 'dynamic-openapi-client={git="https://github.com/openbindings/openapi-client",rev="7cec696f19259cffd411c96d4c50f68c4c313558"}\n'
+    patches += f'dynamic-openapi-client={{git="{CLIENT_URL}",rev="{CLIENT_REV}"}}\n'
     (consumer / "Cargo.toml").write_text((FIXTURE / "Cargo.toml").read_text() + patches)
     shutil.copyfile(ROOT / "Cargo.lock", consumer / "Cargo.lock")
     # Preserve the root lock's selected versions, adding only the external fixture.
@@ -120,7 +120,7 @@ def main():
     run("consumer-lint", ["cargo", "clippy", "--locked", "--all-targets", "--", "-D", "warnings"], consumer)
     metadata = json.loads(run("consumer-metadata", ["cargo", "metadata", "--locked", "--format-version", "1"], consumer))
     client = [p for p in metadata["packages"] if p["name"] == "dynamic-openapi-client"]
-    if len(client) != 1 or not client[0].get("source", "").endswith("#7cec696f19259cffd411c96d4c50f68c4c313558"):
+    if len(client) != 1 or not client[0].get("source", "").endswith(f"#{CLIENT_REV}"):
         raise SystemExit("Consumer did not resolve the pinned git client")
     core_tree = run("core-isolation", ["cargo", "tree", "--locked", "-p", "openbindings", "--edges", "normal"])
     if "dynamic-openapi-client" in core_tree or "openbindings-openapi" in core_tree:
