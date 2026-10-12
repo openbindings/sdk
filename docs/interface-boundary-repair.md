@@ -71,3 +71,17 @@ retain their separate scopes.
 Historical qualification receipts are not rewritten to claim a new run. The
 repair receipt records the checks actually rerun for this change. No new browser,
 network-adapter, performance or cross-implementation qualification is claimed.
+
+## Verification result
+
+The [repair receipt](qualification/interface-boundary-repair.json) records the
+qualified SDK revision and exact interface hashes. All 93 affected native tests
+and four associated doctests passed. Interface checks cover all eight documents,
+shared schemas, comparison-profile membership, canonical order, fixture schemas,
+embedded documents and the pinned core schema. Strict Clippy and the public Rust
+reference/doctest checks passed. All three external-consumer qualification tools
+passed against extracted Cargo archives from the clean SDK repair commit.
+
+No runtime algorithm changed, and no new performance claim is made. The next
+adapter slice can build on these provisional native APIs without promoting their
+implementation policies back into the published interfaces.

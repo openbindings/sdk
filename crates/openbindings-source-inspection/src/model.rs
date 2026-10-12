@@ -210,8 +210,9 @@ impl SourceInspection {
             limitation: Some(limitation),
         }
     }
-    /// Check role structure without claiming to prove source correspondence,
-    /// inventory completeness, or the semantic soundness of operation framing.
+    /// Check the SDK's result structure and policy, including duplicate rejection.
+    /// This is stricter than the shared interface and does not prove source
+    /// correspondence, inventory completeness, or sound operation framing.
     pub fn validate(&self) -> Result<(), InspectionError> {
         if !self.exhaustive && self.limitation.is_none() {
             return Err(InspectionError::result(

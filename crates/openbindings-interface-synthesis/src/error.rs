@@ -15,7 +15,7 @@ pub enum SynthesisErrorKind {
     UnreadableSource,
     /// A provider-specific failure.
     ProviderFailure,
-    /// Invalid document, coverage or request correspondence.
+    /// The result fails SDK document, coverage or correspondence policy checks.
     InvalidResult,
     /// Strict completeness refused; the checked result is retained.
     Incomplete,
