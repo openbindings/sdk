@@ -2,7 +2,7 @@
     "openbindings": "0.2.0",
     "name": "Source Inspector",
     "version": "0.1.0",
-    "description": "Interface for inspecting binding source artifacts before an OpenBindings interface exists. A source inspector reports its supported kinds and discovers bindable targets that tooling can offer to users.\n\nCarried-values rule: sources and bindings are read under the OpenBindings 0.2 line named by this contract. A source may carry only kind, content, description and x- members. A binding may carry only operation, source, content, idempotent, preference, description, deprecated and x- members, each core member with its core type. The implementation MUST refuse a call carrying any other member or a core member of the wrong type before doing its work. Open carrier schemas preserve extensions; their openness does not waive this rule. Binding operation/source members are forwarded verbatim; this interface neither interprets them nor forbids a kind from reading them. Other binding metadata is information, not an instruction. Kinds are best served identifying targets through content.\n\nFor a kind answered false, inspectSource refuses before work. For a kind answered true, admitted targets the implementation cannot establish or represent are omitted with exhaustive: false and a limitation; inability to read the source at all refuses the call.",
+    "description": "Inspect a source under its kind and report bindable targets, optional operation framing, and completeness information.\n\nThese operations are offered for voluntary adoption by name. Their schemas and descriptions identify the exchanged values and the capability they describe; they do not prescribe an SDK, internal algorithm, validation or recovery policy, or process architecture. Correspondence is an author claim, not verification of an implementation.\n\nSources and bindings are OpenBindings 0.2 values. Their core fields have their core meanings and types; x- members are extensions. Source and binding content preserve absence versus JSON null and are interpreted under the source's exact kind. The open carrier schemas are not complete document-conformance checks. Handling malformed carriers is implementation policy; it does not make those carriers conformant.",
     "schemas": {
         "SupportedKind": {
             "type": "object",
@@ -24,7 +24,7 @@
         },
         "Source": {
             "type": "object",
-            "description": "A source as an OpenBindings 0.2 document carries it: an exact kind and optional content read under that kind. Absent content and present JSON null are distinct. Only core source fields and x- extensions may appear; the carried-values rule requires refusal of other members before work.",
+            "description": "A source as an OpenBindings 0.2 document carries it: an exact kind and optional content read under that kind. Absent content and present JSON null are distinct. Only core source fields and x- extensions may appear; the open carrier schema does not fully check that boundary. Handling malformed carriers is implementation policy.",
             "properties": {
                 "kind": {
                     "type": "string",
@@ -67,12 +67,12 @@
         },
         "BindableTarget": {
             "type": "object",
-            "description": "A target the source's kind admits, with binding data and optional sound operation framing. The producer MUST omit operation and source from binding, and MUST NOT include a binding member that is neither a core binding field nor x- prefixed. Consumers MUST reject a target violating either restriction. The author assigns operation and source; author-assigned keys win when constructing the final binding. A producer includes binding.idempotent only where the observed source states it.",
+            "description": "A target admitted by the source kind, with a binding fragment and optional operation framing for that target. The fragment uses core binding fields and x- extensions, without author-assigned operation and source keys. The author supplies those keys when composing a document. Handling malformed fragments is consumer policy.",
             "properties": {
                 "sourceRef": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Stable identifier for this target within the source. An implementation offering both inspection and synthesis uses the same identifier for the same target-scope unit. Cross-producer equality is promised only where the kind defines it. Unique within this inspection by exact whole-string equality. A producer MUST NOT reuse an identifier for distinct target-scope units in the same observed source state; consumers reject duplicate identifiers."
+                    "description": "Stable identifier for this target within the observed source. An implementation offering both inspection and synthesis uses the same reference for the same target-scope unit. Equality across producers is meaningful only where the kind defines it. This field does not prescribe duplicate-row handling."
                 },
                 "binding": {
                     "$ref": "#/schemas/Binding"
@@ -104,7 +104,7 @@
         },
         "SourceInspection": {
             "type": "object",
-            "description": "Inventory of targets the kind admits. Excluded targets are not listed; an admitted target the implementation cannot establish or represent makes the result non-exhaustive with a limitation. If the source cannot be read at all, refuse the call. Within one inspection each sourceRef MUST occur at most once, using exact whole-string equality without normalization. Consumers MUST reject duplicate identifiers, including identical repeated target rows; they MUST NOT silently select, merge or deduplicate them.",
+            "description": "Inventory of targets admitted by the source kind. exhaustive describes completeness of the target inventory; limitation explains a non-exhaustive result. The interface does not prescribe target ordering, duplicate rejection, or deduplication.",
             "properties": {
                 "targets": {
                     "type": "array",
@@ -180,7 +180,7 @@
                 },
                 "supported": {
                     "type": "boolean",
-                    "description": "True warrants that this implementation knows how to read sources of this exact kind, and their bindings, for its job and never presents a case it cannot handle as handled: it refuses before work or, where the operation defines disclosure, omits and discloses the case. False means every call on this kind is refused before work."
+                    "description": "True reports that this implementation knows how to interpret this exact kind for its job; it does not promise that every case succeeds. False reports no support for that job."
                 }
             },
             "required": [
@@ -190,7 +190,7 @@
         },
         "Binding": {
             "type": "object",
-            "description": "A binding as an OpenBindings 0.2 document carries it, or would carry it, by value. It is interpreted under the accompanying source's kind. Absent content and present JSON null are distinct. Only core binding fields and x- extensions may appear; the carried-values rule requires refusal of other members before work.",
+            "description": "A binding as an OpenBindings 0.2 document carries it, or would carry it, by value. It is interpreted under the accompanying source's kind. Absent content and present JSON null are distinct. Only core binding fields and x- extensions may appear; the open carrier schema does not fully check that boundary. Handling malformed carriers is implementation policy.",
             "properties": {
                 "operation": {
                     "type": "string",
@@ -227,7 +227,7 @@
     },
     "operations": {
         "openbindings.source-inspector.listSupportedKinds": {
-            "description": "Return an advisory list of kinds supported for this interface's job, for display, documentation and pickers. Every listed kind MUST receive supported: true from this interface's checkKindSupport. Absence carries no information and MUST NOT be treated as a negative support decision. This operation is idempotent: repeating it with the same input in context that does not change its intended effects produces no additional intended operation-level effects after the first application. This does not promise identical results or authorize retries.",
+            "description": "Return an advisory list of kinds supported for this interface's job. Listed kinds have supported: true in checkKindSupport; absence from the list makes no support claim. This is a capability query, not performance of the job.",
             "output": {
                 "type": "array",
                 "items": {
@@ -236,7 +236,7 @@
             }
         },
         "openbindings.source-inspector.checkKindSupport": {
-            "description": "Authoritatively determine support for exact kinds for this interface's job. This is the only operation on which a consumer may base a support decision. Return one verdict per unique input kind in first-occurrence order. True warrants that the implementation knows how to read the kind for this job, whether its meaning is written, private or defined only in code. True does not promise every case is within reach; an unhandled case is never presented as handled. False means every call on the kind is refused before work. For a kind answered false, inspectSource refuses before work. For a kind answered true, admitted targets the implementation cannot establish or represent are omitted with exhaustive: false and a limitation; inability to read the source at all refuses the call. The result is deterministic for a given implementation version and configuration. Kinds compare by exact equality: no normalization, case folding, prefix matching, inferred version order or dereferencing. An internal pattern may compress the supported set but MUST NOT extend it. Future optional verdict fields may annotate a verdict but never qualify supported. This operation is idempotent: repeating it with the same input in context that does not change its intended effects produces no additional intended operation-level effects after the first application. This does not promise identical results or authorize retries. The check MUST have no side effects; it neither acquires nor modifies source artifacts or performs the interface job.",
+            "description": "Report support for this interface's job for the requested exact kind strings, with one verdict per distinct requested kind in first-occurrence order. supported: true means the implementation knows how to interpret that kind for this job, not that every artifact or case succeeds. supported: false reports no support for that job. Additional fields do not qualify the Boolean. The operation reports capability without performing the requested inspection, synthesis or invocation. Kind equality is the core's exact string equality. Capability detection and representation are implementation choices.",
             "input": {
                 "type": "object",
                 "properties": {
@@ -261,7 +261,7 @@
             }
         },
         "openbindings.source-inspector.inspectSource": {
-            "description": "Inspect a binding source artifact and return targets admitted by its source's kind, optionally with sound operation framing. The result states whether enumeration is exhaustive and explains any partial result. This operation is idempotent: repeating it with the same input in context that does not change its intended effects produces no additional intended operation-level effects after the first application. This does not promise identical results or authorize retries. The producer MUST omit operation and source from binding, and MUST NOT include a binding member that is neither a core binding field nor x- prefixed. Consumers MUST reject a target violating either restriction. The author assigns operation and source; author-assigned keys win when constructing the final binding. Operation framing MUST omit idempotent, a binding claim. For composition use {...target.binding, operation: authorOperationKey, source: authorSourceKey}, so author keys win. After substituting a source or binding, the caller owns the edited correspondence claim.",
+            "description": "Inspect a source and return bindable targets admitted by its kind, optionally with operation framing for those same targets. exhaustive reports whether the inventory is complete; a partial result carries limitation evidence. Each target carries a binding fragment without operation or source keys, which the document author supplies. Operation framing has the core operation shape; idempotent is binding metadata. Inspection does not intentionally change the inspected source or perform its operations. Acquisition, enumeration, ordering, duplicate handling and recovery are implementation choices. Editing the source or binding afterward creates a new correspondence claim.",
             "input": {
                 "$ref": "#/schemas/InspectSourceInput"
             },

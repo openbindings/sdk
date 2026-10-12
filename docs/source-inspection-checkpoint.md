@@ -1,5 +1,10 @@
 # Source-inspection foundation checkpoint — 2026-10-11
 
+> Historical checkpoint. Interface authority and SDK-policy distinctions below
+> are superseded by [the interface-boundary repair](interface-boundary-repair.md).
+> Its tests remain implementation evidence; they do not impose the SDK's policies
+> on independent adopters.
+
 Implemented on `codex/sdk-source-inspection`, based on SDK
 `fb6e647ae5c3d5954ed2d56c42c794bea06cb37f`. This is the first optional role companion,
 not completion of the capability foundation or OpenAPI adapter. The Rust API remains

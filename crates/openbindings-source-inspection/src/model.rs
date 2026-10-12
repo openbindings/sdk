@@ -109,8 +109,8 @@ impl Serialize for BindingFragment {
 /// One target admitted by the source's kind, with optional operation framing.
 #[derive(Clone, Debug)]
 pub struct BindableTarget {
-    /// Stable source-local identity, unique within this inspection by exact string
-    /// equality. Cross-provider equality exists only if the
+    /// Stable source-local identity. This SDK requires uniqueness within one
+    /// inspection by exact string equality. Cross-provider equality exists only if the
     /// kind defines it; synthesis in this same provider must use the same identity.
     pub source_ref: String,
     /// Binding data without author-owned operation/source keys.

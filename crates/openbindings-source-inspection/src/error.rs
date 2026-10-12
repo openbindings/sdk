@@ -4,7 +4,7 @@ use std::fmt;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum InspectionErrorKind {
-    /// The request does not satisfy the role's carrier rules.
+    /// The request fails the SDK's carrier admission checks.
     InvalidInput,
     /// The provider does not support this exact source kind for inspection.
     UnsupportedKind,
@@ -12,7 +12,7 @@ pub enum InspectionErrorKind {
     UnreadableSource,
     /// Inspection failed for a provider-specific reason.
     ProviderFailure,
-    /// A provider response violates the role's structural requirements.
+    /// A provider response fails the SDK's structural or result-policy checks.
     InvalidResult,
     /// The result could not be encoded within the selected exact JSON limits.
     Encoding,

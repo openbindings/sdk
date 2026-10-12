@@ -5,7 +5,7 @@ use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::sync::Arc;
 use support::*;
 #[tokio::test]
-async fn portable_cases_and_pinned_role_are_independent_oracles() {
+async fn sdk_policy_cases_and_interface_output_shapes_are_distinct() {
     let role =
         ParsedDocument::parse(include_bytes!("fixtures/interface-synthesizer-0.2.json")).unwrap();
     let context = role
@@ -92,7 +92,7 @@ async fn portable_cases_and_pinned_role_are_independent_oracles() {
 }
 
 #[test]
-fn portable_fixture_file_satisfies_its_pinned_schema() {
+fn sdk_policy_fixture_file_satisfies_its_local_schema() {
     let mut draft = openbindings::DocumentBuilder::new();
     draft.operations.insert(
         "check".into(),
@@ -112,4 +112,42 @@ fn portable_fixture_file_satisfies_its_pinned_schema() {
         contract.validate(&corpus()),
         ValueOutcome::Satisfies
     ));
+}
+
+#[test]
+fn independent_interface_examples_allow_variation_beyond_sdk_policy() {
+    let role =
+        ParsedDocument::parse(include_bytes!("fixtures/interface-synthesizer-0.2.json")).unwrap();
+    let context = role
+        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
+        .unwrap();
+    let ContractPreparation::Ready(contract) = context.prepare(
+        "openbindings.interface-synthesizer.synthesizeInterfaceWithCoverage",
+        Side::Output,
+    ) else {
+        panic!("role output contract failed")
+    };
+    let examples = json(include_str!("fixtures/interface-output-cases.json"));
+    for case in examples.get("tests").unwrap().elements().unwrap() {
+        let wire = json(&format!(
+            r#"{{"interface":{},"coverage":{}}}"#,
+            case.get("interface").unwrap().text(),
+            case.get("report").unwrap().text(),
+        ));
+        let expected = case.get("schemaValid").unwrap().as_bool().unwrap();
+        let outcome = contract.validate(&wire);
+        assert!(
+            matches!(
+                outcome,
+                ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
+            ),
+            "undetermined example: {outcome:?}"
+        );
+        assert_eq!(
+            matches!(outcome, ValueOutcome::Satisfies),
+            expected,
+            "{}: {outcome:?}",
+            case.get("description").unwrap().text()
+        );
+    }
 }

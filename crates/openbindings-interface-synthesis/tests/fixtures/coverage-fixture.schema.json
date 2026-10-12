@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://openbindings.com/interfaces/conformance/synthesis-coverage/fixture.schema.json",
-  "title": "Interface-Synthesizer Coverage Evidence Cases",
+  "$id": "https://openbindings.com/sdk/testing/synthesis-policy.schema.json",
+  "title": "Rust SDK Synthesis Policy Regression Cases",
   "type": "object",
   "required": [
     "format",
@@ -10,7 +10,7 @@
   "additionalProperties": false,
   "properties": {
     "format": {
-      "const": "openbindings.interface-synthesis-coverage-cases@1"
+      "const": "openbindings.sdk-synthesis-policy-cases@1"
     },
     "tests": {
       "type": "array",

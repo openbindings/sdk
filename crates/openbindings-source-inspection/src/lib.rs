@@ -24,4 +24,4 @@ pub use model::{
 /// Applied Source Inspector interface version, independent of the crate version.
 pub const ROLE_VERSION: &str = "0.1.0";
 /// Exact interfaces repository revision used by this companion.
-pub const APPLIED_ROLE_REVISION: &str = "8ff5d9d913cb525dacb347a29e534af278ed88f6";
+pub const APPLIED_ROLE_REVISION: &str = "468bb83e5986de3ee490767bcb4b6630071bdec5";

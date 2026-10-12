@@ -25,9 +25,9 @@ fn json(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
 }
 
-// These are the complete closed frame envelopes at interfaces revision
-// 8b25ddccb477db31d7a507fe07227e08f544679d. An open payload has a distinct
-// admission boundary, checked only after first/single-open ordering.
+// These envelopes match the pinned role shapes. The mapper's malformed-frame
+// classification, admission order and lifecycle traces are this SDK's policy;
+// interface adoption does not prescribe these internal choices.
 fn fields(kind: &str, output: bool) -> Option<&'static [&'static str]> {
     match (kind, output) {
         ("open", false) => Some(&["kind", "input"]),

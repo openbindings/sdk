@@ -1,5 +1,10 @@
 # Binding invocation checkpoint
 
+> Historical checkpoint. Interface authority and SDK-policy distinctions below
+> are superseded by [the interface-boundary repair](interface-boundary-repair.md).
+> Its tests remain implementation evidence; they do not impose the SDK's policies
+> on independent adopters.
+
 This slice adds `openbindings-invocation`, the third optional role companion after
 inspection and synthesis. It implements the binding-provider seam and a usable
 checked native lifecycle. Generic operation invocation and the OpenAPI kind

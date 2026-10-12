@@ -1,5 +1,16 @@
 # OpenBindings invocation
 
+## SDK policy and interface scope
+
+The adopted interfaces describe frame values and capability meanings. This SDK
+chooses strict carrier admission, malformed-frame classification in its test
+bridge, first-settled terminal arbitration, retention of queued outputs before
+that terminal, lazy schema preparation and admission of readable partial documents.
+Its native polling, backpressure, cancellation and ownership rules are SDK API
+guarantees, not requirements imposed on every interface adopter. Implementations
+can use different internal scheduling or recovery while providing the described
+operation. Frame-schema tests and SDK lifecycle-policy tests are distinct evidence.
+
 An optional Rust companion for **binding and operation invocation**: a provider implements one
 ordinary asynchronous job; a checked `binding::Invoker` supplies the bounded
 input/output lifetime. The same path handles zero-value, unary, server-streaming,
@@ -263,7 +274,8 @@ Pinned authority: interfaces `8b25ddccb477db31d7a507fe07227e08f544679d`;
 | Context/effect semantics | Checked structure plus documented provider obligations; no resolver. |
 | Source interpretation | Kind adapter; the companion treats content as opaque. |
 
-Maintained value, lifecycle and frame-correspondence tests cover the role rules.
+Maintained value and frame-shape tests cover the adopted interface; lifecycle
+and malformed-frame tests separately qualify this SDK's policy.
 The frame mapper is test-only and does not establish a new streaming fixture
 standard. The external Catalog consumer joins inspection, synthesis and explicit
 binding invocation against an independent execution oracle. The invoker-only

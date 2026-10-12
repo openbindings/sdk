@@ -1,0 +1,361 @@
+{
+  "format": "openbindings.interface-synthesis-shape-cases@1",
+  "tests": [
+    {
+      "description": "Coverage without optional attribution fields",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {}
+      },
+      "report": {
+        "entries": [],
+        "exhaustive": true,
+        "fullyRepresented": true
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "A represented path without a report-level source map",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getUser": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "report": {
+        "entries": [
+          {
+            "sourceIndex": 0,
+            "sourceKey": "api",
+            "sourceRef": "#/paths/~1users~1{id}/get",
+            "scope": "target",
+            "status": "represented",
+            "operationKey": "getUser",
+            "bindingKey": "getUser.api"
+          }
+        ],
+        "exhaustive": true,
+        "fullyRepresented": true
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "Repeated identical evidence is not a schema error or a mandated rejection",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getUser": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "report": {
+        "entries": [
+          {
+            "sourceIndex": 0,
+            "sourceKey": "api",
+            "sourceRef": "#/paths/~1users~1{id}/get",
+            "scope": "target",
+            "status": "represented",
+            "operationKey": "getUser",
+            "bindingKey": "getUser.api"
+          },
+          {
+            "sourceIndex": 0,
+            "sourceKey": "api",
+            "sourceRef": "#/paths/~1users~1{id}/get",
+            "scope": "target",
+            "status": "represented",
+            "operationKey": "getUser",
+            "bindingKey": "getUser.api"
+          }
+        ],
+        "exhaustive": true,
+        "fullyRepresented": true
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "Lossy dependency evidence without optional dependencyKey",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createJob": {},
+          "onJobDone": {}
+        },
+        "dependencies": {
+          "jobDone": {
+            "operation": "onJobDone"
+          }
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "createJob.api": {
+            "operation": "createJob",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1jobs/post"
+            }
+          }
+        }
+      },
+      "report": {
+        "entries": [
+          {
+            "sourceIndex": 0,
+            "sourceKey": "api",
+            "sourceRef": "#/paths/~1jobs/post",
+            "scope": "target",
+            "status": "represented",
+            "operationKey": "createJob",
+            "bindingKey": "createJob.api"
+          },
+          {
+            "sourceIndex": 0,
+            "sourceRef": "dependency:lossy",
+            "scope": "dependency",
+            "status": "lossy",
+            "reasonCode": "example.loss",
+            "message": "The dependency contract is a lossy projection."
+          }
+        ],
+        "exhaustive": true,
+        "fullyRepresented": false
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "Optional source and dependency attribution",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createJob": {},
+          "onJobDone": {}
+        },
+        "dependencies": {
+          "jobDone": {
+            "operation": "onJobDone"
+          },
+          "second": {
+            "operation": "onJobDone"
+          }
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "createJob.api": {
+            "operation": "createJob",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1jobs/post"
+            }
+          }
+        }
+      },
+      "report": {
+        "entries": [
+          {
+            "sourceIndex": 0,
+            "sourceKey": "api",
+            "sourceRef": "#/paths/~1jobs/post",
+            "scope": "target",
+            "status": "represented",
+            "operationKey": "createJob",
+            "bindingKey": "createJob.api"
+          },
+          {
+            "sourceIndex": 0,
+            "sourceRef": "#/paths/~1jobs/post/callbacks/done/{$request.body#~1url}/post",
+            "scope": "dependency",
+            "status": "represented",
+            "dependencyKey": "jobDone"
+          },
+          {
+            "sourceIndex": 0,
+            "sourceRef": "second",
+            "scope": "dependency",
+            "status": "represented",
+            "dependencyKey": "second"
+          }
+        ],
+        "sourceKeys": [
+          "api"
+        ],
+        "exhaustive": true,
+        "fullyRepresented": true
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "An additional unbound operation is not an interface prohibition",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "abstractOperation": {}
+        }
+      },
+      "report": {
+        "entries": [],
+        "exhaustive": true,
+        "fullyRepresented": true
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "Application-owned extra report information is allowed",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {}
+      },
+      "report": {
+        "entries": [],
+        "exhaustive": true,
+        "fullyRepresented": true,
+        "applicationNote": "example"
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "Missing entries does not match the report shape",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {}
+      },
+      "report": {
+        "exhaustive": true,
+        "fullyRepresented": true
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "An optional source map still has a declared value type",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {}
+      },
+      "report": {
+        "entries": [],
+        "exhaustive": true,
+        "fullyRepresented": true,
+        "sourceKeys": [
+          null
+        ]
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "An optional dependency key still has a declared value type",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createJob": {},
+          "onJobDone": {}
+        },
+        "dependencies": {
+          "jobDone": {
+            "operation": "onJobDone"
+          },
+          "second": {
+            "operation": "onJobDone"
+          }
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "createJob.api": {
+            "operation": "createJob",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1jobs/post"
+            }
+          }
+        }
+      },
+      "report": {
+        "entries": [
+          {
+            "sourceIndex": 0,
+            "sourceKey": "api",
+            "sourceRef": "#/paths/~1jobs/post",
+            "scope": "target",
+            "status": "represented",
+            "operationKey": "createJob",
+            "bindingKey": "createJob.api",
+            "dependencyKey": 42
+          },
+          {
+            "sourceIndex": 0,
+            "sourceRef": "#/paths/~1jobs/post/callbacks/done/{$request.body#~1url}/post",
+            "scope": "dependency",
+            "status": "represented",
+            "dependencyKey": "jobDone"
+          },
+          {
+            "sourceIndex": 0,
+            "sourceRef": "second",
+            "scope": "dependency",
+            "status": "represented",
+            "dependencyKey": "second"
+          }
+        ],
+        "sourceKeys": [
+          "api"
+        ],
+        "exhaustive": true,
+        "fullyRepresented": true
+      },
+      "schemaValid": false
+    }
+  ]
+}

@@ -1,10 +1,13 @@
-# Contract fixture
+# Interface snapshots and SDK policy evidence
 
-Verbatim `openbindings/interfaces/source-inspector/0.1.json` from commit
-`8ff5d9d913cb525dacb347a29e534af278ed88f6`.
+Interface source revision: `468bb83e5986de3ee490767bcb4b6630071bdec5` on
+`codex/interface-boundary-repair`. These are draft source snapshots, not evidence
+of a deployed or released publication.
 
-SHA-256: `72a5639b460842e196ce460858a6a4a94d1158549924acef8d08b507bcfa5542`.
+| Fixture | Evidence owner | SHA-256 |
+| --- | --- | --- |
+| `source-inspector-0.1.json` | Pinned interface source | `3e646bab0a4ff209dd57825b63009f33063c3e48692b3118d5f4131b468ee660` |
 
-The output-schema test supplements the behavioral boundary tests. The schema
-intentionally leaves carriers open; it does not replace the role prose concerning
-author keys, allowed binding members, semantic completeness or source correspondence.
+The output-schema tests check the described result shape. The SDK separately
+rejects duplicates and malformed carriers. That policy is not an interface
+requirement, and shape acceptance is not evidence of truthful inspection.

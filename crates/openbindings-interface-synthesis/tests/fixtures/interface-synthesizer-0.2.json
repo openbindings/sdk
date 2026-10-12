@@ -2,7 +2,7 @@
     "openbindings": "0.2.0",
     "name": "Interface Synthesizer",
     "version": "0.2.0",
-    "description": "Interface for synthesizing OpenBindings interfaces from sources read under their exact kinds. A kind decides how the source is read and may incorporate an artifact authority, have a private definition, or exist only in code.\n\nCarried-values rule: sources and bindings are read under the OpenBindings 0.2 line named by this contract. A source may carry only kind, content, description and x- members. A binding may carry only operation, source, content, idempotent, preference, description, deprecated and x- members, each core member with its core type. The implementation MUST refuse a call carrying any other member or a core member of the wrong type before doing its work. Open carrier schemas preserve extensions; their openness does not waive this rule. Binding operation/source members are forwarded verbatim; this interface neither interprets them nor forbids a kind from reading them. Other binding metadata is information, not an instruction. Kinds are best served identifying targets through content.\n\nFor a kind answered false, both synthesis operations refuse before work. For a kind answered true, strict synthesis refuses an unhandled admitted case; synthesis with coverage may disclose it as implementation-unsupported. A wholly unreadable source MUST be refused. When only part of its inventory can be established, synthesis with coverage MAY return a sound partial interface with exhaustive: false and limitation evidence; every established admitted unit the implementation cannot represent is disclosed as implementation-unsupported. Strict synthesis MUST refuse such partial work.",
+    "description": "Derive an OpenBindings interface from sources interpreted under their exact kinds. The strict operation describes complete synthesis of admitted targets; the coverage operation can describe partial synthesis with explicit accounting.\n\nThese operations are offered for voluntary adoption by name. Their schemas and descriptions identify the exchanged values and the capability they describe; they do not prescribe an SDK, internal algorithm, validation or recovery policy, or process architecture. Correspondence is an author claim, not verification of an implementation.\n\nSources and bindings are OpenBindings 0.2 values. Their core fields have their core meanings and types; x- members are extensions. Source and binding content preserve absence versus JSON null and are interpreted under the source's exact kind. The open carrier schemas are not complete document-conformance checks. Handling malformed carriers is implementation policy; it does not make those carriers conformant.",
     "schemas": {
         "SupportedKind": {
             "type": "object",
@@ -33,7 +33,7 @@
                 },
                 "supported": {
                     "type": "boolean",
-                    "description": "True warrants that this implementation knows how to read sources of this exact kind, and their bindings, for its job and never presents a case it cannot handle as handled: it refuses before work or, where the operation defines disclosure, omits and discloses the case. False means every call on this kind is refused before work."
+                    "description": "True reports that this implementation knows how to interpret this exact kind for its job; it does not promise that every case succeeds. False reports no support for that job."
                 }
             },
             "required": [
@@ -63,14 +63,14 @@
             "properties": {
                 "openbindingsVersion": {
                     "type": "string",
-                    "description": "Target specification version. If supplied it MUST name the supported 0.2 line; another line is refused. Omission still targets the 0.2 line."
+                    "description": "Target specification version in the supported 0.2 line. Omission also targets that line."
                 },
                 "sources": {
                     "type": "array",
                     "items": {
                         "$ref": "#/schemas/SynthesizeInterfaceSource"
                     },
-                    "description": "Binding sources to synthesize from. Omission and an empty array both request a source-free skeleton. Every input is preserved as an unchanged emitted source; every emitted source corresponds to an input. Distinct supplied names remain distinct keys. Equal values may share a key where names permit; coverage still accounts for each input index. A repeated explicit name attached to unequal source values is refused before work."
+                    "description": "Sources to synthesize from. Omission or an empty array requests a source-free document skeleton. Composition capability and generated naming are implementation choices. A supplied source name names that source when emitted; an emitted source preserves its supplied value."
                 },
                 "name": {
                     "type": "string",
@@ -94,12 +94,12 @@
         },
         "SynthesisCoverageEntry": {
             "type": "object",
-            "description": "Disposition of one source interaction unit, declared dependency, or separately tracked projection observed during synthesis. An interaction unit is an addressable target or independently selectable alternative whose omission would remove an upstream-permitted invocation path; a dependency is a source unit the synthesizer emitted as a consumption point in the interface's `dependencies` map rather than as a binding, so its omission would remove a declared consumption point rather than an invocation path; a projection records schema or semantic fidelity of a represented path. Every dependency the emitted interface declares in its `dependencies` map has exactly one represented or lossy dependency-scope entry, and a represented dependency entry carries no operation, binding, source key, or reason code. A represented or lossy dependency entry MUST name its emitted dependencyKey; correspondence is a bijection with the emitted dependencies map. Unit identities compare exact sourceIndex, scope and sourceRef. Projection identity additionally includes sourceKey, operationKey and bindingKey when present; repeated or conflicting identities are rejected even for non-exhaustive reports.",
+            "description": "Disposition of a source target, alternative, dependency or projection considered by this synthesis. sourceIndex identifies its input source; sourceRef identifies the source-local unit and scope explains what is being described. Represented or lossy binding paths name their emitted source, operation and binding. A dependency disposition describes a consumption point rather than a binding path. The interface does not prescribe an internal identity tuple, duplicate-row policy or one-to-one mapping between source units and emitted dependencies.",
             "properties": {
                 "sourceIndex": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "Zero-based index of the input source containing the interaction unit. It also indexes coverage.sourceKeys, which preserves the input-to-emitted-source mapping after the request is gone."
+                    "description": "Zero-based index of the input source containing this unit. When coverage.sourceKeys is present, the same index identifies its emitted source key."
                 },
                 "sourceKey": {
                     "type": "string",
@@ -168,7 +168,7 @@
                 },
                 "dependencyKey": {
                     "type": "string",
-                    "description": "Key of the emitted dependency. Required for represented/lossy dependency entries; forbidden on other entries. Each emitted dependency has exactly one such entry."
+                    "description": "Optional emitted dependency key for a represented or lossy dependency disposition. When supplied, it identifies the corresponding entry in the returned interface dependencies map."
                 }
             },
             "required": [
@@ -189,8 +189,7 @@
                                 "alternative",
                                 "projection"
                             ]
-                        },
-                        "dependencyKey": false
+                        }
                     },
                     "required": [
                         "sourceKey",
@@ -209,8 +208,7 @@
                                 "alternative",
                                 "projection"
                             ]
-                        },
-                        "dependencyKey": false
+                        }
                     },
                     "required": [
                         "sourceKey",
@@ -231,8 +229,7 @@
                                 "alternative",
                                 "projection"
                             ]
-                        },
-                        "dependencyKey": false
+                        }
                     },
                     "required": [
                         "reasonCode",
@@ -254,8 +251,7 @@
                                 "alternative",
                                 "projection"
                             ]
-                        },
-                        "dependencyKey": false
+                        }
                     },
                     "required": [
                         "reasonCode",
@@ -274,16 +270,8 @@
                         },
                         "sourceKey": false,
                         "operationKey": false,
-                        "bindingKey": false,
-                        "dependencyKey": {
-                            "type": "string",
-                            "description": "Key of the emitted dependency. Required for represented/lossy dependency entries; forbidden on other entries. Each emitted dependency has exactly one such entry."
-                        },
-                        "reasonCode": false
-                    },
-                    "required": [
-                        "dependencyKey"
-                    ]
+                        "bindingKey": false
+                    }
                 },
                 {
                     "properties": {
@@ -295,8 +283,7 @@
                         },
                         "sourceKey": false,
                         "operationKey": false,
-                        "bindingKey": false,
-                        "dependencyKey": false
+                        "bindingKey": false
                     },
                     "required": [
                         "reasonCode",
@@ -312,39 +299,17 @@
                         "status": {
                             "enum": [
                                 "invalid",
+                                "lossy",
                                 "implementation-unsupported"
                             ]
                         },
                         "sourceKey": false,
                         "operationKey": false,
-                        "bindingKey": false,
-                        "dependencyKey": false
+                        "bindingKey": false
                     },
                     "required": [
                         "reasonCode",
                         "message"
-                    ]
-                },
-                {
-                    "properties": {
-                        "scope": {
-                            "const": "dependency"
-                        },
-                        "status": {
-                            "const": "lossy"
-                        },
-                        "sourceKey": false,
-                        "operationKey": false,
-                        "bindingKey": false,
-                        "dependencyKey": {
-                            "type": "string",
-                            "description": "Key of the emitted dependency. Required for represented/lossy dependency entries; forbidden on other entries. Each emitted dependency has exactly one such entry."
-                        }
-                    },
-                    "required": [
-                        "reasonCode",
-                        "message",
-                        "dependencyKey"
                     ]
                 }
             ]
@@ -359,7 +324,7 @@
                         "type": "string",
                         "minLength": 1
                     },
-                    "description": "One emitted source key per supplied input, in original request order. Length MUST equal the input sources length (zero when omitted). Each key MUST resolve to the unchanged corresponding input source; a supplied name MUST be used. Repeated keys are allowed for equal inputs where names permit. An unnamed input may map to any equal preserved emitted source; its binding paths may use another equal emitted source. Every entry sourceIndex indexes this array, including non-emitted and dependency entries."
+                    "description": "Optional attribution map: one emitted source key per input source, in request order. When present, each key identifies the preserved corresponding source in the returned interface. Equal inputs may name the same emitted source. Omission makes no durable input-to-source mapping claim; sourceIndex still indexes the request."
                 },
                 "entries": {
                     "type": "array",
@@ -373,14 +338,13 @@
                 },
                 "fullyRepresented": {
                     "type": "boolean",
-                    "description": "Derived as exhaustive AND every entry status is represented or invalid. Excluded, lossy and implementation-unsupported entries in any scope make it false. Invalid units are not upstream-valid units."
+                    "description": "True means the inventory is exhaustive and every upstream-valid unit described by it is represented without exclusion, loss or an implementation gap. Invalid source units do not count as upstream-valid. The flag describes the report; no internal derivation algorithm is prescribed."
                 },
                 "limitation": {
                     "$ref": "#/schemas/CoverageLimitation"
                 }
             },
             "required": [
-                "sourceKeys",
                 "entries",
                 "exhaustive",
                 "fullyRepresented"
@@ -448,7 +412,7 @@
         },
         "Source": {
             "type": "object",
-            "description": "A source as an OpenBindings 0.2 document carries it: an exact kind and optional content read under that kind. Absent content and present JSON null are distinct. Only core source fields and x- extensions may appear; the carried-values rule requires refusal of other members before work.",
+            "description": "A source as an OpenBindings 0.2 document carries it: an exact kind and optional content read under that kind. Absent content and present JSON null are distinct. Only core source fields and x- extensions may appear; the open carrier schema does not fully check that boundary. Handling malformed carriers is implementation policy.",
             "properties": {
                 "kind": {
                     "type": "string",
@@ -470,7 +434,7 @@
         },
         "Binding": {
             "type": "object",
-            "description": "A binding as an OpenBindings 0.2 document carries it, or would carry it, by value. It is interpreted under the accompanying source's kind. Absent content and present JSON null are distinct. Only core binding fields and x- extensions may appear; the carried-values rule requires refusal of other members before work.",
+            "description": "A binding as an OpenBindings 0.2 document carries it, or would carry it, by value. It is interpreted under the accompanying source's kind. Absent content and present JSON null are distinct. Only core binding fields and x- extensions may appear; the open carrier schema does not fully check that boundary. Handling malformed carriers is implementation policy.",
             "properties": {
                 "operation": {
                     "type": "string",
@@ -507,7 +471,7 @@
     },
     "operations": {
         "openbindings.interface-synthesizer.listSupportedKinds": {
-            "description": "Return an advisory list of kinds supported for this interface's job, for display, documentation and pickers. Every listed kind MUST receive supported: true from this interface's checkKindSupport. Absence carries no information and MUST NOT be treated as a negative support decision. This operation is idempotent: repeating it with the same input in context that does not change its intended effects produces no additional intended operation-level effects after the first application. This does not promise identical results or authorize retries.",
+            "description": "Return an advisory list of kinds supported for this interface's job. Listed kinds have supported: true in checkKindSupport; absence from the list makes no support claim. This is a capability query, not performance of the job.",
             "output": {
                 "type": "array",
                 "items": {
@@ -516,7 +480,7 @@
             }
         },
         "openbindings.interface-synthesizer.checkKindSupport": {
-            "description": "Authoritatively determine support for exact kinds for this interface's job. This is the only operation on which a consumer may base a support decision. Return one verdict per unique input kind in first-occurrence order. True warrants that the implementation knows how to read the kind for this job, whether its meaning is written, private or defined only in code. True does not promise every case is within reach; an unhandled case is never presented as handled. False means every call on the kind is refused before work. For a kind answered false, both synthesis operations refuse before work. For a kind answered true, strict synthesis refuses an unhandled admitted case; synthesis with coverage may disclose it as implementation-unsupported. A wholly unreadable source MUST be refused. When only part of its inventory can be established, synthesis with coverage MAY return a sound partial interface with exhaustive: false and limitation evidence; every established admitted unit the implementation cannot represent is disclosed as implementation-unsupported. Strict synthesis MUST refuse such partial work. The result is deterministic for a given implementation version and configuration. Kinds compare by exact equality: no normalization, case folding, prefix matching, inferred version order or dereferencing. An internal pattern may compress the supported set but MUST NOT extend it. Future optional verdict fields may annotate a verdict but never qualify supported. This operation is idempotent: repeating it with the same input in context that does not change its intended effects produces no additional intended operation-level effects after the first application. This does not promise identical results or authorize retries. The check MUST have no side effects; it neither acquires nor modifies source artifacts or performs the interface job.",
+            "description": "Report support for this interface's job for the requested exact kind strings, with one verdict per distinct requested kind in first-occurrence order. supported: true means the implementation knows how to interpret that kind for this job, not that every artifact or case succeeds. supported: false reports no support for that job. Additional fields do not qualify the Boolean. The operation reports capability without performing the requested inspection, synthesis or invocation. Kind equality is the core's exact string equality. Capability detection and representation are implementation choices.",
             "input": {
                 "type": "object",
                 "properties": {
@@ -541,7 +505,7 @@
             }
         },
         "openbindings.interface-synthesizer.synthesizeInterface": {
-            "description": "Synthesize a creation-time-sound OpenBindings interface, optionally from binding source artifacts. Every emitted binding resolves to a supported target and admits a faithful invocation path. For every accepted source input, represent every callable target admitted by its source's kind; an implementation may refuse an unsupported artifact as a whole but MUST refuse instead of silently returning a partial interface when one admitted target cannot be represented faithfully. This operation is idempotent: repeating it with the same input in context that does not change its intended effects produces no additional intended operation-level effects after the first application. This does not promise identical results or authorize retries. Every emitted source is exactly the corresponding supplied source, including extensions and content presence. When name is supplied, use it as the source key. Refuse a supplied openbindingsVersion outside the 0.2 line. The carried-values rule applies. After a caller substitutes source content, the resulting document and the validity of affected bindings are the caller's claim. If the complete admitted inventory cannot be established, strict synthesis MUST refuse instead of returning a partial interface. Strict success requires exhaustive coverage and no implementation-unsupported disposition in any scope, including dependencies, alternatives and projections. Sound lossy representation and invalid or kind-excluded units do not independently prohibit strict success. Strict eligibility is distinct from fullyRepresented. Every emitted operation MUST be referenced by at least one emitted binding or dependency. Dependency-only operations are permitted. This structural requirement is necessary but does not prove kind-specific soundness; it does not require a binding-to-coverage bijection.",
+            "description": "Return an OpenBindings interface representing all callable targets admitted by the kinds of the accepted input sources. A successful strict result describes complete synthesis, not a partial result disguised by a warning. Sound lossy schema projection need not prevent complete callable coverage. With no sources, return a source-free document skeleton. Emitted bindings describe faithful paths under their source kinds, and supplied source values are preserved where emitted, including extensions and content presence. A supplied name is the emitted source key. Requested openbindingsVersion selects the 0.2 line. Metadata overrides retain their input meanings. Editing a returned source or binding afterward creates a new author claim. Synthesis does not intentionally change the sources or perform their operations. The operation does not require generating an internal coverage report, using a particular checker, or assigning every additional operation declaration a binding or dependency. Naming, composition, duplicate handling and failure recovery are implementation choices.",
             "input": {
                 "$ref": "#/schemas/SynthesizeInterfaceInput"
             },
@@ -550,7 +514,7 @@
             }
         },
         "openbindings.interface-synthesizer.synthesizeInterfaceWithCoverage": {
-            "description": "Synthesize a creation-time-sound OpenBindings interface and return durable dispositions plus an explicit exhaustiveness claim for the source interaction units considered by the same call. The result distinguishes kind-defined exclusions, invalid source units, lossy projections, and implementation gaps. Coverage is evidence that consumers may verify independently, not proof. This operation is idempotent: repeating it with the same input in context that does not change its intended effects produces no additional intended operation-level effects after the first application. This does not promise identical results or authorize retries. Every emitted source is exactly the corresponding supplied source, including extensions and content presence. When name is supplied, use it as the source key. Refuse a supplied openbindingsVersion outside the 0.2 line. The carried-values rule applies. After a caller substitutes source content, the resulting document and the validity of affected bindings are the caller's claim. A wholly unreadable source MUST be refused. When only part of its inventory can be established, synthesis with coverage MAY return a sound partial interface with exhaustive: false and limitation evidence; every established admitted unit the implementation cannot represent is disclosed as implementation-unsupported. Strict synthesis MUST refuse such partial work. Every emitted operation MUST be referenced by at least one emitted binding or dependency. Dependency-only operations are permitted. This structural requirement is necessary but does not prove kind-specific soundness; it does not require a binding-to-coverage bijection.",
+            "description": "Return an OpenBindings interface and coverage evidence for the source units considered in the same synthesis. The report distinguishes represented, excluded, invalid, lossy and implementation-unsupported units. exhaustive describes inventory completeness; a non-exhaustive report includes limitation evidence. A partial result makes its gaps explicit without claiming complete synthesis, and disclosure does not make an unsound binding faithful. Coverage is an author claim that consumers may assess independently. Emitted bindings describe faithful paths under their source kinds, and supplied source values are preserved where emitted, including extensions and content presence. A supplied name is the emitted source key. Requested openbindingsVersion selects the 0.2 line. Metadata overrides retain their input meanings. Editing a returned source or binding afterward creates a new author claim. Synthesis does not intentionally change the sources or perform their operations. Optional attribution fields aid persistence and handoff. Report construction, duplicate handling, validation strategy and failure recovery remain implementation choices.",
             "input": {
                 "$ref": "#/schemas/SynthesizeInterfaceInput"
             },

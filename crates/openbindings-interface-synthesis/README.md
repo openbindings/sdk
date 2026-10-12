@@ -1,5 +1,19 @@
 # Interface synthesis
 
+## SDK policy and interface scope
+
+The publication describes synthesis results. This SDK additionally checks unique
+coverage identities, one evidence entry per emitted dependency, preservation of
+every input source, and a binding or dependency for every generated operation.
+It derives strict eligibility and source attribution through one checked result.
+Those are reference-SDK policies, not obligations of every interface adopter.
+
+`sourceKeys` and `dependencyKey` are optional in the shared output shape. This
+SDK always emits the source map and requires dependency keys for represented or
+lossy dependency entries. A remote report without them can match the interface
+without being a checked native `Synthesis`. The policy corpus is maintained here;
+the separate interface examples intentionally allow other implementations.
+
 Optional, provisional Rust API for Interface Synthesizer 0.2. Implement
 `InterfaceSynthesizer`; consume it through `Synthesizer`. Providers can also inspect,
 but neither role requires the other. No public TypeScript role API is released.
@@ -36,7 +50,7 @@ async fn example() -> Result<(), SynthesisError> {
 }
 ```
 
-Both strict and coverage operations use one provider derivation. Strict synthesis
+In this SDK, both strict and coverage operations use one provider derivation. Strict synthesis
 requires exhaustive accounting with no implementation-unsupported unit. Genuine
 exclusions, invalid units and sound lossy framing may pass strict synthesis while
 full upstream representation is false. On `Incomplete`, `partial()`/`into_partial()`
@@ -79,12 +93,12 @@ These limits do not bound existing owners or process memory. Exact numeric token
 content presence and opaque values never travel through binary64. Source comparison
 ignores JSON formatting/member order but preserves numeric spelling and opaque data.
 
-Authority and executable cases are pinned in `tests/fixtures`. Package and narrow
+Interface snapshots and separate SDK policy cases are retained in `tests/fixtures`. Package and narrow
 Rust-provider TypeScript/Wasm qualification uses `tools/verify-interface-synthesis.py`.
 See the repository synthesis checkpoint for acceptance coverage and remaining limits.
 
 
-## Role mapping
+## Interface mapping
 
 | Interface Synthesizer 0.2 operation/field | Rust surface |
 | --- | --- |

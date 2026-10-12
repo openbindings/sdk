@@ -1,5 +1,15 @@
 # Source inspection
 
+## SDK policy and interface scope
+
+This crate adopts the inspection operation shapes and meanings. Its checked
+facade is deliberately stricter: it rejects malformed carriers and duplicate
+`source_ref` rows, including identical rows, and applies its documented bounds.
+Those are SDK policies, not requirements of the published interface. A provider
+using this facade supplies its checked shape; other implementations may normalize
+duplicates or choose different recovery. Interface compatibility does not certify
+that a result will pass every SDK policy check.
+
 An optional SDK companion for the OpenBindings **Source Inspector 0.1.0** role.
 A kind adapter can implement inspection without also implementing synthesis,
 invocation, HTTP discovery or a plugin registry. Core document semantics are unchanged.
@@ -66,7 +76,7 @@ and its README. Role, SDK package and OBI versions are independent.
 | `listSupportedKinds` | `Inspector::list_supported_kinds`; validates listed kinds against support. Omission has no negative implication. |
 | `inspectSource` | `Inspector::inspect`, or `inspect_with_control` for cancellation. Unsupported kinds and invalid carrier members are refused before the provider hook. |
 | Source carrier | Core `Source`; typed fields establish their types. Non-`x-` additional fields are refused, including shadowed typed fields. Core itself continues retaining unknown fields. |
-| Target identity | Nonempty `BindableTarget::source_ref`, unique by exact string equality within one inspection. Duplicate identifiers are refused, including identical rows. Stability and ordering are provider obligations. Cross-provider equality requires a kind-level rule. |
+| Target identity and SDK policy | `source_ref` identifies the source-local target. This SDK rejects duplicate references, including identical rows, and expects stable provider ordering; the interface does not impose either policy. Cross-provider equality requires a kind-level definition. |
 | Author-owned keys | `BindingFragment` omits `operation` and `source`. Facade, serialization and `bind` reject illegal extension keys. The caller assigns keys through `bind`. |
 | Completeness | `SourceInspection::complete` or `partial`; incomplete results require a nonempty limitation code/message. Complete empty results are valid. The role also permits evidence on complete results. |
 | Framing | Core `Operation`; rejects `idempotent` and shadowed typed members. Sound projection is the provider's claim; conformance belongs to final document assessment. |
@@ -145,8 +155,6 @@ lists, complete/partial/empty inventories, unreadable sources, author-key inject
 retained exact values, malformed framing, native `Send`, cancellation/drop, encoding
 budgets and local async Wasm delivery.
 
-The amended role explicitly requires unique `sourceRef` values within an inspection;
-uniqueness is a behavioral rule because ordinary JSON Schema cannot express
-uniqueness of one member across target objects. It neither makes identities global
-nor promises correspondence after source replacement. Cross-role identity and
-portable OpenAPI binding semantics require later adapter work.
+The shared role leaves duplicate handling to implementations. This SDK rejects
+duplicates through the checked facade and both serializers. That policy neither
+makes identifiers global nor proves the provider's inventory truthful.

@@ -1,5 +1,5 @@
 {
-  "format": "openbindings.interface-synthesis-coverage-cases@1",
+  "format": "openbindings.sdk-synthesis-policy-cases@1",
   "tests": [
     {
       "description": "complete represented evidence links input source, emitted source, binding, operation",

@@ -1,5 +1,10 @@
 # Interface synthesis checkpoint — 2026-10-11
 
+> Historical checkpoint. Interface authority and SDK-policy distinctions below
+> are superseded by [the interface-boundary repair](interface-boundary-repair.md).
+> Its tests remain implementation evidence; they do not impose the SDK's policies
+> on independent adopters.
+
 Implementation is on `codex/sdk-interface-synthesis`; the coordinated draft role
 is on `codex/interface-synthesis-contract` in `openbindings/interfaces`, revision
 `56aadc07aef362d1bbe1f42dd3081f4a750555f6`. This is a local, provisional Rust foundation
