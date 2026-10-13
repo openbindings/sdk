@@ -51,11 +51,12 @@ export function fixedDiagnosticCases(sdk) {
       required: "kind",
     },
     {
-      name: "complex failure keeps a generic schema explanation",
+      // CR-6: identify anyOf without inventing a repair for one of its branches.
+      name: "complex failure names its keyword without inventing a branch repair",
       text: '{"openbindings":"0.2.0","operations":{"x":{"input":null}}}',
       pointer: "/operations/x/input",
       token: "null",
-      fallback: true,
+      keyword: "anyOf",
     },
     {
       name: "corrected healthy document",
@@ -147,10 +148,10 @@ export function fixedDiagnosticCases(sdk) {
             finding.message.includes(JSON.stringify(fixture.required)),
             `${fixture.name}: required member explained`,
           );
-        if (fixture.fallback) {
+        if (fixture.keyword) {
           check(
-            /schema/i.test(finding.message),
-            `${fixture.name}: generic schema explanation`,
+            finding.message.includes(fixture.keyword),
+            `${fixture.name}: failing keyword explained`,
           );
           check(
             !/\b(?:boolean|object|array|string)\b/i.test(finding.message),

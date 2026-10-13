@@ -253,17 +253,22 @@ async fn complete_bad_body_and_version_priority_survive_with_metadata() {
         "}".repeat(260)
     );
     let (r, _) = get(200, deep.as_bytes(), 0).await;
-    let DiscoveryOutcome::Undetermined { assessment } = r.outcome else {
-        panic!("expected undetermined")
+    // CR-4: local schema checks establish conformance beyond depth 256.
+    let DiscoveryOutcome::Found { document } = r.outcome else {
+        panic!("expected found")
     };
-    assert_eq!(assessment.report().conclusion, Conformance::Undetermined);
+    assert_eq!(
+        document.parsed().assess().unwrap().report().conclusion,
+        Conformance::Conformant
+    );
     let (r, _) = get(
         200,
         br#"{"openbindings":"0.2.0","operations":{"run":{}},"x":"\ud800"}"#,
         0,
     )
     .await;
-    assert!(matches!(r.outcome, DiscoveryOutcome::Undetermined { .. }));
+    // CR-3: a lone surrogate does not hide the invalid extension name "x".
+    assert!(matches!(r.outcome, DiscoveryOutcome::NonConformant { .. }));
     assert!(r.body.is_some());
 }
 #[tokio::test(flavor = "current_thread")]
@@ -434,13 +439,14 @@ fn publication_refuses_every_unestablished_conformance_state() {
         ),
         Err(PublicationError::VersionRefused(_))
     ));
-    assert!(matches!(
+    // CR-5: publication accepts a conformant document with an opaque surrogate.
+    assert!(
         Publication::from_bytes(
             br#"{"openbindings":"0.2.0","operations":{},"x-value":"\ud800"}"#,
             PublicationOptions::default()
-        ),
-        Err(PublicationError::Undetermined(_))
-    ));
+        )
+        .is_ok()
+    );
 }
 
 // HD-1/HD-5: WHATWG alternate IP spellings are admitted and recorded canonically.

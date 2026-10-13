@@ -320,10 +320,6 @@ fn owned_traits_document_drop_and_global_refusals() {
             r#"{"openbindings":"0.2.0","sources":{"s":{},"s":{}}}"#,
             "duplicate-members",
         ),
-        (
-            r#"{"openbindings":"0.2.0","sources":{},"x":"\ud800"}"#,
-            "unpaired-string",
-        ),
         (r#"{"openbindings":1,"sources":{}}"#, "malformed-version"),
     ] {
         let error = ParsedDocument::parse(text).unwrap().sources().unwrap_err();

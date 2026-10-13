@@ -31,7 +31,12 @@ separate work. Local Wasm probes qualify the Rust role seams.
 
 The flat immutable JSON arena preserves numeric spellings, negative zero, duplicate
 object members and escaped UTF-16 code units. Parse does not establish document
-conformance. Default admission is 64 MiB, 10,000 levels of JSON container nesting and 1,000,000 nodes.
+conformance. Default parsing admission is 64 MiB, 10,000 levels of JSON container
+nesting and 1,000,000 nodes. Whole-document `assess_document` uses the default byte
+and node limits with no nesting cap and checks admitted schemas locally at any
+depth. `assess_document_with_limits` accepts caller-selected byte, node and depth
+limits. Admission precedes version selection: an admission refusal leaves every
+rule inconclusive, even if a fragment appears to declare another specification line.
 Limits are observable errors, not silently truncated values. Structural/source
 locations use JSON Pointer, zero-based UTF-8 byte offsets and one-based lines/byte
 columns. Duplicate names remain available to document rules and diagnostics.
@@ -40,9 +45,8 @@ Rust authoring retains opaque values as `JsonValue`. TypeScript exact text/bytes
 are the escape route for numbers JavaScript cannot represent. Checked ordinary
 conversion rejects unsupported values and reports inexact conversion; it cannot
 recover rounding that happened before the call. Escaped lone surrogates are carried
-exactly, while the default evaluator refuses instance interpretation requiring
-Unicode scalar strings. Unknown members are preserved even if conformance rejects
-them. Missing, null and empty remain distinct.
+exactly through whole-document assessment. Unknown members are preserved even if
+conformance rejects them. Missing, null and empty remain distinct.
 
 ## Evaluation
 
@@ -65,17 +69,26 @@ case/percent-encoding equivalence is not added. Trusted fixed assessment is sepa
 
 Default limits: 2,000,000 evaluation steps per verdict/diagnostic pass; evaluation
 depth 1,024; 2,000,000 regex steps; 256 selected problems; compiler JSON depth 512;
-pattern size 1 MiB; pattern nesting 256. Schema traversal admits depth 256, 100,000
-reached nodes and 64 MiB of projection text. Deep const/enum literals and annotations
-use exact flat values and do not inherit recursive compiler depth. Expensive
-numeric divisibility has a 4,096 normalized coefficient-digit and 20,000 absolute
-normalized-power admission bound. Carriage, type checks and comparisons are not
-blanket refused because of that arithmetic limit. The pinned Go 4,096-token /
-exponent ±10,000 arithmetic floor is qualified separately.
+pattern size 1 MiB; pattern nesting 256. Value-contract preparation traversal admits
+schema depth 256, 100,000 reached nodes and 64 MiB of projection text. Deep const/enum
+literals and annotations use exact flat values and do not inherit recursive compiler
+depth. Expensive numeric divisibility has a 4,096 normalized coefficient-digit and
+20,000 absolute normalized-power admission bound. Carriage, type checks and
+comparisons are not blanket refused because of that arithmetic limit. The pinned
+Go 4,096-token / exponent ±10,000 arithmetic floor is qualified separately.
 
-Selected Unicode-property regex matching, external old/custom dialects and
-lone-surrogate interpretation are declared unsupported cases. Invalid patterns
-and some in-place recursion or dominating branches can
+Selected Unicode-property regex matching and external old/custom dialects are
+declared unsupported cases. During preparation, opaque values and annotations do
+not trigger refusal for lone surrogates; reached schema strings requiring Unicode
+scalar interpretation still refuse. During value validation, unsupported-string
+refusal is scoped to each evaluation and occurs only when a reached keyword needs
+to interpret an unpaired string, such as patterns, lengths, const/enum string
+comparisons or member-name interpretation through `propertyNames`. Boolean and
+type-only schemas can decide without interpreting string contents: `true` accepts
+and `false` fails a lone-surrogate instance. An unsupported access during diagnostics
+preserves an established failure and marks diagnostics incomplete.
+
+Invalid patterns and some in-place recursion or dominating branches can
 cause conservative no-verdict; preparation failure does not prove semantic
 undefinedness. Exact-case declarations and the full suite distinguish these
 limits from wrong verdicts. The implementation does not promise a complete
