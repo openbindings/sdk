@@ -56,7 +56,7 @@ fn version_priority_requires_one_complete_declaration() {
 fn deep_carriage_and_deeper_grammar_have_distinct_limits() {
     for (nested, want) in [
         (9999, Conformance::Conformant),
-        (10000, Conformance::Undetermined),
+        (10000, Conformance::Conformant),
     ] {
         let text = format!(
             r#"{{"openbindings":"0.2.0","operations":{{}},"x-deep":{}0{}}}"#,
@@ -73,7 +73,7 @@ fn deep_carriage_and_deeper_grammar_have_distinct_limits() {
 fn lone_surrogates_remain_exact_and_are_not_syntax_errors() {
     let text = r#"{"openbindings":"0.2.0","operations":{},"x-data":"\ud800"}"#;
     let checked = assessment(text);
-    assert_eq!(checked.report().conclusion, Conformance::Undetermined);
+    assert_eq!(checked.report().conclusion, Conformance::Conformant);
     assert_eq!(checked.report().evidence["OBI-01"], Evidence::Satisfied);
     assert_eq!(checked.parsed().unwrap().original_bytes(), text.as_bytes());
     let duplicate = assessment(r#"{"openbindings":"0.2.0","operations":{},"\ud800":1,"\ud800":2}"#);
@@ -99,7 +99,7 @@ fn meta_checks_find_local_errors_before_a_depth_limit() {
     }
     let text = format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#);
     let r = assessment(&text);
-    assert_eq!(r.report().evidence["OBI-10"], Evidence::Inconclusive);
+    assert_eq!(r.report().evidence["OBI-10"], Evidence::Violated);
     let text = text.replacen("\"input\":{", "\"input\":{\"type\":7,", 1);
     let r = assessment(&text);
     assert_eq!(r.report().evidence["OBI-10"], Evidence::Violated);

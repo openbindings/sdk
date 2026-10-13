@@ -24,6 +24,99 @@ pub fn member_at(value: crate::JsonRef<'_>, index: usize) -> Option<crate::JsonM
     })
 }
 
+// Fixed schemas only test ASCII patterns, ASCII constants and nonempty strings.
+// Escape the marker itself and encode unpaired units, retaining every UTF-16 unit.
+// This presentation is injective; it is not a Unicode replacement operation.
+const STRING_MARKER: char = '\u{e000}';
+#[derive(Clone, Copy, Default)]
+struct StringAccess {
+    fixed: bool,
+    unsupported: bool,
+}
+thread_local! {
+    static STRING_ACCESS: std::cell::Cell<StringAccess> = const {
+        std::cell::Cell::new(StringAccess { fixed: false, unsupported: false })
+    };
+}
+struct StringScope(StringAccess);
+impl Drop for StringScope {
+    fn drop(&mut self) {
+        STRING_ACCESS.set(self.0);
+    }
+}
+/// Run one runtime evaluation, recording only strings actually interpreted by it.
+/// Nested calls restore their caller's state, including on unwinding.
+pub fn string_scope<T>(evaluate: impl FnOnce() -> T) -> Result<T, UnsupportedString> {
+    let _restore = StringScope(STRING_ACCESS.replace(StringAccess::default()));
+    let result = evaluate();
+    if STRING_ACCESS.get().unsupported {
+        Err(UnsupportedString)
+    } else {
+        Ok(result)
+    }
+}
+#[derive(Debug)]
+pub struct UnsupportedString;
+/// Use the lossless presentation only for the trusted fixed-schema constraints.
+pub fn fixed_strings<T>(evaluate: impl FnOnce() -> T) -> T {
+    let _restore = StringScope(STRING_ACCESS.replace(StringAccess {
+        fixed: true,
+        unsupported: false,
+    }));
+    evaluate()
+}
+fn interpreted_unpaired() {
+    STRING_ACCESS.update(|mut state| {
+        if !state.fixed {
+            state.unsupported = true;
+        }
+        state
+    });
+}
+fn present_string(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
+    if let Some(text) = arena.string(id) {
+        if !text.contains(STRING_MARKER) {
+            return Some(Cow::Borrowed(text));
+        }
+        return Some(Cow::Owned(
+            text.replace(STRING_MARKER, &STRING_MARKER.to_string().repeat(2)),
+        ));
+    }
+    let units = arena.units(id)?;
+    let mut text = String::new();
+    for unit in char::decode_utf16(units) {
+        match unit {
+            Ok(c) => {
+                text.push(c);
+                if c == STRING_MARKER {
+                    text.push(c);
+                }
+            }
+            Err(unit) => {
+                use std::fmt::Write;
+                let _ = write!(text, "{STRING_MARKER}{:04x};", unit.unpaired_surrogate());
+            }
+        }
+    }
+    Some(Cow::Owned(text))
+}
+fn read_string(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
+    if STRING_ACCESS.get().fixed {
+        return present_string(arena, id);
+    }
+    if let Some(text) = arena.string(id) {
+        return Some(Cow::Borrowed(text));
+    }
+    if matches!(arena.nodes[id].kind, Kind::String { .. }) {
+        interpreted_unpaired();
+    }
+    present_string(arena, id)
+}
+/// The same fixed-schema spelling for locating errors back in the exact arena.
+pub fn fixed_string(value: crate::JsonRef<'_>) -> Option<Cow<'_, str>> {
+    present_string(value.owner, value.id)
+}
+
 pub struct FlatJson;
 #[derive(Clone, Copy)]
 pub enum View<'a> {
@@ -83,10 +176,9 @@ fn cold_value(bytes: &[u8], _: u32) -> Value {
             Kind::Bool(b) => Value::Bool(*b),
             Kind::Number => Value::Number(arena.raw(id).parse().expect("admitted number")),
             Kind::String { .. } => Value::String(
-                arena
-                    .string(id)
-                    .expect("unsupported strings are declined before evaluation")
-                    .to_owned(),
+                present_string(&arena, id)
+                    .expect("string node")
+                    .into_owned(),
             ),
             Kind::Array(items) => Value::Array(
                 items
@@ -103,7 +195,9 @@ fn cold_value(bytes: &[u8], _: u32) -> Value {
                     .iter()
                     .map(|m| {
                         (
-                            arena.string(m.key).expect("admitted name").to_owned(),
+                            present_string(&arena, m.key)
+                                .expect("member name")
+                                .into_owned(),
                             values[m.value]
                                 .take()
                                 .expect("child precedes parent consumption"),
@@ -141,7 +235,7 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
     fn as_string(&self) -> Option<Cow<'a, str>> {
         match self {
             Self::Text(s) => Some(Cow::Borrowed(s)),
-            Self::Stored(a, id) => a.string(*id).map(Cow::Borrowed),
+            Self::Stored(a, id) => read_string(a, *id),
         }
     }
     fn as_number(&self) -> Option<Number<'a>> {
@@ -276,17 +370,46 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
 }
 pub struct ObjectView<'a>(&'a Arena, &'a [Member]);
 pub struct Members<'a>(&'a Arena, std::slice::Iter<'a, Member>);
+// Iterating values need not interpret their member names. Mark unsupported
+// access only when the engine requests the scalar name (matching or locating it).
+pub struct MemberName<'a> {
+    text: Cow<'a, str>,
+    unpaired: bool,
+}
+impl AsRef<str> for MemberName<'_> {
+    fn as_ref(&self) -> &str {
+        if self.unpaired {
+            interpreted_unpaired();
+        }
+        &self.text
+    }
+}
+impl<'a> From<MemberName<'a>> for Cow<'a, str> {
+    fn from(name: MemberName<'a>) -> Self {
+        if name.unpaired {
+            interpreted_unpaired();
+        }
+        name.text
+    }
+}
 impl<'a> Iterator for Members<'a> {
-    type Item = (&'a str, View<'a>);
+    type Item = (MemberName<'a>, View<'a>);
     fn next(&mut self) -> Option<Self::Item> {
         if !jsonschema::ob_work::charge(1) {
             return None;
         }
         self.1.next().map(|m| {
             (
-                self.0
-                    .string(m.key)
-                    .expect("unpaired member interpretation is declined by caller"),
+                MemberName {
+                    text: if STRING_ACCESS.get().fixed {
+                        present_string(self.0, m.key).expect("member name is a string")
+                    } else {
+                        self.0.string(m.key).map(Cow::Borrowed).unwrap_or_else(|| {
+                            present_string(self.0, m.key).expect("member name is a string")
+                        })
+                    },
+                    unpaired: self.0.string(m.key).is_none(),
+                },
                 View::Stored(self.0, m.value),
             )
         })
@@ -294,7 +417,7 @@ impl<'a> Iterator for Members<'a> {
 }
 impl<'a> Object<'a, FlatJson> for ObjectView<'a> {
     type Node = View<'a>;
-    type MemberName = &'a str;
+    type MemberName = MemberName<'a>;
     type MembersIter = Members<'a>;
     fn len(&self) -> usize {
         self.1.len()
@@ -354,7 +477,11 @@ impl<'a> Array<'a, FlatJson> for ArrayView<'a> {
                 Kind::Null => hasher.hash_one((0u8, 0u8)),
                 Kind::Bool(b) => hasher.hash_one((1u8, b)),
                 Kind::Number => hasher.hash_one((2u8, Decimal::parse(self.0.raw(id)))),
-                Kind::String { .. } => hasher.hash_one((3u8, self.0.string(id))),
+                Kind::String {
+                    unpaired: Some(units),
+                    ..
+                } => hasher.hash_one((3u8, 1u8, units)),
+                Kind::String { .. } => hasher.hash_one((3u8, 0u8, self.0.string(id))),
                 Kind::Array(items) => hasher.hash_one((
                     4u8,
                     items.iter().map(|&i| hashes[i - first]).collect::<Vec<_>>(),
@@ -554,17 +681,69 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
             if items.len() != other.len() {
                 return false;
             }
-            for (k, v) in items.members() {
-                let Some(r) = other.get(&k.to_owned()) else {
+            // Exact object equality does not round-trip names through the scalar
+            // lookup API. In particular, an encoded surrogate cannot alias a
+            // genuine scalar member name containing the presentation marker.
+            for member in items.1 {
+                if !jsonschema::ob_work::charge(1) {
+                    return false;
+                }
+                let matched = if let Some(key) = items.0.string(member.key) {
+                    other.get(&key.to_owned())
+                } else {
+                    interpreted_unpaired();
+                    let key = items.0.units(member.key).unwrap();
+                    let mut matched = None;
+                    for candidate in other.1 {
+                        if !jsonschema::ob_work::charge(1) {
+                            return false;
+                        }
+                        if other.0.units(candidate.key).as_deref() == Some(&key) {
+                            matched = Some(View::Stored(other.0, candidate.value));
+                            break;
+                        }
+                    }
+                    matched
+                };
+                let Some(other) = matched else {
                     return false;
                 };
-                stack.push((v, r));
+                stack.push((View::Stored(items.0, member.value), other));
             }
         } else if let Some(n) = left.as_number() {
             if Decimal::parse(n.0) != Decimal::parse(right.as_number().unwrap().0) {
                 return false;
             }
-        } else if left.as_string() != right.as_string() || left.as_boolean() != right.as_boolean() {
+        } else if left.json_type() == JsonType::String {
+            fn scalar(value: View<'_>) -> Option<&str> {
+                match value {
+                    View::Stored(arena, id) => arena.string(id),
+                    View::Text(text) => Some(text),
+                }
+            }
+            fn unpaired(value: View<'_>) -> Option<&[u16]> {
+                match value {
+                    View::Stored(arena, id) => match &arena.nodes[id].kind {
+                        Kind::String { unpaired, .. } => unpaired.as_deref(),
+                        _ => None,
+                    },
+                    View::Text(_) => None,
+                }
+            }
+            match (scalar(left), scalar(right)) {
+                (Some(a), Some(b)) => {
+                    if a != b {
+                        return false;
+                    }
+                }
+                _ => {
+                    interpreted_unpaired();
+                    if unpaired(left) != unpaired(right) {
+                        return false;
+                    }
+                }
+            }
+        } else if left.as_boolean() != right.as_boolean() {
             return false;
         }
     }

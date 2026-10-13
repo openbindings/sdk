@@ -2,7 +2,7 @@
 use crate::{JsonRef, JsonValue};
 use jsonschema::{Draft, Retrieve, Validator};
 use openbindings_internal_json::{
-    backend::{FlatJson, pointer_size, view},
+    backend::{self, FlatJson, location_pointer_size, view},
     numeric,
 };
 use serde_json::Value;
@@ -77,6 +77,30 @@ fn diagnostic_message(kind: &jsonschema::error::ValidationErrorKind) -> Cow<'sta
             };
             format!("object is missing required field {quoted}")
         }
+        Kind::AnyOf { .. } => "value violates the anyOf constraint".into(),
+        Kind::OneOfNotValid { .. } | Kind::OneOfMultipleValid { .. } => {
+            "value violates the oneOf constraint".into()
+        }
+        Kind::Pattern { .. } => "string violates the pattern constraint".into(),
+        Kind::MinItems { .. } => "array violates the minItems constraint".into(),
+        Kind::MaxItems { .. } => "array violates the maxItems constraint".into(),
+        Kind::MinLength { .. } => "string violates the minLength constraint".into(),
+        Kind::MaxLength { .. } => "string violates the maxLength constraint".into(),
+        Kind::UniqueItems => "array violates the uniqueItems constraint".into(),
+        Kind::Enum { .. } => "value violates the enum constraint".into(),
+        Kind::Minimum { .. } => "number violates the minimum constraint".into(),
+        Kind::Maximum { .. } => "number violates the maximum constraint".into(),
+        Kind::ExclusiveMinimum { .. } => "number violates the exclusiveMinimum constraint".into(),
+        Kind::ExclusiveMaximum { .. } => "number violates the exclusiveMaximum constraint".into(),
+        Kind::Custom { keyword, .. }
+            if matches!(
+                keyword.as_str(),
+                "minimum" | "maximum" | "exclusiveMinimum" | "exclusiveMaximum" | "multipleOf"
+            ) =>
+        {
+            format!("number violates the {keyword} constraint")
+        }
+        Kind::PropertyNames { error } => return diagnostic_message(error.kind()),
         _ => return GENERIC_MESSAGE.into(),
     };
     if message.len() > MAX_MESSAGE_BYTES {
@@ -105,51 +129,51 @@ fn document() -> &'static Compiled {
         compile(&schema, BTreeMap::new())
     })
 }
+fn localize(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            if map.get("$dynamicRef").and_then(Value::as_str) == Some("#meta") {
+                map.remove("$dynamicRef");
+                map.insert("type".into(), serde_json::json!(["object", "boolean"]));
+            }
+            for (key, value) in map {
+                if key == "$id" {
+                    if let Some(id) = value.as_str() {
+                        *value = Value::String(id.replace(
+                            "https://json-schema.org/draft/2020-12/",
+                            "https://openbindings.invalid/internal-meta/",
+                        ));
+                    }
+                } else {
+                    localize(value);
+                }
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                localize(value);
+            }
+        }
+        _ => {}
+    }
+}
+const META_FILES: [&str; 8] = [
+    include_str!("../schemas/draft2020-12/schema.json"),
+    include_str!("../schemas/draft2020-12/meta/core.json"),
+    include_str!("../schemas/draft2020-12/meta/applicator.json"),
+    include_str!("../schemas/draft2020-12/meta/unevaluated.json"),
+    include_str!("../schemas/draft2020-12/meta/validation.json"),
+    include_str!("../schemas/draft2020-12/meta/meta-data.json"),
+    include_str!("../schemas/draft2020-12/meta/format-annotation.json"),
+    include_str!("../schemas/draft2020-12/meta/content.json"),
+];
 fn meta() -> &'static Compiled {
     META.get_or_init(|| {
         // Each direct subschema is checked separately by the normative-position walk.
         // Substituting only recursive meta edges with the object/boolean type check
         // preserves all local keyword constraints and avoids repeated ancestor work.
-        fn localize(value: &mut Value) {
-            match value {
-                Value::Object(map) => {
-                    if map.get("$dynamicRef").and_then(Value::as_str) == Some("#meta") {
-                        map.remove("$dynamicRef");
-                        map.insert("type".into(), serde_json::json!(["object", "boolean"]));
-                    }
-                    for (key, value) in map {
-                        if key == "$id" {
-                            if let Some(id) = value.as_str() {
-                                *value = Value::String(id.replace(
-                                    "https://json-schema.org/draft/2020-12/",
-                                    "https://openbindings.invalid/internal-meta/",
-                                ));
-                            }
-                        } else {
-                            localize(value);
-                        }
-                    }
-                }
-                Value::Array(values) => {
-                    for value in values {
-                        localize(value);
-                    }
-                }
-                _ => {}
-            }
-        }
-        let files = [
-            include_str!("../schemas/draft2020-12/schema.json"),
-            include_str!("../schemas/draft2020-12/meta/core.json"),
-            include_str!("../schemas/draft2020-12/meta/applicator.json"),
-            include_str!("../schemas/draft2020-12/meta/unevaluated.json"),
-            include_str!("../schemas/draft2020-12/meta/validation.json"),
-            include_str!("../schemas/draft2020-12/meta/meta-data.json"),
-            include_str!("../schemas/draft2020-12/meta/format-annotation.json"),
-            include_str!("../schemas/draft2020-12/meta/content.json"),
-        ];
         let mut resources = BTreeMap::new();
-        for text in files {
+        for text in META_FILES {
             let mut schema: Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
             localize(&mut schema);
             let id = schema["$id"]
@@ -222,7 +246,7 @@ impl<'a> ProblemCollector<'a> {
                 self.truncated = true;
                 return true;
             }
-            let Some(size) = pointer_size(at, self.pointer_bytes) else {
+            let Some(size) = location_pointer_size(at, self.pointer_bytes) else {
                 self.truncated = true;
                 self.expansion_exhausted = true;
                 return true;
@@ -245,6 +269,26 @@ impl<'a> ProblemCollector<'a> {
     }
 }
 
+fn fixed_at<'a>(mut value: JsonRef<'a>, path: &str) -> Option<JsonRef<'a>> {
+    if !path.contains('\u{e000}') {
+        return value.at(path);
+    }
+    if path.is_empty() {
+        return Some(value);
+    }
+    for token in path.strip_prefix('/')?.split('/') {
+        let token = token.replace("~1", "/").replace("~0", "~");
+        value = if let Some(mut members) = value.members() {
+            members
+                .find(|m| backend::fixed_string(m.name).as_deref() == Some(&token))?
+                .value
+        } else {
+            value.element(token.parse().ok()?)?
+        };
+    }
+    Some(value)
+}
+
 pub(crate) fn check(
     value: &JsonValue,
     is_meta: bool,
@@ -261,71 +305,110 @@ pub(crate) fn check_with_retained<'a>(
     let validator = (if is_meta { meta() } else { document() })
         .as_ref()
         .map_err(Clone::clone)?;
-    jsonschema::ob_work::bounded(2_000_000, 1024, || {
-        jsonschema::ob_ecma::top_level(2_000_000, || {
-            let mut collector = ProblemCollector::new(max_problems);
-            'errors: for error in validator.iter_errors(view(value)) {
-                collector.violated = true;
-                // Once a distinct expanded pointer was omitted, the expansion
-                // allowance stays closed; ordinary errors remain eligible.
-                if !is_meta
-                    && collector.expansion_exhausted
-                    && matches!(
-                        error.kind(),
-                        jsonschema::error::ValidationErrorKind::AdditionalProperties { .. }
-                    )
-                {
-                    continue;
-                }
-                let at = value
-                    .at(error.instance_path().as_str())
-                    .unwrap_or(value.view());
-                if !is_meta
-                    && let jsonschema::error::ValidationErrorKind::AdditionalProperties {
-                        unexpected,
-                    } = error.kind()
-                    && let Some(members) = at.members()
-                {
-                    let names: HashSet<_> = unexpected.iter().map(String::as_str).collect();
-                    let mut matched = false;
-                    for member in members {
-                        if member
-                            .name
-                            .as_str()
-                            .is_some_and(|name| names.contains(name))
-                        {
-                            matched = true;
-                            if !collector.offer(
-                                member.name,
-                                UNEXPECTED_MEMBER_MESSAGE.into(),
-                                true,
-                                &already_retained,
-                            ) {
-                                break 'errors;
-                            }
-                            if collector.expansion_exhausted {
-                                continue 'errors;
-                            }
-                        }
-                    }
-                    if matched {
+    backend::fixed_strings(|| {
+        jsonschema::ob_work::bounded(2_000_000, 1024, || {
+            jsonschema::ob_ecma::top_level(2_000_000, || {
+                let mut collector = ProblemCollector::new(max_problems);
+                let mut checked_names = HashSet::new();
+                'errors: for error in validator.iter_errors(view(value)) {
+                    collector.violated = true;
+                    // Once a distinct expanded pointer was omitted, the expansion
+                    // allowance stays closed; ordinary errors remain eligible.
+                    if !is_meta
+                        && collector.expansion_exhausted
+                        && matches!(
+                            error.kind(),
+                            jsonschema::error::ValidationErrorKind::AdditionalProperties { .. }
+                        )
+                    {
                         continue;
                     }
+                    let at = fixed_at(value.view(), error.instance_path().as_str())
+                        .unwrap_or(value.view());
+                    // Upstream PropertyNames errors give the container and schema path,
+                    // not a member token. Recheck the trusted name constraint once per
+                    // container/path, without reading an error's rejected-instance payload.
+                    if !is_meta
+                        && matches!(
+                            error.kind(),
+                            jsonschema::error::ValidationErrorKind::PropertyNames { .. }
+                        )
+                        && let Some((prefix, _)) =
+                            error.schema_path().as_str().split_once("/propertyNames")
+                    {
+                        let path = format!("{prefix}/propertyNames");
+                        if !checked_names.insert((occurrence(at), path.clone())) {
+                            continue;
+                        }
+                        let schema: Result<Value, _> = serde_json::from_str(include_str!(
+                            "../schemas/openbindings.schema.json"
+                        ))
+                        .map_err(|e| e.to_string());
+                        if let Ok(schema) = schema
+                            && let Some(constraint) = schema.pointer(&path)
+                            && let Ok(names) = compile(constraint, BTreeMap::new())
+                            && let Some(members) = at.members()
+                        {
+                            for member in members {
+                                if !names.is_valid(view(&member.name.to_owned()))
+                                    && !collector.offer(
+                                        member.name,
+                                        diagnostic_message(error.kind()),
+                                        true,
+                                        &already_retained,
+                                    )
+                                {
+                                    break 'errors;
+                                }
+                            }
+                            continue;
+                        }
+                    }
+                    if !is_meta
+                        && let jsonschema::error::ValidationErrorKind::AdditionalProperties {
+                            unexpected,
+                        } = error.kind()
+                        && let Some(members) = at.members()
+                    {
+                        let names: HashSet<_> = unexpected.iter().map(String::as_str).collect();
+                        let mut matched = false;
+                        for member in members {
+                            if backend::fixed_string(member.name)
+                                .is_some_and(|name| names.contains(name.as_ref()))
+                            {
+                                matched = true;
+                                if !collector.offer(
+                                    member.name,
+                                    UNEXPECTED_MEMBER_MESSAGE.into(),
+                                    true,
+                                    &already_retained,
+                                ) {
+                                    break 'errors;
+                                }
+                                if collector.expansion_exhausted {
+                                    continue 'errors;
+                                }
+                            }
+                        }
+                        if matched {
+                            continue;
+                        }
+                    }
+                    if !collector.offer(
+                        at,
+                        diagnostic_message(error.kind()),
+                        false,
+                        &already_retained,
+                    ) {
+                        break;
+                    }
                 }
-                if !collector.offer(
-                    at,
-                    diagnostic_message(error.kind()),
-                    false,
-                    &already_retained,
-                ) {
-                    break;
-                }
-            }
-            collector.finish()
+                collector.finish()
+            })
         })
+        .map_err(|e| format!("fixed validation work limit: {e:?}"))?
+        .map_err(|_| "fixed pattern work limit".into())
     })
-    .map_err(|e| format!("fixed validation work limit: {e:?}"))?
-    .map_err(|_| "fixed pattern work limit".into())
 }
 
 #[cfg(test)]
@@ -411,9 +494,6 @@ mod tests {
             "expected one of these JSON types: boolean, object"
         );
         for kind in [
-            Kind::AnyOf { context: vec![] },
-            Kind::OneOfNotValid { context: vec![] },
-            Kind::OneOfMultipleValid { context: vec![] },
             Kind::Required {
                 property: Value::String("x".repeat(MAX_REQUIRED_NAME_BYTES + 1)),
             },
@@ -480,17 +560,7 @@ mod tests {
 
     #[test]
     fn localized_meta_matches_unmodified_meta_on_keyword_shapes() {
-        let files = [
-            include_str!("../schemas/draft2020-12/schema.json"),
-            include_str!("../schemas/draft2020-12/meta/core.json"),
-            include_str!("../schemas/draft2020-12/meta/applicator.json"),
-            include_str!("../schemas/draft2020-12/meta/unevaluated.json"),
-            include_str!("../schemas/draft2020-12/meta/validation.json"),
-            include_str!("../schemas/draft2020-12/meta/meta-data.json"),
-            include_str!("../schemas/draft2020-12/meta/format-annotation.json"),
-            include_str!("../schemas/draft2020-12/meta/content.json"),
-        ];
-        let resources: BTreeMap<_, _> = files
+        let resources: BTreeMap<_, _> = META_FILES
             .iter()
             .map(|text| {
                 let v: Value = serde_json::from_str(text).unwrap();
@@ -580,3 +650,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/support/meta_equivalence.rs"]
+mod equivalence;

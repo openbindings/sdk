@@ -250,7 +250,7 @@ impl PreparedSchema for Compiled {
         ResourceCompleteness::Complete
     }
     fn validate(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
-        if let Err(detail) = admit_instance(value, control) {
+        if let Err(detail) = control.check() {
             return ValueOutcome::NoVerdict { detail };
         }
         let valid = verdict_pass(&self.limits, || {
@@ -262,7 +262,11 @@ impl PreparedSchema for Compiled {
         }) {
             Err(detail) => ValueOutcome::NoVerdict { detail },
             Ok(true) => ValueOutcome::Satisfies,
-            Ok(false) => self.diagnostics(value, control, false),
+            Ok(false) => backend::string_scope(|| self.diagnostics(value, control, false))
+                .unwrap_or(ValueOutcome::Fails {
+                    problems: Vec::new(),
+                    problems_complete: false,
+                }),
         }
     }
 }
@@ -468,7 +472,7 @@ impl PreparedSchema for PartialCompiled {
         )
     }
     fn validate(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
-        if let Err(detail) = admit_instance(value, control) {
+        if let Err(detail) = control.check() {
             return ValueOutcome::NoVerdict { detail };
         }
         // One outer work AND regex allowance covers both Boolean evaluations.
@@ -482,7 +486,14 @@ impl PreparedSchema for PartialCompiled {
         });
         match result {
             Err(detail) => ValueOutcome::NoVerdict { detail },
-            Ok(Some(false)) => self.upper.diagnostics(value, control, true),
+            Ok(Some(false)) => {
+                backend::string_scope(|| self.upper.diagnostics(value, control, true)).unwrap_or(
+                    ValueOutcome::Fails {
+                        problems: Vec::new(),
+                        problems_complete: false,
+                    },
+                )
+            }
             Ok(Some(true)) => ValueOutcome::Satisfies,
             Ok(None) => ValueOutcome::NoVerdict {
                 detail: self.unavailable.clone().unwrap_or_else(|| {
@@ -510,24 +521,23 @@ fn bounded_decision(
     control.check()?;
     Ok(lower.then_some(true))
 }
-fn admit_instance(value: &JsonValue, control: &WorkControl) -> Result<(), NoVerdict> {
-    control.check()?;
-    if backend::has_unpaired(value) {
-        return Err(no_verdict(
-            NoVerdictReason::UnsupportedCapability,
-            "lone-surrogate-instance",
-            "instance interpretation requires Unicode scalar strings",
-        ));
-    }
-    Ok(())
-}
 fn verdict_pass<T>(
     limits: &Limits,
     evaluate: impl FnOnce() -> Result<T, NoVerdict>,
 ) -> Result<T, NoVerdict> {
-    match jsonschema::ob_work::bounded(limits.evaluation_steps, limits.evaluation_depth, || {
-        jsonschema::ob_ecma::top_level(limits.regex_steps, evaluate)
-    }) {
+    let evaluated = backend::string_scope(|| {
+        jsonschema::ob_work::bounded(limits.evaluation_steps, limits.evaluation_depth, || {
+            jsonschema::ob_ecma::top_level(limits.regex_steps, evaluate)
+        })
+    })
+    .map_err(|_| {
+        no_verdict(
+            NoVerdictReason::UnsupportedCapability,
+            "lone-surrogate-instance",
+            "a reached keyword requires Unicode scalar string interpretation",
+        )
+    })?;
+    match evaluated {
         Ok(Ok(result)) => result,
         Ok(Err(jsonschema::ob_ecma::Exhausted::UnsupportedProperty)) => Err(no_verdict(
             NoVerdictReason::UnsupportedCapability,

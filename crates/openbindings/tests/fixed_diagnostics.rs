@@ -72,10 +72,7 @@ fn complex_failure_stays_generic_while_explicit_type_union_is_explained() {
     let findings = &assessment.report().findings;
     let normative = findings.iter().find(|f| f.rule == "OBI-02").unwrap();
     assert_eq!(normative.code, "schema-mismatch");
-    assert_eq!(
-        normative.message,
-        "value violates the fixed normative schema"
-    );
+    assert_eq!(normative.message, "value violates the anyOf constraint");
     assert_eq!(
         normative.location.as_ref().unwrap().pointer.as_deref(),
         Some("/operations/lookup/input")
@@ -232,11 +229,8 @@ fn expansion_saturation_preserves_all_rule_evidence_and_truthful_truncation() {
             );
             let assessment = assess_document(source).unwrap();
             assert_eq!(assessment.report().findings.len(), 4096);
-            assert!(assessment.report().findings_truncated);
-            assert_eq!(
-                assessment.report().evidence["OBI-10"],
-                Evidence::Inconclusive
-            );
+            assert!(!assessment.report().findings_truncated);
+            assert_eq!(assessment.report().evidence["OBI-10"], Evidence::Satisfied);
         }
     }
 }
@@ -298,12 +292,57 @@ fn ambiguous_json_refusals_are_not_replaced_by_field_guidance() {
     );
     let unpaired =
         assess_document(r#"{"openbindings":"0.2.0","operations":{},"\ud800":0}"#).unwrap();
-    assert_eq!(unpaired.report().evidence["OBI-02"], Evidence::Inconclusive);
+    assert_eq!(unpaired.report().evidence["OBI-02"], Evidence::Violated);
+    assert_eq!(unpaired.report().findings[0].message, UNEXPECTED);
+    assert_eq!(
+        unpaired.report().findings[0]
+            .location
+            .as_ref()
+            .unwrap()
+            .byte_offset,
+        40
+    );
+}
+
+#[test]
+fn keyword_messages_are_value_free_and_property_names_locate_original_tokens() {
+    // CR-6: use documented kind/path metadata, never rejected-instance payloads.
+    let text = r#"{"openbindings":"0.2.0","operations":{"-secret":{},".private":{},"\ud800":{}},"dependencies":{"d":{"operation":"-secret","kinds":[]}},"schemas":{"s":{"$anchor":"1private","minLength":-1}}}"#;
+    let assessment = assess_document(text).unwrap();
+    for (pointer, keyword) in [
+        ("/dependencies/d/kinds", "minItems"),
+        ("/schemas/s/$anchor", "pattern"),
+        ("/schemas/s/minLength", "minimum"),
+    ] {
+        assert!(
+            assessment
+                .report()
+                .findings
+                .iter()
+                .any(|f| f.code == "schema-mismatch"
+                    && f.location.as_ref().unwrap().pointer.as_deref() == Some(pointer)
+                    && f.message.contains(keyword)),
+            "{pointer}: {:?}",
+            assessment.report().findings
+        );
+    }
+    for token in [r#""-secret""#, r#"".private""#, r#""\ud800""#] {
+        assert!(
+            assessment
+                .report()
+                .findings
+                .iter()
+                .any(|f| f.rule == "OBI-02"
+                    && f.message.contains("pattern")
+                    && f.location.as_ref().unwrap().byte_offset == text.find(token).unwrap()),
+            "{token}"
+        );
+    }
     assert!(
-        unpaired
+        assessment
             .report()
             .findings
             .iter()
-            .all(|f| f.message != UNEXPECTED)
+            .all(|f| !f.message.contains("secret") && !f.message.contains("private"))
     );
 }
