@@ -1,0 +1,12 @@
+{
+  "allSixProvenanceHashesMatch": true,
+  "runtimeAndFrozenPolicyAndPriorRunsUnchanged": true,
+  "logCredentialSentinelScan": {
+    "files": 30,
+    "matches": 0
+  },
+  "additionalTimingsRun": false,
+  "finalQualificationRun": false,
+  "additionalLocalBinaryCopy": "/Users/matt/Code/ob-pj/openbindings/sdk/target/openapi-auth-performance-investigation/20261013/candidate",
+  "additionalLocalBinaryCopySha256": "711571feff841e4816d3e90ecafddad23ce19272a6c111f42a94453c9171fae5"
+}

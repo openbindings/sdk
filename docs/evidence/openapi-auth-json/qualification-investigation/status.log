@@ -1,0 +1,8 @@
+ M examples/openapi-json-path-consumer/examples/auth_measure.rs
+ M tools/measure-openapi-auth-json.py
+?? docs/evidence/openapi-auth-json/astra-investigation-instrument.md
+?? docs/evidence/openapi-auth-json/claude-investigation-design.md
+?? docs/evidence/openapi-auth-json/claude-investigation-input.txt
+?? docs/evidence/openapi-auth-json/claude-investigation-instrument.md
+?? docs/evidence/openapi-auth-json/performance-investigation-plan.md
+?? tools/investigate-openapi-auth-performance.py

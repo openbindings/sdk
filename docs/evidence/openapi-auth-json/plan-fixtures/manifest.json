@@ -1,0 +1,18 @@
+{
+  "status": "fresh design seeds; runtime-unexecuted; Gate A must add full acceptance variants and independently authored manual OBI before product edits",
+  "origin": "Constructed directly from upstream source semantics and this plan’s stated consumer needs; no adapter generator or binding draft",
+  "fixtures": [
+    {
+      "path": "fixtures/service-3.0.4.json",
+      "sha256": "c13717ff4c4a3ae90273e2c8f37f00cc145a3eb412ce46aef17aa884f4b1615c"
+    },
+    {
+      "path": "fixtures/service-3.1.2.json",
+      "sha256": "46e5d94afdd10afaf7b7c33026f2c577ab7807247fd9a3fe8e7a56a03513067d"
+    },
+    {
+      "path": "fixtures/wire-oracle.json",
+      "sha256": "a60e1ec2b022a44436bcec9c5fe215d2eb22a326ac5d0783f29239a2b9a92d69"
+    }
+  ]
+}

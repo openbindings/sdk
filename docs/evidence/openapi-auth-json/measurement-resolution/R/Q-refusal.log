@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/Users/matt/Code/ob-pj/openbindings/sdk/tools/qualify-openapi-auth-performance.py", line 3, in <module>
+    if __name__=='__main__':raise SystemExit(main('Q'))
+                                             ~~~~^^^^^
+  File "/Users/matt/Code/ob-pj/openbindings/sdk/tools/run_auth_resolution.py", line 291, in main
+    return phase_run(phase)
+  File "/Users/matt/Code/ob-pj/openbindings/sdk/tools/run_auth_resolution.py", line 176, in phase_run
+    a.require(r_summary['status']=='method-adequate-for-one-qualification','R inadequate: Q refused')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/matt/Code/ob-pj/openbindings/sdk/tools/auth_resolution.py", line 26, in require
+    raise ValueError(why)
+ValueError: R inadequate: Q refused

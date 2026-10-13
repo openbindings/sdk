@@ -1,0 +1,11 @@
+{
+  "authority": "NEED + frozen private experiment choices V01\u2013V03; not generated from adapter or client results",
+  "harnessSubstitution": "https://archive.example.invalid replaced by bound loopback origin in manual source text only",
+  "files": {
+    "crates/openbindings-openapi/tests/fixtures/v30/entry.json": "99528be2c50b0ef58eefe94eac9ede775d82cecf6f409da72b774cf12e8a9b5f",
+    "crates/openbindings-openapi/tests/fixtures/v30/exchanges.json": "0fc82c38ac71e436da0c05724d8e28b08b06b568d5140014e9d4599590029cdb",
+    "crates/openbindings-openapi/tests/fixtures/v30/manual.obi.json": "c73eefa19600b5525064867c75df8f922a3c594f08a2aab7d1ee09d93578da6c",
+    "crates/openbindings-openapi/tests/fixtures/v30/parameters.json": "46ecd4e67fca759ee161a020c7ae3aba877eddf02125583accb29ee7e02623f7",
+    "crates/openbindings-openapi/tests/fixtures/v30/routes.json": "01477ac09b5cf1ade709f23a12ccda4b18f16aa0a5f3bbc1b718353237516928"
+  }
+}

@@ -65,8 +65,22 @@ without inspection, synthesis, HTTP or a mandatory executor. Caller polling
 drives bounded I/O; source interpretation and external effects remain provider
 responsibilities. `operation::Invoker` adds explicit document-based selection and
 per-value validation through a caller-selected evaluator, returning that same
-lifecycle. A concrete OpenAPI kind adapter, context provisioning and remote
-transports remain separate work. The invocation companion's
+lifecycle. Context provisioning and remote role transports remain separate work.
+The invocation companion's
 [public guide](../crates/openbindings-invocation/README.md) describes both entry
 points; the [binding checkpoint](binding-invocation-checkpoint.md) retains the
 underlying lifecycle qualification history.
+
+`openbindings-openapi` composes the inspection, synthesis and binding-invocation
+roles with the independent dynamic OpenAPI client. Its provider shares prepared
+public source analysis; synthesis does not invoke inspection through a mandatory
+role dependency. The client interprets OpenAPI and prepares HTTP requests, while
+the adapter translates between role carriers and the client's types. Application
+code supplies source resources, per-attempt context and transport. The current
+experimental profile covers private OpenAPI 3.0/3.1 kinds and finite JSON operations,
+including supplied bearer and header API-key credentials. Credentials never enter
+the prepared-source cache. The generic operation invoker can use this same provider.
+No protocol dependency enters specification core, and no public TypeScript adapter
+API or published OpenAPI binding standard is implied. See the
+[adapter guide](../crates/openbindings-openapi/README.md) and
+[deferred performance qualification](evidence/openapi-auth-json/performance-follow-up.md).

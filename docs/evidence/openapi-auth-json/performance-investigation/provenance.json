@@ -1,0 +1,165 @@
+{
+  "format": "openbindings.auth-performance-investigation@1",
+  "host": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "measurement_sha256": "265c04b1c3c3f775cce492588181f324c05d4bc61fa956e590ba4e09c8b58677",
+  "runner_sha256": "2c6da3377deaf479c06eb989e43c96524098d815ae9233748a9c10899d5c9069",
+  "preregistration_sha256": "08962a1459de211a12999c7b78ab523ba89d652f7fab38ddcea217cffc3e1e4e",
+  "receipt_sha256": "ccd8d47b8d0e40a9ae7f941289c531e70b63d209c0aef5860a4a18fcdd5c0347",
+  "binary_sha256": "711571feff841e4816d3e90ecafddad23ce19272a6c111f42a94453c9171fae5",
+  "qualification_runner_sha256": "99b0341c5c0750b8ec9731ff0d21535fb6dde2420a6d4f40f80113f696f4aea6",
+  "settle_seconds": 10,
+  "processes": [
+    {
+      "process": 0,
+      "before": {
+        "time_ns": 1791897378925312000,
+        "load_average": [
+          5.19189453125,
+          4.90576171875,
+          4.591796875
+        ],
+        "cpu": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "performance_levels": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "thermal": {
+          "exit": 0,
+          "stdout": "Error:Failed to get thermal warning level with error code 0xe00002bc\nError: Failed to get performance warning level with error code 0xe00002bc\nError: No CPU power status with error code 0xe00002bc\n",
+          "stderr": ""
+        }
+      },
+      "after": {
+        "time_ns": 1791897436539586000,
+        "load_average": [
+          3.44287109375,
+          4.46044921875,
+          4.4443359375
+        ],
+        "cpu": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "performance_levels": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "thermal": {
+          "exit": 0,
+          "stdout": "Error:Failed to get thermal warning level with error code 0xe00002bc\nError: Failed to get performance warning level with error code 0xe00002bc\nError: No CPU power status with error code 0xe00002bc\n",
+          "stderr": ""
+        }
+      },
+      "exit": 0
+    },
+    {
+      "process": 1,
+      "before": {
+        "time_ns": 1791897436645093000,
+        "load_average": [
+          3.44287109375,
+          4.46044921875,
+          4.4443359375
+        ],
+        "cpu": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "performance_levels": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "thermal": {
+          "exit": 0,
+          "stdout": "Error:Failed to get thermal warning level with error code 0xe00002bc\nError: Failed to get performance warning level with error code 0xe00002bc\nError: No CPU power status with error code 0xe00002bc\n",
+          "stderr": ""
+        }
+      },
+      "after": {
+        "time_ns": 1791897493950646000,
+        "load_average": [
+          2.79443359375,
+          4.12109375,
+          4.31884765625
+        ],
+        "cpu": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "performance_levels": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "thermal": {
+          "exit": 0,
+          "stdout": "Error:Failed to get thermal warning level with error code 0xe00002bc\nError: Failed to get performance warning level with error code 0xe00002bc\nError: No CPU power status with error code 0xe00002bc\n",
+          "stderr": ""
+        }
+      },
+      "exit": 0
+    },
+    {
+      "process": 2,
+      "before": {
+        "time_ns": 1791897494058031000,
+        "load_average": [
+          2.79443359375,
+          4.12109375,
+          4.31884765625
+        ],
+        "cpu": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "performance_levels": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "thermal": {
+          "exit": 0,
+          "stdout": "Error:Failed to get thermal warning level with error code 0xe00002bc\nError: Failed to get performance warning level with error code 0xe00002bc\nError: No CPU power status with error code 0xe00002bc\n",
+          "stderr": ""
+        }
+      },
+      "after": {
+        "time_ns": 1791897551498072000,
+        "load_average": [
+          5.30419921875,
+          4.52685546875,
+          4.45166015625
+        ],
+        "cpu": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "performance_levels": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "thermal": {
+          "exit": 0,
+          "stdout": "Error:Failed to get thermal warning level with error code 0xe00002bc\nError: Failed to get performance warning level with error code 0xe00002bc\nError: No CPU power status with error code 0xe00002bc\n",
+          "stderr": ""
+        }
+      },
+      "exit": 0
+    }
+  ],
+  "status": "inconclusive-stop"
+}

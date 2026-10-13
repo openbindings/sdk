@@ -1,0 +1,479 @@
+{
+  "format": "openbindings.auth-json.diagnostics@1",
+  "rows": [
+    {
+      "cold": false,
+      "operations": 1,
+      "source_bytes": 473,
+      "stage": "inspection",
+      "status": "diagnostic",
+      "version": "3.0.4",
+      "process_medians_ns": [
+        353.9097890713477,
+        343.28691873038974,
+        344.66263183290823
+      ],
+      "median_ns": 344.66263183290823,
+      "process_spread": 0.03082106779161337
+    },
+    {
+      "cold": false,
+      "operations": 1,
+      "source_bytes": 473,
+      "stage": "synthesis-with-coverage",
+      "status": "diagnostic",
+      "version": "3.0.4",
+      "process_medians_ns": [
+        23433.5946579194,
+        23429.58594847775,
+        23336.910872608492
+      ],
+      "median_ns": 23429.58594847775,
+      "process_spread": 0.004126568242542419
+    },
+    {
+      "cold": true,
+      "operations": 1,
+      "source_bytes": 473,
+      "stage": "inspection",
+      "status": "diagnostic",
+      "version": "3.0.4",
+      "process_medians_ns": [
+        23632.40359168242,
+        23202.12668213457,
+        23434.883786316776
+      ],
+      "median_ns": 23434.883786316776,
+      "process_spread": 0.01836053097046216
+    },
+    {
+      "cold": true,
+      "operations": 1,
+      "source_bytes": 473,
+      "stage": "synthesis-with-coverage",
+      "status": "diagnostic",
+      "version": "3.0.4",
+      "process_medians_ns": [
+        48295.16505791506,
+        48437.519845111325,
+        47402.05308056872
+      ],
+      "median_ns": 48295.16505791506,
+      "process_spread": 0.021440381522682045
+    },
+    {
+      "cold": false,
+      "operations": 32,
+      "source_bytes": 3874,
+      "stage": "inspection",
+      "status": "diagnostic",
+      "version": "3.0.4",
+      "process_medians_ns": [
+        2271.411574978422,
+        2232.031024015713,
+        2231.230477465417
+      ],
+      "median_ns": 2232.031024015713,
+      "process_spread": 0.018002033610049793
+    },
+    {
+      "cold": false,
+      "operations": 32,
+      "source_bytes": 3874,
+      "stage": "synthesis-with-coverage",
+      "status": "diagnostic",
+      "version": "3.0.4",
+      "process_medians_ns": [
+        464009.64814814815,
+        465933.6388888889,
+        468162.38317757007
+      ],
+      "median_ns": 465933.6388888889,
+      "process_spread": 0.00891271778385639
+    },
+    {
+      "cold": true,
+      "operations": 32,
+      "source_bytes": 3874,
+      "stage": "inspection",
+      "status": "diagnostic",
+      "version": "3.0.4",
+      "process_medians_ns": [
+        496365.099009901,
+        493801.0588235294,
+        498738.0396039604
+      ],
+      "median_ns": 496365.099009901,
+      "process_spread": 0.00994626896669166
+    },
+    {
+      "cold": true,
+      "operations": 32,
+      "source_bytes": 3874,
+      "stage": "synthesis-with-coverage",
+      "status": "diagnostic",
+      "version": "3.0.4",
+      "process_medians_ns": [
+        957876.5660377359,
+        959481.9056603773,
+        960912.7358490566
+      ],
+      "median_ns": 959481.9056603773,
+      "process_spread": 0.003164384646973656
+    },
+    {
+      "cold": false,
+      "operations": 512,
+      "source_bytes": 57086,
+      "stage": "inspection",
+      "status": "diagnostic",
+      "version": "3.0.4",
+      "process_medians_ns": [
+        36057.28767123288,
+        35482.44680851064,
+        36358.61773255814
+      ],
+      "median_ns": 36057.28767123288,
+      "process_spread": 0.024299412979599123
+    },
+    {
+      "cold": false,
+      "operations": 512,
+      "source_bytes": 57086,
+      "stage": "synthesis-with-coverage",
+      "status": "diagnostic",
+      "version": "3.0.4",
+      "process_medians_ns": [
+        7666815.428571428,
+        7472398.857142857,
+        7488904.714285715
+      ],
+      "median_ns": 7488904.714285715,
+      "process_spread": 0.025960614915784008
+    },
+    {
+      "cold": true,
+      "operations": 512,
+      "source_bytes": 57086,
+      "stage": "inspection",
+      "status": "diagnostic",
+      "version": "3.0.4",
+      "process_medians_ns": [
+        8012488.142857143,
+        7900809.571428572,
+        7999976.285714285
+      ],
+      "median_ns": 7999976.285714285,
+      "process_spread": 0.013959862809593262
+    },
+    {
+      "cold": true,
+      "operations": 512,
+      "source_bytes": 57086,
+      "stage": "synthesis-with-coverage",
+      "status": "diagnostic",
+      "version": "3.0.4",
+      "process_medians_ns": [
+        15891104.25,
+        15396479.25,
+        15449291.5
+      ],
+      "median_ns": 15449291.5,
+      "process_spread": 0.032016031285318165
+    },
+    {
+      "context_bytes": 0,
+      "stage": "missing-credentials",
+      "status": "diagnostic",
+      "version": "3.0.4",
+      "process_medians_ns": [
+        12799.441003327362,
+        12647.919828022255,
+        12803.336917562725
+      ],
+      "median_ns": 12799.441003327362,
+      "process_spread": 0.012142490402515787
+    },
+    {
+      "context_bytes": 196,
+      "stage": "wrong-origin",
+      "status": "diagnostic",
+      "version": "3.0.4",
+      "process_medians_ns": [
+        4778.721521406728,
+        4653.7990506329115,
+        4757.576117982873
+      ],
+      "median_ns": 4757.576117982873,
+      "process_spread": 0.026257587409191385
+    },
+    {
+      "context_bytes": 0,
+      "stage": "security-selection",
+      "status": "diagnostic",
+      "version": "3.0.4",
+      "process_medians_ns": [
+        18346.32538517975,
+        18047.51605918441,
+        20751.555371215265
+      ],
+      "median_ns": 18346.32538517975,
+      "process_spread": 0.14738860536155052
+    },
+    {
+      "context_bytes": 105,
+      "stage": "anonymous-selection",
+      "status": "diagnostic",
+      "version": "3.0.4",
+      "process_medians_ns": [
+        8733.190709046456,
+        8560.548878616675,
+        8637.365348073934
+      ],
+      "median_ns": 8637.365348073934,
+      "process_spread": 0.01998778834431013
+    },
+    {
+      "cold": false,
+      "operations": 1,
+      "source_bytes": 473,
+      "stage": "inspection",
+      "status": "diagnostic",
+      "version": "3.1.2",
+      "process_medians_ns": [
+        354.53094333200977,
+        347.4534658281505,
+        351.5635094183079
+      ],
+      "median_ns": 351.5635094183079,
+      "process_spread": 0.020131433764469905
+    },
+    {
+      "cold": false,
+      "operations": 1,
+      "source_bytes": 473,
+      "stage": "synthesis-with-coverage",
+      "status": "diagnostic",
+      "version": "3.1.2",
+      "process_medians_ns": [
+        23729.245730550283,
+        23479.460093896712,
+        23949.73275862069
+      ],
+      "median_ns": 23729.245730550283,
+      "process_spread": 0.019818272778831827
+    },
+    {
+      "cold": true,
+      "operations": 1,
+      "source_bytes": 473,
+      "stage": "inspection",
+      "status": "diagnostic",
+      "version": "3.1.2",
+      "process_medians_ns": [
+        23488.78581493659,
+        23251.375174337518,
+        23715.366998577523
+      ],
+      "median_ns": 23488.78581493659,
+      "process_spread": 0.019753759427826686
+    },
+    {
+      "cold": true,
+      "operations": 1,
+      "source_bytes": 473,
+      "stage": "synthesis-with-coverage",
+      "status": "diagnostic",
+      "version": "3.1.2",
+      "process_medians_ns": [
+        48672.13910505836,
+        47278.63137996219,
+        48422.67666989352
+      ],
+      "median_ns": 48422.67666989352,
+      "process_spread": 0.028777998676032996
+    },
+    {
+      "cold": false,
+      "operations": 32,
+      "source_bytes": 3874,
+      "stage": "inspection",
+      "status": "diagnostic",
+      "version": "3.1.2",
+      "process_medians_ns": [
+        2220.138486812894,
+        2234.3324098485186,
+        2267.348342629121
+      ],
+      "median_ns": 2234.3324098485186,
+      "process_spread": 0.02112928927143284
+    },
+    {
+      "cold": false,
+      "operations": 32,
+      "source_bytes": 3874,
+      "stage": "synthesis-with-coverage",
+      "status": "diagnostic",
+      "version": "3.1.2",
+      "process_medians_ns": [
+        455373.4818181818,
+        459959.4770642202,
+        462751.1467889908
+      ],
+      "median_ns": 459959.4770642202,
+      "process_spread": 0.016039815111318887
+    },
+    {
+      "cold": true,
+      "operations": 32,
+      "source_bytes": 3874,
+      "stage": "inspection",
+      "status": "diagnostic",
+      "version": "3.1.2",
+      "process_medians_ns": [
+        486164.2427184466,
+        494599.67647058825,
+        489733.00970873784
+      ],
+      "median_ns": 489733.00970873784,
+      "process_spread": 0.017224556206980046
+    },
+    {
+      "cold": true,
+      "operations": 32,
+      "source_bytes": 3874,
+      "stage": "synthesis-with-coverage",
+      "status": "diagnostic",
+      "version": "3.1.2",
+      "process_medians_ns": [
+        940460.6481481482,
+        958684.7547169811,
+        954351.4150943396
+      ],
+      "median_ns": 954351.4150943396,
+      "process_spread": 0.019095802951192134
+    },
+    {
+      "cold": false,
+      "operations": 512,
+      "source_bytes": 57086,
+      "stage": "inspection",
+      "status": "diagnostic",
+      "version": "3.1.2",
+      "process_medians_ns": [
+        35455.439404677534,
+        36302.068214804065,
+        36089.707070707074
+      ],
+      "median_ns": 36089.707070707074,
+      "process_spread": 0.02345901030639603
+    },
+    {
+      "cold": false,
+      "operations": 512,
+      "source_bytes": 57086,
+      "stage": "synthesis-with-coverage",
+      "status": "diagnostic",
+      "version": "3.1.2",
+      "process_medians_ns": [
+        7510648.857142857,
+        7475452.428571428,
+        7635458.285714285
+      ],
+      "median_ns": 7510648.857142857,
+      "process_spread": 0.02130386604223772
+    },
+    {
+      "cold": true,
+      "operations": 512,
+      "source_bytes": 57086,
+      "stage": "inspection",
+      "status": "diagnostic",
+      "version": "3.1.2",
+      "process_medians_ns": [
+        8003011.857142857,
+        8344104.166666667,
+        8350779.714285715
+      ],
+      "median_ns": 8344104.166666667,
+      "process_spread": 0.041678273688400616
+    },
+    {
+      "cold": true,
+      "operations": 512,
+      "source_bytes": 57086,
+      "stage": "synthesis-with-coverage",
+      "status": "diagnostic",
+      "version": "3.1.2",
+      "process_medians_ns": [
+        15469843.75,
+        16158937.5,
+        16065885.25
+      ],
+      "median_ns": 16065885.25,
+      "process_spread": 0.042891738567596205
+    },
+    {
+      "context_bytes": 0,
+      "stage": "missing-credentials",
+      "status": "diagnostic",
+      "version": "3.1.2",
+      "process_medians_ns": [
+        12529.190679027812,
+        12655.245507466465,
+        12745.995921488657
+      ],
+      "median_ns": 12655.245507466465,
+      "process_spread": 0.017131650455372998
+    },
+    {
+      "context_bytes": 194,
+      "stage": "wrong-origin",
+      "status": "diagnostic",
+      "version": "3.1.2",
+      "process_medians_ns": [
+        4639.280571534608,
+        4698.768276639729,
+        4767.192582705692
+      ],
+      "median_ns": 4698.768276639729,
+      "process_spread": 0.027222455682057875
+    },
+    {
+      "context_bytes": 0,
+      "stage": "security-selection",
+      "status": "diagnostic",
+      "version": "3.1.2",
+      "process_medians_ns": [
+        17642.51922398589,
+        17729.779865295994,
+        17917.59226083841
+      ],
+      "median_ns": 17729.779865295994,
+      "process_spread": 0.015514746316221451
+    },
+    {
+      "context_bytes": 103,
+      "stage": "anonymous-selection",
+      "status": "diagnostic",
+      "version": "3.1.2",
+      "process_medians_ns": [
+        8390.690552106058,
+        8525.895140664961,
+        8606.583476764199
+      ],
+      "median_ns": 8525.895140664961,
+      "process_spread": 0.025322024385266238
+    }
+  ],
+  "notes": [
+    "Cold includes fresh provider and source preparation; warm retains public source analysis only.",
+    "No direct baseline claims equivalent synthesis coverage, so these source rows are diagnostic under the registered rule.",
+    "Negative-path rows include effect assertions and helper ownership/destruction; no network/heap/RSS claim."
+  ],
+  "host": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "receipt_sha256": "bf26867ee658e5930e4f678769a56b22096a68337d1221fd9e17ce10fc3b5da9",
+  "source_sha256": "5983a2709d7cdfb67ca0ab3697f798330cc34aa8ba992c3320095fe899d02305",
+  "binary_sha256": "2ebd2fac69695c5d3f4fad080110190cebd09090cd6e972c3dfaafdbc2508809"
+}

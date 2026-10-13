@@ -17,7 +17,16 @@ independent. Unsupported or malformed versions are explicit refusals.
 | Default 2020-12 evaluator, format annotations | Yes | Same semantic engine |
 | Discovery client/publication | Portable transport trait; optional native client | Fetch and standard Request/Response |
 | Source inspection extension role | Provisional provider trait, checked consumer, exact binding fragments | Local async Wasm qualification probe only; no public TS role API yet |
-| Invocation, synthesis, binding adapters, protocol clients | Outside scope | Outside scope |
+| Interface synthesis extension role | Provisional provider trait, checked document and coverage, strict recovery | Local Wasm qualification probe; no public TS role API yet |
+| Binding and operation invocation | Provisional provider/consumer APIs; bounded I/O, cancellation, selection and optional value contracts | Local Wasm qualification probes; no public TS role APIs yet |
+| OpenAPI kind adapter | Experimental inspection, synthesis and finite JSON invocation for private 3.0/3.1 kinds; supplied bearer/header API-key credentials | Local Node/Wasm qualification probe; no public TS adapter API yet |
+| Dynamic protocol engine | Independent OpenAPI client composed by the optional adapter; outside specification core | No protocol engine exposed through this SDK facade |
+
+The OpenAPI adapter's supported profile and refusals are described in its
+[package guide](crates/openbindings-openapi/README.md). Authenticated behavior passed
+functional qualification; the incremental-auth performance check is
+[unresolved and deferred](docs/evidence/openapi-auth-json/performance-follow-up.md).
+Node/Wasm probes do not establish production browser/Worker transport qualification.
 
 ## Exact input and diagnostics
 

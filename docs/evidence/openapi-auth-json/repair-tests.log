@@ -1,0 +1,27 @@
+warning: use of deprecated associated function `core::num::<impl usize>::max_value`: replaced by the `MAX` associated constant on this type
+   --> vendor/openbindings-internal-serde-json/src/lexical/math.rs:458:33
+    |
+458 |             .map_or_else(usize::max_value, |v| v - nlz)
+    |                                 ^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: `openbindings-internal-serde-json` (lib) generated 1 warning
+   Compiling openbindings-openapi v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk/crates/openbindings-openapi)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.03s
+     Running unittests src/lib.rs (target/debug/deps/openbindings_openapi-03b9150dc1c17ef3)
+
+running 3 tests
+test security::tests::exact_challenge_budget_and_one_over ... ok
+test security::tests::repeated_origins_stop_at_the_incremental_limit ... ok
+test cache_tests::one_source_cache_checks_content_base_and_fixed_options ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/auth.rs (target/debug/deps/auth-cb1e49132b666df8)
+
+running 1 test
+test authenticated_public_consumers_both_versions ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+

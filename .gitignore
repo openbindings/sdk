@@ -18,3 +18,5 @@
 /tools/conformance-observer/target/
 /examples/source-inspection-consumer/target/
 /examples/source-inspection-consumer/Cargo.lock
+/examples/openapi-inspection-consumer/target/
+/examples/openapi-inspection-consumer/Cargo.lock

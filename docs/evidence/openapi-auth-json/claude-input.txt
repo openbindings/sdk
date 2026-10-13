@@ -1,0 +1,2091 @@
+Matthew requests an independent Claude Opus 5.5 Extra review of the authenticated JSON operations adapter slice. Stay on Opus 5.5 Extra. The current SDK is /Users/matt/Code/ob-pj/openbindings/sdk, branch codex/sdk-openapi-auth-json; review working changes relative to abc96027691187ad11fe0394f1d1c9d73482e093. Do not edit product code, run broad commands, spawn agents, or read other review findings. Save your report only to /Users/matt/Code/ob-pj/openbindings/sdk/docs/evidence/openapi-auth-json/claude-review.md.
+
+STRICT AUTHORITY BOUNDARY: no old OpenAPI binding drafts or their derivative designs, decisions, fixture expectations, or reviews. Do not read CLAUDE.md, traverse other docs/design/spec directories, or follow links into excluded material. The attached current engineering plan is a policy/acceptance assignment, not a binding specification. Allowed sources: the files in this packet; current SDK crates/openbindings-openapi/src, generic invocation/source-inspection/interface-synthesis APIs as needed; adopted role JSONs in /Users/matt/Code/ob-pj/openbindings/interfaces from baseline.json; pinned client /Users/matt/Code/ob-pj/openbindings/openapi-client/rust/client/src at fe09522; official OAS 3.0.4/3.1.2 and RFC6750 only as applicable. Current new tests are examples, not source semantic authority. No existing kind draft is a comparator.
+
+Review consumer usability, security selection/credential scope, source interpretation/synthesis coverage, finite bounds and effects, and minimalist portability boundaries. Prefer concrete counterexamples, severity and narrow repairs. Distinguish verified static findings from evidence gaps. Qualification is still running: presently native fresh consumer suite passes both editions; final package, Node, CPU receipts are not available yet. Do not call the slice complete or treat later-mentioned counts as independently run evidence. Return <=1500 words with any material blockers and whether the design boundaries remain coherent. If a later follow-up provides a repair, verify it independently within the same allowed scope.
+
+
+
+FILE docs/evidence/openapi-auth-json/gate-a.md
+# Gate A contract freeze
+
+The existing named credential JSON context plus one kind-specific security point is selected. A Rust-only typed host credential/grant seam would duplicate the adopted role credential carrier and require another bridging design for local Wasm. The shared JSON path keeps source-only authoring and existing invokers unchanged. The application owns its context and must authorize grants independently of source/challenge assertions.
+
+Selection is a set of declared names: unlike an index it survives reordered alternatives. Duplicate equivalent alternatives coalesce; anonymous is the empty set. Missing destination precedes auth challenges, avoiding a server/security cross product. Unsupported alternatives exclude the whole operation initially. Source-only synthesis records nonsecret OR/AND prerequisites. Existing private labels and client pin remain unchanged. These are adapter policies, not future specification mandates.
+
+Admission: authenticated profiles and explicit anonymous choices within those profiles admit the complete encoded context up to Options.context_bytes (64KiB default), reject duplicate names in that admitted context, and bound traversal by those admitted bytes. Already-unsecured profiles ignore auth context, preserving existing behavior. Public metadata is charged to result_bytes. Client document/nodes/descriptor_work/reference_steps bound source and request work; headers bounds header count. Provider challenges use a checked incremental result_bytes serialization before SDK max_error_bytes admission. No whole-RSS or zeroization claim.
+
+Fresh manual OBI/source variants and six literal wire exchanges were authored before runtime edits. Cases.json fixes caller outcomes for every negative variation. Reference fixture selects entry-document implicit names, one upstream-permitted resolution policy; this is explicitly an implementation choice where Appendix F allows variation. No old binding draft or derived expectations were read.
+
+
+FILE docs/evidence/openapi-auth-json/plan.md
+# Authenticated JSON operations: bounded adapter slice
+
+Status: designed on 2026-10-13; implementation and runtime qualification have not
+started. Start from SDK `abc96027691187ad11fe0394f1d1c9d73482e093` on a new branch
+`codex/sdk-openapi-auth-json`. Keep the independent client pinned to
+`fe09522a9b99a6c6b4918e3de0467b5a638afa5e`. The previous slice remains closed.
+
+The deliverable is one optional OpenAPI provider that can inspect, synthesize,
+save/reload, and invoke a finite secured JSON operation through the existing
+binding and operation invokers. Applications supply credentials for each attempt.
+A developer should not need a separate authentication invoker or a new SDK role.
+
+This document sets engineering acceptance criteria for this implementation. It is
+not a binding specification or an expansion of the published role interfaces.
+The concrete context design below is a proposed private experiment; Gate A freezes
+it against independent consumer examples before product edits begin.
+
+## Authority and exclusions
+
+Use only the exact allowed inputs in [baseline.json](baseline.json): OpenBindings
+core, the adopted role definitions, the pinned current SDK/client, applicable
+upstream OpenAPI/HTTP rules, and the consumer needs in this plan. Implementation
+facts do not become semantic authority. In particular, do not treat the client's
+selection indexes, current errors, or internal resolution/cache APIs as requirements
+for a binding kind.
+
+**Do not read, quote, use as a comparator, or derive expected results from any old
+OpenAPI binding draft or its derivative plans, fixtures, semantic decisions or
+review conclusions.** Follow no links into those materials. Current fresh private
+experiment behavior is a compatibility baseline, not a normative binding draft.
+Reviewers receive this allowlist and fresh cases, not whole-repository research tasks.
+
+Applicable upstream rules are linked in the baseline. Security requirements can
+combine schemes and offer alternatives; operation declarations can replace global
+security, including anonymous access. These meanings come from the source version,
+not this adapter's preferred selection procedure.
+
+## Scope
+
+| In this slice | Outside this slice |
+| --- | --- |
+| Existing private 3.0 and 3.1 kinds; primary fixtures 3.0.4 and 3.1.2 | Another version family or full-version conformance claims |
+| HTTP bearer and API keys in declared headers | Basic, OAuth2/OIDC schemes, mTLS, API keys in query/cookies |
+| Already obtained, per-attempt credential strings | Login, issuance, refresh, verification of token claims/roles, a credential broker/store |
+| Required combinations and alternatives of supported schemes; anonymous alternatives and operation overrides | Dropping unsupported alternatives silently, choosing from credential availability, authentication negotiation/retry |
+| Existing GET/POST scalar path/query and finite JSON profile | New methods, parameter/media forms, streaming or schema translation |
+| Manual and synthesized documents, cold reload with supplied resources | Automatic resource acquisition or embedding a full resource graph |
+| Rust plus the existing exact-text local Node/Wasm seam | Published TypeScript adapter package, browser/Worker networking or CORS qualification |
+| Targeted auth costs, bounds, cleanup and unaffected-path regression checks | Multi-source cache redesign, general allocator/browser-memory qualification |
+
+Only empty scope/role arrays are admitted for these two mechanisms initially.
+Nonempty role arrays in 3.1 are an implementation limitation, not invalid OpenAPI;
+3.0's non-OAuth scope constraints are evaluated under its own upstream rules.
+`bearerFormat` remains descriptive; it is not permission to decode or validate JWTs.
+Unsupported mechanisms remain known unsupported targets with no generated callable
+operation. Initially an operation with any unsupported effective alternative is
+unsupported as a whole. That conservative policy avoids presenting a narrowed set
+as full support. Unrelated supported operations remain usable.
+
+## Responsibility boundaries
+
+- **Core and generic roles:** unchanged document model, framing, context forwarding,
+  challenge shape, lifecycle and terminal meanings. No OpenAPI-specific credential
+  lookup, token store or source acquisition enters these crates.
+- **Adapter:** supported-profile analysis; private selection/context mapping;
+  conversion of selected caller credentials to client inputs; honest synthesis
+  coverage and actionable challenges. No independent HTTP auth encoder.
+- **OpenAPI client:** effective source declarations, references and source-version
+  interpretation; request preparation, header application, collisions and final
+  request-origin checks using explicitly supplied credential scopes.
+- **Application/host:** credential acquisition, trust and release decisions, transport
+  policy/TLS, storage and logging. A source declaration or challenge never grants
+  authority to release a credential. Custom hosts remain trusted application code.
+
+The client already exposes `SecurityAlternative`, `SecurityRequirement`,
+`SecurityScheme`, `Input.credentials`, `Credential.origins`, and `Selection.security`.
+These are capabilities to reuse, not proof that every needed behavior is qualified.
+If a client defect blocks a required case, preserve a minimal reproducer and record
+an explicit client dependency. Do not copy client logic into the adapter or silently
+change the pin. Unrelated cases can continue; the slice cannot be called complete.
+
+## Proposed consumer contract
+
+The role already defines `context.credentials[name]` as a string for named
+`auth.bearer` and `auth.apiKey` requirements. Use that as the documented primary path.
+The operation input remains exactly the current parameters/body envelope.
+Credentials never become operation-input fields or authored source/binding content.
+
+The initial experiment adds one private configuration point per kind:
+`local.openapi-json-probe.r1.security` and
+`local.openapi30-json-probe.r1.security`. Its value contains:
+
+- `schemes`: the exact set of declared scheme names selecting one effective security
+  alternative, represented as a duplicate-free string array; order is immaterial.
+  `[]` selects an explicitly available anonymous alternative. It is optional when
+  there is only one distinct alternative. Identical duplicate alternatives may map
+  to the same semantic choice. A selector is not a client array index.
+- `origins`: a map from each selected scheme name to caller-approved origin URLs.
+  The client compares scheme, host and effective port canonically. Scope is checked
+  against the actual request destination, not the document's retrieval URI.
+  Never populate grants automatically from a source, challenge or selected server.
+
+See the candidate [context](examples/context.json),
+[missing-credential challenge](examples/missing-credential-challenge.json), and
+[alternative-selection challenge](examples/alternative-selection-challenge.json).
+All strings called credentials in these files are manufactured test sentinels.
+These examples are proposals, not claims about a currently implemented API.
+
+Use the existing role's convenience forms only as compatibility inputs:
+`bearerToken`, `apiKey`, and `apiKeys[name]`. A flat form can resolve only one
+unambiguous selected requirement of its family. Conflicting applicable named,
+legacy or flat values refuse; equal values may coalesce. No precedence rule may
+silently choose between different secrets. Do not add new convenience spellings.
+Unused credentials are not forwarded or used to select an alternative. Existing
+unsecured operations continue to omit authentication even if context contains keys.
+
+The private `origins` map is the proposed portable JSON seam for this adapter's
+release-scope policy, chosen so Rust and a future TypeScript API can share one
+context path. Gate A compares it with a typed host-owned grant seam using the same
+consumer needs, then records one choice. Do not implement both to avoid deciding.
+If a future binding specification adopts a configuration point, that point's
+observable meaning would need definition; adopting this grant mechanism at all
+is not presumed. No origin-policy algorithm is added to a generic interface.
+
+### Selection and challenge behavior
+
+There is no first-alternative, available-credential, or failure-driven selection.
+A single distinct alternative may be used without a selector. Multiple alternatives,
+including anonymous versus authenticated, require an explicit semantic selection.
+A valid selected combination applies all its requirements together. No fallback to
+another alternative is attempted on failure. Origins do not select security schemes.
+
+Server selection retains its current point and behavior. If destination choice is
+missing, challenge for it before asking the application to release credentials;
+then a fresh attempt can challenge for security choice, missing credentials or
+missing grants. Avoid a destination-by-security Cartesian-product challenge.
+For an authenticated branch, use the existing `auth.bearer`/`auth.apiKey` requirement
+families with source-declared names. Use `config.value` for private selector/grant
+values; RFC 6901 paths address within that point. Selection schemas describe sets
+without imposing array order. Grant requirements identify the selected origin in
+nonsecret explanatory metadata/examples, without treating that assertion as permission. An anonymous selection branch
+still has its nonempty selector requirement, satisfying the adopted role shape.
+
+Challenges describe the context still needed for a particular attempt. They never
+include supplied secret values, store credentials, spend approval, start a host,
+resume the same completed attempt or promise that other caller inputs are valid.
+Do not invent a global malformed-input/error precedence rule for the interfaces.
+The challenge target remains an untrusted scope assertion; include the relevant
+kind, operation, destination and public security requirements, without secret data.
+Exact encoding/digest strategy is an implementation choice, not a persistence contract.
+
+Well-formed absent context can produce `CONTEXT_REQUIRED`. Malformed credentials,
+conflicts, an invalid selector, an explicit grant for the wrong origin, unsupported
+profiles or exhausted admission budgets refuse with no dispatch. Do not ask for a
+broader grant when the caller has explicitly supplied a nonmatching one. Supplying
+corrected context means starting a deliberate new invocation. After host entry,
+401/403 use the existing kind-specific status failure; never turn them into a
+no-effect challenge or silently refresh/retry. Existing cancellation/drop semantics
+and the distinction between output and terminal success remain unchanged.
+
+No specific preflight implementation is required in this slice. The existing
+advisory default remains valid and must not be documented as auth readiness proof.
+
+## Inspection and synthesis
+
+Inspection remains source-only; it never needs credential material. A supported
+secured target receives the same sound mechanical operation framing as an
+unsecured target. Missing runtime credentials are not implementation-unsupported.
+
+Synthesis preserves the supplied source and the existing path/method binding
+locator, leaves credentials out of the OBI, and describes runtime prerequisites
+using existing coverage fields. A flat list must not misrepresent OR branches as
+one AND; use nonsecret structured coverage details when that distinction matters.
+That detail is explanatory output, not a second source of invocation authority.
+Do not add auth schema properties to the operation's ordinary input contract.
+Runtime prerequisites do not by themselves imply schema loss; preexisting schema
+projection loss continues to be reported independently.
+
+A cold reloaded document, independently supplied resources, a new provider and new
+per-attempt credentials must reproduce the manual consumer's wire exchanges.
+Generated operation keys must remain freely renameable without changing selection.
+No credential value or caller-supplied grant is stored in the prepared-source cache.
+A caller deliberately resupplying context on a later call is new caller input,
+not a cache-isolation violation. No cross-source authorization or cryptographic
+identity guarantee is inferred from a shared scheme name or an opaque target string.
+
+## Fixtures and execution sequence
+
+[Cases](cases.json) are required outcomes, currently all unexecuted.
+[Decisions](decisions.json) separate proposed choices from portable meanings.
+[Performance](performance.md) fixes measurement claims and engineering budgets.
+The [seed manifest](fixtures/manifest.json) describes fresh upstream documents and
+literal request expectations authored for this plan. None came from a binding draft.
+The seed oracle is independent of adapter output; it is not the entire required corpus.
+
+1. **Gate A — freeze the experiment.** Verify pins and clean branch setup. Run small
+   direct-client probes for effective security/selection, origin checks and relevant
+   references; those probes establish client capability, not expected authority.
+   Compare the two context/grant designs. Freeze one contract, the fresh manual OBI,
+   all required source variations, caller outcomes and literal HTTP oracle before
+   runtime edits. Hash the frozen files and record provenance. No success expectation
+   may be produced by serializing a candidate request or synthesized document.
+2. **Gate B — one complete bearer consumer.** On 3.1.2, implement inspect → manual
+   invocation → synthesis → save/reload → invocation. Exercise a missing-credential
+   challenge followed by a new authorized attempt, exact header/body values and
+   origin rejection. One provider and the existing public invokers throughout.
+3. **Gate C — close the support matrix.** Add header API keys, combinations,
+   alternatives, anonymous and inherited/overridden requirements, supplied references,
+   both editions and honest exclusions. Retain anonymous behavior and the dialect
+   fix. Finish secret-handling, bounds, cancellation and adversarial-context cases.
+4. **Gate D — qualify consumers and costs.** Run affected tests/Clippy, extracted
+   packages, core/minimal-consumer isolation, real loopback HTTP with manufactured
+   values, and local Node/Wasm consumers. Use programmable HTTPS destinations for
+   scheme/origin cases; loopback HTTP is a synthetic transport fixture and does not
+   establish secure production transport. Run registered measurements once, preserving
+   every failed or inconclusive result. Add explicit Node effect-count assertions
+   on error paths rather than repeating the previous probe's evidentiary gap.
+5. **Gate E — independent closeout.** Request two bounded GPT-6 Astra xhigh reviews
+   (source/portability semantics; consumer/effects/resource behavior) and a Claude
+   Opus 5.5 Extra review. Give them the allowlist, fresh contract/cases and code.
+   Keep their initial conclusions independent. Reconcile concrete findings, make at
+   most two focused repair passes per material finding, and have the affected repair
+   independently checked. Re-run only checks changed by the repair.
+
+Reviewers can run in parallel after the coherent implementation is ready; contract
+choice, manual-oracle freezing and dependent implementation gates stay sequential.
+Do not spawn separate implementers to invent competing public APIs. Execution of
+this plan is a subsequent action; this planning task dispatches no reviewers.
+
+## Bounds and exit criteria
+
+Add at most one necessary adapter context-byte option (proposed default 64 KiB);
+all auth traversal/copying and challenge construction must have explicit logical
+bounds. Reuse client `document_bytes`, `nodes`, `reference_steps`, `descriptor_work`,
+`headers`, SDK `max_error_bytes`, and adapter `result_bytes` where applicable.
+Record exactly which fields bound each cost before coding. Charge retained security
+metadata. If an existing bound does not cover a cost, add a small adapter-owned
+bound rather than claim an unrelated limit protects it. Context byte counts do not
+bound a caller's already-retained JSON arena or guarantee zeroization.
+
+Exit requires all of the following:
+
+- Every required AJ case passes for its declared editions and host scope. Every
+  negative case asserts effects/output/terminal outcomes, not merely any error.
+- Manual and synthesized/reloaded consumers match independent request and caller
+  oracles through binding and generic operation invocation. No hidden prerequisite
+  on a prior inspection, warm cache, credential store or generated operation name.
+- Credential values are absent from authored documents, coverage, challenges,
+  SDK-generated error/debug text, cache state and maintained logs. Successful remote
+  output is still exact application data, not a credential-redaction service; a
+  custom host or caller can explicitly inspect its own supplied/request values.
+- Only the chosen schemes' credentials reach the chosen destination. Missing,
+  malformed, conflicted or out-of-scope context gives zero host entries; multiple
+  input values, cancellation and post-dispatch failures retain existing guarantees.
+- Bounds pass exact-limit/one-over cases; same-source warm calls do not re-analyze
+  source because credentials changed; owner/host registrations return to baseline.
+- Extracted Rust and local Node/Wasm consumers pass. No auth model is pushed into
+  core or generic roles. No new public invocation facade, token store or broker.
+- Frozen performance gates pass with reported absolute costs, ratios, incremental
+  auth overhead and raw receipts. Inconclusive timing cannot be described as passing.
+- Independent review has no unresolved material correctness, credential-isolation,
+  boundary or API-coherence finding within this scope. Required reviewer absence
+  leaves a review-pending checkpoint rather than an invented concurrence.
+- The decision ledger classifies every consequential choice as upstream/adopted
+  meaning, candidate portable meaning, implementation policy, or unresolved evidence.
+  There is no obligation to write a binding spec; no old draft is rehabilitated.
+
+A remaining client/role blocker or a stable failed gate yields an explicit partial
+checkpoint with reproducer and remaining work after the bounded repairs. Do not
+weaken scope or rewrite an oracle to obtain green checks. Unrelated broad capabilities,
+cache optimization, URI-normalization coverage and production distribution remain
+follow-ups. A substantive scope change returns to design, not an unbounded loop.
+
+Save maintained consumer/tests, a concise execution report, exact tested-input
+hashes, raw qualification/measurement receipts and review reconciliations in the SDK
+when implementing. Commit on the task branch; this assignment does not authorize
+merge, publication, or changes to the website, role publications or binding specs.
+
+Planning check: `python3 authenticated-json/verify-plan.py` from the loop root.
+It checks plan consistency/pins only; it does not execute or qualify the adapter.
+
+
+FILE crates/openbindings-openapi/src/security.rs
+//! Private experiment policy. Source interpretation and HTTP encoding stay in the client.
+use crate::{Kind, Options, analysis::Profile, json};
+use dynamic_openapi_client::{Credential, CredentialValue, Input};
+use openbindings::{JsonRef, JsonValue, WorkControl};
+use openbindings_invocation::{ContextChallenge, InvocationError};
+use serde_json_compat::{Value, json as j};
+use std::collections::{BTreeMap, BTreeSet};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Family {
+    Bearer,
+    Key,
+}
+impl Family {
+    fn requirement(self) -> &'static str {
+        match self {
+            Self::Bearer => "auth.bearer",
+            Self::Key => "auth.apiKey",
+        }
+    }
+}
+pub(crate) type Alternative = BTreeMap<String, Family>;
+
+pub(crate) fn details(profile: &Profile) -> Value {
+    j!({"alternatives":profile.security.iter().map(|a|a.iter().map(|(n,f)|j!({"type":f.requirement(),"name":n})).collect::<Vec<_>>()).collect::<Vec<_>>()})
+}
+
+/// Only applicable context is admitted. Unsecured operations keep ignoring auth context.
+pub(crate) fn apply(
+    profile: &Profile,
+    kind: Kind,
+    context: Option<&JsonValue>,
+    destination: &str,
+    operation: (&str, &str),
+    options: &Options,
+    work: &WorkControl,
+    input: &mut Input,
+) -> Result<(), InvocationError> {
+    let fail = InvocationError::refused;
+    if !profile.security.iter().any(|a| !a.is_empty()) {
+        input.selection.security = (!profile.security.is_empty()).then_some(0);
+        return Ok(());
+    }
+    if let Some(c) = context {
+        if c.bytes().len() > options.context_bytes
+            || c.view().members().is_none()
+            || c.has_duplicate_names()
+        {
+            return Err(fail());
+        }
+    }
+    let root = context.map(JsonValue::view);
+    let configuration = member_object(root, "configuration")?;
+    let point = member_object(configuration, kind.security_point())?;
+    if let Some(p) = point {
+        crate::analysis::object(p, &["schemes", "origins"]).map_err(|_| fail())?;
+    }
+    let origin = dynamic_openapi_client::uri::origin(destination).map_err(|_| fail())?;
+    let choices: BTreeMap<Vec<&str>, usize> = profile
+        .security
+        .iter()
+        .enumerate()
+        .rev()
+        .map(|(i, a)| (a.keys().map(String::as_str).collect(), i))
+        .collect();
+    let selected = if let Some(s) = point.and_then(|p| p.get("schemes")) {
+        let mut names = BTreeSet::new();
+        for v in s.elements().ok_or_else(fail)? {
+            if work.is_cancelled() {
+                return Err(InvocationError::cancelled());
+            }
+            if !names.insert(v.as_str().ok_or_else(fail)?) {
+                return Err(fail());
+            }
+        }
+        Some(
+            *choices
+                .get(&names.into_iter().collect::<Vec<_>>())
+                .ok_or_else(fail)?,
+        )
+    } else if choices.len() == 1 {
+        choices.values().next().copied()
+    } else {
+        None
+    };
+    let target = j!([
+        kind.label(),
+        operation.0,
+        operation.1,
+        origin,
+        choices.keys().collect::<Vec<_>>()
+    ])
+    .to_string();
+    if target.len() > options.result_bytes {
+        return Err(fail());
+    }
+    let mut challenge = Challenge::new(target, options.result_bytes)?;
+    let Some(index) = selected else {
+        for names in choices.keys() {
+            if work.is_cancelled() {
+                return Err(InvocationError::cancelled());
+            }
+            let schema = if names.is_empty() {
+                j!({"const":[]})
+            } else {
+                j!({"type":"array","items":{"enum":names},"uniqueItems":true,"minItems":names.len(),"maxItems":names.len()})
+            };
+            challenge.alternative(vec![j!({"type":"config.value","point":kind.security_point(),"path":"/schemes","schema":schema})])?;
+        }
+        return Err(challenge.finish()?);
+    };
+    input.selection.security = Some(index);
+    let selected = &profile.security[index];
+    if selected.is_empty() {
+        return Ok(());
+    }
+    let credentials = member_object(root, "credentials")?;
+    let keys = member_object(root, "apiKeys")?;
+    let origins = member_object(point, "origins")?;
+    let mut requirements = vec![];
+    for (name, family) in selected {
+        if work.is_cancelled() {
+            return Err(InvocationError::cancelled());
+        }
+        let flat_name = match family {
+            Family::Bearer => "bearerToken",
+            Family::Key => "apiKey",
+        };
+        let flat = root.and_then(|r| r.get(flat_name));
+        if flat.is_some() && selected.values().filter(|f| *f == family).count() != 1 {
+            return Err(fail());
+        }
+        let material = consistent([
+            credentials.and_then(|c| c.get(name)),
+            if *family == Family::Key {
+                keys.and_then(|k| k.get(name))
+            } else {
+                None
+            },
+            flat,
+        ])?;
+        let grant = origins
+            .and_then(|o| o.get(name))
+            .map(|v| {
+                let mut result = vec![];
+                for v in v.elements().ok_or_else(fail)? {
+                    if work.is_cancelled() {
+                        return Err(InvocationError::cancelled());
+                    }
+                    let raw = v.as_str().ok_or_else(fail)?;
+                    // Validate all supplied grants; the client performs the final target check.
+                    dynamic_openapi_client::uri::origin(raw).map_err(|_| fail())?;
+                    result.push(raw.to_owned());
+                }
+                if result.is_empty()
+                    || !result
+                        .iter()
+                        .any(|s| dynamic_openapi_client::uri::origin(s).is_ok_and(|o| o == origin))
+                {
+                    return Err(fail());
+                }
+                Ok(result)
+            })
+            .transpose()?;
+        if material.is_none() {
+            requirements.push(j!({"type":family.requirement(),"name":name}));
+        }
+        if grant.is_none() {
+            requirements.push(j!({"type":"config.value","point":kind.security_point(),"path":format!("/origins/{}",name.replace('~',"~0").replace('/',"~1")),"schema":{"type":"array","minItems":1,"items":{"type":"string"},"description":format!("Caller-approved credential origins; selected destination is {origin}"),"examples":[[origin]]}}));
+        }
+        if let (Some(value), Some(origins)) = (material, grant) {
+            let value = match family {
+                Family::Bearer => CredentialValue::Bearer(value.into()),
+                Family::Key => CredentialValue::ApiKey(value.into()),
+            };
+            input
+                .credentials
+                .insert(name.clone(), Credential { value, origins });
+        }
+    }
+    if !requirements.is_empty() {
+        challenge.alternative(requirements)?;
+        return Err(challenge.finish()?);
+    }
+    Ok(())
+}
+fn member_object<'a>(
+    parent: Option<JsonRef<'a>>,
+    name: &str,
+) -> Result<Option<JsonRef<'a>>, InvocationError> {
+    let v = parent.and_then(|p| p.get(name));
+    if v.is_some_and(|v| v.members().is_none()) {
+        return Err(InvocationError::refused());
+    }
+    Ok(v)
+}
+fn consistent<'a>(values: [Option<JsonRef<'a>>; 3]) -> Result<Option<&'a str>, InvocationError> {
+    let mut found = None;
+    for v in values.into_iter().flatten() {
+        let v = v.as_str().ok_or_else(InvocationError::refused)?;
+        if found.is_some_and(|old| old != v) {
+            return Err(InvocationError::refused());
+        }
+        found = Some(v);
+    }
+    Ok(found)
+}
+// Each fragment is charged before retaining it; total serialization is bounded
+// again. All fragments originate in bounded source metadata, never secret values.
+struct Challenge {
+    target: String,
+    alternatives: Vec<Value>,
+    remaining: usize,
+    limit: usize,
+}
+impl Challenge {
+    fn new(target: String, limit: usize) -> Result<Self, InvocationError> {
+        let size = j!({"target":target,"alternatives":[]}).to_string().len();
+        Ok(Self {
+            target,
+            alternatives: vec![],
+            remaining: limit
+                .checked_sub(size)
+                .ok_or_else(InvocationError::refused)?,
+            limit,
+        })
+    }
+    fn alternative(&mut self, requirements: Vec<Value>) -> Result<(), InvocationError> {
+        let value = j!({"requirements":requirements});
+        self.remaining = self
+            .remaining
+            .checked_sub(value.to_string().len() + 1)
+            .ok_or_else(InvocationError::refused)?;
+        self.alternatives.push(value);
+        Ok(())
+    }
+    fn finish(self) -> Result<InvocationError, InvocationError> {
+        let v = json(&j!({"target":self.target,"alternatives":self.alternatives}))
+            .map_err(|_| InvocationError::refused())?;
+        if v.bytes().len() > self.limit {
+            return Err(InvocationError::refused());
+        }
+        ContextChallenge::new(v)
+            .map(InvocationError::challenge)
+            .map_err(|_| InvocationError::refused())
+    }
+}
+
+
+FILE crates/openbindings-openapi/src/analysis.rs
+use crate::{Error, ErrorKind, Kind, Options, check, json};
+use dynamic_openapi_client::{
+    Document, DocumentBuilder, Method, Operation, ParameterLocation, ResourceInput, SchemaProfile,
+    SourceFormat, ValueKind,
+};
+use openbindings::{JsonRef, JsonValue, WorkControl};
+use openbindings_source_inspection::{
+    BindableTarget, BindingFragment, InspectionLimitation, SourceInspection,
+};
+use std::collections::{BTreeMap, HashSet};
+
+pub(crate) struct Prepared {
+    pub kind: Kind,
+    pub content: JsonValue,
+    pub document: Document,
+    pub units: Vec<Unit>,
+    pub exhaustive: bool,
+    pub extra_interactions: bool,
+}
+pub(crate) struct Unit {
+    pub operation: Operation,
+    pub source_ref: String,
+    pub binding: JsonValue,
+    pub profile: Result<Profile, &'static str>,
+}
+pub(crate) struct Profile {
+    pub servers: Vec<String>,
+    pub parameters: BTreeMap<&'static str, BTreeMap<String, String>>,
+    pub has_body: bool,
+    pub input_schema: JsonValue,
+    pub schema_loss: bool,
+    pub security: Vec<crate::security::Alternative>,
+}
+impl Profile {
+    fn retained_bytes(&self) -> usize {
+        let servers = self
+            .servers
+            .iter()
+            .fold(0usize, |n, s| n.saturating_add(s.len()).saturating_add(32));
+        let servers = self.security.iter().fold(servers, |n, a| {
+            a.keys().fold(n.saturating_add(64), |n, k| {
+                n.saturating_add(k.len()).saturating_add(64)
+            })
+        });
+        self.parameters.values().flat_map(|p| p.iter()).fold(
+            servers.saturating_add(self.input_schema.bytes().len()),
+            |n, (name, kind)| {
+                n.saturating_add(name.len())
+                    .saturating_add(kind.len())
+                    .saturating_add(128)
+            },
+        )
+    }
+}
+impl Prepared {
+    pub fn inspection(&self) -> SourceInspection {
+        let targets = self
+            .units
+            .iter()
+            .map(|u| BindableTarget {
+                source_ref: u.source_ref.clone(),
+                binding: BindingFragment {
+                    content: Some(u.binding.clone()),
+                    ..Default::default()
+                },
+                operation_key: None,
+                operation: u.profile.as_ref().ok().map(|p| openbindings::Operation {
+                    input: Some(p.input_schema.clone()),
+                    ..Default::default()
+                }),
+            })
+            .collect();
+        if self.exhaustive && !self.extra_interactions {
+            SourceInspection::complete(targets)
+        } else {
+            SourceInspection::partial(targets, InspectionLimitation { code: "openbindings.openapi.inventory-incomplete".into(), message: "Supplied resources or this implementation do not establish every interaction; omitted interactions are not declared invalid".into(), details: None })
+        }
+    }
+}
+pub(crate) fn object(value: JsonRef<'_>, allowed: &[&str]) -> Result<(), Error> {
+    let members = value
+        .members()
+        .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "expected-object"))?;
+    let mut names = HashSet::new();
+    for member in members {
+        let name = member
+            .name
+            .as_str()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "invalid-member-name"))?;
+        if !allowed.contains(&name) || !names.insert(name) {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "unknown-or-duplicate-member",
+            ));
+        }
+    }
+    Ok(())
+}
+pub(crate) fn prepare(
+    kind: Kind,
+    content: &JsonValue,
+    options: &Options,
+    control: &WorkControl,
+) -> Result<Prepared, Error> {
+    object(content.view(), &["document", "retrievalUri"])?;
+    let text = content
+        .get("document")
+        .and_then(JsonRef::as_str)
+        .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "document-text-required"))?;
+    let input = match content.get("retrievalUri") {
+        Some(v) => ResourceInput::at(
+            v.as_str()
+                .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "retrieval-uri-required"))?,
+            text.as_bytes(),
+        )
+        .map_err(|_| Error::new(ErrorKind::Unsupported, "retrieval-uri-unsupported"))?,
+        None => ResourceInput::anonymous(text.as_bytes()),
+    };
+    let mut builder = DocumentBuilder::new(options.limits.clone(), options.graph_limits.clone());
+    let entry = builder
+        .add(input)
+        .map_err(|_| Error::new(ErrorKind::InvalidInput, "document-admission"))?;
+    for resource in &options.resources {
+        check(control)?;
+        builder
+            .add(resource.clone())
+            .map_err(|_| Error::new(ErrorKind::Unreadable, "resource-admission"))?;
+    }
+    let document = builder
+        .build(entry)
+        .map_err(|_| Error::new(ErrorKind::Unreadable, "graph-admission"))?;
+    if document.format() != SourceFormat::Json || document.edition().ok() != Some(kind.edition()) {
+        return Err(Error::new(
+            ErrorKind::Unsupported,
+            "unqualified-description",
+        ));
+    }
+    let root = document.root();
+    let mut exhaustive = document.discovery_complete()
+        && root
+            .get("paths")
+            .is_none_or(|p| p.kind() == ValueKind::Object);
+    let mut extra_interactions = root
+        .get("webhooks")
+        .is_some_and(|v| v.members().is_none_or(|mut m| m.next().is_some()));
+    let mut remaining = options.result_bytes;
+    let mut seen = HashSet::new();
+    let mut units = Vec::new();
+    for operation in document.operations() {
+        check(control)?;
+        let method = operation.method().as_str().to_ascii_lowercase();
+        if !matches!(
+            method.as_str(),
+            "get" | "post" | "put" | "patch" | "delete" | "head" | "options" | "trace"
+        ) || !operation.path().starts_with('/')
+        {
+            exhaustive = false;
+            continue;
+        }
+        let item_pointer = format!(
+            "/paths/{}",
+            operation.path().replace('~', "~0").replace('/', "~1")
+        );
+        let established = document
+            .protocol_at(
+                &item_pointer,
+                dynamic_openapi_client::ReferenceKind::PathItem,
+            )
+            .and_then(|site| document.resolve_protocol(&site));
+        if let Ok(item) = &established
+            && !item.chain.iter().any(|v| {
+                v.get(&method)
+                    .is_some_and(|v| v.kind() == ValueKind::Object)
+            })
+        {
+            exhaustive = false;
+            continue;
+        }
+        let ambiguous = established.as_ref().is_ok_and(|item| {
+            [&*method, "parameters", "servers"]
+                .iter()
+                .any(|key| item.chain.iter().filter(|v| v.get(key).is_some()).count() > 1)
+        });
+        if !seen.insert((operation.path().to_owned(), method.clone())) {
+            exhaustive = false;
+            continue;
+        }
+        let source_ref = format!(
+            "/paths/{}/{}",
+            operation.path().replace('~', "~0").replace('/', "~1"),
+            method
+        );
+        let binding = json(&serde_json_compat::json!({"path":operation.path(),"method":method}))?;
+        extra_interactions |= operation
+            .value()
+            .get("callbacks")
+            .is_some_and(|v| v.members().is_none_or(|mut m| m.next().is_some()));
+        let profile = if ambiguous {
+            Err("ambiguous-path-item-merge")
+        } else {
+            profile(&operation, kind)
+        };
+        let cost = source_ref
+            .len()
+            .saturating_add(binding.bytes().len())
+            .saturating_add(profile.as_ref().map_or(0, Profile::retained_bytes))
+            .saturating_add(512);
+        remaining = remaining
+            .checked_sub(cost)
+            .ok_or_else(|| Error::new(ErrorKind::Limit, "result-limit"))?;
+        units.push(Unit {
+            operation,
+            source_ref,
+            binding,
+            profile,
+        });
+    }
+    check(control)?;
+    Ok(Prepared {
+        kind,
+        content: content.clone(),
+        document,
+        units,
+        exhaustive,
+        extra_interactions,
+    })
+}
+fn profile(operation: &Operation, kind: Kind) -> Result<Profile, &'static str> {
+    if !operation.path().is_ascii() {
+        return Err("literal-unicode-path-unimplemented");
+    }
+    if !matches!(operation.method(), Method::Get | Method::Post) {
+        return Err("unqualified-method");
+    }
+    if operation
+        .value()
+        .get("callbacks")
+        .is_some_and(|v| v.members().is_none_or(|mut m| m.next().is_some()))
+    {
+        return Err("callbacks-unimplemented");
+    }
+    let d = operation
+        .describe()
+        .map_err(|_| "operation-description-unavailable")?;
+    let security = d
+        .security
+        .iter()
+        .map(|a| {
+            a.requirements
+                .iter()
+                .map(|r| {
+                    use crate::security::Family;
+                    use dynamic_openapi_client::SecurityScheme;
+                    if !r.scopes.is_empty() {
+                        return Err("security-roles-unimplemented");
+                    }
+                    let family = match &r.scheme {
+                        SecurityScheme::Bearer { .. } => Family::Bearer,
+                        SecurityScheme::ApiKey {
+                            location: ParameterLocation::Header,
+                            ..
+                        } => Family::Key,
+                        _ => return Err("security-unimplemented"),
+                    };
+                    Ok((r.name.clone(), family))
+                })
+                .collect::<Result<crate::security::Alternative, _>>()
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if d.servers.is_empty()
+        || d.servers.iter().any(|s| {
+            s.variables
+                .as_ref()
+                .is_some_and(|v| v.members().is_none_or(|mut m| m.next().is_some()))
+                || dynamic_openapi_client::uri::origin(&s.url).is_err()
+                || s.url.contains('?')
+        })
+    {
+        return Err("server-profile-unimplemented");
+    }
+    let mut locations =
+        BTreeMap::<&str, serde_json_compat::Map<String, serde_json_compat::Value>>::from([
+            ("path", Default::default()),
+            ("query", Default::default()),
+        ]);
+    let mut required = BTreeMap::<&str, Vec<String>>::new();
+    let mut schema_loss = false;
+    let mut parameters: BTreeMap<&'static str, BTreeMap<String, String>> = BTreeMap::new();
+    for param in d.parameters.iter() {
+        let location = match param.location() {
+            ParameterLocation::Path => "path",
+            ParameterLocation::Query => "query",
+            _ => return Err("parameter-location-unimplemented"),
+        };
+        let raw = param.resolved().target;
+        let expected_style = if location == "path" { "simple" } else { "form" };
+        if raw.get("content").is_some()
+            || raw
+                .get("style")
+                .is_some_and(|v| v.as_str() != Some(expected_style))
+        {
+            return Err("parameter-representation-unimplemented");
+        }
+        let description = param
+            .schema_description()
+            .ok_or("parameter-shape-unestablished")?;
+        if kind == Kind::OpenApi31
+            && !matches!(&description.profile, SchemaProfile::JsonSchema { dialect_uri }
+                if matches!(dialect_uri.as_str(),
+                    "https://spec.openapis.org/oas/3.1/dialect/base"
+                    | "https://spec.openapis.org/oas/3.1/dialect/2024-11-10"
+                    | "https://json-schema.org/draft/2020-12/schema"))
+        {
+            // Use the client's lexical context, including schema-level overrides.
+            // Other dialects may ignore or reinterpret the apparent type keyword.
+            return Err("parameter-schema-dialect-unimplemented");
+        }
+        let schema = description.value;
+        if kind == Kind::OpenApi30 {
+            // A 3.0 Schema Reference Object's siblings do not establish a type.
+            // Resolving/translating schema contracts remains outside this profile.
+            if schema.get("$ref").is_some() {
+                return Err("parameter-schema-reference-unimplemented");
+            }
+            // This experiment has no caller-to-wire mapping for null parameters.
+            // Refuse the profile rather than synthesize a narrower claimed contract.
+            if schema
+                .get("nullable")
+                .is_some_and(|v| v.as_bool() != Some(false))
+            {
+                return Err("nullable-parameter-unimplemented");
+            }
+        }
+        let kind = schema
+            .get("type")
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .ok_or("parameter-shape-unestablished")?;
+        if !matches!(kind.as_str(), "string" | "integer" | "number" | "boolean") {
+            return Err("parameter-shape-unimplemented");
+        }
+        parameters
+            .entry(location)
+            .or_default()
+            .insert(param.name().into(), kind.clone());
+        locations
+            .entry(location)
+            .or_default()
+            .insert(param.name().into(), serde_json_compat::json!({"type":kind}));
+        if param.required() {
+            required
+                .entry(location)
+                .or_default()
+                .push(param.name().into());
+        }
+        schema_loss |= schema
+            .members()
+            .is_none_or(|mut m| m.any(|(k, _)| k != "type"));
+    }
+    if let Some(body) = &d.request_body {
+        if body.media_unrestricted
+            || body.media.len() != 1
+            || body.media[0].media_type != "application/json"
+        {
+            return Err("request-media-unimplemented");
+        }
+        if body.media[0].encoding.is_some() {
+            return Err("request-encoding-unimplemented");
+        }
+        schema_loss |= body.media[0].schema.is_some();
+    }
+    for response in &d.responses {
+        if !response.status.starts_with('2') && response.status != "default" {
+            schema_loss |=
+                !response.media.is_empty() || response.declaration.target.get("headers").is_some();
+            continue;
+        }
+        if response.media.is_empty() && response.status != "204" {
+            return Err("response-no-content-unimplemented");
+        }
+        if response
+            .media
+            .iter()
+            .any(|m| m.media_type != "application/json")
+        {
+            return Err("response-media-unimplemented");
+        }
+        if response
+            .declaration
+            .target
+            .get("headers")
+            .is_some_and(|v| v.members().is_none_or(|mut m| m.next().is_some()))
+        {
+            return Err("response-headers-unimplemented");
+        }
+        schema_loss |= response.media.iter().any(|m| m.schema.is_some());
+    }
+    let mut parameter_properties = serde_json_compat::Map::new();
+    let mut required_locations = Vec::new();
+    for (location, props) in locations {
+        let needed = required.remove(location).unwrap_or_default();
+        if !needed.is_empty() {
+            required_locations.push(location);
+        }
+        parameter_properties.insert(location.into(), serde_json_compat::json!({"type":"object","properties":props,"required":needed,"additionalProperties":false}));
+    }
+    let mut properties = serde_json_compat::Map::new();
+    let mut required_fields = Vec::new();
+    if !parameter_properties.is_empty() {
+        if !required_locations.is_empty() {
+            required_fields.push("parameters");
+        }
+        properties.insert("parameters".into(), serde_json_compat::json!({"type":"object","properties":parameter_properties,"required":required_locations,"additionalProperties":false}));
+    }
+    if let Some(body) = &d.request_body {
+        properties.insert("body".into(), serde_json_compat::Value::Bool(true));
+        if body.required {
+            required_fields.push("body");
+        }
+    }
+    let input_schema = json(&serde_json_compat::json!({"type":"object","properties":properties,"required":required_fields,"additionalProperties":false})).map_err(|_| "schema-budget")?;
+    Ok(Profile {
+        security,
+        has_body: d.request_body.is_some(),
+        servers: d.servers.into_iter().map(|s| s.url).collect(),
+        parameters,
+        input_schema,
+        schema_loss,
+    })
+}
+
+
+FILE crates/openbindings-openapi/src/invocation.rs
+use crate::{Kind, OpenApi, analysis, json};
+use dynamic_openapi_client::{
+    Body, BodyState, Cancellation, ExactJson, HeaderDelivery, Input, Outcome, ParameterInput,
+    ParameterLocation, PreparedRequest,
+};
+use openbindings::{JsonKind, JsonRef, JsonValue, WorkControl};
+use openbindings_invocation::{
+    BindingRequest, ContextChallenge, InvocationError, ProviderInput, ProviderIo, ProviderOutput,
+    binding::{BindingInvoker, SupportedKind},
+};
+use std::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+};
+
+/// Application-owned execution of one prepared request. Implementations must
+/// report honest client outcome evidence and own cancellation/cleanup. No executor
+/// or Send bound is imposed. A closure taking an owned plan can implement this.
+pub trait Transport {
+    /// A host future that may borrow its reusable host.
+    type Execution<'a>: Future<Output = Outcome>
+    where
+        Self: 'a;
+    /// Execute once; ownership of the plan avoids self-referential futures.
+    fn execute(&self, request: PreparedRequest, cancellation: Cancellation) -> Self::Execution<'_>;
+}
+impl<F, Fut> Transport for F
+where
+    F: Fn(PreparedRequest, Cancellation) -> Fut,
+    Fut: Future<Output = Outcome>,
+{
+    type Execution<'a>
+        = Fut
+    where
+        Self: 'a;
+    fn execute(&self, request: PreparedRequest, cancellation: Cancellation) -> Fut {
+        self(request, cancellation)
+    }
+}
+
+type NextInput = Pin<Box<dyn Future<Output = (ProviderInput, Option<JsonValue>)> + Send>>;
+type Emit = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send>>;
+fn receive(mut input: ProviderInput) -> NextInput {
+    Box::pin(async move {
+        let value = input.next().await;
+        (input, value)
+    })
+}
+fn emit(mut output: ProviderOutput, value: JsonValue) -> Emit {
+    Box::pin(async move { output.emit(value).await })
+}
+
+/// Provider job preserving conditional Send: a local host stays local; a Sync
+/// host with Send execution futures can be used by native multithreaded callers.
+/// Dropping it cancels its client token and drops pending host work.
+pub struct InvocationFuture<'a, T: Transport> {
+    provider: &'a OpenApi<T>,
+    request: BindingRequest<'a>,
+    input: Option<NextInput>,
+    value: Option<JsonValue>,
+    output: Option<ProviderOutput>,
+    execution: Option<Pin<Box<T::Execution<'a>>>>,
+    emitting: Option<Emit>,
+    control: openbindings::Cancellation,
+    cancellation: Cancellation,
+    work: WorkControl,
+    done: bool,
+}
+impl<T: Transport> Unpin for InvocationFuture<'_, T> {}
+impl<T: Transport> Drop for InvocationFuture<'_, T> {
+    fn drop(&mut self) {
+        self.cancellation.cancel();
+    }
+}
+impl<T: Transport> Future for InvocationFuture<'_, T> {
+    type Output = Result<(), InvocationError>;
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        assert!(!this.done, "polled completed adapter job");
+        let result = loop {
+            if Pin::new(&mut this.control).poll(cx).is_ready() {
+                this.cancellation.cancel();
+                break Poll::Ready(Err(InvocationError::cancelled()));
+            }
+            if let Some(input) = &mut this.input {
+                let (input, value) = match input.as_mut().poll(cx) {
+                    Poll::Pending => return Poll::Pending,
+                    Poll::Ready(value) => value,
+                };
+                this.input = None;
+                if let Some(value) = value {
+                    if this.value.is_some() {
+                        break Poll::Ready(Err(InvocationError::refused()));
+                    }
+                    this.value = Some(value);
+                    this.input = Some(receive(input));
+                    continue;
+                }
+                drop(input);
+                let Some(value) = this.value.take() else {
+                    break Poll::Ready(Err(InvocationError::refused()));
+                };
+                let prepared =
+                    match prepare_request(this.provider, this.request, &value, &this.work) {
+                        Ok(p) => p,
+                        Err(e) => break Poll::Ready(Err(e)),
+                    };
+                if this.work.is_cancelled() {
+                    break Poll::Ready(Err(InvocationError::cancelled()));
+                }
+                this.execution = Some(Box::pin(
+                    this.provider
+                        .transport
+                        .execute(prepared, this.cancellation.clone()),
+                ));
+            }
+            if let Some(execution) = &mut this.execution {
+                let outcome = match execution.as_mut().poll(cx) {
+                    Poll::Pending => return Poll::Pending,
+                    Poll::Ready(outcome) => outcome,
+                };
+                this.execution = None;
+                let kind =
+                    Kind::from_label(&this.request.source.kind).expect("admitted source kind");
+                let value = match accept(outcome, kind) {
+                    Ok(value) => value,
+                    Err(e) => break Poll::Ready(Err(e)),
+                };
+                if let Some(value) = value {
+                    this.emitting =
+                        Some(emit(this.output.take().expect("one output owner"), value));
+                } else {
+                    break Poll::Ready(Ok(()));
+                }
+            }
+            if let Some(emitting) = &mut this.emitting {
+                break emitting.as_mut().poll(cx);
+            }
+        };
+        if result.is_ready() {
+            this.done = true;
+        }
+        result
+    }
+}
+impl<T: Transport> BindingInvoker for OpenApi<T> {
+    type Invocation<'a>
+        = InvocationFuture<'a, T>
+    where
+        Self: 'a;
+    fn supports_kind(&self, kind: &str) -> bool {
+        Kind::from_label(kind).is_some()
+    }
+    fn supported_kinds(&self) -> Vec<SupportedKind> {
+        Kind::ALL
+            .into_iter()
+            .map(|kind| SupportedKind {
+                kind: kind.label().into(),
+                description: Some(
+                    "Private finite JSON experiment; no implicit retry or resource acquisition"
+                        .into(),
+                ),
+            })
+            .collect()
+    }
+    fn invoke<'a>(
+        &'a self,
+        request: BindingRequest<'a>,
+        io: ProviderIo,
+        work: WorkControl,
+    ) -> Self::Invocation<'a> {
+        let (input, output) = io.split();
+        InvocationFuture {
+            provider: self,
+            request,
+            input: Some(receive(input)),
+            value: None,
+            output: Some(output),
+            execution: None,
+            emitting: None,
+            control: work.cancelled(),
+            cancellation: Cancellation::default(),
+            work,
+            done: false,
+        }
+    }
+}
+fn prepare_request<T>(
+    provider: &OpenApi<T>,
+    request: BindingRequest<'_>,
+    value: &JsonValue,
+    control: &WorkControl,
+) -> Result<PreparedRequest, InvocationError> {
+    let refused = || InvocationError::refused();
+    let p = provider.prepare(request.source, control).map_err(|_| {
+        if control.is_cancelled() {
+            InvocationError::cancelled()
+        } else {
+            refused()
+        }
+    })?;
+    let binding = request.binding.content.as_ref().ok_or_else(refused)?;
+    analysis::object(binding.view(), &["path", "method"]).map_err(|_| refused())?;
+    let path = binding
+        .get("path")
+        .and_then(JsonRef::as_str)
+        .ok_or_else(refused)?;
+    let method = binding
+        .get("method")
+        .and_then(JsonRef::as_str)
+        .ok_or_else(refused)?;
+    let unit = p
+        .units
+        .iter()
+        .find(|u| {
+            u.operation.path() == path && u.operation.method().as_str().eq_ignore_ascii_case(method)
+        })
+        .ok_or_else(refused)?;
+    if method != method.to_ascii_lowercase() {
+        return Err(refused());
+    }
+    let profile = unit.profile.as_ref().map_err(|_| refused())?;
+    analysis::object(value.view(), &["parameters", "body"]).map_err(|_| refused())?;
+    if value.has_duplicate_names() {
+        return Err(refused());
+    }
+    let mut input = Input::default();
+    if let Some(parameters) = value.get("parameters") {
+        analysis::object(parameters, &["path", "query"]).map_err(|_| refused())?;
+        let supplied = ["path", "query"]
+            .into_iter()
+            .filter_map(|name| parameters.get(name))
+            .try_fold(0usize, |n, value| {
+                let mut total = n;
+                for _ in value.members().ok_or_else(refused)? {
+                    if control.is_cancelled() {
+                        return Err(InvocationError::cancelled());
+                    }
+                    total = total.checked_add(1).ok_or_else(refused)?;
+                    if total > provider.options.limits.reference_steps {
+                        return Err(refused());
+                    }
+                }
+                Ok(total)
+            })?;
+        input.parameters.reserve(supplied);
+        for (location, location_name) in [
+            (ParameterLocation::Path, "path"),
+            (ParameterLocation::Query, "query"),
+        ] {
+            if let Some(values) = parameters.get(location_name) {
+                let members = values.members().ok_or_else(refused)?;
+                let mut names = std::collections::HashSet::new();
+                for member in members {
+                    let name = member.name.as_str().ok_or_else(refused)?;
+                    if !names.insert(name) {
+                        return Err(refused());
+                    }
+                    if control.is_cancelled() {
+                        return Err(InvocationError::cancelled());
+                    }
+                    let expected = profile
+                        .parameters
+                        .get(location_name)
+                        .and_then(|parameters| parameters.get(name))
+                        .ok_or_else(refused)?;
+                    let valid = match member.value.kind() {
+                        JsonKind::String => expected == "string",
+                        JsonKind::Boolean => expected == "boolean",
+                        JsonKind::Number => {
+                            expected == "number"
+                                || (expected == "integer"
+                                    && integer(member.value.number_text().expect("number")))
+                        }
+                        _ => false,
+                    };
+                    if !valid {
+                        return Err(refused());
+                    }
+                    let value =
+                        ExactJson::parse(member.value.text(), provider.options.limits.clone())
+                            .map_err(|_| refused())?
+                            .root();
+                    input.parameters.push(ParameterInput {
+                        location,
+                        name: name.into(),
+                        value,
+                    });
+                }
+            }
+        }
+    }
+    if let Some(body) = value.get("body") {
+        if !profile.has_body {
+            return Err(refused());
+        }
+        input.body = Body::Json(
+            ExactJson::parse(body.text(), provider.options.limits.clone())
+                .map_err(|_| refused())?
+                .root(),
+        );
+    }
+    let servers = &profile.servers;
+    let server_point = p.kind.server_point();
+    let choice = request
+        .context
+        .and_then(|c| c.get("configuration"))
+        .and_then(|c| c.get(server_point));
+    let selected = match choice {
+        Some(choice) => choice
+            .as_str()
+            .and_then(|s| servers.iter().position(|candidate| candidate == s)),
+        None if servers.iter().all(|s| s == &servers[0]) => Some(0),
+        None => None,
+    };
+    input.selection.server = Some(selected.ok_or_else(|| {
+        let choices: std::collections::BTreeSet<_> = servers.iter().map(|s| s.as_str()).collect();
+        let target = serde_json_compat::json!([p.kind.label(), request.source.content.as_ref().and_then(|v| v.get("retrievalUri")).and_then(JsonRef::as_str), path, method, choices]).to_string();
+        let shape = json(&serde_json_compat::json!({"target":target,"alternatives":[{"requirements":[{"type":"config.value","point":server_point,"path":"","schema":{"type":"string","enum":choices}}]}]}));
+        shape.ok().and_then(|v| ContextChallenge::new(v).ok()).map(InvocationError::challenge).unwrap_or_else(refused)
+    })?);
+    crate::security::apply(
+        profile,
+        p.kind,
+        request.context,
+        &servers[input.selection.server.expect("selected")],
+        (path, method),
+        &provider.options,
+        control,
+        &mut input,
+    )?;
+    unit.operation.prepare(&input).map_err(|_| refused())
+}
+fn accept(outcome: Outcome, kind: Kind) -> Result<Option<JsonValue>, InvocationError> {
+    if outcome.cancelled {
+        return Err(InvocationError::cancelled());
+    }
+    // A host outcome is evidence, not permission to infer absence of effects.
+    if outcome.error.is_some()
+        || outcome.dispatch != dynamic_openapi_client::DispatchEvidence::Dispatched
+    {
+        return Err(InvocationError::execution_failed());
+    }
+    let response = outcome
+        .response
+        .ok_or_else(InvocationError::execution_failed)?;
+    if response.body_state() != BodyState::Complete
+        || response.header_delivery() != HeaderDelivery::Complete
+        || response.omitted_header_lines() != 0
+    {
+        return Err(InvocationError::execution_failed());
+    }
+    if !(200..300).contains(&response.status()) {
+        let data = json(&serde_json_compat::json!({"status":response.status()}))
+            .map_err(|_| InvocationError::execution_failed())?;
+        return Err(InvocationError::new(kind.status_error(), Some(data))
+            .expect("fixed governed error shape"));
+    }
+    if response.status() == 204 {
+        return if response.raw().is_empty() {
+            Ok(None)
+        } else {
+            Err(InvocationError::execution_failed())
+        };
+    }
+    let decoded = response
+        .json()
+        .map_err(|_| InvocationError::execution_failed())?;
+    JsonValue::parse(decoded.source())
+        .map(Some)
+        .map_err(|_| InvocationError::execution_failed())
+}
+
+// Exact integrality without machine-number conversion or exponent expansion.
+fn integer(token: &str) -> bool {
+    let token = token.trim_start_matches('-');
+    let (mantissa, exponent) = token.split_once(['e', 'E']).unwrap_or((token, "0"));
+    if mantissa.bytes().all(|b| b == b'0' || b == b'.') {
+        return true;
+    }
+    let fractional = mantissa.split_once('.').map_or(0, |(_, f)| f.len());
+    let zeros = mantissa
+        .bytes()
+        .filter(|b| *b != b'.')
+        .rev()
+        .take_while(|b| *b == b'0')
+        .count();
+    let exponent = exponent
+        .parse::<i64>()
+        .unwrap_or(if exponent.starts_with('-') {
+            i64::MIN
+        } else {
+            i64::MAX
+        });
+    exponent >= fractional as i64 - zeros as i64
+}
+
+
+FILE crates/openbindings-openapi/src/synthesis.rs
+use crate::{Error, ErrorKind, Kind, OpenApi, check};
+use openbindings::{Binding, DocumentBuilder, Operation, ParsedDocument, WorkControl};
+use openbindings_interface_synthesis::{
+    CoverageDraft, CoverageEntry, CoverageLimitation, CoverageScope, CoverageStatus,
+    InterfaceSynthesizer, SupportedKind, SynthesisCandidate, SynthesisError, SynthesisErrorKind,
+    SynthesisRequest,
+};
+use std::{
+    collections::BTreeMap,
+    future::{Ready, ready},
+};
+impl Error {
+    fn synthesis(&self) -> SynthesisError {
+        let kind = match self.kind() {
+            ErrorKind::InvalidInput => SynthesisErrorKind::InvalidInput,
+            ErrorKind::Unsupported => SynthesisErrorKind::UnsupportedRequest,
+            ErrorKind::Unreadable => SynthesisErrorKind::UnreadableSource,
+            ErrorKind::Limit => SynthesisErrorKind::ProviderFailure,
+            ErrorKind::Cancelled => SynthesisErrorKind::Cancelled,
+        };
+        SynthesisError::new(
+            kind,
+            format!("openbindings.openapi.{}", self.code()),
+            self.to_string(),
+        )
+    }
+}
+impl<T> InterfaceSynthesizer for OpenApi<T> {
+    type Synthesis<'a>
+        = Ready<Result<SynthesisCandidate, SynthesisError>>
+    where
+        Self: 'a;
+    fn supports_kind(&self, kind: &str) -> bool {
+        Kind::from_label(kind).is_some()
+    }
+    fn supported_kinds(&self) -> Vec<SupportedKind> {
+        Kind::ALL
+            .into_iter()
+            .map(|kind| {
+                SupportedKind {
+            kind: kind.label().into(),
+            description: Some(
+                "Private JSON experiment, with disclosed schema projection and capability limits"
+                    .into(),
+            ),
+        }
+            })
+            .collect()
+    }
+    fn synthesize<'a>(
+        &'a self,
+        request: &'a SynthesisRequest<'a>,
+        control: WorkControl,
+    ) -> Self::Synthesis<'a> {
+        ready(self.derive(request, &control))
+    }
+}
+impl<T> OpenApi<T> {
+    fn derive(
+        &self,
+        request: &SynthesisRequest<'_>,
+        control: &WorkControl,
+    ) -> Result<SynthesisCandidate, SynthesisError> {
+        check(control).map_err(|e| e.synthesis())?;
+        if request.sources.len() > 1 {
+            return Err(SynthesisError::new(
+                SynthesisErrorKind::UnsupportedRequest,
+                "openbindings.openapi.composition-unimplemented",
+                "This experiment accepts at most one supplied source",
+            ));
+        }
+        let mut draft = DocumentBuilder::new();
+        if let Some(version) = request.openbindings_version {
+            draft.openbindings = version.into();
+        }
+        draft.name = request.name.map(str::to_owned);
+        draft.version = request.version.map(str::to_owned);
+        draft.description = request.description.map(str::to_owned);
+        let mut coverage = CoverageDraft {
+            exhaustive: true,
+            ..Default::default()
+        };
+        if let Some(input) = request.sources.first() {
+            let prepared = self
+                .prepare(input.source, control)
+                .map_err(|e| e.synthesis())?;
+            let source_key = input.name.unwrap_or("api").to_owned();
+            draft.sources = Some(BTreeMap::from([(source_key.clone(), input.source.clone())]));
+            let mut bindings = BTreeMap::new();
+            for (index, unit) in prepared.units.iter().enumerate() {
+                check(control).map_err(|e| e.synthesis())?;
+                let mut entry = CoverageEntry::new(
+                    0,
+                    &unit.source_ref,
+                    CoverageScope::Target,
+                    CoverageStatus::Represented,
+                );
+                match &unit.profile {
+                    Ok(profile) => {
+                        // Core keys have an ASCII grammar. The ordinal guarantees
+                        // uniqueness; the short path hint is authoring convenience.
+                        let hint: String = unit
+                            .operation
+                            .path()
+                            .chars()
+                            .take(48)
+                            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                            .collect();
+                        let key = format!(
+                            "{}_{}_{}",
+                            unit.operation.method().as_str().to_ascii_lowercase(),
+                            index + 1,
+                            hint
+                        );
+                        draft.operations.insert(
+                            key.clone(),
+                            Operation {
+                                input: Some(profile.input_schema.clone()),
+                                ..Default::default()
+                            },
+                        );
+                        bindings.insert(
+                            key.clone(),
+                            Binding {
+                                operation: key.clone(),
+                                source: source_key.clone(),
+                                content: Some(unit.binding.clone()),
+                                ..Default::default()
+                            },
+                        );
+                        entry.source_key = Some(source_key.clone());
+                        entry.operation_key = Some(key.clone());
+                        entry.binding_key = Some(key.clone());
+                        if profile.security.iter().any(|a| !a.is_empty()) {
+                            entry.requirements=Some(vec!["Per-attempt security selection, named credentials and caller-approved origins as applicable".into()]);
+                            entry.details = Some(BTreeMap::from([(
+                                "security".into(),
+                                crate::json(&crate::security::details(profile))
+                                    .map_err(|e| e.synthesis())?,
+                            )]));
+                        }
+                        coverage.entries.push(entry);
+                        if profile.schema_loss {
+                            let mut loss = CoverageEntry::new(
+                                0,
+                                &unit.source_ref,
+                                CoverageScope::Projection,
+                                CoverageStatus::Lossy,
+                            );
+                            loss.source_key = Some(source_key.clone());
+                            loss.operation_key = Some(key.clone());
+                            loss.binding_key = Some(key);
+                            loss.reason_code =
+                                Some("openbindings.openapi.schema-contract-not-projected".into());
+                            loss.message=Some("The input schema describes the adapter envelope; source value constraints and response schemas are not fully projected".into());
+                            coverage.entries.push(loss);
+                        }
+                    }
+                    Err(reason) => {
+                        entry.status = CoverageStatus::ImplementationUnsupported;
+                        entry.reason_code = Some(format!("openbindings.openapi.{reason}"));
+                        entry.message=Some("This implementation cannot faithfully represent the declared operation profile; the target is not declared invalid or excluded by a kind rule".into());
+                        coverage.entries.push(entry);
+                    }
+                }
+            }
+            if !bindings.is_empty() {
+                draft.bindings = Some(bindings);
+            }
+            coverage.exhaustive = prepared.exhaustive && !prepared.extra_interactions;
+            if !coverage.exhaustive {
+                let resources: Vec<_> = prepared
+                    .document
+                    .graph_issues()
+                    .filter_map(|d| {
+                        d.resource_need()
+                            .and_then(|r| r.requested_uri())
+                            .map(str::to_owned)
+                    })
+                    .collect();
+                let details =
+                    crate::json(&serde_json_compat::json!({"requiredResources":resources}))
+                        .map_err(|e| e.synthesis())?;
+                coverage.limitation=Some(CoverageLimitation{code:"openbindings.openapi.inventory-incomplete".into(),message:"The supplied resources and implemented interaction profile do not establish every source unit; no empty/full inventory claim is made".into(),details:Some(BTreeMap::from([("inventory".into(),details)])),additional_fields:BTreeMap::new()});
+            }
+        }
+        check(control).map_err(|e| e.synthesis())?;
+        let document = ParsedDocument::from_json(draft.to_json()?);
+        if document.value().bytes().len()
+            > self
+                .options
+                .source_bytes
+                .saturating_add(self.options.result_bytes)
+        {
+            return Err(Error::new(ErrorKind::Limit, "synthesis-result-limit").synthesis());
+        }
+        Ok(SynthesisCandidate { document, coverage })
+    }
+}
+
+
+FILE crates/openbindings-openapi/src/lib.rs
+//! Experimental OpenAPI inspection, synthesis and finite JSON invocation.
+//!
+//! This optional adapter implements private 3.1 and 3.0 JSON experiments. Their meaning
+//! is documented in the package README; it is not a published binding standard.
+//! Core remains unaware of OpenAPI, transport and operation effects.
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
+
+mod analysis;
+mod invocation;
+mod security;
+mod synthesis;
+
+use dynamic_openapi_client::DocumentBuilder;
+pub use dynamic_openapi_client::{GraphLimits, Limits, ResourceInput, ResourceLayout};
+pub use invocation::{InvocationFuture, Transport};
+use openbindings::{JsonValue, Source, WorkControl};
+use openbindings_source_inspection::{
+    InspectionError, InspectionErrorKind, SourceInspection, SourceInspector, SupportedKind,
+};
+use std::{
+    future::{Ready, ready},
+    sync::{Arc, Mutex},
+};
+
+/// Exact private experiment identifier. Saved r1 documents retain this meaning.
+pub const EXPERIMENTAL_KIND: &str = "local.openapi-json-probe.r1";
+/// Configuration point containing a declared absolute server URL selector.
+pub const SECURITY_POINT: &str = "local.openapi-json-probe.r1.security";
+/// Configuration point containing a declared absolute server URL selector.
+pub const SERVER_POINT: &str = "local.openapi-json-probe.r1.server";
+/// Kind-defined unsuccessful HTTP status, with application data `{ "status": n }`.
+pub const HTTP_STATUS_ERROR: &str = "local.openapi-json-probe.r1.http-status";
+/// Exact private OpenAPI 3.0 experiment identifier; independent of the 3.1 r1 kind.
+pub const EXPERIMENTAL_KIND_30: &str = "local.openapi30-json-probe.r1";
+/// OpenAPI 3.0 experiment's declared absolute server URL configuration point.
+pub const SECURITY_POINT_30: &str = "local.openapi30-json-probe.r1.security";
+/// OpenAPI 3.0 experiment's declared absolute server URL configuration point.
+pub const SERVER_POINT_30: &str = "local.openapi30-json-probe.r1.server";
+/// OpenAPI 3.0 experiment's unsuccessful HTTP status, with data `{ "status": n }`.
+pub const HTTP_STATUS_ERROR_30: &str = "local.openapi30-json-probe.r1.http-status";
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    OpenApi31,
+    OpenApi30,
+}
+impl Kind {
+    const ALL: [Self; 2] = [Self::OpenApi31, Self::OpenApi30];
+    fn from_label(label: &str) -> Option<Self> {
+        match label {
+            EXPERIMENTAL_KIND => Some(Self::OpenApi31),
+            EXPERIMENTAL_KIND_30 => Some(Self::OpenApi30),
+            _ => None,
+        }
+    }
+    fn label(self) -> &'static str {
+        match self {
+            Self::OpenApi31 => EXPERIMENTAL_KIND,
+            Self::OpenApi30 => EXPERIMENTAL_KIND_30,
+        }
+    }
+    fn edition(self) -> dynamic_openapi_client::Edition {
+        match self {
+            Self::OpenApi31 => dynamic_openapi_client::Edition::OpenApi31,
+            Self::OpenApi30 => dynamic_openapi_client::Edition::OpenApi30,
+        }
+    }
+    fn server_point(self) -> &'static str {
+        match self {
+            Self::OpenApi31 => SERVER_POINT,
+            Self::OpenApi30 => SERVER_POINT_30,
+        }
+    }
+    fn security_point(self) -> &'static str {
+        match self {
+            Self::OpenApi31 => SECURITY_POINT,
+            Self::OpenApi30 => SECURITY_POINT_30,
+        }
+    }
+    fn status_error(self) -> &'static str {
+        match self {
+            Self::OpenApi31 => HTTP_STATUS_ERROR,
+            Self::OpenApi30 => HTTP_STATUS_ERROR_30,
+        }
+    }
+}
+
+/// Fixed resources and finite admission budgets. Changing these requires a new provider.
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub struct Options {
+    /// Client per-resource, operation and HTTP budgets.
+    pub limits: Limits,
+    /// Aggregate resource graph budgets.
+    pub graph_limits: GraphLimits,
+    /// Explicit resource bytes and identities; no automatic acquisition occurs.
+    pub resources: Vec<ResourceInput>,
+    /// Maximum encoded source content, including its document text.
+    pub source_bytes: usize,
+    /// Maximum charged adapter inventory bytes, including retained server/parameter metadata.
+    /// This is a logical work budget, not an allocator or process RSS measurement.
+    pub result_bytes: usize,
+    /// Maximum encoded per-attempt context for a profile containing authenticated alternatives.
+    /// Unsecured profiles ignore authentication context. No retained-arena/RSS guarantee.
+    pub context_bytes: usize,
+}
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            limits: Limits::default(),
+            graph_limits: GraphLimits::default(),
+            resources: vec![],
+            source_bytes: 16 << 20,
+            result_bytes: 8 << 20,
+            context_bytes: 64 << 10,
+        }
+    }
+}
+
+/// Configuration/source admission category. Messages never include source values.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ErrorKind {
+    /// Invalid carrier or malformed supplied data.
+    InvalidInput,
+    /// A different kind or an unimplemented source/profile.
+    Unsupported,
+    /// The available resources cannot establish the source.
+    Unreadable,
+    /// A configured budget was exhausted.
+    Limit,
+    /// Cooperative cancellation.
+    Cancelled,
+}
+/// Safe adapter admission error; role facades map it into their own error vocabulary.
+#[derive(Clone, Debug)]
+pub struct Error {
+    kind: ErrorKind,
+    code: &'static str,
+}
+impl Error {
+    /// Typed admission category.
+    pub fn kind(&self) -> ErrorKind {
+        self.kind
+    }
+    /// Stable implementation diagnostic, not a binding-spec requirement.
+    pub fn code(&self) -> &'static str {
+        self.code
+    }
+    pub(crate) fn new(kind: ErrorKind, code: &'static str) -> Self {
+        Self { kind, code }
+    }
+    pub(crate) fn inspection(&self) -> InspectionError {
+        let kind = match self.kind {
+            ErrorKind::InvalidInput => InspectionErrorKind::InvalidInput,
+            ErrorKind::Unsupported if self.code == "unsupported-kind" => {
+                InspectionErrorKind::UnsupportedKind
+            }
+            ErrorKind::Unsupported => InspectionErrorKind::UnreadableSource,
+            ErrorKind::Unreadable => InspectionErrorKind::UnreadableSource,
+            ErrorKind::Limit => InspectionErrorKind::ProviderFailure,
+            ErrorKind::Cancelled => InspectionErrorKind::Cancelled,
+        };
+        InspectionError::new(
+            kind,
+            format!("openbindings.openapi.{}", self.code),
+            self.to_string(),
+        )
+    }
+}
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "OpenAPI adapter admission: {}", self.code)
+    }
+}
+impl std::error::Error for Error {}
+
+/// Reusable adapter. Inspection and synthesis need no transport; bind one once
+/// with [`Self::with_transport`] to enable the existing BindingInvoker role.
+///
+/// One immutable prepared source is cached. No mutex is held during host I/O.
+/// Supplied resources must be reconstructed for an independent cold reload.
+pub struct OpenApi<T = ()> {
+    options: Options,
+    transport: T,
+    cached: Mutex<Option<Arc<analysis::Prepared>>>,
+    #[cfg(test)]
+    preparations: std::sync::atomic::AtomicUsize,
+}
+impl Default for OpenApi<()> {
+    fn default() -> Self {
+        Self {
+            options: Options::default(),
+            transport: (),
+            cached: Mutex::new(None),
+            #[cfg(test)]
+            preparations: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+}
+impl OpenApi<()> {
+    /// Check a fixed supplied-resource collection without performing I/O.
+    pub fn new(options: Options) -> Result<Self, Error> {
+        let mut builder =
+            DocumentBuilder::new(options.limits.clone(), options.graph_limits.clone());
+        for resource in &options.resources {
+            builder
+                .add(resource.clone())
+                .map_err(|_| Error::new(ErrorKind::InvalidInput, "resource-admission"))?;
+        }
+        Ok(Self {
+            options,
+            ..Self::default()
+        })
+    }
+}
+impl<T> OpenApi<T> {
+    /// Bind application-owned HTTP execution. Native and local non-Send hosts are supported.
+    pub fn with_transport<H: Transport>(self, transport: H) -> OpenApi<H> {
+        OpenApi {
+            options: self.options,
+            transport,
+            cached: self.cached,
+            #[cfg(test)]
+            preparations: self.preparations,
+        }
+    }
+    fn prepare(
+        &self,
+        source: &Source,
+        control: &WorkControl,
+    ) -> Result<Arc<analysis::Prepared>, Error> {
+        check(control)?;
+        let kind = Kind::from_label(&source.kind)
+            .ok_or_else(|| Error::new(ErrorKind::Unsupported, "unsupported-kind"))?;
+        let content = source
+            .content
+            .as_ref()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "missing-source-content"))?;
+        if content.bytes().len() > self.options.source_bytes {
+            return Err(Error::new(ErrorKind::Limit, "source-limit"));
+        }
+        let mut cache = self
+            .cached
+            .lock()
+            .map_err(|_| Error::new(ErrorKind::Unreadable, "poisoned-cache"))?;
+        check(control)?;
+        if let Some(prepared) = cache.as_ref().filter(|p| {
+            p.kind == kind
+                && (std::ptr::eq(p.content.text(), content.text())
+                    || p.content.text() == content.text())
+        }) {
+            return Ok(prepared.clone());
+        }
+        *cache = None;
+        let prepared = Arc::new(analysis::prepare(kind, content, &self.options, control)?);
+        #[cfg(test)]
+        self.preparations
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        *cache = Some(prepared.clone());
+        Ok(prepared)
+    }
+}
+impl<T> SourceInspector for OpenApi<T> {
+    type Inspection<'a>
+        = Ready<Result<SourceInspection, InspectionError>>
+    where
+        Self: 'a;
+    fn supports_kind(&self, kind: &str) -> bool {
+        Kind::from_label(kind).is_some()
+    }
+    fn supported_kinds(&self) -> Vec<SupportedKind> {
+        Kind::ALL
+            .into_iter()
+            .map(|kind| SupportedKind {
+                kind: kind.label().into(),
+                description: Some(
+                    "Private finite JSON experiment; consult its qualified capability profile"
+                        .into(),
+                ),
+            })
+            .collect()
+    }
+    fn inspect<'a>(&'a self, source: &'a Source, control: WorkControl) -> Self::Inspection<'a> {
+        ready(
+            self.prepare(source, &control)
+                .map(|p| p.inspection())
+                .map_err(|e| e.inspection()),
+        )
+    }
+}
+fn check(control: &WorkControl) -> Result<(), Error> {
+    if control.is_cancelled() {
+        Err(Error::new(ErrorKind::Cancelled, "cancelled"))
+    } else {
+        Ok(())
+    }
+}
+fn json(value: &serde_json_compat::Value) -> Result<JsonValue, Error> {
+    JsonValue::parse(value.to_string()).map_err(|_| Error::new(ErrorKind::Limit, "result-limit"))
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+    use std::sync::atomic::Ordering;
+    fn source(uri: &str) -> Source {
+        Source {kind:EXPERIMENTAL_KIND.into(),content:Some(json(&serde_json_compat::json!({"document":include_str!("../tests/fixtures/r1/parcels.json"),"retrievalUri":uri})).unwrap()),..Default::default()}
+    }
+    #[test]
+    fn one_source_cache_checks_content_base_and_fixed_options() {
+        let provider = OpenApi::default();
+        let control = WorkControl::new();
+        let a = source("https://a.invalid/doc.json");
+        let first = provider.prepare(&a, &control).unwrap();
+        let same = provider.prepare(&a.clone(), &control).unwrap();
+        assert!(Arc::ptr_eq(&first, &same));
+        let equivalent = source("https://a.invalid/doc.json");
+        assert!(Arc::ptr_eq(
+            &first,
+            &provider.prepare(&equivalent, &control).unwrap()
+        ));
+        assert_eq!(provider.preparations.load(Ordering::Relaxed), 1);
+        let b = source("https://b.invalid/doc.json");
+        assert!(!Arc::ptr_eq(
+            &first,
+            &provider.prepare(&b, &control).unwrap()
+        ));
+        assert_eq!(provider.preparations.load(Ordering::Relaxed), 2);
+        drop(same);
+        drop(first);
+        let weak = Arc::downgrade(provider.cached.lock().unwrap().as_ref().unwrap());
+        provider.prepare(&a, &control).unwrap();
+        assert!(weak.upgrade().is_none());
+        let options = Options {
+            source_bytes: 0,
+            ..Default::default()
+        };
+        assert!(
+            OpenApi::new(options)
+                .unwrap()
+                .prepare(&a, &control)
+                .is_err()
+        );
+    }
+}
+
+
+FILE examples/openapi-json-path-consumer/src/auth.rs
+//! Authenticated consumers shared by native and local Wasm qualification.
+use crate::wire_json::{Value, json};
+use dynamic_openapi_client::{BodyState, Cancellation, DeliveredBody, Header, HeaderDelivery, HostCapabilities, Outcome, PreparedRequest, Provenance, ResponseInput, TransportResult, UploadState};
+use openbindings::{DocumentBuilder, JsonValue, ParsedDocument, Source};
+use openbindings_invocation::{binding, operation, BindingRequest, BindingValue, InvocationError};
+use openbindings_openapi::{OpenApi, Options};
+use openbindings_interface_synthesis::{Synthesizer, SynthesisSource, SynthesisRequest};
+use std::{cell::{Cell,RefCell},rc::Rc,sync::Arc};
+pub const OUTPUT:&str=r#"{"ok":true,"n":9007199254740993,"label":"雪"}"#;
+pub fn value(v:Value)->JsonValue{JsonValue::parse(v.to_string()).unwrap()}
+pub fn edition(v30:bool)->(&'static str,&'static str,&'static str,&'static str){
+    if v30 {(openbindings_openapi::EXPERIMENTAL_KIND_30,include_str!("auth-fixtures/service-3.0.4.json"),include_str!("auth-fixtures/manual-3.0.4.obi.json"),include_str!("auth-fixtures/variants-3.0.4.json"))}
+    else{(openbindings_openapi::EXPERIMENTAL_KIND,include_str!("auth-fixtures/service-3.1.2.json"),include_str!("auth-fixtures/manual-3.1.2.obi.json"),include_str!("auth-fixtures/variants-3.1.2.json"))}
+}
+pub fn source(kind:&str,text:&str)->Source{Source{kind:kind.into(),content:Some(value(json!({"document":text,"retrievalUri":"https://source.example.test/service.json"}))),..Default::default()}}
+pub fn context(kind:&str,names:&[&str])->Value{
+    let mut credentials=crate::wire_json::Map::new();let mut origins=crate::wire_json::Map::new();
+    for n in names {credentials.insert((*n).into(),json!(if *n=="ServiceToken"{"fixture-bearer-A"}else{"fixture-key-A"}));origins.insert((*n).into(),json!(["https://api.example.test"]));}
+    json!({"credentials":credentials,"configuration":{format!("{kind}.security"):{"schemes":names,"origins":origins}}})
+}
+#[derive(Default)]
+pub struct Seen {pub calls:Cell<usize>,pub wires:RefCell<Vec<Value>>}
+pub fn host(seen:Rc<Seen>,status:u16,body:&str)->impl Fn(PreparedRequest,Cancellation)->std::pin::Pin<Box<dyn Future<Output=Outcome>>>{
+    let body=body.to_owned();
+    move |request,cancel| { let seen=seen.clone();let body=body.clone();Box::pin(async move {
+        // Count adapter-to-host entry too, including a client-side dispatch refusal.
+        seen.calls.set(seen.calls.get()+1);
+        request.invoke(cancel,&HostCapabilities::programmable(),move |wire,_|async move{
+            seen.wires.borrow_mut().push(json!({"target":wire.target,"headers":wire.headers.iter().map(|h|(h.name().to_lowercase(),String::from_utf8(h.value().to_vec()).unwrap())).collect::<Vec<_>>(),"body":wire.body.as_deref().map(|b|String::from_utf8(b.to_vec()).unwrap())}));
+            let mut response=ResponseInput::new(status,vec![Header::new("content-type","application/json")],DeliveredBody{bytes:Arc::from(body.as_bytes()),state:BodyState::Complete,provenance:Provenance::Wire});response.header_delivery=HeaderDelivery::Complete;
+            TransportResult{upload:UploadState::Complete,response:Some(response),error_detail:None}
+        }).await
+    })}
+}
+pub async fn binding_call<P:binding::BindingInvoker>(p:P,src:&Source,path:&str,method:&str,context:Option<&JsonValue>,inputs:&[&str])->Result<Vec<String>,InvocationError>{
+    let b=BindingValue{content:Some(value(json!({"path":path,"method":method}))),..Default::default()};
+    let invoker=binding::Invoker::new(p);let mut call=invoker.invoke(BindingRequest{source:src,binding:&b,context});
+    for v in inputs {let _=call.write(JsonValue::parse(v).unwrap()).await;}call.close();drain(&mut call).await
+}
+async fn drain<F:Future<Output=Result<(),InvocationError>>>(call:&mut openbindings_invocation::Invocation<F>)->Result<Vec<String>,InvocationError>{
+    let mut out=vec![];while let Some(v)=call.next().await {match v{Ok(v)=>out.push(v.text().into()),Err(e)=>{assert!(out.is_empty());return Err(e);}}}
+    call.outcome().expect("terminal")?;Ok(out)
+}
+pub async fn operation_call<P:binding::BindingInvoker>(p:P,saved:&str,key:&str,context:&JsonValue,input:&str)->Result<Vec<String>,InvocationError>{
+    let invoker=operation::Invoker::new(ParsedDocument::parse(saved).unwrap(),p).with_evaluator(Arc::new(openbindings_json_schema_evaluator::DefaultEvaluator::new()),openbindings::ResourceSet::default()).unwrap();
+    let mut call=invoker.invoke(operation::Request::operation(key).with_context(context));let _=call.write(JsonValue::parse(input).unwrap()).await;call.close();drain(&mut call).await
+}
+fn assert_wire(seen:&Seen,row:&Value){
+    assert_eq!(seen.calls.get(),1);let wires=seen.wires.borrow();assert_eq!(wires.len(),1);let w=&wires[0];
+    assert_eq!(w["target"],format!("https://api.example.test{}",row["path"].as_str().unwrap()));assert_eq!(w["body"],row["bodyText"]);
+    let h=w["headers"].as_array().unwrap();
+    for name in ["authorization","x-partner-key","x-second-key"] {
+        let matches:Vec<_>=h.iter().filter(|x|x[0]==name).collect();
+        let expected=row["authHeaders"].as_object().unwrap().iter().find(|(n,_)|n.eq_ignore_ascii_case(name)).map(|(_,v)|v);
+        assert_eq!(matches.len(),usize::from(expected.is_some()));if let Some(expected)=expected {assert_eq!(&matches[0][1],expected);}
+    }
+}
+pub async fn suite(v30:bool){
+    let (kind,text,manual,variants)=edition(v30);let src=source(kind,text);let point=format!("{kind}.security");
+    let oracle:Value=crate::wire_json::from_str(include_str!("auth-fixtures/wire-oracle.json")).unwrap();
+    let inspector=OpenApi::default();assert_eq!(openbindings_source_inspection::Inspector::new(&inspector).inspect(&src).await.unwrap().targets.len(),7);
+    let sources=[SynthesisSource{name:Some("api"),source:&src}];let synthesis=Synthesizer::new(inspector).synthesize_with_coverage(&SynthesisRequest{sources:&sources,..Default::default()}).await.unwrap();
+    assert_eq!(synthesis.document().parsed().value().get("operations").unwrap().members().unwrap().count(),6);
+    let mut generated=DocumentBuilder::from_json(synthesis.document().parsed().value()).unwrap();
+    // Rename all generated operation keys. Binding path/method remains the authority.
+    for (index,b) in generated.bindings.as_mut().unwrap().values_mut().enumerate(){let old=b.operation.clone();let new=format!("renamed_{index}");let op=generated.operations.remove(&old).unwrap();generated.operations.insert(new.clone(),op);b.operation=new;}
+    let saved=generated.to_json().unwrap().text().to_owned();
+    for row in oracle["requests"].as_array().unwrap(){
+        let names:Vec<_>=row["securitySchemes"].as_array().unwrap().iter().map(|n|n.as_str().unwrap()).collect();let mut c=context(kind,&names);c["credentials"]=row["credentials"].clone();let c=value(c);
+        let path=row["path"].as_str().unwrap();let method=row["method"].as_str().unwrap().to_lowercase();let input=row["inputText"].as_str().unwrap();
+        let seen=Rc::new(Seen::default());let p=OpenApi::default().with_transport(host(seen.clone(),200,OUTPUT));
+        assert_eq!(binding_call(p,&src,path,&method,Some(&c),&[input]).await.unwrap(),[OUTPUT]);assert_wire(&seen,row);
+        for doc in [manual,&saved] {
+            let draft=DocumentBuilder::from_json(ParsedDocument::parse(doc).unwrap().value()).unwrap();let key=&draft.bindings.as_ref().unwrap().values().find(|b|b.content.as_ref().unwrap().get("path").unwrap().as_str()==Some(path)).unwrap().operation;
+            let seen=Rc::new(Seen::default());let p=OpenApi::default().with_transport(host(seen.clone(),200,OUTPUT));
+            assert_eq!(operation_call(p,doc,key,&c,input).await.unwrap(),[OUTPUT]);assert_wire(&seen,row);
+        }
+    }
+    let variants:Value=crate::wire_json::from_str(variants).unwrap();
+    for n in ["mixed-unsupported","roles","query","cookie","oauth","oidc","unknown","mtls"]{
+        let s=source(kind,&variants[n].to_string());let seen=Rc::new(Seen::default());let p=OpenApi::default().with_transport(host(seen.clone(),200,OUTPUT));
+        assert_eq!(binding_call(p,&s,"/items","get",Some(&value(context(kind,&["ServiceToken"]))),&["{}"]).await.unwrap_err().code(),"ERR_REFUSED","{n}");assert_eq!(seen.calls.get(),0);
+        let input=[SynthesisSource{name:None,source:&s}];let result=Synthesizer::new(OpenApi::default()).synthesize_with_coverage(&SynthesisRequest{sources:&input,..Default::default()}).await.unwrap();
+        assert!(result.coverage().entries().iter().any(|e|e.source_ref=="/paths/~1items/get" && e.status==openbindings_interface_synthesis::CoverageStatus::ImplementationUnsupported));
+        assert!(result.document().parsed().value().get("operations").unwrap().members().unwrap().count()>0);
+    }
+    for (n,names) in [("two-keys",vec!["PartnerKey","SecondKey"]),("duplicate-alternatives",vec!["ServiceToken"]),("anonymous",vec![]),("reordered",vec!["PartnerKey"])]{
+        let s=source(kind,&variants[n].to_string());let mut c=context(kind,&names);if n=="duplicate-alternatives"{c["configuration"][&point].as_object_mut().unwrap().remove("schemes");}
+        let seen=Rc::new(Seen::default());let p=OpenApi::default().with_transport(host(seen.clone(),200,OUTPUT));assert!(binding_call(p,&s,"/items","get",Some(&value(c)),&["{}"]).await.is_ok(),"{n}");assert_eq!(seen.calls.get(),1);
+    }
+    for (n,names) in [("collision",vec!["ServiceToken","Other"]),("key-collision",vec!["PartnerKey","Other"]) ]{
+        let s=source(kind,&variants[n].to_string());let seen=Rc::new(Seen::default());let p=OpenApi::default().with_transport(host(seen.clone(),200,OUTPUT));assert_eq!(binding_call(p,&s,"/items","get",Some(&value(context(kind,&names))),&["{}"]).await.unwrap_err().code(),"ERR_REFUSED");assert_eq!(seen.calls.get(),0);
+    }
+    let good=context(kind,&["ServiceToken"]);
+    let mut contexts:Vec<(Value,&str)>=vec![(json!({}),"CONTEXT_REQUIRED")];
+    for v in [Value::Null,json!(23),json!({}),json!("bad token"),json!("fixture-bearer-A\r\ninject: x")]{let mut c=good.clone();c["credentials"]["ServiceToken"]=v;contexts.push((c,"ERR_REFUSED"));}
+    for v in [json!(null),json!([]),json!([23]),json!(["not-a-url"]),json!(["http://api.example.test"]),json!(["https://api.example.test:444"]),json!(["https://source.example.test"])]{let mut c=good.clone();c["configuration"][&point]["origins"]["ServiceToken"]=v;contexts.push((c,"ERR_REFUSED"));}
+    for v in [json!(["Unknown"]),json!(["ServiceToken","ServiceToken"]),json!(null),json!([])]{let mut c=good.clone();c["configuration"][&point]["schemes"]=v;contexts.push((c,"ERR_REFUSED"));}
+    let mut conflict=good.clone();conflict["bearerToken"]=json!("fixture-CONFLICT");contexts.push((conflict,"ERR_REFUSED"));
+    let mut missing=good.clone();missing["credentials"]=json!({});contexts.push((missing,"CONTEXT_REQUIRED"));
+    let mut missing=good.clone();missing["configuration"][&point].as_object_mut().unwrap().remove("origins");contexts.push((missing,"CONTEXT_REQUIRED"));
+    let wrong_kind=if v30{openbindings_openapi::EXPERIMENTAL_KIND}else{openbindings_openapi::EXPERIMENTAL_KIND_30};contexts.push((context(wrong_kind,&["ServiceToken"]),"CONTEXT_REQUIRED"));
+    let seen=Rc::new(Seen::default());let p=OpenApi::default().with_transport(host(seen.clone(),200,OUTPUT));
+    // Same provider: A then B then absent. Context is never retained in its cache.
+    for token in ["fixture-bearer-A","fixture-bearer-B"]{let mut c=good.clone();c["credentials"]["ServiceToken"]=json!(token);assert!(binding_call(&p,&src,"/items","get",Some(&value(c)),&["{}"]).await.is_ok());}
+    let before=seen.calls.get();
+    for (c,code) in contexts {let e=binding_call(&p,&src,"/items","get",Some(&value(c)),&["{}"]).await.unwrap_err();assert_eq!(e.code(),code);let debug=format!("{e:?}");assert!(!debug.contains("fixture-"));assert_eq!(seen.calls.get(),before);}
+    for c in [format!(r#"{{"credentials":{{"ServiceToken":"fixture-bearer-A","ServiceToken":"fixture-bearer-B"}}}}"#),format!(r#"{{"configuration":{{"{point}":{{"schemes":["ServiceToken"],"schemes":[]}}}}}}"#)] {assert_eq!(binding_call(&p,&src,"/items","get",Some(&JsonValue::parse(c).unwrap()),&["{}"]).await.unwrap_err().code(),"ERR_REFUSED");assert_eq!(seen.calls.get(),before);}
+    // Explicit compatibility forms and canonical origins.
+    for alias in ["bearerToken","equal"]{let mut c=good.clone();c["bearerToken"]=json!("fixture-bearer-A");if alias!="equal"{c.as_object_mut().unwrap().remove("credentials");}c["configuration"][&point]["origins"]["ServiceToken"]=json!(["HTTPS://API.EXAMPLE.TEST:443"]);assert!(binding_call(&p,&src,"/items","get",Some(&value(c)),&["{}"]).await.is_ok());}
+    for alias in ["apiKey","apiKeys"]{let mut c=context(kind,&["PartnerKey"]);c.as_object_mut().unwrap().remove("credentials");c[alias]=if alias=="apiKey"{json!("fixture-key-A")}else{json!({"PartnerKey":"fixture-key-A"})};assert!(binding_call(&p,&src,"/items/new","post",Some(&value(c)),&["{\"body\":null}"]).await.is_ok());}
+    for path in ["/choice","/optional"]{let before=seen.calls.get();let e=binding_call(&p,&src,path,"get",Some(&value(json!({"credentials":{"ServiceToken":"fixture-bearer-A"}}))),&["{}"]).await.unwrap_err();assert_eq!(e.code(),"CONTEXT_REQUIRED");assert_eq!(seen.calls.get(),before);assert!(binding_call(&p,&src,path,"get",Some(&value(context(kind,&[]))),&["{}"]).await.is_ok());}
+    let two=source(kind,&variants["two-servers"].to_string());let e=binding_call(&p,&two,"/items","get",None,&["{}"]).await.unwrap_err();let encoded=e.to_json().unwrap().text().to_owned();assert!(encoded.contains(&format!("{kind}.server")));assert!(!encoded.contains("auth.bearer"));
+    let mut c=good.clone();c["configuration"][format!("{kind}.server")]=json!("https://api.example.test");assert!(binding_call(&p,&two,"/items","get",Some(&value(c)),&["{}"]).await.is_ok());
+    for status in [401,403,302]{let seen=Rc::new(Seen::default());let p=OpenApi::default().with_transport(host(seen.clone(),status,OUTPUT));assert_eq!(binding_call(p,&src,"/items","get",Some(&value(good.clone())),&["{}"]).await.unwrap_err().code(),format!("{kind}.http-status"));assert_eq!(seen.calls.get(),1);}
+    let seen=Rc::new(Seen::default());let p=OpenApi::default().with_transport(host(seen.clone(),200,"{"));assert_eq!(binding_call(p,&src,"/items","get",Some(&value(good.clone())),&["{}"]).await.unwrap_err().code(),"ERR_EXECUTION_FAILED");assert_eq!(seen.calls.get(),1);
+    for inputs in [vec![],vec!["{}","{}"]]{let seen=Rc::new(Seen::default());let p=OpenApi::default().with_transport(host(seen.clone(),200,OUTPUT));assert_eq!(binding_call(p,&src,"/items","get",Some(&value(good.clone())),&inputs).await.unwrap_err().code(),"ERR_REFUSED");assert_eq!(seen.calls.get(),0);}
+    let c=value(good.clone());for (limit,ok) in [(c.bytes().len(),true),(c.bytes().len()-1,false)]{let mut o=Options::default();o.context_bytes=limit;let seen=Rc::new(Seen::default());let p=OpenApi::new(o).unwrap().with_transport(host(seen.clone(),200,OUTPUT));assert_eq!(binding_call(p,&src,"/items","get",Some(&c),&["{}"]).await.is_ok(),ok);assert_eq!(seen.calls.get(),usize::from(ok));}
+    // External resource names are resolved in the entry OpenAPI document in this experiment.
+    let mut o=Options::default();o.resources.push(openbindings_openapi::ResourceInput::at("https://source.example.test/parts.json",if v30{include_bytes!("auth-fixtures/parts-3.0.4.json").as_slice()}else{include_bytes!("auth-fixtures/parts-3.1.2.json").as_slice()}).unwrap());
+    let s=source(kind,&variants["references"].to_string());let seen=Rc::new(Seen::default());let p=OpenApi::new(o.clone()).unwrap().with_transport(host(seen.clone(),200,OUTPUT));assert!(binding_call(p,&s,"/items","get",Some(&c),&["{}"]).await.is_ok());assert_eq!(seen.calls.get(),1);
+    let sources=[SynthesisSource{name:Some("api"),source:&s}];let result=Synthesizer::new(OpenApi::new(o.clone()).unwrap()).synthesize_with_coverage(&SynthesisRequest{sources:&sources,..Default::default()}).await.unwrap();let saved=result.document().parsed().value().text();let draft=DocumentBuilder::from_json(result.document().parsed().value()).unwrap();let name=&draft.bindings.as_ref().unwrap().values().find(|b|b.content.as_ref().unwrap().get("path").unwrap().as_str()==Some("/items")).unwrap().operation;
+    let seen=Rc::new(Seen::default());assert!(operation_call(OpenApi::new(o).unwrap().with_transport(host(seen.clone(),200,OUTPUT)),saved,name,&c,"{}").await.is_ok());assert_eq!(seen.calls.get(),1);
+    let seen=Rc::new(Seen::default());assert_eq!(binding_call(OpenApi::default().with_transport(host(seen.clone(),200,OUTPUT)),&s,"/items","get",Some(&c),&["{}"]).await.unwrap_err().code(),"ERR_REFUSED");assert_eq!(seen.calls.get(),0);
+}
+
+/// Repeated resource/effect mix including a pending host and independent sibling.
+pub async fn cycle(v30:bool){
+    use openbindings::WorkControl;
+    use std::task::Poll;
+    let (kind,text,_,_)=edition(v30);let src=source(kind,text);let good=value(context(kind,&["ServiceToken"]));
+    for (ctx,status,body,code,effects) in [(Some(&good),200,OUTPUT,None,1),(None,200,OUTPUT,Some("CONTEXT_REQUIRED"),0),(Some(&good),401,OUTPUT,Some(if v30{openbindings_openapi::HTTP_STATUS_ERROR_30}else{openbindings_openapi::HTTP_STATUS_ERROR}),1),(Some(&good),200,"{",Some("ERR_EXECUTION_FAILED"),1)]{
+        let seen=Rc::new(Seen::default());let p=OpenApi::default().with_transport(host(seen.clone(),status,body));let r=binding_call(p,&src,"/items","get",ctx,&["{}"]).await;
+        match code{None=>assert_eq!(r.unwrap(),[OUTPUT]),Some(code)=>assert_eq!(r.unwrap_err().code(),code)}assert_eq!(seen.calls.get(),effects);
+    }
+    let mut wrong=context(kind,&["ServiceToken"]);wrong["configuration"][format!("{kind}.security")]["origins"]["ServiceToken"]=json!(["https://wrong.test"]);let seen=Rc::new(Seen::default());assert_eq!(binding_call(OpenApi::default().with_transport(host(seen.clone(),200,OUTPUT)),&src,"/items","get",Some(&value(wrong)),&["{}"]).await.unwrap_err().code(),"ERR_REFUSED");assert_eq!(seen.calls.get(),0);
+    struct Guard(Rc<Cell<usize>>);impl Drop for Guard{fn drop(&mut self){self.0.set(self.0.get()-1);}}
+    for abandon in [false,true]{
+        let live=Rc::new(Cell::new(0));let effects=Rc::new(Cell::new(0));let count=effects.clone();let registered=live.clone();
+        let p=OpenApi::default().with_transport(move |request:PreparedRequest,cancel:Cancellation|{let registered=registered.clone();let count=count.clone();async move{
+            count.set(count.get()+1);
+            let pending=request.headers().iter().any(|h|h.value()==b"Bearer fixture-bearer-A");
+            if pending {registered.set(registered.get()+1);let _guard=Guard(registered);std::future::pending::<Outcome>().await}
+            else {request.invoke(cancel,&HostCapabilities::programmable(),|_,_|async {let mut response=ResponseInput::new(200,vec![Header::new("content-type","application/json")],DeliveredBody{bytes:Arc::from(OUTPUT.as_bytes()),state:BodyState::Complete,provenance:Provenance::Wire});response.header_delivery=HeaderDelivery::Complete;TransportResult{upload:UploadState::Complete,response:Some(response),error_detail:None}}).await}
+        }});
+        let invoker=binding::Invoker::new(&p);let b=BindingValue{content:Some(value(json!({"path":"/items","method":"get"}))),..Default::default()};let control=WorkControl::new();
+        let mut job=invoker.invoke_with_control(BindingRequest{source:&src,binding:&b,context:Some(&good)},&control);job.write(JsonValue::parse("{}").unwrap()).await.unwrap();job.close();
+        {let mut next=std::pin::pin!(job.next());std::future::poll_fn(|cx|{assert!(next.as_mut().poll(cx).is_pending());Poll::Ready(())}).await;}
+        assert_eq!(live.get(),1);assert_eq!(effects.get(),1);
+        let mut sibling=context(kind,&["ServiceToken"]);sibling["credentials"]["ServiceToken"]=json!("fixture-bearer-B");assert!(binding_call(&p,&src,"/items","get",Some(&value(sibling)),&["{}"]).await.is_ok());assert_eq!(live.get(),1);assert_eq!(effects.get(),2);
+        if !abandon{control.cancel();assert_eq!(job.next().await.unwrap().unwrap_err().code(),"ERR_CANCELLED");}drop(job);assert_eq!(live.get(),0);
+        let cancelled=WorkControl::new();cancelled.cancel();let mut before=invoker.invoke_with_control(BindingRequest{source:&src,binding:&b,context:Some(&good)},&cancelled);before.close();assert_eq!(before.next().await.unwrap().unwrap_err().code(),"ERR_CANCELLED");assert_eq!(effects.get(),2);
+    }
+}

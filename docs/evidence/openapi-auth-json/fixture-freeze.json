@@ -1,0 +1,24 @@
+{
+  "stage": "before runtime edits",
+  "authority": "Fresh authored sources/manual OBI and literal wire; case outcomes from plan, never candidate output",
+  "sha256": {
+    "crates/openbindings-openapi/tests/fixtures/auth/manual-3.0.4.obi.json": "9427db71f7c8a451869022e5b86c9290b9becfd415d45b2b3ebb31817a46ec38",
+    "crates/openbindings-openapi/tests/fixtures/auth/manual-3.1.2.obi.json": "3d04c712cc10cf50d3687d044f1d768842f509f64499574ea5d4044f74164bf1",
+    "crates/openbindings-openapi/tests/fixtures/auth/parts-3.0.4.json": "85b20cf984c4ae7033eb1cb62d6c8062c31e33d4dffb3c3d77cc0d05fbfd6ecf",
+    "crates/openbindings-openapi/tests/fixtures/auth/parts-3.1.2.json": "7a7aa2689c460a8c2166c3c336a5340d96e30036358fa8bdf14cd693fb5d74d7",
+    "crates/openbindings-openapi/tests/fixtures/auth/service-3.0.4.json": "c13717ff4c4a3ae90273e2c8f37f00cc145a3eb412ce46aef17aa884f4b1615c",
+    "crates/openbindings-openapi/tests/fixtures/auth/service-3.1.2.json": "46e5d94afdd10afaf7b7c33026f2c577ab7807247fd9a3fe8e7a56a03513067d",
+    "crates/openbindings-openapi/tests/fixtures/auth/variants-3.0.4.json": "7486d08a7a2427d85a71f7cf1cdf58ab6a2e0aa5b4a365074ba301a0c98b6546",
+    "crates/openbindings-openapi/tests/fixtures/auth/variants-3.1.2.json": "8345824dfc0f062dcb41757aa3934e882bbd8c03b809a3199b795b53b455bc70",
+    "crates/openbindings-openapi/tests/fixtures/auth/wire-oracle.json": "a60e1ec2b022a44436bcec9c5fe215d2eb22a326ac5d0783f29239a2b9a92d69"
+  },
+  "corrections": [
+    {
+      "reason": "Manual carrier used 0.2 shorthand; adopted core requires semver 0.2.0. Corrected syntactic fixture error, no wire/caller expectations changed.",
+      "newHashes": {
+        "crates/openbindings-openapi/tests/fixtures/auth/manual-3.0.4.obi.json": "2c8c7b2bceb769c280b753c20e46ba21ebd3fb62c065b688a85e4ee52e3e5442",
+        "crates/openbindings-openapi/tests/fixtures/auth/manual-3.1.2.obi.json": "9904692971a2c9e3915efaffaab8e5a06f9e6dc6120cb3be285717462a8d9ee5"
+      }
+    }
+  ]
+}

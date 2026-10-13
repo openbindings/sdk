@@ -1,0 +1,37 @@
+{
+  "retention": "All raw bytes preserved in verified lossless gzip copies. Redundant uncompressed checkpoints removed only after both independent raw reviews.",
+  "files": [
+    {
+      "raw_name": "0-candidate.jsonl",
+      "raw_sha256": "69c796ecfa882f3ecf608055d8fed2fa2b7ba88c35d960ae5d68e2a256ade1fc",
+      "compressed_name": "0-candidate.jsonl.gz",
+      "compressed_sha256": "35eb7727f1d09a2363965876a22aff04732fdc06a872ab77aa0e9f7d1353ecad",
+      "raw_bytes": 6068940,
+      "compressed_bytes": 394624
+    },
+    {
+      "raw_name": "1-candidate.jsonl",
+      "raw_sha256": "b9e332b749f1cfccdc6d0c5c5e8b09bacadd2765cd5efc0990eb77ed7ddb4789",
+      "compressed_name": "1-candidate.jsonl.gz",
+      "compressed_sha256": "6cdecf2130911a4bd5e80a30c61314d60c84fe311803ecb08f53d343659000d2",
+      "raw_bytes": 6112864,
+      "compressed_bytes": 398145
+    },
+    {
+      "raw_name": "2-candidate.jsonl",
+      "raw_sha256": "2dcb8583f94bab14f8cdbe53016348688ed49aec53dd92b498bef8d647dae4a3",
+      "compressed_name": "2-candidate.jsonl.gz",
+      "compressed_sha256": "ce89f8385ba6e88c0863c2800307b79ef9eb80e6c41ab60fea66d89e30971af5",
+      "raw_bytes": 6120291,
+      "compressed_bytes": 396252
+    },
+    {
+      "raw_name": "first-launch-candidate.jsonl",
+      "raw_sha256": "e3a77ffa0fc6eaa619f0d5b310f21bc627903ee43f18a8ebb547a235c5d739a6",
+      "compressed_name": "first-launch-candidate.jsonl.gz",
+      "compressed_sha256": "4167c95113349f057e36ac86d25ae69e5add74179e885ccec93741cd2dcac63d",
+      "raw_bytes": 581082,
+      "compressed_bytes": 5541
+    }
+  ]
+}

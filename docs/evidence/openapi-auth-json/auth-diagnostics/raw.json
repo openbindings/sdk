@@ -1,0 +1,1613 @@
+[
+  {
+    "notes": [
+      "Cold includes fresh provider and source preparation; warm retains public source analysis only.",
+      "No direct baseline claims equivalent synthesis coverage, so these source rows are diagnostic under the registered rule.",
+      "Negative-path rows include effect assertions and helper ownership/destruction; no network/heap/RSS claim."
+    ],
+    "rows": [
+      {
+        "cold": false,
+        "operations": 1,
+        "samples_ns": [
+          506.41453805173495,
+          359.460596126472,
+          352.3085497667733,
+          353.9097890713477,
+          357.8120066695769,
+          351.9995283218112,
+          351.0569059454602
+        ],
+        "source_bytes": 473,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 1,
+        "samples_ns": [
+          23607.58970727101,
+          23359.684259691734,
+          23415.75,
+          23410.092696629214,
+          23433.5946579194,
+          23461.831613508442,
+          23471.492257156264
+        ],
+        "source_bytes": 473,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 1,
+        "samples_ns": [
+          23571.33600377003,
+          23380.39597942964,
+          23632.40359168242,
+          23812.241904761904,
+          23750.9301994302,
+          23827.87470223916,
+          23626.121870571562
+        ],
+        "source_bytes": 473,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 1,
+        "samples_ns": [
+          48198.619460500966,
+          48892.79863147605,
+          47984.86001917545,
+          48295.16505791506,
+          48666.74805447471,
+          48200.46531791907,
+          48383.90522243714
+        ],
+        "source_bytes": 473,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 32,
+        "samples_ns": [
+          2259.7090884439826,
+          2266.153734590283,
+          2272.1700899754615,
+          2274.741094581684,
+          2252.7238691656153,
+          2273.319709024778,
+          2271.411574978422
+        ],
+        "source_bytes": 3874,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 32,
+        "samples_ns": [
+          462738.9082568807,
+          462370.0366972477,
+          462425.08256880735,
+          464009.64814814815,
+          470750.38317757007,
+          468935.7476635514,
+          467012.73148148146
+        ],
+        "source_bytes": 3874,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 32,
+        "samples_ns": [
+          494097.6274509804,
+          497063.5346534653,
+          498208.3366336634,
+          496365.099009901,
+          497379.1287128713,
+          494306.7843137255,
+          494872.95098039217
+        ],
+        "source_bytes": 3874,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 32,
+        "samples_ns": [
+          979468.75,
+          949012.5660377359,
+          974657.0384615385,
+          957876.5660377359,
+          969011.2115384615,
+          951289.320754717,
+          952348.2641509434
+        ],
+        "source_bytes": 3874,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 512,
+        "samples_ns": [
+          36126.29314079422,
+          36057.28767123288,
+          35896.625987078245,
+          36029.0886167147,
+          36098.06421356421,
+          35825.54297994269,
+          36088.83477633478
+        ],
+        "source_bytes": 57086,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 512,
+        "samples_ns": [
+          7581333.285714285,
+          7539756.0,
+          7666815.428571428,
+          7706803.571428572,
+          7608833.428571428,
+          7773119.142857143,
+          7871386.857142857
+        ],
+        "source_bytes": 57086,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 512,
+        "samples_ns": [
+          7884767.857142857,
+          8012488.142857143,
+          8051821.428571428,
+          7992660.714285715,
+          7861059.428571428,
+          8465354.166666666,
+          8180583.428571428
+        ],
+        "source_bytes": 57086,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 512,
+        "samples_ns": [
+          16098520.75,
+          16125875.0,
+          15926448.0,
+          15891104.25,
+          15654687.5,
+          15480177.0,
+          15426760.5
+        ],
+        "source_bytes": 57086,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "context_bytes": 0,
+        "samples_ns": [
+          12809.13806352459,
+          12807.387551229509,
+          12778.569384104268,
+          12731.468431771895,
+          12799.441003327362,
+          12875.4289392379,
+          12781.25
+        ],
+        "stage": "missing-credentials",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "context_bytes": 196,
+        "samples_ns": [
+          4762.6242499285645,
+          4739.644549763033,
+          4794.435420462173,
+          4778.721521406728,
+          4759.713660161828,
+          4791.3951705634345,
+          4839.555845915602
+        ],
+        "stage": "wrong-origin",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "context_bytes": 0,
+        "samples_ns": [
+          18498.766555678874,
+          18286.74588665448,
+          18176.784078516903,
+          18346.32538517975,
+          18204.31379686931,
+          18379.22638735759,
+          18365.49761292692
+        ],
+        "stage": "security-selection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "context_bytes": 105,
+        "samples_ns": [
+          8673.73512575889,
+          8733.219699615787,
+          8745.139734172788,
+          8733.190709046456,
+          8736.865979381444,
+          8523.414862791888,
+          8663.188430897126
+        ],
+        "stage": "anonymous-selection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 1,
+        "samples_ns": [
+          354.98594259181687,
+          354.1232842755358,
+          353.5148723459915,
+          354.53094333200977,
+          354.6734101791098,
+          355.67650699255927,
+          352.4579764699248
+        ],
+        "source_bytes": 473,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": false,
+        "operations": 1,
+        "samples_ns": [
+          23729.245730550283,
+          23939.0057443753,
+          23848.53710751665,
+          23803.54593050928,
+          23686.700615821886,
+          23518.87347130762,
+          23356.083605791686
+        ],
+        "source_bytes": 473,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 1,
+        "samples_ns": [
+          23488.78581493659,
+          23345.84126984127,
+          23525.04703668862,
+          23537.235294117647,
+          23277.564245810056,
+          23493.521841240017,
+          23419.340515222484
+        ],
+        "source_bytes": 473,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 1,
+        "samples_ns": [
+          49624.09027777778,
+          49523.39108910891,
+          48032.74159462056,
+          48672.13910505836,
+          48045.50912584054,
+          48419.32817037754,
+          50314.889336016095
+        ],
+        "source_bytes": 473,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": false,
+        "operations": 32,
+        "samples_ns": [
+          2311.5185613240255,
+          2215.3577758085953,
+          2226.0002225981657,
+          2250.2944194419442,
+          2203.5866202459124,
+          2220.138486812894,
+          2203.8136900564173
+        ],
+        "source_bytes": 3874,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": false,
+        "operations": 32,
+        "samples_ns": [
+          460558.8623853211,
+          455373.4818181818,
+          455329.92727272725,
+          455677.2727272727,
+          451168.5495495495,
+          452586.7117117117,
+          455910.9818181818
+        ],
+        "source_bytes": 3874,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 32,
+        "samples_ns": [
+          485788.0576923077,
+          492193.6274509804,
+          488279.53398058255,
+          487296.92233009706,
+          484632.60576923075,
+          481016.0288461539,
+          486164.2427184466
+        ],
+        "source_bytes": 3874,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 32,
+        "samples_ns": [
+          936776.2407407408,
+          941321.7592592592,
+          940010.8148148148,
+          939768.5185185185,
+          952577.8301886793,
+          945099.0566037736,
+          940460.6481481482
+        ],
+        "source_bytes": 3874,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": false,
+        "operations": 512,
+        "samples_ns": [
+          35452.90007087172,
+          35412.8895184136,
+          35369.96110325318,
+          35455.439404677534,
+          35704.52605281941,
+          35740.11222301644,
+          35694.950035688795
+        ],
+        "source_bytes": 57086,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": false,
+        "operations": 512,
+        "samples_ns": [
+          7387333.285714285,
+          7510648.857142857,
+          7775898.857142857,
+          7659160.714285715,
+          7503791.714285715,
+          7654267.857142857,
+          7377309.571428572
+        ],
+        "source_bytes": 57086,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 512,
+        "samples_ns": [
+          7782875.0,
+          7895178.571428572,
+          8227440.571428572,
+          7907636.857142857,
+          8062875.0,
+          8269898.857142857,
+          8003011.857142857
+        ],
+        "source_bytes": 57086,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 512,
+        "samples_ns": [
+          15438395.75,
+          15555364.5,
+          15450583.25,
+          15469843.75,
+          15104177.0,
+          15801698.0,
+          15496781.25
+        ],
+        "source_bytes": 57086,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "context_bytes": 0,
+        "samples_ns": [
+          12529.190679027812,
+          12526.991482965932,
+          12522.612321562734,
+          12544.813095835423,
+          12478.849513351635,
+          12546.213748118415,
+          12560.453906053755
+        ],
+        "stage": "missing-credentials",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "context_bytes": 194,
+        "samples_ns": [
+          4632.287937743191,
+          4639.280571534608,
+          4647.86279977691,
+          4634.9338153503895,
+          4625.373913043478,
+          4652.99488181649,
+          4656.941790071714
+        ],
+        "stage": "wrong-origin",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "context_bytes": 0,
+        "samples_ns": [
+          17612.774568510038,
+          17600.126011967615,
+          17642.51922398589,
+          17618.657505285413,
+          17688.42094092678,
+          17679.18593142453,
+          17666.387142352527
+        ],
+        "stage": "security-selection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "context_bytes": 103,
+        "samples_ns": [
+          8436.758225071706,
+          8370.766320723134,
+          8390.690552106058,
+          8365.623724276393,
+          8448.295151207974,
+          8360.753552917573,
+          8523.308334753707
+        ],
+        "stage": "anonymous-selection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      }
+    ]
+  },
+  {
+    "notes": [
+      "Cold includes fresh provider and source preparation; warm retains public source analysis only.",
+      "No direct baseline claims equivalent synthesis coverage, so these source rows are diagnostic under the registered rule.",
+      "Negative-path rows include effect assertions and helper ownership/destruction; no network/heap/RSS claim."
+    ],
+    "rows": [
+      {
+        "cold": false,
+        "operations": 1,
+        "samples_ns": [
+          348.35009823456465,
+          343.45991839426284,
+          342.60477179134034,
+          343.28691873038974,
+          341.98961724713416,
+          341.98174506008604,
+          345.56456863246507
+        ],
+        "source_bytes": 473,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 1,
+        "samples_ns": [
+          23429.58594847775,
+          23289.08570097811,
+          23515.710860366715,
+          23264.80604651163,
+          23370.405140186915,
+          24401.646341463416,
+          23504.209586466164
+        ],
+        "source_bytes": 473,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 1,
+        "samples_ns": [
+          23202.12668213457,
+          23356.706212050445,
+          23127.50555041628,
+          23171.72520852641,
+          23311.324941724943,
+          23252.479311947933,
+          23177.073679332716
+        ],
+        "source_bytes": 473,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 1,
+        "samples_ns": [
+          47508.74453941121,
+          47177.43773584906,
+          48931.30332681018,
+          48437.519845111325,
+          49222.768700787405,
+          48499.39379243453,
+          47912.275862068964
+        ],
+        "source_bytes": 473,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 32,
+        "samples_ns": [
+          2232.031024015713,
+          2221.043221393035,
+          2226.4096981031257,
+          2228.2967155399083,
+          2245.1655965156483,
+          2244.6635392350513,
+          2247.963808838736
+        ],
+        "source_bytes": 3874,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 32,
+        "samples_ns": [
+          468009.72897196264,
+          471840.0188679245,
+          464665.1203703704,
+          465933.6388888889,
+          467694.7102803738,
+          461525.2293577982,
+          465724.1574074074
+        ],
+        "source_bytes": 3874,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 32,
+        "samples_ns": [
+          497369.6336633663,
+          494589.8725490196,
+          496860.9801980198,
+          488142.7961165049,
+          489016.58252427186,
+          488550.9708737864,
+          493801.0588235294
+        ],
+        "source_bytes": 3874,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 32,
+        "samples_ns": [
+          960951.2641509434,
+          954000.0,
+          958266.5094339623,
+          964807.6923076923,
+          961483.4905660377,
+          959481.9056603773,
+          950780.6603773584
+        ],
+        "source_bytes": 3874,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 512,
+        "samples_ns": [
+          35569.73115220483,
+          35532.640625,
+          35433.310198300285,
+          35770.863376251786,
+          35215.72746478873,
+          35482.44680851064,
+          35216.81338028169
+        ],
+        "source_bytes": 57086,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 512,
+        "samples_ns": [
+          7502220.285714285,
+          7344416.714285715,
+          7319363.0,
+          7550589.285714285,
+          7595434.428571428,
+          7472398.857142857,
+          7437589.285714285
+        ],
+        "source_bytes": 57086,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 512,
+        "samples_ns": [
+          7811767.857142857,
+          7730803.571428572,
+          8222184.428571428,
+          7812756.0,
+          8027506.0,
+          7900809.571428572,
+          8059964.285714285
+        ],
+        "source_bytes": 57086,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 512,
+        "samples_ns": [
+          15278177.0,
+          15735218.75,
+          15727562.5,
+          15059135.25,
+          15157239.5,
+          15396479.25,
+          15635521.0
+        ],
+        "source_bytes": 57086,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "context_bytes": 0,
+        "samples_ns": [
+          12512.814814814816,
+          12647.919828022255,
+          12625.925523857612,
+          12698.059674961909,
+          12659.282784810126,
+          12660.632911392406,
+          12544.374059207224
+        ],
+        "stage": "missing-credentials",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "context_bytes": 196,
+        "samples_ns": [
+          4692.084263864127,
+          4661.415120723408,
+          4650.873593154125,
+          4626.341598815692,
+          4653.7990506329115,
+          4656.550754330416,
+          4650.638671875
+        ],
+        "stage": "wrong-origin",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "context_bytes": 0,
+        "samples_ns": [
+          18071.407300325263,
+          17940.23493543759,
+          17864.8324401572,
+          18142.047515415306,
+          18108.149167270094,
+          18047.51605918441,
+          17954.75763016158
+        ],
+        "stage": "security-selection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "context_bytes": 105,
+        "samples_ns": [
+          8517.636177823199,
+          8560.548878616675,
+          8460.659898477157,
+          8536.957145296226,
+          8569.494430162811,
+          8575.680329274566,
+          8645.494813278008
+        ],
+        "stage": "anonymous-selection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 1,
+        "samples_ns": [
+          347.4534658281505,
+          347.1286864759789,
+          347.89346172846376,
+          348.268764627215,
+          345.72255834053584,
+          345.84394151092175,
+          347.82395252902586
+        ],
+        "source_bytes": 473,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": false,
+        "operations": 1,
+        "samples_ns": [
+          23396.359681945745,
+          23562.755419415647,
+          23341.11059262716,
+          23479.460093896712,
+          23480.55539906103,
+          23178.637627432807,
+          25210.223286290322
+        ],
+        "source_bytes": 473,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 1,
+        "samples_ns": [
+          23550.57297551789,
+          23040.89912482727,
+          23273.80967892043,
+          23251.375174337518,
+          23362.291452592246,
+          23149.016203703704,
+          23139.653863951873
+        ],
+        "source_bytes": 473,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 1,
+        "samples_ns": [
+          47112.641242937854,
+          46932.45778611632,
+          47133.600377002826,
+          47278.63137996219,
+          48180.63583815029,
+          47695.98093422307,
+          48003.9990403071
+        ],
+        "source_bytes": 473,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": false,
+        "operations": 32,
+        "samples_ns": [
+          2233.4483405547862,
+          2225.1216679275512,
+          2244.989987428161,
+          2253.5097800612944,
+          2233.0512259389934,
+          2234.3324098485186,
+          2249.4732319596906
+        ],
+        "source_bytes": 3874,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": false,
+        "operations": 32,
+        "samples_ns": [
+          462486.623853211,
+          455725.37272727274,
+          459430.42201834865,
+          458500.7545454545,
+          459959.4770642202,
+          461462.15596330276,
+          472392.3611111111
+        ],
+        "source_bytes": 3874,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 32,
+        "samples_ns": [
+          863361.3448275862,
+          496290.0099009901,
+          492638.48039215687,
+          494599.67647058825,
+          491636.0294117647,
+          495143.14851485146,
+          489250.8058252427
+        ],
+        "source_bytes": 3874,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 32,
+        "samples_ns": [
+          961883.8076923077,
+          946759.4339622641,
+          954457.5471698113,
+          949857.716981132,
+          974533.6538461539,
+          958684.7547169811,
+          969612.9807692308
+        ],
+        "source_bytes": 3874,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": false,
+        "operations": 512,
+        "samples_ns": [
+          36087.481962481965,
+          36191.057887120114,
+          36308.599419448474,
+          36601.34747622531,
+          36161.485177151124,
+          36302.068214804065,
+          36388.93963636363
+        ],
+        "source_bytes": 57086,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": false,
+        "operations": 512,
+        "samples_ns": [
+          7367535.714285715,
+          7363720.142857143,
+          7416708.285714285,
+          7475452.428571428,
+          7690892.857142857,
+          7720648.714285715,
+          7626928.571428572
+        ],
+        "source_bytes": 57086,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 512,
+        "samples_ns": [
+          8211916.714285715,
+          8421750.0,
+          8543187.5,
+          8498944.5,
+          8290261.857142857,
+          8344104.166666667,
+          8124690.428571428
+        ],
+        "source_bytes": 57086,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 512,
+        "samples_ns": [
+          16029291.75,
+          16158937.5,
+          16220823.0,
+          16236323.0,
+          16272302.25,
+          15437645.75,
+          15702395.75
+        ],
+        "source_bytes": 57086,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "context_bytes": 0,
+        "samples_ns": [
+          13079.878367774,
+          12588.557401812688,
+          12593.343238478972,
+          12632.800656897423,
+          12805.175160051216,
+          12717.086469989827,
+          12655.245507466465
+        ],
+        "stage": "missing-credentials",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "context_bytes": 194,
+        "samples_ns": [
+          4678.337543268781,
+          4722.3507744616545,
+          4693.436737375633,
+          4713.215194646055,
+          4698.768276639729,
+          4710.504003768253,
+          4698.134924363431
+        ],
+        "stage": "wrong-origin",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "context_bytes": 0,
+        "samples_ns": [
+          17771.707178393746,
+          17745.031937544358,
+          17729.218362282878,
+          17729.779865295994,
+          17659.501765536723,
+          17642.651499118165,
+          17842.1780235462
+        ],
+        "stage": "security-selection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "context_bytes": 103,
+        "samples_ns": [
+          8550.943399452804,
+          8633.244129834255,
+          8498.739632902787,
+          8525.895140664961,
+          8544.265550239234,
+          8451.68475321163,
+          8410.359905819038
+        ],
+        "stage": "anonymous-selection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      }
+    ]
+  },
+  {
+    "notes": [
+      "Cold includes fresh provider and source preparation; warm retains public source analysis only.",
+      "No direct baseline claims equivalent synthesis coverage, so these source rows are diagnostic under the registered rule.",
+      "Negative-path rows include effect assertions and helper ownership/destruction; no network/heap/RSS claim."
+    ],
+    "rows": [
+      {
+        "cold": false,
+        "operations": 1,
+        "samples_ns": [
+          345.1191140131697,
+          348.29457985329867,
+          344.66263183290823,
+          343.65972246087443,
+          344.25361121438704,
+          343.0987572994078,
+          344.8688811791727
+        ],
+        "source_bytes": 473,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 1,
+        "samples_ns": [
+          23479.949295774648,
+          23399.70379036032,
+          23209.18422273782,
+          23233.666047375755,
+          23492.562705495537,
+          23235.32342007435,
+          23336.910872608492
+        ],
+        "source_bytes": 473,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 1,
+        "samples_ns": [
+          24731.845697329376,
+          23434.883786316776,
+          23652.65279091769,
+          23245.525337052535,
+          23448.077824660104,
+          23407.600374356574,
+          23139.96205460435
+        ],
+        "source_bytes": 473,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 1,
+        "samples_ns": [
+          47788.04489016237,
+          47402.05308056872,
+          47310.35193945128,
+          47365.60890151515,
+          47805.807839388144,
+          48089.30288461538,
+          47182.90094339623
+        ],
+        "source_bytes": 473,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 32,
+        "samples_ns": [
+          2220.9125433063873,
+          2225.200267022697,
+          2231.230477465417,
+          2235.5807922739873,
+          2233.156543099598,
+          2230.597965738758,
+          2233.1256754946185
+        ],
+        "source_bytes": 3874,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 32,
+        "samples_ns": [
+          468162.38317757007,
+          472484.27358490566,
+          469755.4579439252,
+          465437.1203703704,
+          464350.31481481483,
+          469318.92523364484,
+          464814.4259259259
+        ],
+        "source_bytes": 3874,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 32,
+        "samples_ns": [
+          501455.83,
+          496730.61386138614,
+          499502.47524752474,
+          499053.62376237626,
+          494712.82352941175,
+          496212.8712871287,
+          498738.0396039604
+        ],
+        "source_bytes": 3874,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 32,
+        "samples_ns": [
+          962153.3018867924,
+          962949.5192307692,
+          979696.3076923077,
+          957006.3018867924,
+          952305.037735849,
+          960912.7358490566,
+          954993.6981132076
+        ],
+        "source_bytes": 3874,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 512,
+        "samples_ns": [
+          36396.955604075694,
+          36195.76121562952,
+          36279.429296591734,
+          36308.08563134978,
+          36358.61773255814,
+          36405.65866084425,
+          36482.95040116703
+        ],
+        "source_bytes": 57086,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 512,
+        "samples_ns": [
+          7388851.285714285,
+          7655928.571428572,
+          7556392.857142857,
+          7488904.714285715,
+          7450154.714285715,
+          7733922.571428572,
+          7419220.285714285
+        ],
+        "source_bytes": 57086,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 512,
+        "samples_ns": [
+          8049244.0,
+          8388263.833333333,
+          7724637.0,
+          7875458.285714285,
+          8020517.857142857,
+          7999976.285714285,
+          7890000.0
+        ],
+        "source_bytes": 57086,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": true,
+        "operations": 512,
+        "samples_ns": [
+          15449291.5,
+          15357354.25,
+          15606104.0,
+          15158614.75,
+          15444750.0,
+          15623135.5,
+          15779510.5
+        ],
+        "source_bytes": 57086,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "context_bytes": 0,
+        "samples_ns": [
+          12729.023415627385,
+          12577.789738430583,
+          13556.609650311737,
+          12796.379222108495,
+          12858.607611211108,
+          12866.819094184251,
+          12803.336917562725
+        ],
+        "stage": "missing-credentials",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "context_bytes": 196,
+        "samples_ns": [
+          4743.734844891376,
+          4798.740403071018,
+          4757.576117982873,
+          4730.13035663608,
+          4748.796941779846,
+          4780.19034416826,
+          4827.789610891185
+        ],
+        "stage": "wrong-origin",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "context_bytes": 0,
+        "samples_ns": [
+          18376.822124219038,
+          17978.103163191947,
+          18470.78574067233,
+          20751.555371215265,
+          42237.01435810811,
+          26586.323763955344,
+          29148.18822843823
+        ],
+        "stage": "security-selection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "context_bytes": 105,
+        "samples_ns": [
+          8978.1118491921,
+          8637.365348073934,
+          8675.659264399723,
+          8612.527213227695,
+          8556.553730321697,
+          8550.993160054719,
+          8853.628009915014
+        ],
+        "stage": "anonymous-selection",
+        "status": "diagnostic",
+        "version": "3.0.4"
+      },
+      {
+        "cold": false,
+        "operations": 1,
+        "samples_ns": [
+          345.54394609536973,
+          348.8699553446832,
+          352.5762618641319,
+          534.5408546167909,
+          349.0678167258917,
+          351.5635094183079,
+          367.0395812840427
+        ],
+        "source_bytes": 473,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": false,
+        "operations": 1,
+        "samples_ns": [
+          23912.780966044953,
+          23729.32495256167,
+          24130.748673420163,
+          24027.630946660258,
+          23768.337927756653,
+          23949.73275862069,
+          24006.8007681229
+        ],
+        "source_bytes": 473,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 1,
+        "samples_ns": [
+          23715.366998577523,
+          23535.607529411765,
+          23874.56229116945,
+          24242.44643722734,
+          23531.431529411766,
+          23538.235294117647,
+          23984.35251798561
+        ],
+        "source_bytes": 473,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 1,
+        "samples_ns": [
+          48445.546950629236,
+          48098.477884615386,
+          48054.31412103747,
+          49433.05335968379,
+          48725.85978578384,
+          48070.40441882805,
+          48422.67666989352
+        ],
+        "source_bytes": 473,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": false,
+        "operations": 32,
+        "samples_ns": [
+          2242.273554867931,
+          2273.2239043462446,
+          2299.765430963113,
+          2254.0855197908213,
+          2238.2511303102197,
+          2267.348342629121,
+          2280.8727305902744
+        ],
+        "source_bytes": 3874,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": false,
+        "operations": 32,
+        "samples_ns": [
+          482586.14423076925,
+          477866.26666666666,
+          463181.712962963,
+          460390.29357798165,
+          461981.2752293578,
+          460725.91743119265,
+          462751.1467889908
+        ],
+        "source_bytes": 3874,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 32,
+        "samples_ns": [
+          492137.2549019608,
+          487529.12621359224,
+          490432.1862745098,
+          489733.00970873784,
+          487165.4563106796,
+          488144.00970873784,
+          499190.59405940596
+        ],
+        "source_bytes": 3874,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 32,
+        "samples_ns": [
+          973771.6346153846,
+          954351.4150943396,
+          945330.9811320754,
+          963878.2115384615,
+          949631.3018867924,
+          954233.4905660377,
+          962425.320754717
+        ],
+        "source_bytes": 3874,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": false,
+        "operations": 512,
+        "samples_ns": [
+          35794.94774516822,
+          36089.707070707074,
+          36317.23602033406,
+          36804.20676968359,
+          35878.4074605452,
+          35679.297432239655,
+          36092.02164502165
+        ],
+        "source_bytes": 57086,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": false,
+        "operations": 512,
+        "samples_ns": [
+          7358881.0,
+          7393779.714285715,
+          7398535.714285715,
+          7757047.571428572,
+          7635458.285714285,
+          7794339.285714285,
+          7713684.571428572
+        ],
+        "source_bytes": 57086,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 512,
+        "samples_ns": [
+          8350779.714285715,
+          8036285.714285715,
+          8469319.5,
+          8014273.857142857,
+          8133773.857142857,
+          8478444.333333334,
+          8374625.0
+        ],
+        "source_bytes": 57086,
+        "stage": "inspection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "cold": true,
+        "operations": 512,
+        "samples_ns": [
+          15760645.75,
+          16305229.0,
+          15931270.75,
+          16065885.25,
+          16502229.25,
+          15301333.5,
+          16079125.0
+        ],
+        "source_bytes": 57086,
+        "stage": "synthesis-with-coverage",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "context_bytes": 0,
+        "samples_ns": [
+          12841.476373908577,
+          12745.995921488657,
+          12743.704968152866,
+          12788.05522884173,
+          12613.61629667003,
+          12592.797783933518,
+          12879.163533350502
+        ],
+        "stage": "missing-credentials",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "context_bytes": 194,
+        "samples_ns": [
+          4767.192582705692,
+          4694.180998873451,
+          4723.878129428436,
+          4827.034462785983,
+          4883.26826171875,
+          4963.1307196029775,
+          4736.93870784388
+        ],
+        "stage": "wrong-origin",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "context_bytes": 0,
+        "samples_ns": [
+          17974.1344356578,
+          17758.492897727272,
+          17811.594729344728,
+          17813.042037762734,
+          17935.63199426112,
+          17917.59226083841,
+          17954.30879712747
+        ],
+        "stage": "security-selection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      },
+      {
+        "context_bytes": 103,
+        "samples_ns": [
+          8847.192675159236,
+          8906.878895814782,
+          8915.255303975753,
+          8543.859217495301,
+          8593.20759580684,
+          8606.583476764199,
+          8583.540679711637
+        ],
+        "stage": "anonymous-selection",
+        "status": "diagnostic",
+        "version": "3.1.2"
+      }
+    ]
+  }
+]

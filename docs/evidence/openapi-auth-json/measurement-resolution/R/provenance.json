@@ -1,0 +1,336 @@
+{
+  "phase": "R",
+  "freeze_sha256": "ab7a4a89c56e05baaa18e21f80cfd780bc182b79821a8f84c196ffd9d9e00fbc",
+  "start_ns": 1791902706827643000,
+  "processes": [
+    {
+      "process": 0,
+      "name": "candidate",
+      "preflight": true,
+      "binary": "/Users/matt/Code/ob-pj/openbindings/sdk/target/openapi-auth-measurement-resolution/20261013/R-candidate",
+      "binary_sha256": "e5f598e1e54eda1eaa7c8169ac688028aaa50b90834a126eaf957b971e9284d7",
+      "before": {
+        "time_ns": 1791902706829797000,
+        "load_average": [
+          2.99462890625,
+          3.11181640625,
+          2.962890625
+        ],
+        "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+        "cpu": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "performance_levels": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "thermal": {
+          "exit": 0,
+          "stdout": "Error:Failed to get thermal warning level with error code 0xe00002bc\nError: Failed to get performance warning level with error code 0xe00002bc\nError: No CPU power status with error code 0xe00002bc\n",
+          "stderr": ""
+        }
+      },
+      "command": [
+        "/Users/matt/Code/ob-pj/openbindings/sdk/target/openapi-auth-measurement-resolution/20261013/R-candidate",
+        "phase=R",
+        "process=0",
+        "remaining-seconds=2698.9562162500806",
+        "checkpoint-ack",
+        "preflight-only"
+      ],
+      "checkpoints": [
+        {
+          "row": 0,
+          "sha256": "5d892d8d59da09c0638daf37b29d2dec3e61ac3a92852e66375f1d649e4f0437"
+        },
+        {
+          "row": 1,
+          "sha256": "f75ede0916936d0d9398616ccffb18108e3b5656f0cf715246f2c24465177cdf"
+        },
+        {
+          "row": 2,
+          "sha256": "81ea9f2d13771c03c3d86e999874552294e2cf27f7fd4ebee9d1b76a55ae5eef"
+        },
+        {
+          "row": 3,
+          "sha256": "70647dd75dbe17c6ea4d03f2ea02604854ecd28f8b1e8afa6ae358c174a43ceb"
+        }
+      ],
+      "exit": 0,
+      "after": {
+        "time_ns": 1791902707235601000,
+        "load_average": [
+          2.99462890625,
+          3.11181640625,
+          2.962890625
+        ],
+        "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+        "cpu": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "performance_levels": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "thermal": {
+          "exit": 0,
+          "stdout": "Error:Failed to get thermal warning level with error code 0xe00002bc\nError: Failed to get performance warning level with error code 0xe00002bc\nError: No CPU power status with error code 0xe00002bc\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "process": 0,
+      "name": "candidate",
+      "preflight": false,
+      "binary": "/Users/matt/Code/ob-pj/openbindings/sdk/target/openapi-auth-measurement-resolution/20261013/R-candidate",
+      "binary_sha256": "e5f598e1e54eda1eaa7c8169ac688028aaa50b90834a126eaf957b971e9284d7",
+      "before": {
+        "time_ns": 1791902717273317000,
+        "load_average": [
+          2.98828125,
+          3.107421875,
+          2.962890625
+        ],
+        "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+        "cpu": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "performance_levels": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "thermal": {
+          "exit": 0,
+          "stdout": "Error:Failed to get thermal warning level with error code 0xe00002bc\nError: Failed to get performance warning level with error code 0xe00002bc\nError: No CPU power status with error code 0xe00002bc\n",
+          "stderr": ""
+        }
+      },
+      "command": [
+        "/Users/matt/Code/ob-pj/openbindings/sdk/target/openapi-auth-measurement-resolution/20261013/R-candidate",
+        "phase=R",
+        "process=0",
+        "remaining-seconds=2688.5311972920317",
+        "checkpoint-ack"
+      ],
+      "checkpoints": [
+        {
+          "row": 0,
+          "sha256": "85e668d56a37e3a1db32fb1d9c943df608c5d95c8aaf67665f2d482b2a8a9a92"
+        },
+        {
+          "row": 1,
+          "sha256": "cc6fe0561df91d1e5d7473a0f171559eaae97226644a92b3ed5c31f3d8c9c937"
+        },
+        {
+          "row": 2,
+          "sha256": "ebae4dcec118be7c0e7031abacd6d518f6dd79cd8cf666391f9335c51a131edd"
+        },
+        {
+          "row": 3,
+          "sha256": "79eea037658c81872e1634dbbc5240cc87182e7f06986e2e71460137504434ee"
+        }
+      ],
+      "exit": 0,
+      "after": {
+        "time_ns": 1791903490343267000,
+        "load_average": [
+          2.1611328125,
+          2.07861328125,
+          2.478515625
+        ],
+        "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+        "cpu": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "performance_levels": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "thermal": {
+          "exit": 0,
+          "stdout": "Error:Failed to get thermal warning level with error code 0xe00002bc\nError: Failed to get performance warning level with error code 0xe00002bc\nError: No CPU power status with error code 0xe00002bc\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "process": 1,
+      "name": "candidate",
+      "preflight": false,
+      "binary": "/Users/matt/Code/ob-pj/openbindings/sdk/target/openapi-auth-measurement-resolution/20261013/R-candidate",
+      "binary_sha256": "e5f598e1e54eda1eaa7c8169ac688028aaa50b90834a126eaf957b971e9284d7",
+      "before": {
+        "time_ns": 1791903490715632000,
+        "load_average": [
+          2.1611328125,
+          2.07861328125,
+          2.478515625
+        ],
+        "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+        "cpu": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "performance_levels": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "thermal": {
+          "exit": 0,
+          "stdout": "Error:Failed to get thermal warning level with error code 0xe00002bc\nError: Failed to get performance warning level with error code 0xe00002bc\nError: No CPU power status with error code 0xe00002bc\n",
+          "stderr": ""
+        }
+      },
+      "command": [
+        "/Users/matt/Code/ob-pj/openbindings/sdk/target/openapi-auth-measurement-resolution/20261013/R-candidate",
+        "phase=R",
+        "process=1",
+        "remaining-seconds=1915.1028083751444",
+        "checkpoint-ack"
+      ],
+      "checkpoints": [
+        {
+          "row": 0,
+          "sha256": "6e3b90dfc2d52eef67b9f71f1d954e3f56f6dbe3911115a33d1b4465f19dedc1"
+        },
+        {
+          "row": 1,
+          "sha256": "48a025303d838584211899af636b15affd8b1e74bc4d19d4d68d5460afee004d"
+        },
+        {
+          "row": 2,
+          "sha256": "6a3babed5d694027713edc8295e06b3415f590484b39b3b0b31aa3f820f756f4"
+        },
+        {
+          "row": 3,
+          "sha256": "7a63cbe6ac831b93fe439ab6f0dbd04a68706335737d86d3c426599db0aca6b3"
+        }
+      ],
+      "exit": 0,
+      "after": {
+        "time_ns": 1791904269296624000,
+        "load_average": [
+          1.70703125,
+          2.15869140625,
+          2.49560546875
+        ],
+        "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+        "cpu": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "performance_levels": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "thermal": {
+          "exit": 0,
+          "stdout": "Error:Failed to get thermal warning level with error code 0xe00002bc\nError: Failed to get performance warning level with error code 0xe00002bc\nError: No CPU power status with error code 0xe00002bc\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "process": 2,
+      "name": "candidate",
+      "preflight": false,
+      "binary": "/Users/matt/Code/ob-pj/openbindings/sdk/target/openapi-auth-measurement-resolution/20261013/R-candidate",
+      "binary_sha256": "e5f598e1e54eda1eaa7c8169ac688028aaa50b90834a126eaf957b971e9284d7",
+      "before": {
+        "time_ns": 1791904269669585000,
+        "load_average": [
+          1.70703125,
+          2.15869140625,
+          2.49560546875
+        ],
+        "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+        "cpu": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "performance_levels": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "thermal": {
+          "exit": 0,
+          "stdout": "Error:Failed to get thermal warning level with error code 0xe00002bc\nError: Failed to get performance warning level with error code 0xe00002bc\nError: No CPU power status with error code 0xe00002bc\n",
+          "stderr": ""
+        }
+      },
+      "command": [
+        "/Users/matt/Code/ob-pj/openbindings/sdk/target/openapi-auth-measurement-resolution/20261013/R-candidate",
+        "phase=R",
+        "process=2",
+        "remaining-seconds=1136.1531459591351",
+        "checkpoint-ack"
+      ],
+      "checkpoints": [
+        {
+          "row": 0,
+          "sha256": "0108c4b700894cd89bea678eaed6d938a8e7e9f7bcca1a1e08829571a0b176fa"
+        },
+        {
+          "row": 1,
+          "sha256": "be6ecd0a12c384cb6ae94751edbc37f71eb6bb6a258678b4b3351b83db783950"
+        },
+        {
+          "row": 2,
+          "sha256": "ac50088e743710b2f0808adc8cd1092e2e9fd670b651557cb35c1bc0ba144448"
+        },
+        {
+          "row": 3,
+          "sha256": "eb25175892a8d1497c6db1a1b7759db7ff4a63d1928511944d31e4474d1e8bb1"
+        }
+      ],
+      "exit": 0,
+      "after": {
+        "time_ns": 1791905044174401000,
+        "load_average": [
+          3.2607421875,
+          2.7197265625,
+          2.412109375
+        ],
+        "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+        "cpu": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "performance_levels": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n"
+        },
+        "thermal": {
+          "exit": 0,
+          "stdout": "Error:Failed to get thermal warning level with error code 0xe00002bc\nError: Failed to get performance warning level with error code 0xe00002bc\nError: No CPU power status with error code 0xe00002bc\n",
+          "stderr": ""
+        }
+      }
+    }
+  ],
+  "status": "inconclusive-stop",
+  "seconds_cap": 2700,
+  "end_ns": 1791905044573587000,
+  "elapsed_seconds": 2337.7313531248365
+}

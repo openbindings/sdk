@@ -1,0 +1,165 @@
+{
+  "mode": "baseline",
+  "scope": "native release, generation/input-carrier construction excluded, result destruction included; logical owner accounting is not total heap or RSS",
+  "workloads": [
+    {
+      "clientAccountedRetainedBytes": 2744,
+      "clientOwnerDelta": 0,
+      "operations": 1,
+      "ownerCycles": 1000,
+      "resultJsonBytes": 147,
+      "samples": [
+        {
+          "coldIterations": 7000,
+          "coldNs": 7894.398857142857,
+          "warmIterations": 300000,
+          "warmNs": 168.18944333333334
+        },
+        {
+          "coldIterations": 9000,
+          "coldNs": 6142.338,
+          "warmIterations": 335000,
+          "warmNs": 149.5706447761194
+        },
+        {
+          "coldIterations": 9000,
+          "coldNs": 6095.773222222222,
+          "warmIterations": 340000,
+          "warmNs": 147.31764705882352
+        },
+        {
+          "coldIterations": 9000,
+          "coldNs": 6098.115777777778,
+          "warmIterations": 345000,
+          "warmNs": 146.94191014492753
+        },
+        {
+          "coldIterations": 9000,
+          "coldNs": 6101.717666666666,
+          "warmIterations": 340000,
+          "warmNs": 147.48933823529413
+        },
+        {
+          "coldIterations": 9000,
+          "coldNs": 6110.287,
+          "warmIterations": 345000,
+          "warmNs": 147.03152173913043
+        },
+        {
+          "coldIterations": 9000,
+          "coldNs": 6100.208333333333,
+          "warmIterations": 340000,
+          "warmNs": 147.96029411764707
+        }
+      ],
+      "sdkOwnerDelta": 0,
+      "sourceBytes": 164
+    },
+    {
+      "clientAccountedRetainedBytes": 48757,
+      "clientOwnerDelta": 0,
+      "operations": 32,
+      "ownerCycles": 1000,
+      "resultJsonBytes": 3809,
+      "samples": [
+        {
+          "coldIterations": 500,
+          "coldNs": 101661.0,
+          "warmIterations": 13500,
+          "warmNs": 3757.527777777778
+        },
+        {
+          "coldIterations": 500,
+          "coldNs": 101734.418,
+          "warmIterations": 13500,
+          "warmNs": 3764.061777777778
+        },
+        {
+          "coldIterations": 500,
+          "coldNs": 101954.916,
+          "warmIterations": 13500,
+          "warmNs": 3754.972222222222
+        },
+        {
+          "coldIterations": 500,
+          "coldNs": 101808.332,
+          "warmIterations": 13500,
+          "warmNs": 3758.8117037037036
+        },
+        {
+          "coldIterations": 500,
+          "coldNs": 101600.916,
+          "warmIterations": 13500,
+          "warmNs": 3750.5617037037036
+        },
+        {
+          "coldIterations": 500,
+          "coldNs": 101617.834,
+          "warmIterations": 13500,
+          "warmNs": 3744.632666666667
+        },
+        {
+          "coldIterations": 500,
+          "coldNs": 101572.168,
+          "warmIterations": 13500,
+          "warmNs": 3785.2377037037036
+        }
+      ],
+      "sdkOwnerDelta": 0,
+      "sourceBytes": 2781
+    },
+    {
+      "clientAccountedRetainedBytes": 764457,
+      "clientOwnerDelta": 0,
+      "operations": 512,
+      "ownerCycles": 1000,
+      "resultJsonBytes": 62165,
+      "samples": [
+        {
+          "coldIterations": 30,
+          "coldNs": 1793950.0,
+          "warmIterations": 800,
+          "warmNs": 65514.7925
+        },
+        {
+          "coldIterations": 30,
+          "coldNs": 2128123.6,
+          "warmIterations": 500,
+          "warmNs": 105925.084
+        },
+        {
+          "coldIterations": 40,
+          "coldNs": 1649148.975,
+          "warmIterations": 700,
+          "warmNs": 111265.59571428571
+        },
+        {
+          "coldIterations": 30,
+          "coldNs": 1952320.8333333333,
+          "warmIterations": 250,
+          "warmNs": 201020.168
+        },
+        {
+          "coldIterations": 40,
+          "coldNs": 1646925.0,
+          "warmIterations": 800,
+          "warmNs": 64505.8325
+        },
+        {
+          "coldIterations": 40,
+          "coldNs": 1644982.3,
+          "warmIterations": 800,
+          "warmNs": 63338.48875
+        },
+        {
+          "coldIterations": 40,
+          "coldNs": 1623262.5,
+          "warmIterations": 800,
+          "warmNs": 63387.39625
+        }
+      ],
+      "sdkOwnerDelta": 0,
+      "sourceBytes": 44405
+    }
+  ]
+}
