@@ -359,7 +359,7 @@ fn known_closure_checks_continue_past_holes() {
         ),
         (r#"{"pattern":"["}"#, "schema-pattern-compilation"),
         (r##"{"$ref":"#"}"##, "in-place-cycle"),
-        (r#"{"const":"\ud800"}"#, "lone-surrogate-schema"),
+        (r#"{"pattern":"\ud800"}"#, "lone-surrogate-schema"),
     ] {
         assert_eq!(
             refusal(&schema, resources(&[("https://review.invalid/K", known)])).code,

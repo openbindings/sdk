@@ -2,6 +2,15 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- Whole-document assessment no longer declines for escaped lone surrogates or schema
+  depth above 256. `assess_document_with_limits` accepts caller-supplied admission
+  limits; admission precedes version selection. The default evaluator refuses
+  unsupported string interpretation only when reached, per evaluation scope.
+  Assessment findings use `input-limit` for admission limits; `representation-limit`
+  and `schema-depth-limit` are no longer emitted by assessment. CONFORMANCE-06 changes
+  from undetermined to conformant because its description's lone surrogate no longer
+  gates assessment.
+
 - Finish the source-inspection, synthesis and invocation role definitions. Providers
   move `BindingInvoker::preflight` and its future type to optional `BindingPreflight`;
   callers opt in through `preflight_with_provider`. Invoke-only and local providers
