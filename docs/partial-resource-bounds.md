@@ -100,7 +100,8 @@ This includes relative spellings and fragments that resolve to the same carrier.
 Reference siblings, property/pattern names, array prefix positions, known identities
 and original mappings survive. The constants have no source map. Missing anchors
 or non-schema targets in a supplied carrier are not holes. The bundled context
-selects unique contained declared IDs before supplied names and packaged standards.
+selects unique contained declared IDs before supplied names; a supplied claim on a
+packaged standard identity is an identity conflict, so no completion can redefine one.
 Both planners check the selected base and final target carrier for references and
 every directly reached carrier. A competing canonical carrier is a conservative
 `resource-identity-conflict` refusal, even through an otherwise unique retrieval

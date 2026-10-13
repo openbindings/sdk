@@ -2,6 +2,15 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- Evaluator correctness. A supplied resource, nested `$id` or retrieval alias that
+  claims a packaged standard identity is now an identity conflict instead of replacing
+  it, so a completion can no longer invert a verdict established with a missing
+  resource. In the maintained regress fork, quantified lone-surrogate atoms such as
+  `\ud83d?` accept zero repetitions per ECMA-262 (checked against Node's RegExp), and a
+  budget interruption leaves the backtrack stack intact instead of panicking in debug
+  builds. Pattern-compilation refusals name the authored `pattern` or
+  `patternProperties` location.
+
 - Require HTTPS for discovery except normalized literal 127/8 and `::1`; native
   and portable paths allow ten redirects and refuse HTTPS-to-HTTP hops. Fetch
   follows browser policy and checks its final URL. Safe native construction refuses

@@ -762,15 +762,13 @@ fn ri24_user_standard_names_do_not_replace_trusted_assessment() {
             Evidence::Violated
         );
     }
-    // A supplied name also precedes the packaged fallback when no contained ID owns it.
+    // Without a contained owner, supplied claims on a packaged identity conflict.
     let standard = "https://json-schema.org/draft/2020-12/schema";
     let doc = one(json!({}), json!({"$ref":standard}));
-    verdicts(
-        &ready(
-            &context(&doc, &resources(&[(standard, json!(false))])),
-            "op",
-        ),
-        &[("2", "fails")],
+    assert_eq!(
+        refusal(context(&doc, &resources(&[(standard, json!(false))])).prepare("op", Side::Input))
+            .code,
+        "ambiguous-resource"
     );
 }
 #[test]
@@ -1080,4 +1078,136 @@ fn inherited_conservative_policy_case_has_both_value_controls() {
         }
     );
     helpers_ready(&doc, &supplied, "op");
+}
+
+#[test]
+fn s3_collision_policy_matrix_used_and_unused() {
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    enum Origin {
+        Contained,
+        Supplied,
+        NestedSupplied,
+        Standard,
+    }
+    use Origin::*;
+    let standard = "https://json-schema.org/draft/2020-12/meta/validation";
+    for left in [Contained, Supplied, NestedSupplied, Standard] {
+        for right in [Contained, Supplied, NestedSupplied, Standard] {
+            let origins = [left, right];
+            let uri = if origins.contains(&Standard) {
+                standard
+            } else {
+                U
+            };
+            let mut schemas = json!({});
+            let mut supplied = Vec::new();
+            for (i, origin) in origins.iter().enumerate() {
+                let claim = json!({"$id":uri,"type":"integer"});
+                match origin {
+                    Contained => schemas[format!("owner{i}")] = claim,
+                    Supplied => supplied.push(([A, B][i], claim)),
+                    NestedSupplied => supplied.push(([A, B][i], json!({"$defs":{"nested":claim}}))),
+                    Standard => (),
+                }
+            }
+            let supplied = resources(&supplied);
+            let doc = document(
+                schemas,
+                json!({
+                    "used":{"input":{"$ref":uri}},
+                    "unused":{"input":{"type":"boolean"}}
+                }),
+            );
+            let ctx = context(&doc, &supplied);
+            verdicts(
+                &ready(&ctx, "unused"),
+                &[("true", "satisfies"), ("2", "fails")],
+            );
+            helpers_ready(&doc, &supplied, "unused");
+            let contained = origins.iter().filter(|&&o| o == Contained).count();
+            if contained == 1 {
+                verdicts(
+                    &ready(&ctx, "used"),
+                    &[("2", "satisfies"), (r#""x""#, "fails")],
+                );
+                helpers_ready(&doc, &supplied, "used");
+            } else if origins == [Standard, Standard] {
+                // Both references designate the one packaged carrier.
+                verdicts(&ready(&ctx, "used"), &[("{}", "satisfies"), ("2", "fails")]);
+            } else {
+                for engine in [
+                    Arc::new(DefaultEvaluator::new()) as Arc<dyn SchemaEvaluator>,
+                    Arc::new(Project(false)),
+                    Arc::new(Project(true)),
+                ] {
+                    let detail = refusal(
+                        doc.value_contracts(engine, supplied.clone())
+                            .unwrap()
+                            .prepare("used", Side::Input),
+                    );
+                    assert_eq!(detail.code, "ambiguous-resource", "{left:?}/{right:?}");
+                    assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn s3_packaged_retrieval_aliases_conflict_even_with_a_different_declared_id() {
+    for suffix in [
+        "schema",
+        "meta/core",
+        "meta/applicator",
+        "meta/unevaluated",
+        "meta/validation",
+        "meta/meta-data",
+        "meta/format-annotation",
+        "meta/content",
+    ] {
+        let uri = format!("https://json-schema.org/draft/2020-12/{suffix}");
+        for body in [json!(true), json!({"$id":U})] {
+            let supplied = resources(&[(&uri, body)]);
+            let doc = document(
+                json!({}),
+                json!({"used":{"input":{"$ref":uri}},"unused":{"input":true}}),
+            );
+            let ctx = context(&doc, &supplied);
+            assert_eq!(
+                refusal(ctx.prepare("used", Side::Input)).code,
+                "ambiguous-resource",
+                "{uri}"
+            );
+            verdicts(&ready(&ctx, "unused"), &[("null", "satisfies")]);
+        }
+    }
+}
+
+#[test]
+fn s3_standard_identity_completions_cannot_invert_partial_verdicts() {
+    let standard = "https://json-schema.org/draft/2020-12/meta/validation";
+    for (keyword, instance, before, replacement) in [
+        ("anyOf", "5", "satisfies", false),
+        ("allOf", "-1", "fails", true),
+    ] {
+        let doc = one(
+            json!({}),
+            json!({keyword:[{"$ref":U},{"$ref":format!("{standard}#/$defs/nonNegativeInteger")}]}),
+        );
+        verdicts(
+            &ready(&context(&doc, &ResourceSet::default()), "op"),
+            &[(instance, before)],
+        );
+        let claim = json!({"$id":standard,"$defs":{"nonNegativeInteger":replacement}});
+        for supplied in [
+            resources(&[(U, json!({"not":!replacement,"$defs":{"x":claim}}))]),
+            resources(&[(U, json!(replacement)), (A, claim.clone())]),
+            resources(&[(U, json!(replacement)), (A, json!({"$defs":{"x":claim}}))]),
+            resources(&[(U, json!(replacement)), (standard, claim)]),
+        ] {
+            let detail = refusal(context(&doc, &supplied).prepare("op", Side::Input));
+            assert_eq!(detail.code, "ambiguous-resource", "{keyword}");
+            assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
+        }
+    }
 }

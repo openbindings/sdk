@@ -118,21 +118,34 @@ fn cycles_are_conservative_even_with_a_dominating_success_branch() {
     }
 }
 #[test]
-fn pattern_preparation_failures_are_actionable_without_source_echo_or_guessed_locations() {
+fn pattern_preparation_failures_use_original_locations_and_safe_messages() {
     const URI: &str = "https://SECRET-user:SECRET-password@example.invalid/SECRET-resource";
     for pattern in [
         "[".to_owned(),
         format!("[{}", "SECRET-pattern".repeat(2000)),
     ] {
-        for schema in [
-            serde_json::json!({"type":"string", "pattern":pattern}),
-            serde_json::json!({"patternProperties":{pattern:true}}),
+        for (keyword, schema) in [
+            (
+                "pattern",
+                serde_json::json!({"type":"string", "pattern":pattern}),
+            ),
+            (
+                "patternProperties",
+                serde_json::json!({"patternProperties":{pattern:true}}),
+            ),
         ] {
-            for (entry, resources) in [
-                (schema.clone(), ResourceSet::default()),
+            for (entry, resources, resource, pointer) in [
+                (
+                    schema.clone(),
+                    ResourceSet::default(),
+                    None,
+                    "/operations/op/input",
+                ),
                 (
                     serde_json::json!({"$defs":{"target":schema},"$ref":"#/operations/op/input/$defs/target"}),
                     ResourceSet::default(),
+                    None,
+                    "/operations/op/input/$defs/target",
                 ),
                 (
                     serde_json::json!({"$ref":URI}),
@@ -141,6 +154,8 @@ fn pattern_preparation_failures_are_actionable_without_source_echo_or_guessed_lo
                         document: JsonValue::parse(schema.to_string()).unwrap(),
                     }])
                     .unwrap(),
+                    Some(URI.to_owned()),
+                    "",
                 ),
             ] {
                 let context = document(entry)
@@ -154,12 +169,18 @@ fn pattern_preparation_failures_are_actionable_without_source_echo_or_guessed_lo
                 assert_eq!(detail.code, "schema-pattern-compilation");
                 assert_eq!(
                     detail.message,
-                    "a schema regular expression could not be compiled; inspect pattern and patternProperties"
+                    format!("the schema {keyword} regular expression could not be compiled")
                 );
-                assert_eq!(detail.location, None);
+                assert_eq!(
+                    detail.location,
+                    Some(SchemaLocation {
+                        resource,
+                        pointer: format!("{pointer}/{keyword}")
+                    })
+                );
                 safe(&detail.message);
                 let serialized = serde_json::to_string(&detail).unwrap();
-                assert!(!serialized.contains("SECRET"));
+                assert!(!serialized.contains("SECRET-pattern"));
                 assert!(!serialized.contains("/$defs/n"));
             }
         }
