@@ -30,6 +30,37 @@ pub(crate) struct Profile {
     pub input_schema: JsonValue,
     pub schema_loss: bool,
     pub security: Vec<crate::security::Alternative>,
+    pub empty_responses: EmptyResponses,
+}
+/// One bit per successful status, compiled once from the effective declarations.
+/// This carries no credential or request data across transport execution.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct EmptyResponses(u128);
+impl EmptyResponses {
+    fn from_descriptions(responses: &[dynamic_openapi_client::ResponseDescription]) -> Self {
+        let fallback = ["2XX", "default"]
+            .into_iter()
+            .find_map(|key| responses.iter().find(|r| r.status == key));
+        let mut bits = if fallback.is_some_and(|r| r.media.is_empty()) {
+            (1u128 << 100) - 1
+        } else {
+            0
+        };
+        for response in responses {
+            if let Ok(status @ 200..=299) = response.status.parse::<u16>() {
+                let bit = 1u128 << (status - 200);
+                if response.media.is_empty() {
+                    bits |= bit;
+                } else {
+                    bits &= !bit;
+                }
+            }
+        }
+        Self(bits)
+    }
+    pub fn contains(self, status: u16) -> bool {
+        (200..300).contains(&status) && self.0 & (1u128 << (status - 200)) != 0
+    }
 }
 impl Profile {
     fn retained_bytes(&self) -> usize {
@@ -43,7 +74,9 @@ impl Profile {
             })
         });
         self.parameters.values().flat_map(|p| p.iter()).fold(
-            servers.saturating_add(self.input_schema.bytes().len()),
+            servers
+                .saturating_add(self.input_schema.bytes().len())
+                .saturating_add(std::mem::size_of::<EmptyResponses>()),
             |n, (name, kind)| {
                 n.saturating_add(name.len())
                     .saturating_add(kind.len())
@@ -229,7 +262,10 @@ fn profile(operation: &Operation, kind: Kind) -> Result<Profile, &'static str> {
     if !operation.path().is_ascii() {
         return Err("literal-unicode-path-unimplemented");
     }
-    if !matches!(operation.method(), Method::Get | Method::Post) {
+    if !matches!(
+        operation.method(),
+        Method::Get | Method::Post | Method::Put | Method::Patch | Method::Delete
+    ) {
         return Err("unqualified-method");
     }
     if operation
@@ -398,9 +434,6 @@ fn profile(operation: &Operation, kind: Kind) -> Result<Profile, &'static str> {
                 !response.media.is_empty() || response.declaration.target.get("headers").is_some();
             continue;
         }
-        if response.media.is_empty() && response.status != "204" {
-            return Err("response-no-content-unimplemented");
-        }
         if response
             .media
             .iter()
@@ -443,6 +476,7 @@ fn profile(operation: &Operation, kind: Kind) -> Result<Profile, &'static str> {
     }
     let input_schema = json(&serde_json_compat::json!({"type":"object","properties":properties,"required":required_fields,"additionalProperties":false})).map_err(|_| "schema-budget")?;
     Ok(Profile {
+        empty_responses: EmptyResponses::from_descriptions(&d.responses),
         security,
         has_body: d.request_body.is_some(),
         servers: d.servers.into_iter().map(|s| s.url).collect(),

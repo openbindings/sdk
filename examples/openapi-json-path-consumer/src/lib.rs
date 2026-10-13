@@ -102,3 +102,4 @@ pub use serde_json as wire_json;
 pub mod auth;
 
 pub mod auth_acceptance;
+pub mod crud;

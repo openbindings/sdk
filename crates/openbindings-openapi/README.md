@@ -65,8 +65,22 @@ duplicate JSON names, or unsupported shapes refuse before effects.
 ```
 
 An absent `body` means no entity; `"body": null` sends JSON null. Path and query scalar
-values remain separate. Complete 2xx JSON produces one exact body value. A verified
-empty 204 produces no value. Always drain and check the terminal outcome; receiving
+values remain separate. Supported JSON success produces one exact body value,
+including one value for JSON null. A selected successful response declaration
+with no content produces no value only when delivered bytes are verified empty.
+Exact status declarations take precedence over `2XX`, then `default`. HTTP 204
+and 205 always require empty delivery. An empty JSON-declared response fails;
+unexpected bytes on a content-less response fail rather than being discarded.
+An unmatched successful status retains the experiment's JSON-success fallback;
+this is not complete response-conformance validation.
+Requiring empty bytes when the selected declaration omits content is this
+experiment's policy, not an OpenAPI guarantee about every server. A content-less
+`default` also governs unmatched 2xx responses and can therefore cause a failure
+after dispatch if the server supplies a payload. The private r1 labels are retained
+for this capability extension and the HTTP 205 correction; the latter also rejects
+illegal 205 payloads previously returned as JSON. See the
+[portability observations](../../docs/evidence/openapi-json-crud/portability.md).
+Always drain and check the terminal outcome; receiving
 an output alone does not establish success. Complete non-2xx responses produce
 the kind's status error with data `{"status":404}` and no output:
 `HTTP_STATUS_ERROR` for 3.1 or `HTTP_STATUS_ERROR_30` for 3.0.
@@ -180,21 +194,25 @@ and JSON Schema 2020-12. The client's lexical schema context determines the dial
 including schema-level overrides of `jsonSchemaDialect`. Other dialects produce
 `parameter-schema-dialect-unimplemented`; their raw `type` cannot establish a caller
 contract here. This guard does not translate schemas or validate source-schema constraints.
-OpenAPI 3.0 GET request-body declarations are ignored under that edition's rules;
-they neither require nor enable an input body. OpenAPI 3.1 GET body declarations
+OpenAPI 3.0 GET and DELETE request-body declarations are ignored under that edition's rules;
+they neither require nor enable an input body. OpenAPI 3.1 GET and DELETE body declarations
 remain effective. The paired consumer regression verifies this distinction.
 
-The qualified profile uses GET/POST, absolute HTTP(S) servers without variables,
+The supported profile uses GET/POST/PUT/PATCH/DELETE, absolute HTTP(S) servers without variables,
 path/query scalar parameters, finite JSON bodies, and supplied references. Forms,
 security acquisition, binary/streaming delivery, richer parameter locations, callbacks,
 webhook services, ambiguous Path Item merges, and literal non-ASCII path templates
-are not implemented. Explicit non-204 no-content success declarations are currently
-unsupported. Percent-encoded Unicode paths preserve their spelling; the client gap
+are not implemented. HEAD, OPTIONS and TRACE remain outside this implementation's
+invocation profile. PATCH uses application/json; JSON Patch and Merge Patch media
+types remain unsupported. Percent-encoded Unicode paths preserve their spelling; the client gap
 for literal Unicode is tracked separately. Bodies/headers on explicit non-2xx responses
 are discarded under the status-only mapping and their lost representation is disclosed
 in coverage. A `default` response can also cover success, so it must meet the supported
-success profile; for example, a content-less or `application/problem+json` default makes
-the operation implementation-unsupported.
+success profile; an `application/problem+json` default makes the operation
+implementation-unsupported. Content-less exact, range and default declarations
+are supported. The [CRUD consumer](../../examples/openapi-json-path-consumer/src/crud.rs)
+exercises both manually authored and synthesized documents through binding and
+operation invocation, including an authenticated PATCH.
 
 `Options` owns immutable client/graph budgets and supplied resources. The adapter
 caches one prepared source by kind and content and charges retained metadata. Alternating

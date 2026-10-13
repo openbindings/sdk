@@ -27,6 +27,10 @@ The OpenAPI adapter's supported profile and refusals are described in its
 functional qualification; the incremental-auth performance check is
 [unresolved and deferred](docs/evidence/openapi-auth-json/performance-follow-up.md).
 Node/Wasm probes do not establish production browser/Worker transport qualification.
+The Rust role foundations have a bounded [contract closeout](docs/role-contract-closeout.md).
+Their current scope is complete; stabilization and public TypeScript roles are
+separate gates. The adapter supports finite JSON CRUD through GET, POST, PUT, PATCH
+and DELETE, with declared empty success distinct from JSON null.
 
 ## Exact input and diagnostics
 

@@ -16,6 +16,82 @@ pub struct Reply {
     pub status: u16,
     pub body: &'static str,
 }
+
+#[tokio::test]
+async fn crud_methods_and_empty_success_over_native_http() {
+    for (version, kind) in [
+        ("3.0.4", openbindings_openapi::EXPERIMENTAL_KIND_30),
+        ("3.1.2", openbindings_openapi::EXPERIMENTAL_KIND),
+    ] {
+        let (origin, server) = server(vec![
+            Reply {
+                method: "PUT",
+                target: "/records",
+                request: Some(r#"{"n":9007199254740993}"#),
+                status: 200,
+                body: r#"{"n":9007199254740993}"#,
+            },
+            Reply {
+                method: "PATCH",
+                target: "/records",
+                request: Some("null"),
+                status: 202,
+                body: "",
+            },
+            Reply {
+                method: "DELETE",
+                target: "/records",
+                request: None,
+                status: 204,
+                body: "",
+            },
+            Reply {
+                method: "DELETE",
+                target: "/records",
+                request: None,
+                status: 205,
+                body: "",
+            },
+        ]);
+        use serde_json_compat::json;
+        let body = json!({"required":true,"content":{"application/json":{"schema":{}}}});
+        let source = json!({"openapi":version,"info":{"title":"Native CRUD","version":"1"},"servers":[{"url":origin}],"paths":{"/records":{
+            "put":{"requestBody":body,"responses":{"200":{"description":"updated","content":{"application/json":{}}}}},
+            "patch":{"requestBody":body,"responses":{"202":{"description":"accepted"}}},
+            "delete":{"responses":{"204":{"description":"removed"},"205":{"description":"reset"}}}
+        }}});
+        let saved = json!({"openbindings":"0.2.0","operations":{"replace":{},"edit":{},"remove":{}},"sources":{"api":{"kind":kind,"content":{"document":source.to_string()}}},"bindings":{
+            "replace":{"operation":"replace","source":"api","content":{"path":"/records","method":"put"}},
+            "edit":{"operation":"edit","source":"api","content":{"path":"/records","method":"patch"}},
+            "remove":{"operation":"remove","source":"api","content":{"path":"/records","method":"delete"}}
+        }}).to_string();
+        let client = dynamic_openapi_client_reqwest::Client::new().unwrap();
+        let provider = OpenApi::default().with_transport(
+            move |request: PreparedRequest, cancel: Cancellation| {
+                let client = client.clone();
+                async move { client.execute(&request, cancel).await }
+            },
+        );
+        let invoker = operation::Invoker::new(ParsedDocument::parse(saved).unwrap(), provider);
+        assert_eq!(
+            call(&invoker, "replace", r#"{"body":{"n":9007199254740993}}"#)
+                .await
+                .unwrap()
+                .unwrap()
+                .text(),
+            r#"{"n":9007199254740993}"#
+        );
+        assert!(
+            call(&invoker, "edit", r#"{"body":null}"#)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(call(&invoker, "remove", "{}").await.unwrap().is_none());
+        assert!(call(&invoker, "remove", "{}").await.unwrap().is_none());
+        server.join().unwrap();
+    }
+}
 fn server(replies: Vec<Reply>) -> (String, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let origin = format!("http://{}", listener.local_addr().unwrap());
