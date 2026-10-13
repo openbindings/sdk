@@ -29,7 +29,12 @@
     "astraSemantics": "accepted, focused repair verification complete",
     "astraConsumer": "accepted, literal acceptance gaps closed and final execution reconciled",
     "claudeOpus55Extra": "accepted, contract/resource and performance repair verification complete",
-    "performanceDisposition": "independent Astra confirms 2 failed rows remain blocking"
+    "performanceDisposition": "independent Astra confirms 2 failed rows remain blocking",
+    "boundedInvestigation": {
+      "astra": "astra-investigation-results.md",
+      "claude": "claude-investigation-results.md",
+      "disposition": "Investigation complete; method inadequate; authenticated slice not qualified complete"
+    }
   },
   "performance": {
     "run1": {
@@ -60,7 +65,23 @@
     },
     "authSourceAndNegativeRows": "diagnostic only",
     "thresholdsChanged": false,
-    "unjustifiedRepeats": 0
+    "unjustifiedRepeats": 0,
+    "boundedInvestigation": {
+      "status": "inconclusive-stop",
+      "preregistrationCommit": "4437176",
+      "balancedNullPass": 3,
+      "balancedNullTotal": 12,
+      "individualNullChecksPass": 22,
+      "individualNullChecksTotal": 36,
+      "balancedAuthDiagnosticFormulaPass": 12,
+      "balancedAuthDiagnosticFormulaTotal": 12,
+      "finalQualificationRun": false,
+      "runtimeChanged": false,
+      "budgetsChanged": false,
+      "repeats": 0,
+      "evidence": "performance-investigation-report.md",
+      "resultReviews": "Astra xhigh and Claude Opus 5.5 Extra independently accept inconclusive-stop; slice remains blocked"
+    }
   },
   "cases": {
     "pass": 21,
@@ -68,5 +89,7 @@
       "AJ20"
     ]
   },
-  "remaining": "Independently design bounded performance diagnosis; retain original formulas/results. No further capability expansion or completion claim."
+  "remaining": "AJ20 remains blocked. Bounded performance investigation stopped inconclusive under the prospective resolution guard; no final qualification. Design a measurement-resolution decision before another run.",
+  "investigationQualificationReceipt": "qualification-investigation/receipt.json",
+  "investigationQualificationReceiptSha256": "ccd8d47b8d0e40a9ae7f941289c531e70b63d209c0aef5860a4a18fcdd5c0347"
 }

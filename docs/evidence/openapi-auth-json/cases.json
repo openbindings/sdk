@@ -604,9 +604,14 @@
         "broad-312/summary.json",
         "auth-diagnostics/summary.json",
         "performance-repair.md",
-        "astra-performance-repair.md"
+        "astra-performance-repair.md",
+        "performance-investigation-plan.md",
+        "performance-investigation/summary.json",
+        "performance-investigation-report.md",
+        "astra-investigation-results.md",
+        "claude-investigation-results.md"
       ],
-      "remaining": "Two incremental-auth 64 KiB AND POST operation rows fail in revised pair 1. Every pair must pass. No threshold or failure suppression."
+      "remaining": "Original two failed incremental-auth rows remain blocking. Subsequent single diagnostic stopped inconclusive: 3/12 balanced null rows pass prospective guard. No final qualification, budget change or rerun."
     },
     {
       "id": "AJ21",

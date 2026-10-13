@@ -4,6 +4,9 @@ The implementation is on `codex/sdk-openapi-auth-json`, based on
 `abc96027691187ad11fe0394f1d1c9d73482e093`. The independent client remains pinned to
 `fe09522a9b99a6c6b4918e3de0467b5a638afa5e`. **This slice is not qualified complete:**
 two registered incremental-auth performance rows still fail after a bounded repair.
+A subsequent [bounded measurement investigation](performance-investigation-report.md)
+ended inconclusive: only 3/12 balanced null rows met its prospective 1 µs resolution
+guard. No final qualification was allowed, so the original failures remain blocking.
 No merge, publication, website, generic role, core, or binding specification change
 is part of this checkpoint. Old binding drafts and their derived expectations were
 excluded throughout.
@@ -55,6 +58,8 @@ Independent reviews:
 
 - Two GPT-6 Astra xhigh reviews: [initial findings and repair record](astra-reviews.json),
   [performance repair](astra-performance-repair.md), and [literal acceptance audit](astra-acceptance-audit.md).
+- Bounded investigation: [Astra results](astra-investigation-results.md) and
+  [Claude results](claude-investigation-results.md) independently confirm the inconclusive stop.
 - Claude Opus 5.5 Extra: [initial review](claude-review.md), [contract/resource repair
   verification](claude-repair-review.md), and [performance-repair verification](claude-performance-repair.md).
 
@@ -125,9 +130,11 @@ measurement sources and a fresh candidate qualification receipt. Output director
 must be new. Broad checks use `tools/measure-openapi-json-path.py --edition 3.0.4`
 or `3.1.2` with a fresh `--output` directory.
 
-The remaining blocker is **AJ20**. A next bounded performance investigation should
-distinguish reproducible auth overhead from uncertainty when subtracting several
-large totals. Preserve both failed runs and the current budget. A methodological or
+The remaining blocker is **AJ20**. The [single bounded investigation](performance-investigation-report.md) has now
+run and stopped inconclusive. It reduced observed residual variation but failed its
+method-adequacy guard; no runtime repair or final qualification followed. The next
+design decision concerns measurement resolution and the separation of sampling
+variation from instance-placement effects. Preserve both failed runs and the current budget. A methodological or
 budget change requires a recorded design decision and independent rationale before
 a new qualification; repeated unchanged runs until green are not permitted.
 
