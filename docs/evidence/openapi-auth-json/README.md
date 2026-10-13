@@ -1,12 +1,13 @@
-# Authenticated JSON operations — performance-blocked checkpoint
+# Authenticated JSON operations with deferred performance qualification
 
 The implementation is on `codex/sdk-openapi-auth-json`, based on
 `abc96027691187ad11fe0394f1d1c9d73482e093`. The independent client remains pinned to
-`fe09522a9b99a6c6b4918e3de0467b5a638afa5e`. **This slice is not qualified complete:**
-two registered incremental-auth performance rows still fail after a bounded repair.
-A subsequent [bounded measurement investigation](performance-investigation-report.md)
-ended inconclusive: only 3/12 balanced null rows met its prospective 1 µs resolution
-guard. No final qualification was allowed, so the original failures remain blocking.
+`fe09522a9b99a6c6b4918e3de0467b5a638afa5e`. Matthew stopped further benchmark work on
+2026-10-13. The implementation is ready for PR review with **AJ20 explicitly
+unresolved and deferred**; full qualification under the original plan is not claimed.
+Two registered incremental-auth rows remain failed, and both subsequent measurement
+investigations ended inconclusive. See the [landing assessment and optimization
+follow-ups](performance-follow-up.md). Normal PR and CI checks remain before landing.
 No merge, publication, website, generic role, core, or binding specification change
 is part of this checkpoint. Old binding drafts and their derived expectations were
 excluded throughout.
@@ -130,7 +131,8 @@ measurement sources and a fresh candidate qualification receipt. Output director
 must be new. Broad checks use `tools/measure-openapi-json-path.py --edition 3.0.4`
 or `3.1.2` with a fresh `--output` directory.
 
-The remaining blocker is **AJ20**. The [earlier bounded investigation](performance-investigation-report.md)
+The remaining unpassed acceptance item is **AJ20**, now deferred from active work
+at Matthew's direction. The [earlier bounded investigation](performance-investigation-report.md)
 and the subsequently authorized [measurement resolution experiment](measurement-resolution/report.md)
 both stopped inconclusive. The latter completed 96 control configurations in 39 minutes:
 61/72 eligible observations and 196/216 component checks passed, with four same-object
@@ -139,9 +141,11 @@ therefore blocked Phase Q; no runtime repair, final qualification, budget relaxa
 or estimator substitution followed. Both historical failed runs remain unchanged.
 
 The unresolved issue is adequate resolution for the frozen estimator on this host;
-separate object or fixture allocation cannot be its sole explanation. A further
-measurement approach requires a new recorded decision and independent validation
-against the preserved budgets. Repeated unchanged runs until green are not permitted.
+separate object or fixture allocation cannot be its sole explanation. No further
+benchmark work is active. Reopening requires a new bounded scope decision and
+independent validation against the preserved budgets. Repeated unchanged runs until
+green are not permitted. Concrete optimization candidates and landing conditions
+are recorded in [the follow-up](performance-follow-up.md).
 
 Nonblocking follow-ups remain outside this slice: client/host treatment of API keys
 named after connection/framing headers; the one-source cache's alternating-source
