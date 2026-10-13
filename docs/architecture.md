@@ -57,7 +57,7 @@ dependency on inspection. Providers return editable candidates; the `Synthesizer
 facade checks core conformance, source preservation and coverage correspondence
 before delivering immutable results. Strict refusal retains the checked document
 and evidence from that same call. Concrete source analysis and kind soundness
-remain provider responsibilities. See the [synthesis checkpoint](interface-synthesis-checkpoint.md).
+remain provider responsibilities. See the [synthesis guide](../crates/openbindings-interface-synthesis/README.md).
 
 `openbindings-invocation` adds the optional binding-kind provider seam, document-based operation invocation, and one
 checked input/output lifetime for all cardinalities. It depends on core only,
@@ -68,19 +68,10 @@ per-value validation through a caller-selected evaluator, returning that same
 lifecycle. Context provisioning and remote role transports remain separate work.
 The invocation companion's
 [public guide](../crates/openbindings-invocation/README.md) describes both entry
-points; the [binding checkpoint](binding-invocation-checkpoint.md) retains the
-underlying lifecycle qualification history.
+points and the maintained lifecycle tests.
 
-`openbindings-openapi` composes the inspection, synthesis and binding-invocation
-roles with the independent dynamic OpenAPI client. Its provider shares prepared
-public source analysis; synthesis does not invoke inspection through a mandatory
-role dependency. The client interprets OpenAPI and prepares HTTP requests, while
-the adapter translates between role carriers and the client's types. Application
-code supplies source resources, per-attempt context and transport. The current
-experimental profile covers private OpenAPI 3.0/3.1 kinds and finite JSON operations,
-including supplied bearer and header API-key credentials. Credentials never enter
-the prepared-source cache. The generic operation invoker can use this same provider.
-No protocol dependency enters specification core, and no public TypeScript adapter
-API or published OpenAPI binding standard is implied. See the
-[adapter guide](../crates/openbindings-openapi/README.md) and
-[deferred performance qualification](evidence/openapi-auth-json/performance-follow-up.md).
+The SDK supplies the three role contracts and checked caller APIs without
+kind-specific instances. Providers own source interpretation, kind soundness and
+external effects. [openbindings/openapi](https://github.com/openbindings/openapi)
+is a separate project that implements these roles using the independent client.
+It depends on the SDK; the SDK workspace, tools and examples do not depend on it.

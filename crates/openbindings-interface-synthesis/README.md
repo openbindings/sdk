@@ -14,7 +14,8 @@ lossy dependency entries. A remote report without them can match the interface
 without being a checked native `Synthesis`. The policy corpus is maintained here;
 the separate interface examples intentionally allow other implementations.
 
-Optional, provisional Rust API for Interface Synthesizer 0.2. Implement
+Optional, provisional Rust API for Interface Synthesizer 0.2. A synthesizer turns
+sources into a conformant document and reports what each source contributes. Implement
 `InterfaceSynthesizer`; consume it through `Synthesizer`. Providers can also inspect,
 but neither role requires the other. No public TypeScript role API is released.
 
@@ -95,7 +96,10 @@ ignores JSON formatting/member order but preserves numeric spelling and opaque d
 
 Interface snapshots and separate SDK policy cases are retained in `tests/fixtures`. Package and narrow
 Rust-provider TypeScript/Wasm qualification uses `tools/verify-interface-synthesis.py`.
-See the repository synthesis checkpoint for acceptance coverage and remaining limits.
+The maintained tests and the [generic catalog consumer](../../examples/interface-synthesis-consumer/)
+exercise source accounting, strict recovery and caller-owned keys. The SDK supplies
+no kind-specific instances; [openbindings/openapi](https://github.com/openbindings/openapi)
+is a separate implementation of the roles.
 
 
 ## Interface mapping

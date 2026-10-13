@@ -8,7 +8,7 @@ This delivery covers document parsing and exact preservation, typed authoring,
 conformance, inspection, operation value contracts, optional default schema
 evaluation, evaluator test support and HTTP discovery. Optional Rust companions
 also provide source inspection, interface synthesis, binding/operation invocation
-and an experimental OpenAPI adapter. These role and adapter APIs are provisional;
+through provider traits and checked caller APIs. These role APIs are provisional;
 their public TypeScript counterparts and CLI/application integration are not
 delivered by this SDK. These capabilities remain outside specification core.
 
@@ -16,15 +16,13 @@ The older Go and independent TypeScript SDKs are legacy implementations. Their
 source and historical packages are preserved. The older TypeScript SDK has a
 broader invocation/synthesis/adapter surface; replacing it requires checking each
 caller's actual capabilities. This API is not a drop-in replacement for all of
-those exports. See CAPABILITIES.md and the package guides for the supported scope.
+those exports. See [CAPABILITIES.md](../CAPABILITIES.md) and the package guides for the supported scope.
 
-The independent dynamic OpenAPI client lives in
-[openbindings/openapi-client](https://github.com/openbindings/openapi-client).
-The optional `openbindings-openapi` adapter composes that engine with SDK facilities;
-the engine has no dependency on OpenBindings core. Its finite JSON and authentication
-profile does not establish full OpenAPI coverage or a published binding standard.
-The [incremental-auth performance check](evidence/openapi-auth-json/performance-follow-up.md)
-remains unresolved and deferred.
+The SDK supplies no kind-specific instances of its roles. The separate
+[OpenAPI project](https://github.com/openbindings/openapi) implements them and
+depends on the independent
+[client](https://github.com/openbindings/openapi-client).
+Consult that project's guide for its private kinds, supported profile and limits.
 
 ## Source provenance
 
