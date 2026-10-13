@@ -319,6 +319,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dynamic-openapi-client-reqwest"
+version = "0.0.0"
+source = "git+https://github.com/openbindings/openapi-client?rev=fe09522a9b99a6c6b4918e3de0467b5a638afa5e#fe09522a9b99a6c6b4918e3de0467b5a638afa5e"
+dependencies = [
+ "bytes",
+ "dynamic-openapi-client",
+ "http",
+ "hyper",
+ "hyper-util",
+ "reqwest",
+ "tokio",
+]
+
+[[package]]
 name = "email_address"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1166,8 +1180,12 @@ name = "openbindings-openapi"
 version = "0.2.0-alpha.1"
 dependencies = [
  "dynamic-openapi-client",
+ "dynamic-openapi-client-reqwest",
  "fluent-uri",
  "openbindings",
+ "openbindings-interface-synthesis",
+ "openbindings-invocation",
+ "openbindings-json-schema-evaluator",
  "openbindings-source-inspection",
  "serde_json",
  "tokio",

@@ -1,0 +1,267 @@
+{
+  "format": "openbindings.clean-portability-observations@1",
+  "observations": [
+    {
+      "id": "P01",
+      "caseIds": [
+        "FR01",
+        "FR02",
+        "FR08",
+        "FR14"
+      ],
+      "observedConsumerNeed": "Save and independently reload a binding without losing exact source values or reference identity.",
+      "plausibleInterpretations": [
+        "Inline source object",
+        "Exact source text with optional retrieval identity and supplied external resources"
+      ],
+      "meaningDifference": "A plain JavaScript parse can round large values; missing resource identity changes reference resolution or prevents establishment.",
+      "upstreamAnswerOrGap": "OpenAPI reference resolution uses resource bases; it does not define an OpenBindings source carrier.",
+      "allowedAlternatives": [
+        "Caller supplied resources",
+        "Self-contained source graph",
+        "A separately authorized acquisition facility"
+      ],
+      "minimumSharedMeaningOrSilence": "A future kind needs an unambiguous source carrier and explicit resource/base semantics. It need not mandate embedded resources or an acquisition mechanism.",
+      "implementationPolicySeparated": "r1 chooses JSON text, immutable supplied resources and no automatic I/O. Graph caches, URI-index data structures and embedding every resource remain implementation choices.",
+      "evidence": [
+        "tests/manual.rs: cold_reloaded_mounts_use_supplied_reference_bases_on_real_http",
+        "tests/synthesis.rs: fresh_nested_resources_preserve_mounts_and_reference_bases"
+      ],
+      "status": "observed in private r1 experiment; candidate shared meaning only, not normative text"
+    },
+    {
+      "id": "P02",
+      "caseIds": [
+        "FR01",
+        "FR06",
+        "FR07",
+        "FR08"
+      ],
+      "observedConsumerNeed": "Identify the same mounted operation after authoring keys change.",
+      "plausibleInterpretations": [
+        "Entry path plus method",
+        "Operation ID",
+        "Component-local pointer"
+      ],
+      "meaningDifference": "Operation IDs can be absent or repeated; a referenced Path Item can be mounted at several callable paths.",
+      "upstreamAnswerOrGap": "OpenAPI defines path/method operations and resource-relative references; it does not define the binding locator.",
+      "allowedAlternatives": [
+        "Different generated names",
+        "Different inventory order",
+        "A later independently chosen locator carrier"
+      ],
+      "minimumSharedMeaningOrSilence": "The kind must establish locator interpretation and identity. r1 uses exact entry path plus lowercase method. Generated OBI names and inspection sourceRefs are not execution selectors.",
+      "implementationPolicySeparated": "Naming suggestions, lookup maps and enumeration order need no portable algorithm. Literal Unicode client limitation is not a prohibition of a future binding family.",
+      "evidence": [
+        "tests/manual.rs: manual_mount_and_renamed_unicode_target_use_literal_locations",
+        "tests/manual.rs: cold_reloaded_mounts_use_supplied_reference_bases_on_real_http"
+      ],
+      "status": "observed in private r1 experiment; candidate shared meaning only, not normative text"
+    },
+    {
+      "id": "P03",
+      "caseIds": [
+        "FR01",
+        "FR02",
+        "FR03",
+        "FR06"
+      ],
+      "observedConsumerNeed": "Express path/query homonyms and distinguish no entity from JSON null.",
+      "plausibleInterpretations": [
+        "Flat parameter map",
+        "Location-qualified parameter maps",
+        "JSON body envelope",
+        "Bare request object treated as body"
+      ],
+      "meaningDifference": "Flattening aliases distinct parameters; interpreting omitted body as null sends different bytes.",
+      "upstreamAnswerOrGap": "OpenAPI gives parameter locations and serialization; it does not map the caller value to those declarations.",
+      "allowedAlternatives": [
+        "Alternative internal scalar representations preserving exact value",
+        "Different validation libraries"
+      ],
+      "minimumSharedMeaningOrSilence": "Specify the caller-value mapping and presence/null distinction. Delegate scalar wire serialization to the appropriate OpenAPI version instead of duplicating its rules.",
+      "implementationPolicySeparated": "r1 closed-envelope typo checks, duplicate-name refusal, resource limits and Rust types are implementation admission policies unless a concrete interoperability need later demands shared treatment.",
+      "evidence": [
+        "tests/manual.rs: authored_bindings_make_real_http_calls_and_preserve_exact_values",
+        "tests/semantics.rs: exact_integer_parameters_agree_with_the_operation_schema"
+      ],
+      "status": "observed in private r1 experiment; candidate shared meaning only, not normative text"
+    },
+    {
+      "id": "P04",
+      "caseIds": [
+        "FR03",
+        "FR04",
+        "FR15"
+      ],
+      "observedConsumerNeed": "Distinguish an empty successful operation from a JSON null and actionable HTTP failure.",
+      "plausibleInterpretations": [
+        "Bare decoded JSON",
+        "Status/header/body envelope",
+        "Non-2xx as output",
+        "Non-2xx as kind-defined failure"
+      ],
+      "meaningDifference": "The same HTTP exchange yields incompatible caller-visible values/cardinality or errors.",
+      "upstreamAnswerOrGap": "HTTP/OpenAPI define status and representation; the binding mapping still must choose what reaches the role caller.",
+      "allowedAlternatives": [
+        "Different transports providing equivalent complete evidence",
+        "Different internal buffering within finite limits"
+      ],
+      "minimumSharedMeaningOrSilence": "A future kind must state the output/error mapping and required completeness evidence. r1 has exact 2xx JSON, empty 204, and governed status-only failure. Error shape belongs to that chosen kind meaning, not the generic role.",
+      "implementationPolicySeparated": "Buffer strategy, transport implementation, redirect policy, retry policy and diagnostic detail retention should remain unspecified unless their observable result changes the selected mapping. Non-204 no-content success is an honest r1 gap, not an upstream exclusion.",
+      "evidence": [
+        "tests/semantics.rs: failed_or_incomplete_responses_never_emit_success",
+        "tests/manual.rs: real_http_redirect_and_post_receipt_cancellation_have_one_effect"
+      ],
+      "status": "observed in private r1 experiment; candidate shared meaning only, not normative text"
+    },
+    {
+      "id": "P05",
+      "caseIds": [
+        "FR05"
+      ],
+      "observedConsumerNeed": "Choose one declared effective server without confusing source identity, author names or list order.",
+      "plausibleInterpretations": [
+        "Server index",
+        "Literal declared URL",
+        "Arbitrary destination override"
+      ],
+      "meaningDifference": "Reordering choices can silently change an index-based target; override permits a different operation destination.",
+      "upstreamAnswerOrGap": "OpenAPI defines effective server declarations; caller context mapping is not supplied by OpenAPI.",
+      "allowedAlternatives": [
+        "Caller-managed choice UI",
+        "No persistence",
+        "Explicitly scoped persistence"
+      ],
+      "minimumSharedMeaningOrSilence": "Specify the context point and value interpretation if server selection is part of the kind. r1 uses exact declared URL membership. Do not imply credential acquisition or an automatic retry.",
+      "implementationPolicySeparated": "Opaque challenge target construction, storage, UX and persistence are application/adapter policy. r1 challenge target separates source/operation/choice sets but is not an authority or trusted cache key.",
+      "evidence": [
+        "tests/semantics.rs: destination_context_is_membership_and_new_attempt"
+      ],
+      "status": "observed in private r1 experiment; candidate shared meaning only, not normative text"
+    },
+    {
+      "id": "P06",
+      "caseIds": [
+        "FR10",
+        "FR11"
+      ],
+      "observedConsumerNeed": "Know when input is complete and whether additional input creates effects.",
+      "plausibleInterpretations": [
+        "One request for every value",
+        "First value starts one request",
+        "Exactly one value followed by close"
+      ],
+      "meaningDifference": "Consumers can hang, accidentally invoke twice, or receive a false no-effect refusal after dispatch.",
+      "upstreamAnswerOrGap": "The role supplies lifecycle and effect-error meanings, but does not make every binding kind one-shot.",
+      "allowedAlternatives": [
+        "Any implementation with the same observable cardinality/effect meaning"
+      ],
+      "minimumSharedMeaningOrSilence": "State the input cardinality and completion meaning for the chosen binding kind. Reuse role terminal and cancellation semantics; do not prescribe Rust poll structure.",
+      "implementationPolicySeparated": "r1 waits for close before one request. Queue size, executor, channel type, future ownership and buffering mechanism remain implementation policy. Cancellation does not promise remote rollback.",
+      "evidence": [
+        "tests/semantics.rs: caller_close_and_cardinality_precede_effects",
+        "tests/manual.rs: real_http_redirect_and_post_receipt_cancellation_have_one_effect"
+      ],
+      "status": "observed in private r1 experiment; candidate shared meaning only, not normative text"
+    },
+    {
+      "id": "P07",
+      "caseIds": [
+        "FR09",
+        "FR12",
+        "FR14"
+      ],
+      "observedConsumerNeed": "Use synthesized documents without mistaking a mechanical envelope schema for full upstream contract translation.",
+      "plausibleInterpretations": [
+        "Copy an OAS body schema to the whole caller envelope",
+        "Mechanical envelope schema plus explicit loss",
+        "No generated schema"
+      ],
+      "meaningDifference": "A copied body schema validates the wrong caller shape; omitted constraints cannot truthfully count as full representation.",
+      "upstreamAnswerOrGap": "Core operation contracts and synthesis coverage already supply the concepts; OpenAPI dialect differences remain upstream.",
+      "allowedAlternatives": [
+        "More capable schema translators",
+        "Different synthesis strategies",
+        "Manual authorship"
+      ],
+      "minimumSharedMeaningOrSilence": "No binding-spec rule for synthesis naming, target-row uniqueness, coverage algorithm or internal schema projection is currently justified. Shared invocation value meaning is sufficient; documentation and coverage describe this implementation.",
+      "implementationPolicySeparated": "r1 derives scalar/envelope structure and omits output schemas, reports loss/unsupported/unknown distinctly, and delegates author contracts to the existing operation layer.",
+      "evidence": [
+        "tests/synthesis.rs: skeleton_preservation_and_composition_boundaries",
+        "tests/semantics.rs: generic_selection_and_author_contracts_remain_in_the_operation_layer"
+      ],
+      "status": "observed in private r1 experiment; candidate shared meaning only, not normative text"
+    },
+    {
+      "id": "P08",
+      "caseIds": [
+        "FR08",
+        "FR09",
+        "FR13"
+      ],
+      "observedConsumerNeed": "Avoid pretending unresolved or ambiguous source material established one portable operation.",
+      "plausibleInterpretations": [
+        "Silently choose a merge interpretation",
+        "Disclose an unsupported known target",
+        "Mark an unestablished remainder"
+      ],
+      "meaningDifference": "Different resolutions can invoke different parameters/servers or falsely advertise complete coverage.",
+      "upstreamAnswerOrGap": "Resource resolution comes from upstream; undefined or unimplemented interpretations should not be invented as binding authority.",
+      "allowedAlternatives": [
+        "More complete future clients",
+        "Alternative analysis preserving upstream meaning"
+      ],
+      "minimumSharedMeaningOrSilence": "Prefer existing upstream rules. No new prohibition is justified by an implementation gap. A future spec may need to identify which established source operation is addressed, while staying silent about analysis strategy.",
+      "implementationPolicySeparated": "r1 declines overlapping Path Item method/parameters/servers and literal Unicode templates; unknown inventory remains non-exhaustive.",
+      "evidence": [
+        "tests/synthesis.rs: response_profiles_and_ambiguous_mounts_have_truthful_coverage",
+        "tests/semantics.rs: pinned_client_literal_unicode_limitation_is_reproduced_independently"
+      ],
+      "status": "observed in private r1 experiment; candidate shared meaning only, not normative text"
+    },
+    {
+      "id": "P09",
+      "caseIds": [
+        "FR16"
+      ],
+      "observedConsumerNeed": "Use the same Rust adapter in native and local Wasm consumers with exact values and finite ownership.",
+      "plausibleInterpretations": [
+        "Host-owned transport future",
+        "Adapter-owned global executor",
+        "JavaScript value conversion",
+        "JSON text bridge"
+      ],
+      "meaningDifference": "Machine-number conversion loses data; mandatory Send/executor assumptions can exclude local hosts.",
+      "upstreamAnswerOrGap": "Language and packaging choices are outside OpenBindings binding semantics.",
+      "allowedAlternatives": [
+        "Different languages",
+        "Native packages",
+        "Wasm with a different host",
+        "Other finite resource strategies"
+      ],
+      "minimumSharedMeaningOrSilence": "Remain silent about crate topology, language bindings, cache shape, scheduling, memory ownership and benchmarks. Require only the shared externally observable binding meaning.",
+      "implementationPolicySeparated": "r1 uses one immutable source cache, conditional Send, GAT transport future, finite budgets and an exact-text probe; these are implementation and qualification evidence.",
+      "evidence": [
+        "examples/openapi-json-path-consumer",
+        "examples/openapi-invocation-only",
+        "tools/verify-openapi-json-path.py"
+      ],
+      "status": "observed in private r1 experiment; candidate shared meaning only, not normative text"
+    }
+  ],
+  "requiredFields": [
+    "id",
+    "caseIds",
+    "observedConsumerNeed",
+    "plausibleInterpretations",
+    "meaningDifference",
+    "upstreamAnswerOrGap",
+    "allowedAlternatives",
+    "minimumSharedMeaningOrSilence",
+    "implementationPolicySeparated",
+    "evidence",
+    "status"
+  ],
+  "status": "Nine evidence-backed candidate observations; no binding specification written"
+}

@@ -1,63 +1,48 @@
-//! OpenAPI kind adaptation outside the normative document model.
+//! Experimental OpenAPI inspection, synthesis and finite JSON invocation.
 //!
-//! This provisional package implements source inspection for the unpublished
-//! OpenAPI 3.1 candidate only. It performs no I/O, invocation or synthesis.
-//! Use the SDK's checked [`Inspector`](openbindings_source_inspection::Inspector).
-//!
-//! ```
-//! use openbindings::{JsonValue, Source};
-//! use openbindings_openapi::{OpenApi, OPENAPI_31};
-//! use openbindings_source_inspection::Inspector;
-//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let source = Source {
-//!     kind: OPENAPI_31.into(),
-//!     content: Some(JsonValue::parse(r#"{"document":{"openapi":"3.1.2","paths":{}}}"#)?),
-//!     ..Default::default()
-//! };
-//! let inspector = Inspector::new(OpenApi::default());
-//! let inventory = inspector.inspect(&source).await?;
-//! assert!(inventory.exhaustive);
-//! # Ok(()) }
-//! ```
+//! This optional adapter implements `local.openapi-json-probe.r1`. Its meaning
+//! is documented in the package README; it is not a published binding standard.
+//! Core remains unaware of OpenAPI, transport and operation effects.
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-use dynamic_openapi_client::{Code, Document, DocumentBuilder, Method, ReferenceKind, ValueKind};
-use openbindings::{JsonKind, JsonValue, Source, WorkControl};
+mod analysis;
+mod invocation;
+mod synthesis;
+
+use dynamic_openapi_client::DocumentBuilder;
+pub use dynamic_openapi_client::{GraphLimits, Limits, ResourceInput, ResourceLayout};
+pub use invocation::{InvocationFuture, Transport};
+use openbindings::{JsonValue, Source, WorkControl};
 use openbindings_source_inspection::{
-    BindableTarget, BindingFragment, InspectionError, InspectionErrorKind, InspectionLimitation,
-    SourceInspection, SourceInspector, SupportedKind,
+    InspectionError, InspectionErrorKind, SourceInspection, SourceInspector, SupportedKind,
 };
 use std::{
-    collections::BTreeMap,
     future::{Ready, ready},
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
 
-/// Client-owned resource inputs and limits; no second resource vocabulary is imposed.
-pub use dynamic_openapi_client::{GraphLimits, Limits, ResourceInput, ResourceLayout};
+/// Exact private experiment identifier. Saved r1 documents retain this meaning.
+pub const EXPERIMENTAL_KIND: &str = "local.openapi-json-probe.r1";
+/// Configuration point containing a declared absolute server URL selector.
+pub const SERVER_POINT: &str = "local.openapi-json-probe.r1.server";
+/// Kind-defined unsuccessful HTTP status, with application data `{ "status": n }`.
+pub const HTTP_STATUS_ERROR: &str = "local.openapi-json-probe.r1.http-status";
 
-/// Unpublished OpenAPI 3.1 candidate identifier, compared exactly.
-pub const OPENAPI_31: &str = "openbindings.openapi-3.1@1";
-
-/// Immutable provider configuration. A new provider establishes a new snapshot.
-///
-/// Resources are caller-supplied bytes, not permission to fetch anything. Limits
-/// apply independently to input, the client graph, and adapter-owned result text.
+/// Fixed resources and finite admission budgets. Changing these requires a new provider.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Options {
-    /// Per-resource client parsing and analysis budgets.
+    /// Client per-resource, operation and HTTP budgets.
     pub limits: Limits,
-    /// Aggregate client resource graph budgets.
+    /// Aggregate resource graph budgets.
     pub graph_limits: GraphLimits,
-    /// Original resources, with real retrieval identities and any explicit layouts.
+    /// Explicit resource bytes and identities; no automatic acquisition occurs.
     pub resources: Vec<ResourceInput>,
-    /// Maximum encoded source carrier bytes retained for repeat-call identity.
+    /// Maximum encoded source content, including its document text.
     pub source_bytes: usize,
-    /// Maximum logical target/diagnostic text bytes, with conservative fixed
-    /// overhead for limitation evidence. This is not a heap-allocation counter.
-    /// Container allocations are additionally bounded by the client's operation/node limits.
+    /// Maximum charged adapter inventory bytes, including retained server/parameter metadata.
+    /// This is a logical work budget, not an allocator or process RSS measurement.
     pub result_bytes: usize,
 }
 impl Default for Options {
@@ -72,437 +57,224 @@ impl Default for Options {
     }
 }
 
-/// A reusable inspection provider with one bounded private prepared entry.
+/// Configuration/source admission category. Messages never include source values.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ErrorKind {
+    /// Invalid carrier or malformed supplied data.
+    InvalidInput,
+    /// A different kind or an unimplemented source/profile.
+    Unsupported,
+    /// The available resources cannot establish the source.
+    Unreadable,
+    /// A configured budget was exhausted.
+    Limit,
+    /// Cooperative cancellation.
+    Cancelled,
+}
+/// Safe adapter admission error; role facades map it into their own error vocabulary.
+#[derive(Clone, Debug)]
+pub struct Error {
+    kind: ErrorKind,
+    code: &'static str,
+}
+impl Error {
+    /// Typed admission category.
+    pub fn kind(&self) -> ErrorKind {
+        self.kind
+    }
+    /// Stable implementation diagnostic, not a binding-spec requirement.
+    pub fn code(&self) -> &'static str {
+        self.code
+    }
+    pub(crate) fn new(kind: ErrorKind, code: &'static str) -> Self {
+        Self { kind, code }
+    }
+    pub(crate) fn inspection(&self) -> InspectionError {
+        let kind = match self.kind {
+            ErrorKind::InvalidInput => InspectionErrorKind::InvalidInput,
+            ErrorKind::Unsupported if self.code == "unsupported-kind" => {
+                InspectionErrorKind::UnsupportedKind
+            }
+            ErrorKind::Unsupported => InspectionErrorKind::UnreadableSource,
+            ErrorKind::Unreadable => InspectionErrorKind::UnreadableSource,
+            ErrorKind::Limit => InspectionErrorKind::ProviderFailure,
+            ErrorKind::Cancelled => InspectionErrorKind::Cancelled,
+        };
+        InspectionError::new(
+            kind,
+            format!("openbindings.openapi.{}", self.code),
+            self.to_string(),
+        )
+    }
+}
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "OpenAPI adapter admission: {}", self.code)
+    }
+}
+impl std::error::Error for Error {}
+
+/// Reusable adapter. Inspection and synthesis need no transport; bind one once
+/// with [`Self::with_transport`] to enable the existing BindingInvoker role.
 ///
-/// Warm calls compare exact carrier bytes and clone owned target metadata; they
-/// do not reparse or serialize the document. Options/resources never mutate.
-/// A different carrier replaces the entry. Drop the provider to release it.
-/// Concurrent native callers share this entry through a mutex; work is synchronous
-/// and bounded, with cancellation checks between stages/targets. It cannot preempt
-/// a parser call or a thread waiting for this mutex. No executor is required.
-pub struct OpenApi {
+/// One immutable prepared source is cached. No mutex is held during host I/O.
+/// Supplied resources must be reconstructed for an independent cold reload.
+pub struct OpenApi<T = ()> {
     options: Options,
-    cached: Mutex<Option<Prepared>>,
+    transport: T,
+    cached: Mutex<Option<Arc<analysis::Prepared>>>,
     #[cfg(test)]
     preparations: std::sync::atomic::AtomicUsize,
 }
-struct Prepared {
-    carrier: String,
-    // Retain reusable client preparation privately for future independent roles.
-    _document: Document,
-    inspection: SourceInspection,
-}
-impl Default for OpenApi {
+impl Default for OpenApi<()> {
     fn default() -> Self {
         Self {
             options: Options::default(),
+            transport: (),
             cached: Mutex::new(None),
             #[cfg(test)]
             preparations: std::sync::atomic::AtomicUsize::new(0),
         }
     }
 }
-impl OpenApi {
-    /// Admit a fixed supplied-resource collection under explicit limits.
-    /// Resource admission errors are configuration refusals, before any inspection.
-    /// Resources are validated once here, then included in each new preparation.
-    pub fn new(options: Options) -> Result<Self, InspectionError> {
-        if options.resources.len() > options.graph_limits.resources {
-            return Err(limit());
-        }
+impl OpenApi<()> {
+    /// Check a fixed supplied-resource collection without performing I/O.
+    pub fn new(options: Options) -> Result<Self, Error> {
         let mut builder =
             DocumentBuilder::new(options.limits.clone(), options.graph_limits.clone());
         for resource in &options.resources {
             builder
                 .add(resource.clone())
-                .map_err(|e| client_error(e.diagnostic()))?;
+                .map_err(|_| Error::new(ErrorKind::InvalidInput, "resource-admission"))?;
         }
         Ok(Self {
             options,
             ..Self::default()
         })
     }
-
-    fn run(
+}
+impl<T> OpenApi<T> {
+    /// Bind application-owned HTTP execution. Native and local non-Send hosts are supported.
+    pub fn with_transport<H: Transport>(self, transport: H) -> OpenApi<H> {
+        OpenApi {
+            options: self.options,
+            transport,
+            cached: self.cached,
+            #[cfg(test)]
+            preparations: self.preparations,
+        }
+    }
+    fn prepare(
         &self,
         source: &Source,
         control: &WorkControl,
-    ) -> Result<SourceInspection, InspectionError> {
-        check_cancelled(control)?;
-        if !self.supports_kind(&source.kind) {
-            return Err(error(
-                InspectionErrorKind::UnsupportedKind,
-                "unsupported-kind",
-                "unsupported inspection kind",
-            ));
+    ) -> Result<Arc<analysis::Prepared>, Error> {
+        check(control)?;
+        if source.kind != EXPERIMENTAL_KIND {
+            return Err(Error::new(ErrorKind::Unsupported, "unsupported-kind"));
         }
         let content = source
             .content
             .as_ref()
-            .ok_or_else(|| invalid("source content is absent"))?;
-        if content.text().len() > self.options.source_bytes {
-            return Err(limit());
+            .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "missing-source-content"))?;
+        if content.bytes().len() > self.options.source_bytes {
+            return Err(Error::new(ErrorKind::Limit, "source-limit"));
         }
-        let mut cached = self.cached.lock().map_err(|_| {
-            error(
-                InspectionErrorKind::ProviderFailure,
-                "state",
-                "provider state was poisoned",
-            )
-        })?;
-        check_cancelled(control)?;
-        if let Some(prepared) = cached.as_ref().filter(|p| p.carrier == content.text()) {
-            return Ok(prepared.inspection.clone());
+        let mut cache = self
+            .cached
+            .lock()
+            .map_err(|_| Error::new(ErrorKind::Unreadable, "poisoned-cache"))?;
+        check(control)?;
+        if let Some(prepared) = cache.as_ref().filter(|p| {
+            std::ptr::eq(p.content.text(), content.text()) || p.content.text() == content.text()
+        }) {
+            return Ok(prepared.clone());
         }
-        // Release the old snapshot before admitting another full source.
-        *cached = None;
-        let carrier = Carrier::read(content)?;
-        let bytes = carrier.document.ok_or_else(|| {
-            error(
-                InspectionErrorKind::UnreadableSource,
-                "source-unavailable",
-                "location-only source has no supplied entry document; supply content.document",
-            )
-        })?;
-        let input = match carrier.location {
-            Some(uri) => {
-                ResourceInput::at(uri, bytes.as_bytes()).map_err(|_| unsupported_location())?
-            }
-            None => ResourceInput::anonymous(bytes.as_bytes()),
-        };
-        let mut builder = DocumentBuilder::new(
-            self.options.limits.clone(),
-            self.options.graph_limits.clone(),
-        );
-        let entry = builder
-            .add(input)
-            .map_err(|e| client_error(e.diagnostic()))?;
-        for resource in &self.options.resources {
-            check_cancelled(control)?;
-            builder
-                .add(resource.clone())
-                .map_err(|e| client_error(e.diagnostic()))?;
-        }
-        let document = builder.build(entry).map_err(|e| client_error(&e))?;
-        check_cancelled(control)?;
-        if document.root().kind() != ValueKind::Object {
-            return Err(invalid("entry document must be an object"));
-        }
-        if !matches!(
-            document
-                .root()
-                .get("openapi")
-                .as_ref()
-                .and_then(|v| v.as_str()),
-            Some("3.1.0" | "3.1.1" | "3.1.2")
-        ) {
-            return Err(error(
-                InspectionErrorKind::InvalidInput,
-                "unsupported-version",
-                "this candidate accepts OpenAPI 3.1.0, 3.1.1 and 3.1.2 only",
-            ));
-        }
-        let inspection = inspect_document(&document, control, self.options.result_bytes)?;
-        check_cancelled(control)?;
+        *cache = None;
+        let prepared = Arc::new(analysis::prepare(content, &self.options, control)?);
         #[cfg(test)]
         self.preparations
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        *cached = Some(Prepared {
-            carrier: content.text().into(),
-            _document: document,
-            inspection: inspection.clone(),
-        });
-        Ok(inspection)
+        *cache = Some(prepared.clone());
+        Ok(prepared)
     }
 }
-impl SourceInspector for OpenApi {
-    type Inspection<'a> = Ready<Result<SourceInspection, InspectionError>>;
+impl<T> SourceInspector for OpenApi<T> {
+    type Inspection<'a>
+        = Ready<Result<SourceInspection, InspectionError>>
+    where
+        Self: 'a;
     fn supports_kind(&self, kind: &str) -> bool {
-        kind == OPENAPI_31
+        kind == EXPERIMENTAL_KIND
     }
     fn supported_kinds(&self) -> Vec<SupportedKind> {
         vec![SupportedKind {
-            kind: OPENAPI_31.into(),
+            kind: EXPERIMENTAL_KIND.into(),
             description: Some(
-                "Provisional OpenAPI 3.1 source inspection; no acquisition, framing or invocation"
-                    .into(),
+                "Private finite JSON experiment; consult its qualified capability profile".into(),
             ),
         }]
     }
     fn inspect<'a>(&'a self, source: &'a Source, control: WorkControl) -> Self::Inspection<'a> {
-        ready(self.run(source, &control))
+        ready(
+            self.prepare(source, &control)
+                .map(|p| p.inspection())
+                .map_err(|e| e.inspection()),
+        )
     }
 }
-
-struct Carrier<'a> {
-    document: Option<&'a str>,
-    location: Option<&'a str>,
-}
-impl<'a> Carrier<'a> {
-    fn read(content: &'a JsonValue) -> Result<Self, InspectionError> {
-        let fields = content
-            .view()
-            .members()
-            .ok_or_else(|| invalid("source content must be an object"))?;
-        let (mut document, mut location) = (None, None);
-        for field in fields {
-            match field.name.as_str() {
-                Some("document") if document.is_none() => {
-                    document = Some(match field.value.kind() {
-                        JsonKind::Object => field.value.text(),
-                        JsonKind::String => field.value.as_str().ok_or_else(|| {
-                            invalid("document text must contain Unicode scalar characters")
-                        })?,
-                        _ => return Err(invalid("document must be an object or JSON/YAML text")),
-                    });
-                }
-                Some("location") if location.is_none() => {
-                    let uri = field
-                        .value
-                        .as_str()
-                        .ok_or_else(|| invalid("location must be a URI string"))?;
-                    let uri = uri.strip_suffix('#').unwrap_or(uri);
-                    let parsed = fluent_uri::UriRef::parse(uri).map_err(|_| {
-                        invalid("location must be an absolute URI with no nonempty fragment")
-                    })?;
-                    if parsed.scheme().is_none() || parsed.fragment().is_some() {
-                        return Err(invalid(
-                            "location must be an absolute URI with no nonempty fragment",
-                        ));
-                    }
-                    // The client additionally declines userinfo. That policy is
-                    // an implementation limitation, not malformed kind content.
-                    ResourceInput::at(uri, &[][..]).map_err(|_| unsupported_location())?;
-                    location = Some(uri);
-                }
-                _ => {
-                    return Err(invalid(
-                        "source content contains an unknown or duplicate member",
-                    ));
-                }
-            }
-        }
-        if document.is_none() && location.is_none() {
-            return Err(invalid("source content requires document or location"));
-        }
-        Ok(Self { document, location })
-    }
-}
-
-fn pointer_token(text: &str) -> String {
-    text.replace('~', "~0").replace('/', "~1")
-}
-fn inspect_document(
-    document: &Document,
-    control: &WorkControl,
-    mut remaining: usize,
-) -> Result<SourceInspection, InspectionError> {
-    let mut targets = Vec::new();
-    let mut issues = Vec::new();
-    let root = document.root();
-    if let Some(authored_paths) = root.get("paths") {
-        if let Some(members) = authored_paths.members() {
-            for (path, item) in members.filter(|(p, _)| p.starts_with('/')) {
-                check_cancelled(control)?;
-                let pointer = format!("/paths/{}", pointer_token(path));
-                // Non-object declarations cannot supply an Operation Object.
-                if item.kind() != ValueKind::Object {
-                    continue;
-                }
-                let resolved = document
-                    .protocol_at(&pointer, ReferenceKind::PathItem)
-                    .and_then(|site| document.resolve_protocol(&site));
-                match resolved {
-                    Ok(resolved) => {
-                        // Only standard 3.1 fields in the resolved Path Item chain
-                        // define targets. The client's raw inventory also exposes
-                        // later-edition fields such as additionalOperations.
-                        for item in resolved.chain {
-                            for (method, operation) in
-                                item.members().expect("resolved Path Item object")
-                            {
-                                if !matches!(
-                                    method,
-                                    "get"
-                                        | "put"
-                                        | "post"
-                                        | "delete"
-                                        | "options"
-                                        | "head"
-                                        | "patch"
-                                        | "trace"
-                                ) || operation.kind() != ValueKind::Object
-                                {
-                                    continue;
-                                }
-                                // The client retains every declaration, with method-local
-                                // ambiguity evidence. Under the candidate kind, no
-                                // conflicting method is a target; healthy neighbors are.
-                                if resolved.path_item_conflicts.iter().any(|conflict| {
-                                    Some(&conflict.method) == Method::parse(method).as_ref()
-                                }) {
-                                    continue;
-                                }
-                                check_cancelled(control)?;
-                                let target = format!("{pointer}/{method}");
-                                let encoded = serde_json_compat::to_string(
-                                    &serde_json_compat::json!({"target":target}),
-                                )
-                                .expect("string JSON");
-                                let operation_key = operation.get("operationId").and_then(|v| {
-                                    v.as_str().filter(|id| !id.is_empty()).map(str::to_owned)
-                                });
-                                charge(
-                                    &mut remaining,
-                                    target.len().saturating_add(encoded.len()).saturating_add(
-                                        operation_key.as_ref().map_or(0, String::len),
-                                    ),
-                                )?;
-                                targets.push(BindableTarget {
-                                    source_ref: target,
-                                    binding: BindingFragment {
-                                        content: Some(
-                                            JsonValue::parse(encoded).map_err(|_| limit())?,
-                                        ),
-                                        ..Default::default()
-                                    },
-                                    operation_key,
-                                    operation: None,
-                                });
-                            }
-                        }
-                    }
-                    Err(diagnostic) => {
-                        let need = diagnostic
-                            .resource_need()
-                            .and_then(|need| need.requested_uri())
-                            .map(str::to_owned);
-                        let issue = serde_json_compat::json!({"pointer":pointer,"clientCode":format!("{:?}",diagnostic.code()),"resource":need});
-                        charge(&mut remaining, issue.to_string().len())?;
-                        issues.push(issue);
-                    }
-                }
-            }
-        } else {
-            let issue =
-                serde_json_compat::json!({"pointer":"/paths","clientCode":"InvalidPathsShape"});
-            charge(&mut remaining, issue.to_string().len())?;
-            issues.push(issue);
-        }
-    }
-    Ok(if issues.is_empty() {
-        SourceInspection::complete(targets)
-    } else {
-        // Include fixed limitation text and JSON/container spelling allowance.
-        charge(&mut remaining, 512usize.saturating_add(issues.len()))?;
-        let evidence =
-            JsonValue::parse(serde_json_compat::to_vec(&issues).expect("diagnostic JSON"))
-                .map_err(|_| limit())?;
-        SourceInspection::partial(targets, InspectionLimitation {
-            code: "openbindings.openapi.analysis-incomplete".into(),
-            message: "Some paths could not be established. Supply missing resources/layouts when identified; other client diagnostics may require adapter/client support. Unreported paths are not declared invalid.".into(),
-            details: Some(BTreeMap::from([("issues".into(), evidence)])),
-        })
-    })
-}
-fn charge(remaining: &mut usize, bytes: usize) -> Result<(), InspectionError> {
-    *remaining = remaining.checked_sub(bytes).ok_or_else(limit)?;
-    Ok(())
-}
-fn error(kind: InspectionErrorKind, code: &str, message: &str) -> InspectionError {
-    InspectionError::new(kind, format!("openbindings.openapi.{code}"), message)
-}
-fn invalid(message: &str) -> InspectionError {
-    error(InspectionErrorKind::InvalidInput, "invalid-source", message)
-}
-fn unsupported_location() -> InspectionError {
-    error(
-        InspectionErrorKind::UnreadableSource,
-        "unsupported-location",
-        "the client cannot admit this retrieval URI; URI userinfo is not supported",
-    )
-}
-fn limit() -> InspectionError {
-    error(
-        InspectionErrorKind::ProviderFailure,
-        "limit",
-        "configured source, graph or result budget was exhausted",
-    )
-}
-fn check_cancelled(control: &WorkControl) -> Result<(), InspectionError> {
+fn check(control: &WorkControl) -> Result<(), Error> {
     if control.is_cancelled() {
-        Err(error(
-            InspectionErrorKind::Cancelled,
-            "cancelled",
-            "inspection was cancelled",
-        ))
+        Err(Error::new(ErrorKind::Cancelled, "cancelled"))
     } else {
         Ok(())
     }
 }
-fn client_error(diagnostic: &dynamic_openapi_client::Diagnostic) -> InspectionError {
-    if diagnostic.code() == Code::Limit {
-        return limit();
-    }
-    if matches!(
-        diagnostic.code(),
-        Code::InvalidJson | Code::InvalidYaml | Code::InvalidUtf8 | Code::DuplicateMember
-    ) {
-        return error(
-            InspectionErrorKind::InvalidInput,
-            "invalid-document",
-            &format!("invalid document representation: {:?}", diagnostic.code()),
-        );
-    }
-    error(
-        InspectionErrorKind::UnreadableSource,
-        "client-admission",
-        &format!(
-            "OpenAPI resource admission refused: {:?}",
-            diagnostic.code()
-        ),
-    )
+fn json(value: &serde_json_compat::Value) -> Result<JsonValue, Error> {
+    JsonValue::parse(value.to_string()).map_err(|_| Error::new(ErrorKind::Limit, "result-limit"))
 }
 
 #[cfg(test)]
 mod cache_tests {
     use super::*;
-    use openbindings_source_inspection::Inspector;
     use std::sync::atomic::Ordering;
-    #[tokio::test]
-    async fn repeat_calls_do_not_parse_or_bridge_the_source_again() {
+    fn source(uri: &str) -> Source {
+        Source {kind:EXPERIMENTAL_KIND.into(),content:Some(json(&serde_json_compat::json!({"document":include_str!("../tests/fixtures/r1/parcels.json"),"retrievalUri":uri})).unwrap()),..Default::default()}
+    }
+    #[test]
+    fn one_source_cache_checks_content_base_and_fixed_options() {
         let provider = OpenApi::default();
-        let source = Source {
-            kind: OPENAPI_31.into(),
-            content: Some(
-                JsonValue::parse(
-                    r#"{"document":{"openapi":"3.1.2","paths":{"/first":{"get":{}}}}}"#,
-                )
-                .unwrap(),
-            ),
+        let control = WorkControl::new();
+        let a = source("https://a.invalid/doc.json");
+        let first = provider.prepare(&a, &control).unwrap();
+        let same = provider.prepare(&a.clone(), &control).unwrap();
+        assert!(Arc::ptr_eq(&first, &same));
+        let equivalent = source("https://a.invalid/doc.json");
+        assert!(Arc::ptr_eq(
+            &first,
+            &provider.prepare(&equivalent, &control).unwrap()
+        ));
+        assert_eq!(provider.preparations.load(Ordering::Relaxed), 1);
+        let b = source("https://b.invalid/doc.json");
+        assert!(!Arc::ptr_eq(
+            &first,
+            &provider.prepare(&b, &control).unwrap()
+        ));
+        assert_eq!(provider.preparations.load(Ordering::Relaxed), 2);
+        drop(same);
+        drop(first);
+        let weak = Arc::downgrade(provider.cached.lock().unwrap().as_ref().unwrap());
+        provider.prepare(&a, &control).unwrap();
+        assert!(weak.upgrade().is_none());
+        let options = Options {
+            source_bytes: 0,
             ..Default::default()
         };
-        let inspector = Inspector::new(&provider);
-        for _ in 0..100 {
-            assert_eq!(inspector.inspect(&source).await.unwrap().targets.len(), 1);
-        }
-        assert_eq!(provider.preparations.load(Ordering::Relaxed), 1);
-        // Equal bytes in a different arena need no new preparation.
-        let mut changed = source.clone();
-        changed.content = Some(JsonValue::parse(source.content.as_ref().unwrap().text()).unwrap());
-        inspector.inspect(&changed).await.unwrap();
-        assert_eq!(provider.preparations.load(Ordering::Relaxed), 1);
-        changed.content = Some(
-            JsonValue::parse(r#"{"document":{"openapi":"3.1.2","paths":{"/other":{"post":{}}}}}"#)
-                .unwrap(),
+        assert!(
+            OpenApi::new(options)
+                .unwrap()
+                .prepare(&a, &control)
+                .is_err()
         );
-        assert_eq!(
-            inspector.inspect(&changed).await.unwrap().targets[0].source_ref,
-            "/paths/~1other/post"
-        );
-        assert_eq!(provider.preparations.load(Ordering::Relaxed), 2);
-        changed.content=Some(JsonValue::parse(r#"{"document":{"openapi":"3.1.2","paths":{"/other":{"post":{}}}},"location":"https://fixture.invalid/api"}"#).unwrap());
-        inspector.inspect(&changed).await.unwrap();
-        assert_eq!(provider.preparations.load(Ordering::Relaxed), 3);
     }
 }

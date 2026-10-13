@@ -1,3 +1,5 @@
+> Historical inspection checkpoint. Its kind label, carrier and examples are superseded by the clean r1 experiment. Do not use it as current acceptance or binding authority. See [the current adapter](../crates/openbindings-openapi/README.md).
+
 # OpenAPI 3.1 inspection checkpoint
 
 2026-10-12. This is a bounded, unpublished adapter milestone. It is not complete

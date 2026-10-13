@@ -1,3 +1,5 @@
+> Historical consumer, preserved for the previous inspection checkpoint. It is not a current adapter example and is not run by r1 qualification. Use [the fresh JSON-path consumer](../openapi-json-path-consumer).
+
 # Independent OpenAPI inspection consumer
 
 `src/lib.rs` uses the public SDK packages to inspect, select, author, assess and
