@@ -67,6 +67,14 @@ The initial focused tests failed on the baseline as recorded in
 corrected to record cold retention and compare two completed, warmed suites;
 runtime behavior was unchanged by that test correction.
 
+Windows CI subsequently exposed checkout conversion in the frozen fixtures:
+standalone source files became CRLF, while escaped source text inside the manual
+documents retained LF. A path-specific `.gitattributes` rule now preserves all
+five fixture files byte-for-byte on every host. A temporary
+`git -c core.autocrlf=true checkout-index` checkout matched every pre-implementation
+hash. The exact-source assertion and product code are unchanged; final cross-platform
+CI results belong to the PR checks on the corrected revision.
+
 ## Review and limits
 
 [GPT-6 Astra xhigh](astra-review.md) independently reviewed the role foundations

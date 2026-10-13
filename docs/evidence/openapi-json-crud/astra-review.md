@@ -48,3 +48,12 @@ unchanged. Final lifecycle review found no material concern.
 
 The later test/tooling/lifecycle checks were read-only. Fresh package/native/Wasm
 results belong to the qualification receipt, not these independent review claims.
+
+## Windows fixture checkout
+
+Final CI exposed CRLF conversion of standalone source fixtures, unlike escaped
+source text in the manual documents. The reviewer accepted the narrowly anchored
+`.gitattributes` `-text` rule, verified the five current frozen hashes and confirmed
+that exact-source assertions remain intact. The coordinator's temporary
+`core.autocrlf=true` checkout also matched all five hashes. No runtime change or
+broader independent rerun was needed for this checkout-only correction.
