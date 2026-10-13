@@ -87,7 +87,7 @@ jobs:
           repository: openbindings/spec
           ref: 2f7d754dc2da374058cd517064c17e50f7d95d99
           path: .ci-spec
-      - run: node tools/verify-spec.mjs . .ci-spec 2f7d754dc2da374058cd517064c17e50f7d95d99
+      - run: node tools/verify-spec.mjs . .ci-spec 2f7d754dc2da374058cd517064c17e50f7d95d99 --self-test
       - run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
       - run: npm ci --ignore-scripts
         working-directory: packages/typescript
