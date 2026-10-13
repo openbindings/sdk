@@ -130,13 +130,18 @@ measurement sources and a fresh candidate qualification receipt. Output director
 must be new. Broad checks use `tools/measure-openapi-json-path.py --edition 3.0.4`
 or `3.1.2` with a fresh `--output` directory.
 
-The remaining blocker is **AJ20**. The [single bounded investigation](performance-investigation-report.md) has now
-run and stopped inconclusive. It reduced observed residual variation but failed its
-method-adequacy guard; no runtime repair or final qualification followed. The next
-design decision concerns measurement resolution and the separation of sampling
-variation from instance-placement effects. Preserve both failed runs and the current budget. A methodological or
-budget change requires a recorded design decision and independent rationale before
-a new qualification; repeated unchanged runs until green are not permitted.
+The remaining blocker is **AJ20**. The [earlier bounded investigation](performance-investigation-report.md)
+and the subsequently authorized [measurement resolution experiment](measurement-resolution/report.md)
+both stopped inconclusive. The latter completed 96 control configurations in 39 minutes:
+61/72 eligible observations and 196/216 component checks passed, with four same-object
+failures. Independent Astra and Claude reviews reproduce the results. The fixed guard
+therefore blocked Phase Q; no runtime repair, final qualification, budget relaxation,
+or estimator substitution followed. Both historical failed runs remain unchanged.
+
+The unresolved issue is adequate resolution for the frozen estimator on this host;
+separate object or fixture allocation cannot be its sole explanation. A further
+measurement approach requires a new recorded decision and independent validation
+against the preserved budgets. Repeated unchanged runs until green are not permitted.
 
 Nonblocking follow-ups remain outside this slice: client/host treatment of API keys
 named after connection/framing headers; the one-source cache's alternating-source
