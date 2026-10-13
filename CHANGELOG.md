@@ -2,14 +2,11 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
-- Expand the private OpenAPI 3.0/3.1 adapter to PUT, PATCH and DELETE through the
-  existing inspection, synthesis and invocation APIs. Content-less successful
-  responses now use exact/range/default declaration selection and emit no value
-  only on complete empty delivery. JSON null still emits one value. HTTP 205 now
-  requires empty delivery like 204; illegal 205 payloads fail instead of being
-  returned as JSON. Newly admitted content-less successes reject unexpected
-  payloads. These experimental behavior changes
-  add no public role API or published binding-specification requirement.
+- Extract the kind-specific OpenAPI implementation into
+  [openbindings/openapi](https://github.com/openbindings/openapi). The SDK retains
+  the source-inspection, interface-synthesis and invocation roles, their provider
+  traits, checked caller APIs, generic examples and tests. Historical adapter and
+  role-loop records are archived outside the product repositories.
 
 - The bundled resource resolver now gives unique contained declared IDs priority
   over supplied name associations, with conservative refusal of competing canonical

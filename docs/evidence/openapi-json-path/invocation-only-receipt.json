@@ -1,8 +1,0 @@
-{
-  "archive_receipt_sha256": "cd79389ec4485becdb6353995ffa402fe9c8c0beebc74fcc07394c006f511366",
-  "files": {
-    "Cargo.toml": "7525f4baa91af1575eb5de56314a5b068c9e88b918d27481a03cec275bee85d9",
-    "src/lib.rs": "9510bb6bbeabbecd78bee2aab885d65aa7a604b8ac9fd4310ac709edf95ee66d"
-  },
-  "status": "pass"
-}

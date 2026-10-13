@@ -19,18 +19,13 @@ independent. Unsupported or malformed versions are explicit refusals.
 | Source inspection extension role | Provisional provider trait, checked consumer, exact binding fragments | Local async Wasm qualification probe only; no public TS role API yet |
 | Interface synthesis extension role | Provisional provider trait, checked document and coverage, strict recovery | Local Wasm qualification probe; no public TS role API yet |
 | Binding and operation invocation | Provisional provider/consumer APIs; bounded I/O, cancellation, selection and optional value contracts | Local Wasm qualification probes; no public TS role APIs yet |
-| OpenAPI kind adapter | Experimental inspection, synthesis and finite JSON invocation for private 3.0/3.1 kinds; supplied bearer/header API-key credentials | Local Node/Wasm qualification probe; no public TS adapter API yet |
-| Dynamic protocol engine | Independent OpenAPI client composed by the optional adapter; outside specification core | No protocol engine exposed through this SDK facade |
 
-The OpenAPI adapter's supported profile and refusals are described in its
-[package guide](crates/openbindings-openapi/README.md). Authenticated behavior passed
-functional qualification; the incremental-auth performance check is
-[unresolved and deferred](docs/evidence/openapi-auth-json/performance-follow-up.md).
-Node/Wasm probes do not establish production browser/Worker transport qualification.
-The Rust role foundations have a bounded [contract closeout](docs/role-contract-closeout.md).
-Their current scope is complete; stabilization and public TypeScript roles are
-separate gates. The adapter supports finite JSON CRUD through GET, POST, PUT, PATCH
-and DELETE, with declared empty success distinct from JSON null.
+The SDK defines the three roles and provides traits for implementing providers,
+checked facades for callers, and generic examples and tests. It supplies no
+kind-specific instances. The separate
+[OpenAPI project](https://github.com/openbindings/openapi) implements these roles
+for its documented profile. Stabilization and public TypeScript role APIs remain
+separate work. Local Wasm probes qualify the Rust role seams.
 
 ## Exact input and diagnostics
 

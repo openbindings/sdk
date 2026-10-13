@@ -52,8 +52,8 @@ def consumer_manifest(template, checkout):
 # Portable regression controls for the manifest consumed by actual Cargo below.
 # In particular, D:\a is not a valid unescaped TOML basic string.
 for checkout in [PureWindowsPath(r'D:\a\sdk\sdk'),
-                 PureWindowsPath('C:/Users/Ünicode/sdk'),
-                 PureWindowsPath('C:/Users/😀/sdk'),
+                 PureWindowsPath('C:/callers/Ünicode/sdk'),
+                 PureWindowsPath('C:/callers/😀/sdk'),
                  PurePosixPath('/tmp/user\x7fname/sdk'),
                  PurePosixPath('/tmp/quote"and\\slash/sdk')]:
     template = '[dependencies]\nx = { path = "../../crates/x" }\ny = { path = "../../vendor/y" }\n'

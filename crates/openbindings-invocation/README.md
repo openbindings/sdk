@@ -280,12 +280,12 @@ The frame mapper is test-only and does not establish a new streaming fixture
 standard. The external Catalog consumer joins inspection, synthesis and explicit
 binding invocation against an independent execution oracle. The invoker-only
 consumer guards dependency isolation; the Node/Wasm probe qualifies a thin Rust
-bridge, not a released TypeScript API or browser deployment. See the repository's
-[binding invocation checkpoint](https://github.com/openbindings/sdk/blob/main/docs/binding-invocation-checkpoint.md)
-for the acceptance map and qualification commands.
+bridge, not a released TypeScript API or browser deployment. Run
+`tools/verify-binding-invocation.py` for the maintained consumer qualification.
 
-Context provisioning, protocol transports and the real OpenAPI kind adapter
-remain subsequent work. Operation consumer and cancellation tests, the shared
+Context provisioning and protocol transports remain application responsibilities.
+The SDK supplies no kind-specific instances. The separate
+[OpenAPI project](https://github.com/openbindings/openapi) implements the roles. Operation consumer and cancellation tests, the shared
 Catalog pipeline, and the expanded Node/Wasm probe qualify the operation layer.
 The resource probe records warmed binding-versus-operation overhead and owner
 release; it does not claim HTTP parity, browser memory bounds, or arbitrary schema

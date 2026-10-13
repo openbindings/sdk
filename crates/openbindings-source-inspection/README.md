@@ -16,7 +16,11 @@ invocation, HTTP discovery or a plugin registry. Core document semantics are unc
 This is an unpublished, provisional Rust API. No inspection API has been added to
 `@openbindings/sdk` yet.
 
-Implement `SourceInspector`; applications call `Inspector`. This code-defined
+A source inspector enumerates bindable targets and optional operation framing.
+Implement `SourceInspector`; applications call `Inspector`, select targets and
+assign their own operation and source keys. The SDK supplies no kind-specific
+instances; [openbindings/openapi](https://github.com/openbindings/openapi) is a
+separate implementation of the roles. This code-defined
 example kind has one target whose binding content is the source content:
 
 ```rust
