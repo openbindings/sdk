@@ -102,3 +102,57 @@ pub async fn pending_cleanup(kind: &str, description: &str, abandon: bool) -> Re
     assert_eq!(live.get(), 0);
     Ok(())
 }
+
+#[wasm_bindgen]
+pub async fn authenticated_consumers() -> Result<(), JsValue> {
+    crate::auth_acceptance::suite(false).await;
+    crate::auth_acceptance::suite(true).await;
+    super::auth::additional_admission(false).await;
+    super::auth::additional_admission(true).await;
+    super::auth::bounds(false).await;
+    super::auth::bounds(true).await;
+    super::auth::suite(false).await;
+    super::auth::suite(true).await;
+    super::auth::cycle(false).await;
+    super::auth::cycle(true).await;
+    let before = owners();
+    for _ in 0..1000 {
+        super::auth::cycle(false).await;
+        super::auth::cycle(true).await;
+    }
+    assert_eq!(owners(), before);
+    Ok(())
+}
+
+/// Exact JS text context enters the same role path; report actual effects on errors.
+#[wasm_bindgen]
+pub async fn authenticated_call(
+    v30: bool,
+    path: &str,
+    method: &str,
+    context_text: &str,
+    input: &str,
+) -> String {
+    let (kind, text, _, _) = super::auth::edition(v30);
+    let src = super::auth::source(kind, text);
+    let seen = Rc::new(super::auth::Seen::default());
+    let result = match JsonValue::parse(context_text) {
+        Ok(context) => {
+            super::auth::binding_call(
+                OpenApi::default().with_transport(super::auth::host(
+                    seen.clone(),
+                    200,
+                    super::auth::OUTPUT,
+                )),
+                &src,
+                path,
+                method,
+                Some(&context),
+                &[input],
+            )
+            .await
+        }
+        Err(_) => Err(InvocationError::refused()),
+    };
+    match result {Ok(output)=>serde_json::json!({"output":output,"code":null,"hostEntries":seen.calls.get(),"wires":*seen.wires.borrow()}).to_string(),Err(error)=>serde_json::json!({"output":[],"code":error.code(),"hostEntries":seen.calls.get(),"wires":*seen.wires.borrow()}).to_string()}
+}

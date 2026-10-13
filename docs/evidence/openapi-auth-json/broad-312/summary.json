@@ -1,0 +1,1790 @@
+{
+  "edition": "3.1.2",
+  "qualification_receipt_sha256": "d8e2ee4294d25b922bbe90e95f2322af29f44ffae474f5cdbf854f3cee08ac62",
+  "consumer_lock_sha256": "e2f1582d053ffe66d49695ca0a3a492f1c45a88aa56940f47e7cc1f9a4a12b60",
+  "format": "openbindings.openapi-json-path.performance@1",
+  "time": 1791893764.981945,
+  "binary_sha256": "5392f7027ce709dce81697d6b6e7f77278509a0e181f5c3431a3a82b1dda97f4",
+  "source_sha256": "9d3779f88368d12c50a4c5c84dea546f663de9090f830a2ec30c8822e2717aaa",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "rows": [
+    {
+      "n": 1,
+      "stage": "source-generation",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        2627.1849516603615,
+        2610.9320139940473,
+        2591.4593417983933
+      ],
+      "candidate_process_medians_ns": [
+        2877.6281652854514,
+        2575.5125167404967,
+        2594.693217788387
+      ],
+      "baseline_median_ns": 2610.9320139940473,
+      "candidate_median_ns": 2594.693217788387,
+      "overhead_ns": -16.238796205660492,
+      "ratio": 0.9937804599588868,
+      "baseline_spread": 0.013683086985982957,
+      "ceiling_ns": 5221.864027988095,
+      "paired_overheads_ns": [
+        250.4432136250898,
+        -35.41949725355062,
+        3.233875989993521
+      ],
+      "median_paired_overhead_ns": 3.233875989993521,
+      "paired_ratios": [
+        1.0953275914079865,
+        0.9864341556717259,
+        1.0012478976373789
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "n": 1,
+      "stage": "client-source-preparation",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        7053.097179125529,
+        7118.3925978647685,
+        7415.424588462109
+      ],
+      "candidate_process_medians_ns": [
+        7293.526400233372,
+        7020.2629510037905,
+        7135.589183789954
+      ],
+      "baseline_median_ns": 7118.3925978647685,
+      "candidate_median_ns": 7135.589183789954,
+      "overhead_ns": 17.1965859251859,
+      "ratio": 1.002415796219268,
+      "baseline_spread": 0.05090017224468113,
+      "ceiling_ns": 14236.785195729537,
+      "paired_overheads_ns": [
+        240.42922110784366,
+        -98.12964686097803,
+        -279.83540467215425
+      ],
+      "median_paired_overhead_ns": -98.12964686097803,
+      "paired_ratios": [
+        1.0340884600058287,
+        0.986214634060727,
+        0.9622630637890164
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "cold": false,
+      "n": 1,
+      "workload": "synthesis",
+      "baseline_process_medians_ns": [
+        19666.126228863548,
+        19613.349411764706,
+        19763.75138339921
+      ],
+      "candidate_process_medians_ns": [
+        19846.14761904762,
+        19890.861177406525,
+        19848.69365079365
+      ],
+      "baseline_median_ns": 19666.126228863548,
+      "candidate_median_ns": 19848.69365079365,
+      "overhead_ns": 182.5674219301036,
+      "ratio": 1.0092833443559492,
+      "baseline_spread": 0.00764776803953191,
+      "ceiling_ns": 141332.2524577271,
+      "paired_overheads_ns": [
+        180.02139018407252,
+        277.5117656418188,
+        84.94226739444275
+      ],
+      "median_paired_overhead_ns": 180.02139018407252,
+      "paired_ratios": [
+        1.0091538815570023,
+        1.0141491266899756,
+        1.0042978818012147
+      ],
+      "status": "pass"
+    },
+    {
+      "cold": true,
+      "n": 1,
+      "workload": "synthesis",
+      "baseline_process_medians_ns": [
+        26840.557165861515,
+        27086.132177681473,
+        26988.82406907717
+      ],
+      "candidate_process_medians_ns": [
+        39210.7170846395,
+        39072.39609375,
+        38141.559115179254
+      ],
+      "baseline_median_ns": 26988.82406907717,
+      "candidate_median_ns": 39072.39609375,
+      "overhead_ns": 12083.57202467283,
+      "ratio": 1.4477250284690157,
+      "baseline_spread": 0.009099137153638666,
+      "ceiling_ns": 155977.64813815436,
+      "paired_overheads_ns": [
+        12370.159918777987,
+        11986.263916068528,
+        11152.735046102083
+      ],
+      "median_paired_overhead_ns": 11986.263916068528,
+      "paired_ratios": [
+        1.4608756756551828,
+        1.442524013300984,
+        1.413235308717303
+      ],
+      "status": "pass"
+    },
+    {
+      "n": 32,
+      "stage": "source-generation",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        48413.762826718295,
+        47835.843212237094,
+        48527.23860329777
+      ],
+      "candidate_process_medians_ns": [
+        48281.57142857143,
+        47633.61142857143,
+        47797.71537726839
+      ],
+      "baseline_median_ns": 48413.762826718295,
+      "candidate_median_ns": 47797.71537726839,
+      "overhead_ns": -616.0474494499067,
+      "ratio": 0.9872753652374666,
+      "baseline_spread": 0.01428096786311163,
+      "ceiling_ns": 96827.52565343659,
+      "paired_overheads_ns": [
+        -132.19139814686787,
+        -202.23178366566572,
+        -729.5232260293778
+      ],
+      "median_paired_overhead_ns": -202.23178366566572,
+      "paired_ratios": [
+        0.9972695491854248,
+        0.9957723796616607,
+        0.9849667269964996
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "n": 32,
+      "stage": "client-source-preparation",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        115820.3125,
+        115254.32027649769,
+        135170.25598086126
+      ],
+      "candidate_process_medians_ns": [
+        115455.83640552996,
+        115606.04387990762,
+        114491.03661327231
+      ],
+      "baseline_median_ns": 115820.3125,
+      "candidate_median_ns": 115455.83640552996,
+      "overhead_ns": -364.47609447003924,
+      "ratio": 0.9968530900443734,
+      "baseline_spread": 0.17195546510344262,
+      "ceiling_ns": 231640.625,
+      "paired_overheads_ns": [
+        -364.47609447003924,
+        351.7236034099333,
+        -20679.219367588943
+      ],
+      "median_paired_overhead_ns": -364.47609447003924,
+      "paired_ratios": [
+        0.9968530900443734,
+        1.0030517173027973,
+        0.8470135369831887
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "cold": false,
+      "n": 32,
+      "workload": "synthesis",
+      "baseline_process_medians_ns": [
+        377114.96992481203,
+        373232.27611940296,
+        376594.3007518797
+      ],
+      "candidate_process_medians_ns": [
+        372369.7481481481,
+        374707.7089552239,
+        366461.06569343066
+      ],
+      "baseline_median_ns": 376594.3007518797,
+      "candidate_median_ns": 372369.7481481481,
+      "overhead_ns": -4224.552603731572,
+      "ratio": 0.9887822184369303,
+      "baseline_spread": 0.01031001743164243,
+      "ceiling_ns": 917188.6015037594,
+      "paired_overheads_ns": [
+        -4745.221776663908,
+        1475.432835820946,
+        -10133.235058449034
+      ],
+      "median_paired_overhead_ns": -4745.221776663908,
+      "paired_ratios": [
+        0.9874170421354262,
+        1.003953122305395,
+        0.9730924365073561
+      ],
+      "status": "pass"
+    },
+    {
+      "cold": true,
+      "n": 32,
+      "workload": "synthesis",
+      "baseline_process_medians_ns": [
+        497148.9207920792,
+        494140.1176470588,
+        493139.29411764705
+      ],
+      "candidate_process_medians_ns": [
+        833657.0983606557,
+        831314.2131147541,
+        815133.0645161291
+      ],
+      "baseline_median_ns": 494140.1176470588,
+      "candidate_median_ns": 831314.2131147541,
+      "overhead_ns": 337174.09546769527,
+      "ratio": 1.682345115132957,
+      "baseline_spread": 0.00811435164083565,
+      "ceiling_ns": 1152280.2352941176,
+      "paired_overheads_ns": [
+        336508.17756857653,
+        337174.09546769527,
+        321993.77039848204
+      ],
+      "median_paired_overhead_ns": 336508.17756857653,
+      "paired_ratios": [
+        1.6768760093704662,
+        1.682345115132957,
+        1.652946893989885
+      ],
+      "status": "pass"
+    },
+    {
+      "n": 512,
+      "stage": "source-generation",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        805834.0,
+        805015.2063492064,
+        798517.8571428572
+      ],
+      "candidate_process_medians_ns": [
+        810491.9354838709,
+        798052.253968254,
+        802025.7936507936
+      ],
+      "baseline_median_ns": 805015.2063492064,
+      "candidate_median_ns": 802025.7936507936,
+      "overhead_ns": -2989.4126984127797,
+      "ratio": 0.996286514000189,
+      "baseline_spread": 0.009088204545007292,
+      "ceiling_ns": 1610030.4126984128,
+      "paired_overheads_ns": [
+        4657.935483870911,
+        -6962.952380952425,
+        3507.9365079364507
+      ],
+      "median_paired_overhead_ns": 3507.9365079364507,
+      "paired_ratios": [
+        1.005780266759495,
+        0.9913505331004493,
+        1.0043930595622346
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "n": 512,
+      "stage": "client-source-preparation",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        1776119.2413793104,
+        1766750.0,
+        1770530.1724137932
+      ],
+      "candidate_process_medians_ns": [
+        1779734.2068965517,
+        1782872.1379310344,
+        1798952.392857143
+      ],
+      "baseline_median_ns": 1770530.1724137932,
+      "candidate_median_ns": 1782872.1379310344,
+      "overhead_ns": 12341.965517241275,
+      "ratio": 1.006970773901252,
+      "baseline_spread": 0.0052917716542142485,
+      "ceiling_ns": 3541060.3448275863,
+      "paired_overheads_ns": [
+        3614.965517241275,
+        16122.137931034435,
+        28422.220443349797
+      ],
+      "median_paired_overhead_ns": 16122.137931034435,
+      "paired_ratios": [
+        1.002035316904981,
+        1.0091253080124718,
+        1.0160529432856833
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "cold": false,
+      "n": 512,
+      "workload": "synthesis",
+      "baseline_process_medians_ns": [
+        5929310.222222222,
+        6050064.777777778,
+        6016703.777777778
+      ],
+      "candidate_process_medians_ns": [
+        5969745.444444444,
+        6039606.444444444,
+        6051467.555555556
+      ],
+      "baseline_median_ns": 6016703.777777778,
+      "candidate_median_ns": 6039606.444444444,
+      "overhead_ns": 22902.666666666046,
+      "ratio": 1.003806513917347,
+      "baseline_spread": 0.02006988544151923,
+      "ceiling_ns": 13157407.555555556,
+      "paired_overheads_ns": [
+        40435.222222222015,
+        -10458.333333333954,
+        34763.777777777985
+      ],
+      "median_paired_overhead_ns": 34763.777777777985,
+      "paired_ratios": [
+        1.0068195491055059,
+        0.99827136837084,
+        1.0057778775658153
+      ],
+      "status": "pass"
+    },
+    {
+      "cold": true,
+      "n": 512,
+      "workload": "synthesis",
+      "baseline_process_medians_ns": [
+        7694226.142857143,
+        7749238.0,
+        7821535.714285715
+      ],
+      "candidate_process_medians_ns": [
+        13556666.75,
+        13474875.0,
+        13554323.0
+      ],
+      "baseline_median_ns": 7749238.0,
+      "candidate_median_ns": 13554323.0,
+      "overhead_ns": 5805085.0,
+      "ratio": 1.7491168809113877,
+      "baseline_spread": 0.016428656782585826,
+      "ceiling_ns": 16622476.0,
+      "paired_overheads_ns": [
+        5862440.607142857,
+        5725637.0,
+        5732787.285714285
+      ],
+      "median_paired_overhead_ns": 5732787.285714285,
+      "paired_ratios": [
+        1.7619272553595522,
+        1.7388645180339022,
+        1.7329490646246855
+      ],
+      "status": "pass"
+    },
+    {
+      "bytes": 1024,
+      "method": "get",
+      "stage": "request-preparation",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        1539.4050983651982,
+        1558.0505421912003,
+        1591.5563088871913
+      ],
+      "candidate_process_medians_ns": [
+        1547.1396435422985,
+        1534.6802430864614,
+        1560.0462388069016
+      ],
+      "baseline_median_ns": 1558.0505421912003,
+      "candidate_median_ns": 1547.1396435422985,
+      "overhead_ns": -10.91089864890182,
+      "ratio": 0.9929970829870788,
+      "baseline_spread": 0.03347209163616031,
+      "ceiling_ns": 3116.1010843824006,
+      "paired_overheads_ns": [
+        7.7345451771002445,
+        -23.370299104738933,
+        -31.51007008028978
+      ],
+      "median_paired_overhead_ns": -23.370299104738933,
+      "paired_ratios": [
+        1.0050243728472215,
+        0.9850002946169695,
+        0.9802017246236663
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 1024,
+      "method": "get",
+      "stage": "dispatch-and-client-decode",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        3537.9136064529825,
+        3617.2803298849744,
+        3577.427845746584
+      ],
+      "candidate_process_medians_ns": [
+        3575.0512655512657,
+        3564.918080707258,
+        3615.960370263234
+      ],
+      "baseline_median_ns": 3577.427845746584,
+      "candidate_median_ns": 3575.0512655512657,
+      "overhead_ns": -2.3765801953181835,
+      "ratio": 0.9993356734788812,
+      "baseline_spread": 0.022185415570674806,
+      "ceiling_ns": 7154.855691493168,
+      "paired_overheads_ns": [
+        37.137659098283166,
+        -52.36224917771642,
+        38.53252451665003
+      ],
+      "median_paired_overhead_ns": 37.137659098283166,
+      "paired_ratios": [
+        1.0104970508693445,
+        0.9855244149188235,
+        1.0107710137501345
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 1024,
+      "method": "get",
+      "stage": "input-bridge",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        24.550776062793904,
+        24.53370830622361,
+        24.739955240622475
+      ],
+      "candidate_process_medians_ns": [
+        24.979870754365848,
+        24.840507183123574,
+        24.955433773545355
+      ],
+      "baseline_median_ns": 24.550776062793904,
+      "candidate_median_ns": 24.955433773545355,
+      "overhead_ns": 0.40465771075145085,
+      "ratio": 1.016482481438324,
+      "baseline_spread": 0.00840083156114271,
+      "ceiling_ns": 49.10155212558781,
+      "paired_overheads_ns": [
+        0.4290946915719438,
+        0.30679887689996477,
+        0.2154785329228801
+      ],
+      "median_paired_overhead_ns": 0.30679887689996477,
+      "paired_ratios": [
+        1.017477846340761,
+        1.0125051978718658,
+        1.0087097381877663
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 1024,
+      "method": "get",
+      "stage": "output-bridge",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        835.3178856627352,
+        838.5511932513795,
+        840.2230586970038
+      ],
+      "candidate_process_medians_ns": [
+        845.0340713199256,
+        837.5201755414482,
+        840.2505755625389
+      ],
+      "baseline_median_ns": 838.5511932513795,
+      "candidate_median_ns": 840.2505755625389,
+      "overhead_ns": 1.699382311159411,
+      "ratio": 1.0020265695461839,
+      "baseline_spread": 0.005849580888734302,
+      "ceiling_ns": 1677.102386502759,
+      "paired_overheads_ns": [
+        9.716185657190408,
+        -1.031017709931234,
+        0.027516865535062607
+      ],
+      "median_paired_overhead_ns": 0.027516865535062607,
+      "paired_ratios": [
+        1.011631722274786,
+        0.9987704773206111,
+        1.0000327494767614
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 1024,
+      "method": "get",
+      "stage": "retained-output-clone",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        30.73792032498534,
+        30.79457449324491,
+        30.870880905280888
+      ],
+      "candidate_process_medians_ns": [
+        30.35662571163342,
+        30.561177313356936,
+        30.902418975537067
+      ],
+      "baseline_median_ns": 30.79457449324491,
+      "candidate_median_ns": 30.561177313356936,
+      "overhead_ns": -0.23339717988797304,
+      "ratio": 0.9924208343927866,
+      "baseline_spread": 0.004317662526063328,
+      "ceiling_ns": 61.58914898648982,
+      "paired_overheads_ns": [
+        -0.38129461335191905,
+        -0.23339717988797304,
+        0.03153807025617894
+      ],
+      "median_paired_overhead_ns": -0.23339717988797304,
+      "paired_ratios": [
+        0.9875953021765762,
+        0.9924208343927866,
+        1.0010216122550226
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 1024,
+      "method": "get",
+      "stage": "checked-binding-lifecycle",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        2328.2326783386106,
+        2286.166613323579,
+        2295.4943531356166
+      ],
+      "candidate_process_medians_ns": [
+        2296.053956008633,
+        2306.255108159218,
+        2324.1339128009668
+      ],
+      "baseline_median_ns": 2295.4943531356166,
+      "candidate_median_ns": 2306.255108159218,
+      "overhead_ns": 10.760755023601178,
+      "ratio": 1.0046877723784866,
+      "baseline_spread": 0.018325492701635242,
+      "ceiling_ns": 4590.988706271233,
+      "paired_overheads_ns": [
+        -32.17872232997752,
+        20.088494835638812,
+        28.639559665350134
+      ],
+      "median_paired_overhead_ns": 20.088494835638812,
+      "paired_ratios": [
+        0.9861789061594395,
+        1.008786977606341,
+        1.012476423488574
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 1024,
+      "cold": false,
+      "layer": "binding",
+      "method": "get",
+      "payload": 1026,
+      "workload": "invocation",
+      "baseline_process_medians_ns": [
+        5081.648069105691,
+        5098.620067298868,
+        5121.402232920209
+      ],
+      "candidate_process_medians_ns": [
+        8926.878793288111,
+        8886.810556246668,
+        8990.47105357785
+      ],
+      "baseline_median_ns": 5098.620067298868,
+      "candidate_median_ns": 8926.878793288111,
+      "overhead_ns": 3828.2587259892434,
+      "ratio": 1.7508421250178319,
+      "baseline_spread": 0.007797043766702633,
+      "ceiling_ns": 45457.240134597734,
+      "paired_overheads_ns": [
+        3845.23072418242,
+        3788.1904889478,
+        3869.0688206576415
+      ],
+      "median_paired_overhead_ns": 3845.23072418242,
+      "paired_ratios": [
+        1.7566896943453887,
+        1.742983481598129,
+        1.7554706005686083
+      ],
+      "status": "pass"
+    },
+    {
+      "bytes": 1024,
+      "cold": false,
+      "layer": "operation",
+      "method": "get",
+      "payload": 1026,
+      "workload": "invocation",
+      "baseline_process_medians_ns": [
+        5061.329588014982,
+        5080.310880829015,
+        5130.792940693618
+      ],
+      "candidate_process_medians_ns": [
+        9197.183005333824,
+        9263.137643571694,
+        9298.283004834511
+      ],
+      "baseline_median_ns": 5080.310880829015,
+      "candidate_median_ns": 9263.137643571694,
+      "overhead_ns": 4182.8267627426785,
+      "ratio": 1.8233407090355298,
+      "baseline_spread": 0.013673051572643393,
+      "ceiling_ns": 45420.62176165803,
+      "paired_overheads_ns": [
+        4135.853417318842,
+        4182.8267627426785,
+        4167.490064140893
+      ],
+      "median_paired_overhead_ns": 4167.490064140893,
+      "paired_ratios": [
+        1.8171476181105397,
+        1.8233407090355298,
+        1.8122506817781465
+      ],
+      "status": "pass"
+    },
+    {
+      "bytes": 1024,
+      "method": "get",
+      "source_bytes": 209,
+      "workload": "cold-setup-and-invocation",
+      "baseline_process_medians_ns": [
+        12471.830922693267,
+        12530.850663993986,
+        12595.885894206549
+      ],
+      "candidate_process_medians_ns": [
+        27640.27086788281,
+        27638.167403314917,
+        27804.40522512507
+      ],
+      "baseline_median_ns": 12530.850663993986,
+      "candidate_median_ns": 27640.27086788281,
+      "overhead_ns": 15109.420203888823,
+      "ratio": 2.2057776929146615,
+      "baseline_spread": 0.009899964083822358,
+      "ceiling_ns": 127151.70132798798,
+      "paired_overheads_ns": [
+        15168.439945189542,
+        15107.316739320931,
+        15208.51933091852
+      ],
+      "median_paired_overhead_ns": 15168.439945189542,
+      "paired_ratios": [
+        2.21621597014995,
+        2.2056098300437124,
+        2.20741958593906
+      ],
+      "status": "pass"
+    },
+    {
+      "bytes": 1024,
+      "method": "get",
+      "payload": 1026,
+      "workload": "validated-invocation",
+      "baseline_process_medians_ns": [
+        5133.09721794477,
+        5205.656845393024,
+        5248.718484307757
+      ],
+      "candidate_process_medians_ns": [
+        9559.811699483846,
+        9410.111592021076,
+        9476.083380708737
+      ],
+      "baseline_median_ns": 5205.656845393024,
+      "candidate_median_ns": 9476.083380708737,
+      "overhead_ns": 4270.4265353157125,
+      "ratio": 1.820343457539852,
+      "baseline_spread": 0.022210696900874453,
+      "ceiling_ns": 45671.313690786046,
+      "paired_overheads_ns": [
+        4426.714481539076,
+        4204.454746628052,
+        4227.36489640098
+      ],
+      "median_paired_overhead_ns": 4227.36489640098,
+      "paired_ratios": [
+        1.8623866436941319,
+        1.8076703615892333,
+        1.8054089601184848
+      ],
+      "status": "pass"
+    },
+    {
+      "bytes": 65536,
+      "method": "get",
+      "stage": "request-preparation",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        1537.2573940847321,
+        1542.331132977575,
+        1562.127686828293
+      ],
+      "candidate_process_medians_ns": [
+        1532.5798007662836,
+        1530.5727317252356,
+        1546.3416731096336
+      ],
+      "baseline_median_ns": 1542.331132977575,
+      "candidate_median_ns": 1532.5798007662836,
+      "overhead_ns": -9.751332211291356,
+      "ratio": 0.9936775365530839,
+      "baseline_spread": 0.0161251317643748,
+      "ceiling_ns": 3084.66226595515,
+      "paired_overheads_ns": [
+        -4.677593318448544,
+        -11.758401252339354,
+        -15.786013718659433
+      ],
+      "median_paired_overhead_ns": -11.758401252339354,
+      "paired_ratios": [
+        0.9969571827486746,
+        0.9923762148082695,
+        0.9898945432874883
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 65536,
+      "method": "get",
+      "stage": "dispatch-and-client-decode",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        160532.45192307694,
+        161949.0291262136,
+        158611.28797468354
+      ],
+      "candidate_process_medians_ns": [
+        159412.81847133758,
+        158886.11111111112,
+        160787.7813504823
+      ],
+      "baseline_median_ns": 160532.45192307694,
+      "candidate_median_ns": 159412.81847133758,
+      "overhead_ns": -1119.6334517393552,
+      "ratio": 0.9930255008359565,
+      "baseline_spread": 0.020791691097631917,
+      "ceiling_ns": 321064.9038461539,
+      "paired_overheads_ns": [
+        -1119.6334517393552,
+        -3062.9180151024775,
+        2176.4933757987747
+      ],
+      "median_paired_overhead_ns": -1119.6334517393552,
+      "paired_ratios": [
+        0.9930255008359565,
+        0.9810871480265843,
+        1.0137221846161806
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 65536,
+      "method": "get",
+      "stage": "input-bridge",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        24.56642362305311,
+        24.75100068213702,
+        24.69017169037168
+      ],
+      "candidate_process_medians_ns": [
+        24.794667766886874,
+        24.688997169164285,
+        24.778853068087717
+      ],
+      "baseline_median_ns": 24.69017169037168,
+      "candidate_median_ns": 24.778853068087717,
+      "overhead_ns": 0.08868137771603557,
+      "ratio": 1.003591768369542,
+      "baseline_spread": 0.007475730075861942,
+      "ceiling_ns": 49.38034338074336,
+      "paired_overheads_ns": [
+        0.2282441438337628,
+        -0.06200351297273343,
+        0.08868137771603557
+      ],
+      "median_paired_overhead_ns": 0.08868137771603557,
+      "paired_ratios": [
+        1.0092908983145426,
+        0.9974949088415047,
+        1.003591768369542
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 65536,
+      "method": "get",
+      "stage": "output-bridge",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        45917.73829201102,
+        46222.00369685767,
+        46288.92969472711
+      ],
+      "candidate_process_medians_ns": [
+        46314.46759259259,
+        46076.15930018416,
+        46440.92386258124
+      ],
+      "baseline_median_ns": 46222.00369685767,
+      "candidate_median_ns": 46314.46759259259,
+      "overhead_ns": 92.46389573492343,
+      "ratio": 1.002000430278647,
+      "baseline_spread": 0.008030621198304394,
+      "ceiling_ns": 92444.00739371534,
+      "paired_overheads_ns": [
+        396.7293005815736,
+        -145.8443966735067,
+        151.99416785413632
+      ],
+      "median_paired_overhead_ns": 151.99416785413632,
+      "paired_ratios": [
+        1.0086400009089864,
+        0.9968446976546059,
+        1.0032835965069085
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 65536,
+      "method": "get",
+      "stage": "retained-output-clone",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        30.56956679903278,
+        30.974649150738497,
+        30.67073278453215
+      ],
+      "candidate_process_medians_ns": [
+        30.303000055151415,
+        30.576408852719066,
+        30.936198015758848
+      ],
+      "baseline_median_ns": 30.67073278453215,
+      "candidate_median_ns": 30.576408852719066,
+      "overhead_ns": -0.09432393181308285,
+      "ratio": 0.9969246273809065,
+      "baseline_spread": 0.013207455933690843,
+      "ceiling_ns": 61.3414655690643,
+      "paired_overheads_ns": [
+        -0.26656674388136636,
+        -0.39824029801943084,
+        0.26546523122669896
+      ],
+      "median_paired_overhead_ns": -0.26656674388136636,
+      "paired_ratios": [
+        0.9912799960289329,
+        0.9871430247335041,
+        1.008655327314533
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 65536,
+      "method": "get",
+      "stage": "checked-binding-lifecycle",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        2315.356564019449,
+        2302.4526659913436,
+        2289.360239915755
+      ],
+      "candidate_process_medians_ns": [
+        2285.796205714286,
+        2320.443521440505,
+        2309.7572524020693
+      ],
+      "baseline_median_ns": 2302.4526659913436,
+      "candidate_median_ns": 2309.7572524020693,
+      "overhead_ns": 7.304586410725733,
+      "ratio": 1.0031725240299698,
+      "baseline_spread": 0.011290709462859242,
+      "ceiling_ns": 4604.905331982687,
+      "paired_overheads_ns": [
+        -29.560358305162936,
+        17.990855449161245,
+        20.397012486314452
+      ],
+      "median_paired_overhead_ns": 17.990855449161245,
+      "paired_ratios": [
+        0.9872329131657173,
+        1.0078137786347998,
+        1.0089094814047548
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 65536,
+      "cold": false,
+      "layer": "binding",
+      "method": "get",
+      "payload": 65538,
+      "workload": "invocation",
+      "baseline_process_medians_ns": [
+        161290.59354838709,
+        161159.70096463023,
+        162658.68506493507
+      ],
+      "candidate_process_medians_ns": [
+        208781.77083333334,
+        206851.5826446281,
+        209085.41666666666
+      ],
+      "baseline_median_ns": 161290.59354838709,
+      "candidate_median_ns": 208781.77083333334,
+      "overhead_ns": 47491.17728494626,
+      "ratio": 1.2944448044993953,
+      "baseline_spread": 0.00929368580849782,
+      "ceiling_ns": 1002961.1870967741,
+      "paired_overheads_ns": [
+        47491.17728494626,
+        45691.88167999787,
+        46426.73160173159
+      ],
+      "median_paired_overhead_ns": 46426.73160173159,
+      "paired_ratios": [
+        1.2944448044993953,
+        1.2835192756409115,
+        1.2854242402316085
+      ],
+      "status": "pass"
+    },
+    {
+      "bytes": 65536,
+      "cold": false,
+      "layer": "operation",
+      "method": "get",
+      "payload": 65538,
+      "workload": "invocation",
+      "baseline_process_medians_ns": [
+        161493.5483870968,
+        163090.52442996742,
+        162542.47727272726
+      ],
+      "candidate_process_medians_ns": [
+        207968.1867219917,
+        208306.3609958506,
+        210363.6218487395
+      ],
+      "baseline_median_ns": 162542.47727272726,
+      "candidate_median_ns": 208306.3609958506,
+      "overhead_ns": 45763.88372312335,
+      "ratio": 1.281550302979183,
+      "baseline_spread": 0.009824976644050385,
+      "ceiling_ns": 1005464.9545454546,
+      "paired_overheads_ns": [
+        46474.6383348949,
+        45215.83656588319,
+        47821.144576012244
+      ],
+      "median_paired_overhead_ns": 46474.6383348949,
+      "paired_ratios": [
+        1.2877801546814498,
+        1.27724379895105,
+        1.2942070613072665
+      ],
+      "status": "pass"
+    },
+    {
+      "bytes": 65536,
+      "method": "get",
+      "source_bytes": 209,
+      "workload": "cold-setup-and-invocation",
+      "baseline_process_medians_ns": [
+        168953.6858108108,
+        171009.5290102389,
+        168381.29194630872
+      ],
+      "candidate_process_medians_ns": [
+        230424.3456221198,
+        231051.267281106,
+        230502.49769585254
+      ],
+      "baseline_median_ns": 168953.6858108108,
+      "candidate_median_ns": 230502.49769585254,
+      "overhead_ns": 61548.81188504174,
+      "ratio": 1.3642939873709665,
+      "baseline_spread": 0.015555961690431632,
+      "ceiling_ns": 439997.3716216216,
+      "paired_overheads_ns": [
+        61470.659811309015,
+        60041.73827086709,
+        62121.20574954382
+      ],
+      "median_paired_overhead_ns": 61470.659811309015,
+      "paired_ratios": [
+        1.3638314222996117,
+        1.3511017112226078,
+        1.3689317562033687
+      ],
+      "status": "pass"
+    },
+    {
+      "bytes": 65536,
+      "method": "get",
+      "payload": 65538,
+      "workload": "validated-invocation",
+      "baseline_process_medians_ns": [
+        161396.23548387096,
+        161584.54193548387,
+        160806.1382636656
+      ],
+      "candidate_process_medians_ns": [
+        209639.99163179917,
+        210389.1806722689,
+        209172.39583333334
+      ],
+      "baseline_median_ns": 161396.23548387096,
+      "candidate_median_ns": 209639.99163179917,
+      "overhead_ns": 48243.756147928216,
+      "ratio": 1.2989150025915532,
+      "baseline_spread": 0.004822935736292628,
+      "ceiling_ns": 1003172.4709677419,
+      "paired_overheads_ns": [
+        48243.756147928216,
+        48804.63873678504,
+        48366.25756966774
+      ],
+      "median_paired_overhead_ns": 48366.25756966774,
+      "paired_ratios": [
+        1.2989150025915532,
+        1.3020377949041149,
+        1.3007737023717594
+      ],
+      "status": "pass"
+    },
+    {
+      "bytes": 1024,
+      "method": "post",
+      "stage": "request-preparation",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        2174.2057224855416,
+        2149.378841937841,
+        2148.389834149695
+      ],
+      "candidate_process_medians_ns": [
+        2062.1554419103395,
+        2058.392655716109,
+        2091.068292070927
+      ],
+      "baseline_median_ns": 2149.378841937841,
+      "candidate_median_ns": 2062.1554419103395,
+      "overhead_ns": -87.22340002750161,
+      "ratio": 0.9594192525181542,
+      "baseline_spread": 0.012010859989936128,
+      "ceiling_ns": 4298.757683875682,
+      "paired_overheads_ns": [
+        -112.05028057520212,
+        -90.98618622173217,
+        -57.32154207876829
+      ],
+      "median_paired_overhead_ns": -90.98618622173217,
+      "paired_ratios": [
+        0.9484638093735184,
+        0.9576686136262044,
+        0.9733188357310136
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 1024,
+      "method": "post",
+      "stage": "dispatch-and-client-decode",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        3741.628629152948,
+        3793.237596722804,
+        3757.872388396212
+      ],
+      "candidate_process_medians_ns": [
+        3757.496054708048,
+        3727.5638884747277,
+        3768.4295726882206
+      ],
+      "baseline_median_ns": 3757.872388396212,
+      "candidate_median_ns": 3757.496054708048,
+      "overhead_ns": -0.3763336881638679,
+      "ratio": 0.9998998545854495,
+      "baseline_spread": 0.013733560439470263,
+      "ceiling_ns": 7515.744776792424,
+      "paired_overheads_ns": [
+        15.867425555099999,
+        -65.67370824807631,
+        10.557184292008515
+      ],
+      "median_paired_overhead_ns": 10.557184292008515,
+      "paired_ratios": [
+        1.0042407804535889,
+        0.9826866346825162,
+        1.0028093514629735
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 1024,
+      "method": "post",
+      "stage": "input-bridge",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        2688.1126283533144,
+        2679.969718083396,
+        2674.6077560845147
+      ],
+      "candidate_process_medians_ns": [
+        2701.5457639939486,
+        2698.0471077055904,
+        2698.2758620689656
+      ],
+      "baseline_median_ns": 2679.969718083396,
+      "candidate_median_ns": 2698.2758620689656,
+      "overhead_ns": 18.306143985569634,
+      "ratio": 1.0068307279227997,
+      "baseline_spread": 0.0050391883824933295,
+      "ceiling_ns": 5359.939436166792,
+      "paired_overheads_ns": [
+        13.433135640634191,
+        18.07738962219446,
+        23.668105984450904
+      ],
+      "median_paired_overhead_ns": 18.07738962219446,
+      "paired_ratios": [
+        1.0049972369085083,
+        1.006745370852594,
+        1.0088491876727
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 1024,
+      "method": "post",
+      "stage": "output-bridge",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        834.4292079703615,
+        842.0207301875989,
+        839.5543689972463
+      ],
+      "candidate_process_medians_ns": [
+        839.5853679014004,
+        833.9817359975982,
+        829.1434399044839
+      ],
+      "baseline_median_ns": 839.5543689972463,
+      "candidate_median_ns": 833.9817359975982,
+      "overhead_ns": -5.572632999648135,
+      "ratio": 0.9933623917575415,
+      "baseline_spread": 0.009042323520160623,
+      "ceiling_ns": 1679.1087379944927,
+      "paired_overheads_ns": [
+        5.156159931038928,
+        -8.038994190000722,
+        -10.410929092762444
+      ],
+      "median_paired_overhead_ns": -8.038994190000722,
+      "paired_ratios": [
+        1.0061792658763475,
+        0.9904527360173072,
+        0.9875994581444474
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 1024,
+      "method": "post",
+      "stage": "retained-output-clone",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        30.68588481142005,
+        30.72834223941641,
+        30.681385128376945
+      ],
+      "candidate_process_medians_ns": [
+        30.323068376643736,
+        30.641504496637097,
+        30.45388554708532
+      ],
+      "baseline_median_ns": 30.68588481142005,
+      "candidate_median_ns": 30.45388554708532,
+      "overhead_ns": -0.2319992643347284,
+      "ratio": 0.992439544573654,
+      "baseline_spread": 0.001530251166881429,
+      "ceiling_ns": 61.3717696228401,
+      "paired_overheads_ns": [
+        -0.3628164347763132,
+        -0.08683774277931278,
+        -0.2274995812916245
+      ],
+      "median_paired_overhead_ns": -0.2274995812916245,
+      "paired_ratios": [
+        0.9881764388738992,
+        0.9971740179765402,
+        0.9925850941755164
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 1024,
+      "method": "post",
+      "stage": "checked-binding-lifecycle",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        2307.0929266829694,
+        2290.248625870282,
+        2272.2165416950693
+      ],
+      "candidate_process_medians_ns": [
+        2279.4550054704596,
+        2289.78151760773,
+        2303.9115329677925
+      ],
+      "baseline_median_ns": 2290.248625870282,
+      "candidate_median_ns": 2289.78151760773,
+      "overhead_ns": -0.46710826255184656,
+      "ratio": 0.999796044736246,
+      "baseline_spread": 0.015228209109675712,
+      "ceiling_ns": 4580.497251740564,
+      "paired_overheads_ns": [
+        -27.63792121250981,
+        -0.46710826255184656,
+        31.6949912727232
+      ],
+      "median_paired_overhead_ns": -0.46710826255184656,
+      "paired_ratios": [
+        0.9880204560064053,
+        0.999796044736246,
+        1.0139489307867986
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 1024,
+      "cold": false,
+      "layer": "binding",
+      "method": "post",
+      "payload": 2057,
+      "workload": "invocation",
+      "baseline_process_medians_ns": [
+        5743.203882379968,
+        5716.216049382716,
+        5776.24073004505
+      ],
+      "candidate_process_medians_ns": [
+        12429.312701963709,
+        12276.904738521975,
+        12171.331224142126
+      ],
+      "baseline_median_ns": 5743.203882379968,
+      "candidate_median_ns": 12276.904738521975,
+      "overhead_ns": 6533.700856142007,
+      "ratio": 2.1376404163862732,
+      "baseline_spread": 0.0104514277904166,
+      "ceiling_ns": 57056.40776475993,
+      "paired_overheads_ns": [
+        6686.108819583741,
+        6560.688689139259,
+        6395.090494097076
+      ],
+      "median_paired_overhead_ns": 6560.688689139259,
+      "paired_ratios": [
+        2.164177514243676,
+        2.147732806538643,
+        2.107137114426877
+      ],
+      "status": "pass"
+    },
+    {
+      "bytes": 1024,
+      "cold": false,
+      "layer": "operation",
+      "method": "post",
+      "payload": 2057,
+      "workload": "invocation",
+      "baseline_process_medians_ns": [
+        5737.492828456684,
+        5718.406907593779,
+        5751.260524499655
+      ],
+      "candidate_process_medians_ns": [
+        12675.781495564004,
+        12698.429913661757,
+        12531.777443609022
+      ],
+      "baseline_median_ns": 5737.492828456684,
+      "candidate_median_ns": 12675.781495564004,
+      "overhead_ns": 6938.28866710732,
+      "ratio": 2.209289296658456,
+      "baseline_spread": 0.0057261277509454206,
+      "ceiling_ns": 57044.98565691337,
+      "paired_overheads_ns": [
+        6938.28866710732,
+        6980.023006067979,
+        6780.516919109367
+      ],
+      "median_paired_overhead_ns": 6938.28866710732,
+      "paired_ratios": [
+        2.209289296658456,
+        2.2206237014716166,
+        2.1789618797870847
+      ],
+      "status": "pass"
+    },
+    {
+      "bytes": 1024,
+      "method": "post",
+      "source_bytes": 260,
+      "workload": "cold-setup-and-invocation",
+      "baseline_process_medians_ns": [
+        14953.398923444976,
+        14902.972288438617,
+        14972.243113772454
+      ],
+      "candidate_process_medians_ns": [
+        33504.21366376423,
+        33885.30420054201,
+        33126.51721854305
+      ],
+      "baseline_median_ns": 14953.398923444976,
+      "candidate_median_ns": 33504.21366376423,
+      "overhead_ns": 18550.814740319256,
+      "ratio": 2.240575125113127,
+      "baseline_spread": 0.004632446822857732,
+      "ceiling_ns": 132506.79784688994,
+      "paired_overheads_ns": [
+        18550.814740319256,
+        18982.33191210339,
+        18154.274104770593
+      ],
+      "median_paired_overhead_ns": 18550.814740319256,
+      "paired_ratios": [
+        2.240575125113127,
+        2.273727921163045,
+        2.2125286750167112
+      ],
+      "status": "pass"
+    },
+    {
+      "bytes": 1024,
+      "method": "post",
+      "payload": 2057,
+      "workload": "validated-invocation",
+      "baseline_process_medians_ns": [
+        5837.229628764884,
+        5829.786988457503,
+        5839.678500525517
+      ],
+      "candidate_process_medians_ns": [
+        12930.577191621413,
+        12910.43764523625,
+        12785.050626438251
+      ],
+      "baseline_median_ns": 5837.229628764884,
+      "candidate_median_ns": 12910.43764523625,
+      "overhead_ns": 7073.208016471366,
+      "ratio": 2.211740580088847,
+      "baseline_spread": 0.001694555927570551,
+      "ceiling_ns": 57244.45925752977,
+      "paired_overheads_ns": [
+        7093.347562856528,
+        7080.650656778747,
+        6945.372125912734
+      ],
+      "median_paired_overhead_ns": 7080.650656778747,
+      "paired_ratios": [
+        2.2151907692480877,
+        2.214564214918633,
+        2.1893415237307523
+      ],
+      "status": "pass"
+    },
+    {
+      "bytes": 65536,
+      "method": "post",
+      "stage": "request-preparation",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        3285.733473518202,
+        3304.3550092519163,
+        3312.1991255961843
+      ],
+      "candidate_process_medians_ns": [
+        3213.5767722861365,
+        3251.6339337972295,
+        3247.780787217459
+      ],
+      "baseline_median_ns": 3304.3550092519163,
+      "candidate_median_ns": 3247.780787217459,
+      "overhead_ns": -56.57422203445731,
+      "ratio": 0.9828788910767595,
+      "baseline_spread": 0.008009324665140583,
+      "ceiling_ns": 6608.7100185038325,
+      "paired_overheads_ns": [
+        -72.15670123206564,
+        -52.7210754546868,
+        -64.41833837872537
+      ],
+      "median_paired_overhead_ns": -64.41833837872537,
+      "paired_ratios": [
+        0.9780393930872294,
+        0.9840449723752224,
+        0.9805511879159348
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 65536,
+      "method": "post",
+      "stage": "dispatch-and-client-decode",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        154763.63271604938,
+        155034.18575851392,
+        162257.95469255664
+      ],
+      "candidate_process_medians_ns": [
+        154669.87962962964,
+        154699.07407407407,
+        154876.67801857585
+      ],
+      "baseline_median_ns": 155034.18575851392,
+      "candidate_median_ns": 154699.07407407407,
+      "overhead_ns": -335.11168443984934,
+      "ratio": 0.9978384658660908,
+      "baseline_spread": 0.048339802862451556,
+      "ceiling_ns": 310068.37151702784,
+      "paired_overheads_ns": [
+        -93.75308641974698,
+        -335.11168443984934,
+        -7381.276673980785
+      ],
+      "median_paired_overhead_ns": -335.11168443984934,
+      "paired_ratios": [
+        0.9993942175899182,
+        0.9978384658660908,
+        0.9545089996483274
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 65536,
+      "method": "post",
+      "stage": "input-bridge",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        142200.51988636365,
+        142786.68091168092,
+        146293.73684210525
+      ],
+      "candidate_process_medians_ns": [
+        142056.34375,
+        141973.56090651557,
+        142060.36931818182
+      ],
+      "baseline_median_ns": 142786.68091168092,
+      "candidate_median_ns": 142056.34375,
+      "overhead_ns": -730.3371616809163,
+      "ratio": 0.9948851170360025,
+      "baseline_spread": 0.02866665804966374,
+      "ceiling_ns": 285573.36182336183,
+      "paired_overheads_ns": [
+        -144.17613636364695,
+        -813.1200051653432,
+        -4233.367523923429
+      ],
+      "median_paired_overhead_ns": -813.1200051653432,
+      "paired_ratios": [
+        0.9989861068266216,
+        0.9943053511715964,
+        0.9710625511706458
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 65536,
+      "method": "post",
+      "stage": "output-bridge",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        45604.94530537831,
+        45910.283486238535,
+        45720.71206581353
+      ],
+      "candidate_process_medians_ns": [
+        46124.46175115208,
+        45879.5871559633,
+        45456.36363636364
+      ],
+      "baseline_median_ns": 45720.71206581353,
+      "candidate_median_ns": 45879.5871559633,
+      "overhead_ns": 158.87509014976968,
+      "ratio": 1.0034749041073785,
+      "baseline_spread": 0.006678333889916309,
+      "ceiling_ns": 91441.42413162706,
+      "paired_overheads_ns": [
+        519.5164457737701,
+        -30.696330275233777,
+        -264.34842944989214
+      ],
+      "median_paired_overhead_ns": -30.696330275233777,
+      "paired_ratios": [
+        1.0113916690897227,
+        0.9993313844318902,
+        0.9942181908919229
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 65536,
+      "method": "post",
+      "stage": "retained-output-clone",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        30.834898510183518,
+        30.782989949362022,
+        30.85249127492262
+      ],
+      "candidate_process_medians_ns": [
+        30.210537668582216,
+        30.59148713047809,
+        30.334200484132232
+      ],
+      "baseline_median_ns": 30.834898510183518,
+      "candidate_median_ns": 30.334200484132232,
+      "overhead_ns": -0.5006980260512854,
+      "ratio": 0.9837619693839458,
+      "baseline_spread": 0.0022539826274324977,
+      "ceiling_ns": 61.669797020367035,
+      "paired_overheads_ns": [
+        -0.6243608416013018,
+        -0.19150281888393295,
+        -0.5182907907903882
+      ],
+      "median_paired_overhead_ns": -0.5182907907903882,
+      "paired_ratios": [
+        0.9797514870562943,
+        0.993778940278415,
+        0.9832010068110233
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 65536,
+      "method": "post",
+      "stage": "checked-binding-lifecycle",
+      "workload": "stage",
+      "baseline_process_medians_ns": [
+        2301.723242646043,
+        2273.03236657878,
+        2279.0920278955286
+      ],
+      "candidate_process_medians_ns": [
+        2273.868804001819,
+        2303.6416493895417,
+        2286.411907265993
+      ],
+      "baseline_median_ns": 2279.0920278955286,
+      "candidate_median_ns": 2286.411907265993,
+      "overhead_ns": 7.31987937046415,
+      "ratio": 1.0032117524351236,
+      "baseline_spread": 0.012588730826177206,
+      "ceiling_ns": 4558.184055791057,
+      "paired_overheads_ns": [
+        -27.854438644224047,
+        30.60928281076167,
+        7.31987937046415
+      ],
+      "median_paired_overhead_ns": 7.31987937046415,
+      "paired_ratios": [
+        0.9878984414250417,
+        1.0134662767063158,
+        1.0032117524351236
+      ],
+      "status": "diagnostic"
+    },
+    {
+      "bytes": 65536,
+      "cold": false,
+      "layer": "binding",
+      "method": "post",
+      "payload": 131081,
+      "workload": "invocation",
+      "baseline_process_medians_ns": [
+        159058.46666666667,
+        160815.11254019293,
+        160965.5691318328
+      ],
+      "candidate_process_medians_ns": [
+        361861.2086330935,
+        359967.3237410072,
+        355983.74468085106
+      ],
+      "baseline_median_ns": 160815.11254019293,
+      "candidate_median_ns": 359967.3237410072,
+      "overhead_ns": 199152.21120081426,
+      "ratio": 2.238392387724379,
+      "baseline_spread": 0.011858975409972624,
+      "ceiling_ns": 1657440.2250803858,
+      "paired_overheads_ns": [
+        202802.74196642684,
+        199152.21120081426,
+        195018.17554901825
+      ],
+      "median_paired_overhead_ns": 199152.21120081426,
+      "paired_ratios": [
+        2.275020099316269,
+        2.238392387724379,
+        2.2115521139138514
+      ],
+      "status": "pass"
+    },
+    {
+      "bytes": 65536,
+      "cold": false,
+      "layer": "operation",
+      "method": "post",
+      "payload": 131081,
+      "workload": "invocation",
+      "baseline_process_medians_ns": [
+        159916.6677316294,
+        161778.09032258065,
+        160091.4536741214
+      ],
+      "candidate_process_medians_ns": [
+        359746.40287769784,
+        357414.28571428574,
+        355539.304964539
+      ],
+      "baseline_median_ns": 160091.4536741214,
+      "candidate_median_ns": 357414.28571428574,
+      "overhead_ns": 197322.83204016433,
+      "ratio": 2.2325631850519034,
+      "baseline_spread": 0.011627245229094684,
+      "ceiling_ns": 1655992.9073482428,
+      "paired_overheads_ns": [
+        199829.73514606844,
+        195636.19539170509,
+        195447.8512904176
+      ],
+      "median_paired_overhead_ns": 195636.19539170509,
+      "paired_ratios": [
+        2.2495866627324976,
+        2.2092873330474627,
+        2.2208512497379584
+      ],
+      "status": "pass"
+    },
+    {
+      "bytes": 65536,
+      "method": "post",
+      "source_bytes": 260,
+      "workload": "cold-setup-and-invocation",
+      "baseline_process_medians_ns": [
+        170716.29692832765,
+        170926.76109215018,
+        170609.97959183675
+      ],
+      "candidate_process_medians_ns": [
+        383095.0992366412,
+        385440.06153846154,
+        378016.9172932331
+      ],
+      "baseline_median_ns": 170716.29692832765,
+      "candidate_median_ns": 383095.0992366412,
+      "overhead_ns": 212378.80230831355,
+      "ratio": 2.244045273530489,
+      "baseline_spread": 0.0018556019900456625,
+      "ceiling_ns": 444032.5938566553,
+      "paired_overheads_ns": [
+        212378.80230831355,
+        214513.30044631136,
+        207406.93770139635
+      ],
+      "median_paired_overhead_ns": 212378.80230831355,
+      "paired_ratios": [
+        2.244045273530489,
+        2.2550012594614297,
+        2.2156788143201926
+      ],
+      "status": "pass"
+    },
+    {
+      "bytes": 65536,
+      "method": "post",
+      "payload": 131081,
+      "workload": "validated-invocation",
+      "baseline_process_medians_ns": [
+        159251.32484076434,
+        161148.57877813504,
+        163444.71568627452
+      ],
+      "candidate_process_medians_ns": [
+        358817.85714285716,
+        361190.3525179856,
+        352904.04929577466
+      ],
+      "baseline_median_ns": 161148.57877813504,
+      "candidate_median_ns": 358817.85714285716,
+      "overhead_ns": 197669.27836472212,
+      "ratio": 2.226627500307451,
+      "baseline_spread": 0.02602189158170314,
+      "ceiling_ns": 1658107.15755627,
+      "paired_overheads_ns": [
+        199566.53230209282,
+        200041.77373985059,
+        189459.33360950014
+      ],
+      "median_paired_overhead_ns": 199566.53230209282,
+      "paired_ratios": [
+        2.2531546126956226,
+        2.24134990985718,
+        2.159164631380066
+      ],
+      "status": "pass"
+    }
+  ],
+  "notes": [
+    "Programmable complete delivery; no network latency or general HTTP-parity claim.",
+    "Samples include ownership destruction. Warm input/source owners are retained consistently.",
+    "validated-invocation uses the same core evaluator and input contract on both paths.",
+    "Cold row combines setup and one invocation; warm source parse is separately structurally instrumented."
+  ]
+}

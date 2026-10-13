@@ -1,0 +1,283 @@
+
+running 1 test
+test validate::tests::unpaired_string_comparison_never_aliases_decoded_text ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 10 tests
+test cancellation_wakes_and_drops_both_pending_calls ... ok
+test admission_is_lazy_and_precedes_provider_work ... ok
+test undetermined_conformance_is_not_upgraded ... ok
+test unnamed_source_mapping_is_stable_without_restricting_equal_binding_aliases ... ok
+test provider_cannot_forge_strict_recovery ... ok
+test synthesis_requires_a_realization_path_without_tightening_core_or_inventory ... ok
+test exact_persistence_budgets_and_editing_do_not_reassign_evidence ... ok
+test source_indices_names_and_projection_identity ... ok
+test source_preservation_is_exact_structural_and_panic_free ... ok
+test every_boundary_failure_retains_a_repairable_candidate ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 3 tests
+test sdk_policy_fixture_file_satisfies_its_local_schema ... ok
+test independent_interface_examples_allow_variation_beyond_sdk_policy ... ok
+test sdk_policy_cases_and_interface_output_shapes_are_distinct ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 7 tests
+test lifecycle::driver_tests::last_waker_drop_and_replacement_can_reenter_signal ... ok
+test lifecycle::driver_tests::losing_terminal_cannot_change_the_settled_diagnostic ... ok
+test lifecycle::driver_tests::cancel_during_a_concurrent_provider_poll_wins_and_prevents_late_completion ... ok
+test lifecycle::driver_tests::provider_endpoints_notify_their_own_task_wakers ... ok
+test lifecycle::driver_tests::synchronous_reentrant_wakers_do_not_poll_twice_or_deadlock ... ok
+test lifecycle::driver_tests::dropping_pending_reads_releases_only_their_waiters ... ok
+test lifecycle::driver_tests::finite_slots_and_scoped_pending_waiters ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 12 tests
+test malformed_output_and_invalid_safe_challenges_are_not_portable_successes ... ok
+test provider_input_closure_needs_no_caller_close_and_keeps_output_open ... ok
+test cancellation_drains_committed_outputs_before_one_terminal_frame ... ok
+test echo_frames_correspond_to_native_half_close_exact_values_and_complete ... ok
+test native_empty_completion_and_output_then_failure_have_distinct_terminal_frames ... ok
+test outer_closure_synthesizes_failure_only_when_no_inner_terminal_was_seen ... ok
+test malformed_envelopes_and_first_nonopen_frames_are_protocol_errors_before_work ... ok
+test late_input_is_ignored_only_after_its_envelope_passes_validation ... ok
+test second_open_is_a_protocol_error_even_with_bad_payload_or_after_input_closure ... ok
+test valid_open_envelopes_refuse_invalid_carried_payloads_before_work ... ok
+test operation_role_reuses_the_same_closed_frame_protocol ... ok
+test pinned_role_has_the_complete_closed_frame_envelopes_used_by_the_mapper ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 19 tests
+test dropped_pending_read_does_not_keep_its_waker_alive ... ok
+test full_output_queue_does_not_prevent_immediate_control_cancellation ... ok
+test delivery_limits_are_local_on_input_and_terminal_on_bad_provider_output ... ok
+test accepted_input_drains_on_half_close_and_early_close_keeps_output_open ... ok
+test advisory_preflight_can_challenge_or_fail_without_becoming_an_invocation_gate ... ok
+test lazy_admission_exact_support_and_default_preflight ... ok
+test cancellation_full_queues_preserves_accepted_output_order_and_releases_job ... ok
+test no_busy_self_wake_when_provider_is_pending ... ok
+test native_borrowed_nonclone_provider_is_send_and_retained_output_survives ... ok
+test oversized_terminal_and_preflight_failure_fall_back_without_data_or_retry_claim ... ok
+test per_handle_cancel_before_first_poll_does_no_provider_work ... ok
+test pending_write_drop_and_pending_read_drop_do_not_consume_or_duplicate ... ok
+test challenge_boundary_is_checked_without_inventing_retry_or_effect_guarantees ... ok
+test preflight_requires_context_challenges_in_the_result_not_the_error_channel ... ok
+test pre_cancel_external_control_and_output_abandonment_do_not_cancel_siblings ... ok
+test supplied_unusable_context_can_receive_a_safe_renewed_challenge ... ok
+test zero_null_and_output_then_failure_require_terminal_observation ... ok
+test input_and_output_wakeups_can_be_joined_inside_provider ... ok
+test all_cardinalities_use_same_lifecycle_and_bidi_halves_drive_each_other ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 9 tests
+test exact_opaque_values_carriers_and_context_are_preserved ... ok
+test borrowed_send_and_local_rc_and_cancellation_release ... ok
+test missing_ambiguous_and_sole_candidates ... ok
+test names_ordered_choices_and_explicit_bindings_do_not_invent_policy ... ok
+test binding_errors_and_challenges_bypass_output_contract ... ok
+test output_failure_withholds_only_failing_value ... ok
+test preparation_is_lazy_absence_is_not_true_and_no_verdict_is_not_failure ... ok
+test late_input_failure_is_not_eof_and_keeps_prior_outputs ... ok
+test prepared_contracts_reused_across_values_and_attempts ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 5 tests
+test tests::cancellation_during_poll_overrides_ready_preflight_success ... ok
+test tests::cancellation_during_poll_overrides_ready_provider_success ... ok
+test tests::rejected_input_cannot_turn_into_eof_on_second_poll ... ok
+test tests::already_settled_validation_keeps_its_evidence_when_external_cancel_follows ... ok
+test tests::external_cancel_reaches_cooperative_evaluator ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 12 tests
+test empty_binding_and_optional_presence_are_distinct ... ok
+test explicit_encoding_limits_bound_bytes_depth_and_nodes ... ok
+test native_carriers_cannot_hide_illegal_or_shadowed_fields_in_extensions ... ok
+test diagnostics_and_debug_do_not_reveal_strings_values_or_field_names ... ok
+test preferences_use_exact_integer_math_and_the_interoperable_range ... ok
+test portable_errors_preserve_unknown_codes_and_absent_null_exact_data ... ok
+test source_content_and_context_absence_survive_reencoding ... ok
+test owned_input_preserves_opaque_exact_values_without_normalization ... ok
+test unknown_requirement_families_and_durable_presence_are_preserved ... ok
+test challenges_reject_closed_shape_violations_and_ambiguous_requirements ... ok
+test interpreted_carriers_reject_malformed_duplicate_and_unknown_members ... ok
+test config_challenges_check_pointer_shape_and_admit_boolean_schemas ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+test security::tests::exact_challenge_budget_and_one_over ... ok
+test security::tests::repeated_origins_stop_at_the_incremental_limit ... ok
+test cache_tests::one_source_cache_checks_content_base_and_fixed_options ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test pinned_client_auth_wire_and_origin_capabilities ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test authenticated_wire_and_status_effects ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 6 tests
+test native_provider_future_retains_send ... ok
+test manual_mount_and_renamed_unicode_target_use_literal_locations ... ok
+test authored_bindings_make_real_http_calls_and_preserve_exact_values ... ok
+test synthesized_reloaded_document_repeats_the_independent_wire_call ... ok
+test cold_reloaded_mounts_use_supplied_reference_bases_on_real_http ... ok
+test real_http_redirect_and_post_receipt_cancellation_have_one_effect ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+running 10 tests
+test pinned_client_literal_unicode_limitation_is_reproduced_independently ... ok
+test destination_context_is_membership_and_new_attempt ... ok
+test required_body_and_parameter_count_refuse_before_host_entry ... ok
+test incomplete_headers_and_pre_cancel_are_not_success ... ok
+test required_values_duplicates_media_and_body_budget_are_checked ... ok
+test failed_or_incomplete_responses_never_emit_success ... ok
+test caller_close_and_cardinality_precede_effects ... ok
+test generic_selection_and_author_contracts_remain_in_the_operation_layer ... ok
+test exact_integer_parameters_agree_with_the_operation_schema ... ok
+test pending_local_host_cancellation_and_drop_release_owners ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 7 tests
+test inherited_metadata_is_charged_and_source_limit_has_an_exact_boundary ... ok
+test exact_kind_patch_admission_and_carrier_boundaries ... ok
+test missing_resource_remains_unknown_and_known_gaps_are_not_exclusions ... ok
+test fresh_nested_resources_preserve_mounts_and_reference_bases ... ok
+test skeleton_preservation_and_composition_boundaries ... ok
+test absent_and_repeated_operation_ids_are_not_binding_identity_or_effects ... ok
+test response_profiles_and_ambiguous_mounts_have_truthful_coverage ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 7 tests
+test contexts_statuses_and_finite_boundaries_are_scoped_to_each_kind ... ok
+test kinds_are_advertised_and_crossed_editions_never_dispatch ... ok
+test correct_editions_and_kind_sensitive_cache ... ok
+test get_request_body_uses_the_source_edition_semantics ... ok
+test parameter_types_require_a_supported_lexical_schema_dialect ... ok
+test schema_dialect_boundaries_do_not_invent_a_caller_contract ... ok
+test independent_manual_and_synthesized_reloaded_consumers_use_real_http ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 13 tests
+test cancellation_drops_pending_local_provider_future ... ok
+test inconsistent_advisory_list_is_rejected ... ok
+test constructing_or_dropping_unpolled_work_does_not_call_provider ... ok
+test local_rc_provider_is_forwarded_without_send_requirements ... ok
+test incomplete_results_require_evidence_and_complete_empty_is_valid ... ok
+test pre_cancelled_work_never_calls_provider ... ok
+test optional_operation_examples_cannot_shadow_typed_members ... ok
+test exact_support_and_carrier_admission_precede_provider_work ... ok
+test exact_encoding_budgets_and_opaque_values_are_preserved ... ok
+test every_inventory_output_path_refuses_the_same_invalid_results ... ok
+test exact_content_and_absence_survive_source_and_provider_disposal ... ok
+test source_ref_uniqueness_is_exact_and_valid_serializers_agree ... ok
+test consumer_rejects_provider_author_keys_unknown_binding_fields_and_bad_framing ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test duplicate_recovery_is_sdk_policy_not_an_interface_requirement ... ok
+test inventories_validate_against_pinned_role_output_contract ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 1 test
+test crates/openbindings-interface-synthesis/src/../README.md - (line 21) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.96s; merged doctests compilation took 0.66s
+
+running 2 tests
+test crates/openbindings-invocation/src/lib.rs - (line 26) ... ok
+test crates/openbindings-invocation/src/lib.rs - (line 105) ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+all doctests ran in 0.91s; merged doctests compilation took 0.68s
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test crates/openbindings-source-inspection/src/lib.rs - (line 30) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.84s; merged doctests compilation took 0.62s
+warning: use of deprecated associated function `core::num::<impl usize>::max_value`: replaced by the `MAX` associated constant on this type
+   --> vendor/openbindings-internal-serde-json/src/lexical/math.rs:458:33
+    |
+458 |             .map_or_else(usize::max_value, |v| v - nlz)
+    |                                 ^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: `openbindings-internal-serde-json` (lib) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.27s
+     Running unittests src/lib.rs (target/debug/deps/openbindings_interface_synthesis-8372684f82b5d6ea)
+     Running tests/boundary.rs (target/debug/deps/boundary-7a7cad249a4c9dba)
+     Running tests/role_contract.rs (target/debug/deps/role_contract-d175147a3a82f109)
+     Running unittests src/lib.rs (target/debug/deps/openbindings_invocation-11eed126778328a4)
+     Running tests/frame_correspondence.rs (target/debug/deps/frame_correspondence-37954a46f9b01e6a)
+     Running tests/lifecycle.rs (target/debug/deps/lifecycle-07394b2bc3ad62d6)
+     Running tests/operation.rs (target/debug/deps/operation-b56f402f521c8fe5)
+     Running tests/operation_cancellation.rs (target/debug/deps/operation_cancellation-dd9cbb97c1a22572)
+     Running tests/values.rs (target/debug/deps/values-3a048d6b444f052c)
+     Running unittests src/lib.rs (target/debug/deps/openbindings_openapi-03b9150dc1c17ef3)
+     Running tests/auth_client.rs (target/debug/deps/auth_client-e124af54a96c1f20)
+     Running tests/auth_http.rs (target/debug/deps/auth_http-42c8d8abfee8c953)
+     Running tests/manual.rs (target/debug/deps/manual-3f4c5d2398edde90)
+     Running tests/semantics.rs (target/debug/deps/semantics-3a96899d10f5a567)
+     Running tests/synthesis.rs (target/debug/deps/synthesis-4c0e209c78deefa9)
+     Running tests/versions.rs (target/debug/deps/versions-33a9819725752934)
+     Running unittests src/lib.rs (target/debug/deps/openbindings_source_inspection-032c3019bf218126)
+     Running tests/boundary.rs (target/debug/deps/boundary-08b54ad12b013ff0)
+     Running tests/role_contract.rs (target/debug/deps/role_contract-ef5dbf014086a5dc)
+   Doc-tests openbindings_interface_synthesis
+   Doc-tests openbindings_invocation
+   Doc-tests openbindings_openapi
+   Doc-tests openbindings_source_inspection

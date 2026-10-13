@@ -1,0 +1,20 @@
+ M crates/openbindings-openapi/README.md
+ M crates/openbindings-openapi/src/analysis.rs
+ M crates/openbindings-openapi/src/invocation.rs
+ M crates/openbindings-openapi/src/lib.rs
+ M crates/openbindings-openapi/src/synthesis.rs
+ M examples/openapi-json-path-consumer/src/lib.rs
+ M examples/openapi-json-path-consumer/src/wasm.rs
+ M examples/openapi-json-path-consumer/tests/consumer.rs
+ M examples/openapi-json-path-consumer/wasm-probe.ts
+?? crates/openbindings-openapi/src/security.rs
+?? crates/openbindings-openapi/tests/auth_client.rs
+?? crates/openbindings-openapi/tests/auth_http.rs
+?? crates/openbindings-openapi/tests/fixtures/auth/
+?? docs/evidence/openapi-auth-json/
+?? examples/openapi-json-path-consumer/examples/auth_diagnostics.rs
+?? examples/openapi-json-path-consumer/examples/auth_measure.rs
+?? examples/openapi-json-path-consumer/src/auth-fixtures/
+?? examples/openapi-json-path-consumer/src/auth.rs
+?? tools/measure-openapi-auth-diagnostics.py
+?? tools/measure-openapi-auth-json.py

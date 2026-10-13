@@ -1,0 +1,7 @@
+pair 1 baseline
+pair 1 candidate
+pair 2 candidate
+pair 2 baseline
+pair 3 baseline
+pair 3 candidate
+{"counts": {"pass": 22, "fail": 0, "inconclusive": 0}, "summary": "/tmp/ob-auth-broad-304/summary.json"}

@@ -29,6 +29,7 @@ pub(crate) struct Profile {
     pub has_body: bool,
     pub input_schema: JsonValue,
     pub schema_loss: bool,
+    pub security: Vec<crate::security::Alternative>,
 }
 impl Profile {
     fn retained_bytes(&self) -> usize {
@@ -36,6 +37,11 @@ impl Profile {
             .servers
             .iter()
             .fold(0usize, |n, s| n.saturating_add(s.len()).saturating_add(32));
+        let servers = self.security.iter().fold(servers, |n, a| {
+            a.keys().fold(n.saturating_add(64), |n, k| {
+                n.saturating_add(k.len()).saturating_add(64)
+            })
+        });
         self.parameters.values().flat_map(|p| p.iter()).fold(
             servers.saturating_add(self.input_schema.bytes().len()),
             |n, (name, kind)| {
@@ -236,9 +242,55 @@ fn profile(operation: &Operation, kind: Kind) -> Result<Profile, &'static str> {
     let d = operation
         .describe()
         .map_err(|_| "operation-description-unavailable")?;
-    if d.security.iter().any(|a| !a.requirements.is_empty()) {
-        return Err("security-unimplemented");
-    }
+    let security = d
+        .security
+        .iter()
+        .map(|a| {
+            let mut headers = HashSet::new();
+            a.requirements
+                .iter()
+                .map(|r| {
+                    use crate::security::Family;
+                    use dynamic_openapi_client::SecurityScheme;
+                    if !r.scopes.is_empty() {
+                        return Err("security-roles-unimplemented");
+                    }
+                    let wire_name = match &r.scheme {
+                        SecurityScheme::Bearer { .. } => Some("authorization"),
+                        SecurityScheme::ApiKey {
+                            name,
+                            location: ParameterLocation::Header,
+                        } => Some(name.as_str()),
+                        _ => None,
+                    };
+                    if let Some(name) = wire_name
+                        && (name.is_empty()
+                            || !name.bytes().all(|b| {
+                                b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&b)
+                            })
+                            || (d.request_body.is_some()
+                                && name.eq_ignore_ascii_case("content-type")))
+                    {
+                        return Err("security-header-unusable");
+                    }
+                    if let Some(name) = wire_name
+                        && !headers.insert(name.to_ascii_lowercase())
+                    {
+                        return Err("security-header-collision-unimplemented");
+                    }
+                    let family = match &r.scheme {
+                        SecurityScheme::Bearer { .. } => Family::Bearer,
+                        SecurityScheme::ApiKey {
+                            location: ParameterLocation::Header,
+                            ..
+                        } => Family::Key,
+                        _ => return Err("security-unimplemented"),
+                    };
+                    Ok((r.name.clone(), family))
+                })
+                .collect::<Result<crate::security::Alternative, _>>()
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     if d.servers.is_empty()
         || d.servers.iter().any(|s| {
             s.variables
@@ -391,6 +443,7 @@ fn profile(operation: &Operation, kind: Kind) -> Result<Profile, &'static str> {
     }
     let input_schema = json(&serde_json_compat::json!({"type":"object","properties":properties,"required":required_fields,"additionalProperties":false})).map_err(|_| "schema-budget")?;
     Ok(Profile {
+        security,
         has_body: d.request_body.is_some(),
         servers: d.servers.into_iter().map(|s| s.url).collect(),
         parameters,

@@ -320,6 +320,19 @@ fn prepare_request<T>(
         let shape = json(&serde_json_compat::json!({"target":target,"alternatives":[{"requirements":[{"type":"config.value","point":server_point,"path":"","schema":{"type":"string","enum":choices}}]}]}));
         shape.ok().and_then(|v| ContextChallenge::new(v).ok()).map(InvocationError::challenge).unwrap_or_else(refused)
     })?);
+    crate::security::apply(
+        profile,
+        request.context,
+        crate::security::Target {
+            kind: p.kind,
+            path,
+            method,
+            server: &servers[input.selection.server.expect("selected")],
+        },
+        &provider.options,
+        control,
+        &mut input,
+    )?;
     unit.operation.prepare(&input).map_err(|_| refused())
 }
 fn accept(outcome: Outcome, kind: Kind) -> Result<Option<JsonValue>, InvocationError> {

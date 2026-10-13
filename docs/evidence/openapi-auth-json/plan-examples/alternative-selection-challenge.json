@@ -1,0 +1,101 @@
+{
+  "target": "auth-json-example/choice",
+  "alternatives": [
+    {
+      "requirements": [
+        {
+          "type": "config.value",
+          "point": "local.openapi-json-probe.r1.security",
+          "path": "/schemes",
+          "schema": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "ServiceToken"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 1,
+            "uniqueItems": true
+          }
+        },
+        {
+          "type": "auth.bearer",
+          "name": "ServiceToken"
+        },
+        {
+          "type": "config.value",
+          "point": "local.openapi-json-probe.r1.security",
+          "path": "/origins/ServiceToken",
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "examples": [
+              [
+                "https://api.example.test"
+              ]
+            ]
+          },
+          "description": "Caller-approved destinations for this credential. The selected request origin is https://api.example.test; independently decide whether to authorize it."
+        }
+      ]
+    },
+    {
+      "requirements": [
+        {
+          "type": "config.value",
+          "point": "local.openapi-json-probe.r1.security",
+          "path": "/schemes",
+          "schema": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "PartnerKey"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 1,
+            "uniqueItems": true
+          }
+        },
+        {
+          "type": "auth.apiKey",
+          "name": "PartnerKey"
+        },
+        {
+          "type": "config.value",
+          "point": "local.openapi-json-probe.r1.security",
+          "path": "/origins/PartnerKey",
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "examples": [
+              [
+                "https://api.example.test"
+              ]
+            ]
+          },
+          "description": "Caller-approved destinations for this credential. The selected request origin is https://api.example.test; independently decide whether to authorize it."
+        }
+      ]
+    },
+    {
+      "requirements": [
+        {
+          "type": "config.value",
+          "point": "local.openapi-json-probe.r1.security",
+          "path": "/schemes",
+          "schema": {
+            "const": []
+          }
+        }
+      ]
+    }
+  ]
+}

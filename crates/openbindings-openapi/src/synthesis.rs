@@ -131,6 +131,14 @@ impl<T> OpenApi<T> {
                         entry.source_key = Some(source_key.clone());
                         entry.operation_key = Some(key.clone());
                         entry.binding_key = Some(key.clone());
+                        if profile.security.iter().any(|a| !a.is_empty()) {
+                            entry.requirements = Some(vec![prepared.kind.security_point().into()]);
+                            entry.details = Some(BTreeMap::from([(
+                                "security".into(),
+                                crate::json(&crate::security::details(profile))
+                                    .map_err(|e| e.synthesis())?,
+                            )]));
+                        }
                         coverage.entries.push(entry);
                         if profile.schema_loss {
                             let mut loss = CoverageEntry::new(

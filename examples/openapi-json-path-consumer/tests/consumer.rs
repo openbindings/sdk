@@ -172,3 +172,23 @@ async fn lifecycle_mix_owners_return_to_baseline() {
     }
     assert_eq!(owners(), before);
 }
+
+#[tokio::test]
+async fn authenticated_consumers_and_lifetimes() {
+    auth_acceptance::suite(false).await;
+    auth_acceptance::suite(true).await;
+    auth::additional_admission(false).await;
+    auth::additional_admission(true).await;
+    auth::bounds(false).await;
+    auth::bounds(true).await;
+    auth::suite(false).await;
+    auth::suite(true).await;
+    auth::cycle(false).await;
+    auth::cycle(true).await;
+    let before = owners();
+    for _ in 0..1000 {
+        auth::cycle(false).await;
+        auth::cycle(true).await;
+    }
+    assert_eq!(owners(), before);
+}

@@ -1,0 +1,503 @@
+{
+  "testedInputs": {
+    "Cargo.lock": "3612982a63ad5ca049ee6f91c6e3d00c7653f6db3ebffe7d0e748ac757b57f5e",
+    "crates/openbindings-openapi/Cargo.toml": "a1ef11f795733123ba4d19d0b82ee661cd897c3be61b266847bad995f16ff707",
+    "crates/openbindings-openapi/README.md": "63f9a6a464bfc3e651fb70d2bb4b97254bc5a3674b4681fe9291c9acfd7afc65",
+    "crates/openbindings-openapi/src/analysis.rs": "ad295a29920a59a6f3ca4e2aeddfb2467d611180f5557a87b9246532b814b3f0",
+    "crates/openbindings-openapi/src/invocation.rs": "41b4b8727ea3c9c2a7f6e1382450202c38db53b8996901434bdaf1a74157f08b",
+    "crates/openbindings-openapi/src/lib.rs": "348c1d429569b23f54a42e79936ad064b8a910a6d69b7f71cb389f2031ca2990",
+    "crates/openbindings-openapi/src/security.rs": "f64a8a79e9b7b21b4d3468ca41c0cbe92ff26fd724be71316bf3527564182c7c",
+    "crates/openbindings-openapi/src/synthesis.rs": "740d01e23aae7704fc82ce835639398eeb6fcb1e0491b5139a3478ca210ed036",
+    "crates/openbindings-openapi/tests/auth_client.rs": "3be3bd4406519d59a2c46e1174796526fbf05cb2f34504feff4bebe3653e4f04",
+    "crates/openbindings-openapi/tests/auth_http.rs": "87140133fe9fb6b6ac7ffa614ec5cd6102973fc5fcfb3122683f542850b22e95",
+    "crates/openbindings-openapi/tests/fixtures/README.md": "775b726461555bf9cee5a8764c0e373551a79c4c355fb9a2c6078ebcd27c5846",
+    "crates/openbindings-openapi/tests/fixtures/auth/manual-3.0.4.obi.json": "2c8c7b2bceb769c280b753c20e46ba21ebd3fb62c065b688a85e4ee52e3e5442",
+    "crates/openbindings-openapi/tests/fixtures/auth/manual-3.1.2.obi.json": "9904692971a2c9e3915efaffaab8e5a06f9e6dc6120cb3be285717462a8d9ee5",
+    "crates/openbindings-openapi/tests/fixtures/auth/parts-3.0.4.json": "85b20cf984c4ae7033eb1cb62d6c8062c31e33d4dffb3c3d77cc0d05fbfd6ecf",
+    "crates/openbindings-openapi/tests/fixtures/auth/parts-3.1.2.json": "7a7aa2689c460a8c2166c3c336a5340d96e30036358fa8bdf14cd693fb5d74d7",
+    "crates/openbindings-openapi/tests/fixtures/auth/service-3.0.4.json": "c13717ff4c4a3ae90273e2c8f37f00cc145a3eb412ce46aef17aa884f4b1615c",
+    "crates/openbindings-openapi/tests/fixtures/auth/service-3.1.2.json": "46e5d94afdd10afaf7b7c33026f2c577ab7807247fd9a3fe8e7a56a03513067d",
+    "crates/openbindings-openapi/tests/fixtures/auth/variants-3.0.4.json": "7486d08a7a2427d85a71f7cf1cdf58ab6a2e0aa5b4a365074ba301a0c98b6546",
+    "crates/openbindings-openapi/tests/fixtures/auth/variants-3.1.2.json": "8345824dfc0f062dcb41757aa3934e882bbd8c03b809a3199b795b53b455bc70",
+    "crates/openbindings-openapi/tests/fixtures/auth/wire-oracle.json": "a60e1ec2b022a44436bcec9c5fe215d2eb22a326ac5d0783f29239a2b9a92d69",
+    "crates/openbindings-openapi/tests/fixtures/contrast-20.json": "d0c6b45b8f16d15e2e7b1fc402bd28447f7a7aa5d4589b3e1ca2bce9b78257a0",
+    "crates/openbindings-openapi/tests/fixtures/contrast-30.json": "c178831567ac583965cc97426863683e9a6874a82803e9adae09a3949c8f304e",
+    "crates/openbindings-openapi/tests/fixtures/contrast-32.json": "f287f7c9f5be51d8ff3e35dfbe75b91d745aa5c0c58c02a7a74d5e89bc15537d",
+    "crates/openbindings-openapi/tests/fixtures/duplicate-ids.json": "196bd700cb8504f71c9a8ff20c89496b141ce8b8bd1d0658d3526b18ff8579ea",
+    "crates/openbindings-openapi/tests/fixtures/empty.json": "bd9b46346618737eb048a741a493af71c3ec5c15e8b41b48562a7d0ff37cc358",
+    "crates/openbindings-openapi/tests/fixtures/future-patch.json": "102d5e7e03b7dc6012fb2c8d2907755118c47aba3919991290d1d0754e72f972",
+    "crates/openbindings-openapi/tests/fixtures/identity-31.json": "96807dea0bf8c80298ebac175bb6f242454dd049e992da42e90953450f8ec556",
+    "crates/openbindings-openapi/tests/fixtures/invalid-paths.json": "bf9b3c9cdb6462fdb27f48a21805e98420ea2b128bb9499b94c668795ead2f5e",
+    "crates/openbindings-openapi/tests/fixtures/malformed-neighbor-31.json": "f87055b22f81120e942b80b9e22e07e5dc3dc55b05fab698282c76b65c833e91",
+    "crates/openbindings-openapi/tests/fixtures/malformed-only.json": "e9f28514a2cabc2f65cc07c14700af8a44617cb4e92de214a4a2f800ab0ec59c",
+    "crates/openbindings-openapi/tests/fixtures/method-conflict.json": "c0d06a26c4a36776992a6b76bc224130f106f5297ce2eb01e49fcebeccc5875b",
+    "crates/openbindings-openapi/tests/fixtures/minimal-31.json": "cf0af80657bfefea6d5e5ad69e9bcbddbc37203680d059bcbde08903eaeeb1e4",
+    "crates/openbindings-openapi/tests/fixtures/minimal-31.yaml": "25413bd72bdcc7d5bdac0c67c56cd676610e4d993d5bdad62230e30b4563f358",
+    "crates/openbindings-openapi/tests/fixtures/missing-resource-31.json": "e38b1577dd159e127afacd1a5f6273833391944c0b89a892b41e4f64a1052062",
+    "crates/openbindings-openapi/tests/fixtures/mounted-31.json": "60e921d276d83ae863d69316e98558c3190ece41916e05078fcb4b809bbf671c",
+    "crates/openbindings-openapi/tests/fixtures/r1/destinations.json": "d7982007519c3d25e98d786c7ed0f06f6b6a95c6da99dc0cd91dc158cc0ed838",
+    "crates/openbindings-openapi/tests/fixtures/r1/destinations.obi.json": "e6cf724e0e5c9da9720886ea39c5346cac72b39acffbcf9bb5540403546704d3",
+    "crates/openbindings-openapi/tests/fixtures/r1/expected-caller.json": "f7d3708fd891f48e952e8ad6a6a57a8177f14b76077723766c5247eb3343beda",
+    "crates/openbindings-openapi/tests/fixtures/r1/experiment-contract.json": "f90fb9c6022ea70315b482a44488c0d76cd49e90754eea9db3758b5e338be86e",
+    "crates/openbindings-openapi/tests/fixtures/r1/mounted.json": "b081c90a12caafd552dbeb99b24643dd34052da3f32acc429b7cebb1d1bac987",
+    "crates/openbindings-openapi/tests/fixtures/r1/mounted.obi.json": "b21a37dd92485f032bb3572ab953ded67978eac98fd3d65bdbe3dbfde9a7c06d",
+    "crates/openbindings-openapi/tests/fixtures/r1/nested-entry.json": "73a984638ef4183693351c6948091013e9dd78529517bbfb55ba54eafb3cd3c2",
+    "crates/openbindings-openapi/tests/fixtures/r1/nested-parameters.json": "ec6fd51aeb27507f69a4dbde9a4a4795199f12a57b52d9dfd616b2c5a6aac7a6",
+    "crates/openbindings-openapi/tests/fixtures/r1/nested-parts.json": "7eee091da2177896073f5e20fcc5f4b4cb47682d0169686a5e4495b171bd4aac",
+    "crates/openbindings-openapi/tests/fixtures/r1/parcels.json": "dfb0f57cce46f6644bcca90ca01fcbea92621633a10e1cf981e87c0d57c00175",
+    "crates/openbindings-openapi/tests/fixtures/r1/parcels.obi.json": "a63562e24b0cd4df116c1102950fea52110f47eb04b86714ea4a9b2c33053800",
+    "crates/openbindings-openapi/tests/fixtures/r1/parts.json": "0f5eff900042f5fda7a5cc6411d227f424eba787e85918e14f8a7a0045141168",
+    "crates/openbindings-openapi/tests/fixtures/r1/wire-oracle.json": "5a5a59ef26d6f687e16c16f06837e7cfae6f4ba97d8b623697c117920cd8d05e",
+    "crates/openbindings-openapi/tests/fixtures/readiness-cases.json": "ecc9864874a5ba3861869394c21fc01990304e5fc8f981815376f1b2d400f227",
+    "crates/openbindings-openapi/tests/fixtures/schema-boundary-31.json": "71d07194ada35647fbb84981705caca1795e720034b9ec1712a6d144afa287a3",
+    "crates/openbindings-openapi/tests/fixtures/subordinate-defects.json": "6048c7d8c2ab0efbf15706df158159f995231ad34aa0635e051ee40cfe7951b9",
+    "crates/openbindings-openapi/tests/fixtures/supplied-paths-31.json": "f7f48710b4cae3c05f9e58364c0dee5a8d97b978d325e92460125243eb468e10",
+    "crates/openbindings-openapi/tests/fixtures/unknown-path-field.json": "d37535e40d63aa671146add8bbee981e961dc708dd7c7ed0da4c01479ec9dd42",
+    "crates/openbindings-openapi/tests/fixtures/v30/entry.json": "99528be2c50b0ef58eefe94eac9ede775d82cecf6f409da72b774cf12e8a9b5f",
+    "crates/openbindings-openapi/tests/fixtures/v30/exchanges.json": "0fc82c38ac71e436da0c05724d8e28b08b06b568d5140014e9d4599590029cdb",
+    "crates/openbindings-openapi/tests/fixtures/v30/manual.obi.json": "c73eefa19600b5525064867c75df8f922a3c594f08a2aab7d1ee09d93578da6c",
+    "crates/openbindings-openapi/tests/fixtures/v30/parameters.json": "46ecd4e67fca759ee161a020c7ae3aba877eddf02125583accb29ee7e02623f7",
+    "crates/openbindings-openapi/tests/fixtures/v30/routes.json": "01477ac09b5cf1ade709f23a12ccda4b18f16aa0a5f3bbc1b718353237516928",
+    "crates/openbindings-openapi/tests/manual.rs": "67cf0365c17336aa22c1c6deb4606183f32ab3ca2ed239b0faceb6f2b93b72ae",
+    "crates/openbindings-openapi/tests/semantics.rs": "b736150319f03ae6e8297edeb726bc4394837c62d16c491e284c024aea783a49",
+    "crates/openbindings-openapi/tests/synthesis.rs": "4d7f33b299d34707c3beecc32163d20283ce3e5daf18c4aa90403b02f67bd719",
+    "crates/openbindings-openapi/tests/versions.rs": "e8eefb281d984a448a341ef6e97dda8bbf3c1993d1dac8b3ee02b39501ee0f0b",
+    "examples/openapi-json-path-consumer/Cargo.toml": "c8e63c1a0d6ffe481f6b295ec3ebb35dcd88a5a535425a1b1754f33c2f373993",
+    "examples/openapi-json-path-consumer/README.md": "55f498bc5ca7718462c225e2433064cc8f428bb23417d0988289010e2f8b141e",
+    "examples/openapi-json-path-consumer/examples/auth_diagnostics.rs": "5983a2709d7cdfb67ca0ab3697f798330cc34aa8ba992c3320095fe899d02305",
+    "examples/openapi-json-path-consumer/examples/auth_measure.rs": "af7d571bc9a5bfd9999de44abfa7695297ce27bbd62bdec1dfb359b6a38e1ed4",
+    "examples/openapi-json-path-consumer/examples/measure.rs": "9d3779f88368d12c50a4c5c84dea546f663de9090f830a2ec30c8822e2717aaa",
+    "examples/openapi-json-path-consumer/src/auth-fixtures/manual-3.0.4.obi.json": "2c8c7b2bceb769c280b753c20e46ba21ebd3fb62c065b688a85e4ee52e3e5442",
+    "examples/openapi-json-path-consumer/src/auth-fixtures/manual-3.1.2.obi.json": "9904692971a2c9e3915efaffaab8e5a06f9e6dc6120cb3be285717462a8d9ee5",
+    "examples/openapi-json-path-consumer/src/auth-fixtures/parts-3.0.4.json": "85b20cf984c4ae7033eb1cb62d6c8062c31e33d4dffb3c3d77cc0d05fbfd6ecf",
+    "examples/openapi-json-path-consumer/src/auth-fixtures/parts-3.1.2.json": "7a7aa2689c460a8c2166c3c336a5340d96e30036358fa8bdf14cd693fb5d74d7",
+    "examples/openapi-json-path-consumer/src/auth-fixtures/service-3.0.4.json": "c13717ff4c4a3ae90273e2c8f37f00cc145a3eb412ce46aef17aa884f4b1615c",
+    "examples/openapi-json-path-consumer/src/auth-fixtures/service-3.1.2.json": "46e5d94afdd10afaf7b7c33026f2c577ab7807247fd9a3fe8e7a56a03513067d",
+    "examples/openapi-json-path-consumer/src/auth-fixtures/variants-3.0.4.json": "7486d08a7a2427d85a71f7cf1cdf58ab6a2e0aa5b4a365074ba301a0c98b6546",
+    "examples/openapi-json-path-consumer/src/auth-fixtures/variants-3.1.2.json": "8345824dfc0f062dcb41757aa3934e882bbd8c03b809a3199b795b53b455bc70",
+    "examples/openapi-json-path-consumer/src/auth-fixtures/wire-oracle.json": "a60e1ec2b022a44436bcec9c5fe215d2eb22a326ac5d0783f29239a2b9a92d69",
+    "examples/openapi-json-path-consumer/src/auth.rs": "5a5c2257c843469696e77c977ff87e0b0b8caf531238af557b9ef1715432e031",
+    "examples/openapi-json-path-consumer/src/lib.rs": "fe6046cc8edbe653d6ba740aa1ca10ab18efe0b4f0a84bc5bc6b30063916983e",
+    "examples/openapi-json-path-consumer/src/wasm.rs": "28d95c727ad0a21a12ffc67f3f4824af4b039e6e99488f0b0ad37b371d02ca12",
+    "examples/openapi-json-path-consumer/tests/consumer.rs": "16ef408693f145e1570cab3ca3523724e5761e085c41132fbe7dc9107cefd5b2",
+    "examples/openapi-json-path-consumer/wasm-probe.ts": "62cf53ea1622b5fed519775fabd21d94c3a1356d7f7160fb9a5df2da30333f56",
+    "tools/verify-openapi-json-path.py": "1550253eaf7566afedfcf3818947d10f3ff2c7d8dc8a917dd0d8eabef0111331"
+  },
+  "consumerLockSha256": "e2f1582d053ffe66d49695ca0a3a492f1c45a88aa56940f47e7cc1f9a4a12b60",
+  "head": "abc96027691187ad11fe0394f1d1c9d73482e093",
+  "dirty": true,
+  "archives": {
+    "openbindings-0.2.0-alpha.1.crate": "299eb2d7294923233c03595cd32d592b662a91ba8138933c8fb3264f7350bf2d",
+    "openbindings-internal-json-0.2.0-alpha.1.crate": "4eb26956f41987422aa8e15f2caaa17b31f5d614948bc66612bec31ac62d04f6",
+    "openbindings-source-inspection-0.2.0-alpha.1.crate": "ccc9641ed163152c0837666d35453432d75cdd6010709d989636cae7e350dbf9",
+    "openbindings-openapi-0.2.0-alpha.1.crate": "e242f334523ad032aa4fe50053fa3051101e1ee2514e97b39486aab1c8a2b89f",
+    "openbindings-interface-synthesis-0.2.0-alpha.1.crate": "773c0a18bb4cc84c839ebfaf15061dc1e49608bedbde4401e2cd269e0400f8d0",
+    "openbindings-invocation-0.2.0-alpha.1.crate": "e8a3372f4f97fd0ac863c3b7c2aec8006edd4827a9b8e3a065b46aa455f6c8bb",
+    "openbindings-json-schema-evaluator-0.2.0-alpha.1.crate": "f902b41b69f09f83f2c5f5c34db7e4471f00f27f5d12d1ec1b3bdb2d8298d205",
+    "openbindings-internal-jsonschema-0.58.6-ob.1.crate": "7b1642cf39afae62bbdc64f45b06266a4705e3c3cfd1fc810d04f28e82065921",
+    "openbindings-internal-jsonschema-value-0.58.6-ob.1.crate": "2c72aa9af839ada78f7928f7eca621cfff8ea7e74dee8bd0de2bc8faf22525a6",
+    "openbindings-internal-serde-json-1.0.151-ob.1.crate": "795d6d2e877832badae9f8560e245d2d2430b4e9b47a959d745400a5ce58dd61",
+    "openbindings-internal-referencing-0.58.6-ob.1.crate": "01a54ad8edaec6ed1e2de18316fa84017a18fabf0a8ea9702ec2cbdc78ec7d7e",
+    "openbindings-internal-regress-0.12.0-ob.1.crate": "120b795c3e63053c7205f6565b2a05716190d24767214f458e4f37b4cccf58e6"
+  },
+  "wasmProbe": true,
+  "clientSource": "git+https://github.com/openbindings/openapi-client?rev=fe09522a9b99a6c6b4918e3de0467b5a638afa5e#fe09522a9b99a6c6b4918e3de0467b5a638afa5e",
+  "consumerFiles": {
+    "Cargo.toml": "c8e63c1a0d6ffe481f6b295ec3ebb35dcd88a5a535425a1b1754f33c2f373993",
+    "examples/auth_diagnostics.rs": "5983a2709d7cdfb67ca0ab3697f798330cc34aa8ba992c3320095fe899d02305",
+    "examples/auth_measure.rs": "af7d571bc9a5bfd9999de44abfa7695297ce27bbd62bdec1dfb359b6a38e1ed4",
+    "examples/measure.rs": "9d3779f88368d12c50a4c5c84dea546f663de9090f830a2ec30c8822e2717aaa",
+    "src/auth.rs": "5a5c2257c843469696e77c977ff87e0b0b8caf531238af557b9ef1715432e031",
+    "src/lib.rs": "fe6046cc8edbe653d6ba740aa1ca10ab18efe0b4f0a84bc5bc6b30063916983e",
+    "src/wasm.rs": "28d95c727ad0a21a12ffc67f3f4824af4b039e6e99488f0b0ad37b371d02ca12",
+    "tests/consumer.rs": "16ef408693f145e1570cab3ca3523724e5761e085c41132fbe7dc9107cefd5b2",
+    "wasm-probe.ts": "62cf53ea1622b5fed519775fabd21d94c3a1356d7f7160fb9a5df2da30333f56"
+  },
+  "productFiles": {
+    "crates/openbindings-openapi/Cargo.toml": "a1ef11f795733123ba4d19d0b82ee661cd897c3be61b266847bad995f16ff707",
+    "crates/openbindings-openapi/src/analysis.rs": "ad295a29920a59a6f3ca4e2aeddfb2467d611180f5557a87b9246532b814b3f0",
+    "crates/openbindings-openapi/src/invocation.rs": "41b4b8727ea3c9c2a7f6e1382450202c38db53b8996901434bdaf1a74157f08b",
+    "crates/openbindings-openapi/src/lib.rs": "348c1d429569b23f54a42e79936ad064b8a910a6d69b7f71cb389f2031ca2990",
+    "crates/openbindings-openapi/src/security.rs": "f64a8a79e9b7b21b4d3468ca41c0cbe92ff26fd724be71316bf3527564182c7c",
+    "crates/openbindings-openapi/src/synthesis.rs": "740d01e23aae7704fc82ce835639398eeb6fcb1e0491b5139a3478ca210ed036",
+    "crates/openbindings-openapi/tests/auth_client.rs": "3be3bd4406519d59a2c46e1174796526fbf05cb2f34504feff4bebe3653e4f04",
+    "crates/openbindings-openapi/tests/auth_http.rs": "87140133fe9fb6b6ac7ffa614ec5cd6102973fc5fcfb3122683f542850b22e95",
+    "crates/openbindings-openapi/tests/fixtures/auth/manual-3.0.4.obi.json": "2c8c7b2bceb769c280b753c20e46ba21ebd3fb62c065b688a85e4ee52e3e5442",
+    "crates/openbindings-openapi/tests/fixtures/auth/manual-3.1.2.obi.json": "9904692971a2c9e3915efaffaab8e5a06f9e6dc6120cb3be285717462a8d9ee5",
+    "crates/openbindings-openapi/tests/fixtures/auth/parts-3.0.4.json": "85b20cf984c4ae7033eb1cb62d6c8062c31e33d4dffb3c3d77cc0d05fbfd6ecf",
+    "crates/openbindings-openapi/tests/fixtures/auth/parts-3.1.2.json": "7a7aa2689c460a8c2166c3c336a5340d96e30036358fa8bdf14cd693fb5d74d7",
+    "crates/openbindings-openapi/tests/fixtures/auth/service-3.0.4.json": "c13717ff4c4a3ae90273e2c8f37f00cc145a3eb412ce46aef17aa884f4b1615c",
+    "crates/openbindings-openapi/tests/fixtures/auth/service-3.1.2.json": "46e5d94afdd10afaf7b7c33026f2c577ab7807247fd9a3fe8e7a56a03513067d",
+    "crates/openbindings-openapi/tests/fixtures/auth/variants-3.0.4.json": "7486d08a7a2427d85a71f7cf1cdf58ab6a2e0aa5b4a365074ba301a0c98b6546",
+    "crates/openbindings-openapi/tests/fixtures/auth/variants-3.1.2.json": "8345824dfc0f062dcb41757aa3934e882bbd8c03b809a3199b795b53b455bc70",
+    "crates/openbindings-openapi/tests/fixtures/auth/wire-oracle.json": "a60e1ec2b022a44436bcec9c5fe215d2eb22a326ac5d0783f29239a2b9a92d69",
+    "crates/openbindings-openapi/tests/fixtures/contrast-20.json": "d0c6b45b8f16d15e2e7b1fc402bd28447f7a7aa5d4589b3e1ca2bce9b78257a0",
+    "crates/openbindings-openapi/tests/fixtures/contrast-30.json": "c178831567ac583965cc97426863683e9a6874a82803e9adae09a3949c8f304e",
+    "crates/openbindings-openapi/tests/fixtures/contrast-32.json": "f287f7c9f5be51d8ff3e35dfbe75b91d745aa5c0c58c02a7a74d5e89bc15537d",
+    "crates/openbindings-openapi/tests/fixtures/duplicate-ids.json": "196bd700cb8504f71c9a8ff20c89496b141ce8b8bd1d0658d3526b18ff8579ea",
+    "crates/openbindings-openapi/tests/fixtures/empty.json": "bd9b46346618737eb048a741a493af71c3ec5c15e8b41b48562a7d0ff37cc358",
+    "crates/openbindings-openapi/tests/fixtures/future-patch.json": "102d5e7e03b7dc6012fb2c8d2907755118c47aba3919991290d1d0754e72f972",
+    "crates/openbindings-openapi/tests/fixtures/identity-31.json": "96807dea0bf8c80298ebac175bb6f242454dd049e992da42e90953450f8ec556",
+    "crates/openbindings-openapi/tests/fixtures/invalid-paths.json": "bf9b3c9cdb6462fdb27f48a21805e98420ea2b128bb9499b94c668795ead2f5e",
+    "crates/openbindings-openapi/tests/fixtures/malformed-neighbor-31.json": "f87055b22f81120e942b80b9e22e07e5dc3dc55b05fab698282c76b65c833e91",
+    "crates/openbindings-openapi/tests/fixtures/malformed-only.json": "e9f28514a2cabc2f65cc07c14700af8a44617cb4e92de214a4a2f800ab0ec59c",
+    "crates/openbindings-openapi/tests/fixtures/method-conflict.json": "c0d06a26c4a36776992a6b76bc224130f106f5297ce2eb01e49fcebeccc5875b",
+    "crates/openbindings-openapi/tests/fixtures/minimal-31.json": "cf0af80657bfefea6d5e5ad69e9bcbddbc37203680d059bcbde08903eaeeb1e4",
+    "crates/openbindings-openapi/tests/fixtures/minimal-31.yaml": "25413bd72bdcc7d5bdac0c67c56cd676610e4d993d5bdad62230e30b4563f358",
+    "crates/openbindings-openapi/tests/fixtures/missing-resource-31.json": "e38b1577dd159e127afacd1a5f6273833391944c0b89a892b41e4f64a1052062",
+    "crates/openbindings-openapi/tests/fixtures/mounted-31.json": "60e921d276d83ae863d69316e98558c3190ece41916e05078fcb4b809bbf671c",
+    "crates/openbindings-openapi/tests/fixtures/r1/destinations.json": "d7982007519c3d25e98d786c7ed0f06f6b6a95c6da99dc0cd91dc158cc0ed838",
+    "crates/openbindings-openapi/tests/fixtures/r1/destinations.obi.json": "e6cf724e0e5c9da9720886ea39c5346cac72b39acffbcf9bb5540403546704d3",
+    "crates/openbindings-openapi/tests/fixtures/r1/expected-caller.json": "f7d3708fd891f48e952e8ad6a6a57a8177f14b76077723766c5247eb3343beda",
+    "crates/openbindings-openapi/tests/fixtures/r1/experiment-contract.json": "f90fb9c6022ea70315b482a44488c0d76cd49e90754eea9db3758b5e338be86e",
+    "crates/openbindings-openapi/tests/fixtures/r1/mounted.json": "b081c90a12caafd552dbeb99b24643dd34052da3f32acc429b7cebb1d1bac987",
+    "crates/openbindings-openapi/tests/fixtures/r1/mounted.obi.json": "b21a37dd92485f032bb3572ab953ded67978eac98fd3d65bdbe3dbfde9a7c06d",
+    "crates/openbindings-openapi/tests/fixtures/r1/nested-entry.json": "73a984638ef4183693351c6948091013e9dd78529517bbfb55ba54eafb3cd3c2",
+    "crates/openbindings-openapi/tests/fixtures/r1/nested-parameters.json": "ec6fd51aeb27507f69a4dbde9a4a4795199f12a57b52d9dfd616b2c5a6aac7a6",
+    "crates/openbindings-openapi/tests/fixtures/r1/nested-parts.json": "7eee091da2177896073f5e20fcc5f4b4cb47682d0169686a5e4495b171bd4aac",
+    "crates/openbindings-openapi/tests/fixtures/r1/parcels.json": "dfb0f57cce46f6644bcca90ca01fcbea92621633a10e1cf981e87c0d57c00175",
+    "crates/openbindings-openapi/tests/fixtures/r1/parcels.obi.json": "a63562e24b0cd4df116c1102950fea52110f47eb04b86714ea4a9b2c33053800",
+    "crates/openbindings-openapi/tests/fixtures/r1/parts.json": "0f5eff900042f5fda7a5cc6411d227f424eba787e85918e14f8a7a0045141168",
+    "crates/openbindings-openapi/tests/fixtures/r1/wire-oracle.json": "5a5a59ef26d6f687e16c16f06837e7cfae6f4ba97d8b623697c117920cd8d05e",
+    "crates/openbindings-openapi/tests/fixtures/readiness-cases.json": "ecc9864874a5ba3861869394c21fc01990304e5fc8f981815376f1b2d400f227",
+    "crates/openbindings-openapi/tests/fixtures/schema-boundary-31.json": "71d07194ada35647fbb84981705caca1795e720034b9ec1712a6d144afa287a3",
+    "crates/openbindings-openapi/tests/fixtures/subordinate-defects.json": "6048c7d8c2ab0efbf15706df158159f995231ad34aa0635e051ee40cfe7951b9",
+    "crates/openbindings-openapi/tests/fixtures/supplied-paths-31.json": "f7f48710b4cae3c05f9e58364c0dee5a8d97b978d325e92460125243eb468e10",
+    "crates/openbindings-openapi/tests/fixtures/unknown-path-field.json": "d37535e40d63aa671146add8bbee981e961dc708dd7c7ed0da4c01479ec9dd42",
+    "crates/openbindings-openapi/tests/fixtures/v30/entry.json": "99528be2c50b0ef58eefe94eac9ede775d82cecf6f409da72b774cf12e8a9b5f",
+    "crates/openbindings-openapi/tests/fixtures/v30/exchanges.json": "0fc82c38ac71e436da0c05724d8e28b08b06b568d5140014e9d4599590029cdb",
+    "crates/openbindings-openapi/tests/fixtures/v30/manual.obi.json": "c73eefa19600b5525064867c75df8f922a3c594f08a2aab7d1ee09d93578da6c",
+    "crates/openbindings-openapi/tests/fixtures/v30/parameters.json": "46ecd4e67fca759ee161a020c7ae3aba877eddf02125583accb29ee7e02623f7",
+    "crates/openbindings-openapi/tests/fixtures/v30/routes.json": "01477ac09b5cf1ade709f23a12ccda4b18f16aa0a5f3bbc1b718353237516928",
+    "crates/openbindings-openapi/tests/manual.rs": "67cf0365c17336aa22c1c6deb4606183f32ab3ca2ed239b0faceb6f2b93b72ae",
+    "crates/openbindings-openapi/tests/semantics.rs": "b736150319f03ae6e8297edeb726bc4394837c62d16c491e284c024aea783a49",
+    "crates/openbindings-openapi/tests/synthesis.rs": "4d7f33b299d34707c3beecc32163d20283ce3e5daf18c4aa90403b02f67bd719",
+    "crates/openbindings-openapi/tests/versions.rs": "e8eefb281d984a448a341ef6e97dda8bbf3c1993d1dac8b3ee02b39501ee0f0b"
+  },
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "commands": [
+    {
+      "label": "adapter-tests",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "openbindings-openapi",
+        "-p",
+        "openbindings-source-inspection",
+        "-p",
+        "openbindings-interface-synthesis",
+        "-p",
+        "openbindings-invocation"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "adapter-lint",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "openbindings-openapi",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "package-openbindings",
+      "command": [
+        "cargo",
+        "package",
+        "--locked",
+        "--allow-dirty",
+        "--no-verify",
+        "--exclude-lockfile",
+        "--manifest-path",
+        "/Users/matt/Code/ob-pj/openbindings/sdk/crates/openbindings/Cargo.toml"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "package-openbindings-internal-json",
+      "command": [
+        "cargo",
+        "package",
+        "--locked",
+        "--allow-dirty",
+        "--no-verify",
+        "--exclude-lockfile",
+        "--manifest-path",
+        "/Users/matt/Code/ob-pj/openbindings/sdk/crates/openbindings-internal-json/Cargo.toml"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "package-openbindings-source-inspection",
+      "command": [
+        "cargo",
+        "package",
+        "--locked",
+        "--allow-dirty",
+        "--no-verify",
+        "--exclude-lockfile",
+        "--manifest-path",
+        "/Users/matt/Code/ob-pj/openbindings/sdk/crates/openbindings-source-inspection/Cargo.toml"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "package-openbindings-openapi",
+      "command": [
+        "cargo",
+        "package",
+        "--locked",
+        "--allow-dirty",
+        "--no-verify",
+        "--exclude-lockfile",
+        "--manifest-path",
+        "/Users/matt/Code/ob-pj/openbindings/sdk/crates/openbindings-openapi/Cargo.toml"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "package-openbindings-interface-synthesis",
+      "command": [
+        "cargo",
+        "package",
+        "--locked",
+        "--allow-dirty",
+        "--no-verify",
+        "--exclude-lockfile",
+        "--manifest-path",
+        "/Users/matt/Code/ob-pj/openbindings/sdk/crates/openbindings-interface-synthesis/Cargo.toml"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "package-openbindings-invocation",
+      "command": [
+        "cargo",
+        "package",
+        "--locked",
+        "--allow-dirty",
+        "--no-verify",
+        "--exclude-lockfile",
+        "--manifest-path",
+        "/Users/matt/Code/ob-pj/openbindings/sdk/crates/openbindings-invocation/Cargo.toml"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "package-openbindings-json-schema-evaluator",
+      "command": [
+        "cargo",
+        "package",
+        "--locked",
+        "--allow-dirty",
+        "--no-verify",
+        "--exclude-lockfile",
+        "--manifest-path",
+        "/Users/matt/Code/ob-pj/openbindings/sdk/crates/openbindings-json-schema-evaluator/Cargo.toml"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "package-openbindings-internal-jsonschema",
+      "command": [
+        "cargo",
+        "package",
+        "--locked",
+        "--allow-dirty",
+        "--no-verify",
+        "--exclude-lockfile",
+        "--manifest-path",
+        "/Users/matt/Code/ob-pj/openbindings/sdk/vendor/openbindings-internal-jsonschema/Cargo.toml"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "package-openbindings-internal-jsonschema-value",
+      "command": [
+        "cargo",
+        "package",
+        "--locked",
+        "--allow-dirty",
+        "--no-verify",
+        "--exclude-lockfile",
+        "--manifest-path",
+        "/Users/matt/Code/ob-pj/openbindings/sdk/vendor/openbindings-internal-jsonschema-value/Cargo.toml"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "package-openbindings-internal-serde-json",
+      "command": [
+        "cargo",
+        "package",
+        "--locked",
+        "--allow-dirty",
+        "--no-verify",
+        "--exclude-lockfile",
+        "--manifest-path",
+        "/Users/matt/Code/ob-pj/openbindings/sdk/vendor/openbindings-internal-serde-json/Cargo.toml"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "package-openbindings-internal-referencing",
+      "command": [
+        "cargo",
+        "package",
+        "--locked",
+        "--allow-dirty",
+        "--no-verify",
+        "--exclude-lockfile",
+        "--manifest-path",
+        "/Users/matt/Code/ob-pj/openbindings/sdk/vendor/openbindings-internal-referencing/Cargo.toml"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "package-openbindings-internal-regress",
+      "command": [
+        "cargo",
+        "package",
+        "--locked",
+        "--allow-dirty",
+        "--no-verify",
+        "--exclude-lockfile",
+        "--manifest-path",
+        "/Users/matt/Code/ob-pj/openbindings/sdk/vendor/openbindings-internal-regress/Cargo.toml"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "consumer-test",
+      "command": [
+        "cargo",
+        "test",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "consumer-lint",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "consumer-metadata",
+      "command": [
+        "cargo",
+        "metadata",
+        "--locked",
+        "--format-version",
+        "1"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "core-isolation",
+      "command": [
+        "cargo",
+        "tree",
+        "--locked",
+        "-p",
+        "openbindings",
+        "--edges",
+        "normal"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "wasm-build",
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "--lib",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--features",
+        "wasm-probe"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "wasm-bindgen",
+      "command": [
+        "wasm-bindgen",
+        "--target",
+        "nodejs",
+        "--out-dir",
+        "/Users/matt/Code/ob-pj/openbindings/sdk/target/openapi-json-path-qualification/archives/host/wasm",
+        "/Users/matt/Code/ob-pj/openbindings/sdk/target/wasm32-unknown-unknown/debug/openapi_json_path_consumer.wasm"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "typescript",
+      "command": [
+        "node",
+        "/Users/matt/Code/ob-pj/openbindings/sdk/packages/typescript/node_modules/typescript/bin/tsc",
+        "--strict",
+        "--target",
+        "ES2022",
+        "--module",
+        "commonjs",
+        "--lib",
+        "ES2022,DOM",
+        "/Users/matt/Code/ob-pj/openbindings/sdk/target/openapi-json-path-qualification/archives/host/wasm-probe.ts"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "wasm-host",
+      "command": [
+        "node",
+        "/Users/matt/Code/ob-pj/openbindings/sdk/target/openapi-json-path-qualification/archives/host/wasm-probe.js"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "head",
+      "command": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "status",
+      "command": [
+        "git",
+        "status",
+        "--porcelain"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "rustc",
+      "command": [
+        "rustc",
+        "--version"
+      ],
+      "exit": 0
+    }
+  ]
+}

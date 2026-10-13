@@ -1,0 +1,72 @@
+{
+  "format": "openbindings.authenticated-json-execution@1",
+  "date": "2026-10-13",
+  "status": "performance-blocked checkpoint; not qualified complete",
+  "base": "abc96027691187ad11fe0394f1d1c9d73482e093",
+  "branch": "codex/sdk-openapi-auth-json",
+  "clientPin": "fe09522a9b99a6c6b4918e3de0467b5a638afa5e",
+  "qualifiedComplete": false,
+  "mergeOrPublication": false,
+  "productCodeMatchesMeasuredCandidate": true,
+  "finalReceiptSha256": "debfe61898ae00b0ec1136f24db75219be85934f857fa074d37b19a8f8c54b7f",
+  "qualification": {
+    "affectedRustTests": "pass",
+    "clippy": "pass",
+    "extractedRustConsumer": "pass",
+    "typescript": "pass",
+    "nodeWasm": "pass",
+    "nativeAndNodeAuthLifecycleCyclesPerKind": 1000,
+    "coreIsolation": "pass",
+    "minimalInvocationIsolation": "pass",
+    "loopbackHttp": "pass",
+    "maintainedLogSentinelScan": {
+      "pattern": "fixture- (all manufactured fixture credential prefixes)",
+      "files": 152,
+      "matches": 0
+    }
+  },
+  "reviews": {
+    "astraSemantics": "accepted, focused repair verification complete",
+    "astraConsumer": "accepted, literal acceptance gaps closed and final execution reconciled",
+    "claudeOpus55Extra": "accepted, contract/resource and performance repair verification complete",
+    "performanceDisposition": "independent Astra confirms 2 failed rows remain blocking"
+  },
+  "performance": {
+    "run1": {
+      "pass": 39,
+      "fail": 1,
+      "inconclusive": 0
+    },
+    "run2": {
+      "pass": 38,
+      "fail": 2,
+      "inconclusive": 0
+    },
+    "unsecuredRegressionRows": {
+      "pass": 24,
+      "fail": 0
+    },
+    "incrementalAuthRows": {
+      "pass": 14,
+      "fail": 2
+    },
+    "failedRows": [
+      "3.0.4 AND POST 64 KiB operation",
+      "3.1.2 AND POST 64 KiB operation"
+    ],
+    "broadCompatibilityRowsPerEdition": {
+      "pass": 22,
+      "fail": 0
+    },
+    "authSourceAndNegativeRows": "diagnostic only",
+    "thresholdsChanged": false,
+    "unjustifiedRepeats": 0
+  },
+  "cases": {
+    "pass": 21,
+    "fail": [
+      "AJ20"
+    ]
+  },
+  "remaining": "Independently design bounded performance diagnosis; retain original formulas/results. No further capability expansion or completion claim."
+}

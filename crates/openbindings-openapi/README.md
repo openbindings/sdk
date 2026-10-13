@@ -90,6 +90,73 @@ that preserves the actual terminal even if `write` reports closed admission. Its
 TypeScript probe passes JSON as text through Wasm. It is qualification code, not a
 published first-class TypeScript adapter API.
 
+## Authenticated JSON calls
+
+The two private kinds support HTTP bearer tokens and API keys declared in headers.
+The application supplies already obtained credentials through the existing role
+context; it owns acquisition, storage, trust, TLS and transport policy. The adapter
+never logs in, refreshes, retries, verifies token claims, or caches credentials.
+
+```json
+{
+  "credentials": { "ServiceToken": "application-supplied-token" },
+  "configuration": {
+    "local.openapi-json-probe.r1.security": {
+      "schemes": ["ServiceToken"],
+      "origins": { "ServiceToken": ["https://api.example.test"] }
+    }
+  }
+}
+```
+
+Pass this value with the existing `operation::Request::with_context` or
+`BindingRequest.context`. The constants are `SECURITY_POINT` and `SECURITY_POINT_30`;
+the latter names `local.openapi30-json-probe.r1.security`. Ordinary operation inputs
+remain parameters/body. Neither the OBI nor synthesis needs or stores secrets.
+
+`schemes` is an exact set of source-declared names, with no duplicate names or array
+ordering requirement. A single distinct security alternative can be inferred;
+multiple alternatives require selection even if only one credential is supplied.
+`[]` selects a declared anonymous alternative. All schemes in a chosen alternative
+apply together. Unselected credentials are never forwarded. Equivalent duplicate
+alternatives share a choice; there is no fallback to another choice after failure.
+Named `credentials` is the primary API. Existing `bearerToken`, `apiKey`, and
+`apiKeys[name]` inputs work when unambiguous; conflicting applicable values refuse.
+API-key strings are opaque: empty strings are preserved, while the client's HTTP
+field validation rejects malformed values. An empty bearer token is invalid under
+that mechanism. The adapter does not judge whether a server will accept a key.
+
+Each selected credential needs caller-approved `origins`. Scheme/host/effective-port
+comparison follows the client; it checks the actual request destination too. Source
+URLs and challenge examples are untrusted assertions, never permission or a suggested
+grant. Retrieval identity does not authorize release. Applications must decide which
+origins are appropriate independently. Explicit nonmatching grants refuse rather
+than prompting to widen access. Custom hosts remain trusted application code.
+
+Missing destination is challenged first, then missing security selection, then
+credentials/grants. Supply corrected context in a deliberate new invocation. No
+host is entered before a challenge/refusal; an HTTP 401/403 is a status error after
+dispatch and never a request to retry automatically. The default advisory preflight
+does not prove authentication readiness.
+
+Authenticated profiles admit the **whole encoded context** under `Options.context_bytes`
+(default 64 KiB), including unrelated fields; duplicate names in that context refuse.
+Already-unsecured profiles continue to ignore authentication context. Public security
+metadata and incrementally constructed challenges are bounded by `result_bytes`.
+The generic invocation facade separately applies `max_error_bytes`: an oversized
+portable error becomes `ERR_EXECUTION_FAILED`, with zero host entries in this path,
+under its existing behavior. No truncated challenge is offered as a usable subset.
+These are implementation policies, not requirements imposed on generic interfaces.
+
+Basic, OAuth/OIDC schemes, mTLS, query/cookie keys, nonempty bearer/key role arrays,
+and statically unusable credential-header combinations remain unsupported. Any
+unsupported effective alternative excludes that operation as a whole in this profile.
+This includes case-insensitive collisions, invalid HTTP field names, and keys using
+Content-Type on an operation with a body. Other supported operations survive.
+Synthesis reports runtime prerequisites under the security point and keeps
+AND/OR structure in nonsecret coverage details. Missing runtime credentials are not
+schema loss or a reason to exclude an otherwise supported operation.
+
 ## Synthesis and scope
 
 Zero sources produce a skeleton; one source is preserved; composition of multiple

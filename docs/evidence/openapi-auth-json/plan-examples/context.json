@@ -1,0 +1,17 @@
+{
+  "credentials": {
+    "ServiceToken": "fixture-bearer-A"
+  },
+  "configuration": {
+    "local.openapi-json-probe.r1.security": {
+      "schemes": [
+        "ServiceToken"
+      ],
+      "origins": {
+        "ServiceToken": [
+          "https://api.example.test"
+        ]
+      }
+    }
+  }
+}

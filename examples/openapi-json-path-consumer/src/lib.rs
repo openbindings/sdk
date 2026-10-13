@@ -97,3 +97,8 @@ pub fn owners() -> (usize, usize) {
 }
 #[cfg(all(target_arch = "wasm32", feature = "wasm-probe"))]
 mod wasm;
+
+pub use serde_json as wire_json;
+pub mod auth;
+
+pub mod auth_acceptance;

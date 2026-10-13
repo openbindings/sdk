@@ -1,0 +1,680 @@
+{
+  "format": "openbindings.authenticated-json-cases@1",
+  "status": "executed; 21 cases pass, AJ20 failed; slice performance-blocked",
+  "cases": [
+    {
+      "id": "AJ01",
+      "title": "Bearer vertical consumer",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "Root-inherited bearer GET and operation bearer POST work through manual binding and synthesized/reloaded binding/operation invokers. Exactly one Authorization header; exact JSON body/output; zero authoring effects.",
+      "authorityRefs": [
+        "role-context",
+        "oas30-security",
+        "oas31-security",
+        "bearer-wire",
+        "consumer-needs"
+      ],
+      "decisionIds": [
+        "AD01",
+        "AD03",
+        "AD05"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ02",
+      "title": "Header API key vertical consumer",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "An operation override uses its declared header API key only. Exact value, no automatic Bearer prefix, no inherited bearer header; manual and cold reloaded generated paths reach the same independent oracle.",
+      "authorityRefs": [
+        "oas30-security",
+        "oas31-security",
+        "consumer-needs"
+      ],
+      "decisionIds": [
+        "AD01",
+        "AD03",
+        "AD05"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ03",
+      "title": "Conjunctive requirements",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "Bearer plus API key and two differently named header API keys apply every selected scheme exactly once. Omitting one credential or its grant challenges with zero host entries/output. Never perform a partially authenticated request.",
+      "authorityRefs": [
+        "role-context",
+        "oas30-security",
+        "oas31-security"
+      ],
+      "decisionIds": [
+        "AD01",
+        "AD02",
+        "AD03"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ04",
+      "title": "Alternative election",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "Bearer versus API key requires explicit election even when only one or both credentials are available. Reordered source alternatives and reordered supplied scheme names preserve semantic selection. Identical duplicate alternatives coalesce or map equivalently; unknown/duplicate selector names refuse. No credential from an unselected branch is forwarded.",
+      "authorityRefs": [
+        "role-context",
+        "oas30-security",
+        "oas31-security",
+        "experiment-policy"
+      ],
+      "decisionIds": [
+        "AD02",
+        "AD03"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ05",
+      "title": "Anonymous and override semantics",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "Test absent security, root security inherited, operation security:[], security:[{}], and [{},{ServiceToken:[]}]. Anonymous-versus-authenticated requires election; anonymous sends no auth despite supplied credentials. A single anonymous alternative or absent/empty requirements needs no credential grant.",
+      "authorityRefs": [
+        "oas30-security",
+        "oas31-security",
+        "experiment-policy"
+      ],
+      "decisionIds": [
+        "AD02",
+        "AD05"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ06",
+      "title": "Challenge and deliberate retry",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "Absent selected credentials/grants yield structurally valid CONTEXT_REQUIRED with named auth families and config.value paths. Resolve once in a new invocation and dispatch once. Old attempt remains completed. No acquire/refresh/retry callback, host entry, output or hidden context persistence.",
+      "authorityRefs": [
+        "role-context",
+        "role-terminals",
+        "consumer-needs"
+      ],
+      "decisionIds": [
+        "AD01",
+        "AD03",
+        "AD04"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ07",
+      "title": "Destination grants",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "Two destination origins: token approved only for A never reaches B. Changing server/context causes current-attempt revalidation; no grants inferred from declarations/challenges. Retrieval origin is not destination authority. Scheme/host/default-port canonical equivalence is tested; a changed scheme or nondefault port refuses. Credentials and grants are supplied together per attempt.",
+      "authorityRefs": [
+        "role-context",
+        "consumer-needs",
+        "experiment-policy"
+      ],
+      "decisionIds": [
+        "AD03",
+        "AD04"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ08",
+      "title": "Destination choice before credential release",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "Two-server missing-choice attempt challenges only for destination and has zero effects. With server selected, challenge for security/credentials/grants as needed. Do not build a destination-by-auth Cartesian product. Wrong-kind selector/grant points cannot authorize another kind; wrong grant refuses rather than requesting widened authority.",
+      "authorityRefs": [
+        "role-context",
+        "role-terminals",
+        "experiment-policy"
+      ],
+      "decisionIds": [
+        "AD02",
+        "AD03",
+        "AD04"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ09",
+      "title": "Attempt, source and kind isolation",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "Reuse one provider: A-token, B-token, then no token. Only explicitly supplied current-attempt values apply; the third call challenges. Alternate sources/kinds sharing scheme names and cancel/drop one of two concurrent calls without affecting the other. Deliberate caller resupply is distinguished from cached reuse; source-specific access policy remains caller-owned.",
+      "authorityRefs": [
+        "role-context",
+        "role-terminals",
+        "consumer-needs"
+      ],
+      "decisionIds": [
+        "AD03",
+        "AD06"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ10",
+      "title": "Referenced security and mounted operation",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native",
+      "status": "pass",
+      "expectedOutcome": "Supply a referenced Security Scheme and a mounted Path Item using explicit resource identities; independently fix expected scheme resolution under upstream implicit-name rules. Vary a conflicting named scheme in the secondary document. Manual and cold generated consumers use the agreed source meaning; missing/cross-edition/ambiguous resources refuse or report unestablished behavior without dispatch. No fetch.",
+      "authorityRefs": [
+        "oas30-references",
+        "oas31-references",
+        "consumer-needs"
+      ],
+      "decisionIds": [
+        "AD03",
+        "AD05"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ11",
+      "title": "Unsupported security and source-version distinctions",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "Basic, OAuth2/OIDC, query/cookie API keys and unrecognized mechanisms are honestly unsupported, including when mixed with a supported alternative under the initial whole-operation policy. 3.1 nonempty bearer/API-key role arrays are unsupported, not invalid. Invalid 3.0 non-OAuth nonempty arrays cannot become represented. Unrelated supported operations survive.",
+      "authorityRefs": [
+        "oas30-security",
+        "oas31-security",
+        "experiment-policy"
+      ],
+      "decisionIds": [
+        "AD02",
+        "AD05"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ12",
+      "title": "Credential shape and compatibility inputs",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "Named credentials work. Existing unambiguous bearerToken/apiKey and apiKeys[name] compatibility forms work without new aliases. Conflicting applicable forms, null/object/number values, malformed bearer strings and header control characters refuse with zero host calls. Equal forms may coalesce; no secret-valued error. Duplicate relevant JSON keys and malformed origin collections refuse under bounded admission policy.",
+      "authorityRefs": [
+        "role-context",
+        "experiment-policy",
+        "consumer-needs"
+      ],
+      "decisionIds": [
+        "AD01",
+        "AD03",
+        "AD07"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ13",
+      "title": "Wire collisions and secrecy",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native",
+      "status": "pass",
+      "expectedOutcome": "Collision between two selected schemes targeting the same header, including case variation and bearer plus an Authorization API key, cannot produce dispatch. Valid wire checks count exactly the selected credential headers and no query/body credential injection. Distinct fake sentinels do not occur in generated documents, coverage, challenge/error/debug text or logs. Host-request inspection is an explicit test capability.",
+      "authorityRefs": [
+        "bearer-wire",
+        "consumer-needs",
+        "experiment-policy"
+      ],
+      "decisionIds": [
+        "AD03",
+        "AD04"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ14",
+      "title": "Real HTTP terminal and no retry",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "Controlled 401 and 403 yield existing kind-specific status failure, no output and one host request. No challenge, refresh or fallback after dispatch. Redirect reply produces the existing status error with no second host request in the qualified no-follow host. Malformed/truncated success retains execution-failure meaning.",
+      "authorityRefs": [
+        "role-terminals",
+        "consumer-needs"
+      ],
+      "decisionIds": [
+        "AD04"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "crates/openbindings-openapi/tests/auth_http.rs",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ15",
+      "title": "Cardinality, cancellation and abandon",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "Zero/extra inputs refuse before host entry; one envelope plus close works. Cancellation before dispatch, pending host cancellation, abandon/drop and concurrent sibling isolation preserve terminal/effect guarantees. Credentials do not create detached background work. Node tests assert actual error codes and host counts on each negative path.",
+      "authorityRefs": [
+        "role-terminals",
+        "consumer-needs"
+      ],
+      "decisionIds": [
+        "AD04",
+        "AD07"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ16",
+      "title": "Bounded context, metadata and challenges",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "Freeze explicit bounds, then test exact-budget success and one-over refusal for consumed context, credential/header size/count, retained security metadata and encoded challenges. Bound alternative and origin-list traversal before uncontrolled copying. Oversized challenges are never falsely returned as a usable subset. Logical byte claims remain separate from retained arenas/RSS.",
+      "authorityRefs": [
+        "experiment-policy",
+        "consumer-needs"
+      ],
+      "decisionIds": [
+        "AD04",
+        "AD07"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "crates/openbindings-openapi/src/security.rs::tests",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ17",
+      "title": "Synthesis coverage and persistence",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "Inspection/synthesis work without credentials. Supported secured operations remain representable with runtime prerequisites; existing projection loss remains truthful. Preserve sources, unknown source fields and resource identities. No credentials/grants enter artifacts; OR is not flattened to AND. Save, rename operation keys, cold reload and invoke against the manual oracle.",
+      "authorityRefs": [
+        "role-synthesis",
+        "role-inspection",
+        "consumer-needs"
+      ],
+      "decisionIds": [
+        "AD05",
+        "AD06"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ18",
+      "title": "Public consumer/package boundary",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "An external extracted-package Rust consumer uses one OpenApi provider and existing binding/operation facades; ordinary calls need no dynamic-client credential types. A thin exact-text Node/Wasm consumer uses the same JSON context including opaque credential strings and large JSON numbers. Conditional Send/local Rc remain usable. Core/minimal dependency trees stay isolated; exact client pin maintained.",
+      "authorityRefs": [
+        "consumer-needs",
+        "experiment-policy"
+      ],
+      "decisionIds": [
+        "AD01",
+        "AD06"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "examples/openapi-json-path-consumer/wasm-probe.ts",
+        "minimal-consumer.log",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ19",
+      "title": "Credential lifetime and resource cleanup",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "Run 1000 mixed cycles per kind with success, challenges, refusals, failure and pending-host cancellation/drop. SDK/client owners and host registrations return to measured baseline. Verify prepared-source cache contains only public security metadata, not context/grants/secret bytes; each completed attempt can release owned request/credential state. No zeroization or heap/RSS promise.",
+      "authorityRefs": [
+        "consumer-needs",
+        "experiment-policy"
+      ],
+      "decisionIds": [
+        "AD03",
+        "AD07"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ20",
+      "title": "Auth CPU cost and anonymous regression",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native-release",
+      "status": "failed; performance-blocked checkpoint",
+      "expectedOutcome": "Execute performance.md against frozen inputs, comparable direct-client work and the baseline SDK. Retain every observation, ratios, absolute costs and differential auth overhead. Existing broad budgets alone do not establish success of the new gates; unresolved failed/inconclusive rows block qualified completion.",
+      "authorityRefs": [
+        "experiment-policy",
+        "consumer-needs"
+      ],
+      "decisionIds": [
+        "AD07"
+      ],
+      "evidence": [
+        "performance.md",
+        "cpu-run1/summary.json",
+        "cpu-run2/summary.json",
+        "broad-304/summary.json",
+        "broad-312/summary.json",
+        "auth-diagnostics/summary.json",
+        "performance-repair.md",
+        "astra-performance-repair.md"
+      ],
+      "remaining": "Two incremental-auth 64 KiB AND POST operation rows fail in revised pair 1. Every pair must pass. No threshold or failure suppression."
+    },
+    {
+      "id": "AJ21",
+      "title": "Compatibility and dependency boundary",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "native+local-wasm",
+      "status": "pass",
+      "expectedOutcome": "All previous private-kind positive cases and supported non-auth meanings remain. New support fills previous refusals without silently changing existing source/binding/input/output fields. A generic-role mismatch or client bug produces a bounded reproducer and separate scope decision, not a workaround copied into core or a silently changed client pin.",
+      "authorityRefs": [
+        "role-context",
+        "role-terminals",
+        "consumer-needs"
+      ],
+      "decisionIds": [
+        "AD06"
+      ],
+      "evidence": [
+        "examples/openapi-json-path-consumer/src/auth.rs",
+        "examples/openapi-json-path-consumer/src/auth_acceptance.rs",
+        "examples/openapi-json-path-consumer/tests/consumer.rs",
+        "examples/openapi-json-path-consumer/src/wasm.rs",
+        "astra-acceptance-audit.md",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ]
+    },
+    {
+      "id": "AJ22",
+      "title": "Independent reviews and portability ledger",
+      "editions": [
+        "3.0.4",
+        "3.1.2"
+      ],
+      "hostScope": "review",
+      "status": "pass",
+      "expectedOutcome": "Independent Astra semantics and consumer reviews plus Claude review reconcile to zero unresolved material in-scope findings. Record which source/context/credential meanings would need agreement if adopted by a future kind; keep storage/cache/acquisition/bounds out of mandatory binding rules. No old draft or derived oracle is used; no merge/publication.",
+      "authorityRefs": [
+        "consumer-needs",
+        "experiment-policy"
+      ],
+      "decisionIds": [
+        "AD01",
+        "AD02",
+        "AD03",
+        "AD04",
+        "AD05",
+        "AD06",
+        "AD07"
+      ],
+      "evidence": [
+        "astra-reviews.json",
+        "astra-acceptance-audit.md",
+        "astra-performance-repair.md",
+        "claude-review.md",
+        "claude-repair-review.md",
+        "claude-performance-repair.md",
+        "portability.json",
+        "qualification-final/receipt.json",
+        "qualification-final/consumer-test.log",
+        "qualification-final/wasm-host.log"
+      ],
+      "disposition": "Astra and Claude runtime/contract repairs accepted; final acceptance evidence reconciled; failed performance retained explicitly in AJ20."
+    }
+  ],
+  "authorityPolicy": "FACT inputs may motivate implementation work, but do not define expected outcomes. All prior binding drafts and derivative expectations excluded.",
+  "evidenceBase": "SDK repository paths for maintained tests; local evidence paths for receipts"
+}

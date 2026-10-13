@@ -8,6 +8,7 @@
 
 mod analysis;
 mod invocation;
+mod security;
 mod synthesis;
 
 use dynamic_openapi_client::DocumentBuilder;
@@ -24,12 +25,16 @@ use std::{
 
 /// Exact private experiment identifier. Saved r1 documents retain this meaning.
 pub const EXPERIMENTAL_KIND: &str = "local.openapi-json-probe.r1";
+/// Private per-attempt security selection and caller-approved credential origins.
+pub const SECURITY_POINT: &str = "local.openapi-json-probe.r1.security";
 /// Configuration point containing a declared absolute server URL selector.
 pub const SERVER_POINT: &str = "local.openapi-json-probe.r1.server";
 /// Kind-defined unsuccessful HTTP status, with application data `{ "status": n }`.
 pub const HTTP_STATUS_ERROR: &str = "local.openapi-json-probe.r1.http-status";
 /// Exact private OpenAPI 3.0 experiment identifier; independent of the 3.1 r1 kind.
 pub const EXPERIMENTAL_KIND_30: &str = "local.openapi30-json-probe.r1";
+/// OpenAPI 3.0 private per-attempt security selection and credential origins.
+pub const SECURITY_POINT_30: &str = "local.openapi30-json-probe.r1.security";
 /// OpenAPI 3.0 experiment's declared absolute server URL configuration point.
 pub const SERVER_POINT_30: &str = "local.openapi30-json-probe.r1.server";
 /// OpenAPI 3.0 experiment's unsuccessful HTTP status, with data `{ "status": n }`.
@@ -67,6 +72,12 @@ impl Kind {
             Self::OpenApi30 => SERVER_POINT_30,
         }
     }
+    fn security_point(self) -> &'static str {
+        match self {
+            Self::OpenApi31 => SECURITY_POINT,
+            Self::OpenApi30 => SECURITY_POINT_30,
+        }
+    }
     fn status_error(self) -> &'static str {
         match self {
             Self::OpenApi31 => HTTP_STATUS_ERROR,
@@ -90,6 +101,9 @@ pub struct Options {
     /// Maximum charged adapter inventory bytes, including retained server/parameter metadata.
     /// This is a logical work budget, not an allocator or process RSS measurement.
     pub result_bytes: usize,
+    /// Maximum encoded per-attempt context for a profile containing authenticated alternatives.
+    /// Unsecured profiles ignore authentication context. No retained-arena/RSS guarantee.
+    pub context_bytes: usize,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -99,6 +113,7 @@ impl Default for Options {
             resources: vec![],
             source_bytes: 16 << 20,
             result_bytes: 8 << 20,
+            context_bytes: 64 << 10,
         }
     }
 }
