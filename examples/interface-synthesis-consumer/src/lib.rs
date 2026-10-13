@@ -330,6 +330,7 @@ impl inspect::SourceInspector for Catalog {
                         code: "example.catalog.unknown".into(),
                         message: "Unknown remainder".into(),
                         details: None,
+                        additional_fields: Default::default(),
                     },
                 )
             } else {

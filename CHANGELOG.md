@@ -11,6 +11,17 @@
   from undetermined to conformant because its description's lone surrogate no longer
   gates assessment.
 
+- Finish the source-inspection, synthesis and invocation role definitions. Providers
+  move `BindingInvoker::preflight` and its future type to optional `BindingPreflight`;
+  callers opt in through `preflight_with_provider`. Invoke-only and local providers
+  remain supported. Provider errors using any of the six operation-owned codes become
+  `ERR_EXECUTION_FAILED`; invocation retains a `reserved-provider-code` finding.
+  Unsupported explicit operation bindings use `ERR_BINDING_NOT_FOUND`; errors show codes.
+  Synthesis compares numbers by exact value, allows unbound operations and optional
+  dependency attribution. Supplied keys must exist; no one-to-one mapping is required.
+  Inspection framing refuses unknown non-`x-` members. `InspectionLimitation` gains
+  `additional_fields`; existing struct literals must supply the map.
+
 - Duplicate-member detection and same-document JSON Pointer resolution now run in
   linear time. An object repeating its keys and a document with many schema
   references, each under 1 MiB, previously took several seconds. Results, source

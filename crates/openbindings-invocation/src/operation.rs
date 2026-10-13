@@ -6,7 +6,7 @@
 use crate::{
     BindingRequest, BindingValue, ContextChallenge, Invocation, InvocationError, InvocationLimits,
     LimitError, ProviderIo,
-    binding::{self, BindingInvoker},
+    binding::{self, BindingInvoker, BindingPreflight},
     lifecycle::Shared,
     value::source_from_json,
 };
@@ -60,7 +60,7 @@ impl<'a> Request<'a> {
             context: None,
         }
     }
-    /// Invoke this exact binding; unsupported kinds refuse without fallback.
+    /// Invoke this exact binding; unsupported kinds yield `ERR_BINDING_NOT_FOUND`.
     pub fn binding(key: &'a str) -> Self {
         Self {
             target: Target::Binding(key),
@@ -176,7 +176,7 @@ impl<P: BindingInvoker> Invoker<P> {
                     .provider
                     .supports_kind(&binding_request.source.kind)
                 {
-                    return Err(InvocationError::refused());
+                    return Err(error("ERR_BINDING_NOT_FOUND"));
                 }
                 Ok(self
                     .binding
@@ -185,11 +185,13 @@ impl<P: BindingInvoker> Invoker<P> {
             },
             external,
             local,
+            shared.clone(),
         );
         Invocation::new(shared, future)
     }
-    /// Resolve by the same rules and delegate advisory preflight. It never prepares
-    /// schemas, consumes values, dispatches, or pins a later selection.
+    /// Resolve by the same rules and make no prediction. Use
+    /// `preflight_with_provider` to opt into the optional provider hook. Neither
+    /// path prepares schemas, consumes values, dispatches, or pins selection.
     pub async fn preflight(
         &self,
         request: Request<'_>,
@@ -209,6 +211,42 @@ impl<P: BindingInvoker> Invoker<P> {
         let selected = self.resolve(request)?;
         self.binding
             .preflight_with_control(
+                BindingRequest {
+                    source: selected.source,
+                    binding: selected.binding,
+                    context: request.context,
+                },
+                control,
+            )
+            .await
+    }
+    /// Resolve and call the optional provider preflight hook. Its named future
+    /// permits generic callers to require `P::Preflight<'a>: Send`.
+    pub async fn preflight_with_provider(
+        &self,
+        request: Request<'_>,
+    ) -> Result<Option<ContextChallenge>, InvocationError>
+    where
+        P: BindingPreflight,
+    {
+        self.preflight_with_provider_and_control(request, &WorkControl::new())
+            .await
+    }
+    /// Call the optional provider preflight hook with caller cancellation.
+    pub async fn preflight_with_provider_and_control(
+        &self,
+        request: Request<'_>,
+        control: &WorkControl,
+    ) -> Result<Option<ContextChallenge>, InvocationError>
+    where
+        P: BindingPreflight,
+    {
+        if control.is_cancelled() {
+            return Err(InvocationError::cancelled());
+        }
+        let selected = self.resolve(request)?;
+        self.binding
+            .preflight_with_provider_and_control(
                 BindingRequest {
                     source: selected.source,
                     binding: selected.binding,
@@ -330,6 +368,9 @@ impl<P: BindingInvoker> Invoker<P> {
             .source(source_key)
             .map_err(|_| InvocationError::refused())?
             .ok_or_else(|| error("ERR_UNKNOWN_SOURCE"))?;
+        if !self.supported(&binding)? {
+            return Err(error("ERR_BINDING_NOT_FOUND"));
+        }
         Ok(Resolved {
             operation,
             source: self.carrier(&self.sources, "sources", source.key(), || {

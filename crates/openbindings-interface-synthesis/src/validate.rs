@@ -22,8 +22,8 @@ fn index(value: Option<JsonRef<'_>>) -> Option<BTreeMap<&str, JsonRef<'_>>> {
         .collect()
 }
 
-// A nonrecursive structural token stream preserves exact numbers and opaque
-// duplicate members while ignoring formatting and ordinary member order.
+// A nonrecursive structural hash ignores formatting and ordinary member order.
+// Numbers contribute only their kind tag; core equality resolves hash collisions.
 #[derive(PartialEq, Eq, Hash)]
 enum Token<'a> {
     Tag(u8),
@@ -49,10 +49,7 @@ fn tokens(value: JsonRef<'_>) -> impl Iterator<Item = Token<'_>> {
                 stack.push(Work::Token(Token::Tag(u8::from(v.as_bool().unwrap()))));
                 1
             }
-            JsonKind::Number => {
-                stack.push(Work::Token(Token::Text(v.number_text().unwrap())));
-                2
-            }
+            JsonKind::Number => 2,
             JsonKind::String => {
                 stack.push(Work::Token(match v.as_str() {
                     Some(s) => Token::Text(s),
@@ -88,8 +85,11 @@ fn tokens(value: JsonRef<'_>) -> impl Iterator<Item = Token<'_>> {
     })
 }
 fn same_json(a: JsonRef<'_>, b: JsonRef<'_>) -> bool {
-    tokens(a).eq(tokens(b))
+    // RO-9: ambiguous duplicate-member values cannot establish preservation.
+    // Retain owners cheaply and defer exact decimal and UTF-16 equality to core.
+    a.to_owned().semantic_eq(&b.to_owned()) == Some(true)
 }
+
 fn hash_value(value: Option<JsonRef<'_>>, h: &mut DefaultHasher) {
     value.is_some().hash(h);
     if let Some(v) = value {
@@ -353,21 +353,6 @@ fn check(
             "source-free synthesis requires an empty exhaustive skeleton",
         ));
     }
-    // Core permits unbound authoring operations. Synthesis promises a realization
-    // path, including dependency consumption points. This structural prerequisite
-    // does not establish kind-specific soundness or truthful coverage inventory.
-    let realized: HashSet<_> = bindings
-        .values()
-        .chain(dependencies.values())
-        .filter_map(|v| v.get("operation").and_then(|v| v.as_str()))
-        .collect();
-    if let Some(key) = operations.keys().find(|key| !realized.contains(**key)) {
-        return Err(issue(
-            "unrealized-operation",
-            format!("/interface/operations/{}", ptr(key)),
-            "synthesized operation requires a binding or dependency",
-        ));
-    }
     let c = &candidate.coverage;
     no_shadow(
         &c.additional_fields,
@@ -402,7 +387,6 @@ fn check(
         )?;
     }
     let mut identities = HashSet::new();
-    let mut dep_keys = HashSet::new();
     let mut source_pairs = HashSet::new();
     for (i, e) in c.entries.iter().enumerate() {
         let path = format!("/coverage/entries/{i}");
@@ -507,18 +491,13 @@ fn check(
                 ));
             }
             if emitted {
-                let key = e.dependency_key.as_ref().ok_or_else(|| {
-                    fail(
-                        "dependency-key",
-                        "dependencyKey",
-                        "emitted dependency requires dependencyKey",
-                    )
-                })?;
-                if !dependencies.contains_key(key.as_str()) || !dep_keys.insert(key.as_str()) {
+                if let Some(key) = &e.dependency_key
+                    && !dependencies.contains_key(key.as_str())
+                {
                     return Err(fail(
                         "dependency-correspondence",
                         "dependencyKey",
-                        "dependency key is missing from output or has duplicate evidence",
+                        "dependency key is missing from output",
                     ));
                 }
             } else if e.dependency_key.is_some() {
@@ -594,16 +573,6 @@ fn check(
             }
         }
     }
-    if dep_keys.len() != dependencies.len() {
-        return Err(issue(
-            "dependency-correspondence",
-            "/coverage/entries",
-            format!(
-                "dependency evidence is incomplete for {} emitted dependencies",
-                dependencies.len()
-            ),
-        ));
-    }
     Ok(source_keys)
 }
 pub(crate) fn validate(
@@ -656,5 +625,101 @@ mod tests {
         let a = parse(r#"{"\uD800":1,"a":2}"#);
         let b = parse(r#"{"a":2,"\ud800":1}"#);
         assert!(same_json(a.view(), b.view()));
+    }
+}
+
+#[cfg(test)]
+mod numeric_tests {
+    use super::*;
+    use openbindings::JsonValue;
+
+    // RO-9: numeric spelling does not affect source hash buckets. Comparison
+    // within each bucket remains core's exact value equality.
+    #[test]
+    fn ro9_values_differing_only_in_number_spelling_hash_equally() {
+        let left = JsonValue::parse(r#"{"n":[1,-0,{"large":9007199254740993}]}"#).unwrap();
+        let right = JsonValue::parse(r#"{"n":[1.0,0e0,{"large":9007199254740993e0}]}"#).unwrap();
+        let hash = |value: &JsonValue| {
+            let mut h = DefaultHasher::new();
+            hash_value(Some(value.view()), &mut h);
+            h.finish()
+        };
+        assert_eq!(hash(&left), hash(&right));
+        assert!(same_json(left.view(), right.view()));
+    }
+
+    // RO-9: equal values must hash equally. Distinct values may collide, but
+    // core equality and checked synthesis must still distinguish their sources.
+    #[test]
+    fn ro9_decimal_equality_and_hashes_are_congruent() {
+        for (left, right, equal) in [
+            ("1", "1.0", true),
+            ("1.0", "1e0", true),
+            ("-0", "0", true),
+            ("1e999999999999999999999", "10e999999999999999999998", true),
+            (
+                "1e-999999999999999999999",
+                "0.1e-999999999999999999998",
+                true,
+            ),
+            ("9007199254740993", "9007199254740992", false),
+            (
+                r#"{"n":[1,-0,{"a":1e0}]}"#,
+                r#"{"n":[1.0,0,{"a":1}]}"#,
+                true,
+            ),
+        ] {
+            let a = JsonValue::parse(left).unwrap();
+            let b = JsonValue::parse(right).unwrap();
+            assert_eq!(same_json(a.view(), b.view()), equal);
+            // Independent equality oracle from the document model.
+            assert_eq!(a.semantic_eq(&b), Some(equal));
+            let hash = |v: &JsonValue| {
+                let mut h = DefaultHasher::new();
+                hash_value(Some(v.view()), &mut h);
+                h.finish()
+            };
+            if equal {
+                assert_eq!(hash(&a), hash(&b));
+            } else {
+                assert_eq!(a.semantic_eq(&b), Some(false));
+                let input = Source {
+                    kind: "example.numeric-source".into(),
+                    content: Some(a),
+                    ..Default::default()
+                };
+                let mut draft = openbindings::DocumentBuilder::new();
+                draft.sources = Some(BTreeMap::from([(
+                    "api".into(),
+                    Source {
+                        content: Some(b),
+                        ..input.clone()
+                    },
+                )]));
+                let candidate = SynthesisCandidate {
+                    document: draft.build().unwrap(),
+                    coverage: CoverageDraft {
+                        exhaustive: true,
+                        ..Default::default()
+                    },
+                };
+                for name in [Some("api"), None] {
+                    let sources = [SynthesisSource {
+                        name,
+                        source: &input,
+                    }];
+                    let request = SynthesisRequest {
+                        sources: &sources,
+                        ..Default::default()
+                    };
+                    let error = validate(&request, candidate.clone()).unwrap_err();
+                    assert_eq!(error.kind(), SynthesisErrorKind::InvalidResult);
+                    assert_eq!(
+                        error.rejected().unwrap().finding.as_ref().unwrap().code,
+                        "source-preservation"
+                    );
+                }
+            }
+        }
     }
 }

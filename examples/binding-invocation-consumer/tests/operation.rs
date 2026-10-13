@@ -194,7 +194,8 @@ async fn manual_alias_ordered_selection_and_invalid_suffix_are_explicit() {
             "ERR_BINDING_NOT_FOUND",
         ),
         (Request::ordered("go", &[]), "ERR_REFUSED"),
-        (Request::binding("skip"), "ERR_REFUSED"),
+        // RO-5: an unsupported explicit binding matches ordered selection.
+        (Request::binding("skip"), "ERR_BINDING_NOT_FOUND"),
     ] {
         let mut call = invoker.invoke(request);
         call.close();

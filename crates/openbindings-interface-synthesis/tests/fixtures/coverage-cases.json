@@ -435,7 +435,7 @@
       }
     },
     {
-      "description": "an emitted dependency with no represented or lossy dependency entry is rejected",
+      "description": "an emitted dependency needs no keyed evidence row",
       "interface": {
         "openbindings": "0.2.0",
         "operations": {
@@ -478,9 +478,12 @@
       ],
       "exhaustive": true,
       "expected": {
-        "valid": false,
-        "errorContains": "for 1 emitted dependencies",
-        "strictEligible": false
+        "valid": true,
+        "fullyRepresented": true,
+        "strictEligible": true,
+        "sourceKeys": [
+          "api"
+        ]
       },
       "request": {
         "sources": [
@@ -653,7 +656,7 @@
       }
     },
     {
-      "description": "matching counts with duplicate dependency evidence refuse",
+      "description": "distinct source units may name the same emitted dependency",
       "interface": {
         "openbindings": "0.2.0",
         "operations": {
@@ -713,8 +716,12 @@
       ],
       "exhaustive": true,
       "expected": {
-        "valid": false,
-        "errorContains": "dependency"
+        "valid": true,
+        "fullyRepresented": true,
+        "strictEligible": true,
+        "sourceKeys": [
+          "api"
+        ]
       },
       "request": {
         "sources": [
@@ -1076,7 +1083,7 @@
       }
     },
     {
-      "description": "orphan generated operation refuses even with exhaustive evidence",
+      "description": "unbound generated operation is permitted with exhaustive evidence",
       "interface": {
         "openbindings": "0.2.0",
         "operations": {
@@ -1091,9 +1098,12 @@
       "entries": [],
       "exhaustive": true,
       "expected": {
-        "valid": false,
-        "errorContains": "requires a binding or dependency",
-        "strictEligible": false
+        "valid": true,
+        "fullyRepresented": true,
+        "strictEligible": true,
+        "sourceKeys": [
+          "api"
+        ]
       },
       "request": {
         "sources": [
@@ -1107,7 +1117,7 @@
       }
     },
     {
-      "description": "orphan generated operation refuses even with partial evidence",
+      "description": "unbound generated operation is permitted with partial evidence",
       "interface": {
         "openbindings": "0.2.0",
         "operations": {
@@ -1122,9 +1132,12 @@
       "entries": [],
       "exhaustive": false,
       "expected": {
-        "valid": false,
-        "errorContains": "requires a binding or dependency",
-        "strictEligible": false
+        "valid": true,
+        "fullyRepresented": false,
+        "strictEligible": false,
+        "sourceKeys": [
+          "api"
+        ]
       },
       "request": {
         "sources": [
@@ -1450,6 +1463,125 @@
             }
           },
           {
+            "source": {
+              "kind": "example.coverage@1"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "a lossy dependency row may omit dependencyKey",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createJob": {},
+          "onJobDone": {}
+        },
+        "dependencies": {
+          "jobDone": {
+            "operation": "onJobDone"
+          }
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1",
+            "content": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "createJob.api": {
+            "operation": "createJob",
+            "source": "api",
+            "content": {
+              "selector": "#/paths/~1jobs/post"
+            }
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceKey": "api",
+          "sourceRef": "#/paths/~1jobs/post",
+          "scope": "target",
+          "status": "represented",
+          "operationKey": "createJob",
+          "bindingKey": "createJob.api"
+        },
+        {
+          "sourceIndex": 0,
+          "sourceRef": "dependency:lossy",
+          "scope": "dependency",
+          "status": "lossy",
+          "reasonCode": "example.loss",
+          "message": "The dependency contract is a lossy projection."
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": false,
+        "strictEligible": true,
+        "sourceKeys": [
+          "api"
+        ]
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
+            "source": {
+              "kind": "example.coverage@1",
+              "content": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "a represented dependency row may omit dependencyKey",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "onEvent": {}
+        },
+        "dependencies": {
+          "event": {
+            "operation": "onEvent"
+          }
+        },
+        "sources": {
+          "api": {
+            "kind": "example.coverage@1"
+          }
+        }
+      },
+      "entries": [
+        {
+          "sourceIndex": 0,
+          "sourceRef": "dependency:event",
+          "scope": "dependency",
+          "status": "represented"
+        }
+      ],
+      "exhaustive": true,
+      "expected": {
+        "valid": true,
+        "fullyRepresented": true,
+        "strictEligible": true,
+        "sourceKeys": [
+          "api"
+        ]
+      },
+      "request": {
+        "sources": [
+          {
+            "name": "api",
             "source": {
               "kind": "example.coverage@1"
             }
