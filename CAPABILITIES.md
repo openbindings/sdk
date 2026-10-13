@@ -57,8 +57,9 @@ projection. Diagnostic locations map back to original documents. Format remains
 annotation; unknown keywords are carried without inventing assertions.
 
 The bundled resolver gives unique contained declared IDs priority over supplied
-name associations, followed by packaged standards. Supplied aliases and declared
-IDs have equal priority; peers remain ambiguous. Every reached named carrier must
+name associations. A supplied resource, nested `$id` or retrieval alias that claims
+a packaged standard identity conflicts with it instead of replacing it. Supplied
+aliases and declared IDs have equal priority; peers remain ambiguous. Every reached named carrier must
 own its canonical identity, including alias, pointer, direct-child and dynamic
 routes. Conflicting routes conservatively refuse; unused conflicts do not poison
 other contracts or independently named nested resources. Original supplied rows,

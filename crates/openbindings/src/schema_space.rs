@@ -232,7 +232,16 @@ impl SchemaSpace {
         self.names
             .entry(name)
             .and_modify(|selected| {
-                if origin < selected.origin {
+                // Supplied resources (including nested IDs and retrieval aliases)
+                // cannot replace packaged standards. Contained IDs retain priority.
+                if matches!(
+                    (origin, selected.origin),
+                    (ResourceOrigin::Standard, ResourceOrigin::Supplied)
+                        | (ResourceOrigin::Supplied, ResourceOrigin::Standard)
+                ) {
+                    selected.origin = ResourceOrigin::Supplied;
+                    selected.carrier = None;
+                } else if origin < selected.origin {
                     *selected = NameSelection {
                         origin,
                         carrier: Some(resource),
