@@ -303,3 +303,17 @@ function preparedResources(
   metadata.status = "complete";
 }
 void preparedResources;
+
+// S5b review F5 / HD-7: only observable failure kinds belong to this union.
+type DiscoveryFailureKind = Extract<
+  import("../dist/http-discovery.js").DiscoveryResult,
+  { status: "transport-error" | "body-error" }
+>["error"]["kind"];
+const observableDiscoveryFailure: DiscoveryFailureKind = "redirect-policy";
+// @ts-expect-error Timeouts have their own result status, not a failure kind.
+const obsoleteDiscoveryTimeout: DiscoveryFailureKind = "timeout";
+// @ts-expect-error Fetch exposes no positive content-coding failure evidence.
+const inventedDiscoveryDecode: DiscoveryFailureKind = "decode";
+void observableDiscoveryFailure;
+void obsoleteDiscoveryTimeout;
+void inventedDiscoveryDecode;

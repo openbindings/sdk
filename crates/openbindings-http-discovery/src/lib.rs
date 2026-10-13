@@ -40,35 +40,60 @@ impl std::fmt::Display for ConfigurationError {
 }
 impl std::error::Error for ConfigurationError {}
 
-/// Construct the discovery URL without silently discarding a resource path.
-/// Host spelling is preserved. The transport remains responsible for network,
-/// scheme and credential policies at each redirect and connection.
+/// Construct and admit the normalized discovery URL using the same WHATWG parser
+/// as reqwest. HTTP is permitted only for literal IPv4 127/8 or IPv6 ::1.
+/// Credentials, resource paths, query and fragment are refused before I/O.
 pub fn endpoint(origin: &str) -> Result<String, ConfigurationError> {
     let invalid = || ConfigurationError {
         code: "invalid-origin",
         message: "expected an absolute HTTP(S) origin without credentials, resource path, query or fragment",
     };
+    // Retain strict origin framing; do not let a forgiving URL parser erase input.
     let uri = fluent_uri::Uri::parse(origin).map_err(|_| invalid())?;
-    let scheme = uri.scheme().as_str();
-    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
-        return Err(invalid());
-    }
     let authority = uri.authority().ok_or_else(invalid)?;
-    if authority.host().is_empty()
-        || authority.userinfo().is_some()
+    if authority.userinfo().is_some()
         || !matches!(uri.path().as_str(), "" | "/")
         || uri.query().is_some()
         || uri.fragment().is_some()
-        || authority
-            .port()
-            .is_some_and(|p| p.as_str().is_empty() || p.as_str().parse::<u16>().is_err())
+        || origin.contains('\\')
+        || origin.bytes().any(|b| b <= b' ' || b == 127)
+        || authority.port().is_some_and(|p| p.as_str().is_empty())
     {
         return Err(invalid());
     }
-    Ok(format!(
-        "{}://{}{}",
-        scheme.to_ascii_lowercase(),
-        authority.as_str(),
-        WELL_KNOWN_PATH
-    ))
+    let mut url = url::Url::parse(origin).map_err(|_| invalid())?;
+    admit_url(&url).map_err(|_| ConfigurationError {
+        code: "origin-policy",
+        message: "discovery requires HTTPS except for literal IPv4 127/8 or IPv6 ::1, without credentials",
+    })?;
+    url.set_path(WELL_KNOWN_PATH);
+    Ok(url.into())
 }
+
+pub(crate) fn admit_url(url: &url::Url) -> Result<(), &'static str> {
+    if !url.username().is_empty() || url.password().is_some() || url.host().is_none() {
+        return Err("discovery destination must have a host and no credentials");
+    }
+    let loopback = match url.host() {
+        Some(url::Host::Ipv4(ip)) => ip.octets()[0] == 127,
+        Some(url::Host::Ipv6(ip)) => ip == std::net::Ipv6Addr::LOCALHOST,
+        _ => false,
+    };
+    if url.scheme() == "https" || (url.scheme() == "http" && loopback) {
+        Ok(())
+    } else {
+        Err("discovery requires HTTPS except for literal IPv4 127/8 or IPv6 ::1")
+    }
+}
+
+pub(crate) fn admit_redirect(previous: &url::Url, next: &url::Url) -> Result<(), &'static str> {
+    if previous.scheme() == "https" && next.scheme() == "http" {
+        return Err("HTTPS to HTTP discovery redirect refused");
+    }
+    admit_url(next)
+}
+
+/// Default whole-attempt duration in seconds, including acquisition and validation.
+pub const DEFAULT_TIMEOUT_SECONDS: u64 = 30;
+/// Maximum number of redirects followed by the checked native and portable paths.
+pub const MAX_REDIRECTS: usize = 10;

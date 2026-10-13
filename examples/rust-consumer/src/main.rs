@@ -194,10 +194,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Ok(())
     });
-    let http = reqwest::Client::builder()
-        .timeout(Duration::from_secs(5))
-        .build()?;
-    let client = native::Client::new(http.clone(), ClientOptions::default())?;
+    let http = reqwest::Client::builder().timeout(Duration::from_secs(5));
+    let client = native::Client::new(http, ClientOptions::default())?;
     for expected in ["found", "absent", "gated", "version-refused"] {
         let result = client.discover(&origin).await?;
         assert_eq!(
@@ -214,9 +212,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(actual, expected);
     }
     let limited = native::Client::new(
-        http,
+        reqwest::Client::builder(),
         ClientOptions {
             max_document_bytes: 1,
+            ..ClientOptions::default()
         },
     )?;
     let result = limited.discover(&origin).await?;

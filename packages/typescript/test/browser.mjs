@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { chromium, webkit } from "playwright-core";
 import { firstUsePage, firstUseLoadingFailures } from "./first-use-browser.mjs";
+import { discoveryPage } from "./discovery-browser.mjs";
 import { editorPage } from "./editor-browser.mjs";
 import {
   usingExampleFiles,
@@ -181,6 +182,7 @@ try {
         };
       }),
   );
+  await discoveryPage(browser, `http://127.0.0.1:${server.address().port}`);
   const exampleUrl = `http://127.0.0.1:${server.address().port}/examples/first-use.html`;
   const firstUse = await firstUsePage(browser, exampleUrl);
   const loadingFailures = await firstUseLoadingFailures(browser, exampleUrl);

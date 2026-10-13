@@ -1605,13 +1605,15 @@ export type DiscoveryFetch = (
   url: string,
   init: RequestInit,
 ) => Promise<Response>;
-/** One discovery attempt: decoded-body bound, cancellation and optional local Fetch callback. The SDK creates no global fetch override or response cache; the application owns credentials, redirects and network policy. */
+/** One discovery attempt with an SDK-owned timer and AbortController. Fetch follows redirects; browser per-hop mixed-content and private-network policy is browser-owned and invisible to the SDK. */
 export interface DiscoveryOptions {
   /** Decoded-body byte limit; omitted or zero selects 1 MiB. Must be a nonnegative safe integer. Bounds accepted/retained document bytes; Fetch may deliver a larger chunk before overflow is detected, so this does not bound host buffering. */
   maxDocumentBytes?: number;
+  /** Whole-attempt milliseconds, default 30,000. Must be positive and finite; "unbounded" explicitly omits the deadline. Zero is refused. */
+  timeoutMs?: number | "unbounded";
   /** Caller cancellation; aborts I/O and is checked around synchronous assessment. */
   signal?: AbortSignal;
-  /** Local asynchronous Fetch-compatible callback; omitted uses host fetch. Configure credentials, redirects and network restrictions here. */
+  /** Local asynchronous Fetch-compatible callback; omitted uses host fetch. Honor redirect: "follow", cancellation and the supplied normalized URL; configure credentials and connection restrictions here. */
   fetch?: DiscoveryFetch;
 }
 /** Observed response facts retained even when body reading or document assessment fails. The final URL is metadata only, not an implicit schema base. */
@@ -1673,15 +1675,19 @@ export type DiscoveryResult = (
       /** Result discriminant; narrow this before reading branch-specific fields. */
       status: "cancelled";
       /** Observed cancellation classification. */
-      reason: "aborted" | "timeout";
+      reason: "aborted";
+    }
+  | {
+      /** Whole-attempt or positively identified host deadline expired. */
+      status: "timeout";
     }
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
       status: "transport-error" | "body-error";
       /** Structured expected failure for this branch. */
       error: {
-        /** Stable category describing the observed value or failure. */
-        kind: "network" | "timeout" | "other";
+        /** Observable acquisition category. Timeouts have their own status; Fetch exposes no decode diagnosis. */
+        kind: "network" | "redirect-policy" | "other";
         /** Human-readable explanation; use structured discriminants/codes for logic. */
         message: string;
       };
@@ -1721,7 +1727,11 @@ function interruptible<T>(
 }
 /** Retrieve decoded bytes, then assess them in Rust. Only 404 means absence.
  * Returned document handles belong to the caller and must be disposed.
- * AbortSignal cancels I/O; synchronous Wasm assessment requires a worker to be interruptible.
+ * The SDK timer covers headers, followed redirects, decoded reads and validation boundaries.
+ * Caller cancellation wins a same-observation tie; the first observed cause is retained.
+ * Synchronous Wasm assessment requires a Worker and responsive supervisor for a hard latency bound.
+ * Fetch uses redirect: "follow". Only the final URL is observable: per-hop mixed-content
+ * and private-network rules belong to the browser, and an HTTPS final URL proves no hop history.
  */
 export async function discover(
   origin: string,
@@ -1736,34 +1746,74 @@ export async function discover(
       "invalid-byte-limit",
       "maxDocumentBytes must be a nonnegative safe integer.",
     );
-  const limit = configured || policy.defaultMaxDocumentBytes,
-    controller = new AbortController(),
-    signal = controller.signal;
-  const cancel = () => controller.abort(options.signal?.reason);
-  const cancellation = (): DiscoveryResult => ({
-    status: "cancelled",
-    reason:
-      options.signal?.reason?.name === "TimeoutError" ? "timeout" : "aborted",
-  });
-  if (options.signal?.aborted) return cancellation();
-  options.signal?.addEventListener("abort", cancel, { once: true });
+  const timeout = options.timeoutMs ?? 30_000;
+  if (timeout !== "unbounded" && (!Number.isFinite(timeout) || timeout <= 0))
+    throw new SdkError(
+      "invalid-timeout",
+      "timeoutMs must be positive and finite, or explicitly unbounded.",
+    );
   const fetcher = options.fetch ?? globalThis.fetch?.bind(globalThis);
-  if (!fetcher) {
-    options.signal?.removeEventListener("abort", cancel);
+  if (!fetcher)
     throw new SdkError(
       "fetch-unavailable",
       "Supply a Fetch callback in this host.",
     );
-  }
+  const limit = configured || policy.defaultMaxDocumentBytes,
+    controller = new AbortController(),
+    signal = controller.signal,
+    deadline = timeout === "unbounded" ? Infinity : performance.now() + timeout;
+  if (timeout !== "unbounded" && !Number.isFinite(deadline))
+    throw new SdkError(
+      "invalid-timeout",
+      "timeoutMs exceeds the host clock range.",
+    );
+  let cause: "cancelled" | "timeout" | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const cancellation = (): DiscoveryResult =>
+    cause === "timeout"
+      ? { status: "timeout" }
+      : { status: "cancelled", reason: "aborted" };
+  const stop = (next: "cancelled" | "timeout") => {
+    cause ??= next;
+    controller.abort();
+  };
+  const check = () => {
+    if (!cause) {
+      if (options.signal?.aborted)
+        stop(
+          options.signal.reason?.name === "TimeoutError"
+            ? "timeout"
+            : "cancelled",
+        );
+      else if (performance.now() >= deadline) stop("timeout");
+    }
+    return cause !== undefined;
+  };
+  const cancel = () => {
+    check();
+  };
+  if (check()) return cancellation();
+  options.signal?.addEventListener("abort", cancel, { once: true });
+  const schedule = () => {
+    timer = setTimeout(
+      () => {
+        if (!check()) schedule();
+      },
+      Math.min(2_147_483_647, Math.max(0, deadline - performance.now())),
+    );
+  };
+  if (timeout !== "unbounded") schedule();
   let metadata: DiscoveryMetadata | undefined,
     body: Uint8Array | undefined,
     reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   let phase: "transport" | "body" | "assessment" = "transport";
   try {
+    if (check()) return cancellation();
     const pending = fetcher(requestedUrl, {
       method: "GET",
       headers: { Accept: policy.accept },
       signal,
+      redirect: "follow",
     });
     const response = await interruptible(
       Promise.resolve(pending).then((response) => {
@@ -1781,6 +1831,46 @@ export async function discover(
       responseType: response.type,
       headers: Object.freeze(Object.fromEntries(response.headers.entries())),
     };
+    if (check()) {
+      void response.body?.cancel().catch(() => {});
+      return { ...cancellation(), metadata };
+    }
+    const policyRefusal = (message: string): DiscoveryResult => {
+      void response.body?.cancel().catch(() => {});
+      return {
+        status: "transport-error",
+        metadata,
+        error: { kind: "redirect-policy", message },
+      };
+    };
+    if (response.type === "opaque" || response.type === "opaqueredirect")
+      return policyRefusal(
+        "Discovery policy cannot be established for an opaque response.",
+      );
+    if (response.url) {
+      let final: URL;
+      try {
+        final = new URL(response.url);
+      } catch {
+        return policyRefusal(
+          "Final response URL cannot establish discovery policy.",
+        );
+      }
+      const loopback =
+        final.hostname === "[::1]" ||
+        /^127\.\d+\.\d+\.\d+$/.test(final.hostname);
+      if (
+        final.username ||
+        final.password ||
+        (final.protocol !== "https:" &&
+          !(final.protocol === "http:" && loopback)) ||
+        (new URL(requestedUrl).protocol === "https:" &&
+          final.protocol === "http:")
+      )
+        return policyRefusal(
+          "Final response URL violates discovery destination or downgrade policy.",
+        );
+    }
     if (response.status !== 200) {
       void response.body?.cancel().catch(() => {});
       return {
@@ -1799,11 +1889,17 @@ export async function discover(
     if (response.body) {
       reader = response.body.getReader();
       while (true) {
+        if (check()) return { ...cancellation(), metadata };
         const part = await interruptible(reader.read(), signal);
+        // F3: successful EOF completes the body before the following stop check.
         if (part.done) break;
+        if (check()) return { ...cancellation(), metadata };
         const chunk = part.value;
         if (!(chunk instanceof Uint8Array))
-          throw new TypeError("Fetch body must yield Uint8Array chunks.");
+          throw new SdkError(
+            "invalid-body-chunk",
+            "Fetch body must yield Uint8Array chunks.",
+          );
         if (chunk.byteLength > limit - length)
           return { status: "body-limit", limit, metadata };
         chunks.push(chunk.slice());
@@ -1816,7 +1912,7 @@ export async function discover(
       body.set(chunk, offset);
       offset += chunk.byteLength;
     }
-    if (signal.aborted) return { ...cancellation(), metadata, body };
+    if (check()) return { ...cancellation(), metadata, body };
     phase = "assessment";
     const assessed = new wasm.WasmDiscovery(body);
     try {
@@ -1833,29 +1929,37 @@ export async function discover(
         document = undefined;
         if (validation.status !== "validated")
           throw new Error("Discovery invariant: conformance changed.");
+        if (check()) {
+          validation.document.dispose();
+          return { ...cancellation(), metadata, body };
+        }
         return { ...result, document: validation.document, metadata, body };
+      }
+      if (check()) {
+        document?.dispose();
+        return { ...cancellation(), metadata, body };
       }
       return { ...result, ...(document ? { document } : {}), metadata, body };
     } finally {
       assessed.free();
     }
   } catch (error) {
-    if (error === aborted || signal.aborted)
+    if (check() || error === aborted)
       return { ...cancellation(), metadata, body };
+    if (error instanceof Error && error.name === "TimeoutError")
+      return { status: "timeout", metadata, body };
     if (phase === "assessment") throw error;
     return {
       status: metadata ? "body-error" : "transport-error",
       metadata,
       body,
       error: {
-        kind:
-          error instanceof Error && error.name === "TimeoutError"
-            ? "timeout"
-            : "network",
+        kind: error instanceof SdkError ? "other" : "network",
         message: error instanceof Error ? error.message : "Fetch failed",
       },
     };
   } finally {
+    if (timer !== undefined) clearTimeout(timer);
     options.signal?.removeEventListener("abort", cancel);
     if (reader) {
       void reader.cancel().catch(() => {});
@@ -1866,30 +1970,25 @@ export async function discover(
 }
 /** Disposable immutable copy of a proved discovery document. Creates no listener or server; authorization and request routing remain caller-owned. Existing publication remains usable after the original proof is disposed. */
 export class DiscoveryPublication extends Managed {
-  /** Copy a ValidatedDocument into an independently owned publication. allowOrigin defaults to omission; accepts *, null or one ASCII URI origin with a scheme and host, without credentials/path/query/fragment. Schemes are not restricted to HTTP(S). Invalid configuration throws; the source proof remains caller-owned. */
+  /** Copy a ValidatedDocument into an independently owned publication. allowOrigin defaults to *; accepts empty for omission, null or an exact ASCII serialized tuple origin. Opaque schemes and noncanonical spellings are refused. Invalid configuration throws; the source proof remains caller-owned. */
   constructor(
     document: ValidatedDocument,
     options: {
-      /** Optional CORS allow-origin spelling; empty/omitted omits the header. Authentication, credentials and preflight remain application-owned. */
+      /** Optional CORS allow-origin spelling; omitted emits *, empty omits the header. Authentication, credentials and preflight remain application-owned. */
       allowOrigin?: string;
     } = {},
   ) {
     requireReady();
-    const allow = options.allowOrigin ?? "";
+    const allow = options.allowOrigin ?? "*";
     scalar(allow);
     super(
       sdkCall(() => new wasm.WasmPublication(documentRaw(document), allow)),
     );
   }
-  /** Create a detached Response for the decoded route and method. GET returns exact bytes; HEAD returns no body with the original Content-Length; unsupported route is 404 and unsupported method 405. Creates no server and does not perform authentication or preflight handling. */
+  /** Create a detached Response for the exact route and method, preserving reserved percent escapes. GET returns exact bytes; HEAD returns no body with the original Content-Length; unsupported route is 404 and unsupported method 405. Creates no server and does not perform authentication or preflight handling. */
   respond(request: Request): Response {
     const url = new URL(request.url);
-    let path: string;
-    try {
-      path = decodeURIComponent(url.pathname);
-    } catch {
-      path = "";
-    }
+    const path = url.pathname;
     const result = decode<{
       status: number;
       headers: { name: string; value: number[] }[];
