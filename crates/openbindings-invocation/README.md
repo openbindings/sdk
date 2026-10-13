@@ -11,6 +11,13 @@ guarantees, not requirements imposed on every interface adopter. Implementations
 can use different internal scheduling or recovery while providing the described
 operation. Frame-schema tests and SDK lifecycle-policy tests are distinct evidence.
 
+A binding invoker executes a source and binding supplied by value under their
+exact kind. An operation invoker resolves caller-owned selection in a document,
+checks declared value contracts, and drives that binding invoker. Implement
+`binding::BindingInvoker`; callers query kind support, exchange input and output
+values through `binding::Invoker`, or address document operations through
+`operation::Invoker`.
+
 An optional Rust companion for **binding and operation invocation**: a provider implements one
 ordinary asynchronous job; a checked `binding::Invoker` supplies the bounded
 input/output lifetime. The same path handles zero-value, unary, server-streaming,
@@ -87,7 +94,15 @@ The associated future may borrow configuration and need not be `Send` or
 asynchronous provider concise. The checked native handle is `Send` when its
 provider borrows and future permit it. `&P`, `Arc<P>` and local `Rc<P>` forward
 provider behavior. Preflight defaults to no prediction, so an invocation-only
-provider needs no preflight implementation.
+provider needs no preflight implementation. `preflight` and
+`preflight_with_control` perform admission and return no prediction. To provide
+advisory work, implement the optional `binding::BindingPreflight` trait with a
+`Preflight<'a>` associated future, then call `preflight_with_provider` or
+`preflight_with_provider_and_control` on either facade. This explicit opt-in keeps
+invoke-only providers unchanged. Generic callers may require
+`for<'a> P::Preflight<'a>: Send` with `P: Sync`; local `Rc` providers need neither
+bound. The hook returns `Ok(None)` when it makes no prediction. Invocation never
+calls it.
 
 For a no-input operation, drop or close input and read output through terminal.
 For a no-output operation, read to normal exhaustion. For a unary result, check
@@ -136,7 +151,7 @@ exists, `Request::ordered("name", &["preferred", "fallback"])` for caller policy
 or `Request::binding("exact-key")` to select directly. Every ordered key must
 belong to the operation, including entries after the first supported one.
 Unsupported automatic/ordered candidates are skipped; an unsupported explicit
-binding refuses. Metadata and provider registration order never choose a binding.
+binding yields `ERR_BINDING_NOT_FOUND` in invocation and preflight. Metadata and provider registration order never choose a binding.
 Use `.with_context(&context)` to forward one opaque object unchanged.
 
 The retained snapshot need not have a whole-document conformance certificate.
@@ -268,7 +283,7 @@ Pinned authority: interfaces `f158f4f345301668ccb8fd555586b04ca823e732`;
 | Input/output frames | Owned native endpoints and terminal sequence; no production frame transport. |
 | `input_closed` | `Input::is_closed`, `closed`, `Control::input_is_closed`; nonterminal. |
 | `complete` / `error` | Job return, fallible output sequence and owned outcome snapshot. |
-| `preflightBinding` | `Invoker::preflight`; no-prediction default, no operation I/O or dispatch. |
+| `preflightBinding` | `Invoker::preflight` for no prediction, or `preflight_with_provider` for the optional hook; no operation I/O or dispatch. |
 | `invokeOperation`, `preflightOperation` | `operation::Invoker` with `operation::Request`; shared lifecycle and explicit evaluator. |
 | Declared schema failures | Code-only portable error plus local `validation_failure()` evidence. |
 | Context/effect semantics | Checked structure plus documented provider obligations; no resolver. |
@@ -290,3 +305,10 @@ Catalog pipeline, and the expanded Node/Wasm probe qualify the operation layer.
 The resource probe records warmed binding-versus-operation overhead and owner
 release; it does not claim HTTP parity, browser memory bounds, or arbitrary schema
 throughput.
+
+Provider errors using operation-invoker-owned resolution or validation codes are
+refused at the provider boundary as `ERR_EXECUTION_FAILED`, without their data.
+Invocation retains a value-free `reserved-provider-code` boundary finding. The
+facade's own selection and validation errors retain their reserved codes and
+local evidence. `InvocationError` displays its code in both Display and Debug;
+application data remains redacted.

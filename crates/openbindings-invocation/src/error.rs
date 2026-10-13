@@ -162,12 +162,30 @@ impl InvocationError {
             data: None,
         }
     }
+
+    // RO-8: only call this on an error returned by a binding provider. Facade
+    // selection and validation errors legitimately use these reserved codes.
+    pub(crate) fn admit_provider_code(self) -> Result<Self, BoundaryError> {
+        if matches!(
+            self.code(),
+            "ERR_OPERATION_NOT_FOUND"
+                | "ERR_BINDING_NOT_FOUND"
+                | "ERR_BINDING_SELECTION_REQUIRED"
+                | "ERR_UNKNOWN_SOURCE"
+                | "ERR_OPERATION_VALIDATION_FAILED"
+                | "ERR_SCHEMA_UNRESOLVED"
+        ) {
+            Err(BoundaryError::new("reserved-provider-code", "/error/code"))
+        } else {
+            Ok(self)
+        }
+    }
 }
 
 impl fmt::Debug for InvocationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("InvocationError")
-            .field("code", &"<redacted>")
+            .field("code", &self.code)
             .field("data_present", &self.data.is_some())
             .finish()
     }
@@ -175,7 +193,7 @@ impl fmt::Debug for InvocationError {
 
 impl fmt::Display for InvocationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("invocation completed unsuccessfully")
+        write!(f, "invocation completed unsuccessfully: {}", self.code)
     }
 }
 
