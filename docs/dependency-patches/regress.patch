@@ -120,7 +120,7 @@
 -memchr = { version = "2.4.0", default-features = false }
 --- /dev/null
 +++ b/OPENBINDINGS-PATCH.md
-@@ -0,0 +1,11 @@
+@@ -0,0 +1,27 @@
 +# Internal dependency fork
 +
 +Based on `regress-0.12.0`; upstream license and notices are retained.
@@ -132,6 +132,22 @@
 +The repository maintenance contract is DEPENDENCY-MAINTENANCE.md. Original
 +upstream identity and manifest are retained as UPSTREAM-VCS.json and
 +UPSTREAM-Cargo.toml; these names avoid Cargo-reserved packaging metadata.
++
++S3 evaluator correctness (2026-10-13): `src/classicalbacktrack.rs` preserves
++zero repetitions when a single-character loop's atom cannot be represented by
++the input element type (notably lone surrogates on scalar strings). Lazy loop
++extension likewise consumes nothing. Positive minima still fail; UTF-16 input
++can still represent surrogate code units. Both interpreter budget exits clear
++the backtrack stack to its exhaustion sentinel, preserving debug invariants.
++
++`tests/tests.rs` directly exercises budget interruption without `catch_unwind`
++and checks every row of `tests/fixtures/lone-surrogate.tsv`. Regenerate the 470
++rows with `node tests/fixtures/lone-surrogate.mjs`; expectations were computed
++with Node v22.19.0 / V8 12.4.254.21-node.29, `new RegExp(pattern, "u")`.
++Coverage includes zero/positive minima, lazy quantifiers, classes, alternation,
++lookbehind, paired surrogates, and braced Unicode escapes. The SDK also checks
++each fixture row through both schema pattern keywords. No upstream upgrade is
++included; these are local correctness and budget-invariant repairs.
 --- /dev/null
 +++ b/UPSTREAM-Cargo.toml
 @@ -0,0 +1,43 @@
@@ -210,27 +226,53 @@
              f.write_str("m")?;
 --- a/src/classicalbacktrack.rs
 +++ b/src/classicalbacktrack.rs
-@@ -500,6 +500,9 @@
+@@ -243,7 +243,11 @@
+     ) -> Option<(Input::Position, Input::Position)> {
+         match re.insns.iat(ip + 1) {
+             &Insn::Char(c) => {
+-                let c = <<Input as InputIndexer>::Element as ElementType>::try_from(c)?;
++                let Some(c) = <<Input as InputIndexer>::Element as ElementType>::try_from(c) else {
++                    // A lone surrogate cannot match scalar input, but zero
++                    // repetitions still succeed without consuming anything.
++                    return (min == 0).then_some((pos, pos));
++                };
+                 Self::run_scm_loop_impl(input, pos, min, max, dir, scm::Char { c })
+             }
+             &Insn::Bracket(idx) => {
+@@ -316,7 +320,9 @@
+     ) -> Option<Input::Position> {
+         let result = match re.insns.iat(ip + 1) {
+             &Insn::Char(c) => {
+-                let c = <<Input as InputIndexer>::Element as ElementType>::try_from(c)?;
++                let Some(c) = <<Input as InputIndexer>::Element as ElementType>::try_from(c) else {
++                    return Some(pos);
++                };
+                 Self::compute_max_pos(input, pos, limit, dir, scm::Char { c })
+             }
+             &Insn::Bracket(idx) => {
+@@ -500,6 +506,10 @@
          _dir: Dir,
      ) -> bool {
          loop {
 +            if !crate::ob_budget::tick() {
++                self.bts.truncate(1);
 +                return false;
 +            }
              // We always have a single Exhausted instruction backstopping our stack,
              // so we do not need to check for empty bts.
              debug_assert!(!self.bts.is_empty(), "Backtrack stack should not be empty");
-@@ -643,6 +646,9 @@
+@@ -643,6 +653,10 @@
          // to.
          #[allow(clippy::never_loop)]
          'nextinsn: loop {
 +            if !crate::ob_budget::tick() {
++                self.bts.truncate(1);
 +                return None;
 +            }
              'backtrack: loop {
                  // Helper macro to either increment ip and go to the next insn, or backtrack.
                  macro_rules! next_or_bt {
-@@ -1071,6 +1077,9 @@
+@@ -1071,6 +1085,9 @@
      ) -> Option<Match> {
          let inp = self.input;
          loop {
@@ -865,3 +907,563 @@
                      let Some(value) =
                          unicode_property_from_str(&buffer, name, self.flags.unicode_sets)
                      else {
+--- /dev/null
++++ b/tests/fixtures/lone-surrogate.mjs
+@@ -0,0 +1,43 @@
++// Regenerate from Node's ECMA-262 u-mode matcher, never from regress.
++// Run: node tests/fixtures/lone-surrogate.mjs (from the fork directory).
++import { writeFileSync } from "node:fs";
++
++const rows = ["# id\tpattern\tinput\tmatches (Node RegExp u)"];
++const inputs = ["", "abc", "a", "😀", "abc😀"];
++const add = (id, pattern) => {
++  const regex = new RegExp(pattern, "u");
++  inputs.forEach((input, i) =>
++    rows.push(`${id}/${i}\t${pattern}\t${input}\t${regex.test(input)}`),
++  );
++};
++for (const [name, escape] of [
++  ["high", String.raw`\ud83d`],
++  ["low", String.raw`\ude00`],
++  ["braced-high", String.raw`\u{d83d}`],
++  ["braced-low", String.raw`\u{de00}`],
++]) {
++  for (const [label, quantifier] of [
++    ["optional", "?"],
++    ["star", "*"],
++    ["zero-bounded", "{0,2}"],
++    ["plus", "+"],
++    ["positive-bounded", "{1,2}"],
++    ["optional-lazy", "??"],
++    ["star-lazy", "*?"],
++    ["zero-bounded-lazy", "{0,2}?"],
++  ]) {
++    add(`${name}/${label}`, `^[a-z]*${escape}${quantifier}$`);
++    add(`${name}/class-${label}`, `^[a-z]*[${escape}]${quantifier}$`);
++  }
++  add(`${name}/bare`, `^${escape}$`);
++  add(`${name}/unanchored-star`, `${escape}*`);
++  add(`${name}/mixed-class`, `^[a${escape}]+$`);
++  add(`${name}/negated-class`, `^[^${escape}]+$`);
++  add(`${name}/alternate`, `^(?:${escape}|abc)$`);
++  add(`${name}/alternate-optional`, `^(?:${escape}|abc)?$`);
++  add(`${name}/lookbehind`, `(?<=${escape}?)abc$`);
++}
++add("paired", String.raw`^\ud83d\ude00$`);
++add("scalar-braced", String.raw`^\u{1f600}$`);
++writeFileSync(new URL("lone-surrogate.tsv", import.meta.url), `${rows.join("\n")}\n`);
++console.log(`${rows.length - 1} cases generated by Node ${process.version}, V8 ${process.versions.v8}`);
+--- /dev/null
++++ b/tests/fixtures/lone-surrogate.tsv
+@@ -0,0 +1,471 @@
++# id	pattern	input	matches (Node RegExp u)
++high/optional/0	^[a-z]*\ud83d?$		true
++high/optional/1	^[a-z]*\ud83d?$	abc	true
++high/optional/2	^[a-z]*\ud83d?$	a	true
++high/optional/3	^[a-z]*\ud83d?$	😀	false
++high/optional/4	^[a-z]*\ud83d?$	abc😀	false
++high/class-optional/0	^[a-z]*[\ud83d]?$		true
++high/class-optional/1	^[a-z]*[\ud83d]?$	abc	true
++high/class-optional/2	^[a-z]*[\ud83d]?$	a	true
++high/class-optional/3	^[a-z]*[\ud83d]?$	😀	false
++high/class-optional/4	^[a-z]*[\ud83d]?$	abc😀	false
++high/star/0	^[a-z]*\ud83d*$		true
++high/star/1	^[a-z]*\ud83d*$	abc	true
++high/star/2	^[a-z]*\ud83d*$	a	true
++high/star/3	^[a-z]*\ud83d*$	😀	false
++high/star/4	^[a-z]*\ud83d*$	abc😀	false
++high/class-star/0	^[a-z]*[\ud83d]*$		true
++high/class-star/1	^[a-z]*[\ud83d]*$	abc	true
++high/class-star/2	^[a-z]*[\ud83d]*$	a	true
++high/class-star/3	^[a-z]*[\ud83d]*$	😀	false
++high/class-star/4	^[a-z]*[\ud83d]*$	abc😀	false
++high/zero-bounded/0	^[a-z]*\ud83d{0,2}$		true
++high/zero-bounded/1	^[a-z]*\ud83d{0,2}$	abc	true
++high/zero-bounded/2	^[a-z]*\ud83d{0,2}$	a	true
++high/zero-bounded/3	^[a-z]*\ud83d{0,2}$	😀	false
++high/zero-bounded/4	^[a-z]*\ud83d{0,2}$	abc😀	false
++high/class-zero-bounded/0	^[a-z]*[\ud83d]{0,2}$		true
++high/class-zero-bounded/1	^[a-z]*[\ud83d]{0,2}$	abc	true
++high/class-zero-bounded/2	^[a-z]*[\ud83d]{0,2}$	a	true
++high/class-zero-bounded/3	^[a-z]*[\ud83d]{0,2}$	😀	false
++high/class-zero-bounded/4	^[a-z]*[\ud83d]{0,2}$	abc😀	false
++high/plus/0	^[a-z]*\ud83d+$		false
++high/plus/1	^[a-z]*\ud83d+$	abc	false
++high/plus/2	^[a-z]*\ud83d+$	a	false
++high/plus/3	^[a-z]*\ud83d+$	😀	false
++high/plus/4	^[a-z]*\ud83d+$	abc😀	false
++high/class-plus/0	^[a-z]*[\ud83d]+$		false
++high/class-plus/1	^[a-z]*[\ud83d]+$	abc	false
++high/class-plus/2	^[a-z]*[\ud83d]+$	a	false
++high/class-plus/3	^[a-z]*[\ud83d]+$	😀	false
++high/class-plus/4	^[a-z]*[\ud83d]+$	abc😀	false
++high/positive-bounded/0	^[a-z]*\ud83d{1,2}$		false
++high/positive-bounded/1	^[a-z]*\ud83d{1,2}$	abc	false
++high/positive-bounded/2	^[a-z]*\ud83d{1,2}$	a	false
++high/positive-bounded/3	^[a-z]*\ud83d{1,2}$	😀	false
++high/positive-bounded/4	^[a-z]*\ud83d{1,2}$	abc😀	false
++high/class-positive-bounded/0	^[a-z]*[\ud83d]{1,2}$		false
++high/class-positive-bounded/1	^[a-z]*[\ud83d]{1,2}$	abc	false
++high/class-positive-bounded/2	^[a-z]*[\ud83d]{1,2}$	a	false
++high/class-positive-bounded/3	^[a-z]*[\ud83d]{1,2}$	😀	false
++high/class-positive-bounded/4	^[a-z]*[\ud83d]{1,2}$	abc😀	false
++high/optional-lazy/0	^[a-z]*\ud83d??$		true
++high/optional-lazy/1	^[a-z]*\ud83d??$	abc	true
++high/optional-lazy/2	^[a-z]*\ud83d??$	a	true
++high/optional-lazy/3	^[a-z]*\ud83d??$	😀	false
++high/optional-lazy/4	^[a-z]*\ud83d??$	abc😀	false
++high/class-optional-lazy/0	^[a-z]*[\ud83d]??$		true
++high/class-optional-lazy/1	^[a-z]*[\ud83d]??$	abc	true
++high/class-optional-lazy/2	^[a-z]*[\ud83d]??$	a	true
++high/class-optional-lazy/3	^[a-z]*[\ud83d]??$	😀	false
++high/class-optional-lazy/4	^[a-z]*[\ud83d]??$	abc😀	false
++high/star-lazy/0	^[a-z]*\ud83d*?$		true
++high/star-lazy/1	^[a-z]*\ud83d*?$	abc	true
++high/star-lazy/2	^[a-z]*\ud83d*?$	a	true
++high/star-lazy/3	^[a-z]*\ud83d*?$	😀	false
++high/star-lazy/4	^[a-z]*\ud83d*?$	abc😀	false
++high/class-star-lazy/0	^[a-z]*[\ud83d]*?$		true
++high/class-star-lazy/1	^[a-z]*[\ud83d]*?$	abc	true
++high/class-star-lazy/2	^[a-z]*[\ud83d]*?$	a	true
++high/class-star-lazy/3	^[a-z]*[\ud83d]*?$	😀	false
++high/class-star-lazy/4	^[a-z]*[\ud83d]*?$	abc😀	false
++high/zero-bounded-lazy/0	^[a-z]*\ud83d{0,2}?$		true
++high/zero-bounded-lazy/1	^[a-z]*\ud83d{0,2}?$	abc	true
++high/zero-bounded-lazy/2	^[a-z]*\ud83d{0,2}?$	a	true
++high/zero-bounded-lazy/3	^[a-z]*\ud83d{0,2}?$	😀	false
++high/zero-bounded-lazy/4	^[a-z]*\ud83d{0,2}?$	abc😀	false
++high/class-zero-bounded-lazy/0	^[a-z]*[\ud83d]{0,2}?$		true
++high/class-zero-bounded-lazy/1	^[a-z]*[\ud83d]{0,2}?$	abc	true
++high/class-zero-bounded-lazy/2	^[a-z]*[\ud83d]{0,2}?$	a	true
++high/class-zero-bounded-lazy/3	^[a-z]*[\ud83d]{0,2}?$	😀	false
++high/class-zero-bounded-lazy/4	^[a-z]*[\ud83d]{0,2}?$	abc😀	false
++high/bare/0	^\ud83d$		false
++high/bare/1	^\ud83d$	abc	false
++high/bare/2	^\ud83d$	a	false
++high/bare/3	^\ud83d$	😀	false
++high/bare/4	^\ud83d$	abc😀	false
++high/unanchored-star/0	\ud83d*		true
++high/unanchored-star/1	\ud83d*	abc	true
++high/unanchored-star/2	\ud83d*	a	true
++high/unanchored-star/3	\ud83d*	😀	true
++high/unanchored-star/4	\ud83d*	abc😀	true
++high/mixed-class/0	^[a\ud83d]+$		false
++high/mixed-class/1	^[a\ud83d]+$	abc	false
++high/mixed-class/2	^[a\ud83d]+$	a	true
++high/mixed-class/3	^[a\ud83d]+$	😀	false
++high/mixed-class/4	^[a\ud83d]+$	abc😀	false
++high/negated-class/0	^[^\ud83d]+$		false
++high/negated-class/1	^[^\ud83d]+$	abc	true
++high/negated-class/2	^[^\ud83d]+$	a	true
++high/negated-class/3	^[^\ud83d]+$	😀	true
++high/negated-class/4	^[^\ud83d]+$	abc😀	true
++high/alternate/0	^(?:\ud83d|abc)$		false
++high/alternate/1	^(?:\ud83d|abc)$	abc	true
++high/alternate/2	^(?:\ud83d|abc)$	a	false
++high/alternate/3	^(?:\ud83d|abc)$	😀	false
++high/alternate/4	^(?:\ud83d|abc)$	abc😀	false
++high/alternate-optional/0	^(?:\ud83d|abc)?$		true
++high/alternate-optional/1	^(?:\ud83d|abc)?$	abc	true
++high/alternate-optional/2	^(?:\ud83d|abc)?$	a	false
++high/alternate-optional/3	^(?:\ud83d|abc)?$	😀	false
++high/alternate-optional/4	^(?:\ud83d|abc)?$	abc😀	false
++high/lookbehind/0	(?<=\ud83d?)abc$		false
++high/lookbehind/1	(?<=\ud83d?)abc$	abc	true
++high/lookbehind/2	(?<=\ud83d?)abc$	a	false
++high/lookbehind/3	(?<=\ud83d?)abc$	😀	false
++high/lookbehind/4	(?<=\ud83d?)abc$	abc😀	false
++low/optional/0	^[a-z]*\ude00?$		true
++low/optional/1	^[a-z]*\ude00?$	abc	true
++low/optional/2	^[a-z]*\ude00?$	a	true
++low/optional/3	^[a-z]*\ude00?$	😀	false
++low/optional/4	^[a-z]*\ude00?$	abc😀	false
++low/class-optional/0	^[a-z]*[\ude00]?$		true
++low/class-optional/1	^[a-z]*[\ude00]?$	abc	true
++low/class-optional/2	^[a-z]*[\ude00]?$	a	true
++low/class-optional/3	^[a-z]*[\ude00]?$	😀	false
++low/class-optional/4	^[a-z]*[\ude00]?$	abc😀	false
++low/star/0	^[a-z]*\ude00*$		true
++low/star/1	^[a-z]*\ude00*$	abc	true
++low/star/2	^[a-z]*\ude00*$	a	true
++low/star/3	^[a-z]*\ude00*$	😀	false
++low/star/4	^[a-z]*\ude00*$	abc😀	false
++low/class-star/0	^[a-z]*[\ude00]*$		true
++low/class-star/1	^[a-z]*[\ude00]*$	abc	true
++low/class-star/2	^[a-z]*[\ude00]*$	a	true
++low/class-star/3	^[a-z]*[\ude00]*$	😀	false
++low/class-star/4	^[a-z]*[\ude00]*$	abc😀	false
++low/zero-bounded/0	^[a-z]*\ude00{0,2}$		true
++low/zero-bounded/1	^[a-z]*\ude00{0,2}$	abc	true
++low/zero-bounded/2	^[a-z]*\ude00{0,2}$	a	true
++low/zero-bounded/3	^[a-z]*\ude00{0,2}$	😀	false
++low/zero-bounded/4	^[a-z]*\ude00{0,2}$	abc😀	false
++low/class-zero-bounded/0	^[a-z]*[\ude00]{0,2}$		true
++low/class-zero-bounded/1	^[a-z]*[\ude00]{0,2}$	abc	true
++low/class-zero-bounded/2	^[a-z]*[\ude00]{0,2}$	a	true
++low/class-zero-bounded/3	^[a-z]*[\ude00]{0,2}$	😀	false
++low/class-zero-bounded/4	^[a-z]*[\ude00]{0,2}$	abc😀	false
++low/plus/0	^[a-z]*\ude00+$		false
++low/plus/1	^[a-z]*\ude00+$	abc	false
++low/plus/2	^[a-z]*\ude00+$	a	false
++low/plus/3	^[a-z]*\ude00+$	😀	false
++low/plus/4	^[a-z]*\ude00+$	abc😀	false
++low/class-plus/0	^[a-z]*[\ude00]+$		false
++low/class-plus/1	^[a-z]*[\ude00]+$	abc	false
++low/class-plus/2	^[a-z]*[\ude00]+$	a	false
++low/class-plus/3	^[a-z]*[\ude00]+$	😀	false
++low/class-plus/4	^[a-z]*[\ude00]+$	abc😀	false
++low/positive-bounded/0	^[a-z]*\ude00{1,2}$		false
++low/positive-bounded/1	^[a-z]*\ude00{1,2}$	abc	false
++low/positive-bounded/2	^[a-z]*\ude00{1,2}$	a	false
++low/positive-bounded/3	^[a-z]*\ude00{1,2}$	😀	false
++low/positive-bounded/4	^[a-z]*\ude00{1,2}$	abc😀	false
++low/class-positive-bounded/0	^[a-z]*[\ude00]{1,2}$		false
++low/class-positive-bounded/1	^[a-z]*[\ude00]{1,2}$	abc	false
++low/class-positive-bounded/2	^[a-z]*[\ude00]{1,2}$	a	false
++low/class-positive-bounded/3	^[a-z]*[\ude00]{1,2}$	😀	false
++low/class-positive-bounded/4	^[a-z]*[\ude00]{1,2}$	abc😀	false
++low/optional-lazy/0	^[a-z]*\ude00??$		true
++low/optional-lazy/1	^[a-z]*\ude00??$	abc	true
++low/optional-lazy/2	^[a-z]*\ude00??$	a	true
++low/optional-lazy/3	^[a-z]*\ude00??$	😀	false
++low/optional-lazy/4	^[a-z]*\ude00??$	abc😀	false
++low/class-optional-lazy/0	^[a-z]*[\ude00]??$		true
++low/class-optional-lazy/1	^[a-z]*[\ude00]??$	abc	true
++low/class-optional-lazy/2	^[a-z]*[\ude00]??$	a	true
++low/class-optional-lazy/3	^[a-z]*[\ude00]??$	😀	false
++low/class-optional-lazy/4	^[a-z]*[\ude00]??$	abc😀	false
++low/star-lazy/0	^[a-z]*\ude00*?$		true
++low/star-lazy/1	^[a-z]*\ude00*?$	abc	true
++low/star-lazy/2	^[a-z]*\ude00*?$	a	true
++low/star-lazy/3	^[a-z]*\ude00*?$	😀	false
++low/star-lazy/4	^[a-z]*\ude00*?$	abc😀	false
++low/class-star-lazy/0	^[a-z]*[\ude00]*?$		true
++low/class-star-lazy/1	^[a-z]*[\ude00]*?$	abc	true
++low/class-star-lazy/2	^[a-z]*[\ude00]*?$	a	true
++low/class-star-lazy/3	^[a-z]*[\ude00]*?$	😀	false
++low/class-star-lazy/4	^[a-z]*[\ude00]*?$	abc😀	false
++low/zero-bounded-lazy/0	^[a-z]*\ude00{0,2}?$		true
++low/zero-bounded-lazy/1	^[a-z]*\ude00{0,2}?$	abc	true
++low/zero-bounded-lazy/2	^[a-z]*\ude00{0,2}?$	a	true
++low/zero-bounded-lazy/3	^[a-z]*\ude00{0,2}?$	😀	false
++low/zero-bounded-lazy/4	^[a-z]*\ude00{0,2}?$	abc😀	false
++low/class-zero-bounded-lazy/0	^[a-z]*[\ude00]{0,2}?$		true
++low/class-zero-bounded-lazy/1	^[a-z]*[\ude00]{0,2}?$	abc	true
++low/class-zero-bounded-lazy/2	^[a-z]*[\ude00]{0,2}?$	a	true
++low/class-zero-bounded-lazy/3	^[a-z]*[\ude00]{0,2}?$	😀	false
++low/class-zero-bounded-lazy/4	^[a-z]*[\ude00]{0,2}?$	abc😀	false
++low/bare/0	^\ude00$		false
++low/bare/1	^\ude00$	abc	false
++low/bare/2	^\ude00$	a	false
++low/bare/3	^\ude00$	😀	false
++low/bare/4	^\ude00$	abc😀	false
++low/unanchored-star/0	\ude00*		true
++low/unanchored-star/1	\ude00*	abc	true
++low/unanchored-star/2	\ude00*	a	true
++low/unanchored-star/3	\ude00*	😀	true
++low/unanchored-star/4	\ude00*	abc😀	true
++low/mixed-class/0	^[a\ude00]+$		false
++low/mixed-class/1	^[a\ude00]+$	abc	false
++low/mixed-class/2	^[a\ude00]+$	a	true
++low/mixed-class/3	^[a\ude00]+$	😀	false
++low/mixed-class/4	^[a\ude00]+$	abc😀	false
++low/negated-class/0	^[^\ude00]+$		false
++low/negated-class/1	^[^\ude00]+$	abc	true
++low/negated-class/2	^[^\ude00]+$	a	true
++low/negated-class/3	^[^\ude00]+$	😀	true
++low/negated-class/4	^[^\ude00]+$	abc😀	true
++low/alternate/0	^(?:\ude00|abc)$		false
++low/alternate/1	^(?:\ude00|abc)$	abc	true
++low/alternate/2	^(?:\ude00|abc)$	a	false
++low/alternate/3	^(?:\ude00|abc)$	😀	false
++low/alternate/4	^(?:\ude00|abc)$	abc😀	false
++low/alternate-optional/0	^(?:\ude00|abc)?$		true
++low/alternate-optional/1	^(?:\ude00|abc)?$	abc	true
++low/alternate-optional/2	^(?:\ude00|abc)?$	a	false
++low/alternate-optional/3	^(?:\ude00|abc)?$	😀	false
++low/alternate-optional/4	^(?:\ude00|abc)?$	abc😀	false
++low/lookbehind/0	(?<=\ude00?)abc$		false
++low/lookbehind/1	(?<=\ude00?)abc$	abc	true
++low/lookbehind/2	(?<=\ude00?)abc$	a	false
++low/lookbehind/3	(?<=\ude00?)abc$	😀	false
++low/lookbehind/4	(?<=\ude00?)abc$	abc😀	false
++braced-high/optional/0	^[a-z]*\u{d83d}?$		true
++braced-high/optional/1	^[a-z]*\u{d83d}?$	abc	true
++braced-high/optional/2	^[a-z]*\u{d83d}?$	a	true
++braced-high/optional/3	^[a-z]*\u{d83d}?$	😀	false
++braced-high/optional/4	^[a-z]*\u{d83d}?$	abc😀	false
++braced-high/class-optional/0	^[a-z]*[\u{d83d}]?$		true
++braced-high/class-optional/1	^[a-z]*[\u{d83d}]?$	abc	true
++braced-high/class-optional/2	^[a-z]*[\u{d83d}]?$	a	true
++braced-high/class-optional/3	^[a-z]*[\u{d83d}]?$	😀	false
++braced-high/class-optional/4	^[a-z]*[\u{d83d}]?$	abc😀	false
++braced-high/star/0	^[a-z]*\u{d83d}*$		true
++braced-high/star/1	^[a-z]*\u{d83d}*$	abc	true
++braced-high/star/2	^[a-z]*\u{d83d}*$	a	true
++braced-high/star/3	^[a-z]*\u{d83d}*$	😀	false
++braced-high/star/4	^[a-z]*\u{d83d}*$	abc😀	false
++braced-high/class-star/0	^[a-z]*[\u{d83d}]*$		true
++braced-high/class-star/1	^[a-z]*[\u{d83d}]*$	abc	true
++braced-high/class-star/2	^[a-z]*[\u{d83d}]*$	a	true
++braced-high/class-star/3	^[a-z]*[\u{d83d}]*$	😀	false
++braced-high/class-star/4	^[a-z]*[\u{d83d}]*$	abc😀	false
++braced-high/zero-bounded/0	^[a-z]*\u{d83d}{0,2}$		true
++braced-high/zero-bounded/1	^[a-z]*\u{d83d}{0,2}$	abc	true
++braced-high/zero-bounded/2	^[a-z]*\u{d83d}{0,2}$	a	true
++braced-high/zero-bounded/3	^[a-z]*\u{d83d}{0,2}$	😀	false
++braced-high/zero-bounded/4	^[a-z]*\u{d83d}{0,2}$	abc😀	false
++braced-high/class-zero-bounded/0	^[a-z]*[\u{d83d}]{0,2}$		true
++braced-high/class-zero-bounded/1	^[a-z]*[\u{d83d}]{0,2}$	abc	true
++braced-high/class-zero-bounded/2	^[a-z]*[\u{d83d}]{0,2}$	a	true
++braced-high/class-zero-bounded/3	^[a-z]*[\u{d83d}]{0,2}$	😀	false
++braced-high/class-zero-bounded/4	^[a-z]*[\u{d83d}]{0,2}$	abc😀	false
++braced-high/plus/0	^[a-z]*\u{d83d}+$		false
++braced-high/plus/1	^[a-z]*\u{d83d}+$	abc	false
++braced-high/plus/2	^[a-z]*\u{d83d}+$	a	false
++braced-high/plus/3	^[a-z]*\u{d83d}+$	😀	false
++braced-high/plus/4	^[a-z]*\u{d83d}+$	abc😀	false
++braced-high/class-plus/0	^[a-z]*[\u{d83d}]+$		false
++braced-high/class-plus/1	^[a-z]*[\u{d83d}]+$	abc	false
++braced-high/class-plus/2	^[a-z]*[\u{d83d}]+$	a	false
++braced-high/class-plus/3	^[a-z]*[\u{d83d}]+$	😀	false
++braced-high/class-plus/4	^[a-z]*[\u{d83d}]+$	abc😀	false
++braced-high/positive-bounded/0	^[a-z]*\u{d83d}{1,2}$		false
++braced-high/positive-bounded/1	^[a-z]*\u{d83d}{1,2}$	abc	false
++braced-high/positive-bounded/2	^[a-z]*\u{d83d}{1,2}$	a	false
++braced-high/positive-bounded/3	^[a-z]*\u{d83d}{1,2}$	😀	false
++braced-high/positive-bounded/4	^[a-z]*\u{d83d}{1,2}$	abc😀	false
++braced-high/class-positive-bounded/0	^[a-z]*[\u{d83d}]{1,2}$		false
++braced-high/class-positive-bounded/1	^[a-z]*[\u{d83d}]{1,2}$	abc	false
++braced-high/class-positive-bounded/2	^[a-z]*[\u{d83d}]{1,2}$	a	false
++braced-high/class-positive-bounded/3	^[a-z]*[\u{d83d}]{1,2}$	😀	false
++braced-high/class-positive-bounded/4	^[a-z]*[\u{d83d}]{1,2}$	abc😀	false
++braced-high/optional-lazy/0	^[a-z]*\u{d83d}??$		true
++braced-high/optional-lazy/1	^[a-z]*\u{d83d}??$	abc	true
++braced-high/optional-lazy/2	^[a-z]*\u{d83d}??$	a	true
++braced-high/optional-lazy/3	^[a-z]*\u{d83d}??$	😀	false
++braced-high/optional-lazy/4	^[a-z]*\u{d83d}??$	abc😀	false
++braced-high/class-optional-lazy/0	^[a-z]*[\u{d83d}]??$		true
++braced-high/class-optional-lazy/1	^[a-z]*[\u{d83d}]??$	abc	true
++braced-high/class-optional-lazy/2	^[a-z]*[\u{d83d}]??$	a	true
++braced-high/class-optional-lazy/3	^[a-z]*[\u{d83d}]??$	😀	false
++braced-high/class-optional-lazy/4	^[a-z]*[\u{d83d}]??$	abc😀	false
++braced-high/star-lazy/0	^[a-z]*\u{d83d}*?$		true
++braced-high/star-lazy/1	^[a-z]*\u{d83d}*?$	abc	true
++braced-high/star-lazy/2	^[a-z]*\u{d83d}*?$	a	true
++braced-high/star-lazy/3	^[a-z]*\u{d83d}*?$	😀	false
++braced-high/star-lazy/4	^[a-z]*\u{d83d}*?$	abc😀	false
++braced-high/class-star-lazy/0	^[a-z]*[\u{d83d}]*?$		true
++braced-high/class-star-lazy/1	^[a-z]*[\u{d83d}]*?$	abc	true
++braced-high/class-star-lazy/2	^[a-z]*[\u{d83d}]*?$	a	true
++braced-high/class-star-lazy/3	^[a-z]*[\u{d83d}]*?$	😀	false
++braced-high/class-star-lazy/4	^[a-z]*[\u{d83d}]*?$	abc😀	false
++braced-high/zero-bounded-lazy/0	^[a-z]*\u{d83d}{0,2}?$		true
++braced-high/zero-bounded-lazy/1	^[a-z]*\u{d83d}{0,2}?$	abc	true
++braced-high/zero-bounded-lazy/2	^[a-z]*\u{d83d}{0,2}?$	a	true
++braced-high/zero-bounded-lazy/3	^[a-z]*\u{d83d}{0,2}?$	😀	false
++braced-high/zero-bounded-lazy/4	^[a-z]*\u{d83d}{0,2}?$	abc😀	false
++braced-high/class-zero-bounded-lazy/0	^[a-z]*[\u{d83d}]{0,2}?$		true
++braced-high/class-zero-bounded-lazy/1	^[a-z]*[\u{d83d}]{0,2}?$	abc	true
++braced-high/class-zero-bounded-lazy/2	^[a-z]*[\u{d83d}]{0,2}?$	a	true
++braced-high/class-zero-bounded-lazy/3	^[a-z]*[\u{d83d}]{0,2}?$	😀	false
++braced-high/class-zero-bounded-lazy/4	^[a-z]*[\u{d83d}]{0,2}?$	abc😀	false
++braced-high/bare/0	^\u{d83d}$		false
++braced-high/bare/1	^\u{d83d}$	abc	false
++braced-high/bare/2	^\u{d83d}$	a	false
++braced-high/bare/3	^\u{d83d}$	😀	false
++braced-high/bare/4	^\u{d83d}$	abc😀	false
++braced-high/unanchored-star/0	\u{d83d}*		true
++braced-high/unanchored-star/1	\u{d83d}*	abc	true
++braced-high/unanchored-star/2	\u{d83d}*	a	true
++braced-high/unanchored-star/3	\u{d83d}*	😀	true
++braced-high/unanchored-star/4	\u{d83d}*	abc😀	true
++braced-high/mixed-class/0	^[a\u{d83d}]+$		false
++braced-high/mixed-class/1	^[a\u{d83d}]+$	abc	false
++braced-high/mixed-class/2	^[a\u{d83d}]+$	a	true
++braced-high/mixed-class/3	^[a\u{d83d}]+$	😀	false
++braced-high/mixed-class/4	^[a\u{d83d}]+$	abc😀	false
++braced-high/negated-class/0	^[^\u{d83d}]+$		false
++braced-high/negated-class/1	^[^\u{d83d}]+$	abc	true
++braced-high/negated-class/2	^[^\u{d83d}]+$	a	true
++braced-high/negated-class/3	^[^\u{d83d}]+$	😀	true
++braced-high/negated-class/4	^[^\u{d83d}]+$	abc😀	true
++braced-high/alternate/0	^(?:\u{d83d}|abc)$		false
++braced-high/alternate/1	^(?:\u{d83d}|abc)$	abc	true
++braced-high/alternate/2	^(?:\u{d83d}|abc)$	a	false
++braced-high/alternate/3	^(?:\u{d83d}|abc)$	😀	false
++braced-high/alternate/4	^(?:\u{d83d}|abc)$	abc😀	false
++braced-high/alternate-optional/0	^(?:\u{d83d}|abc)?$		true
++braced-high/alternate-optional/1	^(?:\u{d83d}|abc)?$	abc	true
++braced-high/alternate-optional/2	^(?:\u{d83d}|abc)?$	a	false
++braced-high/alternate-optional/3	^(?:\u{d83d}|abc)?$	😀	false
++braced-high/alternate-optional/4	^(?:\u{d83d}|abc)?$	abc😀	false
++braced-high/lookbehind/0	(?<=\u{d83d}?)abc$		false
++braced-high/lookbehind/1	(?<=\u{d83d}?)abc$	abc	true
++braced-high/lookbehind/2	(?<=\u{d83d}?)abc$	a	false
++braced-high/lookbehind/3	(?<=\u{d83d}?)abc$	😀	false
++braced-high/lookbehind/4	(?<=\u{d83d}?)abc$	abc😀	false
++braced-low/optional/0	^[a-z]*\u{de00}?$		true
++braced-low/optional/1	^[a-z]*\u{de00}?$	abc	true
++braced-low/optional/2	^[a-z]*\u{de00}?$	a	true
++braced-low/optional/3	^[a-z]*\u{de00}?$	😀	false
++braced-low/optional/4	^[a-z]*\u{de00}?$	abc😀	false
++braced-low/class-optional/0	^[a-z]*[\u{de00}]?$		true
++braced-low/class-optional/1	^[a-z]*[\u{de00}]?$	abc	true
++braced-low/class-optional/2	^[a-z]*[\u{de00}]?$	a	true
++braced-low/class-optional/3	^[a-z]*[\u{de00}]?$	😀	false
++braced-low/class-optional/4	^[a-z]*[\u{de00}]?$	abc😀	false
++braced-low/star/0	^[a-z]*\u{de00}*$		true
++braced-low/star/1	^[a-z]*\u{de00}*$	abc	true
++braced-low/star/2	^[a-z]*\u{de00}*$	a	true
++braced-low/star/3	^[a-z]*\u{de00}*$	😀	false
++braced-low/star/4	^[a-z]*\u{de00}*$	abc😀	false
++braced-low/class-star/0	^[a-z]*[\u{de00}]*$		true
++braced-low/class-star/1	^[a-z]*[\u{de00}]*$	abc	true
++braced-low/class-star/2	^[a-z]*[\u{de00}]*$	a	true
++braced-low/class-star/3	^[a-z]*[\u{de00}]*$	😀	false
++braced-low/class-star/4	^[a-z]*[\u{de00}]*$	abc😀	false
++braced-low/zero-bounded/0	^[a-z]*\u{de00}{0,2}$		true
++braced-low/zero-bounded/1	^[a-z]*\u{de00}{0,2}$	abc	true
++braced-low/zero-bounded/2	^[a-z]*\u{de00}{0,2}$	a	true
++braced-low/zero-bounded/3	^[a-z]*\u{de00}{0,2}$	😀	false
++braced-low/zero-bounded/4	^[a-z]*\u{de00}{0,2}$	abc😀	false
++braced-low/class-zero-bounded/0	^[a-z]*[\u{de00}]{0,2}$		true
++braced-low/class-zero-bounded/1	^[a-z]*[\u{de00}]{0,2}$	abc	true
++braced-low/class-zero-bounded/2	^[a-z]*[\u{de00}]{0,2}$	a	true
++braced-low/class-zero-bounded/3	^[a-z]*[\u{de00}]{0,2}$	😀	false
++braced-low/class-zero-bounded/4	^[a-z]*[\u{de00}]{0,2}$	abc😀	false
++braced-low/plus/0	^[a-z]*\u{de00}+$		false
++braced-low/plus/1	^[a-z]*\u{de00}+$	abc	false
++braced-low/plus/2	^[a-z]*\u{de00}+$	a	false
++braced-low/plus/3	^[a-z]*\u{de00}+$	😀	false
++braced-low/plus/4	^[a-z]*\u{de00}+$	abc😀	false
++braced-low/class-plus/0	^[a-z]*[\u{de00}]+$		false
++braced-low/class-plus/1	^[a-z]*[\u{de00}]+$	abc	false
++braced-low/class-plus/2	^[a-z]*[\u{de00}]+$	a	false
++braced-low/class-plus/3	^[a-z]*[\u{de00}]+$	😀	false
++braced-low/class-plus/4	^[a-z]*[\u{de00}]+$	abc😀	false
++braced-low/positive-bounded/0	^[a-z]*\u{de00}{1,2}$		false
++braced-low/positive-bounded/1	^[a-z]*\u{de00}{1,2}$	abc	false
++braced-low/positive-bounded/2	^[a-z]*\u{de00}{1,2}$	a	false
++braced-low/positive-bounded/3	^[a-z]*\u{de00}{1,2}$	😀	false
++braced-low/positive-bounded/4	^[a-z]*\u{de00}{1,2}$	abc😀	false
++braced-low/class-positive-bounded/0	^[a-z]*[\u{de00}]{1,2}$		false
++braced-low/class-positive-bounded/1	^[a-z]*[\u{de00}]{1,2}$	abc	false
++braced-low/class-positive-bounded/2	^[a-z]*[\u{de00}]{1,2}$	a	false
++braced-low/class-positive-bounded/3	^[a-z]*[\u{de00}]{1,2}$	😀	false
++braced-low/class-positive-bounded/4	^[a-z]*[\u{de00}]{1,2}$	abc😀	false
++braced-low/optional-lazy/0	^[a-z]*\u{de00}??$		true
++braced-low/optional-lazy/1	^[a-z]*\u{de00}??$	abc	true
++braced-low/optional-lazy/2	^[a-z]*\u{de00}??$	a	true
++braced-low/optional-lazy/3	^[a-z]*\u{de00}??$	😀	false
++braced-low/optional-lazy/4	^[a-z]*\u{de00}??$	abc😀	false
++braced-low/class-optional-lazy/0	^[a-z]*[\u{de00}]??$		true
++braced-low/class-optional-lazy/1	^[a-z]*[\u{de00}]??$	abc	true
++braced-low/class-optional-lazy/2	^[a-z]*[\u{de00}]??$	a	true
++braced-low/class-optional-lazy/3	^[a-z]*[\u{de00}]??$	😀	false
++braced-low/class-optional-lazy/4	^[a-z]*[\u{de00}]??$	abc😀	false
++braced-low/star-lazy/0	^[a-z]*\u{de00}*?$		true
++braced-low/star-lazy/1	^[a-z]*\u{de00}*?$	abc	true
++braced-low/star-lazy/2	^[a-z]*\u{de00}*?$	a	true
++braced-low/star-lazy/3	^[a-z]*\u{de00}*?$	😀	false
++braced-low/star-lazy/4	^[a-z]*\u{de00}*?$	abc😀	false
++braced-low/class-star-lazy/0	^[a-z]*[\u{de00}]*?$		true
++braced-low/class-star-lazy/1	^[a-z]*[\u{de00}]*?$	abc	true
++braced-low/class-star-lazy/2	^[a-z]*[\u{de00}]*?$	a	true
++braced-low/class-star-lazy/3	^[a-z]*[\u{de00}]*?$	😀	false
++braced-low/class-star-lazy/4	^[a-z]*[\u{de00}]*?$	abc😀	false
++braced-low/zero-bounded-lazy/0	^[a-z]*\u{de00}{0,2}?$		true
++braced-low/zero-bounded-lazy/1	^[a-z]*\u{de00}{0,2}?$	abc	true
++braced-low/zero-bounded-lazy/2	^[a-z]*\u{de00}{0,2}?$	a	true
++braced-low/zero-bounded-lazy/3	^[a-z]*\u{de00}{0,2}?$	😀	false
++braced-low/zero-bounded-lazy/4	^[a-z]*\u{de00}{0,2}?$	abc😀	false
++braced-low/class-zero-bounded-lazy/0	^[a-z]*[\u{de00}]{0,2}?$		true
++braced-low/class-zero-bounded-lazy/1	^[a-z]*[\u{de00}]{0,2}?$	abc	true
++braced-low/class-zero-bounded-lazy/2	^[a-z]*[\u{de00}]{0,2}?$	a	true
++braced-low/class-zero-bounded-lazy/3	^[a-z]*[\u{de00}]{0,2}?$	😀	false
++braced-low/class-zero-bounded-lazy/4	^[a-z]*[\u{de00}]{0,2}?$	abc😀	false
++braced-low/bare/0	^\u{de00}$		false
++braced-low/bare/1	^\u{de00}$	abc	false
++braced-low/bare/2	^\u{de00}$	a	false
++braced-low/bare/3	^\u{de00}$	😀	false
++braced-low/bare/4	^\u{de00}$	abc😀	false
++braced-low/unanchored-star/0	\u{de00}*		true
++braced-low/unanchored-star/1	\u{de00}*	abc	true
++braced-low/unanchored-star/2	\u{de00}*	a	true
++braced-low/unanchored-star/3	\u{de00}*	😀	true
++braced-low/unanchored-star/4	\u{de00}*	abc😀	true
++braced-low/mixed-class/0	^[a\u{de00}]+$		false
++braced-low/mixed-class/1	^[a\u{de00}]+$	abc	false
++braced-low/mixed-class/2	^[a\u{de00}]+$	a	true
++braced-low/mixed-class/3	^[a\u{de00}]+$	😀	false
++braced-low/mixed-class/4	^[a\u{de00}]+$	abc😀	false
++braced-low/negated-class/0	^[^\u{de00}]+$		false
++braced-low/negated-class/1	^[^\u{de00}]+$	abc	true
++braced-low/negated-class/2	^[^\u{de00}]+$	a	true
++braced-low/negated-class/3	^[^\u{de00}]+$	😀	true
++braced-low/negated-class/4	^[^\u{de00}]+$	abc😀	true
++braced-low/alternate/0	^(?:\u{de00}|abc)$		false
++braced-low/alternate/1	^(?:\u{de00}|abc)$	abc	true
++braced-low/alternate/2	^(?:\u{de00}|abc)$	a	false
++braced-low/alternate/3	^(?:\u{de00}|abc)$	😀	false
++braced-low/alternate/4	^(?:\u{de00}|abc)$	abc😀	false
++braced-low/alternate-optional/0	^(?:\u{de00}|abc)?$		true
++braced-low/alternate-optional/1	^(?:\u{de00}|abc)?$	abc	true
++braced-low/alternate-optional/2	^(?:\u{de00}|abc)?$	a	false
++braced-low/alternate-optional/3	^(?:\u{de00}|abc)?$	😀	false
++braced-low/alternate-optional/4	^(?:\u{de00}|abc)?$	abc😀	false
++braced-low/lookbehind/0	(?<=\u{de00}?)abc$		false
++braced-low/lookbehind/1	(?<=\u{de00}?)abc$	abc	true
++braced-low/lookbehind/2	(?<=\u{de00}?)abc$	a	false
++braced-low/lookbehind/3	(?<=\u{de00}?)abc$	😀	false
++braced-low/lookbehind/4	(?<=\u{de00}?)abc$	abc😀	false
++paired/0	^\ud83d\ude00$		false
++paired/1	^\ud83d\ude00$	abc	false
++paired/2	^\ud83d\ude00$	a	false
++paired/3	^\ud83d\ude00$	😀	true
++paired/4	^\ud83d\ude00$	abc😀	false
++scalar-braced/0	^\u{1f600}$		false
++scalar-braced/1	^\u{1f600}$	abc	false
++scalar-braced/2	^\u{1f600}$	a	false
++scalar-braced/3	^\u{1f600}$	😀	true
++scalar-braced/4	^\u{1f600}$	abc😀	false
+--- a/tests/tests.rs
++++ b/tests/tests.rs
+@@ -2520,3 +2520,37 @@
+     // An out-of-range ascii start likewise yields no matches, not a panic.
+     assert!(re.find_from_ascii("abc", 4).next().is_none());
+ }
++#[test]
++fn openbindings_lone_surrogate_node_differential() {
++    for row in include_str!("fixtures/lone-surrogate.tsv").lines().skip(1) {
++        let fields: Vec<_> = row.split('\t').collect();
++        assert_eq!(fields.len(), 4);
++        let regex = regress::Regex::with_flags(fields[1], "u").unwrap();
++        assert_eq!(
++            regex.find(fields[2]).is_some(),
++            fields[3] == "true",
++            "{}",
++            fields[0]
++        );
++    }
++}
++
++#[test]
++fn openbindings_budget_exit_preserves_backtrack_stack() {
++    let input = format!("{}b", "a".repeat(28));
++    for pattern in ["^(a+)+$", "^(?=(a+)+$)", "^(?!(a+)+$)"] {
++        let regex = regress::Regex::with_flags(pattern, "u").unwrap();
++        // Every interrupt position in this prefix must preserve invariants,
++        // including exits inside nested lookaround and backtracking loops.
++        for budget in 0..256 {
++            let outcome = regress::ob_budget::run(budget, || regex.find(&input));
++            assert!(outcome.is_err(), "{pattern}, budget {budget}: {outcome:?}");
++        }
++    }
++    let regex = regress::Regex::with_flags("^(a+)+$", "u").unwrap();
++    assert!(
++        regress::ob_budget::run(1000, || regex.find("aaaa"))
++            .unwrap()
++            .is_some()
++    );
++}

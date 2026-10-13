@@ -2520,3 +2520,37 @@ fn test_find_from_char_boundaries() {
     // An out-of-range ascii start likewise yields no matches, not a panic.
     assert!(re.find_from_ascii("abc", 4).next().is_none());
 }
+#[test]
+fn openbindings_lone_surrogate_node_differential() {
+    for row in include_str!("fixtures/lone-surrogate.tsv").lines().skip(1) {
+        let fields: Vec<_> = row.split('\t').collect();
+        assert_eq!(fields.len(), 4);
+        let regex = regress::Regex::with_flags(fields[1], "u").unwrap();
+        assert_eq!(
+            regex.find(fields[2]).is_some(),
+            fields[3] == "true",
+            "{}",
+            fields[0]
+        );
+    }
+}
+
+#[test]
+fn openbindings_budget_exit_preserves_backtrack_stack() {
+    let input = format!("{}b", "a".repeat(28));
+    for pattern in ["^(a+)+$", "^(?=(a+)+$)", "^(?!(a+)+$)"] {
+        let regex = regress::Regex::with_flags(pattern, "u").unwrap();
+        // Every interrupt position in this prefix must preserve invariants,
+        // including exits inside nested lookaround and backtracking loops.
+        for budget in 0..256 {
+            let outcome = regress::ob_budget::run(budget, || regex.find(&input));
+            assert!(outcome.is_err(), "{pattern}, budget {budget}: {outcome:?}");
+        }
+    }
+    let regex = regress::Regex::with_flags("^(a+)+$", "u").unwrap();
+    assert!(
+        regress::ob_budget::run(1000, || regex.find("aaaa"))
+            .unwrap()
+            .is_some()
+    );
+}

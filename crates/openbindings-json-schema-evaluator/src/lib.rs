@@ -183,7 +183,7 @@ impl DefaultEvaluator {
         let mut literals = literals::Literals::default();
         for resource in &program.resources {
             control.check()?;
-            check_patterns(resource.document.view(), &self.limits, control)?;
+            check_patterns(resource, &program, &self.limits, control)?;
             let value = literals.resource(&resource.document, &self.limits, control)?;
             // Transfer each private projection into the registry. Holding a
             // second serde tree until compilation unnecessarily raises peak RSS.
@@ -554,12 +554,13 @@ fn verdict_pass<T>(
 }
 
 fn check_patterns(
-    value: JsonRef<'_>,
+    resource: &SchemaResource,
+    program: &EvaluationProgram,
     limits: &Limits,
     control: &WorkControl,
 ) -> Result<(), NoVerdict> {
     // Only schema pattern positions count; opaque values are not interpreted.
-    let Some(definitions) = value.get("$defs").and_then(|v| v.members()) else {
+    let Some(definitions) = resource.document.get("$defs").and_then(|v| v.members()) else {
         return Ok(());
     };
     for definition in definitions {
@@ -567,12 +568,13 @@ fn check_patterns(
         let schema = definition.value;
         let mut patterns = Vec::new();
         if let Some(pattern) = schema.get("pattern").and_then(|v| v.as_str()) {
-            patterns.push(pattern);
+            patterns.push(("pattern", pattern));
         }
         if let Some(entries) = schema.get("patternProperties").and_then(|v| v.members()) {
-            patterns.extend(entries.filter_map(|m| m.name.as_str()));
+            patterns
+                .extend(entries.filter_map(|m| m.name.as_str().map(|p| ("patternProperties", p))));
         }
-        for pattern in patterns {
+        for (keyword, pattern) in patterns {
             if pattern.len() > limits.pattern_bytes {
                 return Err(no_verdict(
                     NoVerdictReason::LimitExceeded,
@@ -605,6 +607,21 @@ fn check_patterns(
                     b')' if !class => depth = depth.saturating_sub(1),
                     _ => {}
                 }
+            }
+            // Compile while the projected node still has an unambiguous source
+            // identity. Dependency build errors may only carry relative paths.
+            if jsonschema::ob_ecma::Regex::new(pattern).is_err() {
+                let mut detail = no_verdict(
+                    NoVerdictReason::ConservativePreparation,
+                    "schema-pattern-compilation",
+                    format!("the schema {keyword} regular expression could not be compiled"),
+                );
+                detail.location = program.original_location(&format!(
+                    "{}#/$defs/{}/{keyword}",
+                    resource.uri,
+                    definition.name.as_str().expect("projected definition name")
+                ));
+                return Err(detail);
             }
         }
     }

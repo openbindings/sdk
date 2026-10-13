@@ -2,6 +2,15 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- Evaluator correctness. A supplied resource, nested `$id` or retrieval alias that
+  claims a packaged standard identity is now an identity conflict instead of replacing
+  it, so a completion can no longer invert a verdict established with a missing
+  resource. In the maintained regress fork, quantified lone-surrogate atoms such as
+  `\ud83d?` accept zero repetitions per ECMA-262 (checked against Node's RegExp), and a
+  budget interruption leaves the backtrack stack intact instead of panicking in debug
+  builds. Pattern-compilation refusals name the authored `pattern` or
+  `patternProperties` location.
+
 - Whole-document assessment no longer declines for escaped lone surrogates or schema
   depth above 256. `assess_document_with_limits` accepts caller-supplied admission
   limits; admission precedes version selection. The default evaluator refuses

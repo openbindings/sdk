@@ -275,7 +275,7 @@
         {
           "file": "OPENBINDINGS-PATCH.md",
           "upstream_sha256": null,
-          "current_sha256": "d5b59fda567f69b44c8569c3f6cdb8b746a8416eed52a1a16cd4126a446183b0"
+          "current_sha256": "376bdb92454e3e395eee8aaef3ff07474716017e02eef30d1bba21f0e652c9a5"
         },
         {
           "file": "UPSTREAM-Cargo.toml",
@@ -295,7 +295,7 @@
         {
           "file": "src/classicalbacktrack.rs",
           "upstream_sha256": "4ac072254f9c6eef7e9d6b40d13b5d12eec508cb35a91e49fbd31f0e8e70972a",
-          "current_sha256": "1d037f25a5416fc9d4747d57f8e5a9a9de48fcd9298955a92a494e9e013e3c2c"
+          "current_sha256": "01142d520b40451cddf3c79c0161c2eb31fc2cd952669026ee39cfaacabe8ec7"
         },
         {
           "file": "src/lib.rs",
@@ -316,6 +316,21 @@
           "file": "src/parse.rs",
           "upstream_sha256": "90e38cdeeb7f597d027f14eb45c35a9d0baa8aeba1c68368ee108c8831faf548",
           "current_sha256": "e31a8553c391a16e74960966acf5dbe3692c4d27f524149bc87eb5697f4f1140"
+        },
+        {
+          "file": "tests/fixtures/lone-surrogate.mjs",
+          "upstream_sha256": null,
+          "current_sha256": "2564393b729a3da8560bcfbb0e9f8bea304e39a2a88edf8021e852e2a6883166"
+        },
+        {
+          "file": "tests/fixtures/lone-surrogate.tsv",
+          "upstream_sha256": null,
+          "current_sha256": "ffab5486c460da601b17a5b33da8efd0aed0b1b70bb8a2936a7ffb9356a10038"
+        },
+        {
+          "file": "tests/tests.rs",
+          "upstream_sha256": "0fe768817a5f39b9e2e437244ba3e81c696f53b74a584f345cf0caf7beaadcf8",
+          "current_sha256": "c6efc287dd4c935ca40f671f8f5429346fcd8ae9ba4ab1ad735aec027fd13ed9"
         }
       ],
       "patch": "regress.patch"
