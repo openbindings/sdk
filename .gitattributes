@@ -1,3 +1,11 @@
 # Mechanical upstream packages retain their exact archived bytes on every host.
 /vendor/openbindings-internal-serde-json/** -text
 /vendor/openbindings-internal-referencing/** -text
+# tools/attribution.py hashes vendored notice files and compares the generated
+# inventories byte-for-byte, so these keep their exact bytes on every host too.
+/vendor/** -text
+/tools/attribution/retrieved/** -text
+/DEPENDENCIES.json -text
+/THIRD-PARTY-NOTICES.txt -text
+/packages/typescript/DEPENDENCIES.json -text
+/packages/typescript/THIRD-PARTY-NOTICES.txt -text
