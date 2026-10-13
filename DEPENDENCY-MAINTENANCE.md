@@ -2,6 +2,8 @@
 
 The SDK carries five renamed internal dependency packages: three behaviorally modified forks and two mechanical package-identity forks. They are implementation details, not supported extension APIs. Their upstream versions and complete crate checksums are recorded by `tools/dependency-patches.py`; that script compares every file with the original downloaded crate archive and emits a full diff plus before/after digests. The original upstream Git identities are retained as `UPSTREAM-VCS.json`; original manifests are retained as `UPSTREAM-Cargo.toml`. Cargo-reserved generated filenames were renamed so the internal packages can themselves be archived. Cargo extraction completion stamps are removed. Retained upstream lockfiles are provenance; the SDK workspace lock is the development/build authority.
 
+Refresh both dependency inventories and their third-party notices offline with `python3 tools/attribution.py` (use `--check` to verify them).
+
 | Upstream | Applied package | Upstream revision |
 | --- | --- | --- |
 | jsonschema 0.58.6 | openbindings-internal-jsonschema 0.58.6-ob.1 | 55ac1664384793c5d3b20745d3f9c169dfe2c06f |
