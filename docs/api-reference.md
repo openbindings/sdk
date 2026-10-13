@@ -92,6 +92,73 @@ identity, immutable ownership, combined text/graph limits and diagnostic scope.
 Core custom-evaluator dispatch and strict `evaluation_program()` stay unchanged.
 No TypeScript application API or configuration variant is added.
 
+## Document assessment
+
+Rust `assess_document(input)` assesses exact JSON bytes using default admission
+limits of 64 MiB and 1,000,000 nodes, with no nesting cap.
+`assess_document_with_limits(input, JsonLimits)` accepts caller-selected byte, node
+and nesting limits, matching the explicit-limits shape of `JsonValue::parse_with_limits`.
+Both return `Result<DocumentAssessment, VersionRefusal>`; only a conformant
+assessment provides a `ValidatedDocument` proof.
+
+Admission precedes version selection. Until the complete JSON text is admitted,
+no version declaration has been established. An admission refusal leaves every
+rule inconclusive, even if an initial fragment appears to name another specification
+line. After admission, version-refusal and OBI-01 priority are unchanged. Document
+assessment checks admitted schemas locally at any depth and carries escaped lone
+surrogates exactly; native namespace and primary-reference comparisons use UTF-16
+units. A violation established by any rule makes the document non-conformant.
+
+### Finding-code catalog
+
+These are stable `Finding.code` values for document assessment. Messages are human
+explanations, not machine identifiers. Multiple rules can share a code. Parse
+locations use original byte coordinates; pointers are absent where a member name
+cannot be represented in Unicode scalar text. Input admission refusals are not
+violations. `InputError` outside whole-document assessment retains its existing
+code-based Display representation.
+
+| Code | Rule | Meaning |
+| --- | --- | --- |
+| `input-limit` | OBI-01 through OBI-13 | Byte, node or caller-selected depth admission limit prevented assessment. |
+| `bom` | OBI-01 | A leading UTF-8 byte-order mark is forbidden. |
+| `utf8` | OBI-01 | The input is not valid UTF-8. |
+| `comma-or-close` | OBI-01 | A container needed a comma or closing delimiter. |
+| `object-key` | OBI-01 | A quoted object member name was expected. |
+| `colon` | OBI-01 | A colon was expected after the member name. |
+| `trailing-token` | OBI-01 | Content follows the complete JSON value. |
+| `number` | OBI-01 | A JSON number is malformed. |
+| `fraction` | OBI-01 | A decimal point lacks following digits. |
+| `exponent` | OBI-01 | A number exponent lacks digits. |
+| `value` | OBI-01 | A JSON value was expected. |
+| `literal` | OBI-01 | A true, false or null literal is malformed. |
+| `unterminated-string` | OBI-01 | A string lacks its closing quote. |
+| `string-control` | OBI-01 | A string contains an unescaped control character. |
+| `escape` | OBI-01 | A JSON string escape is invalid. |
+| `unicode-escape` | OBI-01 | A Unicode escape lacks four hexadecimal digits. |
+| `duplicate-member` | OBI-01 | An object repeats a decoded member name. |
+| `schema-mismatch` | OBI-02, OBI-10 | A constraint in the derived schema or meta-schemas failed. The message identifies the keyword without including instance values. |
+| `fixed-schema-limit-or-failure` | OBI-02, OBI-10 | Fixed-schema checking could not complete within its capability or work limit. |
+| `semver` | OBI-03 | The openbindings value is not a SemVer string. |
+| `missing-version` | OBI-03 | The openbindings member is absent. |
+| `name-grammar` | OBI-04 | A defined map key or operation alias violates the ASCII name grammar. |
+| `duplicate-operation-name` | OBI-05 | An operation key or alias repeats another occurrence in that namespace. |
+| `missing-target` | OBI-06, OBI-07, OBI-08 | A binding or dependency reference names no primary operation/source key. |
+| `schema-dialect` | OBI-09 | A contained schema names a dialect other than JSON Schema 2020-12. |
+| `absolute-schema-id` | OBI-11 | A document-resource schema ID is not an absolute URI. |
+| `reference-type` | OBI-11 | A schema reference cannot be interpreted as a URI-reference string. |
+| `reference-form` | OBI-11 | A document-resource reference is malformed or neither absolute nor same-document. |
+| `reference-target` | OBI-12 | A same-document reference identifies no schema at an OBI position. |
+| `duplicate-anchor` | OBI-13 | A plain name has multiple declarations in the document resource. |
+| `duplicate-schema-id` | OBI-13 | Multiple contained schemas declare the same compared identifier. |
+
+Historical assessment codes `representation-limit` (OBI-02 and OBI-04 through
+OBI-13) and `schema-depth-limit` (OBI-10) are no longer emitted. The latter remains
+a separate value-contract preparation code with its existing meaning.
+
+Raw parser admission codes `byte-limit`, `node-limit` and `depth-limit` remain
+`InputError` codes; whole-document findings translate them to `input-limit`.
+
 ## Inspection and exact editing additions
 
 Rust `ParsedDocument` enumerates and looks up retained binding, source and

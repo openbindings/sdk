@@ -249,9 +249,6 @@ impl ParsedDocument {
         if self.value().has_duplicate_names() {
             return Err(InterpretationError::DuplicateMembers);
         }
-        if backend::has_unpaired(self.value()) {
-            return Err(InterpretationError::UnpairedString);
-        }
         if self
             .value()
             .get("openbindings")
@@ -548,16 +545,25 @@ impl DocumentBuilder {
 
 /// Assess bytes even when parsing fails. A version refusal is never conformance evidence.
 pub fn assess_document(input: impl AsRef<[u8]>) -> Result<DocumentAssessment, VersionRefusal> {
-    let bytes = input.as_ref();
-    // Flat storage permits a grammar scan past the public carriage-depth boundary,
-    // while byte/node admission still bounds memory. This preserves version priority.
-    match JsonValue::parse_with_limits(
-        bytes,
+    assess_document_with_limits(
+        input,
         JsonLimits {
             max_depth: usize::MAX,
             ..Default::default()
         },
-    ) {
+    )
+}
+
+/// Assess bytes with caller-selected byte, node and nesting admission limits.
+/// Admission precedes version selection: if parsing exceeds a limit, no complete
+/// declaration is established and all rules are inconclusive, even for another line.
+/// [`assess_document`] uses default byte/node limits and unlimited nesting.
+pub fn assess_document_with_limits(
+    input: impl AsRef<[u8]>,
+    limits: JsonLimits,
+) -> Result<DocumentAssessment, VersionRefusal> {
+    let bytes = input.as_ref();
+    match JsonValue::parse_with_limits(bytes, limits) {
         Ok(value) => ParsedDocument::from_json(value).assess(),
         Err(error) => {
             let mut checks = Checks::new();
@@ -587,7 +593,7 @@ pub fn assess_document(input: impl AsRef<[u8]>) -> Result<DocumentAssessment, Ve
                         line,
                         byte_column,
                     }),
-                    error.to_string(),
+                    parse_error_message(error.code),
                 );
                 checks.not_applicable_after_json();
             }
@@ -596,6 +602,26 @@ pub fn assess_document(input: impl AsRef<[u8]>) -> Result<DocumentAssessment, Ve
                 report: Arc::new(checks.finish()),
             })
         }
+    }
+}
+fn parse_error_message(code: &str) -> &'static str {
+    match code {
+        "bom" => "JSON text must not begin with a byte-order mark",
+        "utf8" => "JSON text must use valid UTF-8",
+        "comma-or-close" => "expected a comma or the end of the container",
+        "object-key" => "expected a quoted object member name",
+        "colon" => "expected a colon after the member name",
+        "trailing-token" => "unexpected content after the JSON value",
+        "number" => "invalid JSON number",
+        "fraction" => "expected a digit after the decimal point",
+        "exponent" => "expected a digit in the number exponent",
+        "value" => "expected a JSON value",
+        "literal" => "expected true, false or null",
+        "unterminated-string" => "expected the closing quote of the string",
+        "string-control" => "control characters in strings must be escaped",
+        "escape" => "invalid JSON string escape",
+        "unicode-escape" => "expected four hexadecimal digits in the Unicode escape",
+        _ => "invalid JSON text",
     }
 }
 fn version_refusal(value: &JsonValue) -> Option<VersionRefusal> {
@@ -850,20 +876,6 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
             "required openbindings member is absent",
         ),
     }
-    if backend::has_unpaired(value) || backend::depth(value) > 10_000 {
-        for rule in 1..13 {
-            if rule != 2 {
-                c.mark_at(
-                    rule,
-                    Evidence::Inconclusive,
-                    value.view(),
-                    "representation-limit",
-                    "interpretation requires supported strings and document nesting",
-                );
-            }
-        }
-        return Ok(c.finish());
-    }
     c.fixed(value, 1, false);
     let operations = value.get("operations");
     let sources = value.get("sources");
@@ -882,25 +894,24 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
             }
         }
     }
-    let mut names: HashMap<String, JsonValue> = HashMap::new();
+    let mut names: HashMap<Vec<u16>, JsonValue> = HashMap::new();
     if let Some(entries) = operations.and_then(|v| v.members()) {
         let entries: Vec<_> = entries.collect();
         for entry in &entries {
-            if let Some(name) = entry.name.as_str() {
-                names.insert(name.into(), entry.name.to_owned());
+            if let Some(name) = entry.name.utf16_units() {
+                names.insert(name, entry.name.to_owned());
             }
         }
         for entry in entries {
             if let Some(aliases) = entry.value.get("aliases").and_then(|v| v.elements()) {
                 for alias in aliases {
-                    let Some(name) = alias.as_str() else {
-                        c.violation(3, alias, "name-grammar", NAME_GRAMMAR_MESSAGE);
-                        continue;
-                    };
-                    if !valid_name(name) {
+                    if !alias.as_str().is_some_and(valid_name) {
                         c.violation(3, alias, "name-grammar", NAME_GRAMMAR_MESSAGE);
                     }
-                    if names.insert(name.into(), alias.to_owned()).is_some() {
+                    let Some(name) = alias.utf16_units() else {
+                        continue;
+                    };
+                    if names.insert(name, alias.to_owned()).is_some() {
                         c.violation(
                             4,
                             alias,
@@ -922,11 +933,11 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
     // References name primary map keys, including keys whose values are
     // independently malformed. Index once: JsonRef::get scans object members,
     // so calling it per reference made large binding maps quadratic.
-    fn primary_keys(map: Option<JsonRef<'_>>) -> HashSet<&str> {
+    fn primary_keys(map: Option<JsonRef<'_>>) -> HashSet<Vec<u16>> {
         map.and_then(|v| v.members())
             .into_iter()
             .flatten()
-            .filter_map(|m| m.name.as_str())
+            .filter_map(|m| m.name.utf16_units())
             .collect()
     }
     let operation_keys = primary_keys(operations);
@@ -940,8 +951,8 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
             for entry in entries {
                 if let Some(reference) = entry.value.get(field)
                     && reference
-                        .as_str()
-                        .is_none_or(|name| !targets.contains(name))
+                        .utf16_units()
+                        .is_none_or(|name| !targets.contains(&name))
                 {
                     c.violation(
                         rule,
@@ -958,17 +969,7 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
     // different positions must still be checked at each original location.
     for node in &schemas.nodes {
         let schema = node.value.view();
-        if node.depth > 256 {
-            c.mark_at(
-                9,
-                Evidence::Inconclusive,
-                schema,
-                "schema-depth-limit",
-                "schema depth exceeds 256",
-            );
-        } else {
-            c.fixed(&node.value, 9, true);
-        }
+        c.fixed(&node.value, 9, true);
         if let Some(dialect) = schema.get("$schema")
             && !matches!(
                 dialect.as_str(),

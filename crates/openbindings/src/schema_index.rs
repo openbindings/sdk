@@ -27,47 +27,65 @@ pub(crate) fn plain_name(name: &str) -> bool {
                 || (i > 0 && (c.is_ascii_digit() || c == b'-' || c == b'.'))
         })
 }
+// D-METASCHEMA: the test derives these selectors from the pinned originals.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum SchemaSelector {
+    Direct,
+    Map,
+    Array,
+    MapOrStringArray,
+}
+pub(crate) const SCHEMA_SELECTORS: &[(&str, SchemaSelector)] = &[
+    ("$defs", SchemaSelector::Map),
+    ("properties", SchemaSelector::Map),
+    ("patternProperties", SchemaSelector::Map),
+    ("dependentSchemas", SchemaSelector::Map),
+    ("definitions", SchemaSelector::Map),
+    ("dependencies", SchemaSelector::MapOrStringArray),
+    ("additionalProperties", SchemaSelector::Direct),
+    ("propertyNames", SchemaSelector::Direct),
+    ("unevaluatedProperties", SchemaSelector::Direct),
+    ("items", SchemaSelector::Direct),
+    ("contains", SchemaSelector::Direct),
+    ("unevaluatedItems", SchemaSelector::Direct),
+    ("not", SchemaSelector::Direct),
+    ("if", SchemaSelector::Direct),
+    ("then", SchemaSelector::Direct),
+    ("else", SchemaSelector::Direct),
+    ("contentSchema", SchemaSelector::Direct),
+    ("allOf", SchemaSelector::Array),
+    ("anyOf", SchemaSelector::Array),
+    ("oneOf", SchemaSelector::Array),
+    ("prefixItems", SchemaSelector::Array),
+];
 pub(crate) fn schema_children(value: JsonRef<'_>) -> Vec<JsonRef<'_>> {
     let mut out = Vec::new();
     if let Some(members) = value.members() {
         for member in members {
-            let child = member.value;
-            match member.name.as_str().unwrap_or("") {
-                "$defs" | "properties" | "patternProperties" | "dependentSchemas"
-                | "definitions" | "dependencies" => {
-                    if let Some(entries) = child.members() {
-                        out.extend(
-                            entries.map(|m| m.value).filter(|v| {
-                                matches!(v.kind(), JsonKind::Object | JsonKind::Boolean)
-                            }),
-                        );
+            let Some((_, selector)) = SCHEMA_SELECTORS
+                .iter()
+                .find(|(name, _)| Some(*name) == member.name.as_str())
+            else {
+                continue;
+            };
+            let is_schema =
+                |v: &JsonRef<'_>| matches!(v.kind(), JsonKind::Object | JsonKind::Boolean);
+            match selector {
+                SchemaSelector::Map | SchemaSelector::MapOrStringArray => {
+                    if let Some(entries) = member.value.members() {
+                        out.extend(entries.map(|m| m.value).filter(is_schema));
                     }
                 }
-                "additionalProperties"
-                | "propertyNames"
-                | "unevaluatedProperties"
-                | "items"
-                | "contains"
-                | "unevaluatedItems"
-                | "not"
-                | "if"
-                | "then"
-                | "else"
-                | "contentSchema" => {
-                    if matches!(child.kind(), JsonKind::Object | JsonKind::Boolean) {
-                        out.push(child);
+                SchemaSelector::Array => {
+                    if let Some(entries) = member.value.elements() {
+                        out.extend(entries.filter(is_schema));
                     }
                 }
-                "allOf" | "anyOf" | "oneOf" | "prefixItems" => {
-                    if let Some(entries) = child.elements() {
-                        out.extend(
-                            entries.filter(|v| {
-                                matches!(v.kind(), JsonKind::Object | JsonKind::Boolean)
-                            }),
-                        );
+                SchemaSelector::Direct => {
+                    if is_schema(&member.value) {
+                        out.push(member.value);
                     }
                 }
-                _ => {}
             }
         }
     }

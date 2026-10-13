@@ -758,7 +758,28 @@ impl SchemaSpace {
                 "the resource does not use the supported 2020-12 dialect",
             ));
         }
-        if has_unpaired(&node.value) {
+        // EV-3: annotations, literal values and child schemas are not interpreted
+        // by this node. Children receive their own reached-node checks.
+        let interprets_unpaired = node.value.view().members().is_some_and(|mut members| {
+            members.any(|member| {
+                let Some(keyword) = member.name.as_str() else {
+                    return true;
+                };
+                match keyword {
+                    "$id" | "$schema" | "$ref" | "$dynamicRef" | "$anchor" | "$dynamicAnchor"
+                    | "type" | "pattern" | "required" | "dependentRequired" => {
+                        has_unpaired(&member.value.to_owned())
+                    }
+                    "properties" | "patternProperties" | "dependentSchemas" => {
+                        member.value.members().is_some_and(|mut entries| {
+                            entries.any(|entry| entry.name.as_str().is_none())
+                        })
+                    }
+                    _ => false,
+                }
+            })
+        });
+        if interprets_unpaired {
             return Err(self.failure(
                 id,
                 NoVerdictReason::UnsupportedCapability,

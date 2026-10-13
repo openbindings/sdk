@@ -155,9 +155,11 @@ async fn source_preservation_is_exact_structural_and_panic_free() {
             r#"{ "b": [null,true], "a": 9007199254740993 }"#,
             true,
         ),
-        (r#""\uD800""#, r#""\ud800""#, false),
+        // CR-5: equivalent surrogate spellings preserve opaque source content.
+        (r#""\uD800""#, r#""\ud800""#, true),
         (r#""\uD800""#, r#""\"\\uD800\"""#, false),
-        (r#"{"\uD800":1,"a":2}"#, r#"{"a":2,"\ud800":1}"#, false),
+        // CR-5: opaque member names also compare as exact UTF-16 units.
+        (r#"{"\uD800":1,"a":2}"#, r#"{"a":2,"\ud800":1}"#, true),
         ("9007199254740993", "9007199254740992", false),
         ("1.0", "1", false),
         (r#"{"x":1,"x":2}"#, r#"{"x":2,"x":1}"#, false),
@@ -599,17 +601,22 @@ fn cancellation_wakes_and_drops_both_pending_calls() {
 #[tokio::test]
 async fn undetermined_conformance_is_not_upgraded() {
     let s = source(Some(r#""\ud800""#));
-    let e = deliver(&s, candidate(&s)).await.unwrap_err();
-    let rejected = e.rejected().unwrap();
+    // CR-5: opaque source content now establishes conformance without refusal.
+    let result = deliver(&s, candidate(&s)).await.unwrap();
     assert_eq!(
-        rejected.assessment.as_ref().unwrap().report().conclusion,
-        openbindings::Conformance::Undetermined
+        result
+            .document()
+            .parsed()
+            .assess()
+            .unwrap()
+            .report()
+            .conclusion,
+        openbindings::Conformance::Conformant
     );
-    assert!(e.partial().is_none());
     assert!(
-        rejected
-            .candidate
-            .document
+        result
+            .document()
+            .parsed()
             .value()
             .text()
             .contains("\\ud800")

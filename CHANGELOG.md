@@ -2,6 +2,15 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- Whole-document assessment no longer declines for escaped lone surrogates or schema
+  depth above 256. `assess_document_with_limits` accepts caller-supplied admission
+  limits; admission precedes version selection. The default evaluator refuses
+  unsupported string interpretation only when reached, per evaluation scope.
+  Assessment findings use `input-limit` for admission limits; `representation-limit`
+  and `schema-depth-limit` are no longer emitted by assessment. CONFORMANCE-06 changes
+  from undetermined to conformant because its description's lone surrogate no longer
+  gates assessment.
+
 - Duplicate-member detection and same-document JSON Pointer resolution now run in
   linear time. An object repeating its keys and a document with many schema
   references, each under 1 MiB, previously took several seconds. Results, source
