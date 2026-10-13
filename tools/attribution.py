@@ -138,7 +138,11 @@ def metadata(inventory):
     env["CARGO_NET_OFFLINE"] = "true"
     completed = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True)
     if completed.returncode:
-        raise ValueError(f"Cargo metadata failed for {inventory['target']}:\n{completed.stderr.rstrip()}")
+        raise ValueError(
+            f"Cargo metadata failed for {inventory['target']}:\n{completed.stderr.rstrip()}\n"
+            "Inventories cover other platforms' dependencies; acquire every platform's "
+            "sources first with `cargo fetch --locked`."
+        )
     return json.loads(completed.stdout)
 
 
