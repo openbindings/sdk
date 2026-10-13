@@ -15,7 +15,7 @@ independent. Unsupported or malformed versions are explicit refusals.
 | Explicit schema resources; retained input/output contracts | Yes | Yes |
 | Custom evaluator interface and reusable qualification kit | Rust traits | Default evaluator; JS callbacks not exposed |
 | Default 2020-12 evaluator, format annotations | Yes | Same semantic engine |
-| Discovery client/publication | Portable transport trait; optional native client | Fetch and standard Request/Response |
+| Discovery client/publication | One-hop callback and host timer; optional native client | Fetch and standard Request/Response |
 | Source inspection extension role | Provisional provider trait, checked consumer, exact binding fragments | Local async Wasm qualification probe only; no public TS role API yet |
 | Interface synthesis extension role | Provisional provider trait, checked document and coverage, strict recovery | Local Wasm qualification probe; no public TS role API yet |
 | Binding and operation invocation | Provisional provider/consumer APIs; bounded I/O, cancellation, selection and optional value contracts | Local Wasm qualification probes; no public TS role APIs yet |
@@ -150,14 +150,49 @@ wall-clock deadline. Fetch I/O supports asynchronous cancellation and timeout.
 
 ## HTTP discovery
 
-Strict HTTP/HTTPS origins, default decoded response-body limit 1 MiB (zero selects
-default; negative rejected), bounded reads and explicit redirect policy. Only 404
-means absence; 401/403 are gated with observable challenges. Unsupported versions,
-nonconformance, undetermined conformance, body limits and host failures remain
-distinct, retaining observable metadata and complete bounded 200 bytes.
+Origins use WHATWG normalization and require HTTPS except normalized literal IPv4
+127/8 and IPv6 `::1`. Names or DNS results do not establish that exception.
+Requested metadata records the normalized URL supplied to the transport. Native
+construction installs the SDK redirect policy last on the application's builder;
+an already-built client requires explicit policy delegation. Native and portable
+paths follow at most ten admitted 301/302/303/307/308 redirects, resolve relative
+Location, and refuse every HTTPS-to-HTTP hop before dispatch. Safe native policy
+also refuses A -> B -> B credential replay caused by tower-http restoring original
+headers while reqwest strips credentials only on changes from the preceding origin.
+Applications needing those chains must delegate policy and own credential handling.
+Portable callbacks expose individual hops and supply a monotonic, wake-capable
+timer; missing timers are refused before I/O.
 
-Native TLS uses caller trust configuration; tests do not modify OS trust. Browser
-CORS may hide responses/headers; opaque redirects have no observable final URL.
-Requested/final URLs never supply schema bases. Fetch controls its own stream-chunk
-buffering. A publication copies validated bytes and handles GET/HEAD, 405/Allow and
-routing; server auth, credentialed CORS and preflight remain application policy.
+Fetch follows redirects and checks the observable final URL for admission and an
+HTTPS-to-HTTP downgrade. Browser per-hop mixed-content and private-network policy,
+including its redirect limit, remain browser-owned and unobservable to the SDK.
+Opaque and opaqueredirect responses are policy refusals. CORS may hide responses
+and headers; Fetch controls its own stream-chunk buffering.
+
+The default whole-attempt deadline is 30 seconds, covering connection, TLS,
+headers, all redirects, body and validation without resets. Native owns a Tokio
+timer, portable discovery races one host timer, and TypeScript owns its timer and
+AbortController. Positive finite overrides and explicit unbounded mode are supported;
+zero timeout is refused. Timeout and caller cancellation are distinct, with caller
+cancellation winning a simultaneous observation. Timers cannot preempt blocking
+polls or synchronous validation; boundary checks discard late success.
+
+The decoded response-body limit defaults to 1 MiB (zero selects that byte default;
+negative limits are rejected). The SDK enables no reqwest gzip, brotli, deflate or
+stream features; application clients own decoding. Native `Decode` is only the
+SDK's refusal of Content-Encoding left undecoded by the host. Native body-read
+errors, including truncated or corrupt-coded bodies, are `BodyFailure` with
+`Network` and retain upstream messages; identified deadlines yield `Timeout`.
+Portable transports may report their own decoding failures. Only complete bounded
+200 bodies enter assessment; partial prefixes are never retained as documents.
+Only 404 means absence; 401/403 are gated with observable challenges. Unsupported
+versions, nonconformance, undetermined conformance, body limits and host failures
+remain distinct. Observed metadata and complete bounded bytes survive later stops.
+Requested/final URLs never supply schema bases. Native TLS uses caller trust
+configuration; tests use a private CA without modifying OS trust. URL admission
+does not establish connection-time address restrictions, which remain host policy.
+
+Publication copies validated bytes and handles GET/HEAD, 405/Allow and exact path
+routing. It emits `Access-Control-Allow-Origin: *` by default; explicit omission
+or a browser-serialized origin can be configured. Reserved `%2F` stays escaped.
+Server auth, credentialed CORS and preflight remain application policy.

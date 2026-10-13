@@ -2,12 +2,19 @@ use crate::*;
 use openbindings::{DocumentAssessment, ValidatedDocument, VersionRefusal};
 use std::sync::Arc;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 /// Publication header policy. Authentication, credentials and preflight handling remain the caller's responsibility.
 pub struct PublicationOptions {
-    /// Empty omits CORS; `*`, `null`, or one ASCII origin is emitted unchanged.
+    /// Defaults to `*`. Empty omits CORS; `null` or a serialized tuple origin is also accepted.
     /// Credentialed CORS and preflight policy belong to application middleware.
     pub allow_origin: String,
+}
+impl Default for PublicationOptions {
+    fn default() -> Self {
+        Self {
+            allow_origin: "*".into(),
+        }
+    }
 }
 #[derive(Clone, Debug)]
 /// Publication setup refusal; no listener is started and no unproved body is published.
@@ -84,7 +91,7 @@ impl Publication {
             _ => unreachable!("body assessment returns only document outcomes"),
         }
     }
-    /// `path` is the host's decoded route path, excluding query/fragment. Accept
+    /// `path` is the exact route path, excluding query/fragment. Do not decode reserved escapes. Accept
     /// does not affect the default OBI representation. Authentication is external.
     pub fn respond(&self, method: &str, path: &str) -> PublicationResponse {
         let mut response = PublicationResponse {
@@ -130,42 +137,25 @@ pub struct PublicationResponse {
     pub body: Arc<[u8]>,
 }
 
-/// Validate empty (omit), `*`, `null`, or one ASCII URI origin with a scheme and host, without credentials, path, query, fragment or controls. Schemes are not restricted to HTTP(S); the accepted spelling is emitted unchanged.
+/// Validate empty (omit), `*`, `null`, or an exact ASCII browser-serialized
+/// tuple origin. Opaque schemes, credentials and noncanonical spellings are refused.
 pub fn validate_allow_origin(origin: &str) -> Result<(), ConfigurationError> {
     let invalid = || ConfigurationError {
         code: "invalid-allow-origin",
-        message: "allow_origin must be empty, *, null, or one ASCII origin without credentials, path, query or fragment",
+        message: "allow_origin must be empty, *, null, or an exact ASCII serialized tuple origin",
     };
     if matches!(origin, "" | "*" | "null") {
         return Ok(());
     }
-    if origin.bytes().any(|b| b <= b' ' || b >= 0x7f) {
-        return Err(invalid());
-    }
-    let uri = fluent_uri::Uri::parse(origin).map_err(|_| invalid())?;
-    let authority = uri.authority().ok_or_else(invalid)?;
-    let host = authority.host();
-    if host.is_empty()
-        || authority.userinfo().is_some()
-        || !uri.path().is_empty()
-        || uri.query().is_some()
-        || uri.fragment().is_some()
-        || host.as_bytes().iter().any(|b| b",%*\\<>\"".contains(b))
-        || authority
-            .port()
-            .is_some_and(|p| p.as_str().is_empty() || p.as_str().parse::<u16>().is_err())
+    if origin.bytes().any(|b| b <= b' ' || b >= 0x7f)
+        || origin.contains([',', '*', '\\', '<', '>', '"'])
     {
         return Err(invalid());
     }
-    if host.starts_with('[') {
-        if !host.ends_with(']')
-            || host[1..host.len() - 1]
-                .parse::<std::net::Ipv6Addr>()
-                .is_err()
-        {
-            return Err(invalid());
-        }
-    } else if host.contains(['[', ']', ':']) {
+    let parsed = url::Url::parse(origin).map_err(|_| invalid())?;
+    if matches!(parsed.origin(), url::Origin::Opaque(_))
+        || parsed.origin().ascii_serialization() != origin
+    {
         return Err(invalid());
     }
     Ok(())
