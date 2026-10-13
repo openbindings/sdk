@@ -1,0 +1,9 @@
+{
+  "oldReceiptSha256": "debfe61898ae00b0ec1136f24db75219be85934f857fa074d37b19a8f8c54b7f",
+  "newReceiptSha256": "ccd8d47b8d0e40a9ae7f941289c531e70b63d209c0aef5860a4a18fcdd5c0347",
+  "changedQualifiedInputs": [
+    "examples/openapi-json-path-consumer/examples/auth_measure.rs"
+  ],
+  "productRuntimeChanged": false,
+  "sandboxAttempt": "Localhost listener denied before permitted rerun; original log retained. No measurements executed in either qualification."
+}
