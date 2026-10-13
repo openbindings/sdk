@@ -3,29 +3,6 @@
   "scope": "normal and build dependency closure; development-only edges excluded",
   "packages": [
     {
-      "name": "adler2",
-      "version": "2.0.1",
-      "declared_license": "0BSD OR MIT OR Apache-2.0",
-      "repository": "https://github.com/oyvindln/adler2",
-      "notices": [
-        {
-          "path": "LICENSE-0BSD",
-          "sha256": "861399f8c21c042b110517e76dc6b63a2b334276c8cf17412fc3c8908ca8dc17",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-APACHE",
-          "sha256": "8ada45cd9f843acf64e4722ae262c622a2b3b3007c7310ef36ac1061a30f6adb",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-MIT",
-          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
       "name": "ahash",
       "version": "0.8.12",
       "declared_license": "MIT OR Apache-2.0",
@@ -62,32 +39,6 @@
       ]
     },
     {
-      "name": "alloc-no-stdlib",
-      "version": "3.0.0",
-      "declared_license": "BSD-3-Clause",
-      "repository": "https://github.com/dropbox/rust-alloc-no-stdlib",
-      "notices": [
-        {
-          "path": "LICENSE",
-          "sha256": "c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "alloc-stdlib",
-      "version": "0.3.0",
-      "declared_license": "BSD-3-Clause",
-      "repository": "https://github.com/dropbox/rust-alloc-no-stdlib",
-      "notices": [
-        {
-          "path": "upstream/LICENSE",
-          "sha256": "c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae",
-          "retrieved_from": "https://raw.githubusercontent.com/dropbox/rust-alloc-no-stdlib/0a81fd6928ea3b33c8cd484aa4575d50ffb98012/LICENSE"
-        }
-      ]
-    },
-    {
       "name": "allocator-api2",
       "version": "0.2.21",
       "declared_license": "MIT OR Apache-2.0",
@@ -101,24 +52,6 @@
         {
           "path": "LICENSE-MIT",
           "sha256": "36516aefdc84c5d5a1e7485425913a22dbda69eb1930c5e84d6ae4972b5194b9",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "async-compression",
-      "version": "0.4.50",
-      "declared_license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/Nullus157/async-compression",
-      "notices": [
-        {
-          "path": "LICENSE-APACHE",
-          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-MIT",
-          "sha256": "88d1e3160df48926ad3310a8ec5699b502889565908f1be7e77cd21282c7a709",
           "retrieved_from": null
         }
       ]
@@ -286,37 +219,6 @@
       ]
     },
     {
-      "name": "brotli",
-      "version": "9.0.0",
-      "declared_license": "BSD-3-Clause AND MIT",
-      "repository": "https://github.com/dropbox/rust-brotli",
-      "notices": [
-        {
-          "path": "LICENSE.BSD-3-Clause",
-          "sha256": "c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE.MIT",
-          "sha256": "3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "brotli-decompressor",
-      "version": "6.0.1",
-      "declared_license": "BSD-3-Clause/MIT",
-      "repository": "https://github.com/dropbox/rust-brotli-decompressor",
-      "notices": [
-        {
-          "path": "LICENSE",
-          "sha256": "c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
       "name": "bumpalo",
       "version": "3.20.3",
       "declared_license": "MIT OR Apache-2.0",
@@ -456,42 +358,6 @@
       ]
     },
     {
-      "name": "compression-codecs",
-      "version": "0.4.45",
-      "declared_license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/Nullus157/async-compression",
-      "notices": [
-        {
-          "path": "LICENSE-APACHE",
-          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-MIT",
-          "sha256": "88d1e3160df48926ad3310a8ec5699b502889565908f1be7e77cd21282c7a709",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "compression-core",
-      "version": "0.4.33",
-      "declared_license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/Nullus157/async-compression",
-      "notices": [
-        {
-          "path": "LICENSE-APACHE",
-          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-MIT",
-          "sha256": "88d1e3160df48926ad3310a8ec5699b502889565908f1be7e77cd21282c7a709",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
       "name": "core-foundation",
       "version": "0.10.1",
       "declared_license": "MIT OR Apache-2.0",
@@ -523,24 +389,6 @@
         {
           "path": "LICENSE-MIT",
           "sha256": "62065228e42caebca7e7d7db1204cbb867033de5982ca4009928915e4095f3a3",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "crc32fast",
-      "version": "1.5.2",
-      "declared_license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/srijs/rust-crc32fast",
-      "notices": [
-        {
-          "path": "LICENSE-APACHE",
-          "sha256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-MIT",
-          "sha256": "61d383b05b87d78f94d2937e2580cce47226d17823c0430fbcad09596537efcf",
           "retrieved_from": null
         }
       ]
@@ -652,24 +500,6 @@
       ]
     },
     {
-      "name": "flate2",
-      "version": "1.1.10",
-      "declared_license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/rust-lang/flate2-rs",
-      "notices": [
-        {
-          "path": "LICENSE-APACHE",
-          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-MIT",
-          "sha256": "025436edff4cfcdde17a5811fdea78892d8482efd1abdec5a17872d07a4f2112",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
       "name": "fluent-uri",
       "version": "0.4.1",
       "declared_license": "MIT",
@@ -764,60 +594,6 @@
     },
     {
       "name": "futures-core",
-      "version": "0.3.34",
-      "declared_license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/rust-lang/futures-rs",
-      "notices": [
-        {
-          "path": "LICENSE-APACHE",
-          "sha256": "275c491d6d1160553c32fd6127061d7f9606c3ea25abfad6ca3f6ed088785427",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-MIT",
-          "sha256": "6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "futures-io",
-      "version": "0.3.34",
-      "declared_license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/rust-lang/futures-rs",
-      "notices": [
-        {
-          "path": "LICENSE-APACHE",
-          "sha256": "275c491d6d1160553c32fd6127061d7f9606c3ea25abfad6ca3f6ed088785427",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-MIT",
-          "sha256": "6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "futures-macro",
-      "version": "0.3.34",
-      "declared_license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/rust-lang/futures-rs",
-      "notices": [
-        {
-          "path": "LICENSE-APACHE",
-          "sha256": "275c491d6d1160553c32fd6127061d7f9606c3ea25abfad6ca3f6ed088785427",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-MIT",
-          "sha256": "6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "futures-sink",
       "version": "0.3.34",
       "declared_license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs",
@@ -1431,34 +1207,6 @@
         {
           "path": "LICENSE.txt",
           "sha256": "9387c2d197e2370a740ca457dae1662c56de56b811ee4862024343961307f9bf",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "miniz_oxide",
-      "version": "0.9.1",
-      "declared_license": "MIT OR Zlib OR Apache-2.0",
-      "repository": "https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide",
-      "notices": [
-        {
-          "path": "LICENSE",
-          "sha256": "4108245a1f2df9d4e94df8abed5b4ba0759bb2f9b40a6b939f1be141077ae50b",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-APACHE.md",
-          "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-MIT.md",
-          "sha256": "799e9ca9d179295ef372f25d3769cdda7d25bb2668add6a6a1e22d1e4c678b8d",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-ZLIB.md",
-          "sha256": "0a54e647fe54104658b5e563c04c6f9edf251710e47bce692e0bd990a4ddaa39",
           "retrieved_from": null
         }
       ]
@@ -2428,19 +2176,6 @@
       ]
     },
     {
-      "name": "simd-adler32",
-      "version": "0.3.10",
-      "declared_license": "MIT",
-      "repository": "https://github.com/mcountryman/simd-adler32",
-      "notices": [
-        {
-          "path": "LICENSE.md",
-          "sha256": "42a35170233e83e18856792e748de4c1ce4a63b2afce9a370c89ef3fe23f9f2d",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
       "name": "slab",
       "version": "0.4.12",
       "declared_license": "MIT",
@@ -2720,19 +2455,6 @@
         {
           "path": "LICENSE-MIT",
           "sha256": "e20fa2b8e0a2565f24a792b94b4bf4b6c2b9d36f781d8a9516e218a036e6677a",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "tokio-util",
-      "version": "0.7.19",
-      "declared_license": "MIT",
-      "repository": "https://github.com/tokio-rs/tokio",
-      "notices": [
-        {
-          "path": "LICENSE",
-          "sha256": "253cd04c6714889df2d32f3f64d669179a1c95c76ac43c40882c52eb06bc3552",
           "retrieved_from": null
         }
       ]
@@ -3260,19 +2982,6 @@
         {
           "path": "LICENSE",
           "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "zlib-rs",
-      "version": "0.6.8",
-      "declared_license": "Zlib",
-      "repository": "https://github.com/trifectatechfoundation/zlib-rs",
-      "notices": [
-        {
-          "path": "LICENSE",
-          "sha256": "e72111c52b7d96ebe25348dee19f0744f444d3c95ae6b1ecb6ccaecc5bce05ba",
           "retrieved_from": null
         }
       ]

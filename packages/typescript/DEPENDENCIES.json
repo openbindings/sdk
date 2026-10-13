@@ -191,6 +191,24 @@
       ]
     },
     {
+      "name": "displaydoc",
+      "version": "0.2.7",
+      "declared_license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/yaahc/displaydoc",
+      "notices": [
+        {
+          "path": "LICENSE-APACHE",
+          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "retrieved_from": null
+        },
+        {
+          "path": "LICENSE-MIT",
+          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
       "name": "email_address",
       "version": "0.2.9",
       "declared_license": "MIT",
@@ -256,6 +274,24 @@
         {
           "path": "LICENSE",
           "sha256": "b1181a40b2a7b25cf66fd01481713bc1005df082c53ef73e851e55071b102744",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "form_urlencoded",
+      "version": "1.2.2",
+      "declared_license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/servo/rust-url",
+      "notices": [
+        {
+          "path": "LICENSE-APACHE",
+          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "retrieved_from": null
+        },
+        {
+          "path": "LICENSE-MIT",
+          "sha256": "20c7855c364d57ea4c97889a5e8d98470a9952dade37bd9248b9a54431670e5e",
           "retrieved_from": null
         }
       ]
@@ -333,6 +369,133 @@
       ]
     },
     {
+      "name": "icu_collections",
+      "version": "2.3.0",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "icu_locale_core",
+      "version": "2.3.0",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "icu_normalizer",
+      "version": "2.3.0",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "icu_normalizer_data",
+      "version": "2.3.0",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "icu_properties",
+      "version": "2.3.0",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "icu_properties_data",
+      "version": "2.3.0",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "icu_provider",
+      "version": "2.3.1",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "idna",
+      "version": "1.1.0",
+      "declared_license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/servo/rust-url/",
+      "notices": [
+        {
+          "path": "LICENSE-APACHE",
+          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "retrieved_from": null
+        },
+        {
+          "path": "LICENSE-MIT",
+          "sha256": "b38f11f6096706e6de553dabe2a7ed142d59b6fa8c97e290c67496154745cdd5",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "idna_adapter",
+      "version": "1.2.2",
+      "declared_license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/hsivonen/idna_adapter",
+      "notices": [
+        {
+          "path": "LICENSE-APACHE",
+          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "retrieved_from": null
+        },
+        {
+          "path": "LICENSE-MIT",
+          "sha256": "8b43ce8accd61e9d370b5ca9e9c4f953279b5c239926c62315b40e24df51b726",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
       "name": "indexmap",
       "version": "2.14.2",
       "declared_license": "Apache-2.0 OR MIT",
@@ -404,6 +567,19 @@
           "path": "upstream/LICENSE",
           "sha256": "117829c3ca21efb132d81a44b55363d395ab8eea18526873bc828da4c0e5f038",
           "retrieved_from": "https://raw.githubusercontent.com/Stranger6667/jsonschema/55ac1664384793c5d3b20745d3f9c169dfe2c06f/LICENSE"
+        }
+      ]
+    },
+    {
+      "name": "litemap",
+      "version": "0.8.3",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+          "retrieved_from": null
         }
       ]
     },
@@ -771,6 +947,19 @@
       ]
     },
     {
+      "name": "potential_utf",
+      "version": "0.1.6",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
       "name": "proc-macro-crate",
       "version": "3.5.0",
       "declared_license": "MIT OR Apache-2.0",
@@ -1059,6 +1248,24 @@
       ]
     },
     {
+      "name": "stable_deref_trait",
+      "version": "1.2.1",
+      "declared_license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/storyyeller/stable_deref_trait",
+      "notices": [
+        {
+          "path": "LICENSE-APACHE",
+          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "retrieved_from": null
+        },
+        {
+          "path": "LICENSE-MIT",
+          "sha256": "5e05b024f653a5ce199e77cbbbd42fb5553562ec714b819421ed0c3e552a75d7",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
       "name": "strum",
       "version": "0.28.0",
       "declared_license": "MIT",
@@ -1116,6 +1323,32 @@
         {
           "path": "LICENSE-MIT",
           "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "synstructure",
+      "version": "0.14.0",
+      "declared_license": "MIT",
+      "repository": "https://github.com/mystor/synstructure",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "219920e865eee70b7dcfc948a86b099e7f4fe2de01bcca2ca9a20c0a033f2b59",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "tinystr",
+      "version": "0.8.4",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
           "retrieved_from": null
         }
       ]
@@ -1206,6 +1439,47 @@
         {
           "path": "LICENSE-UNICODE",
           "sha256": "f7db81051789b729fea528a63ec4c938fdcb93d9d61d97dc8cc2e9df6d47f2a1",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "url",
+      "version": "2.5.8",
+      "declared_license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/servo/rust-url",
+      "notices": [
+        {
+          "path": "LICENSE-APACHE",
+          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "retrieved_from": null
+        },
+        {
+          "path": "LICENSE-MIT",
+          "sha256": "b38f11f6096706e6de553dabe2a7ed142d59b6fa8c97e290c67496154745cdd5",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "utf8_iter",
+      "version": "1.0.4",
+      "declared_license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/hsivonen/utf8_iter",
+      "notices": [
+        {
+          "path": "COPYRIGHT",
+          "sha256": "c30152c94a6d75e021adbc52b3a52470366a46edb917e17deae3259251af244c",
+          "retrieved_from": null
+        },
+        {
+          "path": "LICENSE-APACHE",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "retrieved_from": null
+        },
+        {
+          "path": "LICENSE-MIT",
+          "sha256": "3fa4ca83dcc9237839b1bdeb2e6d16bdfb5ec0c5ce42b24694d8bbf0dcbef72c",
           "retrieved_from": null
         }
       ]
@@ -1340,6 +1614,45 @@
       ]
     },
     {
+      "name": "writeable",
+      "version": "0.6.4",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "yoke",
+      "version": "0.8.3",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "yoke-derive",
+      "version": "0.8.4",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
       "name": "zerocopy",
       "version": "0.8.62",
       "declared_license": "BSD-2-Clause OR Apache-2.0 OR MIT",
@@ -1358,6 +1671,71 @@
         {
           "path": "LICENSE-MIT",
           "sha256": "1a2f5c12ddc934d58956aa5dbdd3255fe55fd957633ab7d0d39e4f0daa73f7df",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "zerofrom",
+      "version": "0.1.8",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "zerofrom-derive",
+      "version": "0.1.8",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "zerotrie",
+      "version": "0.2.5",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "zerovec",
+      "version": "0.11.8",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
+      "name": "zerovec-derive",
+      "version": "0.11.6",
+      "declared_license": "Unicode-3.0",
+      "repository": "https://github.com/unicode-org/icu4x",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
           "retrieved_from": null
         }
       ]
