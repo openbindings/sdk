@@ -3,21 +3,22 @@
 ## SDK policy and interface scope
 
 The publication describes synthesis results. This SDK additionally checks unique
-coverage identities, one evidence entry per emitted dependency, preservation of
-every input source, and a binding or dependency for every generated operation.
-It derives strict eligibility and source attribution through one checked result.
-Those are reference-SDK policies, not obligations of every interface adopter.
+coverage identities and preservation of every input source. It derives strict
+eligibility and source attribution through one checked result. These extra checks
+are SDK policies, not obligations of every interface adopter.
 
 `sourceKeys` and `dependencyKey` are optional in the shared output shape. This
-SDK always emits the source map and requires dependency keys for represented or
-lossy dependency entries. A remote report without them can match the interface
-without being a checked native `Synthesis`. The policy corpus is maintained here;
-the separate interface examples intentionally allow other implementations.
+SDK derives and emits the source map. Dependency attribution remains optional:
+multiple evidence rows may name one dependency, and emitted dependencies need no
+keyed evidence row. A supplied key must exist in the emitted dependency map.
+Unbound operation contracts are permitted, including in partial results.
 
 Optional, provisional Rust API for Interface Synthesizer 0.2. A synthesizer turns
 sources into a conformant document and reports what each source contributes. Implement
 `InterfaceSynthesizer`; consume it through `Synthesizer`. Providers can also inspect,
-but neither role requires the other. No public TypeScript role API is released.
+but neither role requires the other. Callers query exact kind support, synthesize
+a document with coverage, request strict synthesis, inspect retained partial
+results, and serialize checked results. No public TypeScript role API is released.
 
 ```rust
 use openbindings::{DocumentBuilder, WorkControl};
@@ -65,15 +66,15 @@ futures may retain Rc or host handles. Owned provider controls share caller canc
 unpolled futures do no provider work. Cancellation cannot preempt a blocking poll.
 
 Core assessment checks document conformance, not source semantics. The facade also
-checks source preservation, output paths, unique coverage identities, dependency
-correspondence and evidence structure. A provider remains responsible for truthful
+checks source preservation, output paths, unique coverage identities, supplied dependency
+references and evidence structure. A provider remains responsible for truthful
 inventory, sound framing, deterministic observed-state behavior and absence of side
 effects. Partial coverage never excuses an unsound binding. Multi-source capability
 is provider-specific; it must refuse unsupported composition before acquisition.
 
 Coverage uses source index, scope and source reference as identity, with emitted
-path keys included for projections. Represented/lossy dependencies name dependencyKey;
-every emitted dependency has exactly one corresponding entry. Equal sources may
+path keys included for projections. Represented/lossy dependencies may name `dependencyKey`;
+a supplied key identifies an emitted dependency without imposing a one-to-one mapping. Equal sources may
 share emitted keys when supplied names permit; each input index is still accounted for.
 `coverage().source_keys()` retains one emitted key per input in request order and
 serializes as `coverage.sourceKeys`. Use it to resolve any entry's `source_index`,
@@ -82,17 +83,21 @@ this mapping; providers do not supply it. An unnamed input with multiple equal e
 sources maps to the lexicographically first key; its binding paths may use another
 equal source. Explicit names are preserved.
 
-Every generated operation must be referenced by a binding or dependency, including
-in partial results. A missing path produces `InvalidResult` with an
-`unrealized-operation` finding at the emitted operation. Dependency-only operations
-remain valid. The document core continues to allow unbound authoring contracts;
-this synthesis check does not establish kind soundness or a binding-to-coverage bijection.
+An operation declaration may have neither a binding nor a dependency. This does
+not claim that an admitted callable target was completely synthesized: truthful
+coverage and kind-sound binding paths remain the provider's responsibility.
 
 Only checked success objects serialize. Ordinary Serde requires a RawValue-aware
 serializer; bounded `to_json_with_limits` additionally applies byte/node/depth limits.
 These limits do not bound existing owners or process memory. Exact numeric tokens,
 content presence and opaque values never travel through binary64. Source comparison
-ignores JSON formatting/member order but preserves numeric spelling and opaque data.
+ignores JSON formatting and member order and compares numbers by exact decimal
+value through core's `JsonValue::semantic_eq`, so `1`, `1.0` and `1e0` match, as do
+`-0` and `0`. Numbers contribute only their kind tag to source hashes; core
+equality decides matches within each bucket. A `None` equality verdict means
+duplicate member names and cannot establish a source match. Candidate documents
+with duplicate members remain rejected by core conformance assessment. Exact
+serialization retains the emitted spelling; absent content remains distinct from null.
 
 Interface snapshots and separate SDK policy cases are retained in `tests/fixtures`. Package and narrow
 Rust-provider TypeScript/Wasm qualification uses `tools/verify-interface-synthesis.py`.

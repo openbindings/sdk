@@ -205,16 +205,35 @@ mod tests {
                 Ok(())
             })
         }
-        async fn preflight<'a>(
+    }
+    impl openbindings_invocation::binding::BindingPreflight for CancelThenComplete {
+        type Preflight<'a>
+            = std::pin::Pin<
+            Box<
+                dyn std::future::Future<
+                        Output = Result<
+                            Option<openbindings_invocation::ContextChallenge>,
+                            InvocationError,
+                        >,
+                    > + Send
+                    + 'a,
+            >,
+        >
+        where
+            Self: 'a;
+        fn preflight<'a>(
             &'a self,
             _: BindingRequest<'a>,
             local: WorkControl,
-        ) -> Result<Option<openbindings_invocation::ContextChallenge>, InvocationError> {
-            self.0.cancel();
-            assert!(local.is_cancelled());
-            Ok(None)
+        ) -> Self::Preflight<'a> {
+            Box::pin(async move {
+                self.0.cancel();
+                assert!(local.is_cancelled());
+                Ok(None)
+            })
         }
     }
+
     #[test]
     fn cancellation_during_poll_overrides_ready_provider_success() {
         let external = WorkControl::new();
@@ -234,9 +253,10 @@ mod tests {
     fn cancellation_during_poll_overrides_ready_preflight_success() {
         let external = WorkControl::new();
         let invoker = Invoker::new(doc(), CancelThenComplete(external.clone()));
-        let result =
-            std::pin::pin!(invoker.preflight_with_control(Request::binding("b"), &external))
-                .poll(&mut Context::from_waker(Waker::noop()));
+        let result = std::pin::pin!(
+            invoker.preflight_with_provider_and_control(Request::binding("b"), &external)
+        )
+        .poll(&mut Context::from_waker(Waker::noop()));
         let Poll::Ready(result) = result else {
             panic!("preflight must be ready")
         };

@@ -159,7 +159,7 @@ async fn source_preservation_is_exact_structural_and_panic_free() {
         (r#""\uD800""#, r#""\"\\uD800\"""#, false),
         (r#"{"\uD800":1,"a":2}"#, r#"{"a":2,"\ud800":1}"#, false),
         ("9007199254740993", "9007199254740992", false),
-        ("1.0", "1", false),
+        ("1.0", "1", true),
         (r#"{"x":1,"x":2}"#, r#"{"x":2,"x":1}"#, false),
     ] {
         let s = source(Some(a));
@@ -444,15 +444,14 @@ async fn exact_persistence_budgets_and_editing_do_not_reassign_evidence() {
     );
 }
 
+// RO-14: the publication permits an unbound contract even in a partial result.
 #[tokio::test]
-async fn synthesis_requires_a_realization_path_without_tightening_core_or_inventory() {
+async fn ro14_unbound_contracts_pass_strict_and_partial_synthesis() {
     let s = source(None);
     let mut c = candidate(&s);
     let mut draft = c.document.to_authoring().unwrap();
-    draft.operations.insert("orphan".into(), Default::default());
+    draft.operations.insert("event".into(), Default::default());
     c.document = draft.build().unwrap();
-    // An unbound contract is legitimate core authoring, but not a synthesized path.
-    assert!(c.document.assess().unwrap().validated().is_some());
     let inputs = [SynthesisSource {
         name: Some("api"),
         source: &s,
@@ -461,36 +460,33 @@ async fn synthesis_requires_a_realization_path_without_tightening_core_or_invent
         sources: &inputs,
         ..Default::default()
     };
-    let provider = Fixed::new(c.clone());
-    let facade = Synthesizer::new(&provider);
-    for result in [
-        facade.synthesize_with_coverage(&request).await,
-        facade.synthesize(&request).await.map(|_| unreachable!()),
-    ] {
-        let error = result.unwrap_err();
-        assert_eq!(error.kind(), SynthesisErrorKind::InvalidResult);
-        assert!(error.partial().is_none());
-        let rejected = error.rejected().unwrap();
-        assert!(rejected.assessment.as_ref().unwrap().validated().is_some());
-        let finding = rejected.finding.as_ref().unwrap();
-        assert_eq!(finding.code, "unrealized-operation");
-        assert_eq!(finding.path, "/interface/operations/orphan");
-    }
-    // Structural realizability does not add a binding-to-coverage bijection.
-    draft.bindings = Some(BTreeMap::from([(
-        "path".into(),
-        openbindings::Binding {
-            operation: "orphan".into(),
-            source: "api".into(),
-            ..Default::default()
-        },
-    )]));
-    c.document = draft.build().unwrap();
+    let facade = Synthesizer::new(Fixed::new(c.clone()));
+    assert!(facade.synthesize_with_coverage(&request).await.is_ok());
+    assert!(facade.synthesize(&request).await.is_ok());
+    let mut unsupported = CoverageEntry::new(
+        0,
+        "admitted-event",
+        CoverageScope::Target,
+        CoverageStatus::ImplementationUnsupported,
+    );
+    unsupported.reason_code = Some("example.unsupported".into());
+    unsupported.message = Some("An admitted target cannot be framed".into());
+    c.coverage.entries.push(unsupported);
+    let facade = Synthesizer::new(Fixed::new(c));
+    assert!(facade.synthesize_with_coverage(&request).await.is_ok());
+    let error = facade.synthesize(&request).await.unwrap_err();
+    assert_eq!(error.kind(), SynthesisErrorKind::Incomplete);
     assert!(
-        Synthesizer::new(Fixed::new(c))
-            .synthesize(&request)
-            .await
-            .is_ok()
+        error
+            .partial()
+            .unwrap()
+            .document()
+            .parsed()
+            .value()
+            .get("operations")
+            .unwrap()
+            .get("event")
+            .is_some()
     );
 }
 
