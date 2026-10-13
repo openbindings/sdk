@@ -2,6 +2,11 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- Duplicate-member detection and same-document JSON Pointer resolution now run in
+  linear time. An object repeating its keys and a document with many schema
+  references, each under 1 MiB, previously took several seconds. Results, source
+  order and duplicate coordinates are unchanged.
+
 - Extract the kind-specific OpenAPI implementation into
   [openbindings/openapi](https://github.com/openbindings/openapi). The SDK retains
   the source-inspection, interface-synthesis and invocation roles, their provider
