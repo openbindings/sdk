@@ -1,0 +1,27 @@
+
+running 3 tests
+test tests::capacity_and_orders ... ok
+test tests::controlled_stop_keeps_partial_records_without_calling ... ok
+test tests::cycles_have_every_edge ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: patch `openbindings-http-discovery v0.2.0-alpha.1 (/tmp/ob-auth-baseline/crates/openbindings-http-discovery)` was not used in the crate graph
+warning: patch `openbindings-schema-evaluator-test-support v0.2.0-alpha.1 (/tmp/ob-auth-baseline/crates/openbindings-schema-evaluator-test-support)` was not used in the crate graph
+warning: patch `openbindings-wasm v0.2.0-alpha.1 (/tmp/ob-auth-baseline/crates/openbindings-wasm)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+warning: use of deprecated associated function `core::num::<impl usize>::max_value`: replaced by the `MAX` associated constant on this type
+   --> /tmp/ob-auth-baseline/vendor/openbindings-internal-serde-json/src/lexical/math.rs:458:33
+    |
+458 |             .map_or_else(usize::max_value, |v| v - nlz)
+    |                                 ^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: `openbindings-internal-serde-json` (lib) generated 1 warning
+   Compiling openapi-json-path-consumer v0.0.0 (/tmp/ob-auth-baseline/consumer)
+    Finished `release` profile [optimized] target(s) in 0.94s
+     Running unittests examples/auth_resolution.rs (target/release/examples/auth_resolution-fb92f098dee0e065)

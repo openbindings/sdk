@@ -1,0 +1,7 @@
+{
+  "accepted": true,
+  "receipt_sha256": "ff6bd4ecdd698caaee9fbba9fdb34c7064cf555e2beade9374c569b0b20aec59",
+  "astra_sha256": "c90d7d47d85912120a406eaa06ead451e39c2b1f84a3d4f5c6ea22b1ba30d9e1",
+  "claude_sha256": "df2f152a18b2fd3d2f8285262e7b913f4d05e57a14c869f851e10de3ed58db60",
+  "decision": "Both independent final dispositions accept this exact repaired instrument; one pre-timing repair round consumed. Execute R once; Q only if adequate and independently accepted."
+}
