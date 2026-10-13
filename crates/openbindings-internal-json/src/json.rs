@@ -261,39 +261,10 @@ impl<'a> JsonRef<'a> {
     }
     /// Resolve an RFC 6901 pointer relative to this view. Empty means this value; invalid escapes, noncanonical array indices or unavailable targets return `None`; repeated object names select the first occurrence.
     pub fn at(self, pointer: &str) -> Option<Self> {
-        if pointer.is_empty() {
-            return Some(self);
-        }
-        let mut current = self;
-        for token in pointer.strip_prefix('/')?.split('/') {
-            let mut name = String::with_capacity(token.len());
-            let mut chars = token.chars();
-            while let Some(c) = chars.next() {
-                name.push(if c == '~' {
-                    match chars.next()? {
-                        '0' => '~',
-                        '1' => '/',
-                        _ => return None,
-                    }
-                } else {
-                    c
-                });
-            }
-            current = match current.kind() {
-                JsonKind::Object => current.get(&name)?,
-                JsonKind::Array => {
-                    if name.is_empty()
-                        || (name.len() > 1 && name.starts_with('0'))
-                        || !name.bytes().all(|c| c.is_ascii_digit())
-                    {
-                        return None;
-                    }
-                    current.element(name.parse().ok()?)?
-                }
-                _ => return None,
-            };
-        }
-        Some(current)
+        self.owner.at_from(self.id, pointer).map(|id| Self {
+            owner: self.owner,
+            id,
+        })
     }
     /// Return array element or object member count, including repeated object names; return `None` for scalars.
     pub fn len(self) -> Option<usize> {
