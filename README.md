@@ -9,8 +9,12 @@ Core parses and preserves exact JSON, supports typed authoring, assesses all 13
 document rules, indexes operation names and aliases, inspects kinds and references,
 and creates value-contract contexts with explicit resources and evaluators. Optional
 companions provide a default evaluator, an evaluator qualification kit, HTTP
-discovery, and provisional source-inspection and interface-synthesis provider/consumer
-APIs. Invocation, concrete binding adapters and application migration remain future work.
+discovery, and provisional Rust APIs for source inspection, interface synthesis,
+binding invocation and operation invocation. An experimental OpenAPI adapter
+implements inspection, synthesis and finite JSON invocation for private 3.0/3.1
+kinds, including supplied bearer and header API-key credentials. Public TypeScript
+APIs for these roles and the adapter remain future work; local Wasm probes exercise
+their portability. Application migration is separate work.
 
 ## Installation status
 
@@ -90,7 +94,7 @@ shows retained in-flight work and a replacement that is installed only when read
 | `openbindings-source-inspection` | Optional inspector provider trait and checked consumer API; Rust only, provisional |
 | `openbindings-interface-synthesis` | Optional synthesizer provider trait, checked document/coverage and strict recovery; Rust only, provisional |
 | `openbindings-invocation` | Optional binding provider, document-based operation invocation and bounded input/output lifecycle; Rust only, provisional |
-| `openbindings-openapi` | Optional experimental OpenAPI inspector, synthesizer and finite JSON binding invoker; private kind and bounded coverage |
+| `openbindings-openapi` | Optional experimental OpenAPI inspector, synthesizer and finite JSON binding invoker; private 3.0/3.1 kinds and bounded coverage |
 | `openbindings-wasm` | Internal bridge used by the supported TypeScript facade |
 | `@openbindings/sdk` | First-class TypeScript API and included Wasm asset |
 
@@ -99,6 +103,11 @@ packages. Their upstream APIs are not SDK extension contracts. The core's privat
 schema machinery checks the normative document schema; transport and operation
 value-evaluator policy remain outside core. See [architecture](docs/architecture.md),
 [capabilities](CAPABILITIES.md) and [dependency maintenance](DEPENDENCY-MAINTENANCE.md).
+
+The authenticated adapter is functionally qualified within its documented profile.
+Its incremental-auth performance check remains unresolved and explicitly deferred;
+see [the performance follow-up](docs/evidence/openapi-auth-json/performance-follow-up.md).
+No published binding standard is claimed for the private experimental kinds.
 
 ## Build and verify
 

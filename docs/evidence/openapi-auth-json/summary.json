@@ -1,7 +1,7 @@
 {
   "format": "openbindings.authenticated-json-execution@1",
   "date": "2026-10-13",
-  "status": "functionally qualified; benchmark work stopped by Matthew; AJ20 unresolved and deferred; ready for PR review",
+  "status": "functionally qualified; AJ20 deferred; landing authorized through PR and CI",
   "base": "abc96027691187ad11fe0394f1d1c9d73482e093",
   "branch": "codex/sdk-openapi-auth-json",
   "clientPin": "fe09522a9b99a6c6b4918e3de0467b5a638afa5e",
@@ -99,7 +99,7 @@
       "AJ20"
     ]
   },
-  "remaining": "AJ20 remains unpassed and deferred. Further benchmark work stopped by Matthew on 2026-10-13. See performance-follow-up.md for the unresolved check, optimization opportunities and landing assessment. Normal PR/CI and landing decision remain; no merge or publication.",
+  "remaining": "Normal PR/CI and merge. AJ20 remains unresolved and deferred; no benchmark work or package publication is authorized.",
   "investigationQualificationReceipt": "qualification-investigation/receipt.json",
   "investigationQualificationReceiptSha256": "ccd8d47b8d0e40a9ae7f941289c531e70b63d209c0aef5860a4a18fcdd5c0347",
   "performanceDeferral": {
@@ -112,8 +112,8 @@
     "resourceLimitsChanged": false,
     "fullyPerformanceQualified": false,
     "record": "performance-follow-up.md",
-    "landingAssessment": "Ready for PR review with explicit deferred performance qualification; normal PR/CI and landing decision remain.",
-    "mergeAuthorizedByThisRequest": false
+    "landingAssessment": "Matthew authorized landing with the explicit performance deferral through normal PR/CI; AJ20 remains unpassed.",
+    "mergeAuthorizedByThisRequest": true
   },
   "readinessVerification": {
     "date": "2026-10-13",

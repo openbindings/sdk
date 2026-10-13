@@ -3,7 +3,10 @@
 Date: 2026-10-13. Matthew directed that further benchmark work stop and that the
 unresolved check and optimization opportunities be documented. The implementation
 is ready for PR review with the performance qualification gap stated explicitly.
-Normal PR and CI checks remain before landing; no merge or publication has occurred.
+Matthew subsequently authorized landing the complete SDK stack through the normal
+PR and CI process with that gap disclosed. This authorizes landing with the deferral;
+it does not regrade AJ20, relax a numerical/resource limit, resume measurement, or
+authorize package publication. This record precedes the PR and merge.
 
 ## Unresolved performance check
 
