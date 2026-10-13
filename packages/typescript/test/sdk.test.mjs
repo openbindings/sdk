@@ -223,7 +223,7 @@ test("Fetch discovery keeps assessment and transport distinctions with complete 
   ]) {
     const r = await discovery.discover("HTTPS://EXAMPLE.test/", {
       fetch: async (url, init) => {
-        assert.equal(url, "https://EXAMPLE.test/.well-known/openbindings");
+        assert.equal(url, "https://example.test/.well-known/openbindings");
         assert.equal(init.headers.Accept, discovery.discoveryPolicy().accept);
         return new Response(text, {
           headers: media ? { "content-type": media } : {},

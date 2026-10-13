@@ -1,4 +1,4 @@
-/** Optional HTTP discovery companion. Fetch policy stays with the application. */
+/** Optional HTTP discovery companion. Fetch follows redirects under browser per-hop policy; the SDK checks the final URL and owns the attempt timer. */
 export {
   discover,
   discoveryEndpoint,
