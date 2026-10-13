@@ -6,11 +6,12 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 #[wasm_bindgen]
 pub async fn exact_roundtrip(
+    kind: &str,
     description: &str,
     input: &str,
     response: &str,
 ) -> Result<String, JsValue> {
-    let saved = author(description).await;
+    let saved = author(kind, description).await;
     let output = response.to_owned();
     let calls = Rc::new(Cell::new(0));
     let recorded = calls.clone();
@@ -51,14 +52,14 @@ pub fn logical_owners() -> String {
     format!("{sdk},{client}")
 }
 #[wasm_bindgen]
-pub async fn pending_cleanup(abandon: bool) -> Result<(), JsValue> {
+pub async fn pending_cleanup(kind: &str, description: &str, abandon: bool) -> Result<(), JsValue> {
     struct Guard(Rc<Cell<usize>>);
     impl Drop for Guard {
         fn drop(&mut self) {
             self.0.set(self.0.get() - 1);
         }
     }
-    let saved = author(DESCRIPTION).await;
+    let saved = author(kind, description).await;
     let live = Rc::new(Cell::new(0));
     let registered = live.clone();
     let provider = OpenApi::default().with_transport(

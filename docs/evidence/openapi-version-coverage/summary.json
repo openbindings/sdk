@@ -1,0 +1,101 @@
+{
+  "status": "bounded experimental checkpoint; Claude review unavailable",
+  "testsAndDoctests": 127,
+  "adapterTests": 30,
+  "cpuGates": {
+    "3.1.2": {
+      "pass": 22,
+      "fail": 0,
+      "inconclusive": 0
+    },
+    "3.0.4": {
+      "pass": 22,
+      "fail": 0,
+      "inconclusive": 0
+    }
+  },
+  "warmBindingMicroseconds": [
+    {
+      "edition": "3.1.2",
+      "method": "GET",
+      "bytes": 1024,
+      "directUs": 4.81,
+      "adapterUs": 8.42,
+      "pairedOverheadUs": 3.61
+    },
+    {
+      "edition": "3.1.2",
+      "method": "GET",
+      "bytes": 65536,
+      "directUs": 153.5,
+      "adapterUs": 197.82,
+      "pairedOverheadUs": 44.3
+    },
+    {
+      "edition": "3.1.2",
+      "method": "POST",
+      "bytes": 1024,
+      "directUs": 5.43,
+      "adapterUs": 11.64,
+      "pairedOverheadUs": 6.2
+    },
+    {
+      "edition": "3.1.2",
+      "method": "POST",
+      "bytes": 65536,
+      "directUs": 153.15,
+      "adapterUs": 341.25,
+      "pairedOverheadUs": 188.17
+    },
+    {
+      "edition": "3.0.4",
+      "method": "GET",
+      "bytes": 1024,
+      "directUs": 4.8,
+      "adapterUs": 8.39,
+      "pairedOverheadUs": 3.58
+    },
+    {
+      "edition": "3.0.4",
+      "method": "GET",
+      "bytes": 65536,
+      "directUs": 153.62,
+      "adapterUs": 199.35,
+      "pairedOverheadUs": 45.8
+    },
+    {
+      "edition": "3.0.4",
+      "method": "POST",
+      "bytes": 1024,
+      "directUs": 5.42,
+      "adapterUs": 11.64,
+      "pairedOverheadUs": 6.22
+    },
+    {
+      "edition": "3.0.4",
+      "method": "POST",
+      "bytes": 65536,
+      "directUs": 153.35,
+      "adapterUs": 341.59,
+      "pairedOverheadUs": 188.45
+    }
+  ],
+  "nodeMixedCyclesPerKind": 1000,
+  "nodeLogicalOwnersBaseline": {
+    "sdk": 8,
+    "client": 0
+  },
+  "reviewersCompleted": [
+    "GPT-6 Astra xhigh: source semantics and portability",
+    "GPT-6 Astra xhigh: runtime and consumer APIs"
+  ],
+  "claudeReview": "not submitted; desktop control unavailable",
+  "inputHashesVerifiedAtClose": true,
+  "mergedOrPublished": false,
+  "claimLimits": [
+    "Finite JSON profile only; no complete OpenAPI version support claim.",
+    "CPU comparison against direct client/core, not controlled pre/post regression or HTTP network parity.",
+    "No measured allocation peak/RSS/JS-heap or browser networking claim.",
+    "No binding specification written or adopted."
+  ]
+}

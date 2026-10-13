@@ -1,0 +1,31 @@
+{
+  "format": "review-reconciliation@1",
+  "provenance": "Coordinator summary of independent agent messages; not verbatim transcripts.",
+  "reviewers": [
+    {
+      "agent": "version_portability_review",
+      "model": "gpt-6-astra",
+      "effort": "xhigh",
+      "scope": "Source-version semantics, preservation of the original r1 kind, caching, coverage and portability minimality.",
+      "final": "No material findings remain in the bounded integrated review. Read-only review; parent test evidence is separate."
+    },
+    {
+      "agent": "version_consumer_review",
+      "model": "gpt-6-astra",
+      "effort": "xhigh",
+      "scope": "Runtime and public API diff, native/Wasm consumer lifecycle tests, and measurement changes.",
+      "final": "No remaining findings within the reviewed scope after adding the GET-body regression. Read-only review, without an independent Cargo run."
+    }
+  ],
+  "findings": [
+    {
+      "issue": "OpenAPI 3.0 GET request-body semantics depended on the client without a distinguishing consumer regression.",
+      "resolution": "The pinned client already ignores the 3.0 GET request body. Added a paired public API test of the synthesized body property, literal dispatch bytes, accepted/refused inputs and exactly one effect for each edition. The targeted test passes; both reviewers inspected closure."
+    }
+  ],
+  "claude": {
+    "requested": "Opus 5.5 Extra",
+    "status": "Unavailable: desktop control reported a locked session. Review packet prepared but not submitted.",
+    "claims": "No Claude concurrence claimed."
+  }
+}

@@ -3,9 +3,15 @@ use openapi_json_path_consumer::*;
 use openbindings_invocation::operation;
 use openbindings_openapi::OpenApi;
 use std::{cell::Cell, rc::Rc};
+fn editions() -> [(&'static str, &'static str); 2] {
+    [
+        (openbindings_openapi::EXPERIMENTAL_KIND, DESCRIPTION),
+        (openbindings_openapi::EXPERIMENTAL_KIND_30, DESCRIPTION_30),
+    ]
+}
 async fn package_consumer_exact_roundtrip_and_owners() {
-    async fn once() {
-        let saved = author(DESCRIPTION).await;
+    async fn once(kind: &str, description: &str) {
+        let saved = author(kind, description).await;
         let count = Rc::new(Cell::new(0));
         let recorded = count.clone();
         let provider = OpenApi::default().with_transport(
@@ -45,10 +51,14 @@ async fn package_consumer_exact_roundtrip_and_owners() {
             "ERR_OPERATION_NOT_FOUND"
         );
     }
-    once().await;
+    for (kind, description) in editions() {
+        once(kind, description).await;
+    }
     let before = owners();
     for _ in 0..1000 {
-        once().await;
+        for (kind, description) in editions() {
+            once(kind, description).await;
+        }
     }
     assert_eq!(owners(), before);
 }
@@ -63,8 +73,8 @@ async fn lifecycle_mix_owners_return_to_baseline() {
             self.0.set(self.0.get() - 1);
         }
     }
-    async fn once() {
-        let saved = author(DESCRIPTION).await;
+    async fn once(kind: &str, description: &str) {
+        let saved = author(kind, description).await;
         let parsed = openbindings::ParsedDocument::parse(&saved).unwrap();
         let draft = openbindings::DocumentBuilder::from_json(parsed.value()).unwrap();
         let name = draft.operations.keys().next().unwrap();
@@ -92,11 +102,11 @@ async fn lifecycle_mix_owners_return_to_baseline() {
                 malformed
             );
         }
-        let choices = DESCRIPTION.replace(
+        let choices = description.replace(
             r#"{"url":"https://consumer.invalid"}"#,
             r#"{"url":"https://consumer.invalid"},{"url":"https://other.invalid"}"#,
         );
-        let choice_saved = author(&choices).await;
+        let choice_saved = author(kind, &choices).await;
         let provider = OpenApi::default().with_transport(|_: PreparedRequest, _: Cancellation| {
             std::future::pending::<dynamic_openapi_client::Outcome>()
         });
@@ -151,10 +161,14 @@ async fn lifecycle_mix_owners_return_to_baseline() {
         }
     }
     // Counter evidence needs a serial test process; the qualifier supplies this flag.
-    once().await;
+    for (kind, description) in editions() {
+        once(kind, description).await;
+    }
     let before = owners();
     for _ in 0..1000 {
-        once().await;
+        for (kind, description) in editions() {
+            once(kind, description).await;
+        }
     }
     assert_eq!(owners(), before);
 }

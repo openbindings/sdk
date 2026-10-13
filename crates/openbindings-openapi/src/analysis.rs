@@ -1,7 +1,7 @@
-use crate::{Error, ErrorKind, Options, check, json};
+use crate::{Error, ErrorKind, Kind, Options, check, json};
 use dynamic_openapi_client::{
-    Document, DocumentBuilder, Edition, Method, Operation, ParameterLocation, ResourceInput,
-    SourceFormat, ValueKind,
+    Document, DocumentBuilder, Method, Operation, ParameterLocation, ResourceInput, SourceFormat,
+    ValueKind,
 };
 use openbindings::{JsonRef, JsonValue, WorkControl};
 use openbindings_source_inspection::{
@@ -10,6 +10,7 @@ use openbindings_source_inspection::{
 use std::collections::{BTreeMap, HashSet};
 
 pub(crate) struct Prepared {
+    pub kind: Kind,
     pub content: JsonValue,
     pub document: Document,
     pub units: Vec<Unit>,
@@ -90,6 +91,7 @@ pub(crate) fn object(value: JsonRef<'_>, allowed: &[&str]) -> Result<(), Error> 
     Ok(())
 }
 pub(crate) fn prepare(
+    kind: Kind,
     content: &JsonValue,
     options: &Options,
     control: &WorkControl,
@@ -121,9 +123,7 @@ pub(crate) fn prepare(
     let document = builder
         .build(entry)
         .map_err(|_| Error::new(ErrorKind::Unreadable, "graph-admission"))?;
-    if document.format() != SourceFormat::Json
-        || document.edition().ok() != Some(Edition::OpenApi31)
-    {
+    if document.format() != SourceFormat::Json || document.edition().ok() != Some(kind.edition()) {
         return Err(Error::new(
             ErrorKind::Unsupported,
             "unqualified-description",
@@ -192,7 +192,7 @@ pub(crate) fn prepare(
         let profile = if ambiguous {
             Err("ambiguous-path-item-merge")
         } else {
-            profile(&operation)
+            profile(&operation, kind)
         };
         let cost = source_ref
             .len()
@@ -211,6 +211,7 @@ pub(crate) fn prepare(
     }
     check(control)?;
     Ok(Prepared {
+        kind,
         content: content.clone(),
         document,
         units,
@@ -218,7 +219,7 @@ pub(crate) fn prepare(
         extra_interactions,
     })
 }
-fn profile(operation: &Operation) -> Result<Profile, &'static str> {
+fn profile(operation: &Operation, kind: Kind) -> Result<Profile, &'static str> {
     if !operation.path().is_ascii() {
         return Err("literal-unicode-path-unimplemented");
     }
@@ -273,6 +274,21 @@ fn profile(operation: &Operation) -> Result<Profile, &'static str> {
             return Err("parameter-representation-unimplemented");
         }
         let schema = param.schema().ok_or("parameter-shape-unestablished")?;
+        if kind == Kind::OpenApi30 {
+            // A 3.0 Schema Reference Object's siblings do not establish a type.
+            // Resolving/translating schema contracts remains outside this profile.
+            if schema.get("$ref").is_some() {
+                return Err("parameter-schema-reference-unimplemented");
+            }
+            // This experiment has no caller-to-wire mapping for null parameters.
+            // Refuse the profile rather than synthesize a narrower claimed contract.
+            if schema
+                .get("nullable")
+                .is_some_and(|v| v.as_bool() != Some(false))
+            {
+                return Err("nullable-parameter-unimplemented");
+            }
+        }
         let kind = schema
             .get("type")
             .and_then(|v| v.as_str().map(str::to_owned))

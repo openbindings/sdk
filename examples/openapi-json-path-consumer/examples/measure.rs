@@ -40,9 +40,9 @@ fn sample(mut f: impl FnMut()) -> Vec<f64> {
         })
         .collect()
 }
-fn description(n: usize, method: &str) -> String {
+fn description(n: usize, method: &str, version: &str) -> String {
     let paths:BTreeMap<_,_>=(0..n).map(|i|(format!("/p{i}"),serde_json::json!({method:{"requestBody":if method=="post" {serde_json::json!({"content":{"application/json":{}}})}else{serde_json::Value::Null},"responses":{"200":{"description":"json","content":{"application/json":{}}}}}}))).collect();
-    let mut v = serde_json::json!({"openapi":"3.1.2","info":{"title":"Measure","version":"1"},"servers":[{"url":"https://measure.invalid"}],"paths":paths});
+    let mut v = serde_json::json!({"openapi":version,"info":{"title":"Measure","version":"1"},"servers":[{"url":"https://measure.invalid"}],"paths":paths});
     if method == "get" {
         for value in v["paths"].as_object_mut().unwrap().values_mut() {
             value["get"].as_object_mut().unwrap().remove("requestBody");
@@ -120,15 +120,21 @@ impl binding::BindingInvoker for Echo {
 }
 fn main() {
     let mode = std::env::args().nth(1).unwrap();
+    let version = std::env::args().nth(2).unwrap_or_else(|| "3.1.2".into());
+    let kind = match version.as_str() {
+        "3.0.4" => openbindings_openapi::EXPERIMENTAL_KIND_30,
+        "3.1.2" => openbindings_openapi::EXPERIMENTAL_KIND,
+        _ => panic!("unsupported benchmark version"),
+    };
     let candidate = mode == "candidate";
     let mut rows = Vec::new();
     for n in [1, 32, 512] {
-        let text = description(n, "get");
-        let src = source(&text);
+        let text = description(n, "get", &version);
+        let src = source(kind, &text);
         for stage in ["source-generation", "client-source-preparation"] {
             let samples = sample(|| {
                 if stage == "source-generation" {
-                    black_box(description(n, "get"));
+                    black_box(description(n, "get", &version));
                 } else {
                     black_box(client_doc(&text));
                 }
@@ -187,8 +193,8 @@ fn main() {
     }
     for method in ["get", "post"] {
         for bytes in [1024, 65536] {
-            let text = description(1, method);
-            let src = source(&text);
+            let text = description(1, method, &version);
+            let src = source(kind, &text);
             let document = client_doc(&text);
             let op = document.operations().next().unwrap();
             let body = format!("\"{}\"", "x".repeat(bytes - 2));
@@ -404,5 +410,8 @@ fn main() {
             rows.push(serde_json::json!({"workload":"validated-invocation","method":method,"bytes":bytes,"payload":envelope.len()+bytes,"samples_ns":samples}));
         }
     }
-    println!("{}", serde_json::json!({"mode":mode,"rows":rows}));
+    println!(
+        "{}",
+        serde_json::json!({"mode":mode,"edition":version,"rows":rows})
+    );
 }

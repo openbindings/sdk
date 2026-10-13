@@ -1,6 +1,6 @@
 //! Experimental OpenAPI inspection, synthesis and finite JSON invocation.
 //!
-//! This optional adapter implements `local.openapi-json-probe.r1`. Its meaning
+//! This optional adapter implements private 3.1 and 3.0 JSON experiments. Their meaning
 //! is documented in the package README; it is not a published binding standard.
 //! Core remains unaware of OpenAPI, transport and operation effects.
 #![forbid(unsafe_code)]
@@ -28,6 +28,52 @@ pub const EXPERIMENTAL_KIND: &str = "local.openapi-json-probe.r1";
 pub const SERVER_POINT: &str = "local.openapi-json-probe.r1.server";
 /// Kind-defined unsuccessful HTTP status, with application data `{ "status": n }`.
 pub const HTTP_STATUS_ERROR: &str = "local.openapi-json-probe.r1.http-status";
+/// Exact private OpenAPI 3.0 experiment identifier; independent of the 3.1 r1 kind.
+pub const EXPERIMENTAL_KIND_30: &str = "local.openapi30-json-probe.r1";
+/// OpenAPI 3.0 experiment's declared absolute server URL configuration point.
+pub const SERVER_POINT_30: &str = "local.openapi30-json-probe.r1.server";
+/// OpenAPI 3.0 experiment's unsuccessful HTTP status, with data `{ "status": n }`.
+pub const HTTP_STATUS_ERROR_30: &str = "local.openapi30-json-probe.r1.http-status";
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    OpenApi31,
+    OpenApi30,
+}
+impl Kind {
+    const ALL: [Self; 2] = [Self::OpenApi31, Self::OpenApi30];
+    fn from_label(label: &str) -> Option<Self> {
+        match label {
+            EXPERIMENTAL_KIND => Some(Self::OpenApi31),
+            EXPERIMENTAL_KIND_30 => Some(Self::OpenApi30),
+            _ => None,
+        }
+    }
+    fn label(self) -> &'static str {
+        match self {
+            Self::OpenApi31 => EXPERIMENTAL_KIND,
+            Self::OpenApi30 => EXPERIMENTAL_KIND_30,
+        }
+    }
+    fn edition(self) -> dynamic_openapi_client::Edition {
+        match self {
+            Self::OpenApi31 => dynamic_openapi_client::Edition::OpenApi31,
+            Self::OpenApi30 => dynamic_openapi_client::Edition::OpenApi30,
+        }
+    }
+    fn server_point(self) -> &'static str {
+        match self {
+            Self::OpenApi31 => SERVER_POINT,
+            Self::OpenApi30 => SERVER_POINT_30,
+        }
+    }
+    fn status_error(self) -> &'static str {
+        match self {
+            Self::OpenApi31 => HTTP_STATUS_ERROR,
+            Self::OpenApi30 => HTTP_STATUS_ERROR_30,
+        }
+    }
+}
 
 /// Fixed resources and finite admission budgets. Changing these requires a new provider.
 #[derive(Clone, Debug)]
@@ -170,9 +216,8 @@ impl<T> OpenApi<T> {
         control: &WorkControl,
     ) -> Result<Arc<analysis::Prepared>, Error> {
         check(control)?;
-        if source.kind != EXPERIMENTAL_KIND {
-            return Err(Error::new(ErrorKind::Unsupported, "unsupported-kind"));
-        }
+        let kind = Kind::from_label(&source.kind)
+            .ok_or_else(|| Error::new(ErrorKind::Unsupported, "unsupported-kind"))?;
         let content = source
             .content
             .as_ref()
@@ -186,12 +231,14 @@ impl<T> OpenApi<T> {
             .map_err(|_| Error::new(ErrorKind::Unreadable, "poisoned-cache"))?;
         check(control)?;
         if let Some(prepared) = cache.as_ref().filter(|p| {
-            std::ptr::eq(p.content.text(), content.text()) || p.content.text() == content.text()
+            p.kind == kind
+                && (std::ptr::eq(p.content.text(), content.text())
+                    || p.content.text() == content.text())
         }) {
             return Ok(prepared.clone());
         }
         *cache = None;
-        let prepared = Arc::new(analysis::prepare(content, &self.options, control)?);
+        let prepared = Arc::new(analysis::prepare(kind, content, &self.options, control)?);
         #[cfg(test)]
         self.preparations
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -205,15 +252,19 @@ impl<T> SourceInspector for OpenApi<T> {
     where
         Self: 'a;
     fn supports_kind(&self, kind: &str) -> bool {
-        kind == EXPERIMENTAL_KIND
+        Kind::from_label(kind).is_some()
     }
     fn supported_kinds(&self) -> Vec<SupportedKind> {
-        vec![SupportedKind {
-            kind: EXPERIMENTAL_KIND.into(),
-            description: Some(
-                "Private finite JSON experiment; consult its qualified capability profile".into(),
-            ),
-        }]
+        Kind::ALL
+            .into_iter()
+            .map(|kind| SupportedKind {
+                kind: kind.label().into(),
+                description: Some(
+                    "Private finite JSON experiment; consult its qualified capability profile"
+                        .into(),
+                ),
+            })
+            .collect()
     }
     fn inspect<'a>(&'a self, source: &'a Source, control: WorkControl) -> Self::Inspection<'a> {
         ready(

@@ -1,4 +1,4 @@
-use crate::{EXPERIMENTAL_KIND, HTTP_STATUS_ERROR, OpenApi, SERVER_POINT, analysis, json};
+use crate::{Kind, OpenApi, analysis, json};
 use dynamic_openapi_client::{
     Body, BodyState, Cancellation, ExactJson, HeaderDelivery, Input, Outcome, ParameterInput,
     ParameterLocation, PreparedRequest,
@@ -121,7 +121,9 @@ impl<T: Transport> Future for InvocationFuture<'_, T> {
                     Poll::Ready(outcome) => outcome,
                 };
                 this.execution = None;
-                let value = match accept(outcome) {
+                let kind =
+                    Kind::from_label(&this.request.source.kind).expect("admitted source kind");
+                let value = match accept(outcome, kind) {
                     Ok(value) => value,
                     Err(e) => break Poll::Ready(Err(e)),
                 };
@@ -148,15 +150,19 @@ impl<T: Transport> BindingInvoker for OpenApi<T> {
     where
         Self: 'a;
     fn supports_kind(&self, kind: &str) -> bool {
-        kind == EXPERIMENTAL_KIND
+        Kind::from_label(kind).is_some()
     }
     fn supported_kinds(&self) -> Vec<SupportedKind> {
-        vec![SupportedKind {
-            kind: EXPERIMENTAL_KIND.into(),
-            description: Some(
-                "Private finite JSON experiment; no implicit retry or resource acquisition".into(),
-            ),
-        }]
+        Kind::ALL
+            .into_iter()
+            .map(|kind| SupportedKind {
+                kind: kind.label().into(),
+                description: Some(
+                    "Private finite JSON experiment; no implicit retry or resource acquisition"
+                        .into(),
+                ),
+            })
+            .collect()
     }
     fn invoke<'a>(
         &'a self,
@@ -296,10 +302,11 @@ fn prepare_request<T>(
         );
     }
     let servers = &profile.servers;
+    let server_point = p.kind.server_point();
     let choice = request
         .context
         .and_then(|c| c.get("configuration"))
-        .and_then(|c| c.get(SERVER_POINT));
+        .and_then(|c| c.get(server_point));
     let selected = match choice {
         Some(choice) => choice
             .as_str()
@@ -309,13 +316,13 @@ fn prepare_request<T>(
     };
     input.selection.server = Some(selected.ok_or_else(|| {
         let choices: std::collections::BTreeSet<_> = servers.iter().map(|s| s.as_str()).collect();
-        let target = serde_json_compat::json!([EXPERIMENTAL_KIND, request.source.content.as_ref().and_then(|v| v.get("retrievalUri")).and_then(JsonRef::as_str), path, method, choices]).to_string();
-        let shape = json(&serde_json_compat::json!({"target":target,"alternatives":[{"requirements":[{"type":"config.value","point":SERVER_POINT,"path":"","schema":{"type":"string","enum":choices}}]}]}));
+        let target = serde_json_compat::json!([p.kind.label(), request.source.content.as_ref().and_then(|v| v.get("retrievalUri")).and_then(JsonRef::as_str), path, method, choices]).to_string();
+        let shape = json(&serde_json_compat::json!({"target":target,"alternatives":[{"requirements":[{"type":"config.value","point":server_point,"path":"","schema":{"type":"string","enum":choices}}]}]}));
         shape.ok().and_then(|v| ContextChallenge::new(v).ok()).map(InvocationError::challenge).unwrap_or_else(refused)
     })?);
     unit.operation.prepare(&input).map_err(|_| refused())
 }
-fn accept(outcome: Outcome) -> Result<Option<JsonValue>, InvocationError> {
+fn accept(outcome: Outcome, kind: Kind) -> Result<Option<JsonValue>, InvocationError> {
     if outcome.cancelled {
         return Err(InvocationError::cancelled());
     }
@@ -337,7 +344,7 @@ fn accept(outcome: Outcome) -> Result<Option<JsonValue>, InvocationError> {
     if !(200..300).contains(&response.status()) {
         let data = json(&serde_json_compat::json!({"status":response.status()}))
             .map_err(|_| InvocationError::execution_failed())?;
-        return Err(InvocationError::new(HTTP_STATUS_ERROR, Some(data))
+        return Err(InvocationError::new(kind.status_error(), Some(data))
             .expect("fixed governed error shape"));
     }
     if response.status() == 204 {

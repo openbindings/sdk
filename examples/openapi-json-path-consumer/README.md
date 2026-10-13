@@ -8,7 +8,8 @@ Run from the SDK root with the Rust/Wasm/Node tools available:
 
 ```sh
 python3 tools/verify-openapi-json-path.py --archives --wasm
-python3 tools/measure-openapi-json-path.py --output /absolute/fresh/evidence-directory
+python3 tools/measure-openapi-json-path.py --edition 3.1.2 --output /absolute/fresh/31-evidence
+python3 tools/measure-openapi-json-path.py --edition 3.0.4 --output /absolute/fresh/30-evidence
 ```
 
 The qualifier runs native loopback HTTP, public consumer tests, serial logical-owner
@@ -21,7 +22,9 @@ future. Logical counters do not measure JS heap, resident memory or browser netw
 closes input and observes the authoritative terminal even after closed write admission.
 It retains output until success. The panic/assert helpers around it are fixture setup,
 not a suggested production error policy. The adapter's package README documents its
-private r1 contract and capability limits.
+private r1 contracts and capability limits. Supply the kind explicitly to `author`
+and `source`; the native and Node probes exercise 3.1.2 and 3.0.4 through the same
+facades. Source edition and kind are independently checked by the adapter.
 
 `examples/measure.rs` compares CPU work with the pinned client and core authoring,
 using equal source/result content for synthesis. Stage rows are descriptive diagnostics;

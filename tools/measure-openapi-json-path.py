@@ -4,7 +4,7 @@ extracted consumer from verify-openapi-json-path.py --archives. No network timin
 from pathlib import Path
 import argparse,subprocess,json,statistics,os,hashlib,time
 ROOT=Path(__file__).resolve().parents[1]
-p=argparse.ArgumentParser(description=__doc__);p.add_argument('--output',type=Path,required=True);a=p.parse_args()
+p=argparse.ArgumentParser(description=__doc__);p.add_argument('--output',type=Path,required=True);p.add_argument('--edition',choices=['3.1.2','3.0.4'],default='3.1.2');a=p.parse_args()
 a.output.mkdir(parents=True,exist_ok=False)
 target=Path(os.environ.get('CARGO_TARGET_DIR',ROOT/'target'))
 consumer=target/'openapi-json-path-qualification/archives/consumer'
@@ -24,7 +24,7 @@ raw=[]
 for pair in range(3):
     for mode in (['baseline','candidate'] if pair%2==0 else ['candidate','baseline']):
         print(f'pair {pair+1} {mode}',flush=True)
-        result=subprocess.run([str(binary),mode],text=True,capture_output=True)
+        result=subprocess.run([str(binary),mode,a.edition],text=True,capture_output=True)
         (a.output/f'{pair}-{mode}.stdout').write_text(result.stdout)
         (a.output/f'{pair}-{mode}.stderr').write_text(result.stderr)
         if result.returncode:raise SystemExit(f'Failed pair {pair} {mode}: {result.returncode}')
@@ -43,6 +43,6 @@ for i,example in enumerate(raw[0]['rows']):
     row={k:v for k,v in example.items() if k!='samples_ns'}
     row.update(baseline_process_medians_ns=b,candidate_process_medians_ns=c,baseline_median_ns=bm,candidate_median_ns=cm,overhead_ns=cm-bm,ratio=cm/bm,baseline_spread=spread,ceiling_ns=2*bm+allowance,paired_overheads_ns=[cv-bv for bv,cv in zip(b,c)],median_paired_overhead_ns=statistics.median([cv-bv for bv,cv in zip(b,c)]),paired_ratios=[cv/bv for bv,cv in zip(b,c)],status='diagnostic' if example['workload']=='stage' else 'inconclusive' if spread>0.15 else 'pass' if all(cv<=2*bv+allowance for bv,cv in zip(b,c)) else 'fail')
     rows.append(row)
-report={'qualification_receipt_sha256':hashlib.sha256(receipt_path.read_bytes()).hexdigest(),'consumer_lock_sha256':receipt['consumerLockSha256'],'format':'openbindings.openapi-json-path.performance@1','time':time.time(),'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'source_sha256':hashlib.sha256((consumer/'examples/measure.rs').read_bytes()).hexdigest(),'rustc':subprocess.check_output(['rustc','--version'],text=True).strip(),'rows':rows,'notes':['Programmable complete delivery; no network latency or general HTTP-parity claim.','Samples include ownership destruction. Warm input/source owners are retained consistently.','validated-invocation uses the same core evaluator and input contract on both paths.','Cold row combines setup and one invocation; warm source parse is separately structurally instrumented.']}
+report={'edition':a.edition,'qualification_receipt_sha256':hashlib.sha256(receipt_path.read_bytes()).hexdigest(),'consumer_lock_sha256':receipt['consumerLockSha256'],'format':'openbindings.openapi-json-path.performance@1','time':time.time(),'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'source_sha256':hashlib.sha256((consumer/'examples/measure.rs').read_bytes()).hexdigest(),'rustc':subprocess.check_output(['rustc','--version'],text=True).strip(),'rows':rows,'notes':['Programmable complete delivery; no network latency or general HTTP-parity claim.','Samples include ownership destruction. Warm input/source owners are retained consistently.','validated-invocation uses the same core evaluator and input contract on both paths.','Cold row combines setup and one invocation; warm source parse is separately structurally instrumented.']}
 (a.output/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps({'counts':{s:sum(r['status']==s for r in rows) for s in ['pass','fail','inconclusive']},'summary':str(a.output/'summary.json')}))

@@ -1,4 +1,4 @@
-use crate::{EXPERIMENTAL_KIND, Error, ErrorKind, OpenApi, check};
+use crate::{Error, ErrorKind, Kind, OpenApi, check};
 use openbindings::{Binding, DocumentBuilder, Operation, ParsedDocument, WorkControl};
 use openbindings_interface_synthesis::{
     CoverageDraft, CoverageEntry, CoverageLimitation, CoverageScope, CoverageStatus,
@@ -31,16 +31,21 @@ impl<T> InterfaceSynthesizer for OpenApi<T> {
     where
         Self: 'a;
     fn supports_kind(&self, kind: &str) -> bool {
-        kind == EXPERIMENTAL_KIND
+        Kind::from_label(kind).is_some()
     }
     fn supported_kinds(&self) -> Vec<SupportedKind> {
-        vec![SupportedKind {
-            kind: EXPERIMENTAL_KIND.into(),
+        Kind::ALL
+            .into_iter()
+            .map(|kind| {
+                SupportedKind {
+            kind: kind.label().into(),
             description: Some(
                 "Private JSON experiment, with disclosed schema projection and capability limits"
                     .into(),
             ),
-        }]
+        }
+            })
+            .collect()
     }
     fn synthesize<'a>(
         &'a self,

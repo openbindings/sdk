@@ -6,20 +6,21 @@ use dynamic_openapi_client::{
 use openbindings::{JsonValue, ParsedDocument, Source};
 use openbindings_interface_synthesis::{SynthesisRequest, SynthesisSource, Synthesizer};
 use openbindings_invocation::{InvocationError, binding::BindingInvoker, operation};
-use openbindings_openapi::{EXPERIMENTAL_KIND, OpenApi};
+use openbindings_openapi::OpenApi;
 use std::sync::Arc;
-pub fn source(text: &str) -> Source {
+pub fn source(kind: &str, text: &str) -> Source {
     Source {
-        kind: EXPERIMENTAL_KIND.into(),
+        kind: kind.into(),
         content: Some(JsonValue::parse(serde_json::json!({"document":text}).to_string()).unwrap()),
         ..Default::default()
     }
 }
 pub const DESCRIPTION: &str = r#"{"openapi":"3.1.2","info":{"title":"Consumer","version":"1"},"servers":[{"url":"https://consumer.invalid"}],"paths":{"/items":{"post":{"requestBody":{"required":true,"content":{"application/json":{"schema":true}}},"responses":{"200":{"description":"echo","content":{"application/json":{"schema":true}}}}}}}}"#;
+pub const DESCRIPTION_30: &str = r#"{"openapi":"3.0.4","info":{"title":"Consumer 3.0","version":"1"},"servers":[{"url":"https://consumer.invalid"}],"paths":{"/items":{"post":{"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","nullable":true}}}},"responses":{"200":{"description":"echo","content":{"application/json":{"schema":{"type":"object","nullable":true}}}}}}}}}"#;
 pub const INPUT: &str = r#"{"body":{"integer":9007199254740993,"label":"雪"}}"#;
 pub const OUTPUT: &str = r#"{"integer":9007199254740993,"label":"雪"}"#;
-pub async fn author(text: &str) -> String {
-    let source = source(text);
+pub async fn author(kind: &str, text: &str) -> String {
+    let source = source(kind, text);
     let provider = OpenApi::default();
     let inventory = openbindings_source_inspection::Inspector::new(&provider)
         .inspect(&source)
