@@ -123,15 +123,53 @@ pub struct BindableTarget {
 }
 
 /// Evidence explaining omitted or unestablished admitted targets.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct InspectionLimitation {
     /// Nonempty, stable namespaced reason code.
     pub code: String,
     /// Nonempty explanation of what may be missing and why.
     pub message: String,
     /// Optional structured evidence; exact values are preserved.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<BTreeMap<String, JsonValue>>,
+    /// Additional evidence members permitted by Source Inspector 0.1. Typed
+    /// members (`code`, `message`, `details`) must not be shadowed.
+    pub additional_fields: BTreeMap<String, JsonValue>,
+}
+
+impl InspectionLimitation {
+    fn validate(&self) -> Result<(), InspectionError> {
+        if self.code.is_empty() || self.message.is_empty() {
+            return Err(InspectionError::result(
+                "limitation code and message must be nonempty",
+            ));
+        }
+        if let Some(key) = self
+            .additional_fields
+            .keys()
+            .find(|key| ["code", "message", "details"].contains(&key.as_str()))
+        {
+            return Err(InspectionError::result(format!(
+                "limitation shadows typed member {key:?}"
+            )));
+        }
+        Ok(())
+    }
+}
+
+impl Serialize for InspectionLimitation {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.validate().map_err(serde::ser::Error::custom)?;
+        let mut map = serializer.serialize_map(None)?;
+        map.serialize_entry("code", &self.code)?;
+        map.serialize_entry("message", &self.message)?;
+        if let Some(details) = &self.details {
+            map.serialize_entry("details", details)?;
+        }
+        for (key, value) in &self.additional_fields {
+            map.serialize_entry(key, value)?;
+        }
+        map.end()
+    }
 }
 
 /// An inventory of targets the kind admits, in stable provider-defined order.
@@ -219,12 +257,8 @@ impl SourceInspection {
                 "incomplete inspection requires a limitation",
             ));
         }
-        if let Some(limitation) = &self.limitation
-            && (limitation.code.is_empty() || limitation.message.is_empty())
-        {
-            return Err(InspectionError::result(
-                "limitation code and message must be nonempty",
-            ));
+        if let Some(limitation) = &self.limitation {
+            limitation.validate()?;
         }
         let mut identities = HashSet::with_capacity(self.targets.len());
         for (index, target) in self.targets.iter().enumerate() {
@@ -250,20 +284,9 @@ impl BindableTarget {
         self.binding.validate()?;
         if let Some(operation) = &self.operation {
             for key in operation.additional_fields.keys() {
-                if [
-                    "idempotent",
-                    "description",
-                    "deprecated",
-                    "tags",
-                    "aliases",
-                    "input",
-                    "output",
-                    "examples",
-                ]
-                .contains(&key.as_str())
-                {
+                if !key.starts_with("x-") {
                     return Err(InspectionError::result(format!(
-                        "operation framing has forbidden or shadowed member {key:?}"
+                        "operation framing member {key:?} is not an x- extension"
                     )));
                 }
             }

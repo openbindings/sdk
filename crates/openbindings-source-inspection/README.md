@@ -82,8 +82,8 @@ and its README. Role, SDK package and OBI versions are independent.
 | Source carrier | Core `Source`; typed fields establish their types. Non-`x-` additional fields are refused, including shadowed typed fields. Core itself continues retaining unknown fields. |
 | Target identity and SDK policy | `source_ref` identifies the source-local target. This SDK rejects duplicate references, including identical rows, and expects stable provider ordering; the interface does not impose either policy. Cross-provider equality requires a kind-level definition. |
 | Author-owned keys | `BindingFragment` omits `operation` and `source`. Facade, serialization and `bind` reject illegal extension keys. The caller assigns keys through `bind`. |
-| Completeness | `SourceInspection::complete` or `partial`; incomplete results require a nonempty limitation code/message. Complete empty results are valid. The role also permits evidence on complete results. |
-| Framing | Core `Operation`; rejects `idempotent` and shadowed typed members. Sound projection is the provider's claim; conformance belongs to final document assessment. |
+| Completeness | `SourceInspection::complete` or `partial`; incomplete results require a nonempty limitation code/message. Complete empty results are valid. The role also permits evidence on complete results. `InspectionLimitation::additional_fields` retains additional evidence; typed fields cannot be shadowed. |
+| Framing | Core `Operation`; additional members must begin with `x-`, so unknown and shadowed typed members are refused. Sound projection is the provider's claim; conformance belongs to final document assessment. |
 | Exact content | `Option<JsonValue>` preserves absence/null, Unicode and exact numeric tokens. Opaque content never passes through binary64. |
 | Refusal | `InspectionErrorKind` and stable `code`; unreadable sources are errors. Partiality is successful data with explicit evidence. |
 
