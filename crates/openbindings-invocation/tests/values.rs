@@ -406,7 +406,8 @@ fn diagnostics_and_debug_do_not_reveal_strings_values_or_field_names() {
         context: Some(&context),
     };
     let challenge = ContextChallenge::new(json(&format!(r#"{{"target":"{SECRET}","alternatives":[{{"requirements":[{{"type":"{SECRET}","description":"{SECRET}"}}]}}]}}"#))).unwrap();
-    let error = InvocationError::new(SECRET, Some(context.clone())).unwrap();
+    // RO-7: codes are displayed; sensitive values belong in data, not the code.
+    let error = InvocationError::new("example.application", Some(context.clone())).unwrap();
     let diagnostic = BindingValue::from_json(&context).unwrap_err();
     let input = BindingInvocationInput {
         source: source.clone(),

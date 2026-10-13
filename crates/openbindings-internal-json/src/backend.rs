@@ -300,15 +300,12 @@ impl<'a> Object<'a, FlatJson> for ObjectView<'a> {
         self.1.len()
     }
     fn get(&self, key: &String) -> Option<View<'a>> {
-        for member in self.1 {
-            if !jsonschema::ob_work::charge(1) {
-                return None;
-            }
-            if self.0.string(member.key) == Some(key) {
-                return Some(View::Stored(self.0, member.value));
-            }
-        }
-        None
+        // CR-2: recover the containing object from its first key token, so the
+        // adapter shares the arena index and charges every collision candidate.
+        let (object, _) = self.0.nodes[self.1.first()?.key].parent?;
+        self.0
+            .get_with_probe(object, key, || jsonschema::ob_work::charge(1))
+            .map(|id| View::Stored(self.0, id))
     }
     fn members(&self) -> Members<'a> {
         Members(self.0, self.1.iter())

@@ -1,4 +1,4 @@
-use openbindings::{JsonValue, Operation, Source, WorkControl};
+use openbindings::{JsonLimits, JsonValue, Operation, Source, WorkControl};
 use openbindings_source_inspection::*;
 use std::{
     cell::Cell,
@@ -227,6 +227,7 @@ async fn incomplete_results_require_evidence_and_complete_empty_is_valid() {
                 code: "".into(),
                 message: "missing".into(),
                 details: None,
+                additional_fields: Default::default(),
             },
         ),
         SourceInspection::partial(
@@ -235,6 +236,7 @@ async fn incomplete_results_require_evidence_and_complete_empty_is_valid() {
                 code: "example.limit".into(),
                 message: "".into(),
                 details: None,
+                additional_fields: Default::default(),
             },
         ),
         SourceInspection::complete(vec![BindableTarget {
@@ -260,6 +262,7 @@ async fn incomplete_results_require_evidence_and_complete_empty_is_valid() {
                 code: "example.note".into(),
                 message: "complete within the kind's admitted set".into(),
                 details: None,
+                additional_fields: Default::default(),
             },
         )
     }
@@ -505,6 +508,7 @@ async fn every_inventory_output_path_refuses_the_same_invalid_results() {
                 code: "".into(),
                 message: "why".into(),
                 details: None,
+                additional_fields: Default::default(),
             },
         ),
         SourceInspection::complete(vec![forbidden_framing]),
@@ -538,4 +542,74 @@ fn source_ref_uniqueness_is_exact_and_valid_serializers_agree() {
         inventory.to_json().unwrap().text(),
         serde_json_compat::to_string(&inventory).unwrap()
     );
+}
+
+// RO-15: every operation extension obeys the same carrier rule as binding and
+// source extensions. Neither standalone serialization nor inspection bypasses it.
+#[tokio::test]
+async fn ro15_operation_framing_refuses_unknown_non_extension_members() {
+    for key in ["foo", "idempotent", "input", "x-evidence"] {
+        let item = BindableTarget {
+            operation: Some(Operation {
+                additional_fields: BTreeMap::from([(
+                    key.into(),
+                    JsonValue::parse("1e9999").unwrap(),
+                )]),
+                ..Default::default()
+            }),
+            ..target()
+        };
+        let valid = key.starts_with("x-");
+        assert_eq!(serde_json_compat::to_string(&item).is_ok(), valid);
+        let inventory = SourceInspection::complete(vec![item]);
+        assert_eq!(inventory.to_json().is_ok(), valid);
+        assert_eq!(serde_json_compat::to_string(&inventory).is_ok(), valid);
+        let (facade, _) = inspector(Some(inventory));
+        assert_eq!(facade.inspect(&source()).await.is_ok(), valid);
+    }
+}
+
+// RO-18: keep crate-local forwarding and bounded writers while there is no
+// shared private package boundary. Exercise their composition to prevent drift.
+#[tokio::test]
+async fn ro18_forwarded_inspectors_preserve_exact_encoding_and_byte_limits() {
+    struct Provider;
+    impl SourceInspector for Provider {
+        type Inspection<'a> = Ready<Result<SourceInspection, InspectionError>>;
+        fn supports_kind(&self, kind: &str) -> bool {
+            kind == KIND
+        }
+        fn inspect<'a>(&'a self, _: &'a Source, _: WorkControl) -> Self::Inspection<'a> {
+            ready(Ok(SourceInspection::complete(vec![target()])))
+        }
+    }
+    let provider = std::sync::Arc::new(Provider);
+    let shared = Inspector::new(provider.clone());
+    let borrowed = Inspector::new(&*provider);
+    let local = Inspector::new(Rc::new(provider.clone()));
+    let source = source();
+    for facade_result in [
+        shared.inspect(&source).await,
+        borrowed.inspect(&source).await,
+        local.inspect(&source).await,
+    ] {
+        let result = facade_result.unwrap();
+        let wire = result.to_json().unwrap();
+        assert!(
+            result
+                .to_json_with_limits(JsonLimits {
+                    max_bytes: wire.bytes().len(),
+                    ..Default::default()
+                })
+                .is_ok()
+        );
+        assert!(
+            result
+                .to_json_with_limits(JsonLimits {
+                    max_bytes: wire.bytes().len() - 1,
+                    ..Default::default()
+                })
+                .is_err()
+        );
+    }
 }

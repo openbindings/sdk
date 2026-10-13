@@ -38,6 +38,7 @@ fn inventories_validate_against_pinned_role_output_contract() {
                 code: "example.unavailable".into(),
                 message: "admitted records could not be read".into(),
                 details: None,
+                additional_fields: Default::default(),
             },
         ),
     ] {
@@ -93,4 +94,64 @@ fn duplicate_recovery_is_sdk_policy_not_an_interface_requirement() {
             .is_err()
     );
     assert!(SourceInspection::complete(vec![target]).validate().is_ok());
+}
+
+// RO-15: the pinned InspectionLimitation schema omits additionalProperties,
+// which permits additional evidence. Both serializers must preserve it exactly.
+#[test]
+fn ro15_limitation_additional_evidence_matches_the_published_interface() {
+    let document =
+        ParsedDocument::parse(include_bytes!("fixtures/source-inspector-0.1.json")).unwrap();
+    assert!(
+        document
+            .value()
+            .view()
+            .at("/schemas/InspectionLimitation")
+            .unwrap()
+            .get("additionalProperties")
+            .is_none()
+    );
+    let context = document
+        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
+        .unwrap();
+    let ContractPreparation::Ready(contract) =
+        context.prepare("openbindings.source-inspector.inspectSource", Side::Output)
+    else {
+        panic!("role contract failed")
+    };
+    let mut limitation = InspectionLimitation {
+        code: "example.remaining".into(),
+        message: "Some admitted targets could not be inspected".into(),
+        details: None,
+        additional_fields: std::collections::BTreeMap::from([(
+            "evidence".into(),
+            JsonValue::parse(r#"{"count":9007199254740993,"state":null}"#).unwrap(),
+        )]),
+    };
+    let inventory = SourceInspection::partial(vec![], limitation.clone());
+    let wire = inventory.to_json().unwrap();
+    assert_eq!(
+        wire.text(),
+        serde_json_compat::to_string(&inventory).unwrap()
+    );
+    assert_eq!(
+        wire.view()
+            .at("/limitation/evidence/count")
+            .unwrap()
+            .number_text(),
+        Some("9007199254740993")
+    );
+    assert!(matches!(contract.validate(&wire), ValueOutcome::Satisfies));
+    for key in ["code", "message", "details"] {
+        limitation
+            .additional_fields
+            .insert(key.into(), JsonValue::null());
+        assert!(serde_json_compat::to_string(&limitation).is_err());
+        assert!(
+            SourceInspection::partial(vec![], limitation.clone())
+                .to_json()
+                .is_err()
+        );
+        limitation.additional_fields.remove(key);
+    }
 }

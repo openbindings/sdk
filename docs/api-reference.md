@@ -10,6 +10,9 @@ for a complete job; use the definitions for exact result, ownership and limit co
 | Rust default evaluator | [`openbindings-json-schema-evaluator`](../crates/openbindings-json-schema-evaluator/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-json-schema-evaluator` |
 | Rust evaluator contract kit | [`openbindings-schema-evaluator-test-support`](../crates/openbindings-schema-evaluator-test-support/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-schema-evaluator-test-support` |
 | Rust HTTP discovery | [`openbindings-http-discovery`](../crates/openbindings-http-discovery/src/lib.rs), including native adapter | `cargo doc --locked --no-deps -p openbindings-http-discovery --features native` |
+| Rust source inspection role | [`openbindings-source-inspection`](../crates/openbindings-source-inspection/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-source-inspection` |
+| Rust interface synthesis role | [`openbindings-interface-synthesis`](../crates/openbindings-interface-synthesis/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-interface-synthesis` |
+| Rust binding and operation invocation roles | [`openbindings-invocation`](../crates/openbindings-invocation/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-invocation` |
 | TypeScript core and HTTP discovery | [`internal.ts`](../packages/typescript/src/internal.ts), as exported by the two entry points | Build the package, then run `node packages/typescript/scripts/check-api-reference.mjs target/api-reference` |
 | Compiled Wasm asset import | [`wasm-module.d.ts`](../packages/typescript/src/wasm-module.d.ts) | Host import type documented alongside `initialize` |
 
@@ -20,6 +23,26 @@ are implementation details, not additional supported SDK entry points. Exact JSO
 contracts reexported by `openbindings` remain documented at their original definitions.
 Rust's standard trait implementations inherit their standard contracts; the evaluator
 and transport traits document their additional SDK obligations explicitly.
+
+## Optional Rust role APIs
+
+Source inspection uses `SourceInspector` and `Inspector`; interface synthesis uses
+`InterfaceSynthesizer` and `Synthesizer`. Invocation uses `binding::BindingInvoker`
+with `binding::Invoker` or `operation::Invoker`. These provisional roles have no
+public TypeScript role API.
+
+| Public item | Contract |
+| --- | --- |
+| `binding::BindingPreflight` | Optional provider trait extending `BindingInvoker`; its `Preflight<'a>` associated future and `preflight` method report advisory context requirements or no prediction. |
+| `binding::Invoker::preflight_with_provider`, `operation::Invoker::preflight_with_provider` | Opt into the provider hook after checked admission; require `P: BindingPreflight`. |
+| `binding::Invoker::preflight_with_provider_and_control`, `operation::Invoker::preflight_with_provider_and_control` | The same provider preflight with caller cancellation, isolated from sibling attempts. |
+| `InspectionLimitation::additional_fields` | `BTreeMap<String, JsonValue>` retaining additional exact evidence; `code`, `message` and `details` cannot be shadowed. Existing struct literals must supply this map. |
+
+Providers that implemented `BindingInvoker::preflight` move the hook and declare
+its future type in `BindingPreflight`. Both facades' `preflight` and
+`preflight_with_control` admit the request and make no prediction; invoke-only
+providers need no new items. Provider preflight is Send when the provider is Sync
+and its associated future is Send; local futures and Rc providers remain supported.
 
 ## Boundaries to preserve
 

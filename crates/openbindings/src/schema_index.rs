@@ -189,3 +189,95 @@ pub(crate) enum SameDocument {
     Missing,
     Ambiguous,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fmt::Write;
+
+    #[test]
+    fn cr2_many_same_document_references_keep_the_target() {
+        // CR-2: exercise the normative OBI-12 route at all work-count sizes.
+        // The arena tests count member probes in the shared pointer evaluator.
+        for n in [10_000, 20_000, 40_000] {
+            let mut text = String::from("{\"schemas\":{");
+            for i in 0..n {
+                if i > 0 {
+                    text.push(',');
+                }
+                write!(text, "\"s{i}\":{{\"$ref\":\"#/schemas/s{}\"}}", n - 1).unwrap();
+            }
+            text.push_str("}}");
+            let document = JsonValue::parse(text).unwrap();
+            let index = SchemaIndex::build(&document);
+            assert_eq!(index.nodes.len(), n);
+            let reference = format!("#/schemas/s{}", n - 1);
+            let target = document.at(&reference[1..]).unwrap().to_owned();
+            for node in &index.nodes {
+                assert_eq!(
+                    node.value.get("$ref").unwrap().as_str(),
+                    Some(reference.as_str())
+                );
+                let SameDocument::Found(found) = index.same_document(&document, &reference) else {
+                    panic!("same-document reference lost its target");
+                };
+                assert_eq!(node_id(&found), node_id(&target));
+            }
+            assert!(matches!(
+                index.same_document(&document, "#/schemas/absent"),
+                SameDocument::Missing
+            ));
+        }
+    }
+
+    #[test]
+    fn cr2_pointer_escapes_arrays_and_resource_boundaries() {
+        // CR-2: indexing must leave RFC 6901 and OBI-position semantics intact.
+        let document = JsonValue::parse(
+            r##"{"schemas":{
+            "a/~":{"allOf":[true,{"properties":{"~1":false}}]},
+            "a\u002f~":false,
+            "resource":{"$id":"https://example.test/r","properties":{"child":true}},
+            "space name":true
+        },"x-opaque":{"schema":true}}"##,
+        )
+        .unwrap();
+        let index = SchemaIndex::build(&document);
+        for reference in [
+            "#/schemas/a~1~0/allOf/0",
+            "#%2Fschemas%2Fa~1~0%2FallOf%2F1%2Fproperties%2F~01",
+            "#/schemas/resource",
+            "#/schemas/space%20name",
+        ] {
+            assert!(
+                matches!(
+                    index.same_document(&document, reference),
+                    SameDocument::Found(_)
+                ),
+                "{reference}"
+            );
+        }
+        let SameDocument::Found(first) = index.same_document(&document, "#/schemas/a~1~0") else {
+            panic!()
+        };
+        assert_eq!(first.kind(), JsonKind::Object);
+        for reference in [
+            "#/schemas/a~1~0/allOf/01",
+            "#/schemas/a~1~0/allOf/-",
+            "#/schemas/a~2",
+            "#/schemas/missing",
+            "#/schemas",
+            "#/schemas/resource/properties/child",
+            "#/x-opaque/schema",
+            "#%FF",
+        ] {
+            assert!(
+                matches!(
+                    index.same_document(&document, reference),
+                    SameDocument::Missing
+                ),
+                "{reference}"
+            );
+        }
+    }
+}

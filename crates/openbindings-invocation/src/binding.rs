@@ -53,23 +53,34 @@ pub trait BindingInvoker {
         io: ProviderIo,
         control: WorkControl,
     ) -> Self::Invocation<'a>;
-    /// Advisory only: no operation input/output, dispatch or approval spending.
-    /// The conforming default makes no prediction. Invocation never calls this.
+}
+
+/// Optional advisory preparation for a binding provider. Invocation never calls
+/// this hook. Providers may return local futures or futures that implement Send.
+pub trait BindingPreflight: BindingInvoker {
+    /// Borrowed advisory job; generic consumers can place bounds on this future.
+    type Preflight<'a>: Future<Output = Result<Option<ContextChallenge>, InvocationError>>
+    where
+        Self: 'a;
+    /// Predict context requirements without input/output, dispatch or approval
+    /// spending. `Ok(None)` makes no prediction.
     fn preflight<'a>(
         &'a self,
-        _request: BindingRequest<'a>,
-        _control: WorkControl,
-    ) -> impl Future<Output = Result<Option<ContextChallenge>, InvocationError>> + 'a {
-        std::future::ready(Ok(None))
-    }
+        request: BindingRequest<'a>,
+        control: WorkControl,
+    ) -> Self::Preflight<'a>;
 }
+
 macro_rules! forward { ($($wrapper:ty),+) => { $(
 impl<P: BindingInvoker + ?Sized> BindingInvoker for $wrapper {
     type Invocation<'a> = P::Invocation<'a> where Self: 'a;
     fn supports_kind(&self, kind: &str) -> bool { (**self).supports_kind(kind) }
     fn supported_kinds(&self) -> Vec<SupportedKind> { (**self).supported_kinds() }
     fn invoke<'a>(&'a self, request: BindingRequest<'a>, io: ProviderIo, control: WorkControl) -> Self::Invocation<'a> { (**self).invoke(request, io, control) }
-    fn preflight<'a>(&'a self, request: BindingRequest<'a>, control: WorkControl) -> impl Future<Output = Result<Option<ContextChallenge>, InvocationError>> + 'a { (**self).preflight(request, control) }
+}
+impl<P: BindingPreflight + ?Sized> BindingPreflight for $wrapper {
+    type Preflight<'a> = P::Preflight<'a> where Self: 'a;
+    fn preflight<'a>(&'a self, request: BindingRequest<'a>, control: WorkControl) -> Self::Preflight<'a> { (**self).preflight(request, control) }
 }
 )+ }; }
 forward!(&P, std::sync::Arc<P>, std::rc::Rc<P>);
@@ -158,10 +169,12 @@ impl<P: BindingInvoker> Invoker<P> {
             },
             external,
             local,
+            shared.clone(),
         );
         Invocation::new(shared, future)
     }
-    /// Advisory preflight, independently admitted; no implicit invocation follows.
+    /// Admit advisory preflight and make no prediction. This default path needs
+    /// only an invoke provider; use `preflight_with_provider` to opt into its hook.
     pub async fn preflight(
         &self,
         request: BindingRequest<'_>,
@@ -175,6 +188,44 @@ impl<P: BindingInvoker> Invoker<P> {
         request: BindingRequest<'_>,
         control: &WorkControl,
     ) -> Result<Option<ContextChallenge>, InvocationError> {
+        self.check_preflight(request, control, |_| std::future::ready(Ok(None)))
+            .await
+    }
+    /// Call the optional provider preflight hook after checked admission.
+    /// The future is Send when the provider is Sync and its Preflight is Send.
+    pub async fn preflight_with_provider(
+        &self,
+        request: BindingRequest<'_>,
+    ) -> Result<Option<ContextChallenge>, InvocationError>
+    where
+        P: BindingPreflight,
+    {
+        self.preflight_with_provider_and_control(request, &WorkControl::new())
+            .await
+    }
+    /// Call the optional provider preflight hook with caller cancellation.
+    pub async fn preflight_with_provider_and_control(
+        &self,
+        request: BindingRequest<'_>,
+        control: &WorkControl,
+    ) -> Result<Option<ContextChallenge>, InvocationError>
+    where
+        P: BindingPreflight,
+    {
+        self.check_preflight(request, control, |local| {
+            self.provider.preflight(request, local)
+        })
+        .await
+    }
+    async fn check_preflight<F>(
+        &self,
+        request: BindingRequest<'_>,
+        control: &WorkControl,
+        start: impl FnOnce(WorkControl) -> F,
+    ) -> Result<Option<ContextChallenge>, InvocationError>
+    where
+        F: Future<Output = Result<Option<ContextChallenge>, InvocationError>>,
+    {
         if control.is_cancelled() {
             return Err(InvocationError::cancelled());
         }
@@ -185,7 +236,7 @@ impl<P: BindingInvoker> Invoker<P> {
         let local = WorkControl::new();
         let _relay = cancellation_relay(control, &local);
         let mut cancelled = pin!(control.cancelled());
-        let mut job = pin!(self.provider.preflight(request, local.clone()));
+        let mut job = pin!(start(local.clone()));
         let result = poll_fn(|cx| {
             if cancelled.as_mut().poll(cx).is_ready() {
                 local.cancel();
@@ -196,7 +247,13 @@ impl<P: BindingInvoker> Invoker<P> {
                 local.cancel();
                 Poll::Ready(Err(InvocationError::cancelled()))
             } else {
-                result
+                // RO-8: this branch alone has provider provenance.
+                result.map(|r| {
+                    r.map_err(|e| {
+                        e.admit_provider_code()
+                            .unwrap_or_else(|_| InvocationError::execution_failed())
+                    })
+                })
             }
         })
         .await;
@@ -232,6 +289,7 @@ pub(crate) async fn checked<F: Future<Output = Result<(), InvocationError>>>(
     start: impl FnOnce() -> Result<F, InvocationError>,
     external: WorkControl,
     local: WorkControl,
+    diagnostics: std::sync::Arc<Shared>,
 ) -> Result<(), InvocationError> {
     if external.is_cancelled() {
         return Err(InvocationError::cancelled());
@@ -252,7 +310,14 @@ pub(crate) async fn checked<F: Future<Output = Result<(), InvocationError>>>(
             local.cancel();
             Poll::Ready(Err(InvocationError::cancelled()))
         } else {
-            result
+            result.map(|r| {
+                r.map_err(|e| {
+                    e.admit_provider_code().unwrap_or_else(|finding| {
+                        diagnostics.record_finding(finding);
+                        InvocationError::execution_failed()
+                    })
+                })
+            })
         }
     })
     .await
