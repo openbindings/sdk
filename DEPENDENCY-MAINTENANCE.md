@@ -47,7 +47,7 @@ by the consumer. Exact parsing and RawValue serialization retain source spelling
 
 Shared direct runtime requirements use caret ranges from the tested floors:
 Serde 1.0.229, serde_json 1.0.151 (raw-value protocol only), itoa 1.0.18,
-fluent-uri 0.4.1, and, for native HTTP, reqwest 0.13.5,
+fluent-uri 0.4.1, url 2.5.8 (discovery URL/host normalization), and, for native HTTP, reqwest 0.13.5,
 Tokio 1.53.2 and bytes 1.12.1. These are supported direct dependency floors, not
 a claim about the minimum version of every transitive dependency. Coupled SDK
 packages, internal forks and the Wasm binding generator remain exact. The

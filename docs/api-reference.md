@@ -64,7 +64,8 @@ and transport traits document their additional SDK obligations explicitly.
 - Limits state their units and defaults in definitions. Cancellation is cooperative,
   not a deadline or preemptive interrupt. A same-thread `AbortSignal` cannot run while
   synchronous Wasm occupies that thread. HTTP discovery can interrupt asynchronous
-  acquisition and retains observed response metadata on later body failure.
+  acquisition and separately enforces a whole-attempt deadline. It retains observed
+  response metadata on later body failure and complete bounded bytes on a later stop.
 - Findings retain original byte coordinates. JSON Pointer escaping and safe text
   presentation are separate operations. Byte columns require conversion for UTF-16
   editors. A report's independent rule evidence survives finding-count and aggregate
@@ -91,6 +92,67 @@ The [proof and admission contract](partial-resource-bounds.md) covers influence,
 identity, immutable ownership, combined text/graph limits and diagnostic scope.
 Core custom-evaluator dispatch and strict `evaluation_program()` stay unchanged.
 No TypeScript application API or configuration variant is added.
+
+## HTTP discovery host policy additions
+
+Rust deadline and outcome items are defined in
+[`client.rs`](../crates/openbindings-http-discovery/src/client.rs); constants in
+[`lib.rs`](../crates/openbindings-http-discovery/src/lib.rs); native constructors in
+[`native.rs`](../crates/openbindings-http-discovery/src/native.rs).
+
+| Rust public item | Contract |
+| --- | --- |
+| `AttemptTimeout::{Default, After(Duration), Unbounded}` | Whole-attempt policy: thirty seconds, a positive finite duration, or explicitly no deadline. Zero duration is a configuration error. Connect, TLS, headers, redirects, body and validation share one deadline. |
+| `AttemptTimeout::duration()` | Returns `Result<Option<Duration>, ConfigurationError>`; `None` denotes unbounded and zero returns `invalid-timeout`. |
+| `ClientOptions::timeout` | Defaults to `AttemptTimeout::Default`; successful reads and redirects never reset it. Byte-limit zero continues to select the default byte limit. |
+| `DiscoveryTimer::{now, sleep_until}` | Host monotonic time and a wake-capable absolute timer in the same epoch, expressed as `Duration`. Dropping the timer releases it; local futures are supported. |
+| `ClientOptions::discover_with_timer` | Races one host timer and caller `WorkControl` while invoking a repeatable one-hop callback. The callback must dispatch the normalized URL, expose redirects, deliver decoded bytes or a typed refusal, and release acquisition on drop. Connection-time DNS, peer and proxy policy belongs to the host. |
+| `DEFAULT_TIMEOUT_SECONDS` | Thirty-second SDK default. |
+| `MAX_REDIRECTS` | Ten followed redirects on native and portable checked paths. Browser Fetch owns its hidden redirect limit. |
+| `native::Client::new(ClientBuilder, ClientOptions)` | Installs SDK redirect policy last and builds the client, retaining application TLS, resolver, proxy, credential and decoding choices. Refuses downgrade and credential-replay hops before dispatch. Owns one Tokio attempt timer. |
+| `native::Client::with_delegated_policy(Client, ClientOptions)` | Accepts an already-built client through explicit host policy delegation. The application owns per-hop admission, the ten-redirect limit and credential handling. SDK deadline and cancellation handling still apply. |
+| `DiscoveryOutcome::Timeout` | SDK or identified transport deadline expired; distinct from caller `Cancelled`. Caller cancellation wins when both are ready at the same poll. Observed metadata and complete bounded body, if available, remain in the receipt. |
+| `FailureKind::RedirectPolicy` | Admission, downgrade, hop-limit, credential-replay or observable hidden/unfollowed redirect refusal; never document nonconformance or absence. |
+| `FailureKind::Decode` | Native only when the SDK refuses Content-Encoding left undecoded by the host. Native body-read errors yield `BodyFailure` with `Network` and upstream messages, including corrupt-coded and truncated bodies; identified deadlines yield `Timeout`. Portable transports may report their own decoding failures as `Decode`. |
+
+Rust `ClientOptions` literals must supply `timeout` or use `..ClientOptions::default()`.
+Native callers now pass a builder to `Client::new`; built clients use the explicit
+delegated constructor. Portable `discover_with` without a timer returns
+`timer-unavailable` before I/O, including in unbounded mode. Other admission codes
+are `origin-policy`, `invalid-timeout` and `http-client-build`. Exhaustive outcome
+matches must handle `DiscoveryOutcome::Timeout`.
+
+TypeScript items are exported by
+[`http-discovery.ts`](../packages/typescript/src/http-discovery.ts) and defined in
+[`internal.ts`](../packages/typescript/src/internal.ts).
+
+| TypeScript public item | Contract |
+| --- | --- |
+| `DiscoveryOptions.timeoutMs` | Whole-attempt milliseconds, default 30,000; a positive finite number or `"unbounded"`. Zero is refused. The SDK owns its timer and AbortController, and checks elapsed monotonic time around synchronous validation. |
+| `DiscoveryResult.status: "timeout"` | SDK or identified host deadline expired. Caller abort remains `"cancelled"` with reason `"aborted"`; caller cancellation wins a simultaneous observation. Observed metadata and complete bounded bytes remain available. |
+| `DiscoveryResult.error.kind` | For `"transport-error"` and `"body-error"`, the produced kinds are `"network"`, `"redirect-policy"` and `"other"`. Timeouts have their own status and Fetch exposes no codec diagnosis. |
+
+All paths normalize origins and require HTTPS except literal IPv4 127/8 and IPv6
+`::1`. Native and portable checked paths follow the five discovery redirect
+statuses with admitted Location values and refuse every downgrade before dispatch.
+Safe native construction also refuses A -> B -> B: tower-http 0.6.11 restores
+original request headers while reqwest 0.13.5 strips credentials only when the next
+origin differs from the immediately preceding one. Applications requiring such
+chains use `with_delegated_policy` and own credentials across all hops.
+
+TypeScript Fetch uses `redirect: "follow"`, checks final URL admission and refuses
+an observable HTTPS-to-HTTP downgrade. Browser mixed-content blocking in secure
+contexts and private-network rules govern hidden hops; the SDK cannot observe them.
+Opaque/opaqueredirect responses mean policy cannot be established. Timers remain
+cooperative at blocking polls and synchronous validation boundaries.
+
+Publication defaults to CORS `*`; empty explicitly omits the header, while `null`
+or an exact ASCII browser-serialized tuple origin is accepted. Noncanonical scheme,
+host or default-port spellings and opaque schemes are refused. Routes match the
+well-known path exactly, preserving reserved escapes. The SDK enables no reqwest
+gzip, brotli, deflate or stream features; applications opt into decoding on their
+own dependency and client, with decoded-byte limits still enforced. See the
+[discovery guide](../crates/openbindings-http-discovery/README.md) for host obligations.
 
 ## Inspection and exact editing additions
 

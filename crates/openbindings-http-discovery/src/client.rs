@@ -57,6 +57,13 @@ pub enum FailureKind {
     Network,
     /// A transport-owned deadline expired.
     Timeout,
+    /// Redirect policy refused a destination, hidden hop or exhausted hop limit.
+    RedirectPolicy,
+    /// The native SDK refused a response whose Content-Encoding the host left
+    /// undecoded. Native body-read errors cannot establish a codec failure and
+    /// are Network; identified transport deadlines instead yield Timeout.
+    /// Portable transports may also report their own decoding failures here.
+    Decode,
     /// The transport reports cancellation or abortion.
     Aborted,
     /// The transport cannot classify the failure more specifically.
@@ -90,7 +97,8 @@ pub trait ResponseBody {
         std::future::ready(())
     }
 }
-/// Response supplied by the caller transport, before bounded body reading. The transport owns redirects, credentials, TLS and timeouts.
+/// One response before bounded body reading. Portable transports expose individual hops;
+/// credentials, TLS, DNS/peer restrictions and decoding remain host obligations.
 pub struct HttpResponse<B> {
     /// Final URL when known, for metadata only; never an implicit schema base or acquisition permission.
     pub final_url: Option<String>,
@@ -110,15 +118,54 @@ pub struct DiscoveryRequest {
     pub accept: &'static str,
 }
 
+/// Whole-attempt deadline policy. Zero durations are configuration errors.
 #[derive(Clone, Copy, Debug, Default)]
-/// Portable discovery configuration. Default uses a 1 MiB decoded-body limit; zero selects the default and negative values are refused.
+pub enum AttemptTimeout {
+    /// SDK default: thirty seconds.
+    #[default]
+    Default,
+    /// A positive finite duration, including synchronous validation boundaries.
+    After(std::time::Duration),
+    /// Explicitly omit the attempt deadline. Caller cancellation still applies.
+    Unbounded,
+}
+impl AttemptTimeout {
+    /// Resolve the default or override; reject zero rather than disabling the timer.
+    pub fn duration(self) -> Result<Option<std::time::Duration>, ConfigurationError> {
+        match self {
+            Self::Default => Ok(Some(std::time::Duration::from_secs(
+                DEFAULT_TIMEOUT_SECONDS,
+            ))),
+            Self::After(duration) if !duration.is_zero() => Ok(Some(duration)),
+            Self::Unbounded => Ok(None),
+            Self::After(_) => Err(ConfigurationError {
+                code: "invalid-timeout",
+                message: "attempt timeout must be positive, or explicitly unbounded",
+            }),
+        }
+    }
+}
+
+/// Host-owned monotonic clock and wake-capable timer for portable discovery.
+/// `now` and `sleep_until` must use the same epoch. Polls must be cooperative;
+/// dropping the timer future must release it. Local futures are supported.
+pub trait DiscoveryTimer {
+    /// Monotonic time elapsed since the host's clock epoch.
+    fn now(&self) -> std::time::Duration;
+    /// Wake the attempt when the absolute monotonic deadline is reached.
+    fn sleep_until(&self, deadline: std::time::Duration) -> impl Future<Output = ()>;
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+/// Portable discovery configuration. Defaults to 1 MiB and thirty seconds.
 pub struct ClientOptions {
-    /// Bound on decoded bytes delivered by the transport. Zero selects 1 MiB;
-    /// negative values are configuration errors. At most one extra byte is read.
+    /// Bound on decoded bytes. Zero selects 1 MiB; negative values are refused.
     pub max_document_bytes: i64,
+    /// Whole-attempt deadline, never reset by redirects or successful reads.
+    pub timeout: AttemptTimeout,
 }
 impl ClientOptions {
-    /// Resolve the configured decoded-byte limit, reserving capacity for a one-byte over-limit sentinel. Reject negative or unrepresentable limits before transport work.
+    /// Resolve the decoded-byte limit with room for one over-limit sentinel.
     pub fn byte_limit(&self) -> Result<usize, ConfigurationError> {
         if self.max_document_bytes == 0 {
             return Ok(DEFAULT_MAX_DOCUMENT_BYTES);
@@ -126,73 +173,224 @@ impl ClientOptions {
         usize::try_from(self.max_document_bytes).ok().filter(|n| *n < usize::MAX)
             .ok_or(ConfigurationError { code: "invalid-byte-limit", message: "maximum document bytes must be nonnegative and fit the host's address space with one sentinel byte" })
     }
-    /// Retrieve and assess one document. The SDK stores no response cache and
-    /// never treats the acquisition URL as a schema base URI.
+
+    /// A callback without a timer facility is refused before I/O. Use
+    /// `discover_with_timer` to supply a monotonic clock and functioning timer.
     pub async fn discover_with<B, F, T>(
         &self,
         origin: &str,
+        _control: &WorkControl,
+        _transport: T,
+    ) -> Result<DiscoveryResult, ConfigurationError>
+    where
+        B: ResponseBody,
+        F: Future<Output = Result<HttpResponse<B>, RequestFailure>>,
+        T: FnMut(DiscoveryRequest) -> F,
+    {
+        self.byte_limit()?;
+        self.timeout.duration()?;
+        endpoint(origin)?;
+        Err(ConfigurationError {
+            code: "timer-unavailable",
+            message: "portable discovery requires a monotonic clock and wake-capable timer",
+        })
+    }
+
+    /// Retrieve individual hops with a host-owned timer. The callback MUST NOT
+    /// follow redirects, must dispatch the supplied normalized URL unchanged,
+    /// enforce application DNS/peer/proxy restrictions at connection time, deliver
+    /// decoded bytes (or a typed decode refusal), and cancel/release work on drop.
+    /// The SDK follows at most ten admitted DISC-C-02 redirects. It stores no cache.
+    pub async fn discover_with_timer<B, F, T, C>(
+        &self,
+        origin: &str,
         control: &WorkControl,
+        timer: &C,
         transport: T,
     ) -> Result<DiscoveryResult, ConfigurationError>
     where
         B: ResponseBody,
         F: Future<Output = Result<HttpResponse<B>, RequestFailure>>,
-        T: FnOnce(DiscoveryRequest) -> F,
+        T: FnMut(DiscoveryRequest) -> F,
+        C: DiscoveryTimer,
+    {
+        self.discover_using(origin, control, timer, transport, true)
+            .await
+    }
+
+    pub(crate) async fn discover_using<B, F, T, C>(
+        &self,
+        origin: &str,
+        control: &WorkControl,
+        timer: &C,
+        mut transport: T,
+        individual_hops: bool,
+    ) -> Result<DiscoveryResult, ConfigurationError>
+    where
+        B: ResponseBody,
+        F: Future<Output = Result<HttpResponse<B>, RequestFailure>>,
+        T: FnMut(DiscoveryRequest) -> F,
+        C: DiscoveryTimer,
     {
         let limit = self.byte_limit()?;
+        let duration = self.timeout.duration()?;
         let requested_url = endpoint(origin)?;
+        let deadline = duration
+            .map(|duration| {
+                timer.now().checked_add(duration).ok_or(ConfigurationError {
+                    code: "invalid-timeout",
+                    message: "attempt deadline exceeds the host clock range",
+                })
+            })
+            .transpose()?;
+        // Exactly one timer per attempt, owned by the host facility and dropped on every exit.
+        let expiry = async {
+            if let Some(deadline) = deadline {
+                timer.sleep_until(deadline).await
+            } else {
+                std::future::pending::<()>().await
+            }
+        };
+        let mut expiry = pin!(expiry);
         let mut result = DiscoveryResult {
             metadata: None,
             body: None,
             outcome: DiscoveryOutcome::Cancelled,
         };
-        if control.is_cancelled() {
-            return Ok(result);
-        }
-        let response = until_cancelled(
-            control,
-            transport(DiscoveryRequest {
-                url: requested_url.clone(),
-                accept: ACCEPT,
-            }),
-        )
-        .await;
-        let mut response = match response {
-            None => return Ok(result),
-            Some(Err(failure)) => {
-                result.outcome = DiscoveryOutcome::TransportFailure { failure };
+        let mut current = url::Url::parse(&requested_url).expect("admitted endpoint");
+        let mut followed = 0;
+        let mut response = loop {
+            // Check before calling the callback, which itself may start I/O synchronously.
+            if let Some(outcome) = stopped(control, timer, deadline) {
+                result.outcome = outcome;
                 return Ok(result);
             }
-            Some(Ok(response)) => response,
+            let acquired = until_stopped(
+                control,
+                timer,
+                deadline,
+                expiry.as_mut(),
+                transport(DiscoveryRequest {
+                    url: current.to_string(),
+                    accept: ACCEPT,
+                }),
+            )
+            .await;
+            let mut response = match acquired {
+                Err(outcome) => {
+                    result.outcome = outcome;
+                    return Ok(result);
+                }
+                Ok(Err(failure)) => {
+                    result.outcome = request_failure(failure, false);
+                    return Ok(result);
+                }
+                Ok(Ok(response)) => response,
+            };
+            result.metadata = Some(ResponseMetadata {
+                requested_url: requested_url.clone(),
+                final_url: response.final_url.take(),
+                status: response.status,
+                headers: std::mem::take(&mut response.headers),
+            });
+            let metadata = result.metadata.as_ref().unwrap();
+            if let Some(final_url) = &metadata.final_url {
+                let observed = url::Url::parse(final_url);
+                let admitted = observed.as_ref().ok().is_some_and(|url| {
+                    admit_redirect(&current, url).is_ok() && (!individual_hops || url == &current)
+                });
+                if !admitted {
+                    result.outcome = policy_failure(
+                        "transport response URL violates the hop contract or destination policy",
+                    );
+                    return Ok(result);
+                }
+            }
+            // F2: a host-following transport must not return a redirect with Location.
+            // tower-http can do this for malformed Location without consulting reqwest's policy.
+            if !individual_hops
+                && matches!(response.status, 301 | 302 | 303 | 307 | 308)
+                && metadata.header("location").is_some()
+            {
+                result.outcome =
+                    policy_failure("host did not follow the observed redirect Location");
+                return Ok(result);
+            }
+            if individual_hops
+                && matches!(response.status, 301 | 302 | 303 | 307 | 308)
+                && let Some(location) = metadata.header("location")
+            {
+                let next = std::str::from_utf8(location)
+                    .ok()
+                    .filter(|location| {
+                        !location.contains('\\') && !location.bytes().any(|b| b <= b' ' || b == 127)
+                    })
+                    .filter(|location| fluent_uri::UriRef::parse(*location).is_ok())
+                    .and_then(|location| current.join(location).ok());
+                let next = match next {
+                    Some(mut next)
+                        if admit_redirect(&current, &next).is_ok() && followed < MAX_REDIRECTS =>
+                    {
+                        next.set_fragment(None);
+                        next
+                    }
+                    _ => {
+                        result.outcome =
+                            policy_failure("redirect destination or redirect limit refused");
+                        return Ok(result);
+                    }
+                };
+                // Drop the redirect body before dispatch; no redirect body is an OBI.
+                drop(response);
+                current = next;
+                followed += 1;
+                continue;
+            }
+            break response;
         };
-        result.metadata = Some(ResponseMetadata {
-            requested_url,
-            final_url: response.final_url.take(),
-            status: response.status,
-            headers: std::mem::take(&mut response.headers),
-        });
         if response.status != 200 {
             result.outcome = match response.status {
                 404 => DiscoveryOutcome::Absent,
                 401 | 403 => DiscoveryOutcome::Gated,
                 _ => DiscoveryOutcome::HttpStatus,
             };
-            until_cancelled(control, response.body.discard_status()).await;
+            // Status is committed. Cleanup has the remaining attempt time, never a fresh allowance.
+            let _ = until_stopped(
+                control,
+                timer,
+                deadline,
+                expiry.as_mut(),
+                response.body.discard_status(),
+            )
+            .await;
             return Ok(result);
         }
         let mut body = Vec::new();
         let mut buffer = [0; 8192];
         loop {
             let remaining = (limit + 1 - body.len()).min(buffer.len());
-            match until_cancelled(control, response.body.read(&mut buffer[..remaining])).await {
-                None => return Ok(result),
-                Some(Err(failure)) => {
-                    result.outcome = DiscoveryOutcome::BodyFailure { failure };
+            match until_stopped(control, timer, deadline, expiry.as_mut(), async {
+                let read = response.body.read(&mut buffer[..remaining]).await;
+                // F3: successful EOF proves this bounded body complete before until_stopped's
+                // post-poll check. Preserve it even when that check observes expiry/cancellation.
+                if matches!(read, Ok(0)) {
+                    result.body = Some(Arc::from(std::mem::take(&mut body)));
+                }
+                read
+            })
+            .await
+            {
+                Err(outcome) => {
+                    result.outcome = outcome;
                     return Ok(result);
                 }
-                Some(Ok(0)) => break,
-                Some(Ok(n)) if n <= remaining => body.extend_from_slice(&buffer[..n]),
-                Some(Ok(_)) => {
+                Ok(Err(failure)) => {
+                    result.outcome = request_failure(failure, true);
+                    return Ok(result);
+                }
+                Ok(Ok(0)) => break,
+                Ok(Ok(n)) if n <= remaining => body.extend_from_slice(&buffer[..n]),
+                Ok(Ok(_)) => {
                     result.outcome = DiscoveryOutcome::BodyFailure {
                         failure: RequestFailure {
                             kind: FailureKind::Other,
@@ -208,28 +406,74 @@ impl ClientOptions {
                 return Ok(result);
             }
         }
-        result.body = Some(Arc::from(body));
-        if control.is_cancelled() {
+        if let Some(outcome) = stopped(control, timer, deadline) {
+            result.outcome = outcome;
             return Ok(result);
         }
         result.outcome = assess_body(result.body.as_deref().unwrap());
-        if control.is_cancelled() {
-            result.outcome = DiscoveryOutcome::Cancelled;
+        if let Some(outcome) = stopped(control, timer, deadline) {
+            result.outcome = outcome;
         }
         Ok(result)
     }
 }
-pub(crate) async fn until_cancelled<F: Future>(
+fn request_failure(failure: RequestFailure, body: bool) -> DiscoveryOutcome {
+    if failure.kind == FailureKind::Timeout {
+        DiscoveryOutcome::Timeout
+    } else if body {
+        DiscoveryOutcome::BodyFailure { failure }
+    } else {
+        DiscoveryOutcome::TransportFailure { failure }
+    }
+}
+fn policy_failure(message: &str) -> DiscoveryOutcome {
+    DiscoveryOutcome::TransportFailure {
+        failure: RequestFailure {
+            kind: FailureKind::RedirectPolicy,
+            message: message.into(),
+        },
+    }
+}
+fn stopped<C: DiscoveryTimer>(
     control: &WorkControl,
+    timer: &C,
+    deadline: Option<std::time::Duration>,
+) -> Option<DiscoveryOutcome> {
+    // HD-2: deterministic tie rule, caller cancellation wins when both are ready.
+    if control.is_cancelled() {
+        Some(DiscoveryOutcome::Cancelled)
+    } else if deadline.is_some_and(|deadline| timer.now() >= deadline) {
+        Some(DiscoveryOutcome::Timeout)
+    } else {
+        None
+    }
+}
+async fn until_stopped<C: DiscoveryTimer, F: Future, E: Future<Output = ()>>(
+    control: &WorkControl,
+    timer: &C,
+    deadline: Option<std::time::Duration>,
+    mut expiry: std::pin::Pin<&mut E>,
     future: F,
-) -> Option<F::Output> {
+) -> Result<F::Output, DiscoveryOutcome> {
     let mut future = pin!(future);
     let mut cancelled = pin!(control.cancelled());
     poll_fn(|cx| {
         if cancelled.as_mut().poll(cx).is_ready() {
-            return Poll::Ready(None);
+            return Poll::Ready(Err(DiscoveryOutcome::Cancelled));
         }
-        future.as_mut().poll(cx).map(Some)
+        if let Some(outcome) = stopped(control, timer, deadline) {
+            return Poll::Ready(Err(outcome));
+        }
+        if expiry.as_mut().poll(cx).is_ready() {
+            return Poll::Ready(Err(DiscoveryOutcome::Timeout));
+        }
+        match future.as_mut().poll(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(value) => Poll::Ready(match stopped(control, timer, deadline) {
+                Some(outcome) => Err(outcome),
+                None => Ok(value),
+            }),
+        }
     })
     .await
 }
@@ -269,6 +513,8 @@ pub enum DiscoveryOutcome {
     },
     /// Caller cancellation was observed during acquisition or at assessment boundaries.
     Cancelled,
+    /// The whole-attempt or shorter transport deadline expired. Distinct from caller cancellation.
+    Timeout,
     /// The request failed before response metadata was available.
     TransportFailure {
         #[doc = "Transport classification and adapter-owned explanation."]
@@ -312,5 +558,59 @@ pub fn assess_body(body: &[u8]) -> DiscoveryOutcome {
             Conformance::NonConformant => DiscoveryOutcome::NonConformant { assessment },
             Conformance::Undetermined => DiscoveryOutcome::Undetermined { assessment },
         },
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod review_tests {
+    use super::*;
+    struct Clock;
+    impl DiscoveryTimer for Clock {
+        fn now(&self) -> std::time::Duration {
+            std::time::Duration::ZERO
+        }
+        async fn sleep_until(&self, _: std::time::Duration) {
+            std::future::pending::<()>().await;
+        }
+    }
+    struct Empty;
+    impl ResponseBody for Empty {
+        async fn read(&mut self, _: &mut [u8]) -> Result<usize, RequestFailure> {
+            panic!("redirect body must not be read")
+        }
+    }
+    #[tokio::test(flavor = "current_thread")]
+    async fn malformed_location_is_refused_for_exposed_and_host_followed_hops() {
+        // S5b review F2 / HD-7: identical visible redirects have identical typed outcomes.
+        for individual_hops in [true, false] {
+            let r = ClientOptions::default()
+                .discover_using(
+                    "https://example.test",
+                    &WorkControl::new(),
+                    &Clock,
+                    |_| async {
+                        Ok(HttpResponse {
+                            status: 302,
+                            final_url: None,
+                            headers: vec![Header::new("location", "http://[")],
+                            body: Empty,
+                        })
+                    },
+                    individual_hops,
+                )
+                .await
+                .unwrap();
+            assert!(matches!(
+                r.outcome,
+                DiscoveryOutcome::TransportFailure {
+                    failure: RequestFailure {
+                        kind: FailureKind::RedirectPolicy,
+                        ..
+                    }
+                }
+            ));
+            assert_eq!(r.metadata.unwrap().status, 302);
+            assert!(r.body.is_none());
+        }
     }
 }

@@ -43,6 +43,12 @@ jobs:
           toolchain: ${{ steps.rust-version.outputs.version }}
           components: rustfmt, clippy
       - run: python tools/verify.py
+      - name: Verify discovery downstream features and decoded bodies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cargo fetch --locked --manifest-path crates/openbindings-http-discovery/tests/feature-witness/Cargo.toml
+          python3 crates/openbindings-http-discovery/tests/feature_lock_test.py
+          python3 crates/openbindings-http-discovery/tests/feature-unification.py
       - name: Verify core acquisition boundaries
         if: matrix.os == 'ubuntu-latest'
         run: |

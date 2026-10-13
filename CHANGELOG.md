@@ -2,6 +2,19 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- Require HTTPS for discovery except normalized literal 127/8 and `::1`; native
+  and portable paths allow ten redirects and refuse HTTPS-to-HTTP hops. Fetch
+  follows browser policy and checks its final URL. Safe native construction refuses
+  A -> B -> B credential replay caused by tower-http restoring original headers
+  while reqwest strips credentials only on origin changes. Default to a 30-second
+  whole-attempt timeout and publication CORS `*`; remove reqwest gzip, brotli,
+  deflate and stream features. Add Rust `AttemptTimeout::{Default, After, Unbounded}`,
+  `duration()`, `ClientOptions::timeout`, `DiscoveryTimer::{now, sleep_until}`,
+  `ClientOptions::discover_with_timer`, `DEFAULT_TIMEOUT_SECONDS`, `MAX_REDIRECTS`,
+  `native::Client::with_delegated_policy`, `DiscoveryOutcome::Timeout` and
+  `FailureKind::{RedirectPolicy, Decode}`; native `Client::new` now takes a builder.
+  Add TypeScript `DiscoveryOptions.timeoutMs`, status `"timeout"` and kind `"redirect-policy"`.
+
 - Extract the kind-specific OpenAPI implementation into
   [openbindings/openapi](https://github.com/openbindings/openapi). The SDK retains
   the source-inspection, interface-synthesis and invocation roles, their provider
