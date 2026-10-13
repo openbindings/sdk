@@ -136,6 +136,7 @@ pub fn inspect_catalog(
                     "omitted".into(),
                     JsonValue::from_serializable(&omitted).expect("small counter"),
                 )])),
+                additional_fields: Default::default(),
             },
         )
     })

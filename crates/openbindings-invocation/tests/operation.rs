@@ -121,14 +121,27 @@ impl BindingInvoker for Provider<'_> {
             Ok(())
         })
     }
-    async fn preflight<'a>(
-        &'a self,
-        _: BindingRequest<'a>,
-        _: WorkControl,
-    ) -> Result<Option<openbindings_invocation::ContextChallenge>, InvocationError> {
-        Ok(challenge().context_required())
+}
+impl openbindings_invocation::binding::BindingPreflight for Provider<'_> {
+    type Preflight<'a>
+        = Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        Option<openbindings_invocation::ContextChallenge>,
+                        InvocationError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    >
+    where
+        Self: 'a;
+    fn preflight<'a>(&'a self, _: BindingRequest<'a>, _: WorkControl) -> Self::Preflight<'a> {
+        Box::pin(async move { Ok(challenge().context_required()) })
     }
 }
+
 fn challenge() -> InvocationError {
     InvocationError::new("CONTEXT_REQUIRED",Some(json(r#"{"target":"opaque","alternatives":[{"requirements":[{"type":"test.custom","x":1e9999}]}]}"#))).unwrap()
 }
@@ -211,7 +224,7 @@ async fn names_ordered_choices_and_explicit_bindings_do_not_invent_policy() {
     );
     assert_code(
         outcome(&invoke, Request::binding("unsupported")).await,
-        "ERR_REFUSED",
+        "ERR_BINDING_NOT_FOUND",
     );
     assert_code(
         outcome(&invoke, Request::binding("alias-ref")).await,
@@ -224,7 +237,7 @@ async fn names_ordered_choices_and_explicit_bindings_do_not_invent_policy() {
     assert_eq!(p.calls.load(Ordering::SeqCst), 2);
     assert_eq!(
         invoke
-            .preflight(Request::ordered("say", &["a", "absent"]))
+            .preflight_with_provider(Request::ordered("say", &["a", "absent"]))
             .await
             .unwrap_err()
             .code(),
@@ -232,7 +245,7 @@ async fn names_ordered_choices_and_explicit_bindings_do_not_invent_policy() {
     );
     assert!(
         invoke
-            .preflight(Request::binding("a"))
+            .preflight_with_provider(Request::binding("a"))
             .await
             .unwrap()
             .is_some()
@@ -348,7 +361,7 @@ async fn preparation_is_lazy_absence_is_not_true_and_no_verdict_is_not_failure()
     );
     outcome(&i, Request::operation("echo")).await.unwrap();
     assert!(
-        i.preflight(Request::operation("echo"))
+        i.preflight_with_provider(Request::operation("echo"))
             .await
             .unwrap()
             .is_some()
