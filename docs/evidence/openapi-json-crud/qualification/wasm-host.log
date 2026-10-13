@@ -1,0 +1,2 @@
+{"crudExchangesPerRun":48,"crudRuns":2,"crudColdOwners":"0,0","crudWarmOwners":"8,0","crudFinalOwners":"8,0"}
+{"cyclesPerKind":1000,"kinds":["local.openapi-json-probe.r1","local.openapi30-json-probe.r1"],"exactText":true,"localPendingHost":true,"owners":"8,0"}
