@@ -1,4 +1,4 @@
-import { authenticated_call, authenticated_consumers, exact_roundtrip, pending_cleanup, logical_owners } from './wasm/openapi_json_path_consumer';
+import { authenticated_call, authenticated_consumers, crud_consumers, exact_roundtrip, pending_cleanup, logical_owners } from './wasm/openapi_json_path_consumer';
 // No source/input/output value is parsed into a JavaScript Number.
 const description = '{"openapi":"3.1.2","info":{"title":"Node","version":"1"},"servers":[{"url":"https://node.invalid"}],"paths":{"/echo":{"post":{"requestBody":{"content":{"application/json":{"schema":true}}},"responses":{"200":{"description":"echo","content":{"application/json":{"schema":true}}}}}}}}';
 const input = '{"body":{"n":9007199254740993,"label":"雪"}}';
@@ -22,6 +22,12 @@ async function cycle() {
  }
 }
 async function main() {
+  const crudColdOwners = logical_owners();
+  await crud_consumers();
+  const crudWarmOwners = logical_owners();
+  await crud_consumers();
+  if (logical_owners() !== crudWarmOwners) throw new Error(`CRUD retained owners ${crudWarmOwners} -> ${logical_owners()}`);
+  console.log(JSON.stringify({crudExchangesPerRun:48, crudRuns:2, crudColdOwners, crudWarmOwners, crudFinalOwners:logical_owners()}));
   for (const v30 of [false,true]) {
     const kind=v30 ? 'local.openapi30-json-probe.r1' : 'local.openapi-json-probe.r1';
     for (const [name,path,method,input,header] of [['ServiceToken','/items','get','{}','authorization'],['PartnerKey','/items/new','post','{"body":{"n":9007199254740993,"label":"雪"}}','x-partner-key']]) {

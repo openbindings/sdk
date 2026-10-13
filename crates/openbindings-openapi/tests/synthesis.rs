@@ -284,10 +284,7 @@ async fn response_profiles_and_ambiguous_mounts_have_truthful_coverage() {
     let mut empty = base.clone();
     empty["paths"]["/x"]["get"]["responses"] =
         serde_json_compat::json!({"201":{"description":"created"}});
-    assert_eq!(
-        coverage(empty).await,
-        vec![CoverageStatus::ImplementationUnsupported]
-    );
+    assert_eq!(coverage(empty).await, vec![CoverageStatus::Represented]);
     let mut errors = base.clone();
     errors["paths"]["/x"]["get"]["responses"]["404"] = serde_json_compat::json!({"description":"problem","content":{"application/problem+json":{}}});
     let statuses = coverage(errors).await;

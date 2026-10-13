@@ -2,6 +2,15 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- Expand the private OpenAPI 3.0/3.1 adapter to PUT, PATCH and DELETE through the
+  existing inspection, synthesis and invocation APIs. Content-less successful
+  responses now use exact/range/default declaration selection and emit no value
+  only on complete empty delivery. JSON null still emits one value. HTTP 205 now
+  requires empty delivery like 204; illegal 205 payloads fail instead of being
+  returned as JSON. Newly admitted content-less successes reject unexpected
+  payloads. These experimental behavior changes
+  add no public role API or published binding-specification requirement.
+
 - The bundled resource resolver now gives unique contained declared IDs priority
   over supplied name associations, with conservative refusal of competing canonical
   carriers reached through aliases, pointers or direct applicators. This intentionally

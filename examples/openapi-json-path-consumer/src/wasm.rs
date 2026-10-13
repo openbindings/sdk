@@ -52,6 +52,11 @@ pub fn logical_owners() -> String {
     format!("{sdk},{client}")
 }
 #[wasm_bindgen]
+pub async fn crud_consumers() {
+    crate::crud::suite(true).await;
+    crate::crud::suite(false).await;
+}
+#[wasm_bindgen]
 pub async fn pending_cleanup(kind: &str, description: &str, abandon: bool) -> Result<(), JsValue> {
     struct Guard(Rc<Cell<usize>>);
     impl Drop for Guard {

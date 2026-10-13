@@ -65,6 +65,7 @@ pub struct InvocationFuture<'a, T: Transport> {
     control: openbindings::Cancellation,
     cancellation: Cancellation,
     work: WorkControl,
+    empty_responses: analysis::EmptyResponses,
     done: bool,
 }
 impl<T: Transport> Unpin for InvocationFuture<'_, T> {}
@@ -101,11 +102,12 @@ impl<T: Transport> Future for InvocationFuture<'_, T> {
                 let Some(value) = this.value.take() else {
                     break Poll::Ready(Err(InvocationError::refused()));
                 };
-                let prepared =
+                let (prepared, empty_responses) =
                     match prepare_request(this.provider, this.request, &value, &this.work) {
                         Ok(p) => p,
                         Err(e) => break Poll::Ready(Err(e)),
                     };
+                this.empty_responses = empty_responses;
                 if this.work.is_cancelled() {
                     break Poll::Ready(Err(InvocationError::cancelled()));
                 }
@@ -123,7 +125,7 @@ impl<T: Transport> Future for InvocationFuture<'_, T> {
                 this.execution = None;
                 let kind =
                     Kind::from_label(&this.request.source.kind).expect("admitted source kind");
-                let value = match accept(outcome, kind) {
+                let value = match accept(outcome, kind, this.empty_responses) {
                     Ok(value) => value,
                     Err(e) => break Poll::Ready(Err(e)),
                 };
@@ -182,6 +184,7 @@ impl<T: Transport> BindingInvoker for OpenApi<T> {
             control: work.cancelled(),
             cancellation: Cancellation::default(),
             work,
+            empty_responses: Default::default(),
             done: false,
         }
     }
@@ -191,7 +194,7 @@ fn prepare_request<T>(
     request: BindingRequest<'_>,
     value: &JsonValue,
     control: &WorkControl,
-) -> Result<PreparedRequest, InvocationError> {
+) -> Result<(PreparedRequest, analysis::EmptyResponses), InvocationError> {
     let refused = || InvocationError::refused();
     let p = provider.prepare(request.source, control).map_err(|_| {
         if control.is_cancelled() {
@@ -333,9 +336,16 @@ fn prepare_request<T>(
         control,
         &mut input,
     )?;
-    unit.operation.prepare(&input).map_err(|_| refused())
+    unit.operation
+        .prepare(&input)
+        .map(|request| (request, profile.empty_responses))
+        .map_err(|_| refused())
 }
-fn accept(outcome: Outcome, kind: Kind) -> Result<Option<JsonValue>, InvocationError> {
+fn accept(
+    outcome: Outcome,
+    kind: Kind,
+    empty_responses: analysis::EmptyResponses,
+) -> Result<Option<JsonValue>, InvocationError> {
     if outcome.cancelled {
         return Err(InvocationError::cancelled());
     }
@@ -360,7 +370,7 @@ fn accept(outcome: Outcome, kind: Kind) -> Result<Option<JsonValue>, InvocationE
         return Err(InvocationError::new(kind.status_error(), Some(data))
             .expect("fixed governed error shape"));
     }
-    if response.status() == 204 {
+    if matches!(response.status(), 204 | 205) || empty_responses.contains(response.status()) {
         return if response.raw().is_empty() {
             Ok(None)
         } else {

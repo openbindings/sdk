@@ -129,7 +129,16 @@ def main():
     shutil.copyfile(ROOT / "Cargo.lock", consumer / "Cargo.lock")
     # Preserve the root lock's selected versions, adding only the external fixture.
     run("consumer-test", ["cargo", "test", "--", "--test-threads=1"], consumer)
-    run("consumer-lint", ["cargo", "clippy", "--locked", "--all-targets", "--", "-D", "warnings"], consumer)
+    run("consumer-lint", ["cargo", "clippy", "--locked", "--lib", "--tests", "--", "-D", "warnings"], consumer)
+    for example in sorted((consumer / "examples").glob("*.rs")):
+        lints = ["-D", "warnings"]
+        if example.stem == "auth_resolution":
+            # Preserve the frozen, stopped measurement protocol byte-for-byte.
+            # Its labelled closures and fixed experimental coordinates trigger
+            # two style lints. These exceptions apply only to this target; all
+            # product/library/test targets keep warnings-as-errors. Do not run it.
+            lints += ["-A", "clippy::type_complexity", "-A", "clippy::too_many_arguments"]
+        run("consumer-lint-" + example.stem, ["cargo", "clippy", "--locked", "--example", example.stem, "--", *lints], consumer)
     metadata = json.loads(run("consumer-metadata", ["cargo", "metadata", "--locked", "--format-version", "1"], consumer))
     client = [p for p in metadata["packages"] if p["name"] == "dynamic-openapi-client"]
     if len(client) != 1 or not client[0].get("source", "").endswith(f"#{CLIENT_REV}"):

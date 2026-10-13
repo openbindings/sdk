@@ -1,0 +1,52 @@
+warning: use of deprecated associated function `core::num::<impl usize>::max_value`: replaced by the `MAX` associated constant on this type
+   --> vendor/openbindings-internal-serde-json/src/lexical/math.rs:458:33
+    |
+458 |             .map_or_else(usize::max_value, |v| v - nlz)
+    |                                 ^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: `openbindings-internal-serde-json` (lib) generated 1 warning
+   Compiling openbindings-openapi v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk/crates/openbindings-openapi)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.40s
+     Running tests/crud.rs (target/debug/deps/crud-077d33939e74332b)
+
+running 4 tests
+test crud_methods_preserve_required_absent_and_null_bodies ... FAILED
+test empty_delivery_still_requires_complete_evidence_and_obeys_cancellation ... FAILED
+test successful_response_correspondence_and_precedence ... FAILED
+test unsupported_methods_and_media_remain_explicit ... ok
+
+failures:
+
+---- crud_methods_preserve_required_absent_and_null_bodies stdout ----
+
+thread 'crud_methods_preserve_required_absent_and_null_bodies' (52870175) panicked at crates/openbindings-openapi/tests/crud.rs:63:13:
+assertion `left == right` failed
+  left: (Err("ERR_REFUSED"), 0)
+ right: (Ok(["null"]), 1)
+
+---- empty_delivery_still_requires_complete_evidence_and_obeys_cancellation stdout ----
+
+thread 'empty_delivery_still_requires_complete_evidence_and_obeys_cancellation' (52870176) panicked at crates/openbindings-openapi/tests/crud.rs:118:13:
+assertion `left == right` failed
+  left: (Err("ERR_REFUSED"), 0)
+ right: (Err("ERR_EXECUTION_FAILED"), 1)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- successful_response_correspondence_and_precedence stdout ----
+
+thread 'successful_response_correspondence_and_precedence' (52870177) panicked at crates/openbindings-openapi/tests/crud.rs:101:13:
+assertion `left == right` failed
+  left: 0
+ right: 1
+
+
+failures:
+    crud_methods_preserve_required_absent_and_null_bodies
+    empty_delivery_still_requires_complete_evidence_and_obeys_cancellation
+    successful_response_correspondence_and_precedence
+
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p openbindings-openapi --test crud`

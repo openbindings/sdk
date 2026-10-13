@@ -8,8 +8,6 @@ Run from the SDK root with the Rust/Wasm/Node tools available:
 
 ```sh
 python3 tools/verify-openapi-json-path.py --archives --wasm
-python3 tools/measure-openapi-json-path.py --edition 3.1.2 --output /absolute/fresh/31-evidence
-python3 tools/measure-openapi-json-path.py --edition 3.0.4 --output /absolute/fresh/30-evidence
 ```
 
 The qualifier runs native loopback HTTP, public consumer tests, serial logical-owner
@@ -26,7 +24,15 @@ private r1 contracts and capability limits. Supply the kind explicitly to `autho
 and `source`; the native and Node probes exercise 3.1.2 and 3.0.4 through the same
 facades. Source edition and kind are independently checked by the adapter.
 
+`src/crud.rs` adds a six-operation records service. Independently authored OBI
+documents and literal exchanges live in `src/crud-fixtures`. Both manual and
+synthesized documents are reloaded, then invoked through binding and operation
+facades on 3.0.4 and 3.1.2. The same suite runs in the local Node/Wasm probe;
+PATCH supplies a caller-owned bearer token. PUT, PATCH and DELETE also run over
+native loopback HTTP in the adapter's maintained tests.
+
 `examples/measure.rs` compares CPU work with the pinned client and core authoring,
 using equal source/result content for synthesis. Stage rows are descriptive diagnostics;
 registered end-to-end budgets are evaluated on paired observations. No measurements
 here establish whole-network HTTP parity or production browser/Worker performance.
+Benchmark work is stopped; AJ20 remains unresolved under its original budgets.
