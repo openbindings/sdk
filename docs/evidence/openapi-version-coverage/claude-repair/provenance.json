@@ -1,0 +1,18 @@
+{
+  "reviewModel": "Claude Opus 5.5",
+  "effort": "Extra",
+  "date": "2026-10-13",
+  "reviewedImplementation": "6137585efe220f49a96fadd5af8e0504aacc38f1",
+  "inputPackets": {
+    "claude-review-input.txt": "3dbe8c62538d508ac5a181102813db5ae921fe1c2b8eaafa99a77bef2d15cb7c",
+    "claude-repair-input.txt": "7e3fcf315627143a7a3559590cf2feb46ac3079e21fe30b5664d09c42cde95b1"
+  },
+  "reports": {
+    "claude-review.md": "1480d147b25d8d5c5bbc84824d02cd33a506dce9d60e2d26fce6e9dbf8b4e669",
+    "claude-repair-review.md": "b93b23b88444e749b4e6f100bf0500c34139d50f33c8516532b502b1b029bcf5"
+  },
+  "oldDraftsExcluded": true,
+  "otherReviewOpinionsExcluded": true,
+  "qualificationReceipt": "claude-repair/qualification/receipt.json",
+  "priorEvidencePreserved": true
+}

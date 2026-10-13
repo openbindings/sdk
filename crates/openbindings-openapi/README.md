@@ -107,6 +107,12 @@ parameters, request bodies, responses and supplied Path Items using the source
 edition. Body schemas remain unprojected: 3.0 `nullable` and 3.1 null unions do not
 become copied OBI schemas. JSON null bodies retain their distinct entity meaning.
 These limitations do not declare the corresponding OpenAPI features invalid.
+For 3.1 parameter types, this implementation accepts the OAS 3.1 base dialect
+(`https://spec.openapis.org/oas/3.1/dialect/base` or its `2024-11-10` identifier)
+and JSON Schema 2020-12. The client's lexical schema context determines the dialect,
+including schema-level overrides of `jsonSchemaDialect`. Other dialects produce
+`parameter-schema-dialect-unimplemented`; their raw `type` cannot establish a caller
+contract here. This guard does not translate schemas or validate source-schema constraints.
 OpenAPI 3.0 GET request-body declarations are ignored under that edition's rules;
 they neither require nor enable an input body. OpenAPI 3.1 GET body declarations
 remain effective. The paired consumer regression verifies this distinction.
@@ -117,12 +123,19 @@ security acquisition, binary/streaming delivery, richer parameter locations, cal
 webhook services, ambiguous Path Item merges, and literal non-ASCII path templates
 are not implemented. Explicit non-204 no-content success declarations are currently
 unsupported. Percent-encoded Unicode paths preserve their spelling; the client gap
-for literal Unicode is tracked separately. Error-response bodies/headers are discarded
-under the status-only mapping and their lost representation is disclosed in coverage.
+for literal Unicode is tracked separately. Bodies/headers on explicit non-2xx responses
+are discarded under the status-only mapping and their lost representation is disclosed
+in coverage. A `default` response can also cover success, so it must meet the supported
+success profile; for example, a content-less or `application/problem+json` default makes
+the operation implementation-unsupported.
 
 `Options` owns immutable client/graph budgets and supplied resources. The adapter
-caches one prepared source by kind and content, charges retained metadata, and holds no cache lock across
-host I/O. Source, result, input and body limits are finite. Logical budgets are not RSS
+caches one prepared source by kind and content and charges retained metadata. Alternating
+sources on one provider re-analyzes each source; analysis holds the cache lock, and a
+failed preparation evicts the previous entry. Warm timings apply to repeated use of
+the same source. A provider per source avoids alternating-source cache misses when
+that matters to the application. No cache lock is held across host I/O.
+Source, result, input and body limits are finite. Logical budgets are not RSS
 measurements. Host policy belongs to the application; the qualified reqwest companion
 follows no redirects and performs no implicit retry or credential acquisition.
 

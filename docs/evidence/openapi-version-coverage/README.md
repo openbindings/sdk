@@ -1,8 +1,9 @@
 # OpenAPI 3.0 / 3.1 adapter checkpoint
 
-Status: implementation, independent Astra review, and package/native/Node-Wasm/CPU
-qualification complete within the stated profile; Claude review remains unavailable. This is a bounded experimental profile, not complete OpenAPI support or
-published binding specifications. No merge/publication is authorized by this slice.
+Status: implementation and independent Astra/Claude reviews complete within the
+stated profile. Claude's one material finding was repaired and independently verified;
+refreshed affected/package/native/Node-Wasm qualification is green. Refreshed CPU budgets also passed for both editions. This is a bounded experimental profile, not complete OpenAPI support
+or published binding specifications. No merge/publication is authorized by this slice.
 
 ## Result and boundaries
 
@@ -56,7 +57,7 @@ cardinality, resource limits and malformed/truncated responses.
 
 Current completed checks:
 
-- 127 affected SDK tests and doctests, including 30 adapter tests.
+- 128 affected SDK tests and doctests, including 31 adapter tests after the Claude repair.
 - Strict adapter and external-consumer Clippy, formatting and diff checks.
 - Extracted Cargo packages with the unchanged exact client Git pin.
 - Minimal invocation-only consumer and core dependency isolation.
@@ -75,9 +76,19 @@ within their respective scopes. Both inspected closure of the GET-body validatio
 gap. [Review reconciliation](astra-reviews.json) is a coordinator summary, not a
 verbatim transcript or a claim that reviewers independently ran the test suite.
 
-Claude Opus 5.5 Extra review could not be submitted because the desktop control
-tool reported a locked session. A clean review packet is preserved in the planning
-work directory. No Claude concurrence is claimed for this slice.
+The retried [Claude Opus 5.5 Extra review](claude-review.md) identified one P2
+correctness issue: raw 3.1 parameter types were trusted without checking the schema
+dialect. A nine-row regression reproduced it and now verifies the dialect guard,
+local overrides, honest unsupported coverage and zero dispatch on refusal.
+Claude's [focused verification](claude-repair-review.md) confirms the repair closes
+F1 with no new material issue. Neither Claude nor the Astra reviewers independently
+ran the suite; coordinator-run evidence is separate.
+
+The [reconciliation](claude-reconciliation.md) records the disposition of every
+finding. The cache remains single-entry, and CPU budgets remain permissive: warm
+single-source results cannot be generalized to alternating sources or concurrent
+preparation. Node error-path tests do not independently prove the native zero-effect
+guarantees. These limitations are explicit, not hidden by a pass count.
 
 Qualification retained two failed setup runs: the new loopback harness inherited
 nonblocking socket state on macOS, and new example JSON was missing a closing brace.
@@ -85,32 +96,41 @@ Both setup errors were corrected; neither required product-runtime changes.
 
 ## CPU result
 
-All 22 registered gates passed for each edition: **44 pass, 0 fail, 0 inconclusive**,
-with no timing retries. Three fresh alternating process pairs and seven samples
+Both the original run and the post-repair refresh passed all 22 registered gates
+per edition: **44 pass, 0 fail, 0 inconclusive** in each run, with no timing retries. Three fresh alternating process pairs and seven samples
 per row were retained for each edition. Each gate checks every process pair.
-The archive receipt and exact tested-input hashes match both measurement runs.
+The original archive receipt and tested-input hashes match the original measurement runs.
+The repair has a separate receipt and fresh measurements; historical evidence is retained.
 
-Warm binding results (microseconds; programmable delivery, no network latency):
+Post-repair warm binding results (microseconds; programmable delivery, no network
+latency; a repeatedly used single source):
 
-| Edition | Method | Payload fixture | Direct client | Adapter | Paired overhead |
-| --- | --- | --- | ---: | ---: | ---: |
-| 3.1.2 | GET | 1 KiB | 4.81 | 8.42 | 3.61 |
-| 3.1.2 | GET | 64 KiB | 153.50 | 197.82 | 44.30 |
-| 3.1.2 | POST | 1 KiB | 5.43 | 11.64 | 6.20 |
-| 3.1.2 | POST | 64 KiB | 153.15 | 341.25 | 188.17 |
-| 3.0.4 | GET | 1 KiB | 4.80 | 8.39 | 3.58 |
-| 3.0.4 | GET | 64 KiB | 153.62 | 199.35 | 45.80 |
-| 3.0.4 | POST | 1 KiB | 5.42 | 11.64 | 6.22 |
-| 3.0.4 | POST | 64 KiB | 153.35 | 341.59 | 188.45 |
+| Edition | Method | Fixture | Direct µs | Adapter µs | Ratio | Paired overhead µs |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| 3.1.2 | GET | 1 KiB | 5.11 | 8.91 | 1.74× | 3.80 |
+| 3.1.2 | GET | 64 KiB | 161.84 | 209.29 | 1.29× | 47.31 |
+| 3.1.2 | POST | 1 KiB | 5.71 | 12.27 | 2.15× | 6.61 |
+| 3.1.2 | POST | 64 KiB | 161.57 | 363.32 | 2.25× | 202.37 |
+| 3.0.4 | GET | 1 KiB | 5.06 | 8.89 | 1.76× | 3.82 |
+| 3.0.4 | GET | 64 KiB | 161.30 | 209.87 | 1.30× | 47.87 |
+| 3.0.4 | POST | 1 KiB | 5.71 | 12.31 | 2.16× | 6.62 |
+| 3.0.4 | POST | 64 KiB | 161.21 | 359.42 | 2.23× | 198.21 |
 
 The GET fixture size is the response size; POST uses that size for both request and
 response. Gate accounting includes the input envelope plus output bytes. Paired
-medians need not equal the difference of separately aggregated medians. The raw
-observations, summaries, runner and measurement source are in `performance/`.
-Passing these gates does not establish zero regression from the previous commit.
+medians need not equal the difference of separately aggregated medians. The current raw
+observations and summaries are in `claude-repair/performance/`; original measurements
+and the unchanged runner/measurement source are retained in `performance/`.
 
-The [summary](summary.json) and [qualification receipt](qualification/receipt.json)
-record results and tested-input hashes. The [plan](plan.md) is the frozen starting
+The registered ceilings permit substantial overhead (roughly 6–11× the direct cost
+at the original measured invocation sizes). These are broad budgets. The measured
+ratios and paired overheads above are more informative than the pass count. Passing
+these gates does not establish zero regression from the previous commit, competitive
+whole-network performance, or alternating-source performance.
+
+The [summary](summary.json) and [current qualification receipt](claude-repair/qualification/receipt.json)
+record the repair's results and tested-input hashes. The [original receipt](qualification/receipt.json)
+remains historical evidence for the pre-repair CPU runs. The [plan](plan.md) is the frozen starting
 assignment; this report records its outcome. The initial red test and both failed
 setup runs remain in `failures/`.
 

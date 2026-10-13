@@ -1,0 +1,33 @@
+warning: use of deprecated associated function `core::num::<impl usize>::max_value`: replaced by the `MAX` associated constant on this type
+   --> vendor/openbindings-internal-serde-json/src/lexical/math.rs:458:33
+    |
+458 |             .map_or_else(usize::max_value, |v| v - nlz)
+    |                                 ^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: `openbindings-internal-serde-json` (lib) generated 1 warning
+   Compiling openbindings-openapi v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk/crates/openbindings-openapi)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.96s
+     Running tests/versions.rs (target/debug/deps/versions-33a9819725752934)
+
+running 1 test
+test parameter_types_require_a_supported_lexical_schema_dialect ... FAILED
+
+failures:
+
+---- parameter_types_require_a_supported_lexical_schema_dialect stdout ----
+
+thread 'parameter_types_require_a_supported_lexical_schema_dialect' (52464399) panicked at crates/openbindings-openapi/tests/versions.rs:299:9:
+assertion `left == right` failed: default=Some("http://json-schema.org/draft-07/schema#"), local=None
+  left: true
+ right: false
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    parameter_types_require_a_supported_lexical_schema_dialect
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p openbindings-openapi --test versions`

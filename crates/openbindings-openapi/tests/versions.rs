@@ -255,6 +255,130 @@ async fn kinds_are_advertised_and_crossed_editions_never_dispatch() {
     }
 }
 #[tokio::test]
+async fn parameter_types_require_a_supported_lexical_schema_dialect() {
+    const OLD: &str = "http://json-schema.org/draft-07/schema#";
+    const OPAQUE: &str = "https://schemas.example.invalid/custom";
+    const OAS: &str = "https://spec.openapis.org/oas/3.1/dialect/base";
+    const DATED_OAS: &str = "https://spec.openapis.org/oas/3.1/dialect/2024-11-10";
+    const MODERN: &str = "https://json-schema.org/draft/2020-12/schema";
+    for (default, local, reference, represented) in [
+        (Some(OLD), None, true, false),
+        (None, Some(OLD), true, false),
+        (Some(OPAQUE), None, false, false),
+        (None, Some(OPAQUE), false, false),
+        (Some(OAS), None, true, true),
+        (None, Some(DATED_OAS), true, true),
+        (Some(MODERN), None, true, true),
+        (Some(OLD), Some(MODERN), true, true),
+        (Some(MODERN), Some(OLD), true, false),
+    ] {
+        let mut api: serde_json_compat::Value = serde_json_compat::from_str(SIMPLE).unwrap();
+        api["openapi"] = "3.1.2".into();
+        if let Some(dialect) = default {
+            api["jsonSchemaDialect"] = dialect.into();
+        }
+        api["components"] = serde_json_compat::json!({"schemas":{"Count":{"type":"integer"}}});
+        let mut schema = serde_json_compat::json!({"type":"string"});
+        if reference {
+            schema["$ref"] = "#/components/schemas/Count".into();
+        }
+        if let Some(dialect) = local {
+            schema["$schema"] = dialect.into();
+        }
+        api["paths"]["/ping"]["get"]["parameters"] = serde_json_compat::json!([
+            {"name":"limit","in":"query","schema":schema}
+        ]);
+        let src = source(EXPERIMENTAL_KIND, &api.to_string());
+        let calls = Rc::new(Cell::new(0));
+        let targets = Rc::new(RefCell::new(Vec::new()));
+        let provider = OpenApi::default().with_transport(transport(
+            calls.clone(),
+            targets.clone(),
+            204,
+            "",
+            BodyState::Complete,
+        ));
+        let inventory = Inspector::new(&provider).inspect(&src).await.unwrap();
+        assert_eq!(inventory.targets.len(), 1);
+        assert_eq!(
+            inventory.targets[0].operation.is_some(),
+            represented,
+            "default={default:?}, local={local:?}"
+        );
+        let report = synth(&provider, &src).await.unwrap();
+        assert_eq!(report.coverage().strict_eligible(), represented);
+        let draft = DocumentBuilder::from_json(report.document().parsed().value()).unwrap();
+        assert_eq!(draft.operations.len(), usize::from(represented));
+        assert_eq!(calls.get(), 0, "authoring must not dispatch");
+        if represented {
+            // Only the explicit modern type is projected; the unresolved reference
+            // remains disclosed loss, not an effective schema-validation claim.
+            assert!(!report.coverage().fully_represented());
+            let input = draft
+                .operations
+                .values()
+                .next()
+                .unwrap()
+                .input
+                .as_ref()
+                .unwrap();
+            assert_eq!(
+                input
+                    .get("properties")
+                    .unwrap()
+                    .get("parameters")
+                    .unwrap()
+                    .get("properties")
+                    .unwrap()
+                    .get("query")
+                    .unwrap()
+                    .get("properties")
+                    .unwrap()
+                    .get("limit")
+                    .unwrap()
+                    .get("type")
+                    .unwrap()
+                    .as_str(),
+                Some("string")
+            );
+            invoke(
+                &provider,
+                &src,
+                "/ping",
+                "get",
+                &[r#"{"parameters":{"query":{"limit":"abc"}}}"#],
+                None,
+            )
+            .await
+            .unwrap();
+            assert_eq!(calls.get(), 1);
+            assert_eq!(
+                targets.borrow()[0],
+                "https://version.example.invalid/ping?limit=abc"
+            );
+        } else {
+            assert!(report.coverage().entries().iter().any(|entry| entry.status
+                == CoverageStatus::ImplementationUnsupported
+                && entry.reason_code.as_deref()
+                    == Some("openbindings.openapi.parameter-schema-dialect-unimplemented")));
+            for input in [
+                r#"{"parameters":{"query":{"limit":5}}}"#,
+                r#"{"parameters":{"query":{"limit":"abc"}}}"#,
+            ] {
+                assert_eq!(
+                    invoke(&provider, &src, "/ping", "get", &[input], None)
+                        .await
+                        .unwrap_err()
+                        .code(),
+                    "ERR_REFUSED"
+                );
+            }
+            assert_eq!(calls.get(), 0);
+        }
+    }
+}
+
+#[tokio::test]
 async fn schema_dialect_boundaries_do_not_invent_a_caller_contract() {
     for (kind, version, schema, represented) in [
         (KIND_30, "3.0.4", r#"{"type":"string"}"#, true),

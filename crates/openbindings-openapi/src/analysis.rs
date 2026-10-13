@@ -1,7 +1,7 @@
 use crate::{Error, ErrorKind, Kind, Options, check, json};
 use dynamic_openapi_client::{
-    Document, DocumentBuilder, Method, Operation, ParameterLocation, ResourceInput, SourceFormat,
-    ValueKind,
+    Document, DocumentBuilder, Method, Operation, ParameterLocation, ResourceInput, SchemaProfile,
+    SourceFormat, ValueKind,
 };
 use openbindings::{JsonRef, JsonValue, WorkControl};
 use openbindings_source_inspection::{
@@ -273,7 +273,21 @@ fn profile(operation: &Operation, kind: Kind) -> Result<Profile, &'static str> {
         {
             return Err("parameter-representation-unimplemented");
         }
-        let schema = param.schema().ok_or("parameter-shape-unestablished")?;
+        let description = param
+            .schema_description()
+            .ok_or("parameter-shape-unestablished")?;
+        if kind == Kind::OpenApi31
+            && !matches!(&description.profile, SchemaProfile::JsonSchema { dialect_uri }
+                if matches!(dialect_uri.as_str(),
+                    "https://spec.openapis.org/oas/3.1/dialect/base"
+                    | "https://spec.openapis.org/oas/3.1/dialect/2024-11-10"
+                    | "https://json-schema.org/draft/2020-12/schema"))
+        {
+            // Use the client's lexical context, including schema-level overrides.
+            // Other dialects may ignore or reinterpret the apparent type keyword.
+            return Err("parameter-schema-dialect-unimplemented");
+        }
+        let schema = description.value;
         if kind == Kind::OpenApi30 {
             // A 3.0 Schema Reference Object's siblings do not establish a type.
             // Resolving/translating schema contracts remains outside this profile.
