@@ -49,8 +49,79 @@ fn local_pointer(reference: &str) -> Option<String> {
     (pointer.is_empty() || pointer.starts_with('/')).then(|| format!("#{pointer}"))
 }
 
+/// Projections share the original root's resource and dialect. Nested resources
+/// would rebase retained references, while copied anchors would compete with the
+/// originals. Inspect schema positions, including retained applicators and local
+/// reference targets, without interpreting const data or annotations as schemas.
+fn require_single_resource(root: &Value) -> Result<(), String> {
+    use crate::schema_index::{SCHEMA_SELECTORS, SchemaSelector};
+
+    let mut pending = vec![("#".to_owned(), root)];
+    let mut seen = HashSet::new();
+    while let Some((pointer, schema)) = pending.pop() {
+        if !seen.insert(pointer.clone()) {
+            continue;
+        }
+        let Some(object) = schema.as_object() else {
+            continue;
+        };
+        for keyword in [
+            "$id",
+            "$schema",
+            "$anchor",
+            "$dynamicAnchor",
+            "$recursiveAnchor",
+        ] {
+            let root_metadata = pointer == "#" && matches!(keyword, "$id" | "$schema");
+            if object.contains_key(keyword) && !root_metadata {
+                return Err(format!(
+                    "unsupported location resource scope: {pointer}/{keyword}"
+                ));
+            }
+        }
+        for (keyword, selector) in SCHEMA_SELECTORS {
+            let Some(value) = object.get(*keyword) else {
+                continue;
+            };
+            let child_pointer = format!("{pointer}/{keyword}");
+            match selector {
+                SchemaSelector::Direct => pending.push((child_pointer, value)),
+                SchemaSelector::Map | SchemaSelector::MapOrStringArray => {
+                    if let Some(map) = value.as_object() {
+                        pending.extend(map.iter().map(|(name, child)| {
+                            (format!("{child_pointer}/{}", escape(name)), child)
+                        }));
+                    }
+                }
+                SchemaSelector::Array => {
+                    if let Some(array) = value.as_array() {
+                        pending.extend(
+                            array
+                                .iter()
+                                .enumerate()
+                                .map(|(index, child)| (format!("{child_pointer}/{index}"), child)),
+                        );
+                    }
+                }
+            }
+        }
+        for keyword in ["$ref", "$dynamicRef", "$recursiveRef"] {
+            if let Some(target) = object
+                .get(keyword)
+                .and_then(Value::as_str)
+                .and_then(local_pointer)
+                && let Some(schema) = root.pointer(&target[1..])
+            {
+                pending.push((target, schema));
+            }
+        }
+    }
+    Ok(())
+}
+
 impl LocationMap {
     pub fn compile(schema: &Value) -> Result<Self, String> {
+        require_single_resource(schema)?;
         let validators = super::fixed_schema::options(BTreeMap::new())
             .build_map(schema)
             .map_err(|e| e.to_string())?;
@@ -121,8 +192,8 @@ impl LocationMap {
                 })
                 .transpose()?
                 .unwrap_or_default();
-            // Non-pointer references are deliberate stops. The pinned-schema
-            // inventory test rejects adding anchors or resource scopes unnoticed.
+            // Non-pointer references are deliberate stops. Compilation rejects
+            // resource scopes and anchors that projection cannot preserve.
             let reference = schema
                 .get("$ref")
                 .and_then(Value::as_str)
@@ -520,6 +591,66 @@ mod tests {
         assert_eq!(locate(schema, r#"{"x":0}"#, 10000).0, ["/x", ""]);
     }
     #[test]
+    fn compilation_refuses_nested_resource_shadowing_in_retained_applicators() {
+        let schema = json!({
+            "$id":"https://example.invalid/root",
+            "$defs":{"foo":true},
+            "properties":{"a":{
+                "$id":"nested",
+                "$defs":{"foo":{"required":["missing"]}},
+                "anyOf":[{"$ref":"#/$defs/foo"}],
+                "properties":{"x":{"type":"string"}}
+            }}
+        });
+        let value = JsonValue::parse(r#"{"a":{"x":0}}"#).unwrap();
+        let validator = super::super::fixed_schema::compile(&schema, BTreeMap::new()).unwrap();
+        assert!(!validator.is_valid(backend::view(&value)));
+        // Removing a's identifier from its projection would resolve anyOf to the
+        // root's true schema, losing the independent missing-member failure at /a.
+        assert_eq!(
+            LocationMap::compile(&schema).err().as_deref(),
+            Some("unsupported location resource scope: #/properties/a/$id")
+        );
+    }
+    #[test]
+    fn compilation_refuses_embedded_dialects_and_copied_anchors() {
+        for (schema, pointer) in [
+            (
+                json!({"anyOf":[{"$schema":"https://json-schema.org/draft/2020-12/schema"}]}),
+                "#/anyOf/0/$schema",
+            ),
+            (json!({"$defs":{"a":{"$anchor":"a"}}}), "#/$defs/a/$anchor"),
+            (
+                json!({"prefixItems":[{"$dynamicAnchor":"a"}]}),
+                "#/prefixItems/0/$dynamicAnchor",
+            ),
+            (json!({"$recursiveAnchor":true}), "#/$recursiveAnchor"),
+            (json!({"$anchor":"root"}), "#/$anchor"),
+            (json!({"$dynamicAnchor":"root"}), "#/$dynamicAnchor"),
+            (
+                json!({"$ref":"#/extension", "extension":{"$id":"nested"}}),
+                "#/extension/$id",
+            ),
+        ] {
+            assert_eq!(
+                LocationMap::compile(&schema).err(),
+                Some(format!("unsupported location resource scope: {pointer}")),
+                "{schema}"
+            );
+        }
+    }
+    #[test]
+    fn compilation_preserves_root_metadata_and_opaque_scope_named_data() {
+        let schema = json!({
+            "$id":"https://example.invalid/root",
+            "$schema":"https://json-schema.org/draft/2020-12/schema",
+            "const":{"$id":"literal", "$schema":"literal", "$anchor":"literal"},
+            "properties":{"$id":{"type":"string"}},
+            "default":{"$dynamicAnchor":"literal"}
+        });
+        LocationMap::compile(&schema).unwrap();
+    }
+    #[test]
     fn local_ref_siblings_and_percent_escaped_pointer_are_conjunctive() {
         let schema = json!({"$defs":{"a b":{"properties":{"x":{"type":"string"}}}},
             "$ref":"#/$defs/a%20b", "properties":{"y":{"type":"boolean"}}});
@@ -553,8 +684,6 @@ mod tests {
             "items",
         ];
         let stop = [
-            "$schema",
-            "$id",
             "title",
             "description",
             "type",
@@ -568,19 +697,26 @@ mod tests {
             "maximum",
         ];
         let mut seen = BTreeSet::new();
-        let mut stack = vec![&schema];
-        while let Some(schema) = stack.pop() {
+        let mut stack = vec![(&schema, true)];
+        while let Some((schema, is_root)) = stack.pop() {
             let Some(map) = schema.as_object() else {
                 continue;
             };
             for (key, value) in map {
                 seen.insert(key.as_str());
                 match key.as_str() {
-                    "$defs" | "properties" | "patternProperties" => {
-                        stack.extend(value.as_object().unwrap().values())
+                    "$id" | "$schema" => {
+                        assert!(is_root, "fixed-schema {key} must appear only at the root")
                     }
-                    "anyOf" | "prefixItems" => stack.extend(value.as_array().unwrap()),
-                    "additionalProperties" | "propertyNames" | "items" => stack.push(value),
+                    "$defs" | "properties" | "patternProperties" => {
+                        stack.extend(value.as_object().unwrap().values().map(|v| (v, false)))
+                    }
+                    "anyOf" | "prefixItems" => {
+                        stack.extend(value.as_array().unwrap().iter().map(|v| (v, false)))
+                    }
+                    "additionalProperties" | "propertyNames" | "items" => {
+                        stack.push((value, false))
+                    }
                     "$ref" => assert!(
                         value.as_str().and_then(local_pointer).is_some(),
                         "review non-pointer reference"
