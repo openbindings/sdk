@@ -38,7 +38,13 @@ fn context(doc: &ParsedDocument, supplied: &ResourceSet) -> ValueContracts {
         .unwrap()
         .validated()
         .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::new()), supplied.clone())
+        .value_contracts(
+            Arc::new(
+                DefaultEvaluator::new()
+                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
+            ),
+            supplied.clone(),
+        )
 }
 fn ready(ctx: &ValueContracts, operation: &str) -> ValueContract {
     match ctx.prepare(operation, Direction::Input) {
@@ -100,7 +106,10 @@ fn refusal(prepared: ValueContractPreparation) -> NoVerdict {
 }
 fn identity_refusal(doc: &ParsedDocument, supplied: &ResourceSet, operation: &str) {
     let mut engines: Vec<Arc<dyn SchemaEvaluator>> = vec![
-        Arc::new(DefaultEvaluator::new()),
+        Arc::new(
+            DefaultEvaluator::new()
+                .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
+        ),
         Arc::new(Project(false)),
         Arc::new(Project(true)),
     ];
@@ -273,7 +282,9 @@ fn ri04_05_contained_authority_ignores_supplied_body_and_keeps_raw_catalog() {
                 .iter()
                 .map(|r| r.document.text().to_owned())
                 .collect();
-            DefaultEvaluator::new().prepare(request, control)
+            DefaultEvaluator::new()
+                .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream)
+                .prepare(request, control)
         }
     }
     for text in [
@@ -759,7 +770,10 @@ fn ri22_23_original_dialect_follows_selected_resource() {
     helpers_ready(&doc, &supplied, "owner");
     identity_refusal(&doc, &supplied, "alias");
     for engine in [
-        Arc::new(DefaultEvaluator::new()) as Arc<dyn SchemaEvaluator>,
+        Arc::new(
+            DefaultEvaluator::new()
+                .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
+        ) as Arc<dyn SchemaEvaluator>,
         Arc::new(Project(false)),
         Arc::new(Project(true)),
     ] {
@@ -903,15 +917,17 @@ fn ri25_27_contexts_and_retained_owners_are_independent() {
     );
     let mut retained = Vec::new();
     for kind in ["integer", "string"] {
-        let ctx = doc
-            .validate()
-            .unwrap()
-            .validated()
-            .expect("conformant document")
-            .value_contracts(
-                Arc::new(DefaultEvaluator::new()),
-                resources(&[(V, json!({"type":kind}))]),
-            );
+        let ctx =
+            doc.validate()
+                .unwrap()
+                .validated()
+                .expect("conformant document")
+                .value_contracts(
+                    Arc::new(DefaultEvaluator::new().with_diagnostics(
+                        openbindings_json_schema_evaluator::Diagnostics::Upstream,
+                    )),
+                    resources(&[(V, json!({"type":kind}))]),
+                );
         retained.push(ready(&ctx, "op"));
         ready(&ctx, "other");
         ready(&ctx, "op");
@@ -944,7 +960,10 @@ fn ri28_29_conflicts_do_not_poison_healthy_preparation_or_become_holes() {
     // Strict preparation first sees a real absent resource; bounds subsequently
     // must propagate the conflict rather than creating an incomplete owner.
     for engine in [
-        Arc::new(DefaultEvaluator::new()) as Arc<dyn SchemaEvaluator>,
+        Arc::new(
+            DefaultEvaluator::new()
+                .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
+        ) as Arc<dyn SchemaEvaluator>,
         Arc::new(Project(true)),
     ] {
         let ctx = doc
@@ -995,7 +1014,10 @@ fn ri30_oversized_supplied_closure_keeps_limits_and_healthy_catalog_entries() {
         json!({"healthy":{"input":{"$ref":U}},"deep":{"input":{"$ref":A}}}),
     );
     for evaluator in [
-        Arc::new(DefaultEvaluator::new()) as Arc<dyn SchemaEvaluator>,
+        Arc::new(
+            DefaultEvaluator::new()
+                .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
+        ) as Arc<dyn SchemaEvaluator>,
         Arc::new(Project(false)),
         Arc::new(Project(true)),
     ] {
@@ -1020,7 +1042,10 @@ fn identity_refusal_location_is_optional_and_measured_before_copy() {
         let supplied = resources(&[(V, json!({"properties":{key:{"$id":U}}}))]);
         let doc = one(owner(), json!({"$ref":V}));
         for engine in [
-            Arc::new(DefaultEvaluator::new()) as Arc<dyn SchemaEvaluator>,
+            Arc::new(
+                DefaultEvaluator::new()
+                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
+            ) as Arc<dyn SchemaEvaluator>,
             Arc::new(Project(false)),
             Arc::new(Project(true)),
         ] {
@@ -1233,7 +1258,9 @@ fn s3_collision_policy_matrix_used_and_unused() {
                 verdicts(&ready(&ctx, "used"), &[("{}", "satisfies"), ("2", "fails")]);
             } else {
                 for engine in [
-                    Arc::new(DefaultEvaluator::new()) as Arc<dyn SchemaEvaluator>,
+                    Arc::new(DefaultEvaluator::new().with_diagnostics(
+                        openbindings_json_schema_evaluator::Diagnostics::Upstream,
+                    )) as Arc<dyn SchemaEvaluator>,
                     Arc::new(Project(false)),
                     Arc::new(Project(true)),
                 ] {

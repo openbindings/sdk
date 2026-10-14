@@ -23,7 +23,11 @@ export function oneOfCases(sdk, fixtures) {
     const resources = new sdk.SchemaResources(values);
     let context, contract, value;
     try {
-      context = validatedContracts(parsed.value, { ...options, resources });
+      context = validatedContracts(parsed.value, {
+        diagnostics: "upstream",
+        ...options,
+        resources,
+      });
       const setup = context.prepare(operation, direction);
       check(
         setup.status === "ready",
@@ -130,7 +134,7 @@ export function oneOfCases(sdk, fixtures) {
       );
       if (result.outcome === "fails") {
         check(
-          result.problemsComplete && result.problems.length > 0,
+          !result.problemsComplete && result.problems.length > 0,
           "C22 useful complete summary",
         );
         check(
@@ -160,7 +164,7 @@ export function oneOfCases(sdk, fixtures) {
     );
     if (result.outcome !== "fails") continue;
     check(
-      result.problemsComplete && result.problems.length > 0,
+      !result.problemsComplete && result.problems.length > 0,
       "useful owner-control explanation",
     );
     if (test.summary)
@@ -196,37 +200,21 @@ export function oneOfCases(sdk, fixtures) {
     "input",
     '{"secret":"no-instance-echo"}',
   );
-  const utf8 = (s) => new TextEncoder().encode(s).length;
-  const size = full.problems.reduce(
-    (n, p) =>
-      n +
-      utf8(p.code) +
-      utf8(p.message) +
-      utf8(p.instancePointer) +
-      utf8(p.schemaLocation?.pointer ?? "") +
-      utf8(p.schemaLocation?.resource ?? ""),
-    0,
-  );
   check(!JSON.stringify(full).includes("no-instance-echo"), "summary privacy");
-  for (const bytes of [0, size - 1, size]) {
-    const result = run(
-      doc(schema),
-      "probe",
-      "input",
-      "null",
-      {},
-      { limits: { diagnosticBytes: bytes } },
-    );
-    check(
-      result.outcome === "fails",
-      "diagnostic truncation preserves failure",
-    );
-    check(
-      result.problems.length === (bytes === size ? 1 : 0) &&
-        result.problemsComplete === (bytes === size),
-      "exact summary byte allowance",
-    );
-  }
+  const coarse = run(
+    doc(schema),
+    "probe",
+    "input",
+    "null",
+    {},
+    { diagnostics: "coarse" },
+  );
+  check(
+    coarse.outcome === "fails" &&
+      coarse.problems.length === 0 &&
+      !coarse.problemsComplete,
+    "coarse preserves failure",
+  );
   const exhausted = run(
     doc(schema),
     "probe",

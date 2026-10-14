@@ -34,7 +34,7 @@ comparison remains unchanged.
 The current default evaluator records 42 refusals across 1,564 evaluator observations;
 competing-carrier alias/pointer/direct routes have separate maintained regressions.
 
-The report records preparation refusals separately from optional value outcomes. A preparation refusal does not manufacture a value-validation result. Permitted refusals are counted separately from validity verdicts. Options name exact cases with their predeclared capability reason. Unknown, blank, stale or unused declarations fail; a wrong Boolean verdict can never be exempted. Diagnostic checks verify instance paths and original schema locations. The kit itself has injected wrong-verdict, bogus-path and misclassified-cancellation controls.
+The report records preparation refusals separately from optional value outcomes. A preparation refusal does not manufacture a value-validation result. Permitted refusals are counted separately from validity verdicts. Options name exact cases with their predeclared capability reason. Unknown, blank, stale or unused declarations fail; a wrong Boolean verdict can never be exempted. Diagnostic checks verify every supplied instance path and original schema location. Empty incomplete problems and first-error-only diagnostics are allowed; detail is never verdict evidence. The kit itself has injected wrong-verdict, bogus-path and misclassified-cancellation controls.
 
 `examples/boolean_evaluator.rs` is a small custom evaluator that consumes the original context and honestly declines non-boolean schemas. It demonstrates integration rather than claiming full capability. An integration test wraps the default evaluator with an original-context assertion and runs the complete suite.
 
@@ -46,3 +46,8 @@ are described in the [API reference guide](../../docs/api-reference.md).
 The kit checks preparation and value outcomes, original locations and refusal
 causes. Prepared objects expose no completeness declaration. The qualification
 kit does not impose the default evaluator's private planning policy on a BYO evaluator.
+
+S8a preserves every verdict/refusal and records each changed observation in
+[`s8a-diagnostics-ledger.json`](../../tools/qualification/inputs/s8a-diagnostics-ledger.json).
+Both Coarse and Upstream are replayed; incomplete diagnostic subsets never imply
+missing rule evidence or authorize a wrong verdict/refusal.

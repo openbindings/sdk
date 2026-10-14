@@ -165,10 +165,7 @@ fn transitive_holes_and_original_snapshot_evidence_survive_new_contexts() {
     let two = prepare(
         &format!(r#"{{"properties":{{"a":{{"$ref":"{U}"}},"b":{{"$ref":"{V}"}}}}}}"#),
         ResourceSet::default(),
-        Arc::new(DefaultEvaluator::with_limits(Limits {
-            diagnostic_bytes: 0,
-            ..Limits::default()
-        })),
+        Arc::new(DefaultEvaluator::with_limits(Limits::default())),
     );
     assert!(
         evidence(&two)

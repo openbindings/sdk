@@ -79,6 +79,7 @@ impl PreparedSchema for BooleanContract {
             ValueOutcome::Satisfies
         } else {
             ValueOutcome::Fails {
+                message: "value does not satisfy the contract".into(),
                 problems: vec![ValueProblem {
                     details: None,
                     instance_pointer: String::new(),
@@ -277,6 +278,7 @@ async fn schema_rejection_withholds_values_and_retains_only_local_evidence() {
             ValueOutcome::Fails {
                 problems,
                 problems_complete,
+                ..
             } => {
                 assert!(*problems_complete);
                 assert_eq!(problems[0].code, "consumer.false");

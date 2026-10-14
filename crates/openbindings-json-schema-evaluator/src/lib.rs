@@ -12,14 +12,14 @@ use openbindings_internal_json::{
     numeric,
 };
 use openbindings_internal_schema::{
-    LocationBudgetExceeded, Program as EvaluationProgram, ProjectedResource as SchemaResource,
+    Program as EvaluationProgram, ProjectedResource as SchemaResource,
 };
 use serde_json::Value;
 use std::sync::Arc;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]
-/// Finite default-evaluator budgets. Work counts are implementation units, not milliseconds; exhaustion yields no verdict unless an established failure only loses diagnostic completeness. Zero is literal, except `max_problems` has a minimum count allowance of one. A byte budget may admit no complete problems.
+/// Finite default-evaluator budgets. Work counts are implementation units, not milliseconds; exhaustion yields no verdict unless an established failure only loses diagnostic completeness. Zero is literal. These budgets do not bound upstream diagnostic allocation or stack use.
 pub struct Limits {
     /// Evaluation work units per verdict/diagnostic pass; default 2,000,000. A partial verdict shares this allowance across upper and lower evaluations.
     pub evaluation_steps: usize,
@@ -27,10 +27,6 @@ pub struct Limits {
     pub evaluation_depth: usize,
     /// Regular-expression work/backtracking budget per verdict/diagnostic pass; default 2,000,000. Upper and lower share one verdict allowance.
     pub regex_steps: usize,
-    /// Maximum retained failure diagnostics; default 256, effective minimum count allowance one; byte admission may retain none. Truncation sets `problems_complete` false without changing an established failure.
-    pub max_problems: usize,
-    /// Aggregate retained UTF-8 diagnostic string bytes per failure result; default 1 MiB. Includes pointers, resource identifiers, codes, messages and requested detail strings. Zero preserves failure with empty, incomplete diagnostics. Not a heap or serialized byte limit.
-    pub diagnostic_bytes: usize,
     /// Maximum projected JSON nesting admitted to evaluator compilation; default 512.
     pub compile_json_depth: usize,
     /// Maximum UTF-8 bytes in each schema regular expression; default 1 MiB (1,048,576 bytes).
@@ -44,19 +40,29 @@ impl Default for Limits {
             evaluation_steps: 2_000_000,
             evaluation_depth: 1024,
             regex_steps: 2_000_000,
-            max_problems: 256,
-            diagnostic_bytes: 1024 * 1024,
             compile_json_depth: 512,
             pattern_bytes: 1024 * 1024,
             pattern_depth: 256,
         }
     }
 }
+/// Diagnostic policy for established value failures. Neither mode changes rule evidence.
+#[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Diagnostics {
+    /// Fixed value-free message, no problems, and incomplete diagnostics (default).
+    #[default]
+    Coarse,
+    /// The library's first error, with redacted messages and original schema facts.
+    /// Library-bounded: construction can allocate in proportion to inputs and can
+    /// overflow the stack on deep values. The SDK promises no stronger bound.
+    Upstream,
+}
 #[derive(Clone, Debug, Default)]
 /// Optional JSON Schema 2020-12 companion with exact numeric semantics and explicit resources only. It performs no network/filesystem acquisition. Format is annotation, Unicode property-escape matching is not qualified, and potential non-progressing cycles can conservatively refuse. Use a custom [`SchemaEvaluator`] when different qualified capabilities are required.
 pub struct DefaultEvaluator {
     limits: Limits,
-    include_schema_details: bool,
+    diagnostics: Diagnostics,
 }
 impl DefaultEvaluator {
     /// Construct the companion with [`Limits::default`]; no schemas are compiled or resources acquired yet.
@@ -67,17 +73,15 @@ impl DefaultEvaluator {
     pub fn with_limits(limits: Limits) -> Self {
         Self {
             limits,
-            include_schema_details: false,
+            diagnostics: Diagnostics::Coarse,
         }
     }
-    /// Opt into source-controlled schema facts in failure diagnostics (default false).
-    /// Prepared validators retain their original document/resource snapshots only
-    /// when enabled. Facts may contain secrets; disclose them only in an appropriate
-    /// application context. Exact numeric operands remain JSON token strings.
-    /// The diagnostic byte budget admits complete facts or an explicit Truncated
-    /// marker; it never clips a name/token or returns a partial enum array.
-    pub fn with_schema_details(mut self, include: bool) -> Self {
-        self.include_schema_details = include;
+    /// Select value diagnostics; defaults to [`Diagnostics::Coarse`].
+    /// [`Diagnostics::Upstream`] requests the library's first error and retains
+    /// original source snapshots for schema facts, which may contain secrets.
+    /// Its allocations and stack use are library-bounded, not SDK-bounded.
+    pub fn with_diagnostics(mut self, diagnostics: Diagnostics) -> Self {
+        self.diagnostics = diagnostics;
         self
     }
     /// Borrow this evaluator's configured budgets without allocation.
@@ -247,7 +251,7 @@ impl DefaultEvaluator {
             validator,
             program,
             limits: self.limits.clone(),
-            detail_source: self.include_schema_details.then(|| request.clone()),
+            detail_source: (self.diagnostics == Diagnostics::Upstream).then(|| request.clone()),
         })
     }
 }
@@ -272,11 +276,7 @@ impl PreparedSchema for Compiled {
         }) {
             Err(detail) => ValueOutcome::NoVerdict { detail },
             Ok(true) => ValueOutcome::Satisfies,
-            Ok(false) => backend::string_scope(|| self.diagnostics(value, control, false))
-                .unwrap_or(ValueOutcome::Fails {
-                    problems: Vec::new(),
-                    problems_complete: false,
-                }),
+            Ok(false) => self.diagnostics(value, control, false),
         }
     }
 }
@@ -288,190 +288,54 @@ impl Compiled {
         original_only: bool,
     ) -> ValueOutcome {
         let mut problems = Vec::new();
-        let mut complete = true;
-        let mut remaining = self.limits.diagnostic_bytes;
-        if remaining == 0 {
-            return ValueOutcome::Fails {
-                problems,
-                problems_complete: false,
-            };
-        }
-        let count = self.limits.max_problems.max(1);
-        let (diagnostics, usage) = jsonschema::ob_work::diagnostic_schema_details(
-            self.detail_source.is_some(),
-            || {
-                jsonschema::ob_work::diagnostic_metadata(
-                    self.limits.diagnostic_bytes,
-                    count.saturating_mul(8),
-                    || {
-                        jsonschema::ob_work::diagnostics(count.saturating_mul(8), || {
-                            jsonschema::ob_work::bounded(
-                                self.limits.evaluation_steps,
-                                self.limits.evaluation_depth,
-                                || {
-                                    jsonschema::ob_ecma::top_level(self.limits.regex_steps, || {
-                                        for error in
-                                            self.validator.iter_errors(backend::view(value))
-                                        {
-                                            if problems.len() >= count {
-                                                complete = false;
-                                                break;
-                                            }
-                                            // Messages use only fixed keyword/type metadata (<=192 bytes).
-                                            // No source-controlled operand or rejected instance is rendered.
-                                            let message = if original_only
-                                                && error.kind().keyword() == "oneOf"
-                                            {
-                                                "value does not satisfy exactly one alternative"
-                                                    .into()
-                                            } else {
-                                                diagnostic_message(error.kind())
-                                            };
-                                            let code = error.kind().keyword();
-                                            let reserve = if self.detail_source.is_some() {
-                                                details::TRUNCATED_BYTES
-                                            } else {
-                                                0
-                                            };
-                                            let fixed = code
-                                                .len()
-                                                .saturating_add(message.len())
-                                                .saturating_add(reserve);
-                                            if fixed > remaining {
-                                                complete = false;
-                                                break;
-                                            }
-                                            let all_paths = diagnostic_paths(
-                                                &error,
-                                                value,
-                                                |root, child| {
-                                                    if problems.len() >= count {
-                                                        return false;
-                                                    }
-                                                    let bytes = root.len().saturating_add(
-                                                        child.map_or(0, |s| {
-                                                            1usize.saturating_add(escaped_len(s))
-                                                        }),
-                                                    );
-                                                    if fixed.saturating_add(bytes) > remaining {
-                                                        return false;
-                                                    }
-                                                    let location =
-                                                        match error.absolute_keyword_location() {
-                                                            Some(uri) => match self
-                                                                .program
-                                                                .original_location_bounded(
-                                                                    uri.as_str(),
-                                                                    remaining - fixed - bytes,
-                                                                ) {
-                                                                Ok(location) => {
-                                                                    location.map(original_location)
-                                                                }
-                                                                Err(LocationBudgetExceeded) => {
-                                                                    return false;
-                                                                }
-                                                            },
-                                                            None => None,
-                                                        };
-                                                    if original_only && location.is_none() {
-                                                        // Keep the offered outer error boundary. Never
-                                                        // flatten generated contexts to recover leaves.
-                                                        complete = false;
-                                                        return true;
-                                                    }
-                                                    let location_bytes =
-                                                        location.as_ref().map_or(0, |at| {
-                                                            at.pointer.len().saturating_add(
-                                                                at.resource
-                                                                    .as_ref()
-                                                                    .map_or(0, String::len),
-                                                            )
-                                                        });
-                                                    let total = fixed + bytes + location_bytes;
-                                                    let (detail, detail_bytes) = if let Some(
-                                                        source,
-                                                    ) =
-                                                        &self.detail_source
-                                                    {
-                                                        match details::collect(
-                                                            source,
-                                                            location.as_ref(),
-                                                            error.kind(),
-                                                            remaining - total + reserve,
-                                                            control,
-                                                        ) {
-                                                            details::Collection::Available(
-                                                                detail,
-                                                                bytes,
-                                                            ) => (Some(detail), bytes.max(reserve)),
-                                                            details::Collection::Truncated => {
-                                                                complete = false;
-                                                                (Some(ValueProblemDetails::Truncated), reserve)
-                                                            }
-                                                            details::Collection::Unavailable => {
-                                                                (None, reserve)
-                                                            }
-                                                            details::Collection::Interrupted => {
-                                                                return false;
-                                                            }
-                                                        }
-                                                    } else {
-                                                        (None, 0)
-                                                    };
-                                                    let total = total + detail_bytes - reserve;
-                                                    // Allocate only a whole admitted problem, with exact capacity.
-                                                    let mut path = String::with_capacity(bytes);
-                                                    path.push_str(root);
-                                                    if let Some(child) = child {
-                                                        path.push('/');
-                                                        for character in child.chars() {
-                                                            match character {
-                                                                '~' => path.push_str("~0"),
-                                                                '/' => path.push_str("~1"),
-                                                                _ => path.push(character),
-                                                            }
-                                                        }
-                                                    }
-                                                    remaining -= total;
-                                                    problems.push(ValueProblem {
-                                                        instance_pointer: path,
-                                                        schema_location: location,
-                                                        code: code.into(),
-                                                        message: message.clone(),
-                                                        details: detail,
-                                                    });
-                                                    true
-                                                },
-                                            );
-                                            if !all_paths || control.is_cancelled() {
-                                                complete = false;
-                                                break;
-                                            }
-                                        }
-                                    })
-                                },
-                            )
-                        })
+        if let Some(source) = &self.detail_source {
+            // Validity is already established. Failure to obtain detail (including
+            // cancellation or exhausted work) must never turn it into no-verdict.
+            let diagnostic = verdict_pass(&self.limits, || {
+                control.check()?;
+                let Err(error) = self.validator.validate(backend::view(value)) else {
+                    return Ok(None);
+                };
+                let location = error.absolute_keyword_location().and_then(|uri| {
+                    self.program
+                        .original_location(uri.as_str())
+                        .map(original_location)
+                });
+                // Generated partial-program errors are not original schema evidence.
+                if original_only && location.is_none() {
+                    return Ok(None);
+                }
+                let detail =
+                    match details::collect(source, location.as_ref(), error.kind(), control) {
+                        details::Collection::Available(detail) => Some(detail),
+                        _ => None,
+                    };
+                control.check()?;
+                Ok(Some(ValueProblem {
+                    instance_pointer: error.instance_path().as_str().into(),
+                    schema_location: location,
+                    code: error.kind().keyword().into(),
+                    message: if original_only && error.kind().keyword() == "oneOf" {
+                        "value does not satisfy exactly one alternative".into()
+                    } else {
+                        diagnostic_message(error.kind())
                     },
-                )
-            },
-        );
-        if !matches!(diagnostics, Ok(Ok(Ok(()))))
-            || usage.rejected_copies != 0
-            || usage.collection_truncated
-        {
-            complete = false;
-        }
-        if let Err(detail) = control.check() {
-            let detail = detail.into();
-            return ValueOutcome::NoVerdict { detail };
+                    details: detail,
+                }))
+            });
+            if let Ok(Some(problem)) = diagnostic {
+                problems.push(problem);
+            }
         }
         ValueOutcome::Fails {
+            message: "value does not satisfy the contract".into(),
             problems,
-            problems_complete: complete,
+            // A first error never claims exhaustive diagnostics.
+            problems_complete: false,
         }
     }
 }
+
 struct PartialCompiled {
     upper: Compiled,
     lower: Compiled,
@@ -494,14 +358,7 @@ impl PreparedSchema for PartialCompiled {
         });
         match result {
             Err(detail) => ValueOutcome::NoVerdict { detail },
-            Ok(Some(false)) => {
-                backend::string_scope(|| self.upper.diagnostics(value, control, true)).unwrap_or(
-                    ValueOutcome::Fails {
-                        problems: Vec::new(),
-                        problems_complete: false,
-                    },
-                )
-            }
+            Ok(Some(false)) => self.upper.diagnostics(value, control, true),
             Ok(Some(true)) => ValueOutcome::Satisfies,
             Ok(None) => ValueOutcome::NoVerdict {
                 detail: self.unavailable.clone().unwrap_or_else(|| {
@@ -638,35 +495,6 @@ fn check_patterns(
     Ok(())
 }
 
-fn escaped_len(text: &str) -> usize {
-    text.len()
-        .saturating_add(text.bytes().filter(|b| matches!(b, b'~' | b'/')).count())
-}
-// Visit one path at a time, borrowing root/member strings. Never expand the whole
-// vendor keyword collection or stringify an input value to find an item index.
-fn diagnostic_paths(
-    error: &jsonschema::ValidationError<'_>,
-    value: &JsonValue,
-    mut admit: impl FnMut(&str, Option<&str>) -> bool,
-) -> bool {
-    use jsonschema::error::ValidationErrorKind as Kind;
-    let root = error.instance_path().as_str();
-    match error.kind() {
-        Kind::AdditionalProperties { unexpected } | Kind::UnevaluatedProperties { unexpected } => {
-            unexpected.iter().all(|name| admit(root, Some(name)))
-        }
-        Kind::AdditionalItems { limit } => {
-            match value.at(root).and_then(|v| v.elements().map(|a| a.len())) {
-                Some(len) => (*limit..len).all(|i| admit(root, Some(&i.to_string()))),
-                None => admit(root, None),
-            }
-        }
-        Kind::UnevaluatedItems { indexes, .. } if !indexes.is_empty() => {
-            indexes.iter().all(|i| admit(root, Some(&i.to_string())))
-        }
-        _ => admit(root, None),
-    }
-}
 fn diagnostic_message(kind: &jsonschema::error::ValidationErrorKind) -> String {
     use jsonschema::error::ValidationErrorKind as K;
     let keyword_message = match kind.keyword() {

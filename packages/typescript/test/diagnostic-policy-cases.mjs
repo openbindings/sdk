@@ -167,10 +167,9 @@ export function diagnosticPolicyCases(sdk) {
       { $ref: "#/operations/op/input" },
       { anyOf: [true, { $ref: "#/operations/op/input" }] },
     ]) {
-      const state = own(validatedContracts(withSchema(schema))).prepare(
-        "op",
-        "input",
-      );
+      const state = own(
+        validatedContracts(withSchema(schema), { diagnostics: "upstream" }),
+      ).prepare("op", "input");
       check(
         state.status === "no-verdict" &&
           state.detail.reason === "conservative-preparation" &&
@@ -322,10 +321,9 @@ export function diagnosticPolicyCases(sdk) {
         "object is missing a required member; inspect the required keyword at the schema location",
       ],
     ]) {
-      const state = own(validatedContracts(withSchema(schema))).prepare(
-        "op",
-        "input",
-      );
+      const state = own(
+        validatedContracts(withSchema(schema), { diagnostics: "upstream" }),
+      ).prepare("op", "input");
       check(state.status === "ready", "type/message contract prepared");
       const outcome = own(state.valueContract).validate(instance);
       check(

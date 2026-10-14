@@ -100,7 +100,7 @@ fn unexpected_fields_locate_original_key_tokens_in_source_order() {
     let report = validation.report();
     assert_eq!(report.conclusion, Conformance::NonConformant);
     assert!(!report.findings_truncated);
-    assert_eq!(report.findings.len(), 2);
+    assert_eq!(report.findings.len(), 1);
     for (finding, (token, pointer)) in report
         .findings
         .iter()
@@ -127,14 +127,25 @@ fn unexpected_fields_locate_original_key_tokens_in_source_order() {
 #[test]
 fn all_closed_objects_are_diagnosed_without_entering_opaque_or_schema_values() {
     let text = r#"{"openbindings":"0.2.0","operations":{"run":{"badOperation":0,"input":{"customKeyword":{"inputs":1}},"examples":{"sample":{"badExample":0,"input":{"inputs":1},"x-extra":{"inputs":1}}},"x-extra":{"inputs":1}}},"dependencies":{"d":{"operation":"run","badDependency":0}},"sources":{"s":{"kind":"custom","badSource":0,"content":{"inputs":1}}},"bindings":{"b":{"operation":"run","source":"s","badBinding":0,"content":{"inputs":1}}},"badRoot":0,"x-extra":{"inputs":1}}"#;
-    let validation = validate_document(text).unwrap();
-    let mut paths: Vec<_> = validation
-        .report()
-        .findings
-        .iter()
-        .filter(|f| f.message == UNEXPECTED)
-        .map(|f| f.location.as_ref().unwrap().pointer.as_deref().unwrap())
-        .collect();
+    // Each localized document check retains its first error. Repair that member
+    // and recheck to exercise every closed-object location without entering data.
+    let mut remaining = text.to_owned();
+    let mut paths = Vec::new();
+    loop {
+        let validation = validate_document(&remaining).unwrap();
+        let Some(finding) = validation
+            .report()
+            .findings
+            .iter()
+            .find(|f| f.message == UNEXPECTED)
+        else {
+            break;
+        };
+        let pointer = finding.location.as_ref().unwrap().pointer.as_ref().unwrap();
+        paths.push(pointer.clone());
+        let name = pointer.rsplit('/').next().unwrap();
+        remaining = remaining.replace(&format!("\"{name}\""), &format!("\"x-{name}\""));
+    }
     paths.sort_unstable();
     assert_eq!(
         paths,
@@ -147,7 +158,6 @@ fn all_closed_objects_are_diagnosed_without_entering_opaque_or_schema_values() {
             "/sources/s/badSource"
         ]
     );
-    assert_eq!(validation.report().findings.len(), 6);
     let mut corrected = text.to_owned();
     for name in [
         "badRoot",
@@ -195,84 +205,52 @@ fn name_guidance_describes_the_existing_grammar_for_every_name_position() {
 }
 
 #[test]
-fn expansion_saturation_preserves_all_rule_evidence_and_truthful_truncation() {
+fn localized_first_errors_preserve_all_rule_evidence_under_the_findings_cap() {
     for count in [4096, 4097] {
-        let fields = (0..count)
-            .map(|i| format!(",\"bad{i}\":0"))
-            .collect::<String>();
-        let text = format!("{{\"openbindings\":\"0.2.0\",\"operations\":{{}}{fields}}}");
-        let validation = validate_document(&text).unwrap();
-        assert_eq!(validation.report().findings.len(), 4096);
-        assert_eq!(validation.report().findings_truncated, count > 4096);
-        assert_eq!(validation.report().evidence["OBI-02"], Evidence::Violated);
-        assert_eq!(validation.report().evidence.len(), 13);
+        let schemas = (0..count)
+            .map(|i| format!("\"s{i}\":{{\"minLength\":-1}}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let text =
+            format!(r#"{{"openbindings":"0.2.0","operations":{{}},"schemas":{{{schemas}}}}}"#);
+        let validation = validate_document(text).unwrap();
+        let report = validation.report();
+        assert_eq!(report.findings.len(), 4096);
+        assert_eq!(report.findings_truncated, count > 4096);
+        assert_eq!(report.evidence["OBI-02"], Evidence::Met);
+        assert_eq!(report.evidence["OBI-10"], Evidence::Violated);
+        assert_eq!(report.evidence.len(), 13);
         assert!(
-            validation
-                .report()
+            report
                 .findings
                 .iter()
-                .all(|f| f.message == UNEXPECTED)
+                .all(|f| f.message == "number violates the minimum constraint")
         );
-        let bad_schema = text.replace(
-            "\"operations\":{}",
-            "\"operations\":{},\"schemas\":{\"s\":{\"type\":7}}",
-        );
-        let validation = validate_document(bad_schema).unwrap();
-        assert_eq!(validation.report().findings.len(), 4096);
-        assert!(validation.report().findings_truncated);
-        assert_eq!(validation.report().evidence["OBI-10"], Evidence::Violated);
-        if count == 4096 {
-            let deep = format!("{}true{}", "{\"not\":".repeat(300), "}".repeat(300));
-            let source = text.replace(
-                "\"operations\":{}",
-                &format!("\"operations\":{{}},\"schemas\":{{\"s\":{deep}}}"),
-            );
-            let validation = validate_document(source).unwrap();
-            assert_eq!(validation.report().findings.len(), 4096);
-            assert!(!validation.report().findings_truncated);
-            assert_eq!(validation.report().evidence["OBI-10"], Evidence::Met);
-        }
     }
 }
 
 #[test]
-fn expansion_pointer_budget_prevents_large_ancestor_amplification() {
+fn first_error_does_not_multiply_a_large_ancestor_pointer() {
     let name = "a".repeat(2048);
     let fields = (0..4096)
         .map(|i| format!("\"bad{i}\":0"))
         .collect::<Vec<_>>()
         .join(",");
-    let text = format!(
-        "{{\"openbindings\":\"0.2.0\",\"operations\":{{\"{name}\":{{{fields}}},\"y\":{{\"bad\":0}},\"z\":{{\"description\":42}}}}}}"
-    );
+    let text = format!(r#"{{"openbindings":"0.2.0","operations":{{"{name}":{{{fields}}}}}}}"#);
     let validation = validate_document(text).unwrap();
     let report = validation.report();
-    assert_eq!(report.conclusion, Conformance::NonConformant);
-    assert!(report.findings_truncated);
-    assert!(report.findings.len() < 4096);
-    assert!(
-        report
-            .findings
-            .iter()
-            .any(|f| f.message == "expected JSON type: string"
-                && f.location.as_ref().unwrap().pointer.as_deref()
-                    == Some("/operations/z/description"))
-    );
-    assert!(
-        !report
-            .findings
-            .iter()
-            .any(|f| f.location.as_ref().unwrap().pointer.as_deref() == Some("/operations/y/bad"))
-    );
-    let bytes: usize = report
-        .findings
-        .iter()
-        .filter(|f| f.message == UNEXPECTED)
-        .map(|f| f.location.as_ref().unwrap().pointer.as_ref().unwrap().len())
-        .sum();
-    assert!(bytes <= 8 * 1024 * 1024);
-    assert!(bytes > 8 * 1024 * 1024 - 2100);
     assert_eq!(report.evidence["OBI-02"], Evidence::Violated);
+    assert_eq!(report.findings.len(), 1);
+    assert_eq!(report.findings[0].message, UNEXPECTED);
+    assert_eq!(
+        report.findings[0]
+            .location
+            .as_ref()
+            .unwrap()
+            .pointer
+            .as_deref(),
+        Some(format!("/operations/{name}/bad0").as_str())
+    );
 }
 
 #[test]
@@ -309,21 +287,34 @@ fn keyword_messages_are_value_free_and_property_names_locate_original_tokens() {
     // CR-6: use documented kind/path metadata, never rejected-instance payloads.
     let text = r#"{"openbindings":"0.2.0","operations":{"-secret":{},".private":{},"\ud800":{}},"dependencies":{"d":{"operation":"-secret","kinds":[]}},"schemas":{"s":{"$anchor":"1private","minLength":-1}}}"#;
     let validation = validate_document(text).unwrap();
-    for (pointer, keyword) in [
-        ("/dependencies/d/kinds", "minItems"),
-        ("/schemas/s/$anchor", "pattern"),
-        ("/schemas/s/minLength", "minimum"),
+    for (fragment, pointer, keyword) in [
+        (
+            r#""dependencies":{"d":{"operation":"op","kinds":[]}}"#,
+            "/dependencies/d/kinds",
+            "minItems",
+        ),
+        (
+            r#""schemas":{"s":{"$anchor":"1private"}}"#,
+            "/schemas/s/$anchor",
+            "pattern",
+        ),
+        (
+            r#""schemas":{"s":{"minLength":-1}}"#,
+            "/schemas/s/minLength",
+            "minimum",
+        ),
     ] {
+        let source = format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{}}}},{fragment}}}"#);
+        let check = validate_document(source).unwrap();
         assert!(
-            validation
+            check
                 .report()
                 .findings
                 .iter()
                 .any(|f| f.code == "schema-mismatch"
                     && f.location.as_ref().unwrap().pointer.as_deref() == Some(pointer)
                     && f.message.contains(keyword)),
-            "{pointer}: {:?}",
-            validation.report().findings
+            "{pointer}"
         );
     }
     for token in [r#""-secret""#, r#"".private""#, r#""\ud800""#] {

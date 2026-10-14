@@ -472,14 +472,23 @@ impl WasmValidatedDocument {
         &self,
         resources: &WasmResources,
         limits: &str,
-        include_schema_details: bool,
+        diagnostics: &str,
     ) -> Result<WasmValueContracts, JsValue> {
         let document = self.handle.proof("document-conformance")?;
         let limits: Limits =
             serde_json::from_str(limits).map_err(|e| error("invalid-evaluator-limits", e))?;
         let contracts = document.value_contracts(
             Arc::new(
-                DefaultEvaluator::with_limits(limits).with_schema_details(include_schema_details),
+                DefaultEvaluator::with_limits(limits).with_diagnostics(match diagnostics {
+                    "coarse" => openbindings_json_schema_evaluator::Diagnostics::Coarse,
+                    "upstream" => openbindings_json_schema_evaluator::Diagnostics::Upstream,
+                    _ => {
+                        return Err(error(
+                            "invalid-diagnostics",
+                            "diagnostics must be coarse or upstream",
+                        ));
+                    }
+                }),
             ),
             resources.resources.clone(),
         );

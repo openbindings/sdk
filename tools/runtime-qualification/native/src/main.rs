@@ -169,7 +169,7 @@ fn main() {
         let (wire, serialize_ms) = measured(timed, || serde_json::to_string(&result).unwrap());
         let ValueOutcome::Fails {
             problems,
-            problems_complete,
+            problems_complete, ..
         } = result
         else {
             panic!("witness fails")

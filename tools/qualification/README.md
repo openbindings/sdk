@@ -17,3 +17,11 @@ The nine supplied-resource migrations retain refusal reason/code and change only
 source location. `adversarial/unreached-uncopied-targets/0` (formerly satisfies) and
 `/1` (formerly fails) are now core OBI-12 rejection regressions. No raw fixture seam
 survives, because the nine re-expressions preserve their outcomes.
+
+S8a records diagnostic-only changes for every affected case in
+[`s8a-diagnostics-ledger.json`](inputs/s8a-diagnostics-ledger.json). The new
+`replay/check-s8a-diagnostics.py` compares exact before/after receipts, including
+both default Coarse and explicit Upstream kit runs (`--example replay -- --upstream`).
+It fails on any verdict, refusal stage/reason/code, inventory, or rule-evidence drift.
+Diagnostic completeness no longer serves as verdict evidence in either native or
+browser judges; malformed complete diagnostics and bogus locations still fail.

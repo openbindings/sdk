@@ -19,7 +19,7 @@ export function partialResourceCases(sdk) {
     const document = parsed.value;
     let context, contract;
     try {
-      context = validatedContracts(document);
+      context = validatedContracts(document, { diagnostics: "upstream" });
       const setup = context.prepare("op", "input");
       if (expected === "refuse") {
         check(

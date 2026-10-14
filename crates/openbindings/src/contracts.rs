@@ -154,6 +154,8 @@ pub enum ValueOutcome {
     Satisfies,
     /// The instance was established to fail the selected schema; diagnostic completeness is separate from the verdict.
     Fails {
+        /// Value-free explanation of the established failure.
+        message: String,
         /// Retained actual failing instance locations; diagnostics may be bounded after failure is established.
         problems: Vec<ValueProblem>,
         /// Whether selected diagnostics, including requested details, completed. False does not weaken the established failure verdict.
@@ -455,8 +457,9 @@ impl ValueContract {
     pub fn validate(&self, value: &JsonValue) -> ValueOutcome {
         self.validate_with_control(value, &crate::work_control::NeverCancelled)
     }
-    /// Validate with cooperative cancellation. Cancellation yields no-verdict,
-    /// not failure, and leaves this owner usable with a fresh healthy control.
+    /// Validate with cooperative cancellation. Cancellation before a verdict yields
+    /// no-verdict and leaves this owner usable with a fresh healthy control.
+    /// Cancellation of optional diagnostics does not weaken an established failure.
     /// This is not a preemptive wall-clock deadline; applications schedule work.
     pub fn validate_with_control(
         &self,

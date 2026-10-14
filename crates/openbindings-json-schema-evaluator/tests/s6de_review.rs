@@ -77,10 +77,12 @@ fn contained_and_supplied_surrogate_collision_preserves_each_original_target() {
                         "{found:?}"
                     );
                     let validation = doc.validate().unwrap();
-                    let context = validation
-                        .validated()
-                        .unwrap()
-                        .value_contracts(Arc::new(DefaultEvaluator::new()), resources);
+                    let context = validation.validated().unwrap().value_contracts(
+                        Arc::new(DefaultEvaluator::new().with_diagnostics(
+                            openbindings_json_schema_evaluator::Diagnostics::Upstream,
+                        )),
+                        resources,
+                    );
                     let ValueContractPreparation::Ready(contract) =
                         context.prepare("op", Direction::Input)
                     else {
@@ -135,10 +137,13 @@ fn inspection_root_never_masks_missing_references_including_suffix_candidates() 
             assert!(report.complete);
             assert!(report.references.iter().all(|r| matches!(&r.resolution, ReferenceResolution::Unresolved { detail } if detail.reason == ReferenceRefusalReason::ResourceUnavailable && detail.code == "resource-unavailable")), "{report:?}");
             let validation = doc.validate().unwrap();
-            let context = validation
-                .validated()
-                .unwrap()
-                .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
+            let context =
+                validation.validated().unwrap().value_contracts(
+                    Arc::new(DefaultEvaluator::new().with_diagnostics(
+                        openbindings_json_schema_evaluator::Diagnostics::Upstream,
+                    )),
+                    ResourceSet::default(),
+                );
             let ValueContractPreparation::Ready(contract) = context.prepare("op", Direction::Input)
             else {
                 panic!("expected ready")
@@ -176,10 +181,13 @@ fn unused_malformed_sibling_remains_a_conservative_preparation_limit_until_s9() 
                 matches!(&reference.resolution, ReferenceResolution::Unresolved { detail } if detail.code == "resource-inspection")
             );
             let validation = doc.validate().unwrap();
-            let context = validation
-                .validated()
-                .unwrap()
-                .value_contracts(Arc::new(DefaultEvaluator::new()), resources);
+            let context =
+                validation.validated().unwrap().value_contracts(
+                    Arc::new(DefaultEvaluator::new().with_diagnostics(
+                        openbindings_json_schema_evaluator::Diagnostics::Upstream,
+                    )),
+                    resources,
+                );
             assert!(
                 matches!(context.prepare("op", Direction::Input), ValueContractPreparation::NoVerdict { detail } if detail.reason == NoVerdictReason::ConservativePreparation && detail.code == "resource-inspection")
             );

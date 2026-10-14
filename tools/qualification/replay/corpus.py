@@ -77,7 +77,7 @@ def judge_value(expected,actual,features,profile):
     if result=='no-verdict':
         reason=actual.get('detail',{}).get('reason')
         return reason in ('conservative-preparation','resource-unavailable','unsupported-capability') and (want in ('undefined','external') or form.get('orNoVerdict',False) or unsupported)
-    if result=='fails' and (not actual.get('problems') or actual.get('problems_complete',actual.get('problemsComplete')) is not True):return False
+    if result=='fails' and not actual.get('problems') and actual.get('problems_complete',actual.get('problemsComplete')) is True:return False
     return result=={'satisfies':'satisfies','fails':'fails'}.get(want)
 
 def judge(case,actual,profile=PROFILE):

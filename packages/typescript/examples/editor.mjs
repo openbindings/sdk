@@ -20,7 +20,7 @@ export const exampleDraft = `{
 // Each value check can still return no verdict.
 export class DocumentEditor {
   #document;
-  update(text, value = { id: 7 }, includeSchemaDetails = false) {
+  update(text, value = { id: 7 }, diagnostics = "coarse") {
     const parsed = parseDocument(text);
     if (parsed.status !== "parsed") return parsed;
     let proof, context, input;
@@ -29,7 +29,7 @@ export class DocumentEditor {
       if (checked.status !== "validated") return checked;
       proof = checked.document;
       const operations = proof.operations;
-      context = proof.valueContracts({ includeSchemaDetails });
+      context = proof.valueContracts({ diagnostics });
       const setup = context.prepare("find", "input");
       if (setup.status !== "ready") {
         if (
@@ -191,7 +191,7 @@ export async function mountEditor(root) {
     locate.disabled = true;
     try {
       await view.check(source.value, value.value, {
-        includeSchemaDetails: disclosure.checked,
+        diagnostics: disclosure.checked ? "upstream" : "coarse",
       });
     } catch (error) {
       if (!closed && error.name !== "AbortError") {

@@ -202,7 +202,7 @@ failure returns the original missing-reference no-verdict evidence. An exhausted
 or unsupported pass never establishes a verdict. With no holes both programs are
 exact; disagreement is an evaluator failure, never fabricated missing evidence.
 
-After established upper failure, one separately bounded diagnostic pass uses only
+After established upper failure, an optional library-bounded first-error diagnostic pass uses only
 upper. Synthetic lower/internal failures never escape. A unary
 `oneOf: [{"$ref": "private upper-oneOf predicate"}]` surrounds only the complete
 upper predicate of an authored oneOf, separate from ordinary sibling assertions.
@@ -214,15 +214,13 @@ Private prefix, exact and synthetic-barrier entries serve the existing bounded
 original-location lookup. Descendants of an exact summary stop lookup instead of
 inheriting an invented original path. Offered errors without a proved origin are
 omitted and mark diagnostics incomplete. The default evaluator preserves outer
-`iter_errors` boundaries and does not flatten generated contexts. The evaluator must
+`validate()` first-error boundaries and does not flatten generated contexts. The evaluator must
 preserve those boundaries: a referenced target URI alone says nothing about
 its dynamic occurrence in an internal circuit. Some backend structured `evaluate`
 APIs drop unary wrapper events; a location map cannot reconstruct an omitted event.
 Known diagnostics map to original constraints, with optional details read only
-from original snapshots. Completeness
-means the selected diagnostic pass completed; it does not promise diagnostics
-about absent content. Zero diagnostic bytes preserves failure with empty,
-incomplete diagnostics. Diagnostic exhaustion never erases established failure.
+from original snapshots. A first error never claims completeness; the flag remains
+false in both diagnostic modes. Coarse mode preserves failure with empty, incomplete diagnostics. Diagnostic exhaustion never erases established failure.
 
 ## Fixed admission and ownership
 

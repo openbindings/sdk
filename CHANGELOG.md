@@ -2,6 +2,22 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- S8a: default value failures now use `Diagnostics::Coarse`: a fixed value-free
+  `message`, no problems, and incomplete diagnostics. Migrate
+  `with_schema_details(true)` to `with_diagnostics(Diagnostics::Upstream)` and
+  `includeSchemaDetails: true` to `diagnostics: "upstream"`; false/omission becomes
+  Coarse. Upstream returns the library's first error, with library-bounded
+  allocation and stack use (including possible stack overflow on deep values).
+  Remove `max_problems`/`maxProblems` and `diagnostic_bytes`/`diagnosticBytes`.
+  Rust `ValueOutcome::Fails` literals must now include `message`.
+- OBI-02/OBI-10 diagnostics use one first error per document/localized schema-node
+  check. Keyword messages, original member locations, finding caps and rule
+  evidence remain independent. The diagnostic memory probe detects amplification
+  in the current pinned document and meta schemas; see the
+  [S8a verification receipt](tools/qualification/inputs/s8a-verification.json).
+- Evaluator kit/corpus diagnostics migrate by case ID; verdict and refusal
+  partitions are unchanged. See `tools/qualification/inputs/s8a-diagnostics-ledger.json`.
+
 - S6d/e review fixes: make inspection string presentation injective, translate
   pointer references consistently, and select a collision-free synthetic root.
   Preserve original provenance for contained/supplied surrogate-name collisions.

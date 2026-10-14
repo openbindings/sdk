@@ -1,13 +1,10 @@
-//! Optional exact source facts. Borrow and preflight first; copy only atomic facts.
+//! Optional exact source facts for library-bounded upstream diagnostics.
 use jsonschema::error::{TypeKind, ValidationErrorKind as Kind};
 use openbindings::*;
 
-// Reserve this marker with the base problem before any optional detail work.
-pub(crate) const TRUNCATED_BYTES: usize = "truncated".len();
 pub(crate) enum Collection {
-    Available(ValueProblemDetails, usize),
+    Available(ValueProblemDetails),
     Unavailable,
-    Truncated,
     Interrupted,
 }
 fn work(control: &dyn WorkControl, units: usize) -> bool {
@@ -111,14 +108,13 @@ fn copied(bytes: usize, items: usize) {
     #[cfg(not(test))]
     let _ = (bytes, items);
 }
-fn owned(detail: ValueProblemDetails, bytes: usize) -> Collection {
-    Collection::Available(detail, bytes)
+fn owned(detail: ValueProblemDetails, _bytes: usize) -> Collection {
+    Collection::Available(detail)
 }
 pub(crate) fn collect(
     request: &SchemaRequest,
     at: Option<&SchemaLocation>,
     kind: &Kind,
-    budget: usize,
     control: &dyn WorkControl,
 ) -> Collection {
     if let Kind::Type { kind } = kind {
@@ -128,9 +124,6 @@ pub(crate) fn collect(
                 "type".len() + expected.iter().map(|t| t.as_str().len()).sum::<usize>()
             }
         };
-        if cost > budget {
-            return Collection::Truncated;
-        }
         if !work(control, cost) {
             return Collection::Interrupted;
         }
@@ -177,15 +170,11 @@ pub(crate) fn collect(
             let Kind::Required { property } = kind else {
                 return Collection::Unavailable;
             };
-            // Null in opt-in metadata means the established missing name did not
-            // fit scratch admission; retain a truthful marker, never infer a name.
+            // Recover only the missing member established by the library.
             let Some(member) = property.as_str() else {
-                return Collection::Truncated;
+                return Collection::Unavailable;
             };
             let cost = "required".len().saturating_add(member.len());
-            if cost > budget {
-                return Collection::Truncated;
-            }
             let mut verified = false;
             for required in required {
                 let Some(name) = required.as_str() else {
@@ -220,9 +209,6 @@ pub(crate) fn collect(
                 // Exact JSON tokens are nonempty: item count <= token bytes.
                 // Thus collection/wire framing is bounded without a full Vec.
                 cost = cost.saturating_add(choice.text().len());
-                if cost > budget {
-                    return Collection::Truncated;
-                }
                 if !work(control, choice.text().len()) {
                     return Collection::Interrupted;
                 }
@@ -252,9 +238,6 @@ pub(crate) fn collect(
                 "size-bound"
             };
             let cost = tag.len().saturating_add(bound.len());
-            if cost > budget {
-                return Collection::Truncated;
-            }
             if !work(control, bound.len()) {
                 return Collection::Interrupted;
             }
@@ -278,10 +261,10 @@ pub(crate) fn collect(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DefaultEvaluator, Limits};
+    use crate::DefaultEvaluator;
     use std::sync::Arc;
     #[test]
-    fn rejected_enum_is_not_copied_before_admission() {
+    fn coarse_mode_never_copies_source_facts() {
         let choices = serde_json::json!(["x".repeat(20000), "y".repeat(20000)]);
         let doc = ParsedDocument::parse(format!(
             r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{{"enum":{choices}}}}}}}}}"#
@@ -292,16 +275,7 @@ mod tests {
             .unwrap()
             .validated()
             .expect("conformant document")
-            .value_contracts(
-                Arc::new(
-                    DefaultEvaluator::with_limits(Limits {
-                        diagnostic_bytes: 1024,
-                        ..Limits::default()
-                    })
-                    .with_schema_details(true),
-                ),
-                ResourceSet::default(),
-            );
+            .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
         let ValueContractPreparation::Ready(contract) = context.prepare("op", Direction::Input)
         else {
             panic!()
@@ -311,14 +285,12 @@ mod tests {
         let ValueOutcome::Fails {
             problems,
             problems_complete,
+            ..
         } = contract.validate(&JsonValue::null())
         else {
             panic!()
         };
-        assert!(matches!(
-            problems[0].details,
-            Some(ValueProblemDetails::Truncated)
-        ));
+        assert!(problems.is_empty());
         assert!(!problems_complete);
         assert_eq!(COPIED_DETAIL_BYTES.get(), 0);
         assert_eq!(COPIED_ENUM_ITEMS.get(), 0);

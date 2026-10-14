@@ -101,7 +101,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             ValueOutcome::Fails {
                 problems,
                 problems_complete,
+                message,
             } => {
+                println!("{message}");
                 for problem in problems {
                     println!(
                         "mismatch at {:?} (schema {:?}): {}",

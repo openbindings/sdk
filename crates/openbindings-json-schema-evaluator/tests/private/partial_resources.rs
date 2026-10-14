@@ -224,7 +224,8 @@ fn property_pattern_and_prefix_selection_survive_substitution() {
 fn active_unknown_can_fail_known_constraint_and_never_emits_lower_diagnostics() {
     let schema =
         format!(r#"{{"properties":{{"external":{{"$ref":"{U}"}}}},"required":["private-name"]}}"#);
-    let evaluator = DefaultEvaluator::new().with_schema_details(true);
+    let evaluator = DefaultEvaluator::new()
+        .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream);
     let ValueContractPreparation::Ready(contract) =
         context(&schema, ResourceSet::default(), evaluator).prepare("op", Direction::Input)
     else {
@@ -233,11 +234,12 @@ fn active_unknown_can_fail_known_constraint_and_never_emits_lower_diagnostics() 
     let ValueOutcome::Fails {
         problems,
         problems_complete,
+        ..
     } = contract.validate(&json(r#"{"external":7}"#))
     else {
         panic!()
     };
-    assert!(problems_complete);
+    assert!(!problems_complete);
     assert_eq!(problems.len(), 1);
     assert_eq!(problems[0].code, "required");
     assert_eq!(
@@ -248,17 +250,14 @@ fn active_unknown_can_fail_known_constraint_and_never_emits_lower_diagnostics() 
     assert!(!problems[0].message.contains("private-name"));
     let serialized = serde_json::to_string(&problems).unwrap();
     assert!(!serialized.contains("sdk-bounds"));
-    let zero = DefaultEvaluator::with_limits(Limits {
-        diagnostic_bytes: 0,
-        ..Limits::default()
-    });
+    let zero = DefaultEvaluator::with_limits(Limits::default());
     let ValueContractPreparation::Ready(contract) =
         context(&schema, ResourceSet::default(), zero).prepare("op", Direction::Input)
     else {
         panic!()
     };
     assert!(
-        matches!(contract.validate(&json(r#"{"external":7}"#)), ValueOutcome::Fails { problems, problems_complete: false } if problems.is_empty())
+        matches!(contract.validate(&json(r#"{"external":7}"#)), ValueOutcome::Fails { problems, problems_complete: false, .. } if problems.is_empty())
     );
 }
 #[test]
@@ -620,7 +619,10 @@ fn original_five_frozen_values_and_empty_resource_sets() {
         ),
     ] {
         let doc = ParsedDocument::parse(source).unwrap();
-        let evaluator = Arc::new(DefaultEvaluator::new().with_schema_details(true));
+        let evaluator = Arc::new(
+            DefaultEvaluator::new()
+                .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
+        );
         let empty = doc
             .validate()
             .unwrap()
@@ -651,9 +653,10 @@ fn original_five_frozen_values_and_empty_resource_sets() {
         if let ValueOutcome::Fails {
             problems,
             problems_complete,
+            ..
         } = result
         {
-            assert!(problems_complete);
+            assert!(!problems_complete);
             assert!(problems.iter().any(|p| p.code == keyword));
             assert!(problems.iter().all(|p| {
                 p.schema_location
@@ -732,7 +735,7 @@ fn partial_failure_survives_diagnostic_exhaustion_and_unsupported_known_evaluati
     );
     let limited = DefaultEvaluator::with_limits(Limits {
         evaluation_steps: 30,
-        max_problems: 3,
+
         ..Limits::default()
     });
     let ValueContractPreparation::Ready(contract) =

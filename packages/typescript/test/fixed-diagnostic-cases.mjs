@@ -169,56 +169,30 @@ export function fixedDiagnosticCases(sdk) {
     );
   }
   for (const count of [4096, 4097]) {
-    const fields = Array.from({ length: count }, (_, i) => `,"bad${i}":0`).join(
-      "",
+    const schemas = Object.fromEntries(
+      Array.from({ length: count }, (_, i) => [`s${i}`, { minLength: -1 }]),
     );
-    const text = `{"openbindings":"0.2.0","operations":{}${fields}}`;
-    for (const invalidSchema of [false, true]) {
-      const source = invalidSchema
-        ? text.replace(
-            '"operations":{}',
-            '"operations":{},"schemas":{"s":{"type":7}}',
-          )
-        : text;
-      const parsed = sdk.parseDocument(source);
-      check(parsed.status === "parsed", "saturated document parses");
-      try {
-        const assessment = parsed.value.validate();
-        check(assessment.status === "report", "saturated assessment completes");
-        const report = assessment.report;
-        check(
-          report.conclusion === "non-conformant",
-          "saturated conformance remains refused",
-        );
-        check(report.findings.length === 4096, "finding count remains bounded");
-        check(
-          report.findingsTruncated === (invalidSchema || count > 4096),
-          "truthful truncation",
-        );
-        check(
-          report.evidence["OBI-02"] === "violated",
-          "document evidence preserved",
-        );
-        check(
-          Object.keys(report.evidence).length === 13,
-          "all rule evidence retained",
-        );
-        if (invalidSchema)
-          check(
-            report.evidence["OBI-10"] === "violated",
-            "later evidence survives finding saturation",
-          );
-        else
-          check(
-            report.findings.at(-1).location.pointer === "/bad4095",
-            "original member order retained",
-          );
-      } finally {
-        parsed.value.dispose();
-      }
+    const parsed = sdk.parseDocument(
+      JSON.stringify({ openbindings: "0.2.0", operations: {}, schemas }),
+    );
+    try {
+      const report = parsed.value.validate().report;
+      check(report.findings.length === 4096, "localized finding cap");
+      check(report.findingsTruncated === count > 4096, "truthful truncation");
+      check(
+        report.evidence["OBI-02"] === "met" &&
+          report.evidence["OBI-10"] === "violated",
+        "independent evidence",
+      );
+      check(
+        Object.keys(report.evidence).length === 13,
+        "all rule evidence retained",
+      );
+    } finally {
+      parsed.value.dispose();
     }
     results.push({
-      name: `bounded ${count} unexpected members`,
+      name: `bounded ${count} schema nodes`,
       conclusion: "non-conformant",
     });
   }

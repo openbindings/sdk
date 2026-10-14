@@ -39,6 +39,7 @@ fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {
     assert!(!judge(case, &value, &refusal, true).is_empty());
     for path in ["/absent", "", "/a/absent"] {
         let wrong = ValueOutcome::Fails {
+            message: "value does not satisfy the contract".into(),
             problems: vec![ValueProblem {
                 details: None,
                 instance_pointer: path.into(),
@@ -51,6 +52,7 @@ fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {
         assert!(!judge(case, &value, &wrong, false).is_empty());
     }
     let valid = ValueOutcome::Fails {
+        message: "value does not satisfy the contract".into(),
         problems: vec![ValueProblem {
             details: None,
             instance_pointer: "/a".into(),
@@ -145,6 +147,7 @@ impl SchemaEvaluator for FaultyAdapter {
         control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         let prepared = openbindings_json_schema_evaluator::DefaultEvaluator::new()
+            .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream)
             .prepare(request, control)?;
         Ok(Arc::new(FaultyContract(prepared, self.0)))
     }
@@ -154,6 +157,7 @@ impl PreparedSchema for FaultyContract {
         let outcome = self.0.validate(value, control);
         match self.1 {
             Fault::EmptyMismatch => ValueOutcome::Fails {
+                message: "value does not satisfy the contract".into(),
                 problems: vec![],
                 problems_complete: true,
             },
@@ -161,6 +165,7 @@ impl PreparedSchema for FaultyContract {
                 ValueOutcome::Fails {
                     mut problems,
                     problems_complete,
+                    ..
                 } => {
                     for problem in &mut problems {
                         problem.schema_location = Some(SchemaLocation {
@@ -173,6 +178,7 @@ impl PreparedSchema for FaultyContract {
                     ValueOutcome::Fails {
                         problems,
                         problems_complete,
+                        message: "value does not satisfy the contract".into(),
                     }
                 }
                 other => other,
@@ -218,6 +224,7 @@ impl SchemaEvaluator for LeakyAdapter {
             return Ok(prepared.clone());
         }
         let prepared = openbindings_json_schema_evaluator::DefaultEvaluator::new()
+            .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream)
             .prepare(request, control)?;
         *cache = Some(prepared.clone());
         Ok(prepared)

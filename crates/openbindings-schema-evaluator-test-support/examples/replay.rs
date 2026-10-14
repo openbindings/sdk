@@ -4,7 +4,7 @@ use openbindings_json_schema_evaluator::DefaultEvaluator;
 use openbindings_schema_evaluator_test_support::{Options, run, suite};
 use std::sync::Arc;
 
-struct OriginalContext;
+struct OriginalContext(openbindings_json_schema_evaluator::Diagnostics);
 impl SchemaEvaluator for OriginalContext {
     fn prepare(
         &self,
@@ -21,12 +21,20 @@ impl SchemaEvaluator for OriginalContext {
                 .semantic_eq(request.entry()),
             Some(true)
         );
-        DefaultEvaluator::new().prepare(request, control)
+        DefaultEvaluator::new()
+            .with_diagnostics(self.0)
+            .prepare(request, control)
     }
 }
 fn main() {
     let report = run(
-        Arc::new(OriginalContext),
+        Arc::new(OriginalContext(
+            if std::env::args().any(|arg| arg == "--upstream") {
+                openbindings_json_schema_evaluator::Diagnostics::Upstream
+            } else {
+                openbindings_json_schema_evaluator::Diagnostics::Coarse
+            },
+        )),
         &Options::without_unicode_property_matching(),
     );
     let admission: Vec<_> = suite().groups.iter().map(|group| {

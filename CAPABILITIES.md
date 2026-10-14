@@ -81,7 +81,7 @@ S9's static-reference-defect handling. Duplicate anchors and non-schema pointers
 current refusals until S9. Trusted fixed assessment is separate.
 
 Default limits: 2,000,000 evaluation steps per verdict/diagnostic pass; evaluation
-depth 1,024; 2,000,000 regex steps; 256 selected problems; compiler JSON depth 512;
+depth 1,024; 2,000,000 regex steps; compiler JSON depth 512;
 pattern size 1 MiB; pattern nesting 256. Value-contract preparation traversal admits
 schema depth 256, 100,000 reached nodes and 64 MiB of projection text. Deep const/enum
 literals and annotations use exact flat values and do not inherit recursive compiler
@@ -131,7 +131,7 @@ across both closed programs, including actual duplication and generated glue.
 These prospective limits are unmeasured. Memoized definitions do not cache runtime
 results; nested/recursive bounds can revisit predicates. These are
 not compiled-memory or RSS bounds. Upper/lower share one verdict work/regex budget;
-failure diagnostics retain a separate bounded pass. The
+optional upstream diagnostics use a separate work pass, without a construction-memory guarantee. The
 [private evaluator proof](docs/partial-resource-bounds.md) specifies exact
 eligibility, counting and limitations. Bounds planning and bounded location mapping
 are private evaluator implementation details. Prepared owners expose no resource
@@ -139,10 +139,26 @@ completeness classification; Ready means prepared, even when every value remains
 undecidable. BYO evaluators retain their original context and strict projection. The SDK never fetches references. Supply
 resources in a new context to retry; old owners keep their original snapshots.
 
-Failure diagnostics are bounded, omit instance values and identify original
-schema/instance locations. `problems_complete`/`problemsComplete` describes the
-selected diagnostic pass, not every logically redundant failed keyword. Truncation
-is explicit. Callers must handle no-verdict separately from failure and success.
+The default evaluator decides validity with `is_valid`. `Diagnostics::Coarse`
+(the default) returns `Fails` with the fixed message “value does not satisfy the
+contract”, no problems, and `problems_complete = false`. TypeScript uses
+`diagnostics: "coarse"`, `message`, and `problemsComplete: false`.
+
+Select `DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream)` or
+`proof.valueContracts({ diagnostics: "upstream" })` to request the library's own
+first error through `validate()`. Messages remain value-free; available paths map
+to original locations and optional schema facts may expose source operands.
+This mode is **library-bounded**: construction can allocate in proportion to inputs
+and can overflow the stack on deep values. The SDK promises nothing stronger than
+the library. One first error does not establish diagnostic completeness, so the
+flag remains false. Work/regex limits and cancellation can omit detail after a
+verdict; missing detail never weakens failure and never counts as rule evidence.
+
+The former `with_schema_details` / `includeSchemaDetails` boolean and the
+`max_problems` / `maxProblems`, `diagnostic_bytes` / `diagnosticBytes` options are
+removed. There is no intermediate boolean diagnostics API or SDK construction
+bound for upstream errors.
+
 
 ## Ownership, retention and cancellation
 

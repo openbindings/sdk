@@ -37,8 +37,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ordinary = JsonValue::from_serializable("item")?;
     match input.validate(&ordinary) {
         ValueOutcome::Satisfies => println!("input satisfies the contract"),
-        ValueOutcome::Fails { problems, problems_complete } => {
-            println!("fails: {problems:?}; diagnostics complete: {problems_complete}");
+        ValueOutcome::Fails { message, problems, problems_complete } => {
+            println!("{message}: {problems:?}; diagnostics complete: {problems_complete}");
         }
         ValueOutcome::NoVerdict { detail } => {
             println!("no verdict ({:?}): {}", detail.reason, detail.message);
@@ -111,9 +111,9 @@ schema. Bounds planning and paired compilation are private evaluator modules.
 BYO evaluators receive the original context and strict `evaluation_program()`;
 core never retries their refusals. Upper/lower
 share one verdict work/regex allowance. Only established upper failure produces
-original-source diagnostics, in the existing separate diagnostic scope. A complete
-upper oneOf failure produces a cardinality-neutral original `/oneOf` summary.
-Only outer `iter_errors` boundaries are used; generated contexts are not flattened,
+original-source diagnostics when Upstream is selected. An upper oneOf first error
+produces a cardinality-neutral original `/oneOf` summary.
+Only the outer `validate()` first error is used; generated contexts are not flattened,
 and unmapped errors are omitted with incomplete diagnostics. The evaluator preserves
 these boundaries; a structured backend output API can omit the unary summary event.
 Dependent-oneOf plans additionally cap both copies at 100,000 emitted schema nodes
@@ -133,48 +133,27 @@ identifiers. A source location remains absent when the compiler cannot establish
 the original resource; other unclassified preparation failures retain the generic
 `evaluator-preparation` diagnostic.
 
-Failures report actual instance locations and original schema locations where available. They do not promise every possible failing keyword or Go's diagnostic multiplicity. `problems_complete` means the selected diagnostic pass completed without truncation, not exhaustive traversal of every semantically redundant failure. Diagnostic collection has its own work scope and allocation cap; a confirmed failure remains a failure when its diagnostics are truncated. Messages omit instance values. For partial schemas, completeness describes the selected upper diagnostic pass and makes no claim about unavailable content.
+The default evaluator decides validity with `is_valid`. `Diagnostics::Coarse`
+(the default) returns `Fails` with the fixed message “value does not satisfy the
+contract”, no problems, and `problems_complete = false`. TypeScript uses
+`diagnostics: "coarse"`, `message`, and `problemsComplete: false`.
 
+Select `DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream)` or
+`proof.valueContracts({ diagnostics: "upstream" })` to request the library's own
+first error through `validate()`. Messages remain value-free; available paths map
+to original locations and optional schema facts may expose source operands.
+This mode is **library-bounded**: construction can allocate in proportion to inputs
+and can overflow the stack on deep values. The SDK promises nothing stronger than
+the library. One first error does not establish diagnostic completeness, so the
+flag remains false. Work/regex limits and cancellation can omit detail after a
+verdict; missing detail never weakens failure and never counts as rule evidence.
 
-Value failure diagnostics use `Limits::diagnostic_bytes` (TypeScript
-`diagnosticBytes`), default **1,048,576 UTF-8 bytes per result**. The total includes
-every retained instance pointer, schema resource URI and pointer, code, message and every requested detail string (including its kind tag).
-The evaluator retains a deterministic prefix of whole problems; it never clips a
-pointer or invents a location. `max_problems` / `maxProblems` still defaults to 256
-and has a minimum count allowance of one. A byte allowance need not fit one
-problem: zero, or a single oversized location, can produce `fails` with an empty
-list and `problems_complete = false` / `problemsComplete: false`. Established
-success and failure do not change when this allowance is lowered. Cancellation
-and pre-verdict work exhaustion retain their existing no-verdict semantics.
+The former `with_schema_details` / `includeSchemaDetails` boolean and the
+`max_problems` / `maxProblems`, `diagnostic_bytes` / `diagnosticBytes` options are
+removed. There is no intermediate boolean diagnostics API or SDK construction
+bound for upstream errors.
 
-The byte allowance is neither a heap cap nor a wire cap. For the current default
-problem shape, compact UTF-8 JSON is conservatively bounded by `59 + 96*N + 6*B`
-bytes for Rust/Wasm transport, and `58 + 94*N + 6*B` for `JSON.stringify` of the
-built-in TypeScript failure result. `N` is the retained problem count and `B` the
-retained UTF-8 string-byte total. The envelope, field names, null resource and
-comma framing are included; JSON escaping costs at most six bytes per UTF-8 byte.
-Pretty printing, application wrappers and custom evaluators are outside this bound.
-
-Before collecting final problems, the private validator separately admits at most
-`diagnostic_bytes` logical bytes of copied instance paths and member-name strings,
-and at most `8 * max(max_problems, 1)` error records and collection entries each.
-Unused nested applicator error trees, rejected item values and pattern/schema
-payloads are omitted before copying. Required names are omitted by default;
-opt-in required names share this scratch allowance, with optional refusal recorded
-separately so an already established base failure can remain. The final adapter walks
-collections one member at a time, sizes JSON Pointer escaping before allocation,
-and admits original resource/pointer copies before constructing each problem.
-Original generated-URI decoding has its own same-sized scratch allowance; normal
-unescaped generated identifiers are borrowed. Fixed keyword/type message text is
-at most 192 bytes. Counters measure admitted logical data, not allocator calls or
-capacities. Arc/buffer copies, vector headers/capacity, evaluation bookkeeping,
-source admission, schema compilation, retained source maps and facade transport
-copies remain distinct costs. Exhausting a private diagnostic allowance may produce
-a shorter prefix even when some final byte allowance remains. These guarantees
-apply to the default evaluator and built-in facade, not arbitrary application
-implementations of `SchemaEvaluator`.
-
-`Limits` bounds evaluation work, recursion, regex work, diagnostic output, dependency compilation depth and pattern admission. Parsing, graph preparation and dependency compilation use separate admission bounds. Cancellation is cooperative; dependency compilation/evaluation has bounded regions that are not preempted midway. Browser applications should use a Worker for large synchronous jobs.
+`Limits` bounds evaluation work, recursion, regex work, dependency compilation depth and pattern admission. Parsing, graph preparation and dependency compilation use separate admission bounds. Cancellation is cooperative; dependency compilation/evaluation has bounded regions that are not preempted midway. Browser applications should use a Worker for large synchronous jobs.
 
 The vendored adaptation is an implementation detail. Upgrade it with the recorded patch invariants and the complete evaluator contract suite; a dependency draft label alone is insufficient evidence.
 
@@ -193,47 +172,14 @@ are described in the [API reference guide](../../docs/api-reference.md).
 
 ### Optional exact schema facts
 
-`DefaultEvaluator::new().with_schema_details(true)` enables `ValueProblem.details`.
-It defaults to false and is separate from `Limits`: disclosure is an application
-choice, not a resource limit. Default messages explain keyword semantics without
-copying schema operands or rejected values. Custom evaluators choose their own
-policy.
+Upstream mode retains original document/resource snapshots for `ValueProblem.details`.
+These can extend the lifetime of whole source arenas, including unrelated members.
+Replacement resources do not change facts held by an existing contract. Coarse mode
+adds no original snapshot owners for diagnostics.
 
-The non-exhaustive `ValueProblemDetails` enum carries expected type names, a
-verified missing required member, an exact numeric/size bound, or complete enum
-choices as original JSON token strings. Match `code` to distinguish inclusive,
-exclusive, lower and upper bounds. Numeric strings never pass through `f64`.
-Required problems keep the existing object's instance pointer. Unsupported facts
-have no detail; `None` means disabled or unavailable. `Truncated` exclusively means
-requested applicable facts did not fit the budget. It makes `problems_complete`
-false, including when all base problems are present.
-
-Opt-in compiled contracts retain their original document and supplied resource
-snapshots for exact source recovery. This can extend the lifetime of whole source
-arenas, including unrelated document members, until the contracts/context release
-them. Resource replacement creates new snapshots; existing contracts keep their
-old facts. The default evaluator does not add these original snapshot owners.
-
-Each opt-in problem reserves nine string bytes for `Truncated` before admission.
-If even the base and marker cannot fit, the whole problem is omitted. Facts are
-preflighted against borrowed original nodes before copying. Enum tokens and arrays
-are atomic: no clipped token or partial choices list is returned. The same work and
-cancellation limits apply to source lookup and detail preflight. These operations
-can leave an incomplete prefix when interrupted.
-
-With details, compact Rust/Wasm JSON and TypeScript `JSON.stringify` failure output
-are both conservatively bounded by `59 + 160*N + 9*B` UTF-8 bytes. `B` includes all
-retained strings and kind tags; JSON escaping costs at most `6*B`. Every enum token
-is at least one byte, so at most `B` entries add at most `3*B` bytes of quotes and
-commas. The fixed envelope and base/detail field framing fit the remaining terms;
-type lists use a fixed seven-name vocabulary. This bounds serialization, not total
-heap, vector headers/capacity, the retained source snapshots, or transport copies.
-
-Ready means successfully prepared, not decidable (EV-9). A bare missing reference
-or an alias of one can prepare ready and return ResourceUnavailable for every value;
-`not` around one retains a preparation refusal. There is no resource-completeness
-API. Application replacement policies can inspect original references, but that
-inventory does not establish value decidability. Optional planner qualification
-and admission declines restore the original strict located ResourceUnavailable
-in this default evaluator. Known defects, shared limits, cancellation and compilation
-retain their causes. See the [recovery policy](../../docs/partial-resource-bounds.md).
+The non-exhaustive `ValueProblemDetails` enum carries type names, a verified missing
+required member, exact numeric/size bounds, or enum choices as JSON token strings.
+Interpret a bound with the problem's keyword code; never convert exact tokens through
+`f64`. Unsupported or interrupted fact recovery leaves detail absent. The `Truncated`
+variant remains available to custom evaluators; the default no longer has a byte
+allowance or emits a truncation marker.

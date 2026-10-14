@@ -7,12 +7,6 @@ export function diagnosticDetailsCases(sdk) {
     if (!ok) throw new Error(text);
   };
   const utf8 = (text) => new TextEncoder().encode(text).length;
-  const strings = (value) =>
-    typeof value === "string"
-      ? utf8(value)
-      : value && typeof value === "object"
-        ? Object.values(value).reduce((n, v) => n + strings(v), 0)
-        : 0;
   function prepare(text, options = {}) {
     const parsed = sdk.parseDocument(text);
     check(parsed.status === "parsed", "parse");
@@ -58,7 +52,7 @@ export function diagnosticDetailsCases(sdk) {
   const examples = [];
   for (const [schema, input, kind] of cases) {
     const ordinary = run(schema, input),
-      detailed = run(schema, input, { includeSchemaDetails: true });
+      detailed = run(schema, input, { diagnostics: "upstream" });
     check(
       ordinary.outcome === "fails" && detailed.outcome === "fails",
       "same failure",
@@ -70,7 +64,7 @@ export function diagnosticDetailsCases(sdk) {
       "private default",
     );
     const detail = detailed.problems[0].details;
-    check(detailed.problemsComplete && detail.kind === kind, "atomic fact");
+    check(!detailed.problemsComplete && detail.kind === kind, "atomic fact");
     if (kind === "required")
       check(
         detail.member === "SECRET/member~key" &&
@@ -91,67 +85,13 @@ export function diagnosticDetailsCases(sdk) {
       );
     examples.push(detailed);
   }
-  const schema = '{"enum":["SECRET-choice-that-takes-space",9007199254740993]}';
-  const base = strings(run(schema, "null").problems[0]);
-  const full = strings(
-    run(schema, "null", { includeSchemaDetails: true }).problems[0],
-  );
-  const boundaries = [];
-  for (const diagnosticBytes of [
-    0,
-    1,
-    base + 8,
-    base + 9,
-    full - 1,
-    full,
-    full + 1,
-  ]) {
-    const result = run(schema, "null", {
-      includeSchemaDetails: true,
-      limits: { diagnosticBytes },
-    });
-    const retained = result.problems.reduce((n, p) => n + strings(p), 0);
-    check(
-      result.outcome === "fails" && retained <= diagnosticBytes,
-      "bounded failure",
-    );
-    check(
-      utf8(JSON.stringify(result)) <=
-        59 + 160 * result.problems.length + 9 * retained,
-      "detail wire bound",
-    );
-    if (diagnosticBytes < base + 9)
-      check(
-        result.problems.length === 0 && !result.problemsComplete,
-        "marker reserved before base",
-      );
-    else if (diagnosticBytes < full)
-      check(
-        result.problems[0].details.kind === "truncated" &&
-          !result.problemsComplete,
-        "useful base remains",
-      );
-    else
-      check(
-        result.problems[0].details.kind === "enum" && result.problemsComplete,
-        "entire enum fits",
-      );
-    boundaries.push({
-      diagnosticBytes,
-      retained,
-      problems: result.problems.length,
-      complete: result.problemsComplete,
-    });
-  }
   const largeName = "é".repeat(10000);
-  const omitted = run(JSON.stringify({ required: [largeName] }), "{}", {
-    includeSchemaDetails: true,
-    limits: { diagnosticBytes: 1024 },
+  const large = run(JSON.stringify({ required: [largeName] }), "{}", {
+    diagnostics: "upstream",
   });
   check(
-    omitted.problems.length === 1 &&
-      omitted.problems[0].details.kind === "truncated",
-    "large required name never removes useful base",
+    large.problems[0].details.member === largeName,
+    "upstream retains library-provided name",
   );
   const resourceText =
     '{"allOf":[{"properties":{"a/~":{"minimum":9007199254740993}}}],"x-padding":"' +
@@ -162,7 +102,7 @@ export function diagnosticDetailsCases(sdk) {
     '{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/schema"}}},"x-padding":"' +
     "y".repeat(32768) +
     '"}';
-  function fromResource(text, includeSchemaDetails) {
+  function fromResource(text, diagnostics) {
     const parsed = sdk.parseJson(text);
     check(parsed.status === "parsed", "resource parse");
     let resources;
@@ -170,22 +110,22 @@ export function diagnosticDetailsCases(sdk) {
       resources = new sdk.SchemaResources([
         ["https://example.test/schema", parsed.value],
       ]);
-      return prepare(documentText, { resources, includeSchemaDetails });
+      return prepare(documentText, { resources, diagnostics });
     } finally {
       resources?.dispose();
       parsed.value.dispose();
     }
   }
   // Warm all process-global schema arenas before comparing application retention.
-  let warm = fromResource(resourceText, false);
+  let warm = fromResource(resourceText, "coarse");
   warm.dispose();
   const baseline = sdk.liveStorageOwners();
-  const defaultContract = fromResource(resourceText, false);
+  const defaultContract = fromResource(resourceText, "coarse");
   const defaultArenas = sdk.liveStorageOwners();
   defaultContract.dispose();
-  const old = fromResource(resourceText, true);
+  const old = fromResource(resourceText, "upstream");
   const optInArenas = sdk.liveStorageOwners();
-  const newer = fromResource(replacementText, true);
+  const newer = fromResource(replacementText, "upstream");
   try {
     const oldResult = old.validate({ "a/~": 6 }),
       newResult = newer.validate({ "a/~": 6 });
@@ -212,12 +152,12 @@ export function diagnosticDetailsCases(sdk) {
   try {
     let error;
     try {
-      validatedContracts(probe.value, { includeSchemaDetails: "yes" });
+      validatedContracts(probe.value, { diagnostics: "yes" });
     } catch (e) {
       error = e;
     }
     check(
-      error?.code === "invalid-schema-details",
+      error?.code === "invalid-diagnostics",
       "bad disclosure option rejected",
     );
   } finally {
@@ -231,7 +171,6 @@ export function diagnosticDetailsCases(sdk) {
     diagnosticDetails: {
       assertions,
       examples,
-      boundaries,
       retention: {
         baseline,
         defaultArenas,

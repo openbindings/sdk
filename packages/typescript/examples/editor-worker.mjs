@@ -4,7 +4,7 @@ import { initialize, parseJson, liveStorageOwners } from "../dist/index.js";
 import { DocumentEditor } from "./editor.mjs";
 const editor = new DocumentEditor();
 self.onmessage = async ({ data }) => {
-  const { id, document: source, value, includeSchemaDetails = false } = data;
+  const { id, document: source, value, diagnostics = "coarse" } = data;
   let input,
     initialized = false;
   try {
@@ -16,7 +16,7 @@ self.onmessage = async ({ data }) => {
       result = { status: "value-input-error", error: parsed.error };
     else {
       input = parsed.value;
-      result = editor.update(source, input, includeSchemaDetails);
+      result = editor.update(source, input, diagnostics);
     }
     input?.dispose();
     input = undefined;

@@ -107,15 +107,25 @@ realm. Construct TypeScript validated documents through `parsed.validated()` and
 complete before/after examples and nested exact-value ownership rules.
 
 
-Optional default-evaluator schema facts use
-`DefaultEvaluator::new().with_schema_details(true)` (TS
-`valueContracts({ includeSchemaDetails: true })`). They retain original source snapshots
-and share the diagnostic string-byte budget. `ValueProblemDetails::Truncated`
-sets result completeness false; absent details mean disabled or unavailable.
-Exact bounds and enum choices remain JSON token strings. Existing Rust evaluator
-implementations constructing `ValueProblem` must add `details: None` to preserve
-their previous output. The enum is non-exhaustive; match future variants safely.
-See the [evaluator resource contract](../crates/openbindings-json-schema-evaluator/README.md).
+The default evaluator decides validity with `is_valid`. `Diagnostics::Coarse`
+(the default) returns `Fails` with the fixed message “value does not satisfy the
+contract”, no problems, and `problems_complete = false`. TypeScript uses
+`diagnostics: "coarse"`, `message`, and `problemsComplete: false`.
+
+Select `DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream)` or
+`proof.valueContracts({ diagnostics: "upstream" })` to request the library's own
+first error through `validate()`. Messages remain value-free; available paths map
+to original locations and optional schema facts may expose source operands.
+This mode is **library-bounded**: construction can allocate in proportion to inputs
+and can overflow the stack on deep values. The SDK promises nothing stronger than
+the library. One first error does not establish diagnostic completeness, so the
+flag remains false. Work/regex limits and cancellation can omit detail after a
+verdict; missing detail never weakens failure and never counts as rule evidence.
+
+The former `with_schema_details` / `includeSchemaDetails` boolean and the
+`max_problems` / `maxProblems`, `diagnostic_bytes` / `diagnosticBytes` options are
+removed. There is no intermediate boolean diagnostics API or SDK construction
+bound for upstream errors.
 
 ## Validated contract access (S6c)
 

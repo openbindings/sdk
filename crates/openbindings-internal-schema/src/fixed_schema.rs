@@ -310,7 +310,9 @@ pub fn check_with_retained<'a>(
             jsonschema::ob_ecma::top_level(2_000_000, || {
                 let mut collector = ProblemCollector::new(max_problems);
                 let mut checked_names = HashSet::new();
-                'errors: for error in validator.iter_errors(view(value)) {
+                // One library first error per localized check. Its owned contexts
+                // are dropped before the next document/schema-node check.
+                'errors: for error in validator.validate(view(value)).err().into_iter() {
                     collector.violated = true;
                     // Once a distinct expanded pointer was omitted, the expansion
                     // allowance stays closed; ordinary errors remain eligible.
@@ -520,14 +522,14 @@ mod tests {
             r#"{"openbindings":"0.2.0","operations":{"a":{"description":1,"deprecated":2,"aliases":3}}}"#,
         ).unwrap();
         let all = check(&value, false, 100).unwrap();
-        assert_eq!(all.entries.len(), 3);
+        assert_eq!(all.entries.len(), 1);
         assert!(!all.truncated);
         for capacity in [0, 1, 2, 3] {
             let bounded = check(&value, false, capacity).unwrap();
-            let retained = capacity;
+            let retained = capacity.min(1);
             assert_eq!(bounded.entries.len(), retained);
             assert!(bounded.violated);
-            assert_eq!(bounded.truncated, capacity < 3);
+            assert_eq!(bounded.truncated, capacity < 1);
             for (actual, expected) in bounded.entries.iter().zip(&all.entries) {
                 assert_eq!(actual.at.location(), expected.at.location());
                 assert_eq!(actual.message, expected.message);
@@ -542,14 +544,14 @@ mod tests {
         for capacity in [0, 1, 2, 3] {
             let problems = check(&value, false, capacity).unwrap();
             assert!(problems.violated);
-            assert_eq!(problems.entries.len(), capacity.min(2));
-            assert_eq!(problems.truncated, capacity < 2);
+            assert_eq!(problems.entries.len(), capacity.min(1));
+            assert_eq!(problems.truncated, capacity < 1);
             let paths: Vec<_> = problems
                 .entries
                 .iter()
                 .map(|p| p.at.location().pointer.unwrap())
                 .collect();
-            assert_eq!(paths, ["/z", "/a"][..capacity.min(2)]);
+            assert_eq!(paths, ["/z", "/a"][..capacity.min(1)]);
         }
         let healthy = JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{}}"#).unwrap();
         let problems = check(&healthy, false, 0).unwrap();
