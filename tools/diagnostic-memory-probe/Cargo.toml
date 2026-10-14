@@ -8,6 +8,7 @@ publish = false
 [workspace]
 
 [dependencies]
+openbindings-json-schema-evaluator = { path = "../../crates/openbindings-json-schema-evaluator" }
 openbindings = { path = "../../crates/openbindings" }
 openbindings-internal-schema = { path = "../../crates/openbindings-internal-schema" }
 openbindings-internal-json = { path = "../../crates/openbindings-internal-json" }

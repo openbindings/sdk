@@ -314,3 +314,41 @@ fn fixed_messages_are_value_free_and_property_names_locate_original_tokens() {
             .all(|f| !f.message.contains("secret") && !f.message.contains("private"))
     );
 }
+
+#[test]
+fn independent_container_findings_keep_children_and_truthful_omissions() {
+    for (text, pointers) in [
+        (r#"{"openbindings":"0.2.0","name":42}"#, vec!["/name", ""]),
+        (
+            r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"description":42}}}"#,
+            vec!["/sources/s/description", "/sources/s"],
+        ),
+        (
+            r#"{"openbindings":"0.2.0","operations":{},"bindings":{"b":{"description":42}}}"#,
+            vec!["/bindings/b/description", "/bindings/b"],
+        ),
+        (
+            r#"{"openbindings":"0.2.0","operations":{"op":{"aliases":[false,false]}}}"#,
+            vec![
+                "/operations/op/aliases/0",
+                "/operations/op/aliases/1",
+                "/operations/op/aliases",
+            ],
+        ),
+    ] {
+        let validation = validate_document(text).unwrap();
+        let report = validation.report();
+        assert_eq!(report.evidence["OBI-02"], Evidence::Violated);
+        assert!(!report.findings_truncated);
+        let actual: Vec<_> = report
+            .findings
+            .iter()
+            .filter(|f| f.rule == "OBI-02")
+            .map(|f| {
+                assert_eq!(f.message, MESSAGE);
+                f.location.as_ref().unwrap().pointer.as_deref().unwrap()
+            })
+            .collect();
+        assert_eq!(actual, pointers);
+    }
+}

@@ -110,7 +110,8 @@ payload and schema-detail scopes remain in the fork solely for later removal.
 One inert hook is still called by `PropertyNamesValidator::is_valid`:
 `ob_work::diagnostic_copy` immediately admits the name when no diagnostic scope is
 active. This validity scratch is measured; it is not a bounded error-construction
-path. S8b can remove the diagnostic patch, not the separate work/depth/regex guards.
+path. Remove the unused diagnostic admission and metadata patch, including its inert
+property-name copy hook; retain the separate work/depth/regex guards.
 Explicit value Upstream diagnostics still use the library's `validate()` first
 error, with no SDK construction-memory promise. No vendored source is edited here.
 `tools/verify-diagnostics.py` measures validity, location compilation, fixed findings
@@ -128,8 +129,8 @@ and complete document validation against the pinned generators and corpus.
 - `Cargo.toml`, `src/lib.rs`: private identity and internal modules; the SDK explicitly selects the classical interpreter required by the work budget.
 - `src/api.rs`, `src/classicalbacktrack.rs`, `src/ob_budget.rs`: finite interpreter work and cancellation propagation; a failed/exhausted match must never become an ordinary non-match that supports a wrong validation verdict.
 - `src/parse.rs`, `src/ob_ecma11_properties.rs`: ECMAScript 11 property-name recognition and bounded pattern expansion/admission. Supported syntax and selected matching capability are distinct. Unicode property matching remains an explicitly qualified refusal only when selected by evaluation; irrelevant branches retain existing verdicts.
-- S3 / EV-4: `src/classicalbacktrack.rs` treats an unrepresentable single-character atom as matching zero characters only when its quantifier admits zero repetitions, including lazy extension. Lone-surrogate escapes still match no scalar code point. `tests/fixtures/lone-surrogate.mjs` computes the checked-in 470-row differential fixture using Node's `RegExp` with the `u` flag (Node v22.19.0, V8 12.4.254.21-node.29); `tests/tests.rs` asserts every row, and the evaluator's `pattern_correctness` integration test runs every row through `pattern` and `patternProperties`.
-- S3 / EV-5: both mid-interpreter budget exits truncate the backtrack stack to its exhaustion sentinel. The direct matcher regression uses `^(a+)+$` on 28 `a` characters plus `b`, without `catch_unwind`, at budgets 0–255 in debug tests; positive/negative lookaround variants and fresh-scope recovery are also checked. Re-run the fork with `cargo test --manifest-path vendor/openbindings-internal-regress/Cargo.toml --no-default-features --features std` to select the SDK's classical matcher configuration.
+- Empty quantifier semantics (EV-4): `src/classicalbacktrack.rs` treats an unrepresentable single-character atom as matching zero characters only when its quantifier admits zero repetitions, including lazy extension. Lone-surrogate escapes still match no scalar code point. `tests/fixtures/lone-surrogate.mjs` computes the checked-in 470-row differential fixture using Node's `RegExp` with the `u` flag (Node v22.19.0, V8 12.4.254.21-node.29); `tests/tests.rs` asserts every row, and the evaluator's `pattern_correctness` integration test runs every row through `pattern` and `patternProperties`.
+- Backtrack budget restoration (EV-5): both mid-interpreter budget exits truncate the backtrack stack to its exhaustion sentinel. The direct matcher regression uses `^(a+)+$` on 28 `a` characters plus `b`, without `catch_unwind`, at budgets 0–255 in debug tests; positive/negative lookaround variants and fresh-scope recovery are also checked. Re-run the fork with `cargo test --manifest-path vendor/openbindings-internal-regress/Cargo.toml --no-default-features --features std` to select the SDK's classical matcher configuration.
 
 `OPENBINDINGS-PATCH.md` in each package identifies it as modified. These records and the full file diffs are the patch inventory; the line count alone is not evidence that the maintenance burden is small.
 
@@ -206,4 +207,4 @@ No new Draft4 capability or fresh upstream-suite run is claimed in the facade re
 
 Upstream schema facts are recovered from original snapshots, without activating
 vendored diagnostic metadata scopes. Exact token/source-location tests remain
-required while S8b removes the unused patches.
+required when removing the unused diagnostic admission and metadata patches.

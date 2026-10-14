@@ -5,10 +5,11 @@ use crate::{JsonKind, JsonRef};
 use jsonschema::{Validator, ValidatorMap};
 use openbindings_internal_json::backend::{self, FlatJson};
 use serde_json::Value;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 struct Shape {
     pointer: String,
+    container_pointer: String,
     properties: BTreeMap<String, usize>,
     patterns: Vec<(Validator<FlatJson>, usize)>,
     names: Option<usize>,
@@ -22,6 +23,7 @@ struct Shape {
 /// Internal compiled location plan; compilation depends only on the pinned schema.
 pub struct LocationMap {
     validators: ValidatorMap<FlatJson>,
+    containers: ValidatorMap<FlatJson>,
     shapes: Vec<Shape>,
     root: usize,
 }
@@ -59,6 +61,26 @@ impl LocationMap {
             .enumerate()
             .map(|(i, k)| (k.as_str(), i))
             .collect();
+        // Keep the original root intact: references inside non-descending
+        // applicators (for example anyOf) must still see original constraints.
+        // Container projections live in a collision-free definition beside it.
+        let mut container_root = schema.clone();
+        if !container_root.is_object() {
+            container_root = serde_json::json!({});
+        }
+        let definitions = container_root
+            .as_object_mut()
+            .expect("object root")
+            .entry("$defs")
+            .or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .ok_or("invalid root definitions")?;
+        let mut slot = "__location_containers".to_owned();
+        while definitions.contains_key(&slot) {
+            slot.push('_');
+        }
+        let container_prefix = format!("#/$defs/{}/$defs", escape(&slot));
+        let mut container_schemas = serde_json::Map::new();
         let mut shapes = Vec::with_capacity(keys.len());
         for pointer in &keys {
             let schema = schema
@@ -106,8 +128,42 @@ impl LocationMap {
                 .and_then(Value::as_str)
                 .and_then(local_pointer)
                 .and_then(|key| ids.get(key.as_str()).copied());
+            let mut container = schema.clone();
+            if let Some(object) = container.as_object_mut() {
+                // Retain selectors and annotation coverage, but judge their
+                // constraints only at the selected children. In particular do
+                // not erase properties before additional/unevaluatedProperties,
+                // or prefixItems before items/unevaluatedItems.
+                for keyword in ["properties", "patternProperties"] {
+                    if let Some(map) = object.get_mut(keyword).and_then(Value::as_object_mut) {
+                        for value in map.values_mut() {
+                            *value = Value::Bool(true);
+                        }
+                    }
+                }
+                if let Some(items) = object.get_mut("prefixItems").and_then(Value::as_array_mut) {
+                    items.fill(Value::Bool(true));
+                }
+                for keyword in ["additionalProperties", "propertyNames", "items"] {
+                    if let Some(value) = object.get_mut(keyword) {
+                        *value = Value::Bool(true);
+                    }
+                }
+                if let Some(target) = reference {
+                    object.insert(
+                        "$ref".into(),
+                        Value::String(format!("{container_prefix}/{target}")),
+                    );
+                }
+                // These projections inherit the original root's resource scope;
+                // copying its identifier would register a competing resource.
+                object.remove("$id");
+            }
+            let container_id = shapes.len();
+            container_schemas.insert(container_id.to_string(), container);
             shapes.push(Shape {
                 pointer: pointer.clone(),
+                container_pointer: format!("{container_prefix}/{container_id}"),
                 properties,
                 patterns,
                 names: optional("propertyNames")?,
@@ -119,8 +175,38 @@ impl LocationMap {
             });
         }
         let root = *ids.get("#").ok_or("missing root location validator")?;
+        // build_map also exposes object-shaped annotations and property maps.
+        // Only actual schemas reached by the location walk become projections.
+        let mut reachable = HashSet::new();
+        let mut pending = vec![root];
+        while let Some(id) = pending.pop() {
+            if !reachable.insert(id) {
+                continue;
+            }
+            let shape = &shapes[id];
+            pending.extend(shape.properties.values().copied());
+            pending.extend(shape.patterns.iter().map(|(_, target)| *target));
+            pending.extend(shape.names);
+            pending.extend(shape.additional);
+            pending.extend(shape.prefix.iter().copied());
+            pending.extend(shape.items);
+            pending.extend(shape.reference);
+        }
+        container_schemas
+            .retain(|key, _| reachable.contains(&key.parse::<usize>().expect("shape index")));
+        definitions.insert(slot, serde_json::json!({"$defs":container_schemas}));
+        let containers = super::fixed_schema::options(BTreeMap::new())
+            .build_map(&container_root)
+            .map_err(|e| e.to_string())?;
+        for id in reachable {
+            let shape = &shapes[id];
+            if containers.get(&shape.container_pointer).is_none() {
+                return Err(format!("unmapped container constraint: {}", shape.pointer));
+            }
+        }
         Ok(Self {
             validators,
+            containers,
             shapes,
             root,
         })
@@ -148,12 +234,24 @@ impl LocationMap {
                 }
             }
         }
+        let mut container_failed = false;
+        for &id in &shapes {
+            let validator = self
+                .containers
+                .get(&self.shapes[id].container_pointer)
+                .ok_or(())?;
+            if !super::fixed_schema::bounded_valid(validator, at).map_err(|_| ())? {
+                container_failed = true;
+                break;
+            }
+        }
         Ok(Frame {
             at,
             shapes,
             index: 0,
             name: true,
             found: false,
+            container_failed,
         })
     }
 
@@ -297,7 +395,7 @@ impl LocationMap {
                 }
                 Ok(None) => {
                     let frame = stack.pop().expect("live frame");
-                    if !frame.found && !offer(frame.at) {
+                    if (!frame.found || frame.container_failed) && !offer(frame.at) {
                         return false;
                     }
                 }
@@ -316,6 +414,7 @@ struct Frame<'a> {
     index: usize,
     name: bool,
     found: bool,
+    container_failed: bool,
 }
 
 #[cfg(test)]
@@ -379,6 +478,46 @@ mod tests {
             locate(schema, r#"{"a":{},"b":[1,1],"c":[0]}"#, 10000).0,
             ["/a", "/b", "/c"]
         );
+    }
+    #[test]
+    fn independent_container_assertions_survive_failing_children() {
+        let schema = json!({"properties": {
+            "required": {"required":["missing"],"properties":{"x":{"type":"string"}}},
+            "unique": {"uniqueItems":true,"items":{"type":"string"}},
+            "size": {"maxItems":1,"items":{"type":"string"}},
+            "union": {"anyOf":[{"$ref":"#/$defs/required"},{"type":"boolean"}],"properties":{"x":{"type":"string"}}}
+        },"$defs":{"required":{"required":["missing"]}}});
+        let (paths, limited) = locate(
+            schema,
+            r#"{"required":{"x":0},"unique":[0,0],"size":[0,0],"union":{"x":0}}"#,
+            10000,
+        );
+        assert!(!limited);
+        assert_eq!(
+            paths,
+            [
+                "/required/x",
+                "/required",
+                "/unique/0",
+                "/unique/1",
+                "/unique",
+                "/size/0",
+                "/size/1",
+                "/size",
+                "/union/x",
+                "/union"
+            ]
+        );
+    }
+    #[test]
+    fn container_projections_keep_reference_scope_and_evaluated_positions() {
+        let schema = json!({"$defs":{"inner":{"properties":{"a":{"type":"boolean"}}}},
+            "$ref":"#/$defs/inner", "unevaluatedProperties":false});
+        assert_eq!(locate(schema, r#"{"a":0}"#, 10000).0, ["/a"]);
+        let schema = json!({"prefixItems":[{"type":"boolean"}],"items":{"type":"integer"},"unevaluatedItems":false});
+        assert_eq!(locate(schema, "[0,false]", 10000).0, ["/0", "/1"]);
+        let schema = json!({"properties":{"x":{"type":"boolean"}},"anyOf":[{"$ref":"#/$defs/branch"}],"$defs":{"branch":{"properties":{"x":{"type":"boolean"}}}}});
+        assert_eq!(locate(schema, r#"{"x":0}"#, 10000).0, ["/x", ""]);
     }
     #[test]
     fn local_ref_siblings_and_percent_escaped_pointer_are_conjunctive() {

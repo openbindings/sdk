@@ -9,12 +9,14 @@
   Coarse. Upstream returns the library's first error, with library-bounded
   allocation and stack use (including possible stack overflow on deep values).
   Remove `max_problems`/`maxProblems` and `diagnostic_bytes`/`diagnosticBytes`.
-  Rust `ValueOutcome::Fails` literals must now include `message`.
+  Rust `ValueOutcome::Fails` literals must now include `message`. Remove the unused
+  `ValueProblemDetails::Truncated` / TypeScript `kind: "truncated"` variant; absent
+  details represent unavailable facts, with no retired byte-budget marker.
 - OBI-02/OBI-10 use library validity only and the fixed message
   `value violates the fixed normative schema`. Document findings retain original
   source locations, lose keyword wording, and may report several failing positions.
   OBI-02 descends through member/name and array-element constraints and local
-  pointer references; container failures stay at the container. OBI-10 stays at
+  pointer references; independent container failures remain alongside child failures. OBI-10 stays at
   each checked schema node. Location work and findings caps never change evidence.
   See the [diagnostics verification receipt](tools/qualification/inputs/diagnostics-verification.json).
 - Evaluator kit/corpus diagnostics migrate by case ID; verdict and refusal

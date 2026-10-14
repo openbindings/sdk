@@ -4,6 +4,8 @@ use openbindings_internal_schema::fixed_schema;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
+mod values;
+
 struct Counting;
 static LIVE: AtomicUsize = AtomicUsize::new(0);
 static PEAK: AtomicUsize = AtomicUsize::new(0);
@@ -52,6 +54,10 @@ fn measured<T>(call: impl FnOnce() -> T) -> (T, usize, u128) {
     (result, PEAK.load(Relaxed).saturating_sub(before), nanos)
 }
 fn main() {
+    if std::env::args().any(|arg| arg == "--values-only") {
+        values::run();
+        return;
+    }
     use openbindings_internal_schema::RawDocument;
     use serde_json::{Value, json};
     for repetition in 0..3 {
@@ -198,4 +204,5 @@ fn main() {
             );
         }
     }
+    values::run();
 }

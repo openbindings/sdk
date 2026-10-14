@@ -52,8 +52,8 @@ come from release macOS arm64 runs. The generated full receipts are in
 `target/document-diagnostics/memory.jsonl`; `summarize.py` retains their raw numeric
 samples in `target/document-diagnostics/allocation-samples.json`.
 
-Cold map compilation: **3.351 ms, 1,116,066 bytes peak**. Subsequent isolated rebuilds
-used 569,351 bytes and 0.661/0.686 ms; these are not additional per-document costs.
+Cold map compilation (including container projections): **4.710 ms, 2,441,891 bytes peak**.
+Subsequent isolated rebuilds used 1,895,176 bytes and 1.862/1.878 ms; these are not additional per-document costs.
 
 | Input | Validity peak | Fixed checks + locations | Complete validation |
 | --- | ---: | ---: | ---: |
@@ -65,9 +65,9 @@ used 569,351 bytes and 0.661/0.686 ms; these are not additional per-document cos
 
 The largest large-input peak is uniqueness validity, not diagnostic construction.
 For the 95 corpus documents that enter the OBI-02 location walk, its median time
-was **3.041 microseconds**, peak **1,024 bytes**. Across all 300 corpus documents,
-fixed checks including validity and findings had median **2.563 microseconds**;
-complete validation had median **4.541 microseconds**. Per-case raw timings are
+was **4.000 microseconds**, peak **1,024 bytes**. Across all 300 corpus documents,
+fixed checks including validity and findings had median **2.750 microseconds**;
+complete validation had median **4.750 microseconds**. Per-case raw timings are
 retained; independent timing samples must not be subtracted as an exact cost.
 
 ## Locations and migration
@@ -85,3 +85,35 @@ The [verification receipt](../qualification/inputs/diagnostics-verification.json
 lists commands, passing lanes and loopback denials. The inert property-name
 admission hook and the unused diagnostic patch paths are documented precisely in
 [DEPENDENCY-MAINTENANCE.md](../../DEPENDENCY-MAINTENANCE.md).
+
+
+## Independent container checks and default values
+
+Container projections neutralize the six descending applicators' child constraints
+while retaining their selectors and evaluated-position coverage. All other
+constraints, including `required`, `uniqueItems`, size constraints and `anyOf`, run
+on the original container through `is_valid`. Local direct references point to
+container projections; references inside non-descending constructs still resolve
+to the original schemas. Projections are added under a fresh definition in the
+same pinned root, leaving that root's assertions intact. A container failure is
+retained even if children fail. The additional cached compilation cost is included
+above; per-document allocation thresholds remain unchanged.
+
+The allocation runner now also prepares default value contracts outside the
+measured region and validates arrays of 1,000 and 50,000 elements three times each.
+Ordinary and partial-upper failures use a two-branch type `anyOf`; a missing
+resource forces the partial programs. The partial-lower case reaches both Boolean
+passes and retains its expected resource-unavailable outcome. Each call must use
+at most **65,536 bytes** of incremental live allocation. This is a focused
+regression threshold for prepared type decisions, not a universal value bound.
+Measured maxima are **35 / 35 / 113 bytes** for ordinary / upper / lower paths.
+
+Run `python3 tools/diagnostic-memory-probe/check_value_mutations.py` to test the
+allocation controls. It copies sources under `target/diagnostics-review`, replaces
+one `is_valid` call at a time with `validate(...).is_ok()`, runs the same assertions,
+and restores the copy. It never mutates the production evaluator. On a
+100,001-byte array the three mutations peak at **10,768,016 / 10,768,088 /
+14,068,864 bytes** and all fail the allocation assertion while retaining the
+expected public outcome. [Mutation receipts](../qualification/inputs/value-allocation-mutations.json)
+include the exact changes, commands and rejected samples. Default-value raw samples
+are also included in `document-allocation-samples.json`.

@@ -43,3 +43,12 @@ Parity includes all findings and source coordinates. The comparison normalizes
 Rust/TypeScript field spelling and excludes only the TypeScript observer's extra
 setup tags and the native observer's truncation field; shared cap tests cover the
 latter in Node and the installed package.
+
+
+Independent container failures have four additional public regression cases in
+`inputs/container-findings-cases.json`, outside the unchanged specification corpus
+inventory. `replay/check-container-findings.py --binary PATH` replays them through
+native and TypeScript APIs and compares complete findings, including coordinates.
+The current review changes no existing kit/corpus observation; the migration ledger
+reproduces without changes. The verification receipt records the new regressions
+and the producerless schema-detail variant's removal.

@@ -162,7 +162,7 @@ export interface NoVerdict {
   /** Original schema location when known, otherwise null. */
   location: SchemaLocation | null;
 }
-/** Opt-in schema facts, not rejected instance data. Bounds and enum choices are exact JSON token strings: do not coerce them to Number. Source facts can contain secrets and must be rendered as text under an application disclosure policy. Each variant is atomic; truncated contains no partial facts. */
+/** Opt-in schema facts, not rejected instance data. Bounds and enum choices are exact JSON token strings: do not coerce them to Number. Source facts can contain secrets and must be rendered as text under an application disclosure policy. Each variant contains complete facts. */
 export type ValueProblemDetails =
   | {
       /** Complete expected JSON type names, drawn from the fixed JSON type vocabulary. */
@@ -193,10 +193,6 @@ export type ValueProblemDetails =
       kind: "enum";
       /** Original exact JSON token for every choice, including source-controlled strings/objects and exact numbers. */
       choices: readonly string[];
-    }
-  | {
-      /** Applicable requested facts were omitted for the byte budget; outer problemsComplete is false. */
-      kind: "truncated";
     };
 /** Established instance failure, with an existing instance pointer and optional original schema coordinate. Failure messages avoid echoing instance values by default; pointers still contain source-controlled strings and must be rendered as text. */
 export interface ValueProblem {
@@ -208,7 +204,7 @@ export interface ValueProblem {
   code: string;
   /** Explanatory text; present pointers separately and safely. */
   message: string;
-  /** Optional schema facts. Absent means disabled or unavailable; truncated explicitly marks byte-budget omission. */
+  /** Optional schema facts. Absent means disabled or unavailable. */
   details?: ValueProblemDetails;
 }
 /** Closed selected-schema result partition: satisfies, fails, or no-verdict. An established failure may have incomplete diagnostics; problemsComplete does not weaken its verdict. Neither satisfies nor fails proves normative OBI conformance of the surrounding draft. */

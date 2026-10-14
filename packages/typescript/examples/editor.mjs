@@ -87,8 +87,6 @@ function detailLine(detail) {
       return ` Exact allowed values: ${detail.choices.join(", ")}.`;
     case "type":
       return ` Expected types: ${detail.expected.join(", ")}.`;
-    case "truncated":
-      return " Requested schema detail was omitted for the diagnostic budget.";
   }
 }
 

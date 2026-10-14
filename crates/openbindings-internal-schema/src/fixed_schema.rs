@@ -321,6 +321,17 @@ mod tests {
     }
 
     #[test]
+    fn independent_container_and_child_findings_obey_the_same_cap() {
+        let value = JsonValue::parse(r#"{"openbindings":"0.2.0","name":42}"#).unwrap();
+        for cap in 0..=3 {
+            let problems = check(&value, false, cap).unwrap();
+            assert!(problems.violated);
+            assert_eq!(problems.entries.len(), cap.min(2));
+            assert_eq!(problems.truncated, cap < 2);
+        }
+    }
+
+    #[test]
     fn retained_problem_identity_precedes_both_allowances() {
         let value = JsonValue::parse(r#"{"a":null,"b":null}"#).unwrap();
         let a = value.get("a").unwrap();

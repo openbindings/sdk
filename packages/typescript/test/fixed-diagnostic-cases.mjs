@@ -175,6 +175,38 @@ export function fixedDiagnosticCases(sdk) {
       conclusion: "non-conformant",
     });
   }
+  for (const [text, expected] of [
+    ['{"openbindings":"0.2.0","name":42}', ["/name", ""]],
+    [
+      '{"openbindings":"0.2.0","operations":{},"sources":{"s":{"description":42}}}',
+      ["/sources/s/description", "/sources/s"],
+    ],
+    [
+      '{"openbindings":"0.2.0","operations":{"op":{"aliases":[false,false]}}}',
+      [
+        "/operations/op/aliases/0",
+        "/operations/op/aliases/1",
+        "/operations/op/aliases",
+      ],
+    ],
+  ]) {
+    const report = sdk.validateDocument(text).report;
+    const fixed = report.findings.filter((f) => f.rule === "OBI-02");
+    check(
+      JSON.stringify(fixed.map((f) => f.location.pointer)) ===
+        JSON.stringify(expected),
+      "container and child positions",
+    );
+    check(
+      !report.findingsTruncated &&
+        fixed.every((f) => f.message === unexpectedMessage),
+      "complete fixed container guidance",
+    );
+    results.push({
+      name: `container and child ${expected.join(",")}`,
+      conclusion: report.conclusion,
+    });
+  }
   for (const count of [4096, 4097]) {
     const schemas = Object.fromEntries(
       Array.from({ length: count }, (_, i) => [`s${i}`, { minLength: -1 }]),

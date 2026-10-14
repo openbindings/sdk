@@ -1,11 +1,12 @@
-//! Coarse diagnostics do not copy amplifying instance or schema locations.
+//! Coarse result-shape checks. Allocation is independently enforced by
+//! tools/diagnostic-memory-probe, including ordinary and both partial verdict paths.
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::json;
 use std::sync::Arc;
 
 #[test]
-fn default_diagnostics_do_not_amplify_long_locations_beyond_one_mib() {
+fn default_diagnostics_omit_problems_with_long_source_locations() {
     let key = "k".repeat(32768);
     let document = ParsedDocument::parse(json!({"openbindings":"0.2.0","operations":{"check":{"input":{"type":"object","properties":{&key:{"type":"object","additionalProperties":false}}}}}}).to_string()).unwrap();
     let context = document

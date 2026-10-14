@@ -369,6 +369,7 @@ dependencies = [
  "openbindings-internal-jsonschema",
  "openbindings-internal-schema",
  "openbindings-internal-serde-json",
+ "openbindings-json-schema-evaluator",
 ]
 
 [[package]]
@@ -470,6 +471,19 @@ dependencies = [
  "serde",
  "serde_core",
  "zmij",
+]
+
+[[package]]
+name = "openbindings-json-schema-evaluator"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
+ "openbindings-internal-json",
+ "openbindings-internal-jsonschema",
+ "openbindings-internal-jsonschema-value",
+ "openbindings-internal-schema",
+ "openbindings-internal-serde-json",
+ "serde",
 ]
 
 [[package]]

@@ -100,7 +100,7 @@ impl std::error::Error for NoVerdict {}
 #[non_exhaustive]
 /// Optional schema facts. Treat source operands as sensitive; none contain a
 /// rejected instance value. Numeric bounds and enum choices are exact JSON token
-/// strings. Every variant is atomic; Truncated never contains partial facts.
+/// strings. Every variant contains complete facts.
 pub enum ValueProblemDetails {
     /// Complete expected types from the fixed JSON type vocabulary.
     Type {
@@ -127,9 +127,6 @@ pub enum ValueProblemDetails {
         /// Exact original JSON token text for every choice, including source-controlled data.
         choices: Vec<String>,
     },
-    /// Requested applicable facts were omitted for the diagnostic byte budget.
-    /// The enclosing failure has problems_complete=false.
-    Truncated,
 }
 #[derive(Clone, Debug, Serialize)]
 /// One established instance failure with an optional original schema coordinate. Custom evaluators can construct this public record.
@@ -142,7 +139,7 @@ pub struct ValueProblem {
     pub code: String,
     /// Explanatory text; custom evaluators should avoid exposing instance values or source-controlled strings by default.
     pub message: String,
-    /// Optional schema facts. None means disabled or unavailable; Truncated explicitly marks budget omission.
+    /// Optional schema facts. None means disabled or unavailable.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<ValueProblemDetails>,
 }

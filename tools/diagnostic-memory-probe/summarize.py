@@ -36,11 +36,14 @@ for label, ordinary in [('large', False), ('corpus', True)]:
 files = [root / 'crates/openbindings-internal-schema/src/fixed_schema.rs',
          root / 'crates/openbindings-internal-schema/src/fixed_locations.rs',
          root / 'tools/diagnostic-memory-probe/src/main.rs',
+         root / 'tools/diagnostic-memory-probe/src/values.rs',
+         root / 'crates/openbindings-json-schema-evaluator/src/lib.rs',
          root / 'tools/diagnostic-memory-probe/generate_inputs.py']
 files += sorted((root / 'crates/openbindings-internal-schema/schemas').rglob('*.json'))
 receipt = {
     'scope': 'Release macOS arm64; System allocator incremental live peak, not RSS. Parsing, schema index construction for isolated checks, receipt encoding and warmed compilation excluded. Complete SDK samples use fresh owners, so validation caching is excluded.',
     'bounds_bytes': {'validity': 18 * 1024**2, 'fixed_above_validity': 10 * 1024**2, 'sdk_above_validity': 12 * 1024**2},
+    'default_value_samples': [r for r in raw if r['phase'] == 'default-value'],
     'compilation': [r for r in raw if r['phase'] == 'location-map-compilation'],
     'summary': summary,
     'source_sha256': {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files},

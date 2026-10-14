@@ -412,8 +412,9 @@ use the library's validity API only, with the fixed message
 `value violates the fixed normative schema`, their rule, and original source
 coordinates. OBI-02 follows failing object members, member names and array elements
 through the pinned schema's compiled validator map and local pointer references.
-It reports each deepest failing position under the findings cap. Missing members,
-container constraints and unsupported descent constructs stay at their container;
+It reports failing children and independently failing container constraints under
+the findings cap. Missing members, container constraints and non-descending
+constructs stay at their container, even when a child also fails;
 an empty walk falls back to the root. OBI-10 reports the schema node checked by its
 localized walk. Location work shares the existing work budget; stopping retains
 the deepest established failing node and marks findings truncated. Locations and

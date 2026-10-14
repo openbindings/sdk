@@ -10,7 +10,7 @@ let report = run(evaluator, &Options::without_unicode_property_matching());
 assert!(report.is_success());
 ```
 
-The package carries 496 groups and 1,566 cases from pinned upstream JSON Schema and Go SDK adversarial inputs. `fixtures/provenance.json` records their identities, exact optional capability cases, and historical translations, including exact identifier matching and non-exhaustive diagnostic multiplicity. S6d/e supersedes the historical spelling policy through recorded runtime migrations. The original licenses accompany the fixtures. No sibling checkout or network access is needed.
+The package carries 496 groups and 1,566 cases from pinned upstream JSON Schema and Go SDK adversarial inputs. `fixtures/provenance.json` records their identities, exact optional capability cases, and historical translations, including exact identifier matching and non-exhaustive diagnostic multiplicity. Library URI normalization supersedes the historical spelling policy through recorded runtime migrations. The original licenses accompany the fixtures. No sibling checkout or network access is needed.
 
 The raw fixture remains unchanged. `fixtures/document-migrations.json` re-expresses
 nine custom-meta-schema cases through conformant documents referencing supplied
@@ -27,7 +27,7 @@ The raw fixture remains unchanged. Its provenance also records explicit
 contained integer schema, preserving the historical conservative-refusal expectation
 in the fixture. Native and browser qualification apply the same recorded translation.
 This is an intentional supported-admission expansion, not a normative bug ruling.
-S6d/e additionally migrates `adversarial/case-variant-unmatched/0` to satisfaction
+Library URI normalization additionally migrates `adversarial/case-variant-unmatched/0` to satisfaction
 and `adversarial/case-variant-collision/0` to ambiguous-resource preparation refusal,
 following library normalization under applied §7.4 (Amendment 1). OBI-13's exact
 comparison remains unchanged.
@@ -47,7 +47,7 @@ The kit checks preparation and value outcomes, original locations and refusal
 causes. Prepared objects expose no completeness declaration. The qualification
 kit does not impose the default evaluator's private planning policy on a BYO evaluator.
 
-S8a preserves every verdict/refusal and records each changed observation in
+The diagnostics mode migration preserves every verdict/refusal and records each changed observation in
 [`diagnostics-migration-ledger.json`](../../tools/qualification/inputs/diagnostics-migration-ledger.json).
 Both Coarse and Upstream are replayed; incomplete diagnostic subsets never imply
 missing rule evidence or authorize a wrong verdict/refusal.
