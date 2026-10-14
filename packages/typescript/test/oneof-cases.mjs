@@ -13,7 +13,6 @@ export function oneOfCases(sdk, fixtures) {
     valueText,
     entries = {},
     options = {},
-    completeness = "incomplete",
   ) => {
     const parsed = sdk.parseDocument(text);
     check(parsed.status === "parsed", "oneOf document admitted");
@@ -31,10 +30,6 @@ export function oneOfCases(sdk, fixtures) {
         `oneOf prepared: ${JSON.stringify(setup)}`,
       );
       contract = setup.valueContract;
-      check(
-        contract.resourceCompleteness.status === completeness,
-        "oneOf resource evidence",
-      );
       value = sdk.parseJson(valueText).value;
       context.dispose();
       parsed.value.dispose();

@@ -1,0 +1,158 @@
+{
+  "format": "openbindings.s6de-migrations@1",
+  "base_revision": "9106b47e1e031bd1300eba07da0d2afeb316aaaf",
+  "baseline_ledger": "s6c-migration-ledger.json",
+  "baseline_sha256": "7408d7b692e3daadac1a033c4bddd8c5a349eb265b21f287c31e0d73fa9c8255",
+  "authority": "Claude Amendment 1 (approved), D-S6 items 2–5; spec-applied-2f7d754/openbindings.md §7.4 line 608: OBI-13 keeps resolved spellings distinct only for that comparison; whether RFC 3986 §6-normalized spellings name one resource is for JSON Schema to say.",
+  "raw_fixture_sha256": "de2b34abd3e8e8591e49ab55ab9ce0b2007ef01647abe398380667555b549a53",
+  "summary": {
+    "original_kit_ids": 1566,
+    "evaluated_kit_ids": 1564,
+    "prior_core_rejections": 2,
+    "changed_kit_ids": 2,
+    "corpus_ids": 435,
+    "changed_corpus_ids": 0,
+    "before_partitions": {
+      "fails": 663,
+      "no-verdict": 22,
+      "preparation-refusal": 20,
+      "satisfies": 859
+    },
+    "after_partitions": {
+      "fails": 662,
+      "no-verdict": 21,
+      "preparation-refusal": 21,
+      "satisfies": 860
+    }
+  },
+  "kit_changes": [
+    {
+      "case_id": "adversarial/case-variant-collision/0",
+      "reason": "Library normalizes host case and default HTTPS port; multiple contained carriers are ambiguous-resource under the existing collision policy.",
+      "authority": "Claude Amendment 1 (approved), D-S6 items 2–5; spec-applied-2f7d754/openbindings.md §7.4 line 608: OBI-13 keeps resolved spellings distinct only for that comparison; whether RFC 3986 §6-normalized spellings name one resource is for JSON Schema to say.",
+      "before": {
+        "expected": "fails",
+        "failures": [],
+        "outcome": {
+          "outcome": "fails",
+          "problems": [
+            {
+              "code": "type",
+              "instance_pointer": "",
+              "message": "expected JSON type: integer",
+              "schema_location": {
+                "pointer": "/schemas/B/type",
+                "resource": null
+              }
+            }
+          ],
+          "problems_complete": true
+        },
+        "preparation_refusal": null
+      },
+      "after": {
+        "expected": "no-verdict",
+        "failures": [],
+        "outcome": null,
+        "preparation_refusal": {
+          "code": "ambiguous-resource",
+          "location": {
+            "pointer": "/operations/op/input",
+            "resource": null
+          },
+          "message": "more than one resource carries the referenced identifier",
+          "reason": "conservative-preparation"
+        }
+      },
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"https://ex.invalid/a\"}}},\"schemas\":{\"A\":{\"$id\":\"https://Ex.invalid:443/a\",\"type\":\"string\"},\"B\":{\"$id\":\"https://ex.invalid/a\",\"type\":\"integer\"}}}",
+      "original_value": "\"s\"",
+      "original_resources": []
+    },
+    {
+      "case_id": "adversarial/case-variant-unmatched/0",
+      "reason": "Library normalizes scheme/host case and percent-encoded unreserved spellings, locating the contained string schema.",
+      "authority": "Claude Amendment 1 (approved), D-S6 items 2–5; spec-applied-2f7d754/openbindings.md §7.4 line 608: OBI-13 keeps resolved spellings distinct only for that comparison; whether RFC 3986 §6-normalized spellings name one resource is for JSON Schema to say.",
+      "before": {
+        "expected": "no-verdict",
+        "failures": [],
+        "outcome": {
+          "detail": {
+            "code": "resource-unavailable",
+            "location": {
+              "pointer": "/operations/op/input/$ref",
+              "resource": null
+            },
+            "message": "validity could depend on a resource that was not supplied",
+            "reason": "resource-unavailable"
+          },
+          "outcome": "no-verdict"
+        },
+        "preparation_refusal": null
+      },
+      "after": {
+        "expected": "satisfies",
+        "failures": [],
+        "outcome": {
+          "outcome": "satisfies"
+        },
+        "preparation_refusal": null
+      },
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"https://ex.invalid/%7Ea/A\"}}},\"schemas\":{\"A\":{\"$id\":\"HTTPS://EX.invalid/%7ea/A\",\"type\":\"string\"}}}",
+      "original_value": "\"s\"",
+      "original_resources": []
+    }
+  ],
+  "source_regression_changes": [
+    {
+      "case_id": "RI19",
+      "authority": "Claude Amendment 1 (approved), D-S6 items 2–5; spec-applied-2f7d754/openbindings.md §7.4 line 608: OBI-13 keeps resolved spellings distinct only for that comparison; whether RFC 3986 §6-normalized spellings name one resource is for JSON Schema to say.",
+      "reason": "Ordinary normalization equates each contained/supplied spelling pair; contained identity then wins. OBI-13 comparison remains exact.",
+      "spelling_pairs": [
+        [
+          "https://IDENTITY.example.invalid/U",
+          "https://identity.example.invalid/U"
+        ],
+        [
+          "https://identity.example.invalid/U",
+          "https://identity.example.invalid/%55"
+        ],
+        [
+          "https://identity.example.invalid/%4a",
+          "https://identity.example.invalid/%4A"
+        ]
+      ],
+      "before": {
+        "2": "fails",
+        "\"x\"": "satisfies",
+        "location": "supplied resource root"
+      },
+      "after": {
+        "2": "satisfies",
+        "\"x\"": "fails",
+        "location": "/schemas/E in original OBI document"
+      }
+    }
+  ],
+  "additional_regressions": [
+    {
+      "test": "obi13_keeps_host_spelling_while_resolution_uses_library_identity",
+      "reason": "OBI-13 is Met for host-case-only contained IDs; library-normalized resolution refuses ambiguous-resource."
+    },
+    {
+      "test": "supplied_normalized_identity_peers_remain_ambiguous",
+      "reason": "Two supplied normalized identities preserve existing ambiguous-resource collision policy."
+    },
+    {
+      "test": "encoded_plain_names_keep_document_decoding_and_follow_the_library_elsewhere",
+      "reason": "Document-resource t%61sk still resolves; contained and supplied t%61sk refuse anchor-missing. Literal task controls resolve. No frozen corpus/kit case changes for encoded anchors."
+    },
+    {
+      "test": "library_treats_encoded_leading_slash_as_an_anchor",
+      "reason": "The documented API refuses #%2F$defs%2Ftask as a plain name in an ordinary resource; literal slash controls locate by borrowed pointer identity."
+    },
+    {
+      "test": "ev9_bare_and_aliased_holes_are_ready_but_not_is_a_preparation_refusal",
+      "reason": "Ready means prepared: bare missing $ref and alias return no verdict at validation; not around one returns the preserved preparation refusal."
+    }
+  ]
+}

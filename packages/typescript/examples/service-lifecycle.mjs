@@ -1,5 +1,5 @@
 // node node_modules/@openbindings/sdk/examples/service-lifecycle.mjs
-// This application's replacement policy requires complete schema resources.
+// The application retains ready owners and handles no-verdict at validation.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { initialize, liveStorageOwners, parseJson } from "@openbindings/sdk";
@@ -27,11 +27,6 @@ function prepare(schemaText, documentBytes = document) {
 function replace(service, schemaText, documentBytes = document) {
   const next = prepare(schemaText, documentBytes);
   if (next.status !== "ready") return next;
-  const completeness = next.valueContract.resourceCompleteness;
-  if (completeness.status !== "complete") {
-    next.valueContract.dispose();
-    return { status: "resources-missing", evidence: completeness.evidence };
-  }
   try {
     service.replace(next.valueContract); // ownership transfers only on success
     return { status: "replaced" };
@@ -85,8 +80,9 @@ try {
     service,
     '{"$ref":"https://schema.example/missing"}',
   );
-  assert.equal(outcomes.incompleteReplacement.status, "resources-missing");
-  assert.equal(service.check("still complete").outcome, "satisfies");
+  assert.equal(outcomes.incompleteReplacement.status, "replaced");
+  assert.equal(service.check("missing resource").outcome, "no-verdict");
+  replace(service, '{"type":"string"}');
 
   const cancellation = new AbortController();
   cancellation.abort();
@@ -117,11 +113,6 @@ try {
 const partial = prepareService(document, []);
 assert.equal(partial.status, "ready");
 try {
-  assert.equal(partial.valueContract.resourceCompleteness.status, "incomplete");
-  assert.throws(
-    () => new ValidationService(partial.valueContract),
-    /complete schema resources/,
-  );
   outcomes.missingResource = partial.valueContract.validate(7);
   assert.equal(outcomes.missingResource.outcome, "no-verdict");
   assert.equal(outcomes.missingResource.detail.reason, "resource-unavailable");

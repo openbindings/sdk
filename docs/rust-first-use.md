@@ -134,7 +134,7 @@ Failure problems identify instance pointers and original schema locations when a
 
 ## Retained work and replacement
 
-The replacement example owns an `active: ValueContract` slot. Its `candidate` helper parses a prospective document, establishes conformance, constructs immutable resources, and requires a ready input declaring `ResourceCompleteness::Complete`. Only a successful result is assigned to `active`. The helper retains distinct parse, version, conformance, interpretation and preparation failures with their diagnostics.
+The replacement example owns an `active: ValueContract` slot. Its `candidate` helper parses a prospective document, establishes conformance, constructs immutable resources, and requires a fully located reference inventory and a ready input (an application policy, not a decidability proof). Only a successful result is assigned to `active`. The helper retains distinct parse, version, conformance, interpretation and preparation failures with their diagnostics.
 
 A qualified missing-resource contract can be ready and declare Incomplete. The
 example's candidate helper checks borrowed completeness evidence before accepting it,

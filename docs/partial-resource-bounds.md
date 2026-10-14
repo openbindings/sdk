@@ -16,20 +16,13 @@ limitations, shared limits and cancellation retain their refusal classifications
 error after the first hole is still checked. The strict `evaluation_program()`
 helper and core dispatch to custom evaluators retain their contracts.
 
-Prepared owners expose `resource_completeness()` in Rust and the immutable cached
-`resourceCompleteness` getter in TypeScript. The default evaluator declares Complete
-for supplied evaluation-relevant resources and Incomplete when bounds retain holes.
-This concerns the selected contract, including transitive supplied-resource references;
-unselected contracts and ignored positions do not create missing-resource evidence.
-Complete does not promise a verdict for every value. Evidence names one missing
-reference of this contract, not necessarily one activated by the current instance or
-an exhaustive list. It contains no instance data; original locations retain the same
-source-disclosure policy as diagnostics. Rust borrows evidence without cloning its
-location. TypeScript caches deeply frozen plain data per owner without a new Wasm
-owner, checks disposal on access, and shares cached data on retain. New contexts do
-not change old prepared owners. Services/editors can require Complete before swapping;
-deliberate partial previews can accept Incomplete. Custom Rust evaluators default to
-Undeclared and require caller policy; core never infers completeness for them.
+Prepared owners expose no resource-completeness classification. Applications retain
+ready owners and handle `NoVerdict` during validation. A ready owner can return no
+verdict for every value (EV-9); a bare missing reference and an alias of one are
+stage-tested, while `not` around one retains a preparation refusal. Applications
+that need a reference inventory can inspect the original context. Inspection is
+not a proof of value decidability, and no completeness promise is inferred for
+custom evaluators. New contexts do not change old prepared owners.
 
 When optional bounds planning declines, the default evaluator restores its original
 strict located ResourceUnavailable detail for exactly these reason/code pairs:
@@ -39,8 +32,8 @@ ConservativePreparation with `partial-nonpositive-influence` or
 `partial-generated-node-limit` or `partial-generated-edge-limit`. Known-closure
 defects, cancellation, known schema-node/edge/depth limits and compile failures preserve
 their actual causes. This is a finite fallback policy, not a broad error-category catch.
-The explicitly requested `evaluation_bounds()` utility retains its direct planner
-errors; it neither reruns strict projection nor applies this application recovery rule.
+The private planner retains its direct errors for proof tests; the evaluator alone
+applies this recovery policy.
 
 At the fixed 200,000 edge and 100,000 node caps, `schema-edge-limit` already
 establishes too many known schema positions: each reached node contributes at most
@@ -63,18 +56,19 @@ refusal choices are stable for fixed input/resource order.
 
 Existing strict resolver refusals continue to mark the holder schema, including
 the original `resource-unavailable` detail restored after an optional decline.
-Reference facts, Incomplete evidence and malformed-fragment planner diagnostics
+Reference facts, missing-reference evidence and malformed-fragment planner diagnostics
 mark the reference keyword. Existing precise locations are preserved.
 
-## Adapter contract
+## Private evaluator contract
 
-Rust `SchemaRequest::evaluation_bounds(control)` returns an opaque owned
-`EvaluationBounds`. `lower_program()` and `upper_program()` borrow closed JSON
-Schema projections. `unavailable()` borrows optional original-reference refusal
-evidence. `into_parts()` transfers `(lower, upper, unavailable)` without cloning
-owned projection storage. No TypeScript validation variant or configuration mode
-is added. Custom evaluators receive the original immutable request and can opt
-into this helper; core never retries or reinterprets their refusals.
+The bounds planner, hole influence, generated-node accounting, two-pass emission
+admission, paired compilation and fallback-refusal policy belong to private
+modules of the default evaluator. They are not part of the core or BYO API.
+`SchemaRequest` retains the original document, supplied resources, entry, entry
+location and strict `evaluation_program(control)` projection. Custom evaluators
+own their preparation policy; core does not retry their refusals. Bounded source
+mapping is an evaluator implementation detail; the public strict projection keeps
+`original_location` for original-coordinate recovery.
 
 **Neither bound alone is equivalent to the original partial schema.** For every
 admitted value and every admissible completion that preserves known resource
@@ -92,7 +86,7 @@ Missing static-reference edges use private constant targets: false for a lower
 variant, true for an upper variant. Positive-only programs each need one polarity;
 dependent-oneOf programs may use both internally. The original missing URI is never
 registered.
-The existing resolver exposes missing carrier identities to the planner without
+Library-backed inspection exposes missing carrier identities to the planner without
 copying them. Any occupied canonical private namespace segment is retained as an
 integer, and the planner chooses a free namespace before projection. All generated
 resources, including the constant and known-resource containers, use that namespace.
@@ -144,7 +138,7 @@ paths are not enumerated. The separate in-place cycle check remains active.
 | Closed `not`, conditionals, `contains` | A hole-free subgraph is a fixed predicate and is kept intact. A hole influencing any of these contexts is refused, including a shared target reached by an indirect path. |
 
 Known evaluated `unevaluatedProperties`, `unevaluatedItems`, `$dynamicRef` and
-`$dynamicAnchor` reject this helper globally. Unknown annotations could otherwise
+`$dynamicAnchor` reject partial planning globally. Unknown annotations could otherwise
 change validity outside their own predicates or change dynamic target selection.
 Closed ordinary predicates and exact literals are evaluated by the existing
 backend. Advancing recursion is justified over finite admitted JSON instances:
@@ -220,8 +214,8 @@ Private prefix, exact and synthetic-barrier entries serve the existing bounded
 original-location lookup. Descendants of an exact summary stop lookup instead of
 inheriting an invented original path. Offered errors without a proved origin are
 omitted and mark diagnostics incomplete. The default evaluator preserves outer
-`iter_errors` boundaries and does not flatten generated contexts. Adapters must
-preserve those boundaries too: a referenced target URI alone says nothing about
+`iter_errors` boundaries and does not flatten generated contexts. The evaluator must
+preserve those boundaries: a referenced target URI alone says nothing about
 its dynamic occurrence in an internal circuit. Some backend structured `evaluate`
 APIs drop unary wrapper events; a location map cannot reconstruct an omitted event.
 Known diagnostics map to original constraints, with optional details read only
@@ -232,7 +226,7 @@ incomplete diagnostics. Diagnostic exhaustion never erases established failure.
 
 ## Fixed admission and ownership
 
-The helper admits depth 256, 100,000 reached schema nodes, 200,000 dependency edges
+The private planner admits depth 256, 100,000 reached schema nodes, 200,000 dependency edges
 (including missing edges), and 100,000 missing-reference edges. Counts are checked
 before graph append. Child iterators are borrowed; wide lists are not collected
 before edge admission. Influence marking visits each admitted vertex/edge a bounded
@@ -254,7 +248,7 @@ only to this new fragment and are prospective, unmeasured admission choices.
 The combined plan admits **64 MiB logical retained UTF-8 text**: both projected JSON
 resources including generated wrappers and separately owned decoded strings,
 every resource URI and entry string, generated/original mapping strings, and owned
-Incomplete-evidence code/message/location text. An escaped JSON string owns its complete
+missing-reference code/message/location text. An escaped JSON string owns its complete
 decoded UTF-8 value in addition to its serialized token; both count. This applies
 to member names and strings anywhere inside copied annotations or exact literals.
 The two programs share one immutable source map, counted once; copied text is
@@ -301,3 +295,27 @@ and two compiles. Upper failure uses one Boolean evaluation; success and depende
 no-verdict normally use two. These costs and final-owner release require separate
 measurement alongside unchanged complete-resource baselines; semantic regression
 success is not a performance result.
+
+## Ordinary resolution and original identity
+
+Core owns only the §7 embedding rules: the document resource and unique base,
+pointers from the OBI root, document-resource plain names, contained-identity
+precedence and the 2020-12 default. The internal schema adapter uses the library's
+documented registry/resolver API for ordinary references within `$id` and supplied
+resources. Each static lookup uses a fresh resolver. A recording `Retrieve` names
+missing carriers while inspection preparation finishes; its placeholder schemas
+never enter verdict compilation.
+
+Original locations use pointer identity over the borrowed inspection resources.
+The identity table is built where those inspection copies are made; its source
+comment marks the S8 numeric-copy integration point. It never uses schema equality.
+ResourceSet retains supplied canonical-ID conflicts and protected standard IDs as
+input policy, consulting the library's `contains_resource`. Supplied peers that
+normalize to one identity refuse as `ambiguous-resource`.
+
+OBI-13 still compares exact strings after RFC 3986 §5.2 resolution and empty-fragment
+removal. Ordinary identity follows the library's normalization under §7.4, including
+host case, default port and unreserved percent spellings. Encoded plain names in
+`$id` and external resources follow the library's refusal. Duplicate plain-name
+and non-schema-pointer refusals remain until S9. The [migration ledger](../tools/qualification/inputs/s6de-migration-ledger.json)
+records approved case changes; these are not new document conformance violations.

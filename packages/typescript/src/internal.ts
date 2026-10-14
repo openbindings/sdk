@@ -249,7 +249,7 @@ export type OperationSelection =
       /** Distinct primary keys in lexical order; repeated occurrences can yield one key. */
       candidates: readonly string[];
     };
-/** Setup partition: ready transfers a disposable ValueContract; no-value-contract means the selected direction is absent; operation-missing is a selection outcome; the retained operation-ambiguous branch is unreachable from validated documents; no-verdict is preparation refusal. Present false is a value contract. Ready can include qualified missing-resource value contracts whose values may return no-verdict during validation. None of these setup refusals judges an instance. */
+/** Setup partition: ready transfers a disposable ValueContract; no-value-contract means the selected direction is absent; operation-missing is a selection outcome; the retained operation-ambiguous branch is unreachable from validated documents; no-verdict is preparation refusal. Present false is a value contract. Ready means prepared, not decidable: a contract can return no-verdict for every value. None of these setup refusals judges an instance. */
 export type ValueContractPreparation =
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
@@ -301,6 +301,28 @@ export type ValueCheck =
       /** Structured expected failure for this branch. */
       error: ValueAdmissionFailure;
     };
+/** Known causes of a static reference-inspection refusal in this SDK version. */
+export type ReferenceRefusalReason =
+  | "resource-unavailable"
+  | "invalid-reference"
+  | "missing-target"
+  | "ambiguous-target"
+  | "identity-conflict"
+  | "unsupported-capability"
+  | "limit-exceeded"
+  | "cancelled"
+  | "resolver-failure";
+/** Static inspection failure, separate from a selected-schema value outcome. */
+export interface ReferenceRefusal {
+  /** Broad refusal cause. */
+  reason: ReferenceRefusalReason;
+  /** Stable inspection-specific code; use with the broad reason when branching. */
+  code: string;
+  /** Explanation of the inspection refusal; generated messages omit source-controlled details. */
+  message: string;
+  /** Original location when established. */
+  location: SchemaLocation | null;
+}
 /** One reference keyword in a supported schema position. Opaque content is not interpreted as schema; located is static resolution, and dynamicLookup still requires evaluation-time scope handling. */
 export interface Reference {
   /** Original reference-keyword location. */
@@ -323,7 +345,7 @@ export interface Reference {
         /** Located establishes a static target; unresolved preserves the refusal. */
         outcome: "unresolved";
         /** Structured unresolved-reference cause. */
-        detail: NoVerdict;
+        detail: ReferenceRefusal;
       };
 }
 /** Original-context reference inspection, separate from normative proof and preparation. complete describes traversal completion; a complete report can still contain unresolved reference results. */
@@ -333,7 +355,7 @@ export interface ReferenceReport {
   /** Whether traversal completed; unresolved entries can occur even when true. */
   complete: boolean;
   /** Traversal-level limitation when incomplete, otherwise null. */
-  limitation: NoVerdict | null;
+  limitation: ReferenceRefusal | null;
 }
 /** Cooperative work control. A pre-aborted signal returns cancellation. Synchronous Wasm does not yield to same-thread JavaScript, so use a worker plus host scheduling to interrupt long synchronous work externally. This is not a wall-clock deadline. */
 export interface WorkOptions {
@@ -1538,41 +1560,10 @@ function cancelledValue(): ValueOutcome {
     },
   };
 }
-/** Immutable resource evidence from the bundled evaluator for a selected prepared value contract. Complete is not a decidability promise. The evidence contains original schema identities but no instance data. */
-export type ResourceCompleteness =
-  | {
-      /** All resources reached by evaluation-relevant preparation were supplied. */
-      readonly status: "complete";
-    }
-  | {
-      /** Prepared without at least one evaluation-relevant resource. */
-      readonly status: "incomplete";
-      /** One missing reference of this value contract; not an exhaustive list or necessarily the cause for a particular value. */
-      readonly evidence: Readonly<Omit<NoVerdict, "location">> & {
-        /** Frozen original schema coordinate; contains no instance data. */
-        readonly location: Readonly<SchemaLocation> | null;
-      };
-    };
 /** Disposable retained selected-schema validator, independent of document/context lifetime. Repeated validation borrows exact input; ordinary inputs are admitted and temporary owners released within the call. No verdict here proves whole-document conformance. */
 export class ValueContract extends Managed {
-  #resourceCompleteness?: ResourceCompleteness;
   /** @internal */ constructor(raw: wasm.WasmPrepared) {
     super(raw);
-  }
-  /** Frozen cached resource evidence for this selected contract, with no new Wasm owner. Complete does not promise every value is decidable. Incomplete names one missing reference, not necessarily one activated by a value or an exhaustive list. Original locations require the same disclosure policy as diagnostics. Throws disposed-handle after disposal. */
-  get resourceCompleteness(): ResourceCompleteness {
-    const prepared = handle<wasm.WasmPrepared>(this);
-    if (!this.#resourceCompleteness) {
-      const result = decode<ResourceCompleteness>(
-        prepared.resource_completeness(),
-      );
-      if (result.status === "incomplete") {
-        if (result.evidence.location) Object.freeze(result.evidence.location);
-        Object.freeze(result.evidence);
-      }
-      this.#resourceCompleteness = Object.freeze(result);
-    }
-    return this.#resourceCompleteness;
   }
   /** Borrow an exact root; cancellation cannot preempt synchronous Wasm. */
   validate(value: ExactJson, options?: WorkOptions): ValueOutcome;
@@ -1639,7 +1630,6 @@ export class ValueContract extends Managed {
     const retained = new ValueContract(
       handle<wasm.WasmPrepared>(this).retain(),
     );
-    retained.#resourceCompleteness = this.#resourceCompleteness;
     return retained;
   }
 }

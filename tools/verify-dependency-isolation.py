@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse
 import hashlib
 import json
+import subprocess
 import tarfile
 import tomllib
 
@@ -60,3 +61,29 @@ for role in ['http-discovery', 'invocation', 'source-inspection', 'interface-syn
     }
     assert 'pub use openbindings_internal_cancellation::{Cancellation, CancellationToken};' in (package / 'src/lib.rs').read_text()
 print('Cancellation: one shared identity, std-only implementation above synchronous core.')
+
+# S6d: core's complete implementation closure must not compile the bounds planner.
+graph = json.loads(subprocess.check_output(
+    ['cargo', 'metadata', '--offline', '--locked', '--format-version', '1'], cwd=root))
+packages = {p['id']: p for p in graph['packages']}
+nodes = {n['id']: n for n in graph['resolve']['nodes']}
+pending = [next(p['id'] for p in graph['packages'] if p['name'] == 'openbindings')]
+closure = set()
+while pending:
+    node = pending.pop()
+    if node in closure:
+        continue
+    closure.add(node)
+    pending.extend(d['pkg'] for d in nodes[node]['deps']
+                   if any(k['kind'] is None for k in d['dep_kinds']))
+assert 'openbindings-json-schema-evaluator' not in {packages[p]['name'] for p in closure}
+for name in ['openbindings', 'openbindings-internal-schema']:
+    sources = root / 'crates' / name / 'src'
+    for path in sources.rglob('*.rs'):
+        assert path.name not in ('bounds.rs', 'oneof.rs'), path
+        text = path.read_text()
+        assert 'struct EvaluationBounds' not in text and 'struct Plan' not in text, path
+internal = tomllib.loads((root / 'crates/openbindings-internal-schema/Cargo.toml').read_text())
+assert 'openbindings' not in internal['dependencies']
+assert 'openbindings-json-schema-evaluator' not in internal['dependencies']
+print('Schema boundary: core has no evaluator dependency or bounds/oneOf planner; the shared adapter has no reverse dependency.')

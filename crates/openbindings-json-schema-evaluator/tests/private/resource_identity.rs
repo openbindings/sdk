@@ -1,5 +1,6 @@
 //! Context-local identity admission. RI numbers map the frozen 34-case policy
 //! matrix and SOL supplements; source regressions do not qualify a package.
+use crate::planner::BoundsRequest;
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::{Value, json};
@@ -57,7 +58,7 @@ fn verdicts(contract: &ValueContract, cases: &[(&str, &str)]) {
         assert_eq!(label(contract.validate(&value(text))), *expected, "{text}");
     }
 }
-// Exercise both public projection helpers independently of the default adapter's
+// Exercise the strict public projection and private bounds independently of the adapter's
 // strict-first/fallback choice. Ready here only reports successful projection.
 struct Project(bool);
 struct Projected;
@@ -159,7 +160,7 @@ fn located(
 fn unresolved_identity(doc: &ParsedDocument, supplied: &ResourceSet, pointer: &str) {
     match reference(doc, supplied, pointer) {
         ReferenceResolution::Unresolved { detail } => {
-            assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
+            assert_eq!(detail.reason, ReferenceRefusalReason::IdentityConflict);
             assert!(
                 matches!(
                     detail.code.as_str(),
@@ -184,11 +185,11 @@ fn failed_location(contract: &ValueContract, text: &str) -> SchemaLocation {
 #[test]
 fn ri01_03_exact_b32_original_and_edited_resources() {
     let expectations: Value = serde_json::from_str(include_str!(
-        "fixtures/resource-identity/B32-expectations.json"
+        "../fixtures/resource-identity/B32-expectations.json"
     ))
     .unwrap();
     let schema = value(include_str!(
-        "fixtures/resource-identity/B32-runner-result.json"
+        "../fixtures/resource-identity/B32-runner-result.json"
     ));
     let supplied = ResourceSet::new([SchemaResource {
         uri: schema.get("$id").unwrap().as_str().unwrap().into(),
@@ -198,11 +199,11 @@ fn ri01_03_exact_b32_original_and_edited_resources() {
     for (edited, text) in [
         (
             false,
-            include_str!("fixtures/resource-identity/B32-original.json"),
+            include_str!("../fixtures/resource-identity/B32-original.json"),
         ),
         (
             true,
-            include_str!("fixtures/resource-identity/B32-edited.json"),
+            include_str!("../fixtures/resource-identity/B32-edited.json"),
         ),
     ] {
         let doc = ParsedDocument::parse(text).unwrap();
@@ -569,7 +570,53 @@ fn ri16_17_unique_nested_resources_survive_losing_lexical_ancestors() {
     identity_refusal(&doc, &under_healthy, "loser");
 }
 #[test]
-fn ri18_19_existing_uri_resolution_and_spelling_comparison_are_preserved() {
+fn obi13_keeps_host_spelling_while_resolution_uses_library_identity() {
+    // Amendment 1: §7.4 leaves ordinary identity to JSON Schema; only OBI-13
+    // compares the resolved, empty-fragment-stripped spellings exactly.
+    let doc = one(
+        json!({
+            "A": {"$id":"https://CASE.example.invalid/schema", "type":"string"},
+            "B": {"$id":"https://case.example.invalid/schema", "type":"integer"}
+        }),
+        json!({"$ref":"https://case.example.invalid/schema"}),
+    );
+    let validation = doc.validate().unwrap();
+    assert_eq!(validation.report().evidence["OBI-13"], Evidence::Met);
+    assert!(validation.validated().is_some());
+    let detail = refusal(context(&doc, &ResourceSet::default()).prepare("op", Direction::Input));
+    assert_eq!(detail.code, "ambiguous-resource");
+    assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
+    assert!(matches!(
+        reference(&doc, &ResourceSet::default(), "/operations/op/input/$ref"),
+        ReferenceResolution::Unresolved { detail }
+            if detail.reason == ReferenceRefusalReason::IdentityConflict
+                && detail.code == "ambiguous-resource"
+    ));
+}
+
+#[test]
+fn supplied_normalized_identity_peers_remain_ambiguous() {
+    let doc = one(
+        json!({}),
+        json!({"$ref":"https://case.example.invalid/schema"}),
+    );
+    let supplied = resources(&[
+        (
+            "https://CASE.example.invalid/schema",
+            json!({"type":"string"}),
+        ),
+        (
+            "https://case.example.invalid/schema",
+            json!({"type":"integer"}),
+        ),
+    ]);
+    let detail = refusal(context(&doc, &supplied).prepare("op", Direction::Input));
+    assert_eq!(detail.code, "ambiguous-resource");
+    assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
+}
+
+#[test]
+fn ri18_19_uri_resolution_follows_the_library_and_contained_identity_wins() {
     let child = "https://identity.example.invalid/child";
     let schemas = json!({"Parent":{"$id":"https://identity.example.invalid/dir/parent","$defs":{"Child":{"$id":"../child","type":"integer"}}}});
     for uri in [
@@ -608,15 +655,15 @@ fn ri18_19_existing_uri_resolution_and_spelling_comparison_are_preserved() {
         let supplied = resources(&[(external, json!({"type":"string"}))]);
         verdicts(
             &ready(&context(&doc, &supplied), "op"),
-            &[("2", "fails"), (r#""x""#, "satisfies")],
+            &[("2", "satisfies"), (r#""x""#, "fails")],
         );
         helpers_ready(&doc, &supplied, "op");
         located(
             &doc,
             &supplied,
             "/operations/op/input/$ref",
-            "",
-            Some(external),
+            "/schemas/E",
+            None,
             false,
         );
     }
@@ -1038,8 +1085,8 @@ fn ri33_anonymous_document_has_no_acquisition_or_generated_identity() {
         assert!(matches!(
             reference(&doc, &supplied, "/operations/op/input/$ref"),
             ReferenceResolution::Unresolved {
-                detail: NoVerdict {
-                    reason: NoVerdictReason::ResourceUnavailable,
+                detail: ReferenceRefusal {
+                    reason: ReferenceRefusalReason::ResourceUnavailable,
                     ..
                 }
             }

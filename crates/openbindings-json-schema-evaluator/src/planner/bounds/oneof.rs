@@ -122,7 +122,7 @@ impl<'a> Emitter<'a> {
     }
     fn check(&mut self) -> fmt::Result {
         if let Err(error) = self.control.check() {
-            return self.stop(error.into());
+            return self.stop(error);
         }
         Ok(())
     }

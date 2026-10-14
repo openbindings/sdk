@@ -3,10 +3,16 @@
 #![warn(missing_docs)]
 mod details;
 mod literals;
+#[cfg(test)]
+extern crate self as openbindings_json_schema_evaluator;
+mod planner;
 use openbindings::*;
 use openbindings_internal_json::{
     backend::{self, FlatJson},
     numeric,
+};
+use openbindings_internal_schema::{
+    LocationBudgetExceeded, Program as EvaluationProgram, ProjectedResource as SchemaResource,
 };
 use serde_json::Value;
 use std::sync::Arc;
@@ -125,16 +131,23 @@ impl SchemaEvaluator for DefaultEvaluator {
         control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         control.check()?;
-        match request.evaluation_program(control) {
+        let (space, entry) = planner::space(request);
+        let cancellation = || control.is_cancelled();
+        match space
+            .program(entry, &cancellation)
+            .map_err(projection_failure)
+        {
             Ok(program) => Ok(Arc::new(self.compile(program, request, control)?)),
             Err(detail)
                 if detail.reason == NoVerdictReason::ResourceUnavailable
                     && detail.code == "resource-unavailable" =>
             {
-                let bounds = request
-                    .evaluation_bounds(control)
+                let bounds = space
+                    .bounds(entry, &cancellation)
+                    .map_err(projection_failure)
                     .map_err(|decline| recover_partial_decline(detail, decline))?;
                 let (lower, upper, unavailable) = bounds.into_parts();
+                let unavailable = unavailable.map(projection_failure);
                 let upper = self.compile(upper, request, control)?;
                 control.check()?;
                 let lower = self.compile(lower, request, control)?;
@@ -151,7 +164,6 @@ impl SchemaEvaluator for DefaultEvaluator {
 }
 // Finite optional-planner declines only. Known-closure defects, shared admission
 // limits, cancellation and compiler errors retain their actual classifications.
-// Direct SchemaRequest::evaluation_bounds callers still receive planner errors.
 // With the planner's edge cap >= twice its node cap, schema-edge-limit already
 // establishes too many known positions; supplying missing resources cannot cure
 // it. The core cap-relationship regression pins this recovery-policy premise.
@@ -246,9 +258,6 @@ struct Compiled {
     limits: Limits,
 }
 impl PreparedSchema for Compiled {
-    fn resource_completeness(&self) -> ResourceCompleteness<'_> {
-        ResourceCompleteness::Complete
-    }
     fn validate(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
         if let Err(detail) = control.check() {
             let detail = detail.into();
@@ -355,7 +364,9 @@ impl Compiled {
                                                                     uri.as_str(),
                                                                     remaining - fixed - bytes,
                                                                 ) {
-                                                                Ok(location) => location,
+                                                                Ok(location) => {
+                                                                    location.map(original_location)
+                                                                }
                                                                 Err(LocationBudgetExceeded) => {
                                                                     return false;
                                                                 }
@@ -467,12 +478,6 @@ struct PartialCompiled {
     unavailable: Option<NoVerdict>,
 }
 impl PreparedSchema for PartialCompiled {
-    fn resource_completeness(&self) -> ResourceCompleteness<'_> {
-        self.unavailable.as_ref().map_or(
-            ResourceCompleteness::Complete,
-            ResourceCompleteness::incomplete,
-        )
-    }
     fn validate(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
         if let Err(detail) = control.check() {
             let detail = detail.into();
@@ -619,11 +624,13 @@ fn check_patterns(
                     "schema-pattern-compilation",
                     format!("the schema {keyword} regular expression could not be compiled"),
                 );
-                detail.location = program.original_location(&format!(
-                    "{}#/$defs/{}/{keyword}",
-                    resource.uri,
-                    definition.name.as_str().expect("projected definition name")
-                ));
+                detail.location = program
+                    .original_location(&format!(
+                        "{}#/$defs/{}/{keyword}",
+                        resource.uri,
+                        definition.name.as_str().expect("projected definition name")
+                    ))
+                    .map(original_location);
                 return Err(detail);
             }
         }
@@ -992,5 +999,29 @@ mod partial_budget_tests {
             .unwrap(),
             Some(true)
         );
+    }
+}
+
+fn original_location(at: openbindings_internal_schema::Location) -> SchemaLocation {
+    SchemaLocation {
+        resource: at.resource,
+        pointer: at.pointer,
+    }
+}
+fn projection_failure(f: openbindings_internal_schema::Failure) -> NoVerdict {
+    use openbindings_internal_schema::FailureReason as F;
+    let reason = match f.reason {
+        F::UnsupportedCapability => NoVerdictReason::UnsupportedCapability,
+        F::ConservativePreparation => NoVerdictReason::ConservativePreparation,
+        F::ResourceUnavailable => NoVerdictReason::ResourceUnavailable,
+        F::LimitExceeded => NoVerdictReason::LimitExceeded,
+        F::Cancelled => NoVerdictReason::Cancelled,
+        F::EvaluatorFailure => NoVerdictReason::EvaluatorFailure,
+    };
+    NoVerdict {
+        reason,
+        code: f.code,
+        message: f.message,
+        location: f.location.map(original_location),
     }
 }

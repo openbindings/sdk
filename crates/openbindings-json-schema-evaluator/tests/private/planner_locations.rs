@@ -1,4 +1,5 @@
 //! Public preparation and direct-planner controls, using the production caps.
+use crate::planner::BoundsRequest;
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::sync::{Arc, Mutex};

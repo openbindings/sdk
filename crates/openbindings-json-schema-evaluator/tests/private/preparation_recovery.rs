@@ -1,3 +1,4 @@
+use crate::planner::BoundsRequest;
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use std::sync::{Arc, Mutex};
@@ -33,9 +34,9 @@ fn prepare(
         other => panic!("{other:?}"),
     }
 }
-fn evidence(contract: &ValueContract) -> &NoVerdict {
-    match contract.resource_completeness() {
-        ResourceCompleteness::Incomplete { evidence, .. } => evidence,
+fn evidence(contract: &ValueContract) -> NoVerdict {
+    match contract.validate(&json(r#"{"x":1,"a":1,"b":1}"#)) {
+        ValueOutcome::NoVerdict { detail } => detail,
         other => panic!("{other:?}"),
     }
 }
@@ -43,7 +44,42 @@ fn detail_json(detail: &NoVerdict) -> serde_json::Value {
     serde_json::to_value(detail).unwrap()
 }
 #[test]
-fn completeness_is_selected_borrowed_and_independent_of_value_decidability() {
+fn ev9_bare_and_aliased_holes_are_ready_but_not_is_a_preparation_refusal() {
+    for (schema, ready) in [
+        (format!(r#"{{"$ref":"{U}"}}"#), true),
+        (
+            format!(
+                r##"{{"$defs":{{"alias":{{"$ref":"{U}"}}}},"$ref":"#/operations/op/input/$defs/alias"}}"##
+            ),
+            true,
+        ),
+        (format!(r#"{{"not":{{"$ref":"{U}"}}}}"#), false),
+    ] {
+        let doc = document(&schema);
+        let validation = doc.validate().unwrap();
+        let context = validation
+            .validated()
+            .unwrap()
+            .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
+        match context.prepare("op", Direction::Input) {
+            ValueContractPreparation::Ready(contract) if ready => {
+                for value in ["null", "true", "1", r#""x""#, "[]", "{}"] {
+                    assert!(matches!(contract.validate(&json(value)),
+                        ValueOutcome::NoVerdict { detail }
+                            if detail.reason == NoVerdictReason::ResourceUnavailable));
+                }
+            }
+            ValueContractPreparation::NoVerdict { detail } if !ready => {
+                assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
+                assert_eq!(detail.code, "resource-unavailable");
+            }
+            other => panic!("unexpected preparation stage for {schema}: {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn preparation_is_selected_and_does_not_promise_value_decidability() {
     let default = || Arc::new(DefaultEvaluator::new()) as Arc<dyn SchemaEvaluator>;
     for schema in [
         "true".to_owned(),
@@ -53,13 +89,9 @@ fn completeness_is_selected_borrowed_and_independent_of_value_decidability() {
     ] {
         let contract = prepare(&schema, ResourceSet::default(), default());
         assert!(matches!(
-            contract.resource_completeness(),
-            ResourceCompleteness::Complete
+            contract.validate(&json("null")),
+            ValueOutcome::Satisfies
         ));
-        assert_eq!(
-            serde_json::to_string(&contract.resource_completeness()).unwrap(),
-            r#"{"status":"complete"}"#
-        );
     }
     for schema in [
         format!(r#"{{"$ref":"{U}"}}"#),
@@ -70,17 +102,22 @@ fn completeness_is_selected_borrowed_and_independent_of_value_decidability() {
         ),
     ] {
         let contract = prepare(&schema, ResourceSet::default(), default());
+        if schema.contains("anyOf") {
+            assert!(matches!(
+                contract.validate(&json("null")),
+                ValueOutcome::Satisfies
+            ));
+            continue;
+        }
         let retained = contract.clone();
-        assert!(std::ptr::eq(evidence(&contract), evidence(&contract)));
-        assert!(std::ptr::eq(evidence(&contract), evidence(&retained)));
         assert_eq!(
             evidence(&contract).reason,
             NoVerdictReason::ResourceUnavailable
         );
         assert!(evidence(&contract).location.is_some());
-        let saved = detail_json(evidence(&contract));
+        let saved = detail_json(&evidence(&contract));
         drop(contract);
-        assert_eq!(detail_json(evidence(&retained)), saved);
+        assert_eq!(detail_json(&evidence(&retained)), saved);
         if let ValueOutcome::NoVerdict { detail } = retained.validate(&json(r#"{"x":1}"#)) {
             assert_eq!(detail_json(&detail), saved);
         }
@@ -93,10 +130,6 @@ fn completeness_is_selected_borrowed_and_independent_of_value_decidability() {
             ..Limits::default()
         })),
     );
-    assert!(matches!(
-        limited.resource_completeness(),
-        ResourceCompleteness::Complete
-    ));
     assert!(
         matches!(limited.validate(&json("null")), ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::LimitExceeded)
     );
@@ -110,24 +143,21 @@ fn transitive_holes_and_original_snapshot_evidence_survive_new_contexts() {
         resources(&[(U, &known)]),
         Arc::new(DefaultEvaluator::new()),
     );
-    let at = evidence(&old).location.as_ref().unwrap();
+    let old_detail = evidence(&old);
+    let at = old_detail.location.as_ref().unwrap();
     assert_eq!(at.resource.as_deref(), Some(U));
     assert_eq!(at.pointer, "/properties/x/$ref");
-    let original = detail_json(evidence(&old));
+    let original = detail_json(&evidence(&old));
     let new = prepare(
         &schema,
         resources(&[(U, &known), (V, "true")]),
         Arc::new(DefaultEvaluator::new()),
     );
     assert!(matches!(
-        new.resource_completeness(),
-        ResourceCompleteness::Complete
-    ));
-    assert!(matches!(
         new.validate(&json(r#"{"x":1}"#)),
         ValueOutcome::Satisfies
     ));
-    assert_eq!(detail_json(evidence(&old)), original);
+    assert_eq!(detail_json(&evidence(&old)), original);
     assert!(matches!(
         old.validate(&json(r#"{"x":1}"#)),
         ValueOutcome::NoVerdict { .. }
@@ -151,7 +181,7 @@ fn transitive_holes_and_original_snapshot_evidence_survive_new_contexts() {
     let ValueOutcome::NoVerdict { detail } = two.validate(&json(r#"{"b":1}"#)) else {
         panic!()
     };
-    assert_eq!(detail_json(&detail), detail_json(evidence(&two))); // one witness, not necessarily active
+    assert_eq!(detail_json(&detail), detail_json(&evidence(&two))); // one witness, not necessarily active
 }
 struct Capture(Mutex<Option<SchemaRequest>>);
 impl SchemaEvaluator for Capture {
@@ -238,16 +268,13 @@ impl PreparedSchema for Declared {
             detail: self.0.clone(),
         }
     }
-    fn resource_completeness(&self) -> ResourceCompleteness<'_> {
-        ResourceCompleteness::incomplete(&self.0)
-    }
 }
 #[test]
-fn custom_evaluators_default_to_undeclared_and_can_borrow_their_own_evidence() {
+fn custom_evaluators_return_their_own_outcomes() {
     let legacy = prepare("true", ResourceSet::default(), Arc::new(Legacy));
     assert!(matches!(
-        legacy.resource_completeness(),
-        ResourceCompleteness::Undeclared
+        legacy.validate(&json("null")),
+        ValueOutcome::Satisfies
     ));
     let mut own = NoVerdict::new(
         NoVerdictReason::ResourceUnavailable,
@@ -263,6 +290,5 @@ fn custom_evaluators_default_to_undeclared_and_can_borrow_their_own_evidence() {
         ResourceSet::default(),
         Arc::new(Declared(own.clone())),
     );
-    assert_eq!(detail_json(evidence(&custom)), detail_json(&own));
-    assert!(std::ptr::eq(evidence(&custom), evidence(&custom)));
+    assert_eq!(detail_json(&evidence(&custom)), detail_json(&own));
 }

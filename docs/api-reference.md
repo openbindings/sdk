@@ -76,14 +76,13 @@ and its associated future is Send; local futures and Rc providers remain support
   For a missing resource, Rust `ParsedDocument::references()` and TypeScript
   `ParsedDocument.references()` expose explicit reference spellings and keyword
   locations; apply an application disclosure policy before logging these source facts.
-- `ValueContract::resource_completeness()` borrows evaluator-declared Complete,
-  Incomplete evidence, or Undeclared. Existing custom `PreparedSchema` implementations
-  default to Undeclared. TypeScript's bundled evaluator exposes the complete/incomplete
-  states through a frozen cached `resourceCompleteness` getter with no additional
-  Wasm owner. Complete is a resource claim, not a promise that every value is decidable.
-  Evidence names one missing reference of this contract and follows diagnostic
-  disclosure policy. Require Complete before replacing an active snapshot when your
-  application needs that policy; deliberate partial previews can accept Incomplete.
+- Ready means prepared, not decidable (EV-9). Every value may still return
+  `NoVerdict`. Contracts expose no resource-completeness classification. Applications
+  own replacement policy and handle refusal at preparation and validation.
+- Static inspection uses `ReferenceRefusal` and `ReferenceRefusalReason`, including
+  cancellation, instead of value-outcome `NoVerdict`. Original keyword and target
+  locations are preserved. Both parsed and validated documents support inspection;
+  it performs no acquisition and makes no value-decidability claim.
 - Limits state their units and defaults in definitions. Cancellation is cooperative,
   not a deadline or preemptive interrupt. A same-thread `AbortSignal` cannot run while
   synchronous Wasm occupies that thread. HTTP discovery can interrupt asynchronous
@@ -101,20 +100,19 @@ new evaluator limit. Adding a Rust `Limits` field is an intentional prerelease
 struct-literal source change; callers should use `..Limits::default()` for
 unspecified settings. Existing Rust `ValueProblem` literals must also add
 `details: None`; `ValueOutcome` construction is unchanged.
-Custom evaluator authors can call `EvaluationProgram::original_location_bounded`
-and match `LocationBudgetExceeded` separately from an unmapped location; its
-point-of-definition Rustdoc demonstrates the complete match.
+Custom evaluators receive a `SchemaRequest` with the original document, supplied
+resources, entry and entry location. `evaluation_program(control)` provides the
+strict §7 projection; read-only `EvaluationProgram::entry_uri()` and `resources()`
+keep its contents aligned with provenance, and `original_location` recovers
+original coordinates. Bounds planning, paired compilation, bounded source mapping and the
+fallback policy are private default-evaluator implementation details, with no
+replacement product API. The [proof and admission contract](partial-resource-bounds.md)
+records their retained guards and tests.
 
-Rust adapter authors can call `SchemaRequest::evaluation_bounds(control)` for the
-qualified static-reference fragment. The opaque owned `EvaluationBounds` exposes
-`lower_program()`, `upper_program()`, `unavailable()` and consuming `into_parts()`
-in `(lower, upper, unavailable)` order. **Neither closed projection alone is an
-equivalent of the original partial schema.** Adapters must apply the paired verdict
-rule, preserve incomplete-pass refusals and keep lower synthetic failures private.
-The [proof and admission contract](partial-resource-bounds.md) covers influence,
-identity, immutable ownership, combined text/graph limits and diagnostic scope.
-Core custom-evaluator dispatch and strict `evaluation_program()` stay unchanged.
-No TypeScript application API or configuration variant is added.
+Ordinary references use the library's documented APIs. OBI-13 retains exact
+comparison after its specified resolution, while §7.4 ordinary identity follows
+library normalization. Supplied canonical collisions and protected standard names
+remain input policy; static reference inspection never authorizes acquisition.
 
 ## HTTP discovery host policy additions
 

@@ -179,6 +179,7 @@ pub struct SchemaResource {
 #[derive(Clone, Debug, Default)]
 pub struct ResourceSet {
     resources: Arc<Vec<SchemaResource>>,
+    pub(crate) input_policy: openbindings_internal_schema::Supplied,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 /// Invalid supplied-resource configuration, separate from schema preparation and value outcomes.
@@ -195,7 +196,11 @@ impl fmt::Display for ResourceError {
 }
 impl std::error::Error for ResourceError {}
 impl ResourceSet {
-    /// Identifiers are compared exactly after RFC resolution and empty-fragment removal.
+    /// Admit immutable resources without acquisition. Duplicate retrieval spellings
+    /// after RFC resolution and empty-fragment removal are configuration errors.
+    /// Canonical associations use the library's ordinary URI normalization;
+    /// collisions and protected standard identities are retained as input policy
+    /// and refuse when reached, without poisoning unrelated contracts.
     pub fn new(resources: impl IntoIterator<Item = SchemaResource>) -> Result<Self, ResourceError> {
         let mut by_uri = BTreeMap::new();
         for mut resource in resources {
@@ -224,8 +229,17 @@ impl ResourceSet {
                 });
             }
         }
+        let resources: Vec<_> = by_uri.into_values().collect();
+        let input_policy = openbindings_internal_schema::Supplied::new(resources.iter().map(|r| {
+            openbindings_internal_schema::ProjectedResource {
+                uri: r.uri.clone(),
+                document: r.document.clone(),
+            }
+        }))
+        .expect("admitted resources");
         Ok(Self {
-            resources: Arc::new(by_uri.into_values().collect()),
+            resources: Arc::new(resources),
+            input_policy,
         })
     }
     /// Borrow supplied resources in deterministic normalized-URI order; no allocation or acquisition.
@@ -266,214 +280,68 @@ impl SchemaRequest {
     ) -> Result<EvaluationProgram, NoVerdict> {
         self.space.program(self.entry, control)
     }
-    /// Build paired closed validity bounds for the qualified static-reference
-    /// fragment, without acquiring resources. See [`EvaluationBounds`] for the
-    /// proof, admission limits and adapter responsibilities. This does not
-    /// change the strict [`Self::evaluation_program`] contract. Direct calls
-    /// retain actual planner refusals; only the default evaluator's optional
-    /// fallback can restore its original strict resource-unavailable detail.
-    /// Refusals identify original keyword/node boundaries when safely bounded;
-    /// aggregate projection failures identify the selected schema. Existing
-    /// resolver locations are retained. Optional location text is guarded
-    /// separately from successful paired-program text; cancellation may be unlocated.
-    pub fn evaluation_bounds(
-        &self,
-        control: &dyn WorkControl,
-    ) -> Result<EvaluationBounds, NoVerdict> {
-        self.space.bounds(self.entry, control)
-    }
 }
-/// Paired, owned JSON Schema validity bounds for one immutable resource snapshot.
-///
-/// For every admitted instance and every admissible completion that preserves
-/// known resource identities, `lower(value) <= actual(value) <= upper(value)`.
-/// **Neither program alone is an equivalent of the original partial schema.**
-/// Adapters may establish failure from upper failure, satisfaction from upper
-/// and lower success, and otherwise return [`Self::unavailable`] as no verdict.
-/// They must not promote an incomplete, cancelled or unsupported evaluation.
-/// There is no annotation-output guarantee, nor a promise that arbitrary later
-/// resources (for example colliding identities or unsupported dialects) prepare.
-///
-/// Hole influence is permitted through static `$ref`, `allOf`, `anyOf`,
-/// `properties`, `patternProperties`, `additionalProperties`, `propertyNames`,
-/// `dependentSchemas`, `prefixItems` and `items`. Hole-dependent `oneOf` uses
-/// memoized dual-polarity bounds, not uniform false/true substitution. Closed
-/// `not`, effective conditionals and `contains` remain supported; holes beneath
-/// those operators refuse. Correlations between unknown predicates are not proved.
-/// Evaluated `unevaluated*`, `$dynamicRef` and `$dynamicAnchor` refuse this helper.
-/// Ignored/opaque positions remain ignored. Potential in-place cycles refuse;
-/// advancing recursion is bounded by the admitted finite instance.
-///
-/// Admission: depth 256, 100,000 reached nodes, 200,000 dependency edges (including
-/// holes), 100,000 holes, and 64 MiB combined retained UTF-8 text. Text includes
-/// both projected JSON resources' serialized text and separately owned decoded
-/// strings, their URI/entry strings, shared original maps once, and evidence
-/// strings, including private exact/prefix/barrier mapping entries. Dependent
-/// oneOf additionally admits 100,000 emitted schema-node occurrences and 200,000
-/// reference/applicator-edge occurrences across both independently closed copies.
-/// Wrappers, ordinary bodies, constants and branch refs count. These are unmeasured
-/// admission choices, not heap, allocator-capacity, compiled-memory or runtime bounds. Reference-resolution scratch inputs and full original
-/// pointers also have a separate 64 MiB pre-copy guard. Refusal locations outside
-/// successful plans use that guard too (including any keyword suffix), and can
-/// be omitted or identify a bounded original preparation boundary. No I/O occurs. Later
-/// resource replacements require a new context; these bounds never change.
-#[derive(Debug)]
-pub struct EvaluationBounds {
-    pub(crate) lower: EvaluationProgram,
-    pub(crate) upper: EvaluationProgram,
-    pub(crate) unavailable: Option<NoVerdict>,
-}
-impl EvaluationBounds {
-    /// Borrow the closed lower projection. Its failures alone prove nothing
-    /// about the original partial schema and must not become diagnostics.
-    pub fn lower_program(&self) -> &EvaluationProgram {
-        &self.lower
-    }
-    /// Borrow the closed upper projection. Established failure proves failure
-    /// of the original, with diagnostics only from mapped original constraints.
-    /// A mapped upper unary oneOf summary proves that authored keyword fails,
-    /// without reporting branch counts. Preserve outer error boundaries; never
-    /// flatten generated contexts or diagnose the lower/internal predicates.
-    /// Omit unmapped explanations and mark diagnostics incomplete. The default
-    /// backend iter_errors preserves the unary summary event; structured evaluate
-    /// APIs may omit it, and a source map cannot invent an omitted boundary.
-    pub fn upper_program(&self) -> &EvaluationProgram {
-        &self.upper
-    }
-    /// Borrow conservative refusal evidence at an original missing `$ref`.
-    /// `None` means both projections are exact (there are no holes).
-    pub fn unavailable(&self) -> Option<&NoVerdict> {
-        self.unavailable.as_ref()
-    }
-    /// Transfer the programs and evidence without cloning their owned storage.
-    /// Tuple order is `(lower, upper, unavailable)`.
-    ///
-    /// ```
-    /// # use openbindings::{SchemaRequest, WorkControl, NoVerdict};
-    /// # fn adapter(request: &SchemaRequest) -> Result<(), NoVerdict> {
-    /// let (lower, upper, unavailable) = request
-    ///     .evaluation_bounds(&std::sync::atomic::AtomicBool::new(false))?.into_parts();
-    /// // Compile upper first; compare complete verdicts under one shared budget.
-    /// # let _ = (lower, upper, unavailable);
-    /// # Ok(()) }
-    /// ```
-    pub fn into_parts(self) -> (EvaluationProgram, EvaluationProgram, Option<NoVerdict>) {
-        (self.lower, self.upper, self.unavailable)
-    }
-}
-/// A closed JSON Schema projection with an original-source map. Names are private
-/// to this program; consumers must not rely on their spelling or numbering.
+/// A closed §7 schema projection with original provenance. Generated identifiers
+/// are private to this program and are not original source identities.
 #[derive(Clone, Debug)]
 pub struct EvaluationProgram {
-    /// Private absolute URI selecting the projected entry; never expose it as an original diagnostic location.
-    pub entry_uri: String,
-    /// Owned projected schema resources sufficient for this program; an evaluator may release them after compilation retains its required state.
-    pub resources: Vec<SchemaResource>,
-    pub(crate) locations: Arc<BTreeMap<String, ProgramOrigin>>,
+    entry_uri: String,
+    resources: Vec<SchemaResource>,
+    projection: openbindings_internal_schema::Program,
 }
-// Private provenance boundaries. An Exact ancestor is terminal: descendants
-// cannot inherit an invented original suffix. Synthetic nodes stop lookup too.
-#[derive(Clone, Debug)]
-pub(crate) enum ProgramOrigin {
-    Prefix(SchemaLocation),
-    Exact(SchemaLocation),
-    Synthetic,
-}
-/// Original schema location or URI-decoding scratch exceeds the caller's UTF-8
-/// byte allowance. No partial location is returned.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct LocationBudgetExceeded;
-impl fmt::Display for LocationBudgetExceeded {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("original schema location exceeds the diagnostic byte allowance")
-    }
-}
-impl std::error::Error for LocationBudgetExceeded {}
 impl EvaluationProgram {
-    /// Map a generated absolute keyword URI to original source, including a proved
-    /// upper oneOf summary. Exact summary boundaries do not map their descendants.
-    /// Return `None` for synthetic/unmapped origins. This establishes no verdict:
-    /// only diagnose completed upper failure, preserving outer error boundaries.
-    pub fn original_location(&self, generated_uri: &str) -> Option<SchemaLocation> {
-        self.original_location_bounded(generated_uri, usize::MAX)
-            .ok()
-            .flatten()
+    /// Borrow the private absolute URI selecting the projected entry.
+    pub fn entry_uri(&self) -> &str {
+        &self.entry_uri
     }
-    /// Map an original location when its resource URI plus complete pointer fit
-    /// `max_bytes` UTF-8 bytes. Admission precedes copying original strings.
-    /// URI fragment percent-decoding uses one normalized-string buffer with a
-    /// separate logical UTF-8 allowance of `max_bytes`. Its encoded input length
-    /// is a conservative preallocation bound; allocator capacity/reallocation is
-    /// not measured. Percent escapes in the URI base are preserved verbatim.
-    /// `Ok(None)` means a synthetic/unmapped origin, a descendant blocked by an
-    /// exact origin, or an invalid percent-encoded fragment;
-    /// [`LocationBudgetExceeded`] means either allowance was insufficient.
-    /// This helper establishes neither a verdict nor a total heap bound.
-    ///
-    /// ```
-    /// # use openbindings::{EvaluationProgram, LocationBudgetExceeded};
-    /// # fn map(program: &EvaluationProgram, uri: &str) {
-    /// match program.original_location_bounded(uri, 1024) {
-    ///     Ok(Some(location)) => assert!(location.pointer.len() <= 1024),
-    ///     Ok(None) => {} // Omit unproved explanations; mark diagnostics incomplete.
-    ///     Err(LocationBudgetExceeded) => {} // Mark diagnostics incomplete.
-    /// }
-    /// # }
-    /// ```
-    pub fn original_location_bounded(
-        &self,
-        generated_uri: &str,
-        max_bytes: usize,
-    ) -> Result<Option<SchemaLocation>, LocationBudgetExceeded> {
-        let normalized = match generated_uri.split_once('#') {
-            Some((base, fragment)) if fragment.contains('%') => {
-                if generated_uri.len() > max_bytes {
-                    return Err(LocationBudgetExceeded);
-                }
-                let Some(mut decoded) = crate::uri::decode_fragment(fragment) else {
-                    return Ok(None);
-                };
-                // Grow this admitted buffer instead of retaining both decoded
-                // and formatted URI strings. Logical length never exceeds the
-                // encoded URI length admitted above.
-                decoded.insert(0, '#');
-                decoded.insert_str(0, base);
-                std::borrow::Cow::Owned(decoded)
-            }
-            _ => std::borrow::Cow::Borrowed(generated_uri),
-        };
-        let generated_uri = normalized.as_ref();
-        let mut end = generated_uri.len();
-        loop {
-            if let Some(origin) = self.locations.get(&generated_uri[..end]) {
-                let location = match origin {
-                    ProgramOrigin::Prefix(location) => location,
-                    ProgramOrigin::Exact(location) if end == generated_uri.len() => location,
-                    ProgramOrigin::Exact(_) | ProgramOrigin::Synthetic => return Ok(None),
-                };
-                let bytes = location
-                    .resource
-                    .as_ref()
-                    .map_or(0, String::len)
-                    .saturating_add(location.pointer.len())
-                    .saturating_add(generated_uri.len() - end);
-                if bytes > max_bytes {
-                    return Err(LocationBudgetExceeded);
-                }
-                let mut pointer =
-                    String::with_capacity(location.pointer.len() + generated_uri.len() - end);
-                pointer.push_str(&location.pointer);
-                pointer.push_str(&generated_uri[end..]);
-                return Ok(Some(SchemaLocation {
-                    resource: location.resource.clone(),
-                    pointer,
-                }));
-            }
-            let Some(previous) = generated_uri[..end].rfind('/') else {
-                return Ok(None);
-            };
-            end = previous;
+    /// Borrow the immutable projected resources with their original provenance.
+    pub fn resources(&self) -> &[SchemaResource] {
+        &self.resources
+    }
+    /// Map a generated keyword URI to an established original source location.
+    pub fn original_location(&self, uri: &str) -> Option<SchemaLocation> {
+        self.projection
+            .original_location(uri)
+            .map(original_location)
+    }
+}
+impl EvaluationProgram {
+    pub(crate) fn from_projection(mut projection: openbindings_internal_schema::Program) -> Self {
+        let resources = std::mem::take(&mut projection.resources)
+            .into_iter()
+            .map(|r| SchemaResource {
+                uri: r.uri,
+                document: r.document,
+            })
+            .collect();
+        Self {
+            entry_uri: projection.entry_uri.clone(),
+            resources,
+            projection,
         }
+    }
+}
+pub(crate) fn original_location(at: openbindings_internal_schema::Location) -> SchemaLocation {
+    SchemaLocation {
+        resource: at.resource,
+        pointer: at.pointer,
+    }
+}
+pub(crate) fn projection_failure(f: openbindings_internal_schema::Failure) -> NoVerdict {
+    use openbindings_internal_schema::FailureReason as F;
+    let reason = match f.reason {
+        F::UnsupportedCapability => NoVerdictReason::UnsupportedCapability,
+        F::ConservativePreparation => NoVerdictReason::ConservativePreparation,
+        F::ResourceUnavailable => NoVerdictReason::ResourceUnavailable,
+        F::LimitExceeded => NoVerdictReason::LimitExceeded,
+        F::Cancelled => NoVerdictReason::Cancelled,
+        F::EvaluatorFailure => NoVerdictReason::EvaluatorFailure,
+    };
+    NoVerdict {
+        reason,
+        code: f.code,
+        message: f.message,
+        location: f.location.map(original_location),
     }
 }
 /// Thread-safe preparation extension point. Respect immutable original context, explicit resources and [`WorkControl`]; perform no implicit I/O. Return a refusal when required capabilities, soundness or limits prevent preparation. Prepared objects must own everything they need after the request is dropped.
@@ -526,45 +394,10 @@ pub trait SchemaEvaluator: Send + Sync {
         control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict>;
 }
-/// What the evaluator declared about resources reached for this prepared value contract.
-/// Complete does not promise decidability: budgets, cancellation and unsupported
-/// instances may still prevent a verdict. Evidence borrows the immutable prepared
-/// owner; inspection does not clone its potentially long original location.
-#[derive(Clone, Copy, Debug, Serialize)]
-#[serde(tag = "status", rename_all = "kebab-case")]
-#[non_exhaustive]
-pub enum ResourceCompleteness<'a> {
-    /// All evaluation-relevant schema resources were supplied for preparation.
-    Complete,
-    /// Preparation succeeded without at least one evaluation-relevant resource.
-    #[non_exhaustive]
-    Incomplete {
-        /// One located missing-reference witness, not an exhaustive list or
-        /// necessarily a reference activated by a particular instance. Original
-        /// source identities require the same disclosure policy as diagnostics.
-        evidence: &'a NoVerdict,
-    },
-    /// The evaluator made no declaration; applications choose their own policy.
-    Undeclared,
-}
-impl<'a> ResourceCompleteness<'a> {
-    /// Declare incomplete resources with borrowed, located ResourceUnavailable
-    /// evidence retained by the prepared owner. Does not allocate or clone it.
-    pub fn incomplete(evidence: &'a NoVerdict) -> Self {
-        Self::Incomplete { evidence }
-    }
-}
 /// Thread-safe retained validator returned by a [`SchemaEvaluator`]. Repeated calls must preserve caller input and retain no accidental borrow of a completed request. Only claim established semantic verdicts; bound diagnostic work separately and report incompleteness.
 pub trait PreparedSchema: Send + Sync {
     /// Return only established verdicts. Resource/capability/work failures are NoVerdict.
     fn validate(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome;
-    /// Declare immutable resource evidence for this owner. The default makes no
-    /// claim, preserving existing custom evaluators. Complete declarations must
-    /// not return ResourceUnavailable; incomplete evidence must be located and
-    /// have that reason. Other no-verdict causes remain possible in either state.
-    fn resource_completeness(&self) -> ResourceCompleteness<'_> {
-        ResourceCompleteness::Undeclared
-    }
 }
 /// An immutable document/resource/evaluator context with caller-owned preparation.
 /// Select a value contract using [`Self::prepare`], then retain its ready owner for
@@ -580,7 +413,8 @@ struct ContractsInner {
     space: Arc<SchemaSpace>,
     evaluator: Arc<dyn SchemaEvaluator>,
 }
-/// Setup result. Only Ready owns a successfully prepared value contract.
+/// Setup result. Ready means successfully prepared, not decidable. A ready
+/// contract may return no verdict for every instance (including a bare missing reference).
 #[derive(Clone, Debug)]
 pub enum ValueContractPreparation {
     /// A retained prepared value contract, independently usable after context drop.
@@ -613,12 +447,6 @@ impl fmt::Debug for ValueContract {
     }
 }
 impl ValueContract {
-    /// Borrow the selected evaluator's immutable resource declaration without
-    /// evaluating an instance. Core never infers completeness for custom evaluators.
-    /// Retained clones preserve this evidence after context drop or replacement.
-    pub fn resource_completeness(&self) -> ResourceCompleteness<'_> {
-        self.schema.resource_completeness()
-    }
     /// Validate an admitted exact value, distinguishing satisfies, fails and
     /// no-verdict. For ordinary Rust data first use [`JsonValue::from_serializable`];
     /// for exact JSON text/bytes use [`JsonValue::parse`]. Admission failure is
@@ -741,118 +569,5 @@ impl ValueContracts {
             Ok(schema) => ValueContractPreparation::Ready(ValueContract { schema }),
             Err(detail) => ValueContractPreparation::NoVerdict { detail },
         }
-    }
-}
-
-#[cfg(test)]
-mod location_budget_tests {
-    use super::*;
-    #[test]
-    fn original_mapping_admits_complete_locations_and_decoding_separately() {
-        let uri = "https://sdk-program.openbindings.invalid/p#/$defs/n0";
-        let location = SchemaLocation {
-            resource: Some("https://example.test/".to_owned() + &"u".repeat(32768)),
-            pointer: "/é~0~1\n".into(),
-        };
-        let program = EvaluationProgram {
-            entry_uri: uri.into(),
-            resources: vec![],
-            locations: Arc::new(BTreeMap::from([(
-                uri.into(),
-                ProgramOrigin::Prefix(location.clone()),
-            )])),
-        };
-        let generated = uri.to_owned() + "/type";
-        let required = location.resource.as_ref().unwrap().len() + location.pointer.len() + 5;
-        for bytes in [0, 1, required - 1] {
-            assert_eq!(
-                program.original_location_bounded(&generated, bytes),
-                Err(LocationBudgetExceeded)
-            );
-        }
-        for bytes in [required, required + 1] {
-            assert_eq!(
-                program
-                    .original_location_bounded(&generated, bytes)
-                    .unwrap(),
-                Some(SchemaLocation {
-                    resource: location.resource.clone(),
-                    pointer: location.pointer.clone() + "/type"
-                })
-            );
-        }
-        assert_eq!(
-            program.original_location(&generated),
-            program
-                .original_location_bounded(&generated, usize::MAX)
-                .unwrap()
-        );
-        assert_eq!(
-            program
-                .original_location_bounded(&(uri.to_owned() + "/%74ype"), required)
-                .unwrap(),
-            program.original_location(&generated)
-        );
-        assert_eq!(
-            program
-                .original_location_bounded(&(uri.to_owned() + "/%GG"), required)
-                .unwrap(),
-            None
-        );
-        assert_eq!(
-            program
-                .original_location_bounded("https://unmapped.test/#/x", 0)
-                .unwrap(),
-            None
-        );
-    }
-    #[test]
-    fn percent_bearing_base_lookup_preserves_original_mapping_contract() {
-        let at = SchemaLocation {
-            resource: None,
-            pointer: String::new(),
-        };
-        for base in [
-            "https://example.test/%61",
-            "https://example.test/%61#/$defs/n0",
-        ] {
-            let program = EvaluationProgram {
-                entry_uri: base.into(),
-                resources: vec![],
-                locations: Arc::new(BTreeMap::from([(
-                    base.into(),
-                    ProgramOrigin::Prefix(at.clone()),
-                )])),
-            };
-            assert_eq!(program.original_location(base), Some(at.clone()));
-            assert_eq!(
-                program.original_location_bounded(base, 0),
-                Ok(Some(at.clone()))
-            );
-            assert_eq!(
-                program.original_location_bounded(&(base.to_owned() + "/type"), 5),
-                Ok(Some(SchemaLocation {
-                    resource: None,
-                    pointer: "/type".into()
-                }))
-            );
-        }
-        let uri = "https://example.test/%61#/%74ype";
-        let program = EvaluationProgram {
-            entry_uri: uri.into(),
-            resources: vec![],
-            locations: Arc::new(BTreeMap::from([(
-                "https://example.test/%61#/type".into(),
-                ProgramOrigin::Prefix(at.clone()),
-            )])),
-        };
-        assert_eq!(
-            program.original_location_bounded(uri, uri.len() - 1),
-            Err(LocationBudgetExceeded)
-        );
-        assert_eq!(
-            program.original_location_bounded(uri, uri.len()),
-            Ok(Some(at))
-        );
     }
 }

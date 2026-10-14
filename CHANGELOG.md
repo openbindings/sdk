@@ -2,6 +2,19 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- Integrate S6d/e: move bounds planning, paired compilation and guarded source
+  mapping into private evaluator modules. Remove `ResourceCompleteness`, its
+  Rust/TypeScript accessors, `SchemaRequest::evaluation_bounds`, `EvaluationBounds`,
+  `LocationBudgetExceeded` and `EvaluationProgram::original_location_bounded`
+  without replacement product APIs. The strict projection exposes read-only
+  `entry_uri()` / `resources()` accessors. Ready means prepared, not decidable (EV-9).
+- Reference inspection now has `ReferenceRefusal` / `ReferenceRefusalReason`,
+  including Cancelled. Ordinary resolution uses documented library APIs, recording
+  inspection-only retrieval and original pointer identity; no acquisition occurs.
+  Preserve §7 document embedding and OBI-13 exact comparison. Follow library URI
+  normalization and encoded-name refusal under §7.4, with approved per-case ledger
+  entries. Supplied normalized collisions remain `ambiguous-resource`.
+
 - Recheck cached Rust document conformance at every proof-requiring Wasm entry,
   including raw receiver substitution, retention, transfer and publication. Keep
   TypeScript top-level text reads field-local so malformed siblings do not hide
@@ -132,14 +145,8 @@
   values still return ResourceUnavailable. Other influence exclusions remain.
   Two new generated-plan admission limits count duplicated nodes/edges across
   both closed programs and recover the original strict missing-resource evidence
-  when the default fallback declines. Direct adapter calls retain planner codes.
+  when the default fallback declines. Private planner proofs retain their codes.
 
-
-- Rust adapter utility `SchemaRequest::evaluation_bounds` and opaque owned
-  `EvaluationBounds`, with borrowed lower/upper/evidence access and consuming
-  `into_parts()`. The two closed programs are validity bounds, not individually
-  equivalent schemas. Combined text/graph admission and immutable context ownership
-  are explicit; the strict projection helper and custom evaluator dispatch remain.
 
 - Rust binding, source, dependency and operation-example views, with retained
   ownership, typed metadata and exact opaque content. The TypeScript facade adds
@@ -153,10 +160,6 @@
   retained UTF-8 strings), bounded pre-copy diagnostic construction, whole-problem
   truncation and explicit zero semantics. This adds an intentional prerelease Rust
   `Limits` struct field; `ValueOutcome` fields are unchanged.
-- `EvaluationProgram::original_location_bounded` and `LocationBudgetExceeded` for
-  custom evaluators that need original-coordinate admission before copying.
-
-
 - Definition-level Rust and TypeScript API reference contracts, compiled reference
   examples, and required checks for missing documentation and broken Rust links.
 - Consumer feature-matrix and source-identity guards for the private exact-number
@@ -175,13 +178,9 @@
 
 ### Changed
 
-- Prepared contracts expose borrowed Rust `ResourceCompleteness` and a frozen,
-  cached TypeScript `resourceCompleteness` getter. Existing custom evaluators default
-  to Undeclared. Complete describes resources, not guaranteed value decidability.
-  Retained service/editor examples now require Complete before replacing a snapshot.
-- Declined optional partial planning again preserves the default evaluator's original
-  located ResourceUnavailable refusal. Direct `evaluation_bounds()` retains planner
-  errors; known defects, shared limits, cancellation and compilation keep their causes.
+- Declined optional partial planning preserves the default evaluator's original
+  located ResourceUnavailable refusal. Private proof tests retain planner errors;
+  known defects, shared limits, cancellation and compilation keep their causes.
 
 - The default evaluator can decide values independently of missing static resources
   within a qualified positive fragment, using shared-budget lower/upper evaluation
