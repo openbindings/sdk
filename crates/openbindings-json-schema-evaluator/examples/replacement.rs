@@ -169,19 +169,28 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Preparation can succeed with partial resources; this application checks
     // declared completeness before accepting the candidate, without a probe value.
     match candidate(DOCUMENT, ResourceSet::default(), &healthy) {
-        Err(LoadFailure::MissingResources(detail)) => {
-            assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable)
+        Err(LoadFailure::UnresolvedReferences(report)) => {
+            assert!(report.references.iter().any(|r| matches!(
+                &r.resolution,
+                ReferenceResolution::Unresolved { detail }
+                    if detail.reason == ReferenceRefusalReason::ResourceUnavailable
+            )))
         }
         other => panic!("expected missing-resource rejection: {other:?}"),
     }
     satisfies(&active, &new_value);
     let cancelled = std::sync::atomic::AtomicBool::new(false);
     cancelled.store(true, std::sync::atomic::Ordering::Release);
+    // Cancellation is observed at the first cooperative boundary, reference inspection.
     match candidate(DOCUMENT, resources(r#"{"const":7}"#)?, &cancelled) {
-        Err(LoadFailure::Preparation(ValueContractPreparation::NoVerdict { detail })) => {
-            assert_eq!(detail.reason, NoVerdictReason::Cancelled);
+        Err(LoadFailure::UnresolvedReferences(report)) => {
+            assert!(!report.complete);
+            assert!(matches!(
+                &report.limitation,
+                Some(refusal) if refusal.reason == ReferenceRefusalReason::Cancelled
+            ));
         }
-        other => panic!("expected cancelled preparation: {other:?}"),
+        other => panic!("expected cancelled loading: {other:?}"),
     }
     assert!(matches!(
         active.validate_with_control(&new_value, &cancelled),
