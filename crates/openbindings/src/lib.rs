@@ -34,4 +34,6 @@ pub use contracts::*;
 mod work_control;
 pub use work_control::*;
 mod schema_space;
-pub use schema_space::{Reference, ReferenceReport, ReferenceResolution};
+pub use schema_space::{
+    Reference, ReferenceRefusal, ReferenceRefusalReason, ReferenceReport, ReferenceResolution,
+};

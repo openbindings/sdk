@@ -45,7 +45,7 @@ test("first-use caller keeps setup refusals separate and releases its owners", (
   assert.equal(liveStorageOwners(), baseline);
 });
 
-test("source editor diagnoses a wrong field and commits only a corrected snapshot with complete resources", () => {
+test("source editor requires conformance and retains prepared partial snapshots", () => {
   const corrected = exampleDraft.replace('"inputSchema":', '"input":');
   const warm = new DocumentEditor();
   warm.update(corrected);
@@ -80,16 +80,13 @@ test("source editor diagnoses a wrong field and commits only a corrected snapsho
       ).status,
       "no-value-contract",
     );
-    const refused = editor.update(
-      '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"$ref":"https://schema.example/missing"}}}}',
-    );
-    // Ready partial owners remain usable, but the editor requires complete resources.
-    assert.equal(refused.status, "resources-missing");
-    assert.equal(refused.evidence.reason, "resource-unavailable");
-    assert.match(
-      formatEditorResult(refused),
-      /Previous complete snapshot kept/,
-    );
+    const partialText =
+      '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"$ref":"https://schema.example/missing"}}}}';
+    const partial = editor.update(partialText);
+    assert.equal(partial.status, "updated");
+    assert.equal(partial.result.outcome, "no-verdict");
+    assert.equal(partial.result.detail.reason, "resource-unavailable");
+    assert.match(formatEditorResult(partial), /resource-unavailable/);
     const declined = editor.update(
       '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"not":{"$ref":"https://schema.example/missing"}}}}}',
     );
@@ -100,7 +97,10 @@ test("source editor diagnoses a wrong field and commits only a corrected snapsho
     );
     const current = editor.snapshot();
     try {
-      assert.equal(new TextDecoder().decode(current.originalBytes), corrected);
+      assert.equal(
+        new TextDecoder().decode(current.originalBytes),
+        partialText,
+      );
     } finally {
       current.dispose();
     }

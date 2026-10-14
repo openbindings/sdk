@@ -8,13 +8,7 @@ export function partialResourceCases(sdk) {
   };
   const U = "https://review.invalid/U";
   const hole = { $ref: U };
-  const run = (
-    schema,
-    value,
-    expected,
-    keyword,
-    completeness = "incomplete",
-  ) => {
+  const run = (schema, value, expected, keyword) => {
     const parsed = sdk.parseDocument(
       JSON.stringify({
         openbindings: "0.2.0",
@@ -36,34 +30,6 @@ export function partialResourceCases(sdk) {
       }
       check(setup.status === "ready", "qualified partial preparation is ready");
       contract = setup.valueContract;
-      const owners = sdk.liveStorageOwners();
-      const metadata = contract.resourceCompleteness;
-      check(metadata.status === completeness, "declared resource completeness");
-      check(
-        metadata === contract.resourceCompleteness && Object.isFrozen(metadata),
-        "cached frozen metadata",
-      );
-      if (metadata.status === "incomplete") {
-        check(
-          Object.isFrozen(metadata.evidence) &&
-            Object.isFrozen(metadata.evidence.location),
-          "deeply frozen evidence",
-        );
-        check(
-          metadata.evidence.reason === "resource-unavailable",
-          "located missing evidence",
-        );
-      }
-      check(sdk.liveStorageOwners() === owners, "metadata adds no Wasm owner");
-      const retained = contract.retain();
-      try {
-        check(
-          retained.resourceCompleteness === metadata,
-          "retain shares cached metadata",
-        );
-      } finally {
-        retained.dispose();
-      }
       context.dispose();
       document.dispose();
       const result = contract.validate(value);
@@ -75,10 +41,6 @@ export function partialResourceCases(sdk) {
         check(
           result.detail.reason === "resource-unavailable",
           "dependent value has missing evidence",
-        );
-        check(
-          JSON.stringify(result.detail) === JSON.stringify(metadata.evidence),
-          "metadata and undecided-value evidence agree",
         );
       }
       if (keyword)
@@ -99,21 +61,18 @@ export function partialResourceCases(sdk) {
       if (contract) {
         let code;
         try {
-          void contract.resourceCompleteness;
+          contract.validate(null);
         } catch (error) {
           code = error.code;
         }
-        check(
-          code === "disposed-handle",
-          "cached metadata still checks disposal",
-        );
+        check(code === "disposed-handle", "validation checks disposal");
       }
       context?.dispose();
       document.dispose();
     }
   };
   // Warm instance-lifetime meta-schema owners before measuring release.
-  run({ type: "integer" }, 7, "satisfies", undefined, "complete");
+  run({ type: "integer" }, 7, "satisfies");
   const initial = sdk.liveStorageOwners();
   run(hole, null, "no-verdict");
   run({ allOf: [hole] }, 1, "no-verdict");
@@ -180,7 +139,6 @@ export function partialResourceCases(sdk) {
     null,
     "satisfies",
     undefined,
-    "complete",
   );
   for (const schema of [
     { not: hole },
@@ -234,18 +192,18 @@ export function partialResourceCases(sdk) {
   const old = oldContext.prepare("op", "input").valueContract;
   let completeResources, yes, newContext, next, retained;
   try {
-    const info = old.resourceCompleteness;
+    const info = old.validate({ x: 1 });
     check(
-      info.status === "incomplete" &&
-        info.evidence.location.resource === U &&
-        info.evidence.location.pointer === "/properties/x/$ref",
-      "transitive supplied-resource evidence",
+      info.outcome === "no-verdict" &&
+        info.detail.location.resource === U &&
+        info.detail.location.pointer === "/properties/x/$ref",
+      "transitive supplied-resource refusal",
     );
     retained = old.retain();
     old.dispose();
     oldContext.dispose();
     check(
-      retained.resourceCompleteness === info,
+      JSON.stringify(retained.validate({ x: 1 })) === JSON.stringify(info),
       "evidence survives old owner/context disposal",
     );
     yes = sdk.parseJson("true").value;
@@ -253,11 +211,11 @@ export function partialResourceCases(sdk) {
     newContext = validatedContracts(doc, { resources: completeResources });
     next = newContext.prepare("op", "input").valueContract;
     check(
-      next.resourceCompleteness.status === "complete",
+      next.validate({ x: 1 }).outcome === "satisfies",
       "new complete context ignores unselected references",
     );
     check(
-      retained.resourceCompleteness === info,
+      JSON.stringify(retained.validate({ x: 1 })) === JSON.stringify(info),
       "old partial snapshot unchanged",
     );
     check(

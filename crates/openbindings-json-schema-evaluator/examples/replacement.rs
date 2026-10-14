@@ -16,7 +16,7 @@ enum LoadFailure {
     Conformance(ValidationReport),
     Preparation(ValueContractPreparation),
     MissingResources(NoVerdict),
-    UndeclaredResources,
+    UnresolvedReferences(Box<ReferenceReport>),
 }
 impl fmt::Display for LoadFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -30,8 +30,8 @@ impl fmt::Display for LoadFailure {
             ),
             Self::Preparation(state) => write!(f, "input contract setup: {state:?}"),
             Self::MissingResources(detail) => write!(f, "input contract resources: {detail:?}"),
-            Self::UndeclaredResources => {
-                f.write_str("evaluator did not declare resource completeness")
+            Self::UnresolvedReferences(report) => {
+                write!(f, "unresolved reference inventory: {report:?}")
             }
         }
     }
@@ -45,7 +45,8 @@ fn resources(schema: &str) -> Result<ResourceSet, Box<dyn Error>> {
     }])?)
 }
 
-// This application requires conformance and complete resources before replacement.
+// This application requires conformance and a fully located reference inventory.
+// Inspection is an application policy, not a proof that every value is decidable.
 fn candidate(
     text: &str,
     resources: ResourceSet,
@@ -56,6 +57,15 @@ fn candidate(
     let Some(proof) = validation.validated() else {
         return Err(LoadFailure::Conformance(validation.report().clone()));
     };
+    let report = proof.references_with_resources(resources.clone(), control);
+    if !report.complete
+        || report
+            .references
+            .iter()
+            .any(|r| matches!(r.resolution, ReferenceResolution::Unresolved { .. }))
+    {
+        return Err(LoadFailure::UnresolvedReferences(Box::new(report)));
+    }
     let context = proof.value_contracts(Arc::new(DefaultEvaluator::new()), resources);
     let input = match context.prepare_with_control("find", Direction::Input, control) {
         ValueContractPreparation::Ready(input) => input,
@@ -67,13 +77,7 @@ fn candidate(
         // Retain the distinct no-contract, missing, ambiguous or no-verdict state.
         other => return Err(LoadFailure::Preparation(other)),
     };
-    match input.resource_completeness() {
-        ResourceCompleteness::Complete => Ok(input),
-        ResourceCompleteness::Incomplete { evidence, .. } => {
-            Err(LoadFailure::MissingResources(evidence.clone()))
-        }
-        _ => Err(LoadFailure::UndeclaredResources),
-    } // document/context owners end; the returned owner remains usable.
+    Ok(input) // document/context owners end; the returned owner remains usable.
 }
 
 fn satisfies(input: &ValueContract, value: &JsonValue) {
@@ -165,19 +169,28 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Preparation can succeed with partial resources; this application checks
     // declared completeness before accepting the candidate, without a probe value.
     match candidate(DOCUMENT, ResourceSet::default(), &healthy) {
-        Err(LoadFailure::MissingResources(detail)) => {
-            assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable)
+        Err(LoadFailure::UnresolvedReferences(report)) => {
+            assert!(report.references.iter().any(|r| matches!(
+                &r.resolution,
+                ReferenceResolution::Unresolved { detail }
+                    if detail.reason == ReferenceRefusalReason::ResourceUnavailable
+            )))
         }
         other => panic!("expected missing-resource rejection: {other:?}"),
     }
     satisfies(&active, &new_value);
     let cancelled = std::sync::atomic::AtomicBool::new(false);
     cancelled.store(true, std::sync::atomic::Ordering::Release);
+    // Cancellation is observed at the first cooperative boundary, reference inspection.
     match candidate(DOCUMENT, resources(r#"{"const":7}"#)?, &cancelled) {
-        Err(LoadFailure::Preparation(ValueContractPreparation::NoVerdict { detail })) => {
-            assert_eq!(detail.reason, NoVerdictReason::Cancelled);
+        Err(LoadFailure::UnresolvedReferences(report)) => {
+            assert!(!report.complete);
+            assert!(matches!(
+                &report.limitation,
+                Some(refusal) if refusal.reason == ReferenceRefusalReason::Cancelled
+            ));
         }
-        other => panic!("expected cancelled preparation: {other:?}"),
+        other => panic!("expected cancelled loading: {other:?}"),
     }
     assert!(matches!(
         active.validate_with_control(&new_value, &cancelled),

@@ -180,8 +180,8 @@ mod tests {
                 control: &dyn WorkControl,
             ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
                 let program: EvaluationProgram = request.evaluation_program(control)?;
-                let _: &String = &program.entry_uri;
-                let resources: &Vec<SchemaResource> = &program.resources;
+                let _: &str = program.entry_uri();
+                let resources: &[SchemaResource] = program.resources();
                 assert!(!resources.is_empty());
                 for resource in resources {
                     let document: &JsonValue = &resource.document;
@@ -191,7 +191,7 @@ mod tests {
                 }
                 let entry = resources
                     .iter()
-                    .find(|resource| resource.uri == program.entry_uri)
+                    .find(|resource| resource.uri == program.entry_uri())
                     .unwrap();
                 let reference = entry.document.get("$ref").unwrap();
                 let location: SchemaLocation = program

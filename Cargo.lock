@@ -899,6 +899,7 @@ dependencies = [
  "openbindings-internal-json",
  "openbindings-internal-jsonschema",
  "openbindings-internal-jsonschema-value",
+ "openbindings-internal-schema",
  "openbindings-internal-serde-json",
  "serde",
 ]
@@ -1019,6 +1020,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "openbindings-internal-schema"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "fluent-uri",
+ "openbindings-internal-json",
+ "openbindings-internal-jsonschema",
+ "openbindings-internal-jsonschema-value",
+ "openbindings-internal-serde-json",
+ "serde",
+]
+
+[[package]]
 name = "openbindings-internal-serde-json"
 version = "1.0.151-ob.1"
 dependencies = [
@@ -1050,6 +1063,7 @@ dependencies = [
  "openbindings-internal-json",
  "openbindings-internal-jsonschema",
  "openbindings-internal-jsonschema-value",
+ "openbindings-internal-schema",
  "openbindings-internal-serde-json",
  "serde",
 ]

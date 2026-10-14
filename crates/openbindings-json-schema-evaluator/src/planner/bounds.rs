@@ -1,8 +1,8 @@
 //! Compositional validity bounds. Strict and positive-only encodings stay separate.
 mod oneof;
 use super::*;
-use crate::contracts::ProgramOrigin;
 use openbindings_internal_json::backend::{decoded_string_size, pointer_size};
+use openbindings_internal_schema::ProgramOrigin;
 use std::{
     fmt::{self, Write},
     sync::Arc,
@@ -145,11 +145,7 @@ fn output_mismatch() -> NoVerdict {
     )
 }
 fn output_failure(control: &dyn WorkControl) -> NoVerdict {
-    control
-        .check()
-        .err()
-        .map(NoVerdict::from)
-        .unwrap_or_else(output_mismatch)
+    control.check().err().unwrap_or_else(output_mismatch)
 }
 fn add_bytes(total: &mut usize, size: usize, cap: usize) -> Result<(), NoVerdict> {
     *total = total
@@ -516,13 +512,7 @@ impl SchemaSpace {
             for (&resource, ids) in &groups {
                 let mut count = Sink::count(cap.text - total);
                 self.write_resource(&mut count, resource, ids, entry, &plan, control)
-                    .map_err(|_| {
-                        control
-                            .check()
-                            .err()
-                            .map(NoVerdict::from)
-                            .unwrap_or_else(text_limit)
-                    })?;
+                    .map_err(|_| control.check().err().unwrap_or_else(text_limit))?;
                 add_bytes(&mut total, count.size + count.decoded, cap.text)?;
                 sizes[pass].push((count.size, count.decoded));
                 let mut uri_count = Sink::count(cap.text);
@@ -748,7 +738,7 @@ fn valid_unknown_fragment(fragment: &str) -> bool {
         return true;
     }
     if !fragment.starts_with('/') {
-        return crate::schema_index::plain_name(fragment);
+        return openbindings_internal_schema::schema_index::plain_name(fragment);
     }
     let mut bytes = fragment.bytes();
     while let Some(b) = bytes.next() {

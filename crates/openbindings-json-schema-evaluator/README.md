@@ -101,26 +101,26 @@ resources retain their own original base and dialect. A selected resource's miss
 fragment never falls through to another carrier. Original supplied rows and location
 provenance remain intact: a diagnostic source URI can differ from the selected
 lookup association for that URI. New identity-refusal locations are optional and
-measure source URI plus full pointer against 64 KiB before copying. Comparison
-retains exact spelling after RFC resolution, literal-dot removal and empty-fragment
-removal; this is not a claim of complete RFC URI equivalence. Fixed OBI and
+measure source URI plus full pointer against 64 KiB before copying. Ordinary resolution follows the library's documented APIs and URI normalization.
+OBI-13 alone retains exact compared spelling after RFC §5.2 resolution and
+empty-fragment removal; §7.4 delegates ordinary resource identity to JSON Schema. Fixed OBI and
 meta-schema assessment uses its separate trusted loader.
 
 Both bound programs are closed, but neither alone is equivalent to the partial
-schema. Rust adapter authors may opt into `SchemaRequest::evaluation_bounds` and
-consume `(lower, upper, unavailable)` with `EvaluationBounds::into_parts`; custom
-evaluator dispatch and strict `evaluation_program()` are unchanged. Upper/lower
+schema. Bounds planning and paired compilation are private evaluator modules.
+BYO evaluators receive the original context and strict `evaluation_program()`;
+core never retries their refusals. Upper/lower
 share one verdict work/regex allowance. Only established upper failure produces
 original-source diagnostics, in the existing separate diagnostic scope. A complete
 upper oneOf failure produces a cardinality-neutral original `/oneOf` summary.
 Only outer `iter_errors` boundaries are used; generated contexts are not flattened,
-and unmapped errors are omitted with incomplete diagnostics. Adapters must preserve
+and unmapped errors are omitted with incomplete diagnostics. The evaluator preserves
 these boundaries; a structured backend output API can omit the unary summary event.
 Dependent-oneOf plans additionally cap both copies at 100,000 emitted schema nodes
 and 200,000 reference/applicator edges. Definition sharing is not runtime caching,
 and linear syntax makes no speed/compiled-memory promise. Partial plans
 admit 64 MiB combined retained text and explicit graph/scratch limits. See the
-[complete proof, API and admission contract](../../docs/partial-resource-bounds.md).
+[private proof and admission contract](../../docs/partial-resource-bounds.md).
 There is no annotation-output or arbitrary-future-resource-readiness guarantee.
 
 Unicode property-escape *syntax* follows ECMA-262 edition 11; actual property
@@ -229,12 +229,11 @@ commas. The fixed envelope and base/detail field framing fit the remaining terms
 type lists use a fixed seven-name vocabulary. This bounds serialization, not total
 heap, vector headers/capacity, the retained source snapshots, or transport copies.
 
-Prepared owners declare resource completeness through
-`ValueContract::resource_completeness()`: Complete for strict preparation,
-Incomplete with borrowed missing-reference evidence for qualified partial preparation.
-Complete does not promise total decidability. Services may require Complete before
-replacement; partial previews may accept Incomplete. The evidence is one contract
-witness, not necessarily the reference activated by a particular value. Optional
-planner qualification/admission declines restore the original strict located
-ResourceUnavailable detail in this default evaluator. Explicit `evaluation_bounds()`
-callers receive the original planner cause. See the [recovery policy](../../docs/partial-resource-bounds.md).
+Ready means successfully prepared, not decidable (EV-9). A bare missing reference
+or an alias of one can prepare ready and return ResourceUnavailable for every value;
+`not` around one retains a preparation refusal. There is no resource-completeness
+API. Application replacement policies can inspect original references, but that
+inventory does not establish value decidability. Optional planner qualification
+and admission declines restore the original strict located ResourceUnavailable
+in this default evaluator. Known defects, shared limits, cancellation and compilation
+retain their causes. See the [recovery policy](../../docs/partial-resource-bounds.md).

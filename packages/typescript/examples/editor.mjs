@@ -16,8 +16,8 @@ export const exampleDraft = `{
   }
 }`;
 
-// The component keeps its latest snapshot with complete contract resources.
-// A different preview policy can deliberately accept incomplete prepared contracts.
+// The component keeps its latest prepared snapshot, including partial contracts.
+// Each value check can still return no verdict.
 export class DocumentEditor {
   #document;
   update(text, value = { id: 7 }, includeSchemaDetails = false) {
@@ -40,9 +40,6 @@ export class DocumentEditor {
         return setup;
       }
       input = setup.valueContract;
-      const completeness = input.resourceCompleteness;
-      if (completeness.status !== "complete")
-        return { status: "resources-missing", evidence: completeness.evidence };
       const result = input.validate(value);
       const previous = this.#document;
       this.#document = proof; // transfer the validated owner after successful setup
@@ -151,7 +148,7 @@ export function formatEditorResult(result) {
     case "no-verdict":
       return `Document is conformant; input setup was refused (${result.detail.reason}, ${result.detail.code}); ${schemaLocation(result.detail.location)}: ${result.detail.message}`;
     case "resources-missing":
-      return `Document is conformant; schema resources are missing. Previous complete snapshot kept. One missing reference: ${schemaLocation(result.evidence.location)}. Supply resources in a new context before replacement.`;
+      return `Document is conformant; schema resources are missing. Previous prepared snapshot kept. One missing reference: ${schemaLocation(result.evidence.location)}. Supply resources in a new context before replacement.`;
     case "updated":
       return [
         "Document is conformant; the input contract is ready.",

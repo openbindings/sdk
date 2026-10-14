@@ -50,6 +50,11 @@ conformance rejects them. Missing, null and empty remain distinct.
 
 ## Evaluation
 
+Static inspection reports `ReferenceRefusal` / `ReferenceRefusalReason` (including
+Cancelled), separately from value outcomes. Fresh library resolvers and a recording
+retriever identify missing resources; inspection placeholders never become verdicts.
+Borrowed pointer identity maps targets to original locations.
+
 Resources are caller supplied and immutable. HTTP, files, `$schema`, kinds and
 source content never trigger acquisition. The anonymous document resource and
 original resource/dynamic scope are preserved through a private evaluator
@@ -64,9 +69,16 @@ own its canonical identity, including alias, pointer, direct-child and dynamic
 routes. Conflicting routes conservatively refuse; unused conflicts do not poison
 other contracts or independently named nested resources. Original supplied rows,
 bases, dialects and diagnostic retrieval provenance remain intact. Selection occurs
-before fragment lookup, with no schema equality or fragment fallback. URI comparison
-retains exact spelling after RFC resolution, literal-dot and empty-fragment removal;
-case/percent-encoding equivalence is not added. Trusted fixed assessment is separate.
+before fragment lookup, with no schema equality or fragment fallback. Ordinary resolution uses the library's documented APIs and URI normalization.
+OBI-13 alone retains exact compared spelling after RFC §5.2 resolution and
+empty-fragment removal. A host-case-only difference can pass OBI-13 while resolving
+to an ambiguous identity. Supplied normalized peers likewise refuse. Encoded plain
+names in `$id` and external resources follow the library's refusal; document-resource
+decoding remains §7.3. An encoded leading slash likewise follows the library's
+plain-name refusal in ordinary resources. Unused malformed `$ref` or `$id` siblings
+can cause conservative `resource-inspection` refusal of the whole carrier until
+S9's static-reference-defect handling. Duplicate anchors and non-schema pointers retain their
+current refusals until S9. Trusted fixed assessment is separate.
 
 Default limits: 2,000,000 evaluation steps per verdict/diagnostic pass; evaluation
 depth 1,024; 2,000,000 regex steps; 256 selected problems; compiler JSON depth 512;
@@ -120,10 +132,11 @@ These prospective limits are unmeasured. Memoized definitions do not cache runti
 results; nested/recursive bounds can revisit predicates. These are
 not compiled-memory or RSS bounds. Upper/lower share one verdict work/regex budget;
 failure diagnostics retain a separate bounded pass. The
-[proof and adapter contract](docs/partial-resource-bounds.md) specifies exact
-eligibility, counting and limitations. Prepared owners expose evaluator-declared
-resource completeness, distinct from value decidability. Rust custom evaluators
-default to Undeclared. The SDK never fetches references. Supply
+[private evaluator proof](docs/partial-resource-bounds.md) specifies exact
+eligibility, counting and limitations. Bounds planning and bounded location mapping
+are private evaluator implementation details. Prepared owners expose no resource
+completeness classification; Ready means prepared, even when every value remains
+undecidable. BYO evaluators retain their original context and strict projection. The SDK never fetches references. Supply
 resources in a new context to retry; old owners keep their original snapshots.
 
 Failure diagnostics are bounded, omit instance values and identify original

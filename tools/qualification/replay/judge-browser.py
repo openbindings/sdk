@@ -18,8 +18,9 @@ def current_fixture(fixture):
         assert case['value']==change['original_value']
         assert case['expected']==change['from_expected']
         assert case['refusal_kind']==change['from_refusal_kind']
-        assert change['to_expected']=='satisfies'
-        case.update(expected=change['to_expected'],refusal_kind=None,refusal_reason='')
+        assert change['to_expected'] in ('satisfies', 'no-verdict')
+        assert (change['to_expected']=='no-verdict') == (change.get('to_refusal_kind') is not None)
+        case.update(expected=change['to_expected'],refusal_kind=change.get('to_refusal_kind'),refusal_reason=change.get('to_refusal_reason',''))
     migrations=json.loads((provenance.parent/'document-migrations.json').read_text())
     for change in migrations['reexpressions']:
         group=next(g for g in translated['groups'] if g['id']==change['group'])

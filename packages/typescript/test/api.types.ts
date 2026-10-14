@@ -291,18 +291,10 @@ void inaccessibleConstructors;
 function preparedResources(
   valueContract: import("../dist/index.js").ValueContract,
 ) {
-  const metadata: import("../dist/index.js").ResourceCompleteness =
-    valueContract.resourceCompleteness;
-  if (metadata.status === "incomplete") {
-    // @ts-expect-error evidence fields are immutable
-    metadata.evidence.message = "changed";
-    if (metadata.evidence.location) {
-      // @ts-expect-error original locations are immutable
-      metadata.evidence.location.pointer = "changed";
-    }
-  }
-  // @ts-expect-error resource metadata is immutable
-  metadata.status = "complete";
+  // @ts-expect-error Evaluator completeness metadata is no longer a product API.
+  void valueContract.resourceCompleteness;
+  // @ts-expect-error The planner's metadata type is not exported under a new name.
+  type Removed = import("../dist/index.js").ResourceCompleteness;
 }
 void preparedResources;
 

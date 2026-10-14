@@ -10,7 +10,7 @@ let report = run(evaluator, &Options::without_unicode_property_matching());
 assert!(report.is_success());
 ```
 
-The package carries 496 groups and 1,566 cases from pinned upstream JSON Schema and Go SDK adversarial inputs. `fixtures/provenance.json` records their identities, exact optional capability cases, and two intentional translations: exact identifier matching and non-exhaustive diagnostic multiplicity. The original licenses accompany the fixtures. No sibling checkout or network access is needed.
+The package carries 496 groups and 1,566 cases from pinned upstream JSON Schema and Go SDK adversarial inputs. `fixtures/provenance.json` records their identities, exact optional capability cases, and historical translations, including exact identifier matching and non-exhaustive diagnostic multiplicity. S6d/e supersedes the historical spelling policy through recorded runtime migrations. The original licenses accompany the fixtures. No sibling checkout or network access is needed.
 
 The raw fixture remains unchanged. `fixtures/document-migrations.json` re-expresses
 nine custom-meta-schema cases through conformant documents referencing supplied
@@ -21,12 +21,16 @@ tests because no public normative API can reach their former satisfies/fails sta
 The [full migration ledger](../../tools/qualification/inputs/s6c-migration-ledger.json) accounts for all 1,566 original IDs; the runtime kit has
 495 groups, 1,564 observations, 1,522 verdicts and 42 refusals.
 
-The raw fixture remains unchanged. Its provenance also records one explicit
-`runtime_policy_translations` entry for the current SDK admission policy:
+The raw fixture remains unchanged. Its provenance also records explicit
+`runtime_policy_translations` entries for the current SDK admission policy:
 `adversarial/resource-uri-names-another-id/0` now expects satisfaction from the unique
 contained integer schema, preserving the historical conservative-refusal expectation
 in the fixture. Native and browser qualification apply the same recorded translation.
 This is an intentional supported-admission expansion, not a normative bug ruling.
+S6d/e additionally migrates `adversarial/case-variant-unmatched/0` to satisfaction
+and `adversarial/case-variant-collision/0` to ambiguous-resource preparation refusal,
+following library normalization under applied §7.4 (Amendment 1). OBI-13's exact
+comparison remains unchanged.
 The current default evaluator records 42 refusals across 1,564 evaluator observations;
 competing-carrier alias/pointer/direct routes have separate maintained regressions.
 
@@ -39,8 +43,6 @@ Version 0.2.0-alpha.1 is an unpublished candidate requiring Rust 1.99. Package p
 Definition-level reference contracts, rendered documentation and maintained checks
 are described in the [API reference guide](../../docs/api-reference.md).
 
-The kit checks explicit resource declarations: Complete must not return
-ResourceUnavailable, and Incomplete must carry located ResourceUnavailable evidence.
-The default trait declaration is Undeclared; the kit assigns no default-evaluator
-completeness policy to an undeclared custom evaluator. All existing semantic and
-refusal checks still apply.
+The kit checks preparation and value outcomes, original locations and refusal
+causes. Prepared objects expose no completeness declaration. The qualification
+kit does not impose the default evaluator's private planning policy on a BYO evaluator.

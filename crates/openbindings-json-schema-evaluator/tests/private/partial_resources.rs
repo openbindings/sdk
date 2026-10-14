@@ -1,3 +1,4 @@
+use crate::planner::BoundsRequest;
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use std::sync::{
@@ -569,8 +570,8 @@ fn cancellation_limits_and_concurrent_calls_do_not_poison_prepared_owners() {
 }
 #[test]
 fn original_five_frozen_values_and_empty_resource_sets() {
-    let b02 = include_str!("fixtures/partial-resources/B02.json");
-    let c02 = include_str!("fixtures/partial-resources/C02.json");
+    let b02 = include_str!("../fixtures/partial-resources/B02.json");
+    let c02 = include_str!("../fixtures/partial-resources/C02.json");
     for (source, operation, input, expected, keyword, supplied_uri, supplied_text) in [
         (
             b02,
@@ -579,7 +580,7 @@ fn original_five_frozen_values_and_empty_resource_sets() {
             "fails",
             "required",
             "https://northbank.example.invalid/reference/currency.json",
-            include_str!("fixtures/partial-resources/currency.json"),
+            include_str!("../fixtures/partial-resources/currency.json"),
         ),
         (
             b02,
@@ -588,7 +589,7 @@ fn original_five_frozen_values_and_empty_resource_sets() {
             "fails",
             "minItems",
             "https://northbank.example.invalid/reference/currency.json",
-            include_str!("fixtures/partial-resources/currency.json"),
+            include_str!("../fixtures/partial-resources/currency.json"),
         ),
         (
             c02,
@@ -597,7 +598,7 @@ fn original_five_frozen_values_and_empty_resource_sets() {
             "satisfies",
             "",
             "https://example.invalid/dev/c02/list-name",
-            include_str!("fixtures/partial-resources/list.json"),
+            include_str!("../fixtures/partial-resources/list.json"),
         ),
         (
             c02,
@@ -606,7 +607,7 @@ fn original_five_frozen_values_and_empty_resource_sets() {
             "fails",
             "minLength",
             "https://example.invalid/dev/c02/list-name",
-            include_str!("fixtures/partial-resources/list.json"),
+            include_str!("../fixtures/partial-resources/list.json"),
         ),
         (
             c02,
@@ -615,7 +616,7 @@ fn original_five_frozen_values_and_empty_resource_sets() {
             "fails",
             "type",
             "https://example.invalid/dev/c02/list-name",
-            include_str!("fixtures/partial-resources/list.json"),
+            include_str!("../fixtures/partial-resources/list.json"),
         ),
     ] {
         let doc = ParsedDocument::parse(source).unwrap();

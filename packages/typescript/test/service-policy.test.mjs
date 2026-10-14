@@ -18,7 +18,7 @@ function candidate(input) {
   assert.equal(result.status, "ready");
   return result.valueContract;
 }
-test("service replacement requires complete resources and retains in-flight work", async () => {
+test("service replacement retains in-flight work and handles partial contracts", async () => {
   const warm = candidate(true);
   warm.dispose();
   const baseline = liveStorageOwners();
@@ -28,13 +28,10 @@ test("service replacement requires complete resources and retains in-flight work
   });
   let resume, pending;
   try {
-    assert.equal(partial.resourceCompleteness.status, "incomplete");
     assert.equal(partial.validate("preview").outcome, "satisfies");
-    assert.throws(() => service.replace(partial), /complete schema resources/);
-    assert.throws(
-      () => new ValidationService(partial),
-      /complete schema resources/,
-    );
+    service.replace(partial.retain());
+    assert.equal(service.check("preview").outcome, "satisfies");
+    service.replace(candidate({ type: "integer" }));
     assert.equal(service.check(7).outcome, "satisfies");
     pending = service.checkBytes(
       new Promise((resolve) => {

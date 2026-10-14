@@ -67,6 +67,10 @@ struct PolicyTranslation {
     from_expected: String,
     from_refusal_kind: Option<String>,
     to_expected: String,
+    #[serde(default)]
+    to_refusal_kind: Option<String>,
+    #[serde(default)]
+    to_refusal_reason: String,
     original_document: String,
     original_value: String,
     original_resources: Vec<Resource>,
@@ -98,12 +102,23 @@ fn translate_policy(suite: &mut Suite) {
             .expect("policy translation names an existing case");
         assert!(selected.next().is_none(), "policy translation is unique");
         assert_eq!(case.value, translation.original_value);
-        assert_eq!(case.expected, translation.from_expected);
+        let from_expected = match translation.from_expected.as_str() {
+            "mismatch" => "fails",
+            other => other,
+        };
+        assert_eq!(case.expected, from_expected);
         assert_eq!(case.refusal_kind, translation.from_refusal_kind);
-        assert_eq!(translation.to_expected, "satisfies");
+        assert!(matches!(
+            translation.to_expected.as_str(),
+            "satisfies" | "no-verdict"
+        ));
+        assert_eq!(
+            translation.to_expected == "no-verdict",
+            translation.to_refusal_kind.is_some()
+        );
         case.expected = translation.to_expected;
-        case.refusal_kind = None;
-        case.refusal_reason.clear();
+        case.refusal_kind = translation.to_refusal_kind;
+        case.refusal_reason = translation.to_refusal_reason;
     }
 }
 #[derive(Deserialize)]
@@ -332,12 +347,6 @@ pub fn run(evaluator: Arc<dyn SchemaEvaluator>, options: &Options) -> Report {
                 used.insert(case.id.clone());
             }
             let mut failures = judge(case, &value, &outcome, allowed.is_some());
-            if let ValueContractPreparation::Ready(contract) = &prepared
-                && let Some(failure) =
-                    judge_resource_declaration(contract.resource_completeness(), &outcome)
-            {
-                failures.push(failure.into());
-            }
             if value.text() != original {
                 failures.push("evaluator changed an immutable input".into());
             }
@@ -463,78 +472,6 @@ pub fn judge(
         }
     }
     failures
-}
-
-// Only explicit declarations impose these obligations. Undeclared custom evaluators
-// keep their existing verdict/refusal contract without inheriting default policy.
-fn judge_resource_declaration(
-    declaration: ResourceCompleteness<'_>,
-    outcome: &ValueOutcome,
-) -> Option<&'static str> {
-    match declaration {
-        ResourceCompleteness::Complete if matches!(outcome, ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::ResourceUnavailable) => {
-            Some("complete resource declaration returned ResourceUnavailable")
-        }
-        ResourceCompleteness::Incomplete { evidence, .. }
-            if evidence.reason != NoVerdictReason::ResourceUnavailable
-                || evidence.location.is_none() =>
-        {
-            Some("incomplete declaration requires located ResourceUnavailable evidence")
-        }
-        _ => None,
-    }
-}
-#[cfg(test)]
-mod resource_declaration_tests {
-    use super::*;
-    #[test]
-    fn declarations_are_checked_without_assigning_policy_to_undeclared_evaluators() {
-        let detail = NoVerdict::new(NoVerdictReason::ResourceUnavailable, "missing", "missing");
-        let missing = ValueOutcome::NoVerdict {
-            detail: detail.clone(),
-        };
-        assert!(judge_resource_declaration(ResourceCompleteness::Undeclared, &missing).is_none());
-        assert!(judge_resource_declaration(ResourceCompleteness::Complete, &missing).is_some());
-        assert!(
-            judge_resource_declaration(
-                ResourceCompleteness::incomplete(&detail),
-                &ValueOutcome::Satisfies
-            )
-            .is_some()
-        );
-        let mut located = detail;
-        located.location = Some(SchemaLocation {
-            resource: None,
-            pointer: "/input".into(),
-        });
-        assert!(
-            judge_resource_declaration(
-                ResourceCompleteness::incomplete(&located),
-                &ValueOutcome::Satisfies
-            )
-            .is_none()
-        );
-        assert!(
-            judge_resource_declaration(ResourceCompleteness::incomplete(&located), &missing)
-                .is_none()
-        );
-        let mut wrong = NoVerdict::new(NoVerdictReason::Cancelled, "cancelled", "cancelled");
-        wrong.location = Some(SchemaLocation {
-            resource: None,
-            pointer: "/input".into(),
-        });
-        assert!(
-            judge_resource_declaration(ResourceCompleteness::incomplete(&wrong), &missing)
-                .is_some()
-        );
-        assert!(
-            judge_resource_declaration(
-                ResourceCompleteness::Complete,
-                &ValueOutcome::NoVerdict { detail: wrong }
-            )
-            .is_none()
-        );
-    }
 }
 
 #[cfg(test)]

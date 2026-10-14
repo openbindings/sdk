@@ -1,0 +1,100 @@
+//! Immutable supplied-resource input policy. Association conflicts are retained
+//! for reached-resource admission, so an unused collision does not poison a job.
+use crate::*;
+use openbindings_internal_json::backend::node_id;
+use std::{
+    collections::{BTreeMap, HashSet},
+    sync::{Arc, OnceLock},
+};
+#[derive(Clone, Debug, Default)]
+pub struct InputPolicy {
+    pub(crate) names: BTreeMap<String, Vec<(usize, usize)>>,
+    pub(crate) protected: HashSet<String>,
+}
+#[derive(Clone, Debug, Default)]
+pub struct Supplied {
+    resources: Vec<ProjectedResource>,
+    pub(crate) policy: Arc<InputPolicy>,
+}
+struct NoRetrieval;
+impl jsonschema::Retrieve for NoRetrieval {
+    fn retrieve(
+        &self,
+        _: &jsonschema::Uri<String>,
+    ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        Err("resource acquisition is disabled".into())
+    }
+}
+pub(crate) fn canonical_uri(name: &str) -> Option<String> {
+    resolve_identifier(None, name.strip_suffix('#').unwrap_or(name))
+}
+pub(crate) fn resolve_identifier(parent: Option<&str>, reference: &str) -> Option<String> {
+    static EMPTY: OnceLock<jsonschema::Registry<'static>> = OnceLock::new();
+    let registry = EMPTY.get_or_init(|| {
+        jsonschema::Registry::new()
+            .retriever(NoRetrieval)
+            .prepare()
+            .expect("empty registry")
+    });
+    let base = parent.or_else(|| uri::absolute(reference).then_some(reference))?;
+    registry
+        .resolve_uri(&jsonschema::Uri::parse(base).ok()?, reference)
+        .ok()
+        .map(|uri| uri.as_str().trim_end_matches('#').to_owned())
+}
+
+fn standards() -> &'static jsonschema::Registry<'static> {
+    static REGISTRY: OnceLock<jsonschema::Registry<'static>> = OnceLock::new();
+    REGISTRY.get_or_init(|| {
+        let mut builder = jsonschema::Registry::new()
+            .draft(jsonschema::Draft::Draft202012)
+            .retriever(NoRetrieval);
+        for resource in crate::space::embedded_resources() {
+            let value: serde_json::Value =
+                serde_json::from_str(resource.document.text()).expect("packaged JSON");
+            builder = builder
+                .add(&resource.uri, value)
+                .expect("packaged identity");
+        }
+        builder
+            .prepare()
+            .expect("packaged resources form a closed registry")
+    })
+}
+impl Supplied {
+    pub fn iter(&self) -> impl Iterator<Item = &ProjectedResource> {
+        self.resources.iter()
+    }
+    pub fn new(resources: impl IntoIterator<Item = ProjectedResource>) -> Result<Self, String> {
+        let resources: Vec<_> = resources.into_iter().collect();
+        let mut policy = InputPolicy::default();
+        for (source, resource) in resources.iter().enumerate() {
+            let index = schema_index::SchemaIndex::supplied(&resource.document, &resource.uri);
+            let mut add = |name: &str, node: usize| {
+                if let Some(name) = canonical_uri(name) {
+                    if standards().contains_resource(&name) {
+                        policy.protected.insert(name.clone());
+                    }
+                    let holders = policy.names.entry(name).or_default();
+                    if !holders.contains(&(source, node)) {
+                        holders.push((source, node));
+                    }
+                }
+            };
+            if let Some(root) = index.nodes.first() {
+                add(&resource.uri, node_id(&root.value));
+            }
+            for node in &index.nodes {
+                if node.value.get("$id").is_some()
+                    && let Some(base) = &node.base
+                {
+                    add(base, node_id(&node.value));
+                }
+            }
+        }
+        Ok(Self {
+            resources,
+            policy: Arc::new(policy),
+        })
+    }
+}

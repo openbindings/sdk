@@ -64,19 +64,21 @@ in both phases. Known branch-independent values can now satisfy or fail with the
 original resource set; `anyOf(true, missing-U)` is a declared capability expansion.
 `anyOf(true, invalid-known-pattern)` still refuses. Ready owners remain bound to
 their original snapshots; supplying resources means creating a new context.
-Inspect `ValueContract::resource_completeness()` / `resourceCompleteness` before
-replacing a service/editor snapshot if the application requires complete resources.
-Ready plus Incomplete is usable for partial preview. Complete still allows budget,
-cancellation and unsupported-instance no verdicts. Rust evidence is borrowed;
-TypeScript evidence is frozen, cached and checked for disposed-handle access.
-Existing custom PreparedSchema implementations default to Undeclared and require
-caller policy; the new defaulted method is source-compatible, although a same-named
-extension-trait method may need qualification. Custom evaluators still receive
-original requests and keep their own refusal policy. Declined default bounds planning
-again returns the original located ResourceUnavailable for fragment qualification and
-bounds-only admission. Direct evaluation_bounds calls retain the actual planner cause. Their strict projection helper has not changed. The optional Rust adapter
-addition is [paired evaluation bounds](partial-resource-bounds.md), with consuming
-`into_parts()` in `(lower, upper, unavailable)` order.
+Remove calls to `resource_completeness()` / `resourceCompleteness` and the
+`ResourceCompleteness` type; no replacement classification exists. Ready means
+prepared, not decidable (EV-9). Applications own replacement policy and continue
+to handle no verdict at both stages. Custom evaluators retain the original
+`SchemaRequest` context and strict `evaluation_program()` helper. Projected entry
+and resources now use read-only `entry_uri()` and `resources()` accessors. Remove
+`evaluation_bounds`, `EvaluationBounds`, `original_location_bounded` and
+`LocationBudgetExceeded` from adapter usage: bounds and bounded mapping are now
+private evaluator details. Static reference refusals use `ReferenceRefusal` and
+`ReferenceRefusalReason`, including Cancelled, separately from value no-verdict.
+
+Ordinary `$id` and supplied-resource resolution follows library normalization and
+encoded-name handling under §7.4. OBI-13's exact compared strings are unchanged.
+The S6d/e migration ledger records each approved case delta. Supplied normalized
+peers remain ambiguous; no spelling fallback or implicit acquisition is added.
 
 `AuthoringError` fields are private: use `kind()`, `draft_pointer()`,
 `source_location()` and `message()`. Native draft paths spell `additional_fields`;
