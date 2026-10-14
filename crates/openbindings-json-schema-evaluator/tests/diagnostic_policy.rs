@@ -19,7 +19,13 @@ fn context(document: &ParsedDocument) -> ValueContracts {
         .unwrap()
         .validated()
         .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
+        .value_contracts(
+            Arc::new(
+                DefaultEvaluator::new()
+                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
+            ),
+            ResourceSet::default(),
+        )
 }
 fn ready(document: &ParsedDocument) -> ValueContract {
     match context(document).prepare("op", Direction::Input) {
@@ -170,7 +176,12 @@ fn pattern_preparation_failures_use_original_locations_and_safe_messages() {
                     .unwrap()
                     .validated()
                     .expect("conformant document")
-                    .value_contracts(Arc::new(DefaultEvaluator::new()), resources);
+                    .value_contracts(
+                        Arc::new(DefaultEvaluator::new().with_diagnostics(
+                            openbindings_json_schema_evaluator::Diagnostics::Upstream,
+                        )),
+                        resources,
+                    );
                 let ValueContractPreparation::NoVerdict { detail } =
                     context.prepare("op", Direction::Input)
                 else {
@@ -339,6 +350,7 @@ impl SchemaEvaluator for Custom {
 impl PreparedSchema for CustomPrepared {
     fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
         ValueOutcome::Fails {
+            message: "value does not satisfy the contract".into(),
             problems: vec![ValueProblem {
                 details: None,
                 instance_pointer: "".into(),

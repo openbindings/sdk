@@ -23,7 +23,7 @@ test("Rust proof transfer is single-use and unavailable to parsed or forged hand
   const retained = proof.retain();
   proof.free();
   const resources = new bridge.WasmResources();
-  const context = retained.valueContracts(resources, "{}", false);
+  const context = retained.valueContracts(resources, "{}", "coarse");
   context.free();
   resources.free();
   retained.free();
@@ -85,7 +85,7 @@ test("raw document receiver substitution rechecks proof at every authority entry
                 receiver,
                 resources,
                 "{}",
-                false,
+                "coarse",
               ),
             refuses("document-conformance"),
           );
@@ -150,7 +150,7 @@ test("raw document receiver substitution rechecks proof at every authority entry
       parsed,
       resources,
       "{}",
-      false,
+      "coarse",
     );
     parsed.free();
     const publication = new bridge.WasmPublication(proof, "*");

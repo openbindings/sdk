@@ -38,7 +38,13 @@ fn contracts(schema: &str) -> ValueContracts {
         .unwrap()
         .validated()
         .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
+        .value_contracts(
+            Arc::new(
+                DefaultEvaluator::new()
+                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
+            ),
+            ResourceSet::default(),
+        )
 }
 fn value(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
@@ -103,11 +109,12 @@ fn deep_literal_and_opaque_data_do_not_inherit_compiler_tree_depth() {
             let ValueOutcome::Fails {
                 problems,
                 problems_complete,
+                ..
             } = result
             else {
                 panic!("{depth}: {result:?}")
             };
-            assert!(problems_complete);
+            assert!(!problems_complete);
             assert_eq!(problems[0].instance_pointer, "");
             assert!(matches!(problems[0].code.as_str(), "const" | "enum"));
         }
@@ -218,7 +225,13 @@ fn review_s09_anonymous_scope_selects_outer_dynamic_anchor() {
         .unwrap()
         .validated()
         .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
+        .value_contracts(
+            Arc::new(
+                DefaultEvaluator::new()
+                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
+            ),
+            ResourceSet::default(),
+        );
     let prepared = context.prepare("op", Direction::Input);
     assert!(matches!(
         prepared.validate(&value("[7]")),
@@ -237,7 +250,10 @@ fn review_s09_anonymous_scope_selects_outer_dynamic_anchor() {
 #[test]
 fn review_s11_same_uri_resources_are_isolated_and_precancellation_does_not_poison() {
     let document = doc(r#"{"$ref":"https://review.invalid/shared"}"#);
-    let evaluator = Arc::new(DefaultEvaluator::new());
+    let evaluator = Arc::new(
+        DefaultEvaluator::new()
+            .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
+    );
     let make = |schema: &str| {
         document
             .validate()
@@ -394,7 +410,7 @@ fn review_f04_diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
     );
     let evaluator = DefaultEvaluator::with_limits(Limits {
         evaluation_steps: 30,
-        max_problems: 3,
+
         ..Limits::default()
     });
     let context = doc(&expensive)
@@ -409,13 +425,13 @@ fn review_f04_diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
         let ValueOutcome::Fails {
             problems,
             problems_complete,
+            ..
         } = result
         else {
             panic!("{result:?}");
         };
         assert!(!problems_complete);
-        assert!(!problems.is_empty());
-        assert!(problems.len() <= 3);
+        assert!(problems.is_empty());
     }
     assert!(matches!(
         contracts("true")
@@ -461,7 +477,7 @@ fn diagnostics_are_original_and_do_not_expose_instance_values() {
         panic!("{result:?}");
     };
     assert!(problems.iter().any(|p| p.instance_pointer == "/a~1b"));
-    assert!(problems.iter().any(|p| p.instance_pointer == "/secret"));
+    assert_eq!(problems.len(), 1);
 }
 #[test]
 fn property_escape_refusal_is_lazy_and_does_not_poison_thread_state() {
@@ -504,10 +520,7 @@ fn diagnostic_allocation_admission_bounds_many_missing_names() {
         .validated()
         .expect("conformant document")
         .value_contracts(
-            Arc::new(DefaultEvaluator::with_limits(Limits {
-                max_problems: 2,
-                ..Limits::default()
-            })),
+            Arc::new(DefaultEvaluator::with_limits(Limits::default())),
             ResourceSet::default(),
         );
     let result = context
@@ -516,12 +529,13 @@ fn diagnostic_allocation_admission_bounds_many_missing_names() {
     let ValueOutcome::Fails {
         problems,
         problems_complete,
+        ..
     } = result
     else {
         panic!("{result:?}");
     };
     assert!(!problems_complete);
-    assert_eq!(problems.len(), 2);
+    assert!(problems.is_empty());
 }
 
 #[test]
@@ -639,7 +653,13 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
         .unwrap()
         .validated()
         .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
+        .value_contracts(
+            Arc::new(
+                DefaultEvaluator::new()
+                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
+            ),
+            ResourceSet::default(),
+        );
     assert!(matches!(
         c.prepare("absent", Direction::Input),
         ValueContractPreparation::NoValueContract

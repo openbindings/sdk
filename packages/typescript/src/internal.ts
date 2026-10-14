@@ -162,7 +162,7 @@ export interface NoVerdict {
   /** Original schema location when known, otherwise null. */
   location: SchemaLocation | null;
 }
-/** Opt-in schema facts, not rejected instance data. Bounds and enum choices are exact JSON token strings: do not coerce them to Number. Source facts can contain secrets and must be rendered as text under an application disclosure policy. Each variant is atomic; truncated contains no partial facts. */
+/** Opt-in schema facts, not rejected instance data. Bounds and enum choices are exact JSON token strings: do not coerce them to Number. Source facts can contain secrets and must be rendered as text under an application disclosure policy. Each variant contains complete facts. */
 export type ValueProblemDetails =
   | {
       /** Complete expected JSON type names, drawn from the fixed JSON type vocabulary. */
@@ -193,10 +193,6 @@ export type ValueProblemDetails =
       kind: "enum";
       /** Original exact JSON token for every choice, including source-controlled strings/objects and exact numbers. */
       choices: readonly string[];
-    }
-  | {
-      /** Applicable requested facts were omitted for the byte budget; outer problemsComplete is false. */
-      kind: "truncated";
     };
 /** Established instance failure, with an existing instance pointer and optional original schema coordinate. Failure messages avoid echoing instance values by default; pointers still contain source-controlled strings and must be rendered as text. */
 export interface ValueProblem {
@@ -208,7 +204,7 @@ export interface ValueProblem {
   code: string;
   /** Explanatory text; present pointers separately and safely. */
   message: string;
-  /** Optional schema facts. Absent means disabled or unavailable; truncated explicitly marks byte-budget omission. */
+  /** Optional schema facts. Absent means disabled or unavailable. */
   details?: ValueProblemDetails;
 }
 /** Closed selected-schema result partition: satisfies, fails, or no-verdict. An established failure may have incomplete diagnostics; problemsComplete does not weaken its verdict. Neither satisfies nor fails proves normative OBI conformance of the surrounding draft. */
@@ -220,6 +216,8 @@ export type ValueOutcome =
   | {
       /** Semantic result discriminant; narrow before reading branch-specific data. */
       outcome: "fails";
+      /** Value-free explanation of the established failure. */
+      message: string;
       /** Retained actual failing instance locations. */
       problems: readonly ValueProblem[];
       /** Whether selected failure diagnostics, including requested details, completed; false does not weaken the established failure. */
@@ -362,7 +360,7 @@ export interface WorkOptions {
   /** Optional caller-owned cooperative cancellation signal; synchronous Wasm only observes same-thread cancellation at call boundaries. */
   signal?: AbortSignal;
 }
-/** Default-evaluator finite budgets, each a nonnegative 32-bit integer. Work counts are implementation units, not milliseconds. Zero is literal except maxProblems has a minimum count allowance of one; a byte budget may retain zero problems; exhaustion produces no-verdict unless only post-verdict diagnostics are incomplete. */
+/** Default-evaluator finite budgets, each a nonnegative 32-bit integer. Work counts are implementation units, not milliseconds. Zero is literal; upstream diagnostic allocation and stack use are library-bounded; exhaustion produces no-verdict unless only post-verdict diagnostics are incomplete. */
 export interface EvaluatorLimits {
   /** Work units per verdict/diagnostic pass; default 2,000,000. */
   evaluationSteps: number;
@@ -370,10 +368,6 @@ export interface EvaluatorLimits {
   evaluationDepth: number;
   /** Regex evaluation/backtracking work budget; default 2,000,000. */
   regexSteps: number;
-  /** Retained failure diagnostics; default 256, minimum count allowance one; byte admission may retain none. Truncation clears problemsComplete. */
-  maxProblems: number;
-  /** Aggregate retained UTF-8 bytes in failure pointers, resource identifiers, codes, messages and requested detail strings; default 1,048,576. Zero returns an established failure with empty, incomplete diagnostics. Not a heap or wire-byte limit. */
-  diagnosticBytes: number;
   /** Projected JSON nesting admitted to compilation; default 512. */
   compileJsonDepth: number;
   /** Maximum UTF-8 bytes per schema regex; default 1,048,576 (1 MiB). */
@@ -387,8 +381,8 @@ export interface ValueContractOptions {
   resources?: SchemaResources;
   /** Overrides for built-in evaluator budgets; unspecified entries use evaluatorLimits(). */
   limits?: Partial<EvaluatorLimits>;
-  /** Opt into source-controlled schema facts (default false). Ready validators then retain original document/resource snapshots until their last owner is released. Details obey diagnosticBytes, may expose secrets, and never include rejected instance values. Invalid non-boolean values throw SdkError. */
-  includeSchemaDetails?: boolean;
+  /** Coarse (default) returns a fixed message and no problems. Upstream requests the library's first error and source schema facts, which may contain secrets. Library-bounded construction can allocate in proportion to inputs and overflow the stack on deep values; the SDK promises no stronger bound. Both modes leave problemsComplete false on failure. */
+  diagnostics?: "coarse" | "upstream";
 }
 /** Explicit resources and cooperative cancellation for reference inspection; no retrieval or global resource registry is used. */
 export interface ReferenceOptions extends WorkOptions {
@@ -1213,12 +1207,13 @@ export class ValidatedDocument extends ParsedDocument {
   /** Create a NEW disposable evaluator/resource context from this Rust-owned conformance proof. Preparation is separate and may refuse. */
   valueContracts(options: ValueContractOptions = {}): ValueContracts {
     if (
-      options.includeSchemaDetails !== undefined &&
-      typeof options.includeSchemaDetails !== "boolean"
+      options.diagnostics !== undefined &&
+      options.diagnostics !== "coarse" &&
+      options.diagnostics !== "upstream"
     )
       throw new SdkError(
-        "invalid-schema-details",
-        "includeSchemaDetails must be a boolean.",
+        "invalid-diagnostics",
+        "diagnostics must be coarse or upstream.",
       );
     const resources = options.resources,
       limits = encodedLimits(options.limits),
@@ -1229,7 +1224,7 @@ export class ValidatedDocument extends ParsedDocument {
           validatedRaw(this).valueContracts(
             resourceRaw(resources ?? empty!),
             limits,
-            options.includeSchemaDetails ?? false,
+            options.diagnostics ?? "coarse",
           ),
         ),
       );

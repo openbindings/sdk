@@ -59,10 +59,9 @@ def judge_value(case,result,sources):
         if detail.get('reason') not in ['unsupported-capability','conservative-preparation','resource-unavailable']:failures.append('unjustified refusal reason')
     if tag=='fails':
         problems=result.get('problems',[])
-        if not problems:failures.append('missing problems')
-        if result.get('problemsComplete') is not True:failures.append('unexpected diagnostic truncation')
+        if not problems and result.get('problemsComplete') is True:failures.append('complete diagnostics lack problems')
         paths=sorted({p.get('instancePointer','<absent>') for p in problems})
-        if case['acceptable_paths'] is not None and paths not in [sorted(set(p)) for p in case['acceptable_paths']]:failures.append('wrong instance paths')
+        if result.get('problemsComplete') is True and case['acceptable_paths'] is not None and paths not in [sorted(set(p)) for p in case['acceptable_paths']]:failures.append('wrong instance paths')
         value=json.loads(case['value'])
         if any(not pointer_exists(value,p) for p in paths):failures.append('nonexistent instance location')
         for problem in problems:
@@ -102,7 +101,7 @@ def controls():
     bad.append({'outcome':'satisfies'})
     for field,value in [('instancePointer','/missing'),('schemaLocation',{'resource':None,'pointer':'/missing'}),('schemaLocation',{'resource':'https://sdk-program.openbindings.invalid/private','pointer':''})]:
         x=copy.deepcopy(valid);x['problems'][0][field]=value;bad.append(x)
-    x=copy.deepcopy(valid);x['problemsComplete']=False;bad.append(x)
+    x=copy.deepcopy(valid);x['problemsComplete']=False;assert not judge_value(case,x,sources)
     for result in bad:assert judge_value(case,result,sources)
     optional={**case,'optional_capability':'unicode','refusal_kind':'unsupported-capability'}
     for reason in ['cancelled','limit-exceeded','evaluator-failure','undefined','resource-unavailable']:

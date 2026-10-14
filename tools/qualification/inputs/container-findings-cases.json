@@ -1,0 +1,35 @@
+[
+  {
+    "id": "required-root-and-child",
+    "document": "{\"openbindings\":\"0.2.0\",\"name\":42}",
+    "obi02_pointers": [
+      "/name",
+      ""
+    ]
+  },
+  {
+    "id": "required-source-and-child",
+    "document": "{\"openbindings\":\"0.2.0\",\"operations\":{},\"sources\":{\"s\":{\"description\":42}}}",
+    "obi02_pointers": [
+      "/sources/s/description",
+      "/sources/s"
+    ]
+  },
+  {
+    "id": "required-binding-and-child",
+    "document": "{\"openbindings\":\"0.2.0\",\"operations\":{},\"bindings\":{\"b\":{\"description\":42}}}",
+    "obi02_pointers": [
+      "/bindings/b/description",
+      "/bindings/b"
+    ]
+  },
+  {
+    "id": "unique-array-and-items",
+    "document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"aliases\":[false,false]}}}",
+    "obi02_pointers": [
+      "/operations/op/aliases/0",
+      "/operations/op/aliases/1",
+      "/operations/op/aliases"
+    ]
+  }
+]

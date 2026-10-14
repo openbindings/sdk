@@ -26,7 +26,13 @@ fn ready(
         .unwrap()
         .validated()
         .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::with_limits(limits)), resources)
+        .value_contracts(
+            Arc::new(
+                DefaultEvaluator::with_limits(limits)
+                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
+            ),
+            resources,
+        )
         .prepare(op, direction)
     {
         ValueContractPreparation::Ready(contract) => contract,
@@ -65,9 +71,10 @@ fn frozen_c22_original_values_and_renamed_operation_keep_their_independent_truth
             if let ValueOutcome::Fails {
                 problems,
                 problems_complete,
+                ..
             } = outcome
             {
-                assert!(problems_complete);
+                assert!(!problems_complete);
                 assert!(!problems.is_empty());
                 assert!(problems.iter().all(|p| {
                     p.code == "oneOf"
@@ -181,9 +188,10 @@ fn frozen_owner_controls_cover_endpoints_siblings_nested_and_original_summaries(
         if let ValueOutcome::Fails {
             problems,
             problems_complete,
+            ..
         } = outcome
         {
-            assert!(problems_complete, "{}", case["id"]);
+            assert!(!problems_complete, "{}", case["id"]);
             assert!(!problems.is_empty());
             if let Some(pointer) = case["summary"].as_str() {
                 assert!(
@@ -393,7 +401,7 @@ fn unsupported_influence_and_known_closure_defects_remain_refusals() {
     }
 }
 #[test]
-fn diagnostic_bytes_privacy_and_partial_work_do_not_fabricate_results() {
+fn upstream_privacy_and_partial_work_do_not_fabricate_results() {
     let schema = r#"{"oneOf":[true,true,{"$ref":"https://oneof.invalid/U"}]}"#;
     let value = JsonValue::parse(r#"{"secret":"do-not-render"}"#).unwrap();
     let document = document(schema);
@@ -407,48 +415,18 @@ fn diagnostic_bytes_privacy_and_partial_work_do_not_fabricate_results() {
     let ValueOutcome::Fails {
         problems,
         problems_complete,
+        ..
     } = regular.validate(&value)
     else {
         panic!()
     };
-    assert!(problems_complete);
+    assert!(!problems_complete);
     assert_eq!(problems.len(), 1);
-    let problem = &problems[0];
-    assert_eq!(problem.code, "oneOf");
-    assert_eq!(
-        problem.message,
-        "value does not satisfy exactly one alternative"
-    );
     assert!(
-        !serde_json::to_string(problem)
+        !serde_json::to_string(&problems)
             .unwrap()
             .contains("do-not-render")
     );
-    let bytes = problem.message.len()
-        + problem.code.len()
-        + problem.instance_pointer.len()
-        + problem.schema_location.as_ref().unwrap().pointer.len();
-    for allowance in [0, bytes - 1, bytes] {
-        let contract = ready(
-            &document,
-            "probe",
-            Direction::Input,
-            ResourceSet::default(),
-            Limits {
-                diagnostic_bytes: allowance,
-                ..Limits::default()
-            },
-        );
-        let ValueOutcome::Fails {
-            problems,
-            problems_complete,
-        } = contract.validate(&value)
-        else {
-            panic!()
-        };
-        assert_eq!(problems.len(), usize::from(allowance == bytes));
-        assert_eq!(problems_complete, allowance == bytes);
-    }
     let cancelled = std::sync::atomic::AtomicBool::new(false);
     cancelled.store(true, std::sync::atomic::Ordering::Release);
     assert!(
@@ -614,7 +592,10 @@ fn bounded_nested_runtime_and_original_exact_details_retain_separate_policies() 
         .validated()
         .expect("conformant document")
         .value_contracts(
-            Arc::new(DefaultEvaluator::new().with_schema_details(true)),
+            Arc::new(
+                DefaultEvaluator::new()
+                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
+            ),
             ResourceSet::default(),
         );
     let ValueContractPreparation::Ready(contract) = contracts.prepare("probe", Direction::Input)

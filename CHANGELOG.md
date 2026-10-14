@@ -2,6 +2,26 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- Default value failures now use `Diagnostics::Coarse`: a fixed value-free
+  `message`, no problems, and incomplete diagnostics. Migrate
+  `with_schema_details(true)` to `with_diagnostics(Diagnostics::Upstream)` and
+  `includeSchemaDetails: true` to `diagnostics: "upstream"`; false/omission becomes
+  Coarse. Upstream returns the library's first error, with library-bounded
+  allocation and stack use (including possible stack overflow on deep values).
+  Remove `max_problems`/`maxProblems` and `diagnostic_bytes`/`diagnosticBytes`.
+  Rust `ValueOutcome::Fails` literals must now include `message`. Remove the unused
+  `ValueProblemDetails::Truncated` / TypeScript `kind: "truncated"` variant; absent
+  details represent unavailable facts, with no retired byte-budget marker.
+- OBI-02/OBI-10 use library validity only and the fixed message
+  `value violates the fixed normative schema`. Document findings retain original
+  source locations, lose keyword wording, and may report several failing positions.
+  OBI-02 descends through member/name and array-element constraints and local
+  pointer references; independent container failures remain alongside child failures. OBI-10 stays at
+  each checked schema node. Location work and findings caps never change evidence.
+  See the [diagnostics verification receipt](tools/qualification/inputs/diagnostics-verification.json).
+- Evaluator kit/corpus diagnostics migrate by case ID; verdict and refusal
+  partitions are unchanged. See `tools/qualification/inputs/diagnostics-migration-ledger.json`.
+
 - S6d/e review fixes: make inspection string presentation injective, translate
   pointer references consistently, and select a collision-free synthetic root.
   Preserve original provenance for contained/supplied surrogate-name collisions.

@@ -420,7 +420,7 @@ supplied resources, configuration and prepared state:
 const validation = document.validated();
 if (validation.status !== "validated") throw new Error("Document is not conformant");
 using proof = validation.document;
-using contracts = proof.valueContracts({ resources, limits: { maxProblems: 16 } });
+using contracts = proof.valueContracts({ resources, diagnostics: "upstream" });
 const setup = contracts.prepare('lookup', 'input');
 if (setup.status === 'ready') {
   using input = setup.valueContract;
@@ -624,52 +624,30 @@ upgrading. Neither language adds an `unknown` semantic outcome.
 Definition-level reference contracts, rendered documentation and maintained checks
 are described in the [API reference guide](https://github.com/openbindings/sdk/blob/main/docs/api-reference.md).
 
-Value diagnostics default to an aggregate `diagnosticBytes` allowance of 1 MiB of
-retained UTF-8 strings (pointers, resource URIs, codes, messages and requested detail strings), alongside
-`maxProblems` (default 256, minimum count allowance one). Set these in
-`proof.valueContracts({ limits: { diagnosticBytes: 65536, maxProblems: 32 } })`.
-Only complete problems are retained in deterministic order. Zero or an oversized
-first problem preserves `outcome: "fails"` with `problems: []` and
-`problemsComplete: false`; an empty problem list is not success. Pre-verdict limits
-and cancellation keep their existing no-verdict result.
+The default evaluator decides validity with `is_valid`. `Diagnostics::Coarse`
+(the default) returns `Fails` with the fixed message “value does not satisfy the
+contract”, no problems, and `problems_complete = false`. TypeScript uses
+`diagnostics: "coarse"`, `message`, and `problemsComplete: false`.
 
-This is not a heap or wire-byte cap. Compact `JSON.stringify` failure output is
-bounded by `59 + 160*N + 9*B` with optional details, or `58 + 94*N + 6*B` without them UTF-8 bytes, with `N` retained problems and `B` retained
-string bytes; JSON escaping and fixed framing are included. Application wrappers
-and pretty printing add bytes. The engine also preflights copied diagnostic paths,
-member collections and original locations; source admission, compilation,
-evaluation bookkeeping and JS/Wasm transport copies have separate costs. See the
-[evaluator resource contract](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/README.md)
-for scratch allowances and scope.
+Select `DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream)` or
+`proof.valueContracts({ diagnostics: "upstream" })` to request the library's own
+first error through `validate()`. Messages remain value-free; available paths map
+to original locations and optional schema facts may expose source operands.
+This mode is **library-bounded**: construction can allocate in proportion to inputs
+and can overflow the stack on deep values. The SDK promises nothing stronger than
+the library. One first error does not establish diagnostic completeness, so the
+flag remains false. Work/regex limits and cancellation can omit detail after a
+verdict; missing detail never weakens failure and never counts as rule evidence.
 
+The former `with_schema_details` / `includeSchemaDetails` boolean and the
+`max_problems` / `maxProblems`, `diagnostic_bytes` / `diagnosticBytes` options are
+removed. There is no intermediate boolean diagnostics API or SDK construction
+bound for upstream errors.
 
-### Requesting exact schema facts
-
-Default messages keep schema operands private. An authoring application can opt in:
-
-```ts
-const contracts = proof.valueContracts({ includeSchemaDetails: true });
-// Reuse contracts/ready.valueContract normally; dispose their owners when finished.
-```
-
-`ValueProblem.details` is an optional discriminated union: `type` has `expected`
-type names; `required` has the verified missing `member`; `numeric-bound` and
-`size-bound` have an exact JSON number token `bound`; `enum` has complete `choices`
-as exact JSON token strings. Interpret bounds with the problem's `code`.
-Do not turn exact numeric strings into JavaScript numbers when precision matters.
-No rejected instance data is included. Source operands can be sensitive: choose
-where to render or store them deliberately.
-
-Absent details mean disabled or unavailable. `{ kind: "truncated" }` means requested
-facts did not fit, and sets `problemsComplete: false`. The evaluator reserves the
-marker before admitting a base problem; if that also fails, it omits the entire
-problem. Enum lists and all tokens are atomic. String-byte accounting includes
-kind tags and every detail string; the wire formula above includes enum framing.
-
-Opting in retains whole original document/resource snapshots with prepared
-contracts, potentially including unrelated source members. Disposing the context
-and contracts releases those owners. A new resource set does not change facts
-returned by an existing prepared contract.
+Upstream mode retains whole original document/resource snapshots until the prepared
+contracts release them. Exact `details` include type names, required members, bound
+tokens and enum choices. These schema operands can be sensitive. Missing details
+mean unavailable; the built-in evaluator no longer emits a byte-truncation marker.
 
 The delivered [editor](./examples/editor.html) sends source and selected input text
 to a component-owned module Worker. Its unchecked disclosure checkbox is the
@@ -691,3 +669,23 @@ try {
   showOperationalError(error); // retry initialization or correct the JS input
 }
 ```
+
+
+Document findings are independent of the value diagnostics mode. OBI-02 and OBI-10
+use the library's validity API only, with the fixed message
+`value violates the fixed normative schema`, their rule, and original source
+coordinates. OBI-02 follows failing object members, member names and array elements
+through the pinned schema's compiled validator map and local pointer references.
+It reports failing children and independently failing container constraints under
+the findings cap. Missing members, container constraints and non-descending
+constructs stay at their container, even when a child also fails;
+an empty walk falls back to the root. OBI-10 reports the schema node checked by its
+localized walk. Location work shares the existing work budget; stopping retains
+the deepest established failing node and marks findings truncated. Locations and
+missing detail never change validity or rule evidence. No document opt-in, size
+gate, library error construction or active diagnostic patch is involved.
+
+Migration: document findings keep source locations, lose keyword-specific wording,
+and can now contain several positions. OBI-10 uses the checked node rather than a
+keyword within it. Use rule, code and evidence for logic, not message text or
+finding count.

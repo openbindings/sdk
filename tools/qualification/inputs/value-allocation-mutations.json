@@ -1,0 +1,114 @@
+{
+  "source_sha256": "c976cbdb960fd50949c815455f32ddb837a68477446d4313494972c5687a8c28",
+  "status": "all mutations rejected by allocation",
+  "mutations": [
+    {
+      "path": "ordinary",
+      "mutation": "self.validator.validate(backend::view(value)).is_ok()",
+      "exit_code": 101,
+      "rejected_samples": [
+        {
+          "ceiling_bytes": 65536,
+          "elements": 50000,
+          "nanos": 8740458,
+          "outcome": {
+            "message": "value does not satisfy the contract",
+            "outcome": "fails",
+            "problems": [],
+            "problems_complete": false
+          },
+          "path": "ordinary",
+          "peak_bytes": 10768016,
+          "phase": "default-value",
+          "repetition": 0,
+          "source_bytes": 100001
+        }
+      ],
+      "command": [
+        "cargo",
+        "run",
+        "--offline",
+        "--release",
+        "--locked",
+        "--manifest-path",
+        "/Users/matt/Code/ob-pj/openbindings/sdk-s8a/target/diagnostics-review/value-mutations/sdk/tools/diagnostic-memory-probe/Cargo.toml",
+        "--",
+        "--values-only"
+      ]
+    },
+    {
+      "path": "partial-upper",
+      "mutation": "self.upper.validator.validate(backend::view(value)).is_ok()",
+      "exit_code": 101,
+      "rejected_samples": [
+        {
+          "ceiling_bytes": 65536,
+          "elements": 50000,
+          "nanos": 8803209,
+          "outcome": {
+            "message": "value does not satisfy the contract",
+            "outcome": "fails",
+            "problems": [],
+            "problems_complete": false
+          },
+          "path": "partial-upper",
+          "peak_bytes": 10768088,
+          "phase": "default-value",
+          "repetition": 0,
+          "source_bytes": 100001
+        }
+      ],
+      "command": [
+        "cargo",
+        "run",
+        "--offline",
+        "--release",
+        "--locked",
+        "--manifest-path",
+        "/Users/matt/Code/ob-pj/openbindings/sdk-s8a/target/diagnostics-review/value-mutations/sdk/tools/diagnostic-memory-probe/Cargo.toml",
+        "--",
+        "--values-only"
+      ]
+    },
+    {
+      "path": "partial-lower",
+      "mutation": "self.lower.validator.validate(backend::view(value)).is_ok()",
+      "exit_code": 101,
+      "rejected_samples": [
+        {
+          "ceiling_bytes": 65536,
+          "elements": 50000,
+          "nanos": 17213209,
+          "outcome": {
+            "detail": {
+              "code": "resource-unavailable",
+              "location": {
+                "pointer": "/operations/check/input/anyOf/1/$ref",
+                "resource": null
+              },
+              "message": "validity could depend on a resource that was not supplied",
+              "reason": "resource-unavailable"
+            },
+            "outcome": "no-verdict"
+          },
+          "path": "partial-lower",
+          "peak_bytes": 14068864,
+          "phase": "default-value",
+          "repetition": 0,
+          "source_bytes": 100001
+        }
+      ],
+      "command": [
+        "cargo",
+        "run",
+        "--offline",
+        "--release",
+        "--locked",
+        "--manifest-path",
+        "/Users/matt/Code/ob-pj/openbindings/sdk-s8a/target/diagnostics-review/value-mutations/sdk/tools/diagnostic-memory-probe/Cargo.toml",
+        "--",
+        "--values-only"
+      ]
+    }
+  ]
+}

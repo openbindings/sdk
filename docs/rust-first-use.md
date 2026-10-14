@@ -87,7 +87,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-The `OBI-02` / `schema-mismatch` finding points to `/operations/lookup/inputSchema` at the original key token and says `this member is not permitted here; extension member names begin with x-`. The caller chooses the intended correction; the SDK does not guess a replacement name. Direct type failures explain the expected type. Missing-field messages identify the fixed-schema field and locate its containing object; no source byte offset is invented for a nonexistent property. A `name-grammar` finding explains the permitted ASCII spelling and first character. Complex schema failures keep a general explanation instead of presenting one alternative as the only repair. Messages are bounded guidance, not stable machine identifiers; use rule, code, evidence and location fields for logic. These fixed-schema messages do not echo rejected values or unexpected member names.
+The `OBI-02` / `schema-mismatch` finding points to `/operations/lookup/inputSchema` at the original key token and says `value violates the fixed normative schema`. The caller chooses the intended correction. Missing members locate the containing object; array item failures locate the element. Several positions may be reported. OBI-10 findings locate the schema node checked by the localized walk. The native `name-grammar` message still explains the permitted ASCII spelling. Use rule, code, evidence and location for logic; fixed-schema messages contain no rejected values or member names.
 
 Locations use original JSON Pointers, zero-based UTF-8 byte offsets, and one-based lines and byte columns. Preserve the original document bytes when presenting them. These are not character indexes or JavaScript UTF-16 editor selection offsets: an editor must convert coordinates against the same source bytes before selecting text. Quote or escape pointers when displaying them, and render them as text rather than HTML. Correcting text creates a new snapshot; it does not mutate retained views of the old one. A truncated findings list still accompanies the complete rule evidence map.
 
@@ -127,10 +127,10 @@ Retain one ready contract and call `input.validate(&value)` repeatedly:
 | Outcome | Meaning |
 | --- | --- |
 | `Satisfies` | The input satisfies the contract. |
-| `Fails { problems, problems_complete }` | A failure is established; selected diagnostics may be incomplete. |
+| `Fails { message, problems, problems_complete }` | A failure is established; selected diagnostics may be incomplete. |
 | `NoVerdict { detail }` | The evaluator did not establish a verdict; this is neither success nor failure. |
 
-Failure problems identify instance pointers and original schema locations when available. `problems_complete` describes the selected diagnostic pass, not every logically redundant failed keyword. The first-use example validates an ordinary struct containing `9007199254740993`, then an adjacent smaller exact integer to show a failure without losing digits.
+Upstream failure problems identify instance pointers and original schema locations when available. `problems_complete` describes the selected diagnostic pass, not every logically redundant failed keyword. The first-use example validates an ordinary struct containing `9007199254740993`, then an adjacent smaller exact integer to show a failure without losing digits.
 
 ## Retained work and replacement
 
@@ -174,12 +174,22 @@ contain source text; apply your application's disclosure policy before logging
 them. Custom evaluator messages are supplied by their authors.
 
 
-Optional default-evaluator schema facts use
-`DefaultEvaluator::new().with_schema_details(true)` (TS
-`valueContracts({ includeSchemaDetails: true })`). They retain original source snapshots
-and share the diagnostic string-byte budget. `ValueProblemDetails::Truncated`
-sets result completeness false; absent details mean disabled or unavailable.
-Exact bounds and enum choices remain JSON token strings. Existing Rust evaluator
-implementations constructing `ValueProblem` must add `details: None` to preserve
-their previous output. The enum is non-exhaustive; match future variants safely.
-See the [evaluator resource contract](../crates/openbindings-json-schema-evaluator/README.md).
+The default evaluator decides validity with `is_valid`. `Diagnostics::Coarse`
+(the default) returns `Fails` with the fixed message “value does not satisfy the
+contract”, no problems, and `problems_complete = false`. TypeScript uses
+`diagnostics: "coarse"`, `message`, and `problemsComplete: false`.
+
+Select `DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream)` or
+`proof.valueContracts({ diagnostics: "upstream" })` to request the library's own
+first error through `validate()`. Messages remain value-free; available paths map
+to original locations and optional schema facts may expose source operands.
+This mode is **library-bounded**: construction can allocate in proportion to inputs
+and can overflow the stack on deep values. The SDK promises nothing stronger than
+the library. One first error does not establish diagnostic completeness, so the
+flag remains false. Work/regex limits and cancellation can omit detail after a
+verdict; missing detail never weakens failure and never counts as rule evidence.
+
+The former `with_schema_details` / `includeSchemaDetails` boolean and the
+`max_problems` / `maxProblems`, `diagnostic_bytes` / `diagnosticBytes` options are
+removed. There is no intermediate boolean diagnostics API or SDK construction
+bound for upstream errors.

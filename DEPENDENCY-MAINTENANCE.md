@@ -100,17 +100,22 @@ below for behavioral dependency changes. Keep every `publish = false` guard.
 - `src/error.rs`, `src/keywords/custom.rs`: retain lazy exact instance views through custom-keyword error context; avoid recursive materialization/drop of 10,000-level literals. Internal diagnostics expose bounded metadata and original locations, not whole instance values.
 - `src/keywords/additional_properties.rs`, `any_of.rs`, `helpers.rs`, `items.rs`, `min_length.rs`, `properties.rs`, `property_names.rs`, `required.rs`, `unevaluated_items.rs`, `unevaluated_properties.rs`, and `src/properties.rs`: preserve generic flat-value operation, scoped evaluation/diagnostic work, ECMAScript matching and dynamic reference behavior in the affected applicator/keyword paths. Check the full diff when rebasing; these are evaluator-sensitive changes, not mechanical wrappers.
 
-The value-diagnostic budget repair adds a private `diagnostic_metadata` scope to
-`ob_work.rs`, with pre-copy path/member admission and deterministic usage counters.
-`paths.rs` sizes escaped instance paths before any segment vector/string expansion
-and omits unused evaluation trackers. Metadata mode skips unused applicator branch
-contexts, source-controlled keyword payloads and owned rejected values before
-construction; property-name temporaries are admitted explicitly. The ordinary
-upstream diagnostic path and SDK document diagnostic count scope remain separate.
-The adapter independently admits original source coordinates and final problems;
-private copied bytes do not establish a total heap guarantee. Maintained native
-`diagnostic_budget` and shared package/browser `diagnostic-budget-cases.mjs` cover
-the witness, boundaries, pre-copy counters and deterministic seed 0x5eedcafe.
+Fixed OBI-02/OBI-10 checks now call only `is_valid`; the location map uses
+`build_map` / `get` / `is_valid`. They no longer enter `Validator::validate`,
+`Validator::iter_errors`, `Validator::evaluate`, keyword `validate` / `collect_errors`
+or error-context ownership (`ValidationError::to_owned`, `anyOf` contexts and
+unexpected-name error vectors). No SDK caller activates `ob_work::diagnostics` or
+`ob_work::diagnostic_metadata`; the diagnostic count, copy-admission, metadata-only,
+payload and schema-detail scopes remain in the fork solely for later removal.
+One inert hook is still called by `PropertyNamesValidator::is_valid`:
+`ob_work::diagnostic_copy` immediately admits the name when no diagnostic scope is
+active. This validity scratch is measured; it is not a bounded error-construction
+path. Remove the unused diagnostic admission and metadata patch, including its inert
+property-name copy hook; retain the separate work/depth/regex guards.
+Explicit value Upstream diagnostics still use the library's `validate()` first
+error, with no SDK construction-memory promise. No vendored source is edited here.
+`tools/verify-diagnostics.py` measures validity, location compilation, fixed findings
+and complete document validation against the pinned generators and corpus.
 
 ## jsonschema-value
 
@@ -124,8 +129,8 @@ the witness, boundaries, pre-copy counters and deterministic seed 0x5eedcafe.
 - `Cargo.toml`, `src/lib.rs`: private identity and internal modules; the SDK explicitly selects the classical interpreter required by the work budget.
 - `src/api.rs`, `src/classicalbacktrack.rs`, `src/ob_budget.rs`: finite interpreter work and cancellation propagation; a failed/exhausted match must never become an ordinary non-match that supports a wrong validation verdict.
 - `src/parse.rs`, `src/ob_ecma11_properties.rs`: ECMAScript 11 property-name recognition and bounded pattern expansion/admission. Supported syntax and selected matching capability are distinct. Unicode property matching remains an explicitly qualified refusal only when selected by evaluation; irrelevant branches retain existing verdicts.
-- S3 / EV-4: `src/classicalbacktrack.rs` treats an unrepresentable single-character atom as matching zero characters only when its quantifier admits zero repetitions, including lazy extension. Lone-surrogate escapes still match no scalar code point. `tests/fixtures/lone-surrogate.mjs` computes the checked-in 470-row differential fixture using Node's `RegExp` with the `u` flag (Node v22.19.0, V8 12.4.254.21-node.29); `tests/tests.rs` asserts every row, and the evaluator's `pattern_correctness` integration test runs every row through `pattern` and `patternProperties`.
-- S3 / EV-5: both mid-interpreter budget exits truncate the backtrack stack to its exhaustion sentinel. The direct matcher regression uses `^(a+)+$` on 28 `a` characters plus `b`, without `catch_unwind`, at budgets 0–255 in debug tests; positive/negative lookaround variants and fresh-scope recovery are also checked. Re-run the fork with `cargo test --manifest-path vendor/openbindings-internal-regress/Cargo.toml --no-default-features --features std` to select the SDK's classical matcher configuration.
+- Empty quantifier semantics (EV-4): `src/classicalbacktrack.rs` treats an unrepresentable single-character atom as matching zero characters only when its quantifier admits zero repetitions, including lazy extension. Lone-surrogate escapes still match no scalar code point. `tests/fixtures/lone-surrogate.mjs` computes the checked-in 470-row differential fixture using Node's `RegExp` with the `u` flag (Node v22.19.0, V8 12.4.254.21-node.29); `tests/tests.rs` asserts every row, and the evaluator's `pattern_correctness` integration test runs every row through `pattern` and `patternProperties`.
+- Backtrack budget restoration (EV-5): both mid-interpreter budget exits truncate the backtrack stack to its exhaustion sentinel. The direct matcher regression uses `^(a+)+$` on 28 `a` characters plus `b`, without `catch_unwind`, at budgets 0–255 in debug tests; positive/negative lookaround variants and fresh-scope recovery are also checked. Re-run the fork with `cargo test --manifest-path vendor/openbindings-internal-regress/Cargo.toml --no-default-features --features std` to select the SDK's classical matcher configuration.
 
 `OPENBINDINGS-PATCH.md` in each package identifies it as modified. These records and the full file diffs are the patch inventory; the line count alone is not evidence that the maintenance burden is small.
 
@@ -200,9 +205,6 @@ claim four distinct wrapper executions or the entire raw test's unmatched branch
 No new Draft4 capability or fresh upstream-suite run is claimed in the facade repair.
 
 
-For typed schema details, preserve `diagnostic_schema_details` scope restoration
-and admitted required-name capture in all specialized required validators. Default
-metadata still omits the name. Optional refusal must not invalidate an established
-base problem; final exact facts are recovered by the adapter from original sources.
-`property_name_recheck` covers nested applicator name-copy admission in every
-propertyNames path; normal validity must remain unchanged outside metadata mode.
+Upstream schema facts are recovered from original snapshots, without activating
+vendored diagnostic metadata scopes. Exact token/source-location tests remain
+required when removing the unused diagnostic admission and metadata patches.

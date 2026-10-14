@@ -5,8 +5,7 @@ export function fixedDiagnosticCases(sdk) {
     if (!condition) throw new Error(message);
   };
   const byteLength = (text) => new TextEncoder().encode(text).length;
-  const unexpectedMessage =
-    "this member is not permitted here; extension member names begin with x-";
+  const unexpectedMessage = "value violates the fixed normative schema";
   const cases = [
     {
       name: "unexpected member identifies escaped original key after multibyte prefix",
@@ -51,8 +50,8 @@ export function fixedDiagnosticCases(sdk) {
       required: "kind",
     },
     {
-      // CR-6: identify anyOf without inventing a repair for one of its branches.
-      name: "complex failure names its keyword without inventing a branch repair",
+      // A union failure keeps the checked position and fixed message.
+      name: "complex failure keeps its position without inventing a branch repair",
       text: '{"openbindings":"0.2.0","operations":{"x":{"input":null}}}',
       pointer: "/operations/x/input",
       token: "null",
@@ -133,31 +132,10 @@ export function fixedDiagnosticCases(sdk) {
             byteLength(preceding.slice(preceding.lastIndexOf("\n") + 1)) + 1,
           `${fixture.name}: original byte column`,
         );
-        if (fixture.unexpected)
-          check(
-            finding.message === unexpectedMessage,
-            `${fixture.name}: disallowed member explained`,
-          );
-        if (fixture.expectedType)
-          check(
-            finding.message.includes(fixture.expectedType),
-            `${fixture.name}: expected type explained`,
-          );
-        if (fixture.required)
-          check(
-            finding.message.includes(JSON.stringify(fixture.required)),
-            `${fixture.name}: required member explained`,
-          );
-        if (fixture.keyword) {
-          check(
-            finding.message.includes(fixture.keyword),
-            `${fixture.name}: failing keyword explained`,
-          );
-          check(
-            !/\b(?:boolean|object|array|string)\b/i.test(finding.message),
-            `${fixture.name}: no invented branch repair`,
-          );
-        }
+        check(
+          finding.message === unexpectedMessage,
+          `${fixture.name}: fixed message`,
+        );
       }
       results.push({ name: fixture.name, conclusion: report.conclusion });
     } finally {
@@ -168,57 +146,92 @@ export function fixedDiagnosticCases(sdk) {
       `${fixture.name}: released document storage`,
     );
   }
-  for (const count of [4096, 4097]) {
-    const fields = Array.from({ length: count }, (_, i) => `,"bad${i}":0`).join(
-      "",
+  {
+    const parsed = sdk.parseDocument(
+      '{"openbindings":"0.2.0","operations":{"run":{"aliases":["valid",false,42],"description":0,"input":{"type":42}}}}',
     );
-    const text = `{"openbindings":"0.2.0","operations":{}${fields}}`;
-    for (const invalidSchema of [false, true]) {
-      const source = invalidSchema
-        ? text.replace(
-            '"operations":{}',
-            '"operations":{},"schemas":{"s":{"type":7}}',
-          )
-        : text;
-      const parsed = sdk.parseDocument(source);
-      check(parsed.status === "parsed", "saturated document parses");
-      try {
-        const assessment = parsed.value.validate();
-        check(assessment.status === "report", "saturated assessment completes");
-        const report = assessment.report;
-        check(
-          report.conclusion === "non-conformant",
-          "saturated conformance remains refused",
-        );
-        check(report.findings.length === 4096, "finding count remains bounded");
-        check(
-          report.findingsTruncated === (invalidSchema || count > 4096),
-          "truthful truncation",
-        );
-        check(
-          report.evidence["OBI-02"] === "violated",
-          "document evidence preserved",
-        );
-        check(
-          Object.keys(report.evidence).length === 13,
-          "all rule evidence retained",
-        );
-        if (invalidSchema)
-          check(
-            report.evidence["OBI-10"] === "violated",
-            "later evidence survives finding saturation",
-          );
-        else
-          check(
-            report.findings.at(-1).location.pointer === "/bad4095",
-            "original member order retained",
-          );
-      } finally {
-        parsed.value.dispose();
-      }
+    try {
+      const report = parsed.value.validate().report;
+      const fixed = report.findings.filter((f) => f.code === "schema-mismatch");
+      check(
+        JSON.stringify(fixed.map((f) => [f.rule, f.location.pointer])) ===
+          JSON.stringify([
+            ["OBI-02", "/operations/run/aliases/1"],
+            ["OBI-02", "/operations/run/aliases/2"],
+            ["OBI-02", "/operations/run/description"],
+            ["OBI-10", "/operations/run/input"],
+          ]),
+        "multiple positions and localized meta node",
+      );
+      check(
+        fixed.every((f) => f.message === unexpectedMessage),
+        "fixed messages in both rules",
+      );
+    } finally {
+      parsed.value.dispose();
     }
     results.push({
-      name: `bounded ${count} unexpected members`,
+      name: "multiple positions and localized meta node",
+      conclusion: "non-conformant",
+    });
+  }
+  for (const [text, expected] of [
+    ['{"openbindings":"0.2.0","name":42}', ["/name", ""]],
+    [
+      '{"openbindings":"0.2.0","operations":{},"sources":{"s":{"description":42}}}',
+      ["/sources/s/description", "/sources/s"],
+    ],
+    [
+      '{"openbindings":"0.2.0","operations":{"op":{"aliases":[false,false]}}}',
+      [
+        "/operations/op/aliases/0",
+        "/operations/op/aliases/1",
+        "/operations/op/aliases",
+      ],
+    ],
+  ]) {
+    const report = sdk.validateDocument(text).report;
+    const fixed = report.findings.filter((f) => f.rule === "OBI-02");
+    check(
+      JSON.stringify(fixed.map((f) => f.location.pointer)) ===
+        JSON.stringify(expected),
+      "container and child positions",
+    );
+    check(
+      !report.findingsTruncated &&
+        fixed.every((f) => f.message === unexpectedMessage),
+      "complete fixed container guidance",
+    );
+    results.push({
+      name: `container and child ${expected.join(",")}`,
+      conclusion: report.conclusion,
+    });
+  }
+  for (const count of [4096, 4097]) {
+    const schemas = Object.fromEntries(
+      Array.from({ length: count }, (_, i) => [`s${i}`, { minLength: -1 }]),
+    );
+    const parsed = sdk.parseDocument(
+      JSON.stringify({ openbindings: "0.2.0", operations: {}, schemas }),
+    );
+    try {
+      const report = parsed.value.validate().report;
+      check(report.findings.length === 4096, "localized finding cap");
+      check(report.findingsTruncated === count > 4096, "truthful truncation");
+      check(
+        report.evidence["OBI-02"] === "met" &&
+          report.evidence["OBI-10"] === "violated",
+        "independent evidence",
+      );
+      check(
+        Object.keys(report.evidence).length === 13,
+        "all rule evidence retained",
+      );
+    } finally {
+      parsed.value.dispose();
+    }
+    results.push({
+      name: `bounded ${count} schema nodes`,
       conclusion: "non-conformant",
     });
   }

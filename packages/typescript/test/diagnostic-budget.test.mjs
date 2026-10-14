@@ -7,5 +7,5 @@ await sdk.initialize(
     new URL("../dist/wasm/openbindings_wasm_bg.wasm", import.meta.url),
   ),
 );
-test("bounded value diagnostics and maintained amplification control", () =>
+test("coarse and library-bounded upstream diagnostics", () =>
   diagnosticBudgetCases(sdk));

@@ -93,13 +93,11 @@ and its associated future is Send; local futures and Rc providers remain support
   editors. A report's independent rule evidence survives finding-count and aggregate
   pointer-byte caps; diagnostic truncation must remain visible.
 
-The value diagnostic byte contract, scratch allowances and conservative serialized
-bounds are specified in the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md).
-`Limits::diagnostic_bytes` and TS `EvaluatorLimits.diagnosticBytes` are the only
-new evaluator limit. Adding a Rust `Limits` field is an intentional prerelease
-struct-literal source change; callers should use `..Limits::default()` for
-unspecified settings. Existing Rust `ValueProblem` literals must also add
-`details: None`; `ValueOutcome` construction is unchanged.
+Value diagnostics use the typed `Diagnostics::{Coarse, Upstream}` policy, default
+Coarse. See the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md).
+Custom Rust evaluators constructing `ValueOutcome::Fails` now supply a value-free
+`message` alongside `problems` and `problems_complete`. Empty incomplete diagnostics
+are valid established failures. Diagnostic count/byte options are retired.
 Custom evaluators receive a `SchemaRequest` with the original document, supplied
 resources, entry and entry location. `evaluation_program(control)` provides the
 strict §7 projection; read-only `EvaluationProgram::entry_uri()` and `resources()`
@@ -220,7 +218,7 @@ code-based Display representation.
 | `escape` | OBI-01 | A JSON string escape is invalid. |
 | `unicode-escape` | OBI-01 | A Unicode escape lacks four hexadecimal digits. |
 | `duplicate-member` | OBI-01 | An object repeats a decoded member name. |
-| `schema-mismatch` | OBI-02, OBI-10 | A constraint in the derived schema or meta-schemas failed. The message identifies the keyword without including instance values. |
+| `schema-mismatch` | OBI-02, OBI-10 | A constraint in the derived schema or meta-schemas failed. The fixed message is `value violates the fixed normative schema`; locations identify deepest checked document positions or the checked schema node. |
 | `fixed-schema-limit-or-failure` | OBI-02, OBI-10 | Fixed-schema checking could not complete within its capability or work limit. |
 | `semver` | OBI-03 | The openbindings value is not a SemVer string. |
 | `missing-version` | OBI-03 | The openbindings member is absent. |
@@ -318,7 +316,7 @@ a distinct finding does. Equal schema text at different original locations still
 produces distinct diagnostics. Repeated member names point to their offending
 key tokens, including distinct byte offsets at an otherwise identical pointer.
 Per-rule evidence remains independent of finding presentation. Value-problem
-diagnostics are a separate unchanged contract.
+diagnostics use the separate typed policy described below.
 
 ## Maintained verification
 
@@ -348,15 +346,25 @@ actionable errors, ownership, defaults/units, capability limits and retention. T
 release checklist records those SDK-specific outcomes separately from source landing.
 
 
-Optional default-evaluator schema facts use
-`DefaultEvaluator::new().with_schema_details(true)` (TS
-`valueContracts({ includeSchemaDetails: true })`). They retain original source snapshots
-and share the diagnostic string-byte budget. `ValueProblemDetails::Truncated`
-sets result completeness false; absent details mean disabled or unavailable.
-Exact bounds and enum choices remain JSON token strings. Existing Rust evaluator
-implementations constructing `ValueProblem` must add `details: None` to preserve
-their previous output. The enum is non-exhaustive; match future variants safely.
-See the [evaluator resource contract](../crates/openbindings-json-schema-evaluator/README.md).
+The default evaluator decides validity with `is_valid`. `Diagnostics::Coarse`
+(the default) returns `Fails` with the fixed message “value does not satisfy the
+contract”, no problems, and `problems_complete = false`. TypeScript uses
+`diagnostics: "coarse"`, `message`, and `problemsComplete: false`.
+
+Select `DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream)` or
+`proof.valueContracts({ diagnostics: "upstream" })` to request the library's own
+first error through `validate()`. Messages remain value-free; available paths map
+to original locations and optional schema facts may expose source operands.
+This mode is **library-bounded**: construction can allocate in proportion to inputs
+and can overflow the stack on deep values. The SDK promises nothing stronger than
+the library. One first error does not establish diagnostic completeness, so the
+flag remains false. Work/regex limits and cancellation can omit detail after a
+verdict; missing detail never weakens failure and never counts as rule evidence.
+
+The former `with_schema_details` / `includeSchemaDetails` boolean and the
+`max_problems` / `maxProblems`, `diagnostic_bytes` / `diagnosticBytes` options are
+removed. There is no intermediate boolean diagnostics API or SDK construction
+bound for upstream errors.
 
 ## Caller-owned operation preparation
 
@@ -397,3 +405,23 @@ token, and providers receive an owned token. Token `check()` returns `Cancelled`
 not a value verdict. Contract boundaries convert it to `caller-cancelled`; async
 consumers retain their existing cancellation outcomes. Invocation retains its
 synchronous relay and isolated local tokens. See the [offline primitive comparison](../crates/openbindings-internal-cancellation/README.md).
+
+
+Document findings are independent of the value diagnostics mode. OBI-02 and OBI-10
+use the library's validity API only, with the fixed message
+`value violates the fixed normative schema`, their rule, and original source
+coordinates. OBI-02 follows failing object members, member names and array elements
+through the pinned schema's compiled validator map and local pointer references.
+It reports failing children and independently failing container constraints under
+the findings cap. Missing members, container constraints and non-descending
+constructs stay at their container, even when a child also fails;
+an empty walk falls back to the root. OBI-10 reports the schema node checked by its
+localized walk. Location work shares the existing work budget; stopping retains
+the deepest established failing node and marks findings truncated. Locations and
+missing detail never change validity or rule evidence. No document opt-in, size
+gate, library error construction or active diagnostic patch is involved.
+
+Migration: document findings keep source locations, lose keyword-specific wording,
+and can now contain several positions. OBI-10 uses the checked node rather than a
+keyword within it. Use rule, code and evidence for logic, not message text or
+finding count.

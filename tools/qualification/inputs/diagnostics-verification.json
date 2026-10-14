@@ -1,0 +1,587 @@
+{
+  "subject": "Value diagnostics modes and validity-only document findings",
+  "authority": "D-DIAGNOSTICS, Question 2 revisited; no diagnostic patch, size gate or document opt-in.",
+  "status": "Accepted review fixes complete; all executable offline gates pass except ten native loopback denials and both browser listeners.",
+  "constraints": {
+    "network": "No external network; offline Cargo/npm environment",
+    "git": "No Git writes; changes uncommitted",
+    "vendor": "No vendored source edits",
+    "value_diagnostics": "Coarse/Upstream verdict behavior unchanged; producerless schema-detail truncation variant removed."
+  },
+  "implementation": {
+    "fixed_checks": "is_valid only. OBI-02 checks children through the compiled schema map and independent container constraints through same-root projections; OBI-10 retains checked nodes.",
+    "message": "value violates the fixed normative schema",
+    "limits": "Whole-check validity is authoritative. Guidance shares the existing 2,000,000 work / 1,024 depth and pattern budgets; a walk stop retains failure and deepest known position. Existing 4,096 finding and 8 MiB pointer caps remain.",
+    "fork_boundary": "No instance validate/iter_errors/evaluate, keyword error collection, error-context ownership or active diagnostic count/metadata scope. PropertyNamesValidator::is_valid still calls inert diagnostic_copy, which immediately admits when inactive. See DEPENDENCY-MAINTENANCE.md."
+  },
+  "checks": {
+    "rust_format": "passed: workspace and standalone memory probe",
+    "clippy": "passed: workspace/all-targets/native and standalone probe, -D warnings; unchanged vendored deprecation warning remains dependency-capped",
+    "workspace_tests": {
+      "passed": 441,
+      "failed": 10,
+      "ignored": 2,
+      "status": "only loopback denials",
+      "loopback_denials": [
+        "cancellation_timeout_bounded_status_cleanup_and_connection_reuse",
+        "safe_native_constructor_follows_five_statuses_relative_locations_and_ten_hops",
+        "redirects_all_five_statuses_honor_policy_and_strip_cross_origin_credentials",
+        "normalized_loopback_http_and_non_loopback_admission",
+        "real_http_media_types_statuses_compression_and_location_independence",
+        "credential_origin_chains_refuse_only_cross_origin_then_same_origin",
+        "malformed_native_location_is_a_typed_policy_refusal",
+        "sdk_deadline_covers_slow_headers_and_slow_body",
+        "truncated_native_body_is_network_without_coding_evidence",
+        "tls_uses_private_ca_and_downgrade_chain_is_refused_before_plaintext_dispatch"
+      ],
+      "log": "target/diagnostics-review/workspace.log"
+    },
+    "location_tests": "Passed: required/child public reproductions, uniqueness/items, size/items, anyOf with original references, reference/annotation scope, container count-cap omissions, existing positions and work-budget fallback.",
+    "roles_archives_and_wasm": {
+      "inspection": {
+        "status": "passed",
+        "receipt": "target/source-inspection-qualification/archives/receipt.json",
+        "sha256": "202cc8cf95f9868e63f4ba71a905d1912b964b6f6d87c93437cf9ae911bf792f",
+        "archives": {
+          "openbindings-0.2.0-alpha.1.crate": "7b336ff118c7e2c098db50f1012dd625950ee152423478e045b0400b20692214",
+          "openbindings-internal-json-0.2.0-alpha.1.crate": "1f23c9344a0fc453947ab2b88a64330961e14acb7e74fca75a24e56ada4d53ba",
+          "openbindings-internal-cancellation-0.2.0-alpha.1.crate": "8e8b84652c5f6b2945c3846c2faa46a8a24f25f06a43b08bfa7340a14a052aba",
+          "openbindings-internal-schema-0.2.0-alpha.1.crate": "9926494083b9e128f365bd46ecb4d3787f1e09ec8db87e1ff715181128f4b915",
+          "openbindings-source-inspection-0.2.0-alpha.1.crate": "5c575a0f41ad3a541ef7b91e358f8e508c16ec346de49cbd10b1d463fb903670",
+          "openbindings-internal-jsonschema-0.58.6-ob.1.crate": "f341fb7f6117c1ff274ff635ce9202ed7a2d47c6047e9b66b3ab77d617a0ac70",
+          "openbindings-internal-jsonschema-value-0.58.6-ob.1.crate": "1a2af4ee0404dc3d04f7920981feb2d94b1a7fe8e65a4bfcbb571f8397f80865",
+          "openbindings-internal-serde-json-1.0.151-ob.1.crate": "15564a90c4e3a3eb876fc0486069786b1969460f03ee385777dc29e9410b06d4",
+          "openbindings-internal-referencing-0.58.6-ob.1.crate": "bf519543a8487e2099352cf5467bd7724d8b4a58089092a33fd426e3c342ab08",
+          "openbindings-internal-regress-0.12.0-ob.1.crate": "daa7037104287d4030abd2ea2a0793b7e05ca616ea998319fbe51c1e9673106a"
+        }
+      },
+      "synthesis": {
+        "status": "passed",
+        "receipt": "target/interface-synthesis-qualification/archives/receipt.json",
+        "sha256": "43bd8eef753441b8cdf135271727d72178621e1bde0b39227631bdd7d0298c94",
+        "archives": {
+          "openbindings-0.2.0-alpha.1.crate": "7b336ff118c7e2c098db50f1012dd625950ee152423478e045b0400b20692214",
+          "openbindings-internal-json-0.2.0-alpha.1.crate": "1f23c9344a0fc453947ab2b88a64330961e14acb7e74fca75a24e56ada4d53ba",
+          "openbindings-internal-cancellation-0.2.0-alpha.1.crate": "8e8b84652c5f6b2945c3846c2faa46a8a24f25f06a43b08bfa7340a14a052aba",
+          "openbindings-internal-schema-0.2.0-alpha.1.crate": "9926494083b9e128f365bd46ecb4d3787f1e09ec8db87e1ff715181128f4b915",
+          "openbindings-interface-synthesis-0.2.0-alpha.1.crate": "e36a55d8cd4ffd789f5c0777f301d8e9f283810f9007ae8a10932a3b0d282e64",
+          "openbindings-source-inspection-0.2.0-alpha.1.crate": "5c575a0f41ad3a541ef7b91e358f8e508c16ec346de49cbd10b1d463fb903670",
+          "openbindings-internal-jsonschema-0.58.6-ob.1.crate": "f341fb7f6117c1ff274ff635ce9202ed7a2d47c6047e9b66b3ab77d617a0ac70",
+          "openbindings-internal-jsonschema-value-0.58.6-ob.1.crate": "1a2af4ee0404dc3d04f7920981feb2d94b1a7fe8e65a4bfcbb571f8397f80865",
+          "openbindings-internal-serde-json-1.0.151-ob.1.crate": "15564a90c4e3a3eb876fc0486069786b1969460f03ee385777dc29e9410b06d4",
+          "openbindings-internal-referencing-0.58.6-ob.1.crate": "bf519543a8487e2099352cf5467bd7724d8b4a58089092a33fd426e3c342ab08",
+          "openbindings-internal-regress-0.12.0-ob.1.crate": "daa7037104287d4030abd2ea2a0793b7e05ca616ea998319fbe51c1e9673106a"
+        }
+      },
+      "invocation": {
+        "status": "passed",
+        "receipt": "target/binding-invocation-qualification/archives/receipt.json",
+        "sha256": "5944d5c44a46aa57ea24edf9bd7c79e9f44296039ac873c3399294c85abe19e2",
+        "archives": {
+          "openbindings-0.2.0-alpha.1.crate": "7b336ff118c7e2c098db50f1012dd625950ee152423478e045b0400b20692214",
+          "openbindings-internal-json-0.2.0-alpha.1.crate": "1f23c9344a0fc453947ab2b88a64330961e14acb7e74fca75a24e56ada4d53ba",
+          "openbindings-internal-cancellation-0.2.0-alpha.1.crate": "8e8b84652c5f6b2945c3846c2faa46a8a24f25f06a43b08bfa7340a14a052aba",
+          "openbindings-internal-schema-0.2.0-alpha.1.crate": "9926494083b9e128f365bd46ecb4d3787f1e09ec8db87e1ff715181128f4b915",
+          "openbindings-interface-synthesis-0.2.0-alpha.1.crate": "e36a55d8cd4ffd789f5c0777f301d8e9f283810f9007ae8a10932a3b0d282e64",
+          "openbindings-source-inspection-0.2.0-alpha.1.crate": "5c575a0f41ad3a541ef7b91e358f8e508c16ec346de49cbd10b1d463fb903670",
+          "openbindings-invocation-0.2.0-alpha.1.crate": "d154aff3d48635e830caf3e7b5c4fabbe77cef9411891ba20c495168f38578e5",
+          "openbindings-json-schema-evaluator-0.2.0-alpha.1.crate": "fefed04c5a685dac75a7dd24581b9a5c1f0b535712d56d9bc78755c2fabafa6e",
+          "openbindings-internal-jsonschema-0.58.6-ob.1.crate": "f341fb7f6117c1ff274ff635ce9202ed7a2d47c6047e9b66b3ab77d617a0ac70",
+          "openbindings-internal-jsonschema-value-0.58.6-ob.1.crate": "1a2af4ee0404dc3d04f7920981feb2d94b1a7fe8e65a4bfcbb571f8397f80865",
+          "openbindings-internal-serde-json-1.0.151-ob.1.crate": "15564a90c4e3a3eb876fc0486069786b1969460f03ee385777dc29e9410b06d4",
+          "openbindings-internal-referencing-0.58.6-ob.1.crate": "bf519543a8487e2099352cf5467bd7724d8b4a58089092a33fd426e3c342ab08",
+          "openbindings-internal-regress-0.12.0-ob.1.crate": "daa7037104287d4030abd2ea2a0793b7e05ca616ea998319fbe51c1e9673106a"
+        }
+      }
+    },
+    "api_reference": {
+      "status": "passed",
+      "exports": 83,
+      "entries": 459,
+      "log": "target/diagnostics-review/api-reference.log"
+    },
+    "attribution": "passed: all four files match offline closures",
+    "kit": {
+      "modes": [
+        "coarse",
+        "upstream"
+      ],
+      "observations_per_mode": 1564,
+      "satisfies": 860,
+      "fails": 662,
+      "preparation_refusals": 21,
+      "evaluation_no_verdict": 21,
+      "document_admissions": 495,
+      "status": "pass; exact verdict/refusal/evidence invariance"
+    },
+    "corpus": {
+      "native": 435,
+      "typescript": 435,
+      "status": "pass; exact verdict/refusal/evidence invariance and normalized native/TypeScript findings parity",
+      "native_receipt": "tools/qualification/corpus/88256d42-ff3e-41d2-929d-9b871692270c/full-actual.jsonl",
+      "typescript_receipt": "target/diagnostics-review/ts-corpus.jsonl",
+      "review_deltas": []
+    },
+    "diagnostic_changes": {
+      "ledger": "tools/qualification/inputs/diagnostics-migration-ledger.json",
+      "kit_coarse": 662,
+      "kit_upstream": 662,
+      "kit_document_findings": 0,
+      "corpus": 152
+    },
+    "probe_location_correction": {
+      "previous_claim": "19 enclosing arrays",
+      "actual": "5 arrays now locate failing elements; 14 OBI-10 cases stay at checked nodes as required",
+      "cases": "tools/qualification/inputs/document-location-expectations.json"
+    },
+    "memory": {
+      "status": "passed",
+      "large_documents": 69,
+      "investigation_generators": 67,
+      "retention_controls": 2,
+      "corpus_parsed": 300,
+      "corpus_parse_refusals": 5,
+      "repetitions": 3,
+      "bounds_bytes": {
+        "validity": 18874368,
+        "fixed_above_validity": 10485760,
+        "sdk_above_validity": 12582912
+      },
+      "compilation": [
+        {
+          "nanos": 4710125,
+          "peak_bytes": 2441891,
+          "phase": "location-map-compilation",
+          "repetition": 0
+        },
+        {
+          "nanos": 1878417,
+          "peak_bytes": 1895176,
+          "phase": "location-map-compilation",
+          "repetition": 1
+        },
+        {
+          "nanos": 1861625,
+          "peak_bytes": 1895176,
+          "phase": "location-map-compilation",
+          "repetition": 2
+        }
+      ],
+      "summary": {
+        "large": {
+          "cases": 69,
+          "samples": 207,
+          "validity": {
+            "max_peak_bytes": 17573888,
+            "max_peak_case": "document-aliases-unique",
+            "median_nanos": 1405417,
+            "max_nanos": 58952500
+          },
+          "location": {
+            "max_peak_bytes": 17574216,
+            "max_peak_case": "document-aliases-unique",
+            "median_nanos": 42,
+            "max_nanos": 82218875
+          },
+          "fixed": {
+            "max_peak_bytes": 17574216,
+            "max_peak_case": "document-aliases-unique",
+            "median_nanos": 2884708,
+            "max_nanos": 92988458
+          },
+          "sdk": {
+            "max_peak_bytes": 17949677,
+            "max_peak_case": "document-aliases-unique",
+            "median_nanos": 2792708,
+            "max_nanos": 115961500
+          },
+          "location_walk_cases": 30,
+          "median_active_location_nanos": 2491729.0,
+          "max_fixed_minus_validity_bytes": 8472586,
+          "max_sdk_minus_validity_bytes": 8797823,
+          "median_fixed_minus_validity_nanos": 27875
+        },
+        "corpus": {
+          "cases": 300,
+          "samples": 900,
+          "validity": {
+            "max_peak_bytes": 1120,
+            "max_peak_case": "document/OBI-10.json#/tests/0",
+            "median_nanos": 2125.0,
+            "max_nanos": 18208
+          },
+          "location": {
+            "max_peak_bytes": 1024,
+            "max_peak_case": "document/OBI-02.json#/tests/1",
+            "median_nanos": 42.0,
+            "max_nanos": 22042
+          },
+          "fixed": {
+            "max_peak_bytes": 1024,
+            "max_peak_case": "document/OBI-02.json#/tests/1",
+            "median_nanos": 2750.0,
+            "max_nanos": 17416
+          },
+          "sdk": {
+            "max_peak_bytes": 3930,
+            "max_peak_case": "document/OBI-12.json#/tests/32",
+            "median_nanos": 4750.0,
+            "max_nanos": 44250
+          },
+          "location_walk_cases": 95,
+          "median_active_location_nanos": 4000,
+          "max_fixed_minus_validity_bytes": 1000,
+          "max_sdk_minus_validity_bytes": 2930,
+          "median_fixed_minus_validity_nanos": -83.0
+        }
+      },
+      "raw_numbers": "tools/qualification/inputs/document-allocation-samples.json",
+      "method": "tools/diagnostic-memory-probe/README.md"
+    },
+    "typescript": {
+      "wasm_build": "passed",
+      "build": "passed",
+      "tests": {
+        "passed": 73,
+        "failed": 0
+      },
+      "types": "passed",
+      "format": "passed",
+      "installed_package": "passed",
+      "corpus": "435/435 with normalized native parity",
+      "browsers": {
+        "chromium": "listen EPERM 127.0.0.1 before launch",
+        "webkit": "listen EPERM 127.0.0.1 before launch"
+      },
+      "container_regressions": "Four additional public cases have exact native/TypeScript finding and coordinate parity; shared Node/package fixtures also verify truthful truncation."
+    },
+    "default_value_allocation": {
+      "ceiling_bytes": 65536,
+      "samples": 18,
+      "normal_peak_bytes": {
+        "ordinary": 35,
+        "partial-upper": 35,
+        "partial-lower": 113
+      },
+      "mutation_peaks": {
+        "ordinary": 10768016,
+        "partial-upper": 10768088,
+        "partial-lower": 14068864
+      },
+      "status": "all normal samples pass; all three mutations rejected",
+      "receipt": "tools/qualification/inputs/value-allocation-mutations.json"
+    }
+  },
+  "commands": [
+    "source /Users/matt/Code/ob-pj/design/rust-quality-program-2026-10-13/work/env.sh",
+    "cargo fmt --all --check",
+    "cargo fmt --manifest-path tools/diagnostic-memory-probe/Cargo.toml --check",
+    "cargo clippy --locked --workspace --all-targets --features openbindings-http-discovery/native -- -D warnings",
+    "cargo test --locked --workspace --features openbindings-http-discovery/native --no-fail-fast",
+    "python3 tools/verify-source-inspection.py --archives --wasm",
+    "python3 tools/verify-interface-synthesis.py --archives --wasm",
+    "python3 tools/verify-binding-invocation.py --archives --wasm",
+    "python3 tools/verify-api-reference.py",
+    "python3 tools/attribution.py --check",
+    "python3 tools/verify-diagnostics.py",
+    "cargo clippy --locked --manifest-path tools/diagnostic-memory-probe/Cargo.toml -- -D warnings",
+    "cargo build --locked --manifest-path tools/conformance-observer/Cargo.toml",
+    "python3 tools/qualification/replay/corpus.py",
+    "python3 tools/qualification/replay/production-corpus.py --binary tools/conformance-observer/target/debug/sdk-production-observer",
+    "cargo run --locked -p openbindings-schema-evaluator-test-support --example replay",
+    "cargo run --locked -p openbindings-schema-evaluator-test-support --example replay -- --upstream",
+    "python3 tools/qualification/replay/check-diagnostics-migrations.py --before-kit target/s8a/kit-before.json --coarse-kit target/diagnostics-review/kit-coarse.json --upstream-kit target/diagnostics-review/kit-upstream.json --before-corpus tools/qualification/corpus/5cc6dbf2-7370-4ae4-8fe2-cb1a00c208d4/full-actual.jsonl --after-corpus tools/qualification/corpus/88256d42-ff3e-41d2-929d-9b871692270c/full-actual.jsonl",
+    "npm run build:wasm; npm run build; npm test; npm run test:types; npm run format:check; npm run test:package (packages/typescript)",
+    "node tools/qualification/replay/node-corpus.mjs tools/qualification/corpus/full-requests.jsonl",
+    "python3 tools/qualification/replay/check-corpus-parity.py --native tools/qualification/corpus/88256d42-ff3e-41d2-929d-9b871692270c/full-actual.jsonl --typescript target/diagnostics-review/ts-corpus.jsonl",
+    "python3 tools/qualification/replay/prepare-browser-fixtures.py",
+    "node packages/typescript/test/browser.mjs chromium",
+    "node packages/typescript/test/browser.mjs webkit",
+    "python3 tools/diagnostic-memory-probe/check_value_mutations.py",
+    "python3 tools/qualification/replay/check-container-findings.py --binary tools/conformance-observer/target/debug/sdk-production-observer"
+  ],
+  "logs": "target/diagnostics-review/; allocation raw data: target/document-diagnostics/memory.jsonl",
+  "review_revision": {
+    "base": "75b8cee plus 1dcf25e",
+    "authority": "Accepted independent review findings and Claude instructions; REVIEW.md and CALL-SITES.md in the design s8a-review directory.",
+    "container_failures": "Fixed: container projections use validity only, retaining selector annotations and original-root reference resolution. Child and independent container positions are both retained under the existing cap; omission remains explicit.",
+    "new_public_regressions": [
+      {
+        "id": "required-root-and-child",
+        "document": "{\"openbindings\":\"0.2.0\",\"name\":42}",
+        "obi02_pointers": [
+          "/name",
+          ""
+        ]
+      },
+      {
+        "id": "required-source-and-child",
+        "document": "{\"openbindings\":\"0.2.0\",\"operations\":{},\"sources\":{\"s\":{\"description\":42}}}",
+        "obi02_pointers": [
+          "/sources/s/description",
+          "/sources/s"
+        ]
+      },
+      {
+        "id": "required-binding-and-child",
+        "document": "{\"openbindings\":\"0.2.0\",\"operations\":{},\"bindings\":{\"b\":{\"description\":42}}}",
+        "obi02_pointers": [
+          "/bindings/b/description",
+          "/bindings/b"
+        ]
+      },
+      {
+        "id": "unique-array-and-items",
+        "document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"aliases\":[false,false]}}}",
+        "obi02_pointers": [
+          "/operations/op/aliases/0",
+          "/operations/op/aliases/1",
+          "/operations/op/aliases"
+        ]
+      }
+    ],
+    "public_regression_parity": [
+      {
+        "id": "required-root-and-child",
+        "native_and_typescript": {
+          "executed": true,
+          "findings": [
+            {
+              "code": "schema-mismatch",
+              "location": {
+                "byte_column": 32,
+                "byte_offset": 31,
+                "line": 1,
+                "pointer": "/name"
+              },
+              "message": "value violates the fixed normative schema",
+              "rule": "OBI-02",
+              "status": "violated"
+            },
+            {
+              "code": "schema-mismatch",
+              "location": {
+                "byte_column": 1,
+                "byte_offset": 0,
+                "line": 1,
+                "pointer": ""
+              },
+              "message": "value violates the fixed normative schema",
+              "rule": "OBI-02",
+              "status": "violated"
+            }
+          ],
+          "id": "required-root-and-child",
+          "outcome": "non-conformant",
+          "rules": {
+            "OBI-01": "satisfied",
+            "OBI-02": "violated",
+            "OBI-03": "satisfied",
+            "OBI-04": "satisfied",
+            "OBI-05": "satisfied",
+            "OBI-06": "satisfied",
+            "OBI-07": "satisfied",
+            "OBI-08": "satisfied",
+            "OBI-09": "satisfied",
+            "OBI-10": "satisfied",
+            "OBI-11": "satisfied",
+            "OBI-12": "satisfied",
+            "OBI-13": "satisfied"
+          }
+        }
+      },
+      {
+        "id": "required-source-and-child",
+        "native_and_typescript": {
+          "executed": true,
+          "findings": [
+            {
+              "code": "schema-mismatch",
+              "location": {
+                "byte_column": 71,
+                "byte_offset": 70,
+                "line": 1,
+                "pointer": "/sources/s/description"
+              },
+              "message": "value violates the fixed normative schema",
+              "rule": "OBI-02",
+              "status": "violated"
+            },
+            {
+              "code": "schema-mismatch",
+              "location": {
+                "byte_column": 56,
+                "byte_offset": 55,
+                "line": 1,
+                "pointer": "/sources/s"
+              },
+              "message": "value violates the fixed normative schema",
+              "rule": "OBI-02",
+              "status": "violated"
+            }
+          ],
+          "id": "required-source-and-child",
+          "outcome": "non-conformant",
+          "rules": {
+            "OBI-01": "satisfied",
+            "OBI-02": "violated",
+            "OBI-03": "satisfied",
+            "OBI-04": "satisfied",
+            "OBI-05": "satisfied",
+            "OBI-06": "satisfied",
+            "OBI-07": "satisfied",
+            "OBI-08": "satisfied",
+            "OBI-09": "satisfied",
+            "OBI-10": "satisfied",
+            "OBI-11": "satisfied",
+            "OBI-12": "satisfied",
+            "OBI-13": "satisfied"
+          }
+        }
+      },
+      {
+        "id": "required-binding-and-child",
+        "native_and_typescript": {
+          "executed": true,
+          "findings": [
+            {
+              "code": "schema-mismatch",
+              "location": {
+                "byte_column": 72,
+                "byte_offset": 71,
+                "line": 1,
+                "pointer": "/bindings/b/description"
+              },
+              "message": "value violates the fixed normative schema",
+              "rule": "OBI-02",
+              "status": "violated"
+            },
+            {
+              "code": "schema-mismatch",
+              "location": {
+                "byte_column": 57,
+                "byte_offset": 56,
+                "line": 1,
+                "pointer": "/bindings/b"
+              },
+              "message": "value violates the fixed normative schema",
+              "rule": "OBI-02",
+              "status": "violated"
+            }
+          ],
+          "id": "required-binding-and-child",
+          "outcome": "non-conformant",
+          "rules": {
+            "OBI-01": "satisfied",
+            "OBI-02": "violated",
+            "OBI-03": "satisfied",
+            "OBI-04": "satisfied",
+            "OBI-05": "satisfied",
+            "OBI-06": "satisfied",
+            "OBI-07": "satisfied",
+            "OBI-08": "satisfied",
+            "OBI-09": "satisfied",
+            "OBI-10": "satisfied",
+            "OBI-11": "satisfied",
+            "OBI-12": "satisfied",
+            "OBI-13": "satisfied"
+          }
+        }
+      },
+      {
+        "id": "unique-array-and-items",
+        "native_and_typescript": {
+          "executed": true,
+          "findings": [
+            {
+              "code": "schema-mismatch",
+              "location": {
+                "byte_column": 56,
+                "byte_offset": 55,
+                "line": 1,
+                "pointer": "/operations/op/aliases/0"
+              },
+              "message": "value violates the fixed normative schema",
+              "rule": "OBI-02",
+              "status": "violated"
+            },
+            {
+              "code": "schema-mismatch",
+              "location": {
+                "byte_column": 62,
+                "byte_offset": 61,
+                "line": 1,
+                "pointer": "/operations/op/aliases/1"
+              },
+              "message": "value violates the fixed normative schema",
+              "rule": "OBI-02",
+              "status": "violated"
+            },
+            {
+              "code": "schema-mismatch",
+              "location": {
+                "byte_column": 55,
+                "byte_offset": 54,
+                "line": 1,
+                "pointer": "/operations/op/aliases"
+              },
+              "message": "value violates the fixed normative schema",
+              "rule": "OBI-02",
+              "status": "violated"
+            },
+            {
+              "code": "name-grammar",
+              "location": {
+                "byte_column": 56,
+                "byte_offset": 55,
+                "line": 1,
+                "pointer": "/operations/op/aliases/0"
+              },
+              "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+              "rule": "OBI-04",
+              "status": "violated"
+            },
+            {
+              "code": "name-grammar",
+              "location": {
+                "byte_column": 62,
+                "byte_offset": 61,
+                "line": 1,
+                "pointer": "/operations/op/aliases/1"
+              },
+              "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+              "rule": "OBI-04",
+              "status": "violated"
+            }
+          ],
+          "id": "unique-array-and-items",
+          "outcome": "non-conformant",
+          "rules": {
+            "OBI-01": "satisfied",
+            "OBI-02": "violated",
+            "OBI-03": "satisfied",
+            "OBI-04": "violated",
+            "OBI-05": "satisfied",
+            "OBI-06": "satisfied",
+            "OBI-07": "satisfied",
+            "OBI-08": "satisfied",
+            "OBI-09": "satisfied",
+            "OBI-10": "satisfied",
+            "OBI-11": "satisfied",
+            "OBI-12": "satisfied",
+            "OBI-13": "satisfied"
+          }
+        }
+      }
+    ],
+    "value_allocations": "New measured ordinary, partial-upper and partial-lower regressions, with a 65536-byte peak ceiling. All three validate(...).is_ok() mutations fail in isolated copies without altering public outcomes.",
+    "feature_documentation": "Removed slice labels from the evaluator-kit README and dependency maintenance guide; cleanup instructions name the unused diagnostic admission/metadata patch and guards to retain.",
+    "unused_variant": "No live producer of ValueProblemDetails::Truncated (called SchemaDetail::Truncated in the request). Removed Rust variant, TypeScript union arm, example branch and stale documentation/test wording. Wasm encoded() serializes the Rust result directly, so no separate Wasm variant remains.",
+    "baseline_comparison": {
+      "kit_coarse_changed_ids": [],
+      "kit_upstream_changed_ids": [],
+      "corpus_changed_ids": [],
+      "migration_ledger": "Reproduced unchanged; 662 historical changes per kit mode and 152 corpus changes, with no verdict/refusal/evidence drift."
+    }
+  }
+}

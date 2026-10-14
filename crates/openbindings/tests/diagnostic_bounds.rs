@@ -154,8 +154,8 @@ fn identical_invalid_schemas_at_distinct_locations_are_both_reported() {
         .iter()
         .map(|f| f.location.as_ref().unwrap().pointer.as_deref().unwrap())
         .collect();
-    assert!(pointers.contains("/operations/a/input/type"), "{schema:?}");
-    assert!(pointers.contains("/operations/b/input/type"), "{schema:?}");
+    assert!(pointers.contains("/operations/a/input"), "{schema:?}");
+    assert!(pointers.contains("/operations/b/input"), "{schema:?}");
     let unique: std::collections::HashSet<_> = schema
         .iter()
         .map(|f| {

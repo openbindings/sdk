@@ -444,14 +444,13 @@ pub fn judge(
     if let ValueOutcome::Fails {
         problems,
         problems_complete,
+        ..
     } = outcome
     {
-        if problems.is_empty() {
-            failures.push("failure lacks an actual failing instance location".into());
-        }
-        if !problems_complete {
-            failures
-                .push("these small fixture diagnostics unexpectedly exhausted their limit".into());
+        if *problems_complete && problems.is_empty() {
+            failures.push(
+                "complete failure diagnostics lack an actual failing instance location".into(),
+            );
         }
         let paths: BTreeSet<_> = problems
             .iter()
@@ -463,7 +462,8 @@ pub fn judge(
         {
             failures.push("problem location does not exist in the instance".into());
         }
-        if let Some(choices) = &case.acceptable_paths
+        if *problems_complete
+            && let Some(choices) = &case.acceptable_paths
             && !choices
                 .iter()
                 .any(|choice| choice.iter().cloned().collect::<BTreeSet<_>>() == paths)

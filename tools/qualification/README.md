@@ -17,3 +17,38 @@ The nine supplied-resource migrations retain refusal reason/code and change only
 source location. `adversarial/unreached-uncopied-targets/0` (formerly satisfies) and
 `/1` (formerly fails) are now core OBI-12 rejection regressions. No raw fixture seam
 survives, because the nine re-expressions preserve their outcomes.
+
+The diagnostics migration records diagnostic-only changes for every affected case in
+[`diagnostics-migration-ledger.json`](inputs/diagnostics-migration-ledger.json). The new
+`replay/check-diagnostics-migrations.py` compares exact before/after receipts, including
+both default Coarse and explicit Upstream kit runs (`--example replay -- --upstream`).
+It fails on any verdict, refusal stage/reason/code, inventory, or rule-evidence drift.
+Diagnostic completeness no longer serves as verdict evidence in either native or
+browser judges; malformed complete diagnostics and bogus locations still fail.
+
+
+Document location expectations separately account for the probe's 19 changed
+locations: five array-element fixes and fourteen intentionally localized OBI-10
+nodes. See `inputs/document-location-expectations.json`. The memory qualification
+and raw numbers are documented in `../diagnostic-memory-probe/README.md`.
+
+A listener-free TypeScript corpus lane uses the shipped facade:
+
+```sh
+node tools/qualification/replay/node-corpus.mjs tools/qualification/corpus/full-requests.jsonl > target/document-diagnostics/ts-corpus.jsonl
+python3 tools/qualification/replay/check-corpus-parity.py --native PATH_TO_NATIVE_JSONL --typescript target/document-diagnostics/ts-corpus.jsonl
+```
+
+Parity includes all findings and source coordinates. The comparison normalizes
+Rust/TypeScript field spelling and excludes only the TypeScript observer's extra
+setup tags and the native observer's truncation field; shared cap tests cover the
+latter in Node and the installed package.
+
+
+Independent container failures have four additional public regression cases in
+`inputs/container-findings-cases.json`, outside the unchanged specification corpus
+inventory. `replay/check-container-findings.py --binary PATH` replays them through
+native and TypeScript APIs and compares complete findings, including coordinates.
+The current review changes no existing kit/corpus observation; the migration ledger
+reproduces without changes. The verification receipt records the new regressions
+and the producerless schema-detail variant's removal.

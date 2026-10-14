@@ -1,7 +1,8 @@
 use openbindings::*;
+const MESSAGE: &str = "value violates the fixed normative schema";
 
 #[test]
-fn direct_type_explanation_preserves_rule_location_and_rejected_value_privacy() {
+fn fixed_message_preserves_rule_location_and_rejected_value_privacy() {
     let text = "{\n  \"openbindings\":\"0.2.0\",\n  \"name\":\"café\",\n  \"operations\":{\"lookup\":{\"description\":{\"private\":\"rejected-secret\"}}}\n}";
     let validation = validate_document(text).unwrap();
     let report = validation.report();
@@ -13,7 +14,7 @@ fn direct_type_explanation_preserves_rule_location_and_rejected_value_privacy() 
     assert_eq!(finding.rule, "OBI-02");
     assert_eq!(finding.code, "schema-mismatch");
     assert_eq!(finding.status, Evidence::Violated);
-    assert_eq!(finding.message, "expected JSON type: string");
+    assert_eq!(finding.message, MESSAGE);
     let at = finding.location.as_ref().unwrap();
     assert_eq!(
         at.pointer.as_deref(),
@@ -31,17 +32,14 @@ fn direct_type_explanation_preserves_rule_location_and_rejected_value_privacy() 
 }
 
 #[test]
-fn required_explanation_points_at_the_original_containing_object() {
+fn required_failure_points_at_the_original_containing_object() {
     let text = " \n {\"openbindings\":\"0.2.0\"}";
     let validation = validate_document(text).unwrap();
     assert_eq!(validation.report().findings.len(), 1);
     let finding = &validation.report().findings[0];
     assert_eq!(finding.rule, "OBI-02");
     assert_eq!(finding.code, "schema-mismatch");
-    assert_eq!(
-        finding.message,
-        "object is missing required field \"operations\""
-    );
+    assert_eq!(finding.message, MESSAGE);
     let at = finding.location.as_ref().unwrap();
     assert_eq!(at.pointer.as_deref(), Some(""));
     assert_eq!((at.byte_offset, at.line, at.byte_column), (3, 2, 2));
@@ -56,7 +54,7 @@ fn required_explanation_points_at_the_original_containing_object() {
         .iter()
         .find(|f| f.code == "schema-mismatch")
         .unwrap();
-    assert_eq!(finding.message, "object is missing required field \"kind\"");
+    assert_eq!(finding.message, MESSAGE);
     assert_eq!(
         finding.location.as_ref().unwrap().pointer.as_deref(),
         Some("/sources/s")
@@ -65,23 +63,20 @@ fn required_explanation_points_at_the_original_containing_object() {
 }
 
 #[test]
-fn complex_failure_stays_generic_while_explicit_type_union_is_explained() {
+fn document_and_meta_failures_use_fixed_messages() {
     let validation =
         validate_document(r#"{"openbindings":"0.2.0","operations":{"lookup":{"input":null}}}"#)
             .unwrap();
     let findings = &validation.report().findings;
     let normative = findings.iter().find(|f| f.rule == "OBI-02").unwrap();
     assert_eq!(normative.code, "schema-mismatch");
-    assert_eq!(normative.message, "value violates the anyOf constraint");
+    assert_eq!(normative.message, MESSAGE);
     assert_eq!(
         normative.location.as_ref().unwrap().pointer.as_deref(),
         Some("/operations/lookup/input")
     );
     let meta = findings.iter().find(|f| f.rule == "OBI-10").unwrap();
-    assert_eq!(
-        meta.message,
-        "expected one of these JSON types: boolean, object"
-    );
+    assert_eq!(meta.message, MESSAGE);
     assert_eq!(meta.location, normative.location);
     assert!(findings.iter().all(|f| f.message.len() <= 512));
     assert!(
@@ -91,7 +86,7 @@ fn complex_failure_stays_generic_while_explicit_type_union_is_explained() {
     );
 }
 
-const UNEXPECTED: &str = "this member is not permitted here; extension member names begin with x-";
+const UNEXPECTED: &str = MESSAGE;
 
 #[test]
 fn unexpected_fields_locate_original_key_tokens_in_source_order() {
@@ -132,8 +127,8 @@ fn all_closed_objects_are_diagnosed_without_entering_opaque_or_schema_values() {
         .report()
         .findings
         .iter()
-        .filter(|f| f.message == UNEXPECTED)
-        .map(|f| f.location.as_ref().unwrap().pointer.as_deref().unwrap())
+        .filter(|f| f.rule == "OBI-02")
+        .map(|f| f.location.as_ref().unwrap().pointer.clone().unwrap())
         .collect();
     paths.sort_unstable();
     assert_eq!(
@@ -147,7 +142,6 @@ fn all_closed_objects_are_diagnosed_without_entering_opaque_or_schema_values() {
             "/sources/s/badSource"
         ]
     );
-    assert_eq!(validation.report().findings.len(), 6);
     let mut corrected = text.to_owned();
     for name in [
         "badRoot",
@@ -195,84 +189,54 @@ fn name_guidance_describes_the_existing_grammar_for_every_name_position() {
 }
 
 #[test]
-fn expansion_saturation_preserves_all_rule_evidence_and_truthful_truncation() {
+fn localized_findings_preserve_all_rule_evidence_under_the_findings_cap() {
     for count in [4096, 4097] {
-        let fields = (0..count)
-            .map(|i| format!(",\"bad{i}\":0"))
-            .collect::<String>();
-        let text = format!("{{\"openbindings\":\"0.2.0\",\"operations\":{{}}{fields}}}");
-        let validation = validate_document(&text).unwrap();
-        assert_eq!(validation.report().findings.len(), 4096);
-        assert_eq!(validation.report().findings_truncated, count > 4096);
-        assert_eq!(validation.report().evidence["OBI-02"], Evidence::Violated);
-        assert_eq!(validation.report().evidence.len(), 13);
-        assert!(
-            validation
-                .report()
-                .findings
-                .iter()
-                .all(|f| f.message == UNEXPECTED)
-        );
-        let bad_schema = text.replace(
-            "\"operations\":{}",
-            "\"operations\":{},\"schemas\":{\"s\":{\"type\":7}}",
-        );
-        let validation = validate_document(bad_schema).unwrap();
-        assert_eq!(validation.report().findings.len(), 4096);
-        assert!(validation.report().findings_truncated);
-        assert_eq!(validation.report().evidence["OBI-10"], Evidence::Violated);
-        if count == 4096 {
-            let deep = format!("{}true{}", "{\"not\":".repeat(300), "}".repeat(300));
-            let source = text.replace(
-                "\"operations\":{}",
-                &format!("\"operations\":{{}},\"schemas\":{{\"s\":{deep}}}"),
-            );
-            let validation = validate_document(source).unwrap();
-            assert_eq!(validation.report().findings.len(), 4096);
-            assert!(!validation.report().findings_truncated);
-            assert_eq!(validation.report().evidence["OBI-10"], Evidence::Met);
-        }
+        let schemas = (0..count)
+            .map(|i| format!("\"s{i}\":{{\"minLength\":-1}}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let text =
+            format!(r#"{{"openbindings":"0.2.0","operations":{{}},"schemas":{{{schemas}}}}}"#);
+        let validation = validate_document(text).unwrap();
+        let report = validation.report();
+        assert_eq!(report.findings.len(), 4096);
+        assert_eq!(report.findings_truncated, count > 4096);
+        assert_eq!(report.evidence["OBI-02"], Evidence::Met);
+        assert_eq!(report.evidence["OBI-10"], Evidence::Violated);
+        assert_eq!(report.evidence.len(), 13);
+        assert!(report.findings.iter().all(|f| f.message == MESSAGE));
     }
 }
 
 #[test]
-fn expansion_pointer_budget_prevents_large_ancestor_amplification() {
+fn findings_respect_aggregate_source_pointer_allowance() {
     let name = "a".repeat(2048);
     let fields = (0..4096)
         .map(|i| format!("\"bad{i}\":0"))
         .collect::<Vec<_>>()
         .join(",");
-    let text = format!(
-        "{{\"openbindings\":\"0.2.0\",\"operations\":{{\"{name}\":{{{fields}}},\"y\":{{\"bad\":0}},\"z\":{{\"description\":42}}}}}}"
-    );
+    let text = format!(r#"{{"openbindings":"0.2.0","operations":{{"{name}":{{{fields}}}}}}}"#);
     let validation = validate_document(text).unwrap();
     let report = validation.report();
-    assert_eq!(report.conclusion, Conformance::NonConformant);
+    assert_eq!(report.evidence["OBI-02"], Evidence::Violated);
+    assert!(report.findings.len() > 1);
     assert!(report.findings_truncated);
-    assert!(report.findings.len() < 4096);
-    assert!(
-        report
-            .findings
-            .iter()
-            .any(|f| f.message == "expected JSON type: string"
-                && f.location.as_ref().unwrap().pointer.as_deref()
-                    == Some("/operations/z/description"))
-    );
-    assert!(
-        !report
-            .findings
-            .iter()
-            .any(|f| f.location.as_ref().unwrap().pointer.as_deref() == Some("/operations/y/bad"))
-    );
     let bytes: usize = report
         .findings
         .iter()
-        .filter(|f| f.message == UNEXPECTED)
         .map(|f| f.location.as_ref().unwrap().pointer.as_ref().unwrap().len())
         .sum();
     assert!(bytes <= 8 * 1024 * 1024);
-    assert!(bytes > 8 * 1024 * 1024 - 2100);
-    assert_eq!(report.evidence["OBI-02"], Evidence::Violated);
+    assert_eq!(report.findings[0].message, UNEXPECTED);
+    assert_eq!(
+        report.findings[0]
+            .location
+            .as_ref()
+            .unwrap()
+            .pointer
+            .as_deref(),
+        Some(format!("/operations/{name}/bad0").as_str())
+    );
 }
 
 #[test]
@@ -305,25 +269,29 @@ fn ambiguous_json_refusals_are_not_replaced_by_field_guidance() {
 }
 
 #[test]
-fn keyword_messages_are_value_free_and_property_names_locate_original_tokens() {
-    // CR-6: use documented kind/path metadata, never rejected-instance payloads.
+fn fixed_messages_are_value_free_and_property_names_locate_original_tokens() {
+    // Findings use validity and original tokens, never library error payloads.
     let text = r#"{"openbindings":"0.2.0","operations":{"-secret":{},".private":{},"\ud800":{}},"dependencies":{"d":{"operation":"-secret","kinds":[]}},"schemas":{"s":{"$anchor":"1private","minLength":-1}}}"#;
     let validation = validate_document(text).unwrap();
-    for (pointer, keyword) in [
-        ("/dependencies/d/kinds", "minItems"),
-        ("/schemas/s/$anchor", "pattern"),
-        ("/schemas/s/minLength", "minimum"),
+    for (fragment, pointer) in [
+        (
+            r#""dependencies":{"d":{"operation":"op","kinds":[]}}"#,
+            "/dependencies/d/kinds",
+        ),
+        (r#""schemas":{"s":{"$anchor":"1private"}}"#, "/schemas/s"),
+        (r#""schemas":{"s":{"minLength":-1}}"#, "/schemas/s"),
     ] {
+        let source = format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{}}}},{fragment}}}"#);
+        let check = validate_document(source).unwrap();
         assert!(
-            validation
+            check
                 .report()
                 .findings
                 .iter()
                 .any(|f| f.code == "schema-mismatch"
                     && f.location.as_ref().unwrap().pointer.as_deref() == Some(pointer)
-                    && f.message.contains(keyword)),
-            "{pointer}: {:?}",
-            validation.report().findings
+                    && f.message == MESSAGE),
+            "{pointer}"
         );
     }
     for token in [r#""-secret""#, r#"".private""#, r#""\ud800""#] {
@@ -333,7 +301,7 @@ fn keyword_messages_are_value_free_and_property_names_locate_original_tokens() {
                 .findings
                 .iter()
                 .any(|f| f.rule == "OBI-02"
-                    && f.message.contains("pattern")
+                    && f.message == MESSAGE
                     && f.location.as_ref().unwrap().byte_offset == text.find(token).unwrap()),
             "{token}"
         );
@@ -345,4 +313,42 @@ fn keyword_messages_are_value_free_and_property_names_locate_original_tokens() {
             .iter()
             .all(|f| !f.message.contains("secret") && !f.message.contains("private"))
     );
+}
+
+#[test]
+fn independent_container_findings_keep_children_and_truthful_omissions() {
+    for (text, pointers) in [
+        (r#"{"openbindings":"0.2.0","name":42}"#, vec!["/name", ""]),
+        (
+            r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"description":42}}}"#,
+            vec!["/sources/s/description", "/sources/s"],
+        ),
+        (
+            r#"{"openbindings":"0.2.0","operations":{},"bindings":{"b":{"description":42}}}"#,
+            vec!["/bindings/b/description", "/bindings/b"],
+        ),
+        (
+            r#"{"openbindings":"0.2.0","operations":{"op":{"aliases":[false,false]}}}"#,
+            vec![
+                "/operations/op/aliases/0",
+                "/operations/op/aliases/1",
+                "/operations/op/aliases",
+            ],
+        ),
+    ] {
+        let validation = validate_document(text).unwrap();
+        let report = validation.report();
+        assert_eq!(report.evidence["OBI-02"], Evidence::Violated);
+        assert!(!report.findings_truncated);
+        let actual: Vec<_> = report
+            .findings
+            .iter()
+            .filter(|f| f.rule == "OBI-02")
+            .map(|f| {
+                assert_eq!(f.message, MESSAGE);
+                f.location.as_ref().unwrap().pointer.as_deref().unwrap()
+            })
+            .collect();
+        assert_eq!(actual, pointers);
+    }
 }

@@ -53,8 +53,8 @@ async function caller(
     using validated = proof.document;
     using contracts = validated.valueContracts({
       resources,
-      includeSchemaDetails: true,
-      limits: { maxProblems: 4 },
+      diagnostics: "upstream",
+      limits: { evaluationSteps: 2000000 },
     });
     const prepared = contracts.prepare("run", "input", {
       signal: new AbortController().signal,

@@ -1,0 +1,274 @@
+{
+  "correction": "The probe changed 19 case locations: 5 enclosing arrays and 14 localized OBI-10 schema nodes, not 19 arrays.",
+  "cases": [
+    {
+      "id": "document/OBI-02.json#/tests/22",
+      "kind": "array-element",
+      "rule": "OBI-02",
+      "first_error_pointers": [
+        "/dependencies/delivery/kinds/0"
+      ],
+      "probe_pointers": [
+        "/dependencies/delivery/kinds"
+      ],
+      "expected_pointers": [
+        "/dependencies/delivery/kinds/0"
+      ]
+    },
+    {
+      "id": "document/OBI-02.json#/tests/23",
+      "kind": "array-element",
+      "rule": "OBI-02",
+      "first_error_pointers": [
+        "/dependencies/delivery/kinds/0"
+      ],
+      "probe_pointers": [
+        "/dependencies/delivery/kinds"
+      ],
+      "expected_pointers": [
+        "/dependencies/delivery/kinds/0"
+      ]
+    },
+    {
+      "id": "document/OBI-02.json#/tests/49",
+      "kind": "array-element",
+      "rule": "OBI-02",
+      "first_error_pointers": [
+        "/operations/createTask/tags/1"
+      ],
+      "probe_pointers": [
+        "/operations/createTask/tags"
+      ],
+      "expected_pointers": [
+        "/operations/createTask/tags/1"
+      ]
+    },
+    {
+      "id": "document/OBI-04.json#/tests/23",
+      "kind": "array-element",
+      "rule": "OBI-02",
+      "first_error_pointers": [
+        "/operations/createTask/aliases/0"
+      ],
+      "probe_pointers": [
+        "/operations/createTask/aliases"
+      ],
+      "expected_pointers": [
+        "/operations/createTask/aliases/0"
+      ]
+    },
+    {
+      "id": "document/OBI-04.json#/tests/25",
+      "kind": "array-element",
+      "rule": "OBI-02",
+      "first_error_pointers": [
+        "/operations/createTask/aliases/0"
+      ],
+      "probe_pointers": [
+        "/operations/createTask/aliases"
+      ],
+      "expected_pointers": [
+        "/operations/createTask/aliases/0"
+      ]
+    },
+    {
+      "id": "document/OBI-10.json#/tests/9",
+      "kind": "localized-schema-node",
+      "rule": "OBI-10",
+      "first_error_pointers": [
+        "/operations/createTask/input/type"
+      ],
+      "probe_pointers": [
+        "/operations/createTask/input"
+      ],
+      "expected_pointers": [
+        "/operations/createTask/input"
+      ]
+    },
+    {
+      "id": "document/OBI-10.json#/tests/10",
+      "kind": "localized-schema-node",
+      "rule": "OBI-10",
+      "first_error_pointers": [
+        "/operations/createTask/input/type"
+      ],
+      "probe_pointers": [
+        "/operations/createTask/input"
+      ],
+      "expected_pointers": [
+        "/operations/createTask/input"
+      ]
+    },
+    {
+      "id": "document/OBI-10.json#/tests/13",
+      "kind": "localized-schema-node",
+      "rule": "OBI-10",
+      "first_error_pointers": [
+        "/schemas/Task/properties/title/minLength"
+      ],
+      "probe_pointers": [
+        "/schemas/Task/properties/title"
+      ],
+      "expected_pointers": [
+        "/schemas/Task/properties/title"
+      ]
+    },
+    {
+      "id": "document/OBI-10.json#/tests/14",
+      "kind": "localized-schema-node",
+      "rule": "OBI-10",
+      "first_error_pointers": [
+        "/operations/createTasks/input/items/required"
+      ],
+      "probe_pointers": [
+        "/operations/createTasks/input/items"
+      ],
+      "expected_pointers": [
+        "/operations/createTasks/input/items"
+      ]
+    },
+    {
+      "id": "document/OBI-10.json#/tests/15",
+      "kind": "localized-schema-node",
+      "rule": "OBI-10",
+      "first_error_pointers": [
+        "/operations/getTask/output/oneOf"
+      ],
+      "probe_pointers": [
+        "/operations/getTask/output"
+      ],
+      "expected_pointers": [
+        "/operations/getTask/output"
+      ]
+    },
+    {
+      "id": "document/OBI-10.json#/tests/16",
+      "kind": "localized-schema-node",
+      "rule": "OBI-10",
+      "first_error_pointers": [
+        "/operations/getTask/output/anyOf/1"
+      ],
+      "probe_pointers": [
+        "/operations/getTask/output"
+      ],
+      "expected_pointers": [
+        "/operations/getTask/output"
+      ]
+    },
+    {
+      "id": "document/OBI-10.json#/tests/19",
+      "kind": "localized-schema-node",
+      "rule": "OBI-10",
+      "first_error_pointers": [
+        "/operations/a/input/$anchor"
+      ],
+      "probe_pointers": [
+        "/operations/a/input"
+      ],
+      "expected_pointers": [
+        "/operations/a/input"
+      ]
+    },
+    {
+      "id": "document/OBI-10.json#/tests/21",
+      "kind": "localized-schema-node",
+      "rule": "OBI-10",
+      "first_error_pointers": [
+        "/schemas/A/type"
+      ],
+      "probe_pointers": [
+        "/schemas/A"
+      ],
+      "expected_pointers": [
+        "/schemas/A"
+      ]
+    },
+    {
+      "id": "document/OBI-10.json#/tests/22",
+      "kind": "localized-schema-node",
+      "rule": "OBI-10",
+      "first_error_pointers": [
+        "/schemas/A/$anchor",
+        "/schemas/B/$anchor"
+      ],
+      "probe_pointers": [
+        "/schemas/A",
+        "/schemas/B"
+      ],
+      "expected_pointers": [
+        "/schemas/A",
+        "/schemas/B"
+      ]
+    },
+    {
+      "id": "document/OBI-10.json#/tests/23",
+      "kind": "localized-schema-node",
+      "rule": "OBI-10",
+      "first_error_pointers": [
+        "/operations/op/input/items"
+      ],
+      "probe_pointers": [
+        "/operations/op/input"
+      ],
+      "expected_pointers": [
+        "/operations/op/input"
+      ]
+    },
+    {
+      "id": "document/OBI-10.json#/tests/25",
+      "kind": "localized-schema-node",
+      "rule": "OBI-10",
+      "first_error_pointers": [
+        "/schemas/Task/$defs/Inner/properties/id/type"
+      ],
+      "probe_pointers": [
+        "/schemas/Task/$defs/Inner/properties/id"
+      ],
+      "expected_pointers": [
+        "/schemas/Task/$defs/Inner/properties/id"
+      ]
+    },
+    {
+      "id": "document/OBI-10.json#/tests/26",
+      "kind": "localized-schema-node",
+      "rule": "OBI-10",
+      "first_error_pointers": [
+        "/operations/op/input/minLength"
+      ],
+      "probe_pointers": [
+        "/operations/op/input"
+      ],
+      "expected_pointers": [
+        "/operations/op/input"
+      ]
+    },
+    {
+      "id": "document/OBI-12.json#/tests/40",
+      "kind": "localized-schema-node",
+      "rule": "OBI-10",
+      "first_error_pointers": [
+        "/schemas/A/$anchor"
+      ],
+      "probe_pointers": [
+        "/schemas/A"
+      ],
+      "expected_pointers": [
+        "/schemas/A"
+      ]
+    },
+    {
+      "id": "document/OBI-13.json#/tests/14",
+      "kind": "localized-schema-node",
+      "rule": "OBI-10",
+      "first_error_pointers": [
+        "/schemas/A/type"
+      ],
+      "probe_pointers": [
+        "/schemas/A"
+      ],
+      "expected_pointers": [
+        "/schemas/A"
+      ]
+    }
+  ]
+}

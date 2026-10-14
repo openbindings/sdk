@@ -107,15 +107,25 @@ realm. Construct TypeScript validated documents through `parsed.validated()` and
 complete before/after examples and nested exact-value ownership rules.
 
 
-Optional default-evaluator schema facts use
-`DefaultEvaluator::new().with_schema_details(true)` (TS
-`valueContracts({ includeSchemaDetails: true })`). They retain original source snapshots
-and share the diagnostic string-byte budget. `ValueProblemDetails::Truncated`
-sets result completeness false; absent details mean disabled or unavailable.
-Exact bounds and enum choices remain JSON token strings. Existing Rust evaluator
-implementations constructing `ValueProblem` must add `details: None` to preserve
-their previous output. The enum is non-exhaustive; match future variants safely.
-See the [evaluator resource contract](../crates/openbindings-json-schema-evaluator/README.md).
+The default evaluator decides validity with `is_valid`. `Diagnostics::Coarse`
+(the default) returns `Fails` with the fixed message “value does not satisfy the
+contract”, no problems, and `problems_complete = false`. TypeScript uses
+`diagnostics: "coarse"`, `message`, and `problemsComplete: false`.
+
+Select `DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream)` or
+`proof.valueContracts({ diagnostics: "upstream" })` to request the library's own
+first error through `validate()`. Messages remain value-free; available paths map
+to original locations and optional schema facts may expose source operands.
+This mode is **library-bounded**: construction can allocate in proportion to inputs
+and can overflow the stack on deep values. The SDK promises nothing stronger than
+the library. One first error does not establish diagnostic completeness, so the
+flag remains false. Work/regex limits and cancellation can omit detail after a
+verdict; missing detail never weakens failure and never counts as rule evidence.
+
+The former `with_schema_details` / `includeSchemaDetails` boolean and the
+`max_problems` / `maxProblems`, `diagnostic_bytes` / `diagnosticBytes` options are
+removed. There is no intermediate boolean diagnostics API or SDK construction
+bound for upstream errors.
 
 ## Validated contract access (S6c)
 
@@ -127,3 +137,23 @@ requires that proof, and `with_evaluator` no longer returns an interpretation er
 Retain parsed views for editing invalid documents; acquire validated views for
 infallible field reads. Rust exact text now uses `JsonStringRef` for descriptions,
 tags and kinds; callers choose scalar conversion or exact UTF-16 explicitly.
+
+
+Document findings are independent of the value diagnostics mode. OBI-02 and OBI-10
+use the library's validity API only, with the fixed message
+`value violates the fixed normative schema`, their rule, and original source
+coordinates. OBI-02 follows failing object members, member names and array elements
+through the pinned schema's compiled validator map and local pointer references.
+It reports failing children and independently failing container constraints under
+the findings cap. Missing members, container constraints and non-descending
+constructs stay at their container, even when a child also fails;
+an empty walk falls back to the root. OBI-10 reports the schema node checked by its
+localized walk. Location work shares the existing work budget; stopping retains
+the deepest established failing node and marks findings truncated. Locations and
+missing detail never change validity or rule evidence. No document opt-in, size
+gate, library error construction or active diagnostic patch is involved.
+
+Migration: document findings keep source locations, lose keyword-specific wording,
+and can now contain several positions. OBI-10 uses the checked node rather than a
+keyword within it. Use rule, code and evidence for logic, not message text or
+finding count.

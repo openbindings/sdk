@@ -30,6 +30,7 @@ impl PreparedSchema for BooleanContract {
             ValueOutcome::Satisfies
         } else {
             ValueOutcome::Fails {
+                message: "value does not satisfy the contract".into(),
                 problems: vec![ValueProblem {
                     details: None,
                     instance_pointer: String::new(),

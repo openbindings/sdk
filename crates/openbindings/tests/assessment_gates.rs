@@ -84,46 +84,6 @@ fn native_names_compare_utf16_units_even_when_grammar_is_violated() {
 }
 
 #[test]
-fn local_meta_checks_at_arbitrary_depth_on_small_stack() {
-    // CR-4: full API, cold compilation is also covered in this test executable.
-    std::thread::Builder::new()
-        .stack_size(256 * 1024)
-        .spawn(|| {
-            for depth in [256, 257, 300, 12000] {
-                for bad in [false, true] {
-                    let leaf = if bad { r#"{"type":42}"# } else { "{}" };
-                    let schema =
-                        format!("{}{leaf}{}", r#"{"not":"#.repeat(depth), "}".repeat(depth));
-                    let text = format!(
-                        r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
-                    );
-                    let validation = checked(&text);
-                    assert_eq!(
-                        validation.report().conclusion,
-                        if bad {
-                            Conformance::NonConformant
-                        } else {
-                            Conformance::Conformant
-                        },
-                        "depth {depth}"
-                    );
-                    assert_eq!(
-                        validation.report().evidence["OBI-10"],
-                        if bad {
-                            Evidence::Violated
-                        } else {
-                            Evidence::Met
-                        }
-                    );
-                }
-            }
-        })
-        .unwrap()
-        .join()
-        .unwrap();
-}
-
-#[test]
 fn assessment_admission_is_caller_selected_and_precedes_version() {
     // CR-9 and HD-12: all three limits precede a complete version declaration.
     let text = r#"{"openbindings":"0.3.0","operations":{},"x":[0]}"#;
