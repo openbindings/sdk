@@ -2,7 +2,9 @@
 
 Based on `jsonschema-0.58.6`; upstream license and notices are retained.
 The distinct package identity selects the qualified work/depth/cycle and
-ECMAScript-regex guards. S3 corrections remain in the sibling regress fork.
+ECMAScript-regex guards. The regex correctness fixes (empty quantifier semantics
+and backtrack budget restoration) remain in the sibling regress fork; see
+DEPENDENCY-MAINTENANCE.md.
 All diagnostic admission, copy, payload, metadata and schema-detail changes have
 been removed. Error construction is the upstream implementation.
 
