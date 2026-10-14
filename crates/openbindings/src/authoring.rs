@@ -204,7 +204,7 @@ impl Read for Preference {
 
 #[derive(Clone, Debug)]
 /// Owned, editable normative vocabulary. `None` omits an optional member; opaque `JsonValue::null()` remains present JSON null. Building checks representability and collisions, not conformance. Assess the new immutable snapshot before publication.
-pub struct DocumentBuilder {
+pub struct Document {
     /// Declared specification version; defaults to [`AUTHORING_VERSION`].
     pub openbindings: String,
     /// Primary operation keys and draft operations; aliases share their namespace during interpretation.
@@ -226,7 +226,7 @@ pub struct DocumentBuilder {
     /// Extension and unknown members, retained verbatim; conformance determines whether each is allowed.
     pub additional_fields: BTreeMap<String, JsonValue>,
 }
-impl Serialize for DocumentBuilder {
+impl Serialize for Document {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         const RESERVED: &[&str] = &[
             "openbindings",
@@ -276,7 +276,7 @@ impl Serialize for DocumentBuilder {
         map.end()
     }
 }
-impl Read for DocumentBuilder {
+impl Read for Document {
     fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
         if v.kind() != JsonKind::Object {
             return Err(error(v, "expected an object"));
@@ -348,7 +348,7 @@ pub struct Operation {
     /// Optional output JSON Schema; absence means no output contract, while false is a present schema.
     pub output: Option<JsonValue>,
     /// Optional named examples carrying exact input/output instances.
-    pub examples: Option<BTreeMap<String, OperationExample>>,
+    pub examples: Option<BTreeMap<String, Example>>,
     /// Extension and unknown members, retained verbatim; conformance determines whether each is allowed.
     pub additional_fields: BTreeMap<String, JsonValue>,
 }
@@ -412,7 +412,7 @@ impl Read for Operation {
             output: v.get("output").map(<JsonValue>::read).transpose()?,
             examples: v
                 .get("examples")
-                .map(<BTreeMap<String, OperationExample>>::read)
+                .map(<BTreeMap<String, Example>>::read)
                 .transpose()?,
             additional_fields: v
                 .members()
@@ -437,7 +437,7 @@ impl Read for Operation {
 
 #[derive(Clone, Debug, Default)]
 /// Editable example values; these are instances, not schemas or proof that an operation accepts them.
-pub struct OperationExample {
+pub struct Example {
     /// Optional human-facing explanation of this example.
     pub description: Option<String>,
     /// Optional exact input instance; explicit JSON null is preserved.
@@ -447,7 +447,7 @@ pub struct OperationExample {
     /// Extension and unknown members, retained verbatim; conformance determines whether each is allowed.
     pub additional_fields: BTreeMap<String, JsonValue>,
 }
-impl Serialize for OperationExample {
+impl Serialize for Example {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         const RESERVED: &[&str] = &["description", "input", "output"];
         for key in self.additional_fields.keys() {
@@ -473,7 +473,7 @@ impl Serialize for OperationExample {
         map.end()
     }
 }
-impl Read for OperationExample {
+impl Read for Example {
     fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
         if v.kind() != JsonKind::Object {
             return Err(error(v, "expected an object"));
@@ -497,10 +497,10 @@ impl Read for OperationExample {
 #[derive(Clone, Debug, Default)]
 /// Editable dependency on another operation, with an optional source-kind restriction.
 pub struct Dependency {
-    /// Referenced operation name; document assessment checks the applicable normative constraints.
+    /// Referenced operation name; document validation checks the applicable normative constraints.
     pub operation: String,
     /// Allowed source kinds. Absence accepts every kind; a conformant present list
-    /// must be nonempty. An empty list is representable but fails normative assessment.
+    /// must be nonempty. An empty list is representable but fails normative validation.
     pub kinds: Option<Vec<String>>,
     /// Optional human-facing dependency description.
     pub description: Option<String>,
@@ -712,7 +712,7 @@ impl Read for Binding {
     }
 }
 
-impl Default for DocumentBuilder {
+impl Default for Document {
     fn default() -> Self {
         Self {
             openbindings: AUTHORING_VERSION.into(),
@@ -728,12 +728,12 @@ impl Default for DocumentBuilder {
         }
     }
 }
-impl DocumentBuilder {
+impl Document {
     /// Create an empty draft declaring [`AUTHORING_VERSION`], with all optional fields absent.
     pub fn new() -> Self {
         Self::default()
     }
-    /// Reads only representable normative fields; assessment remains available for every parsed input.
+    /// Reads only representable normative fields; validation remains available for every parsed input.
     pub fn from_json(value: &JsonValue) -> Result<Self, AuthoringError> {
         if value.has_duplicate_names() {
             let mut error = error(
@@ -803,7 +803,7 @@ impl Dependency {
             .is_none_or(|kinds| kinds.iter().any(|k| k == kind))
     }
 }
-impl DocumentBuilder {
+impl Document {
     fn check_collisions(&self) -> Result<(), AuthoringError> {
         check_fields(
             &self.additional_fields,
@@ -889,7 +889,7 @@ mod tests {
     #[test]
     fn absence_null_and_unknown_survive() {
         let value=JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{"go":{"input":true,"examples":{"one":{"input":null}}}},"sources":{"x":{"kind":"custom","content":null}},"x-empty":[],"unknown":9007199254740993}"#).unwrap();
-        let model = DocumentBuilder::from_json(&value).unwrap();
+        let model = Document::from_json(&value).unwrap();
         let output = model.to_json().unwrap();
         assert_eq!(value.semantic_eq(&output), Some(true));
     }
@@ -897,11 +897,11 @@ mod tests {
     fn optional_typed_null_is_an_error() {
         let value =
             JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{},"name":null}"#).unwrap();
-        assert!(DocumentBuilder::from_json(&value).is_err());
+        assert!(Document::from_json(&value).is_err());
     }
     #[test]
     fn reserved_member_collision_is_not_serialized() {
-        let mut b = DocumentBuilder::new();
+        let mut b = Document::new();
         b.additional_fields
             .insert("operations".into(), JsonValue::null());
         assert!(b.to_json().is_err());
@@ -916,7 +916,7 @@ mod tests {
             "-9.007199254740991e15",
         ] {
             let value=JsonValue::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{}},"bindings":{{"b":{{"operation":"x","source":"s","preference":{n}}}}}}}"#)).unwrap();
-            assert!(DocumentBuilder::from_json(&value).is_ok(), "{n}");
+            assert!(Document::from_json(&value).is_ok(), "{n}");
         }
     }
 }

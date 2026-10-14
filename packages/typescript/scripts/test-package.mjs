@@ -162,7 +162,7 @@ await initialize(await readFile(new URL(import.meta.resolve("@openbindings/sdk/o
 const parsed = parseDocument('{"openbindings":"0.2.0","operations":{"run":{}}}');
 assert.equal(parsed.status, "parsed");
 try {
-  const checked = parsed.value.validate();
+  const checked = parsed.value.validated();
   assert.equal(checked.status, "validated");
   checked.document.dispose();
 } finally {

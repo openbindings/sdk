@@ -300,11 +300,13 @@ async fn real_http_media_types_statuses_compression_and_location_independence() 
             DiscoveryOutcome::VersionRefused { .. } => "version",
             DiscoveryOutcome::Found { .. } => "found",
             DiscoveryOutcome::BodyLimit { .. } => "limit",
-            DiscoveryOutcome::BodyFailure { failure } if failure.kind == FailureKind::Decode => {
+            DiscoveryOutcome::BodyError { error: failure } if failure.kind == ErrorKind::Decode => {
                 "decode"
             }
             // S5b review F4 / HD-7: truncated reads remain Network, not Decode.
-            DiscoveryOutcome::BodyFailure { failure } if failure.kind == FailureKind::Network => {
+            DiscoveryOutcome::BodyError { error: failure }
+                if failure.kind == ErrorKind::Network =>
+            {
                 "broken"
             }
             x => panic!("{x:?}"),
@@ -387,9 +389,9 @@ async fn redirects_all_five_statuses_honor_policy_and_strip_cross_origin_credent
         // F2: a delegated host that did not follow a visible Location is a policy refusal.
         assert!(matches!(
             r.outcome,
-            DiscoveryOutcome::TransportFailure {
-                failure: RequestFailure {
-                    kind: FailureKind::RedirectPolicy,
+            DiscoveryOutcome::TransportError {
+                error: RequestError {
+                    kind: ErrorKind::RedirectPolicy,
                     ..
                 }
             }
@@ -407,10 +409,7 @@ async fn redirects_all_five_statuses_honor_policy_and_strip_cross_origin_credent
             .discover(&server.origin)
             .await
             .unwrap();
-    assert!(matches!(
-        r.outcome,
-        DiscoveryOutcome::TransportFailure { .. }
-    ));
+    assert!(matches!(r.outcome, DiscoveryOutcome::TransportError { .. }));
 }
 #[tokio::test(flavor = "current_thread")]
 async fn cancellation_timeout_bounded_status_cleanup_and_connection_reuse() {
@@ -525,7 +524,7 @@ async fn tls_uses_private_ca_and_downgrade_chain_is_refused_before_plaintext_dis
     let untrusted = ordinary.discover(&tls.origin).await.unwrap();
     assert!(matches!(
         untrusted.outcome,
-        DiscoveryOutcome::TransportFailure { .. }
+        DiscoveryOutcome::TransportError { .. }
     ));
     let trusted = native::Client::new(tls.builder(), ClientOptions::default()).unwrap();
     assert!(matches!(
@@ -571,9 +570,9 @@ async fn tls_uses_private_ca_and_downgrade_chain_is_refused_before_plaintext_dis
     let r = client.discover(&tls.origin).await.unwrap();
     assert!(matches!(
         r.outcome,
-        DiscoveryOutcome::TransportFailure {
-            failure: RequestFailure {
-                kind: FailureKind::RedirectPolicy,
+        DiscoveryOutcome::TransportError {
+            error: RequestError {
+                kind: ErrorKind::RedirectPolicy,
                 ..
             }
         }
@@ -621,9 +620,9 @@ async fn safe_native_constructor_follows_five_statuses_relative_locations_and_te
     let r = client.discover(&server.origin).await.unwrap();
     assert!(matches!(
         r.outcome,
-        DiscoveryOutcome::TransportFailure {
-            failure: RequestFailure {
-                kind: FailureKind::RedirectPolicy,
+        DiscoveryOutcome::TransportError {
+            error: RequestError {
+                kind: ErrorKind::RedirectPolicy,
                 ..
             }
         }
@@ -746,9 +745,9 @@ async fn native_builder_retains_application_resolver_policy() {
     let r = client.discover("https://discovery.test").await.unwrap();
     assert!(matches!(
         r.outcome,
-        DiscoveryOutcome::TransportFailure {
-            failure: RequestFailure {
-                kind: FailureKind::Network,
+        DiscoveryOutcome::TransportError {
+            error: RequestError {
+                kind: ErrorKind::Network,
                 ..
             }
         }
@@ -858,9 +857,9 @@ async fn credential_origin_chains_refuse_only_cross_origin_then_same_origin() {
         if chain == "A-B-B" {
             assert!(matches!(
                 r.outcome,
-                DiscoveryOutcome::TransportFailure {
-                    failure: RequestFailure {
-                        kind: FailureKind::RedirectPolicy,
+                DiscoveryOutcome::TransportError {
+                    error: RequestError {
+                        kind: ErrorKind::RedirectPolicy,
                         ..
                     }
                 }
@@ -903,9 +902,9 @@ async fn malformed_native_location_is_a_typed_policy_refusal() {
         let r = client.discover(&server.origin).await.unwrap();
         assert!(matches!(
             r.outcome,
-            DiscoveryOutcome::TransportFailure {
-                failure: RequestFailure {
-                    kind: FailureKind::RedirectPolicy,
+            DiscoveryOutcome::TransportError {
+                error: RequestError {
+                    kind: ErrorKind::RedirectPolicy,
                     ..
                 }
             }
@@ -935,10 +934,10 @@ async fn truncated_native_body_is_network_without_coding_evidence() {
         }
     };
     let r = client("broken").discover(&server.origin).await.unwrap();
-    let DiscoveryOutcome::BodyFailure { failure } = r.outcome else {
+    let DiscoveryOutcome::BodyError { error: failure } = r.outcome else {
         panic!("{:?}", r.outcome);
     };
-    assert_eq!(failure.kind, FailureKind::Network);
+    assert_eq!(failure.kind, ErrorKind::Network);
     assert!(failure.message.contains(&error.to_string()));
     let mut source = std::error::Error::source(&error);
     assert!(source.is_some(), "no upstream source explanation");

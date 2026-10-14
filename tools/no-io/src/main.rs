@@ -7,9 +7,9 @@ fn evaluate(document: &ParsedDocument, resources: ResourceSet) -> ValueOutcome {
     let context = document
         .value_contracts(Arc::new(DefaultEvaluator::new()), resources)
         .unwrap();
-    match context.prepare("op", Side::Input) {
-        ContractPreparation::Ready(contract) => contract.validate(&JsonValue::integer(7)),
-        ContractPreparation::NoVerdict { detail } => ValueOutcome::NoVerdict { detail },
+    match context.prepare("op", Direction::Input) {
+        ValueContractPreparation::Ready(contract) => contract.validate(&JsonValue::integer(7)),
+        ValueContractPreparation::NoVerdict { detail } => ValueOutcome::NoVerdict { detail },
         other => panic!("unexpected setup: {other:?}"),
     }
 }
@@ -44,7 +44,7 @@ fn main() {
     let document = ParsedDocument::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":true}},"sources":{"source":{"kind":uri,"content":{"$ref":uri,"$schema":uri}}},"bindings":{"binding":{"source":"source","operation":"op"}}}).to_string(),
     ).unwrap();
-    assert!(document.assess().unwrap().validated().is_some());
+    assert!(document.validate().unwrap().validated().is_some());
     assert!(matches!(
         evaluate(&document, ResourceSet::default()),
         ValueOutcome::Satisfies

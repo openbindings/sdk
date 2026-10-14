@@ -10,14 +10,16 @@ trait EvaluateCase {
     fn validate(&self, value: &JsonValue) -> ValueOutcome;
     fn validate_with_control(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome;
 }
-impl EvaluateCase for ContractPreparation {
+impl EvaluateCase for ValueContractPreparation {
     fn validate(&self, value: &JsonValue) -> ValueOutcome {
         self.validate_with_control(value, &WorkControl::new())
     }
     fn validate_with_control(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
         match self {
-            ContractPreparation::Ready(contract) => contract.validate_with_control(value, control),
-            ContractPreparation::NoVerdict { detail } => ValueOutcome::NoVerdict {
+            ValueContractPreparation::Ready(contract) => {
+                contract.validate_with_control(value, control)
+            }
+            ValueContractPreparation::NoVerdict { detail } => ValueOutcome::NoVerdict {
                 detail: detail.clone(),
             },
             other => panic!("unexpected setup state: {other:?}"),
@@ -50,18 +52,18 @@ fn numeric_arithmetic_admission_preserves_carriage_types_counts_and_bounds() {
     ] {
         assert!(matches!(
             contracts(&schema)
-                .prepare("op", Side::Input)
+                .prepare("op", Direction::Input)
                 .validate(&parsed),
             ValueOutcome::Satisfies
         ));
     }
     assert!(matches!(
         contracts(&format!("{{\"maxItems\":{huge}}}"))
-            .prepare("op", Side::Input)
+            .prepare("op", Direction::Input)
             .validate(&value("[]")),
         ValueOutcome::Satisfies
     ));
-    let multiple = contracts("{\"multipleOf\":3}").prepare("op", Side::Input);
+    let multiple = contracts("{\"multipleOf\":3}").prepare("op", Direction::Input);
     for token in [&huge, &"7".repeat(4097)] {
         assert!(
             matches!(multiple.validate(&value(token)),ValueOutcome::NoVerdict {detail:NoVerdict {reason:NoVerdictReason::LimitExceeded,ref code,..}} if code=="numeric-arithmetic-limit")
@@ -89,7 +91,7 @@ fn deep_literal_and_opaque_data_do_not_inherit_compiler_tree_depth() {
             format!("{{\"const\":{literal}}}"),
             format!("{{\"enum\":[{literal}]}}"),
         ] {
-            let prepared = contracts(&schema).prepare("op", Side::Input);
+            let prepared = contracts(&schema).prepare("op", Direction::Input);
             assert!(
                 matches!(prepared.validate(&value(&literal)), ValueOutcome::Satisfies),
                 "depth {depth}"
@@ -109,7 +111,7 @@ fn deep_literal_and_opaque_data_do_not_inherit_compiler_tree_depth() {
         let prepared = contracts(&format!(
             "{{\"type\":\"integer\",\"default\":{literal},\"x-opaque\":{literal}}}"
         ))
-        .prepare("op", Side::Input);
+        .prepare("op", Direction::Input);
         assert!(matches!(
             prepared.validate(&value("7")),
             ValueOutcome::Satisfies
@@ -158,13 +160,13 @@ fn preparation_cache_is_bounded_lru_and_eviction_preserves_owned_handles() {
             ValueContractOptions { cache_capacity: 2 },
         )
         .unwrap();
-    let retained = context.prepare("a", Side::Input);
-    drop(context.prepare("b", Side::Input));
-    drop(context.prepare("a", Side::Input)); // a is now most recent.
+    let retained = context.prepare("a", Direction::Input);
+    drop(context.prepare("b", Direction::Input));
+    drop(context.prepare("a", Direction::Input)); // a is now most recent.
     assert_eq!(calls.load(Ordering::SeqCst), 2);
-    drop(context.prepare("c", Side::Input)); // b is evicted and freed.
+    drop(context.prepare("c", Direction::Input)); // b is evicted and freed.
     assert_eq!(live.load(Ordering::SeqCst), 2);
-    drop(context.prepare("b", Side::Input)); // b is recompiled; retained a survives eviction.
+    drop(context.prepare("b", Direction::Input)); // b is recompiled; retained a survives eviction.
     assert_eq!(calls.load(Ordering::SeqCst), 4);
     assert_eq!(live.load(Ordering::SeqCst), 3);
     drop(context);
@@ -182,15 +184,15 @@ fn preparation_cache_is_bounded_lru_and_eviction_preserves_owned_handles() {
             ValueContractOptions { cache_capacity: 0 },
         )
         .unwrap();
-    drop(uncached.prepare("a", Side::Input));
-    drop(uncached.prepare("a", Side::Input));
+    drop(uncached.prepare("a", Direction::Input));
+    drop(uncached.prepare("a", Direction::Input));
     assert_eq!(calls.load(Ordering::SeqCst), 6);
     assert_eq!(live.load(Ordering::SeqCst), 0);
 }
 #[test]
 fn retained_contracts_outlive_documents_and_distinguish_absent_sides() {
     let context = contracts(r#"{"maximum":9007199254740992}"#);
-    let prepared = context.prepare("op", Side::Input);
+    let prepared = context.prepare("op", Direction::Input);
     drop(context);
     assert!(matches!(
         prepared.validate(&value("9007199254740992")),
@@ -202,12 +204,12 @@ fn retained_contracts_outlive_documents_and_distinguish_absent_sides() {
     ));
     let context = contracts("true");
     assert!(matches!(
-        context.prepare("op", Side::Output),
-        ContractPreparation::NoContract
+        context.prepare("op", Direction::Output),
+        ValueContractPreparation::NoValueContract
     ));
     assert!(matches!(
-        context.prepare("missing", Side::Input),
-        ContractPreparation::OperationMissing
+        context.prepare("missing", Direction::Input),
+        ValueContractPreparation::OperationMissing
     ));
 }
 #[test]
@@ -216,7 +218,7 @@ fn review_s09_anonymous_scope_selects_outer_dynamic_anchor() {
     let context = document
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
         .unwrap();
-    let prepared = context.prepare("op", Side::Input);
+    let prepared = context.prepare("op", Direction::Input);
     assert!(matches!(
         prepared.validate(&value("[7]")),
         ValueOutcome::Satisfies
@@ -253,8 +255,8 @@ fn review_s11_same_uri_resources_are_isolated_and_precancellation_does_not_poiso
         let cancelled = WorkControl::new();
         cancelled.cancel();
         assert!(matches!(
-            context.prepare_with_control("op", Side::Input, &cancelled),
-            ContractPreparation::NoVerdict {
+            context.prepare_with_control("op", Direction::Input, &cancelled),
+            ValueContractPreparation::NoVerdict {
                 detail: NoVerdict {
                     reason: NoVerdictReason::Cancelled,
                     ..
@@ -263,11 +265,13 @@ fn review_s11_same_uri_resources_are_isolated_and_precancellation_does_not_poiso
         ));
     }
     assert!(matches!(
-        integer.prepare("op", Side::Input).validate(&value("7")),
+        integer
+            .prepare("op", Direction::Input)
+            .validate(&value("7")),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
-        string.prepare("op", Side::Input).validate(&value("7")),
+        string.prepare("op", Direction::Input).validate(&value("7")),
         ValueOutcome::Fails { .. }
     ));
     std::thread::scope(|scope| {
@@ -276,7 +280,9 @@ fn review_s11_same_uri_resources_are_isolated_and_precancellation_does_not_poiso
             scope.spawn(move || {
                 for _ in 0..100 {
                     assert!(matches!(
-                        context.prepare("op", Side::Input).validate(&value("7")),
+                        context
+                            .prepare("op", Direction::Input)
+                            .validate(&value("7")),
                         ValueOutcome::Satisfies
                     ));
                 }
@@ -308,10 +314,10 @@ fn cancellation_during_preparation_is_not_cached() {
     let context = doc("true")
         .value_contracts(evaluator.clone(), ResourceSet::default())
         .unwrap();
-    let cancelled = context.prepare_with_control("op", Side::Input, &WorkControl::new());
+    let cancelled = context.prepare_with_control("op", Direction::Input, &WorkControl::new());
     assert!(matches!(
         cancelled,
-        ContractPreparation::NoVerdict {
+        ValueContractPreparation::NoVerdict {
             detail: NoVerdict {
                 reason: NoVerdictReason::Cancelled,
                 ..
@@ -319,11 +325,15 @@ fn cancellation_during_preparation_is_not_cached() {
         }
     ));
     assert!(matches!(
-        context.prepare("op", Side::Input).validate(&value("1")),
+        context
+            .prepare("op", Direction::Input)
+            .validate(&value("1")),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
-        context.prepare("op", Side::Input).validate(&value("2")),
+        context
+            .prepare("op", Direction::Input)
+            .validate(&value("2")),
         ValueOutcome::Satisfies
     ));
     assert_eq!(evaluator.calls.load(Ordering::SeqCst), 2);
@@ -331,7 +341,7 @@ fn cancellation_during_preparation_is_not_cached() {
 #[test]
 fn review_f01_f06_conservative_preparation_is_not_semantic_undefinedness() {
     let result = contracts(r#"{"anyOf":[true,{"pattern":"["}]}"#)
-        .prepare("op", Side::Input)
+        .prepare("op", Direction::Input)
         .validate(&value(r#""secret""#));
     assert!(matches!(
         result,
@@ -346,7 +356,7 @@ fn review_f01_f06_conservative_preparation_is_not_semantic_undefinedness() {
     let prepared = contracts(
         r#"{"anyOf":[{"properties":{"x":{"type":"string"}}},true],"unevaluatedProperties":false}"#,
     )
-    .prepare("op", Side::Input);
+    .prepare("op", Direction::Input);
     assert!(matches!(
         prepared.validate(&value(r#"{"x":"ok"}"#)),
         ValueOutcome::Satisfies
@@ -361,7 +371,7 @@ fn review_f06_positive_missing_disjunct_now_establishes_satisfaction() {
     // Intentionally expanded capability: missing positive disjuncts now use bounds.
     assert!(matches!(
         contracts(r#"{"anyOf":[true,{"$ref":"https://absent.invalid/x"}]}"#)
-            .prepare("op", Side::Input)
+            .prepare("op", Direction::Input)
             .validate(&value(r#""secret""#)),
         ValueOutcome::Satisfies
     ));
@@ -380,7 +390,7 @@ fn review_f04_diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
     let context = doc(&expensive)
         .value_contracts(Arc::new(evaluator), ResourceSet::default())
         .unwrap();
-    let prepared = context.prepare("op", Side::Input);
+    let prepared = context.prepare("op", Direction::Input);
     for _ in 0..5 {
         let result = prepared.validate(&value("0"));
         let ValueOutcome::Fails {
@@ -396,7 +406,7 @@ fn review_f04_diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
     }
     assert!(matches!(
         contracts("true")
-            .prepare("op", Side::Input)
+            .prepare("op", Direction::Input)
             .validate(&value("0")),
         ValueOutcome::Satisfies
     ));
@@ -410,7 +420,9 @@ fn review_f04_diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
         )
         .unwrap();
     assert!(matches!(
-        limited.prepare("op", Side::Input).validate(&value("0")),
+        limited
+            .prepare("op", Direction::Input)
+            .validate(&value("0")),
         ValueOutcome::NoVerdict {
             detail: NoVerdict {
                 reason: NoVerdictReason::LimitExceeded,
@@ -423,7 +435,7 @@ fn review_f04_diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
 fn diagnostics_are_original_and_do_not_expose_instance_values() {
     let prepared =
         contracts(r#"{"properties":{"a/b":{"type":"string"}},"unevaluatedProperties":false}"#)
-            .prepare("op", Side::Input);
+            .prepare("op", Direction::Input);
     let result = prepared.validate(&value(r#"{"a/b":789,"secret":"SYNTHETIC_SECRET_VALUE"}"#));
     let encoded = serde_json::to_string(&result).unwrap();
     assert!(!encoded.contains("789"));
@@ -437,7 +449,7 @@ fn diagnostics_are_original_and_do_not_expose_instance_values() {
 }
 #[test]
 fn property_escape_refusal_is_lazy_and_does_not_poison_thread_state() {
-    let prepared = contracts(r#"{"pattern":"\\p{Lu}"}"#).prepare("op", Side::Input);
+    let prepared = contracts(r#"{"pattern":"\\p{Lu}"}"#).prepare("op", Direction::Input);
     assert!(matches!(
         prepared.validate(&value("3")),
         ValueOutcome::Satisfies
@@ -457,7 +469,7 @@ fn property_escape_refusal_is_lazy_and_does_not_poison_thread_state() {
     ));
     assert!(matches!(
         contracts(r#"{"pattern":"^A$"}"#)
-            .prepare("op", Side::Input)
+            .prepare("op", Direction::Input)
             .validate(&value(r#""A""#)),
         ValueOutcome::Satisfies
     ));
@@ -479,7 +491,9 @@ fn diagnostic_allocation_admission_bounds_many_missing_names() {
             ResourceSet::default(),
         )
         .unwrap();
-    let result = context.prepare("op", Side::Input).validate(&value("{}"));
+    let result = context
+        .prepare("op", Direction::Input)
+        .validate(&value("{}"));
     let ValueOutcome::Fails {
         problems,
         problems_complete,
@@ -537,7 +551,7 @@ fn upstream_test_dispositions_use_the_supported_exact_ecma_u_path() {
     for (pattern, expected) in [(r"^\s$", false), (r"^\S$", true), (r"^[^\s]$", true)] {
         let schema = serde_json::json!({"pattern": pattern}).to_string();
         let result = contracts(&schema)
-            .prepare("op", Side::Input)
+            .prepare("op", Direction::Input)
             .validate(&value(r#""\u0085""#));
         assert_eq!(
             matches!(result, ValueOutcome::Satisfies),
@@ -554,19 +568,19 @@ fn upstream_test_dispositions_use_the_supported_exact_ecma_u_path() {
         let schema = serde_json::json!({"pattern": pattern}).to_string();
         assert!(matches!(
             contracts(&schema)
-                .prepare("op", Side::Input)
+                .prepare("op", Direction::Input)
                 .validate(&value(r#""-""#)),
             ValueOutcome::NoVerdict { .. }
         ));
     }
     // The original test expected an engine failure for a valid empty match.
-    let prepared = contracts(r#"{"pattern":"^.{0,404600}$"}"#).prepare("op", Side::Input);
+    let prepared = contracts(r#"{"pattern":"^.{0,404600}$"}"#).prepare("op", Direction::Input);
     assert!(matches!(
         prepared.validate(&value(r#""""#)),
         ValueOutcome::Satisfies
     ));
     // Huge finite decimal exponents do not become infinity or cease to be integers.
-    let prepared = contracts(r#"{"type":"integer"}"#).prepare("op", Side::Input);
+    let prepared = contracts(r#"{"type":"integer"}"#).prepare("op", Direction::Input);
     for number in ["1e1000001", "-1e1000001"] {
         assert!(matches!(
             prepared.validate(&value(number)),
@@ -577,7 +591,7 @@ fn upstream_test_dispositions_use_the_supported_exact_ecma_u_path() {
     // public adapter, selected property matching can never become false validity.
     let schema = serde_json::json!({"patternProperties": {r"^\p{L}{300}$": {"type":"integer"}}, "unevaluatedProperties": false}).to_string();
     let result = contracts(&schema)
-        .prepare("op", Side::Input)
+        .prepare("op", Direction::Input)
         .validate(&value(&serde_json::json!({"a".repeat(300): 1}).to_string()));
     assert!(matches!(
         result,
@@ -597,24 +611,24 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
         .unwrap();
     assert!(matches!(
-        c.prepare("absent", Side::Input),
-        ContractPreparation::NoContract
+        c.prepare("absent", Direction::Input),
+        ValueContractPreparation::NoValueContract
     ));
     assert!(matches!(
-        c.prepare("missing", Side::Input),
-        ContractPreparation::OperationMissing
+        c.prepare("missing", Direction::Input),
+        ValueContractPreparation::OperationMissing
     ));
     assert!(
-        matches!(c.prepare("shared",Side::Input),ContractPreparation::OperationAmbiguous{candidates} if candidates==["no","yes"])
+        matches!(c.prepare("shared",Direction::Input),ValueContractPreparation::OperationAmbiguous{candidates} if candidates==["no","yes"])
     );
     assert!(matches!(
-        c.prepare("null", Side::Input),
-        ContractPreparation::NoVerdict { .. }
+        c.prepare("null", Direction::Input),
+        ValueContractPreparation::NoVerdict { .. }
     ));
-    let ContractPreparation::Ready(ready) = c.prepare("yes", Side::Input) else {
+    let ValueContractPreparation::Ready(ready) = c.prepare("yes", Direction::Input) else {
         panic!()
     };
-    let ContractPreparation::Ready(no) = c.prepare("no", Side::Input) else {
+    let ValueContractPreparation::Ready(no) = c.prepare("no", Direction::Input) else {
         panic!()
     };
     let cancel = WorkControl::new();

@@ -96,9 +96,9 @@ fn namespace_counts_occurrences_and_refuses_malformed_aliases_everywhere() {
 }
 #[test]
 fn authoring_collision_has_native_draft_path_and_source_is_separate() {
-    let mut b = DocumentBuilder::new();
+    let mut b = Document::new();
     let mut op = Operation::default();
-    let mut ex = OperationExample::default();
+    let mut ex = Example::default();
     ex.additional_fields
         .insert("input".into(), JsonValue::null());
     op.examples = Some(BTreeMap::from([("a~/b".into(), ex)]));
@@ -113,25 +113,25 @@ fn authoring_collision_has_native_draft_path_and_source_is_separate() {
     let wrong =
         JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{"x":{"aliases":false}}}"#)
             .unwrap();
-    let e = DocumentBuilder::from_json(&wrong).unwrap_err();
+    let e = Document::from_json(&wrong).unwrap_err();
     assert_eq!(e.kind(), AuthoringErrorKind::InvalidField);
     assert!(e.draft_pointer().is_none());
     assert_eq!(
         e.source_location().unwrap().pointer.as_deref(),
         Some("/operations/x/aliases")
     );
-    let mut b = DocumentBuilder::new();
+    let mut b = Document::new();
     b.additional_fields
         .insert("unknown".into(), JsonValue::null());
     assert_eq!(
-        b.build().unwrap().assess().unwrap().report().conclusion,
+        b.build().unwrap().validate().unwrap().report().conclusion,
         Conformance::NonConformant
     );
     let op = Operation {
         additional_fields: BTreeMap::from([("input".into(), JsonValue::null())]),
         ..Default::default()
     };
-    let mut b = DocumentBuilder::new();
+    let mut b = Document::new();
     b.operations.insert("x".repeat(5000), op);
     let e = b.build().unwrap_err();
     assert!(e.draft_pointer().is_none());
@@ -197,7 +197,7 @@ fn serde_profile_preserves_numbers_enums_unicode_and_refuses_loss() {
         ValueConversionErrorKind::UnsupportedRepresentation
     );
     assert_eq!(exact.text(), "1e999999999999999999999999");
-    let mut draft = DocumentBuilder::new();
+    let mut draft = Document::new();
     draft
         .additional_fields
         .insert("x-number".into(), exact.clone());

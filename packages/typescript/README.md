@@ -45,14 +45,14 @@ function checkInput(input: JsonInput) {
   const parsed = parseDocument(documentText);
   if (parsed.status !== "parsed") return parsed;
   using document = parsed.value;
-  const checked = document.validate();
+  const checked = document.validated();
   if (checked.status !== "validated") return checked;
   using proof = checked.document;
   const operations = proof.operations;
-  using context = proof.contracts();
+  using context = proof.valueContracts();
   const setup = context.prepare("find", "input"); // primary name or alias
   if (setup.status !== "ready") return setup;
-  using contract = setup.contract;
+  using contract = setup.valueContract;
   return { operations, result: contract.validate(input) };
 }
 
@@ -61,8 +61,8 @@ console.log(checkInput("seven"));
 ```
 
 Parsing preserves a document even when a field is malformed. This application
-uses `validate()` to require conformance before exposing operations. A successful
-validation returns an independently owned `ValidatedDocument`; `assess()` instead
+uses `validated()` to require conformance before exposing operations. A successful
+validation returns an independently owned `ValidatedDocument`; `validate()` instead
 returns the report without creating that owner. The [source editor](examples/editor.html)
 starts with a mistaken `inputSchema` operation member, renders its actual findings,
 corrects the original source to `input`, validates it, then prepares and checks an
@@ -82,8 +82,8 @@ Handle setup separately from a value's verdict:
 | Stage       | Result                                                    | Caller action                                                                                             |
 | ----------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | Parse       | `input-error`                                             | Correct the JSON or its admission problem.                                                                |
-| Conformance | `version-refused` or `assessed`                           | Report the refused version or nonconformant/undetermined report.                                          |
-| Prepare     | `operation-missing`, `operation-ambiguous`, `no-contract` | Correct operation selection or explicitly decide how an absent contract fits the application.             |
+| Conformance | `version-refused` or `report`                           | Report the refused version or nonconformant/undetermined report.                                          |
+| Prepare     | `operation-missing`, `operation-ambiguous`, `no-value-contract` | Correct operation selection or explicitly decide how an absent contract fits the application.             |
 | Prepare     | `no-verdict`                                              | Inspect `detail`; for example, supply a missing schema resource before retrying.                          |
 | Validate    | `satisfies`                                               | The value satisfies this prepared contract.                                                               |
 | Validate    | `fails`                                                | Show the bounded problems and their original schema/instance locations.                                   |
@@ -176,7 +176,7 @@ await initialize();
 const parsed = parseDocument(documentBytes);
 if (parsed.status === 'parsed') {
   using document = parsed.value;
-  const assessment = document.assess();
+  const assessment = document.validate();
   // Version refusal and undetermined conformance are explicit outcomes.
 }
 ```
@@ -197,11 +197,11 @@ is shared across concurrent calls; subsequent requests reuse it:
 
 ```ts
 import module from '@openbindings/sdk/openbindings.wasm';
-import { initialize, assessDocument } from '@openbindings/sdk';
+import { initialize, validateDocument } from '@openbindings/sdk';
 export default {
   async fetch(request: Request): Promise<Response> {
     await initialize(module);
-    return Response.json(assessDocument(new Uint8Array(await request.arrayBuffer())));
+    return Response.json(validateDocument(new Uint8Array(await request.arrayBuffer())));
   },
 };
 ```
@@ -238,7 +238,7 @@ if (exact.status === 'parsed') {
   });
   if (authored.status === 'authored') {
     using document = authored.document;
-    const result = document.validate();
+    const result = document.validated();
     if (result.status === 'validated') result.document.dispose();
   }
 }
@@ -269,7 +269,7 @@ if (converted.status === 'drafted') {
   const built = authorDocument(editing.value);
   if (built.status === 'authored') {
     using revised = built.document;
-    console.log(revised.assess());
+    console.log(revised.validate());
   } else {
     console.log(built.error);
   }
@@ -419,15 +419,15 @@ select or invoke anything. A contract context retains its immutable document,
 supplied resources, configuration and prepared state:
 
 ```ts
-using contracts = document.contracts({ resources, limits: { maxProblems: 16 } });
+using contracts = document.valueContracts({ resources, limits: { maxProblems: 16 } });
 const setup = contracts.prepare('lookup', 'input');
 if (setup.status === 'ready') {
-  using input = setup.contract;
+  using input = setup.valueContract;
   const ordinary = input.validate(7); // ValueCheck: semantic outcome or input-error
   using value = ExactJson.from(7);
   const exact = input.validate(value); // ValueOutcome: satisfies | fails | no-verdict
 }
-// Other setup states: no-contract | operation-missing | operation-ambiguous | no-verdict
+// Other setup states: no-value-contract | operation-missing | operation-ambiguous | no-verdict
 ```
 
 For an application-owned replacement candidate:
@@ -541,7 +541,7 @@ Import `discover`, `DiscoveryPublication`, and `discoveryPolicy` from
 `@openbindings/sdk/http-discovery`. Both entry points share initialization,
 `SdkError` identity and managed-handle ownership. `discover(origin, options)`
 uses Fetch or a supplied local async callback. The default decoded body limit is
-1 MiB, zero selects that default, and negative values are rejected. The facade
+1 MiB; omission selects that default, and zero or negative values are rejected. The facade
 retains only bounded body bytes; Fetch controls its own stream chunk buffering.
 
 Only 404 means absence; 401/403 are gated. Unsupported versions, nonconformance,
@@ -552,8 +552,9 @@ response. Opaque redirects expose no final destination; `finalUrl` is null and
 `responseType` records the host restriction. The acquisition URL supplies no
 schema base URI.
 
-`new DiscoveryPublication(validatedDocument, { allowOrigin: '*' })` copies the
-exact approved bytes. Its `respond(request)` method returns a standard Response
+`new DiscoveryPublication(validatedDocument, { allowOrigin: 'any' })` copies the
+exact approved bytes. Use `"omit"` to omit CORS, `"null"` for the opaque origin,
+or `{ origin: "https://example.test" }` for a canonical tuple origin. Its `respond(request)` method returns a standard Response
 for a Node or Worker adapter: GET, HEAD, 405/Allow, and 404 routing. Authentication,
 credentialed CORS and preflight policy remain application responsibilities.
 
@@ -578,7 +579,7 @@ credentialed CORS and preflight policy remain application responsibilities.
 
 When migrating from this candidate's earlier facade, import HTTP discovery from
 its companion path, replace `ValidatedDocument.fromParsed(parsed)` with
-`parsed.validate()`, and narrow selection/preparation before accessing their
+`parsed.validated()`, and narrow selection/preparation before accessing their
 owned result. Handle absent or ambiguous setup once; validate ordinary and exact
 values through the same prepared contract. There is no implicit fetch of schema
 resources and no deterministic garbage-collection promise.
@@ -597,7 +598,7 @@ Dependency notices and compiler attribution are included; this candidate is not 
 
 ### Interpretation errors and diagnostic text
 
-`document.contracts()` and `document.resolveOperation()` check the complete
+`document.valueContracts()` and `document.resolveOperation()` check the complete
 operation namespace, including unrelated malformed operations or aliases. They
 throw `SdkError` with broad `code: "interpretation"`, an optional specific
 `interpretationCode` (such as `"invalid-operation-alias"`), and an original source
@@ -625,7 +626,7 @@ are described in the [API reference guide](https://github.com/openbindings/sdk/b
 Value diagnostics default to an aggregate `diagnosticBytes` allowance of 1 MiB of
 retained UTF-8 strings (pointers, resource URIs, codes, messages and requested detail strings), alongside
 `maxProblems` (default 256, minimum count allowance one). Set these in
-`document.contracts({ limits: { diagnosticBytes: 65536, maxProblems: 32 } })`.
+`document.valueContracts({ limits: { diagnosticBytes: 65536, maxProblems: 32 } })`.
 Only complete problems are retained in deterministic order. Zero or an oversized
 first problem preserves `outcome: "fails"` with `problems: []` and
 `problemsComplete: false`; an empty problem list is not success. Pre-verdict limits
@@ -646,8 +647,8 @@ for scratch allowances and scope.
 Default messages keep schema operands private. An authoring application can opt in:
 
 ```ts
-const contracts = document.contracts({ includeSchemaDetails: true });
-// Reuse contracts/ready.contract normally; dispose their owners when finished.
+const contracts = document.valueContracts({ includeSchemaDetails: true });
+// Reuse contracts/ready.valueContract normally; dispose their owners when finished.
 ```
 
 `ValueProblem.details` is an optional discriminated union: `type` has `expected`
@@ -682,7 +683,7 @@ returns its documented parse outcome. Keep operational recovery around the call:
 
 ```ts
 try {
-  const result = assessDocument(sourceText);
+  const result = validateDocument(sourceText);
   if (result.status === "input-error") showParseError(result.error);
   else showAssessment(result);
 } catch (error) {

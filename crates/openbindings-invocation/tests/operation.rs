@@ -1,6 +1,6 @@
 use openbindings::{
-    JsonValue, NoVerdict, ParsedDocument, PreparedSchema, ResourceSet, SchemaEvaluator,
-    SchemaRequest, Side, ValueOutcome, WorkControl,
+    Direction, JsonValue, NoVerdict, ParsedDocument, PreparedSchema, ResourceSet, SchemaEvaluator,
+    SchemaRequest, ValueOutcome, WorkControl,
 };
 use openbindings_invocation::{
     BindingRequest, InvocationError, ProviderIo,
@@ -334,7 +334,7 @@ async fn late_input_failure_is_not_eof_and_keeps_prior_outputs() {
     assert_eq!(p.eof.load(Ordering::SeqCst), 0);
     assert_eq!(p.live.load(Ordering::SeqCst), 0);
     let failure = call.validation_failure().unwrap();
-    assert_eq!(failure.side(), Side::Input);
+    assert_eq!(failure.direction(), Direction::Input);
     assert_eq!(failure.stage(), ValidationStage::Evaluation);
     assert!(matches!(failure.outcome(), ValueOutcome::Fails { .. }));
     assert!(call.outcome().unwrap().unwrap_err().data().is_none());
@@ -350,7 +350,10 @@ async fn output_failure_withholds_only_failing_value() {
         "ERR_OPERATION_VALIDATION_FAILED"
     );
     assert!(call.next().await.is_none());
-    assert_eq!(call.validation_failure().unwrap().side(), Side::Output);
+    assert_eq!(
+        call.validation_failure().unwrap().direction(),
+        Direction::Output
+    );
 }
 #[tokio::test(flavor = "current_thread")]
 async fn preparation_is_lazy_absence_is_not_true_and_no_verdict_is_not_failure() {

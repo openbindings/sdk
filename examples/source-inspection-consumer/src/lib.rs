@@ -1,6 +1,6 @@
 //! An independent inspector-only provider and authoring consumer.
 //! The catalog is a deliberately small test kind, not an OpenBindings standard.
-use openbindings::{DocumentBuilder, JsonValue, Operation, Source, WorkControl};
+use openbindings::{Document, JsonValue, Operation, Source, WorkControl};
 use openbindings_source_inspection::{
     BindableTarget, BindingFragment, InspectionError, InspectionErrorKind, InspectionLimitation,
     Inspector, SourceInspection, SourceInspector,
@@ -149,8 +149,8 @@ pub enum AuthoringOutcome {
     Partial(SourceInspection),
     Empty,
     NeedsRepair {
-        draft: Box<DocumentBuilder>,
-        assessment: openbindings::DocumentAssessment,
+        draft: Box<Document>,
+        validation: openbindings::DocumentValidation,
     },
 }
 
@@ -203,7 +203,7 @@ pub fn author_target(
     source: &Source,
     target: BindableTarget,
 ) -> Result<AuthoringOutcome, AuthoringFailure> {
-    let mut draft = DocumentBuilder::new();
+    let mut draft = Document::new();
     draft.operations.insert(
         "chosen.operation".into(),
         target.operation.unwrap_or_default(),
@@ -217,11 +217,11 @@ pub fn author_target(
             .map_err(AuthoringFailure::Inspection)?,
     )]));
     let parsed = draft.build().map_err(AuthoringFailure::Draft)?;
-    let assessment = parsed.assess().map_err(AuthoringFailure::Version)?;
-    if assessment.validated().is_none() {
+    let validation = parsed.validate().map_err(AuthoringFailure::Version)?;
+    if validation.validated().is_none() {
         return Ok(AuthoringOutcome::NeedsRepair {
             draft: Box::new(draft),
-            assessment,
+            validation,
         });
     }
     Ok(AuthoringOutcome::Ready(
@@ -261,7 +261,7 @@ mod wasm {
     #[wasm_bindgen(js_name = inspectDocumentSource)]
     pub async fn inspect_document_source(document_json: String) -> Result<String, JsValue> {
         async fn run(text: String) -> Result<String, Box<dyn std::error::Error>> {
-            let draft = DocumentBuilder::from_json(&JsonValue::parse(text)?)?;
+            let draft = Document::from_json(&JsonValue::parse(text)?)?;
             let source = draft
                 .sources
                 .and_then(|mut sources| sources.remove("catalog"))

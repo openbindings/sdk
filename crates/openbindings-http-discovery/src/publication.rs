@@ -1,21 +1,35 @@
 use crate::*;
-use openbindings::{DocumentAssessment, ValidatedDocument, VersionRefusal};
+use openbindings::{DocumentValidation, ValidatedDocument, VersionRefusal};
 use std::sync::Arc;
+
+/// Publication CORS policy. Exact origins must be canonical ASCII tuple origins.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum AllowOrigin {
+    /// Emit the wildcard origin `*` (the default).
+    #[default]
+    Any,
+    /// Omit the Access-Control-Allow-Origin header.
+    Omit,
+    /// Emit the opaque-origin spelling `null`.
+    Null,
+    /// Emit a canonical ASCII serialized tuple origin.
+    Exact(String),
+}
 
 #[derive(Clone, Debug)]
 /// Publication header policy. Authentication, credentials and preflight handling remain the caller's responsibility.
 pub struct PublicationOptions {
-    /// Defaults to `*`. Empty omits CORS; `null` or a serialized tuple origin is also accepted.
-    /// Credentialed CORS and preflight policy belong to application middleware.
-    pub allow_origin: String,
+    /// Defaults to any origin. Credentialed CORS and preflight policy belong to application middleware.
+    pub allow_origin: AllowOrigin,
 }
 impl Default for PublicationOptions {
     fn default() -> Self {
         Self {
-            allow_origin: "*".into(),
+            allow_origin: AllowOrigin::Any,
         }
     }
 }
+
 #[derive(Clone, Debug)]
 /// Publication setup refusal; no listener is started and no unproved body is published.
 pub enum PublicationError {
@@ -24,9 +38,9 @@ pub enum PublicationError {
     /// Unsupported declared version, separate from normative conformance.
     VersionRefused(VersionRefusal),
     /// Assessment established a document violation; payload carries report and any parsed snapshot.
-    NonConformant(DocumentAssessment),
+    NonConformant(DocumentValidation),
     /// Assessment could not establish conformance; payload preserves its evidence.
-    Undetermined(DocumentAssessment),
+    Undetermined(DocumentValidation),
 }
 impl std::fmt::Display for PublicationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -43,16 +57,16 @@ impl std::error::Error for PublicationError {}
 #[derive(Clone)]
 pub struct Publication {
     body: Arc<[u8]>,
-    allow_origin: String,
+    allow_origin: AllowOrigin,
 }
 impl Publication {
     /// Retain an immutable publication of a proved snapshot's exact original bytes. Validate CORS configuration; no server or listener is created.
     ///
     /// ```
-    /// use openbindings::assess_document;
+    /// use openbindings::validate_document;
     /// use openbindings_http_discovery::{Publication, PublicationOptions, WELL_KNOWN_PATH};
-    /// let assessment = assess_document(r#"{"openbindings":"0.2.0","operations":{}}"#)?;
-    /// let proof = assessment.validated().expect("all normative rules established");
+    /// let validation = validate_document(r#"{"openbindings":"0.2.0","operations":{}}"#)?;
+    /// let proof = validation.validated().expect("all normative rules established");
     /// let publication = Publication::new(&proof, PublicationOptions::default())?;
     /// let head = publication.respond("HEAD", WELL_KNOWN_PATH);
     /// assert_eq!(head.status, 200);
@@ -75,20 +89,20 @@ impl Publication {
         options: PublicationOptions,
     ) -> Result<Self, PublicationError> {
         validate_allow_origin(&options.allow_origin).map_err(PublicationError::Configuration)?;
-        match assess_body(bytes.as_ref()) {
+        match validate_body(bytes.as_ref()) {
             DiscoveryOutcome::Found { document } => {
                 Self::new(&document, options).map_err(PublicationError::Configuration)
             }
             DiscoveryOutcome::VersionRefused { refusal } => {
                 Err(PublicationError::VersionRefused(refusal))
             }
-            DiscoveryOutcome::NonConformant { assessment } => {
-                Err(PublicationError::NonConformant(assessment))
+            DiscoveryOutcome::NonConformant { validation } => {
+                Err(PublicationError::NonConformant(validation))
             }
-            DiscoveryOutcome::Undetermined { assessment } => {
-                Err(PublicationError::Undetermined(assessment))
+            DiscoveryOutcome::Undetermined { validation } => {
+                Err(PublicationError::Undetermined(validation))
             }
-            _ => unreachable!("body assessment returns only document outcomes"),
+            _ => unreachable!("body validation returns only document outcomes"),
         }
     }
     /// `path` is the exact route path, excluding query/fragment. Do not decode reserved escapes. Accept
@@ -102,11 +116,15 @@ impl Publication {
         if path != WELL_KNOWN_PATH {
             return response;
         }
-        if !self.allow_origin.is_empty() {
-            response.headers.push(Header::new(
-                "access-control-allow-origin",
-                &self.allow_origin,
-            ));
+        if let Some(origin) = match &self.allow_origin {
+            AllowOrigin::Any => Some("*"),
+            AllowOrigin::Omit => None,
+            AllowOrigin::Null => Some("null"),
+            AllowOrigin::Exact(origin) => Some(origin.as_str()),
+        } {
+            response
+                .headers
+                .push(Header::new("access-control-allow-origin", origin));
         }
         if !matches!(method, "GET" | "HEAD") {
             response.status = 405;
@@ -137,16 +155,16 @@ pub struct PublicationResponse {
     pub body: Arc<[u8]>,
 }
 
-/// Validate empty (omit), `*`, `null`, or an exact ASCII browser-serialized
+/// Validate a typed CORS choice, including an exact ASCII browser-serialized
 /// tuple origin. Opaque schemes, credentials and noncanonical spellings are refused.
-pub fn validate_allow_origin(origin: &str) -> Result<(), ConfigurationError> {
+pub fn validate_allow_origin(origin: &AllowOrigin) -> Result<(), ConfigurationError> {
     let invalid = || ConfigurationError {
         code: "invalid-allow-origin",
-        message: "allow_origin must be empty, *, null, or an exact ASCII serialized tuple origin",
+        message: "exact allow_origin must be a canonical ASCII serialized tuple origin",
     };
-    if matches!(origin, "" | "*" | "null") {
+    let AllowOrigin::Exact(origin) = origin else {
         return Ok(());
-    }
+    };
     if origin.bytes().any(|b| b <= b' ' || b >= 0x7f)
         || origin.contains([',', '*', '\\', '<', '>', '"'])
     {
@@ -154,7 +172,7 @@ pub fn validate_allow_origin(origin: &str) -> Result<(), ConfigurationError> {
     }
     let parsed = url::Url::parse(origin).map_err(|_| invalid())?;
     if matches!(parsed.origin(), url::Origin::Opaque(_))
-        || parsed.origin().ascii_serialization() != origin
+        || parsed.origin().ascii_serialization() != *origin
     {
         return Err(invalid());
     }

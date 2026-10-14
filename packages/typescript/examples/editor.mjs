@@ -25,11 +25,11 @@ export class DocumentEditor {
     if (parsed.status !== "parsed") return parsed;
     let proof, context, input;
     try {
-      const checked = parsed.value.validate();
+      const checked = parsed.value.validated();
       if (checked.status !== "validated") return checked;
       proof = checked.document;
       const operations = proof.operations;
-      context = proof.contracts({ includeSchemaDetails });
+      context = proof.valueContracts({ includeSchemaDetails });
       const setup = context.prepare("find", "input");
       if (setup.status !== "ready") {
         if (
@@ -39,7 +39,7 @@ export class DocumentEditor {
           return { status: "resources-missing", evidence: setup.detail };
         return setup;
       }
-      input = setup.contract;
+      input = setup.valueContract;
       const completeness = input.resourceCompleteness;
       if (completeness.status !== "complete")
         return { status: "resources-missing", evidence: completeness.evidence };
@@ -129,7 +129,7 @@ export function formatEditorResult(result) {
       return `Document was not parsed (${result.error.code})${result.error.byteOffset === undefined ? "" : ` at UTF-8 byte offset ${result.error.byteOffset}`}: ${result.error.message}`;
     case "version-refused":
       return `Document version ${JSON.stringify(result.refusal.declared)} is unsupported; supported: ${JSON.stringify(result.refusal.supported)}.`;
-    case "assessed":
+    case "report":
       return [
         `Document conformance: ${result.report.conclusion}.`,
         ...result.report.findings.map(
@@ -146,7 +146,7 @@ export function formatEditorResult(result) {
       return 'Document is conformant; operation "find" is missing.';
     case "operation-ambiguous":
       return `Document is conformant; operation "find" is ambiguous: ${JSON.stringify(result.candidates)}.`;
-    case "no-contract":
+    case "no-value-contract":
       return 'Document is conformant; operation "find" has no input contract.';
     case "no-verdict":
       return `Document is conformant; input setup was refused (${result.detail.reason}, ${result.detail.code}); ${schemaLocation(result.detail.location)}: ${result.detail.message}`;
@@ -181,7 +181,7 @@ export async function mountEditor(root) {
       output.dataset.arenas = String(arenas); // Test observation, not an RSS/heap claim.
       lastSource = checkedSource;
       lastLocation =
-        result.status === "assessed"
+        result.status === "report"
           ? result.report.findings.find((f) => f.location)?.location
           : undefined;
       locate.disabled = !lastLocation;

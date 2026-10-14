@@ -36,13 +36,13 @@ impl Drop for Body {
     }
 }
 impl ResponseBody for Body {
-    async fn read(&mut self, output: &mut [u8]) -> Result<usize, RequestFailure> {
+    async fn read(&mut self, output: &mut [u8]) -> Result<usize, RequestError> {
         if self.stall {
             std::future::pending::<()>().await;
         }
         if self.fail {
-            return Err(RequestFailure {
-                kind: FailureKind::Network,
+            return Err(RequestError {
+                kind: ErrorKind::Network,
                 message: "incomplete response".into(),
             });
         }
@@ -73,15 +73,15 @@ fn response(status: u16, bytes: &[u8], counts: Rc<RefCell<Counts>>) -> HttpRespo
         },
     }
 }
-async fn get(status: u16, bytes: &[u8], limit: i64) -> (DiscoveryResult, Rc<RefCell<Counts>>) {
+async fn get(status: u16, bytes: &[u8], limit: usize) -> (DiscoveryResult, Rc<RefCell<Counts>>) {
     let counts = Rc::new(RefCell::new(Counts::default()));
     let body_counts = counts.clone();
-    let result = ClientOptions {
-        max_document_bytes: limit,
-        ..ClientOptions::default()
-    }
-    .discover_with_timer(
+    let result = discover(
         "HTTPS://EXAMPLE.test/",
+        &ClientOptions {
+            max_document_bytes: limit,
+            ..ClientOptions::default()
+        },
         &WorkControl::new(),
         &Timer::new(),
         |request| {
@@ -143,20 +143,26 @@ fn hd_1_hd_5_origins_normalize_hosts_and_reject_non_loopback_http() {
 }
 #[test]
 fn fixed_cors_origin_matches_the_published_syntax_policy() {
+    for origin in [AllowOrigin::Any, AllowOrigin::Omit, AllowOrigin::Null] {
+        assert!(validate_allow_origin(&origin).is_ok());
+    }
     for origin in [
-        "",
-        "*",
-        "null",
         "https://client.example",
         "http://localhost:8080",
         "https://127.0.0.1:8443",
         "https://[2001:db8::1]:8443",
         "https://xn--bcher-kva.example",
     ] {
-        assert!(validate_allow_origin(origin).is_ok(), "{origin:?}");
+        assert!(
+            validate_allow_origin(&AllowOrigin::Exact(origin.into())).is_ok(),
+            "{origin:?}"
+        );
     }
     // HD-3: only spellings a browser can serialize are usable fixed CORS origins.
     for origin in [
+        "",
+        "*",
+        "null",
         "HTTPS://A.EXAMPLE",
         "https://a.example:443",
         "file://x",
@@ -194,18 +200,25 @@ fn fixed_cors_origin_matches_the_published_syntax_policy() {
         "https://[fe80::1%25en0]",
         "https://client.example\\path",
     ] {
-        assert!(validate_allow_origin(origin).is_err(), "{origin:?}");
+        assert!(
+            validate_allow_origin(&AllowOrigin::Exact(origin.into())).is_err(),
+            "{origin:?}"
+        );
     }
     for byte in (0..32).chain([127]) {
         assert!(
-            validate_allow_origin(&format!("https://client.example{}", char::from(byte))).is_err()
+            validate_allow_origin(&AllowOrigin::Exact(format!(
+                "https://client.example{}",
+                char::from(byte)
+            )))
+            .is_err()
         );
     }
 }
 #[tokio::test(flavor = "current_thread")]
 async fn status_is_never_collapsed_into_absence_and_every_body_is_released() {
     for status in [200, 301, 302, 303, 307, 308, 400, 401, 403, 404, 429, 500] {
-        let (result, counts) = get(status, DOCUMENT, 0).await;
+        let (result, counts) = get(status, DOCUMENT, DEFAULT_MAX_DOCUMENT_BYTES).await;
         assert_eq!(result.metadata.as_ref().unwrap().status, status);
         assert_eq!(
             result.metadata.as_ref().unwrap().header("WWW-Authenticate"),
@@ -239,12 +252,17 @@ async fn complete_bad_body_and_version_priority_survive_with_metadata() {
         br#"{"openbindings":"0.2.0"}"#,
         br#"{"openbindings":"0.2.0","operations":{"run":{"input":{"pattern":"["}}}}}"#,
     ] {
-        let (r, _) = get(200, bytes, 0).await;
+        let (r, _) = get(200, bytes, DEFAULT_MAX_DOCUMENT_BYTES).await;
         assert!(matches!(r.outcome, DiscoveryOutcome::NonConformant { .. }));
         assert_eq!(r.body.as_deref(), Some(bytes));
         assert!(r.metadata.is_some());
     }
-    let (r, _) = get(200, br#"{"openbindings":"9.0.0"}"#, 0).await;
+    let (r, _) = get(
+        200,
+        br#"{"openbindings":"9.0.0"}"#,
+        DEFAULT_MAX_DOCUMENT_BYTES,
+    )
+    .await;
     assert!(matches!(r.outcome, DiscoveryOutcome::VersionRefused { .. }));
     assert!(r.body.is_some());
     let deep = format!(
@@ -252,19 +270,19 @@ async fn complete_bad_body_and_version_priority_survive_with_metadata() {
         "{\"not\":".repeat(260),
         "}".repeat(260)
     );
-    let (r, _) = get(200, deep.as_bytes(), 0).await;
+    let (r, _) = get(200, deep.as_bytes(), DEFAULT_MAX_DOCUMENT_BYTES).await;
     // CR-4: local schema checks establish conformance beyond depth 256.
     let DiscoveryOutcome::Found { document } = r.outcome else {
         panic!("expected found")
     };
     assert_eq!(
-        document.parsed().assess().unwrap().report().conclusion,
+        document.parsed().validate().unwrap().report().conclusion,
         Conformance::Conformant
     );
     let (r, _) = get(
         200,
         br#"{"openbindings":"0.2.0","operations":{"run":{}},"x":"\ud800"}"#,
-        0,
+        DEFAULT_MAX_DOCUMENT_BYTES,
     )
     .await;
     // CR-3: a lone surrogate does not hide the invalid extension name "x".
@@ -274,13 +292,13 @@ async fn complete_bad_body_and_version_priority_survive_with_metadata() {
 #[tokio::test(flavor = "current_thread")]
 async fn size_is_decoded_bytes_with_one_sentinel_and_no_prefix_assessment() {
     for limit in [
-        0,
-        DOCUMENT.len() as i64,
-        DOCUMENT.len() as i64 - 1,
-        i64::MAX,
+        DEFAULT_MAX_DOCUMENT_BYTES,
+        DOCUMENT.len(),
+        DOCUMENT.len() - 1,
+        isize::MAX as usize,
     ] {
         let (r, c) = get(200, DOCUMENT, limit).await;
-        if limit == DOCUMENT.len() as i64 - 1 {
+        if limit == DOCUMENT.len() - 1 {
             assert!(matches!(r.outcome, DiscoveryOutcome::BodyLimit { .. }));
             assert!(r.body.is_none());
         } else {
@@ -289,7 +307,7 @@ async fn size_is_decoded_bytes_with_one_sentinel_and_no_prefix_assessment() {
         let bound = if limit == 0 {
             DEFAULT_MAX_DOCUMENT_BYTES
         } else {
-            limit as usize
+            limit
         };
         assert!(c.borrow().read <= bound.saturating_add(1));
         assert_eq!(c.borrow().drops, 1);
@@ -297,7 +315,15 @@ async fn size_is_decoded_bytes_with_one_sentinel_and_no_prefix_assessment() {
     assert_eq!(ClientOptions::default().byte_limit().unwrap(), 1 << 20);
     assert!(
         ClientOptions {
-            max_document_bytes: -1,
+            max_document_bytes: usize::MAX,
+            ..Default::default()
+        }
+        .byte_limit()
+        .is_err()
+    );
+    assert!(
+        ClientOptions {
+            max_document_bytes: 0,
             ..ClientOptions::default()
         }
         .byte_limit()
@@ -305,7 +331,7 @@ async fn size_is_decoded_bytes_with_one_sentinel_and_no_prefix_assessment() {
     );
     let mut bytes = DOCUMENT.to_vec();
     bytes.extend(vec![b' '; 1 << 20]);
-    let (r, c) = get(200, &bytes, 0).await;
+    let (r, c) = get(200, &bytes, DEFAULT_MAX_DOCUMENT_BYTES).await;
     assert!(matches!(r.outcome, DiscoveryOutcome::BodyLimit { .. }));
     assert_eq!(c.borrow().read, (1 << 20) + 1);
 }
@@ -313,25 +339,36 @@ async fn size_is_decoded_bytes_with_one_sentinel_and_no_prefix_assessment() {
 async fn cancellation_during_pending_io_wakes_without_transport_cooperation() {
     let control = WorkControl::new();
     control.cancel();
-    let r = ClientOptions::default()
-        .discover_with_timer("https://example.test", &control, &Timer::new(), |_| async {
+    let r = discover(
+        "https://example.test",
+        &ClientOptions::default(),
+        &control,
+        &Timer::new(),
+        |_| async {
             panic!("pre-cancelled transport was dispatched");
             #[allow(unreachable_code)]
-            Ok::<HttpResponse<Body>, RequestFailure>(response(200, DOCUMENT, Rc::default()))
-        })
-        .await
-        .unwrap();
+            Ok::<HttpResponse<Body>, RequestError>(response(200, DOCUMENT, Rc::default()))
+        },
+    )
+    .await
+    .unwrap();
     assert!(matches!(r.outcome, DiscoveryOutcome::Cancelled));
     assert!(r.metadata.is_none());
     let control = WorkControl::new();
     let counts = Rc::new(RefCell::new(Counts::default()));
     let options = ClientOptions::default();
     let timer = Timer::new();
-    let call = options.discover_with_timer("https://example.test", &control, &timer, |_| async {
-        let mut r = response(200, DOCUMENT, counts.clone());
-        r.body.stall = true;
-        Ok(r)
-    });
+    let call = discover(
+        "https://example.test",
+        &options,
+        &control,
+        &timer,
+        |_| async {
+            let mut r = response(200, DOCUMENT, counts.clone());
+            r.body.stall = true;
+            Ok(r)
+        },
+    );
     let cancel = async {
         tokio::time::sleep(Duration::from_millis(5)).await;
         control.cancel();
@@ -341,7 +378,7 @@ async fn cancellation_during_pending_io_wakes_without_transport_cooperation() {
     assert!(matches!(r.outcome, DiscoveryOutcome::Cancelled));
     assert!(r.metadata.is_some());
     assert_eq!(counts.borrow().drops, 1);
-    let healthy = get(200, DOCUMENT, 0).await.0;
+    let healthy = get(200, DOCUMENT, DEFAULT_MAX_DOCUMENT_BYTES).await.0;
     assert!(matches!(healthy.outcome, DiscoveryOutcome::Found { .. }));
 }
 #[tokio::test(flavor = "current_thread")]
@@ -349,32 +386,37 @@ async fn incomplete_body_transport_failure_and_missing_final_url_are_distinct() 
     let options = ClientOptions::default();
     let control = WorkControl::new();
     let counts = Rc::new(RefCell::new(Counts::default()));
-    let r = options
-        .discover_with_timer("https://example.test", &control, &Timer::new(), |_| async {
+    let r = discover(
+        "https://example.test",
+        &options,
+        &control,
+        &Timer::new(),
+        |_| async {
             let mut r = response(200, DOCUMENT, counts.clone());
             r.body.fail = true;
             r.final_url = None;
             Ok(r)
-        })
-        .await
-        .unwrap();
-    assert!(matches!(r.outcome, DiscoveryOutcome::BodyFailure { .. }));
+        },
+    )
+    .await
+    .unwrap();
+    assert!(matches!(r.outcome, DiscoveryOutcome::BodyError { .. }));
     assert!(r.metadata.unwrap().final_url.is_none());
     assert!(r.body.is_none());
-    let r = options
-        .discover_with_timer::<Body, _, _, _>(
-            "https://example.test",
-            &control,
-            &Timer::new(),
-            |_| async {
-                Err(RequestFailure {
-                    kind: FailureKind::Timeout,
-                    message: "deadline".into(),
-                })
-            },
-        )
-        .await
-        .unwrap();
+    let r = discover::<Body, _, _, _>(
+        "https://example.test",
+        &options,
+        &control,
+        &Timer::new(),
+        |_| async {
+            Err(RequestError {
+                kind: ErrorKind::Timeout,
+                message: "deadline".into(),
+            })
+        },
+    )
+    .await
+    .unwrap();
     assert!(matches!(r.outcome, DiscoveryOutcome::Timeout));
     assert!(r.metadata.is_none());
 }
@@ -384,7 +426,7 @@ fn publication_copies_a_conformant_snapshot_and_serves_head_and_method_policy() 
     let publication = Publication::from_bytes(
         &bytes,
         PublicationOptions {
-            allow_origin: "*".into(),
+            allow_origin: AllowOrigin::Any,
         },
     )
     .unwrap();
@@ -478,22 +520,15 @@ fn alternate_loopback_hosts_are_normalized_before_admission() {
     }
 }
 
-// HD-2: no timer means a configuration refusal before the callback is invoked.
+// HD-2: zero timeout remains a configuration refusal before I/O.
 #[tokio::test(flavor = "current_thread")]
-async fn missing_timer_and_zero_timeout_refuse_before_io() {
-    let error = ClientOptions::default()
-        .discover_with::<Body, _, _>("https://example.test", &WorkControl::new(), |_| async {
-            panic!("dispatched without a timer")
-        })
-        .await
-        .unwrap_err();
-    assert_eq!(error.code, "timer-unavailable");
-    let error = ClientOptions {
-        timeout: AttemptTimeout::After(Duration::ZERO),
-        ..Default::default()
-    }
-    .discover_with_timer::<Body, _, _, _>(
+async fn zero_timeout_refuses_before_io() {
+    let error = discover::<Body, _, _, _>(
         "https://example.test",
+        &ClientOptions {
+            timeout: AttemptTimeout::After(Duration::ZERO),
+            ..Default::default()
+        },
         &WorkControl::new(),
         &Timer::new(),
         |_| async { panic!("dispatched with zero timeout") },
@@ -562,15 +597,20 @@ async fn whole_attempt_timer_wakes_pending_io_and_cancellation_wins_ties() {
             let control = WorkControl::new();
             let counts = Rc::new(RefCell::new(Counts::default()));
             let options = ClientOptions::default();
-            let call =
-                options.discover_with_timer("https://example.test", &control, &clock, |_| async {
+            let call = discover(
+                "https://example.test",
+                &options,
+                &control,
+                &clock,
+                |_| async {
                     if !body_phase {
                         std::future::pending::<()>().await;
                     }
                     let mut r = response(200, DOCUMENT, counts.clone());
                     r.body.stall = true;
                     Ok(r)
-                });
+                },
+            );
             let advance = async {
                 tokio::task::yield_now().await;
                 clock.advance(Duration::from_secs(30));
@@ -600,29 +640,29 @@ async fn portable_redirects_obey_statuses_relative_location_limit_and_total_time
     for status in [301, 302, 303, 307, 308] {
         let clock = Clock::default();
         let calls = std::cell::Cell::new(0);
-        let r = ClientOptions::default()
-            .discover_with_timer(
-                "https://example.test",
-                &WorkControl::new(),
-                &clock,
-                |request| {
-                    let n = calls.get();
-                    calls.set(n + 1);
-                    async move {
-                        let mut r =
-                            response(if n == 0 { status } else { 200 }, DOCUMENT, Rc::default());
-                        r.final_url = Some(request.url.clone());
-                        if n == 0 {
-                            r.headers.push(Header::new("location", "../done"));
-                        } else {
-                            assert_eq!(request.url, "https://example.test/done");
-                        }
-                        Ok(r)
+        let r = discover(
+            "https://example.test",
+            &ClientOptions::default(),
+            &WorkControl::new(),
+            &clock,
+            |request| {
+                let n = calls.get();
+                calls.set(n + 1);
+                async move {
+                    let mut r =
+                        response(if n == 0 { status } else { 200 }, DOCUMENT, Rc::default());
+                    r.final_url = Some(request.url.clone());
+                    if n == 0 {
+                        r.headers.push(Header::new("location", "../done"));
+                    } else {
+                        assert_eq!(request.url, "https://example.test/done");
                     }
-                },
-            )
-            .await
-            .unwrap();
+                    Ok(r)
+                }
+            },
+        )
+        .await
+        .unwrap();
         assert!(matches!(r.outcome, DiscoveryOutcome::Found { .. }));
         assert_eq!(calls.get(), 2);
     }
@@ -634,28 +674,28 @@ async fn portable_redirects_obey_statuses_relative_location_limit_and_total_time
         "http://[",
     ] {
         let calls = std::cell::Cell::new(0);
-        let r = ClientOptions::default()
-            .discover_with_timer(
-                "https://example.test",
-                &WorkControl::new(),
-                &Clock::default(),
-                |request| {
-                    calls.set(calls.get() + 1);
-                    async move {
-                        let mut r = response(302, DOCUMENT, Rc::default());
-                        r.final_url = Some(request.url);
-                        r.headers.push(Header::new("location", location));
-                        Ok(r)
-                    }
-                },
-            )
-            .await
-            .unwrap();
+        let r = discover(
+            "https://example.test",
+            &ClientOptions::default(),
+            &WorkControl::new(),
+            &Clock::default(),
+            |request| {
+                calls.set(calls.get() + 1);
+                async move {
+                    let mut r = response(302, DOCUMENT, Rc::default());
+                    r.final_url = Some(request.url);
+                    r.headers.push(Header::new("location", location));
+                    Ok(r)
+                }
+            },
+        )
+        .await
+        .unwrap();
         assert!(matches!(
             r.outcome,
-            DiscoveryOutcome::TransportFailure {
-                failure: RequestFailure {
-                    kind: FailureKind::RedirectPolicy,
+            DiscoveryOutcome::TransportError {
+                error: RequestError {
+                    kind: ErrorKind::RedirectPolicy,
                     ..
                 }
             }
@@ -665,36 +705,36 @@ async fn portable_redirects_obey_statuses_relative_location_limit_and_total_time
     for slow in [false, true] {
         let clock = Clock::default();
         let calls = std::cell::Cell::new(0);
-        let r = ClientOptions::default()
-            .discover_with_timer(
-                "https://example.test",
-                &WorkControl::new(),
-                &clock,
-                |request| {
-                    calls.set(calls.get() + 1);
-                    let clock = &clock;
-                    async move {
-                        if slow {
-                            clock.advance(Duration::from_secs(11));
-                        }
-                        let mut r = response(302, DOCUMENT, Rc::default());
-                        r.final_url = Some(request.url);
-                        r.headers.push(Header::new("location", "/loop"));
-                        Ok(r)
+        let r = discover(
+            "https://example.test",
+            &ClientOptions::default(),
+            &WorkControl::new(),
+            &clock,
+            |request| {
+                calls.set(calls.get() + 1);
+                let clock = &clock;
+                async move {
+                    if slow {
+                        clock.advance(Duration::from_secs(11));
                     }
-                },
-            )
-            .await
-            .unwrap();
+                    let mut r = response(302, DOCUMENT, Rc::default());
+                    r.final_url = Some(request.url);
+                    r.headers.push(Header::new("location", "/loop"));
+                    Ok(r)
+                }
+            },
+        )
+        .await
+        .unwrap();
         if slow {
             assert!(matches!(r.outcome, DiscoveryOutcome::Timeout));
             assert_eq!(calls.get(), 3);
         } else {
             assert!(matches!(
                 r.outcome,
-                DiscoveryOutcome::TransportFailure {
-                    failure: RequestFailure {
-                        kind: FailureKind::RedirectPolicy,
+                DiscoveryOutcome::TransportError {
+                    error: RequestError {
+                        kind: ErrorKind::RedirectPolicy,
                         ..
                     }
                 }
@@ -707,24 +747,24 @@ async fn portable_redirects_obey_statuses_relative_location_limit_and_total_time
 // HD-1/HD-7: observable hidden following is a contract failure, never document invalidity.
 #[tokio::test(flavor = "current_thread")]
 async fn portable_hidden_redirect_is_a_typed_policy_refusal() {
-    let r = ClientOptions::default()
-        .discover_with_timer(
-            "https://example.test",
-            &WorkControl::new(),
-            &Timer::new(),
-            |_| async {
-                let mut r = response(200, DOCUMENT, Rc::default());
-                r.final_url = Some("https://other.test/final".into());
-                Ok(r)
-            },
-        )
-        .await
-        .unwrap();
+    let r = discover(
+        "https://example.test",
+        &ClientOptions::default(),
+        &WorkControl::new(),
+        &Timer::new(),
+        |_| async {
+            let mut r = response(200, DOCUMENT, Rc::default());
+            r.final_url = Some("https://other.test/final".into());
+            Ok(r)
+        },
+    )
+    .await
+    .unwrap();
     assert!(matches!(
         r.outcome,
-        DiscoveryOutcome::TransportFailure {
-            failure: RequestFailure {
-                kind: FailureKind::RedirectPolicy,
+        DiscoveryOutcome::TransportError {
+            error: RequestError {
+                kind: ErrorKind::RedirectPolicy,
                 ..
             }
         }
@@ -742,7 +782,7 @@ fn publication_cors_default_and_explicit_omission() {
                 PublicationOptions::default()
             } else {
                 PublicationOptions {
-                    allow_origin: String::new(),
+                    allow_origin: AllowOrigin::Omit,
                 }
             },
         )
@@ -768,7 +808,7 @@ async fn status_cleanup_is_bounded_by_remaining_attempt_time() {
         }
     }
     impl ResponseBody for StatusBody {
-        async fn read(&mut self, _: &mut [u8]) -> Result<usize, RequestFailure> {
+        async fn read(&mut self, _: &mut [u8]) -> Result<usize, RequestError> {
             panic!("status body read as document")
         }
         async fn discard_status(&mut self) {
@@ -779,14 +819,20 @@ async fn status_cleanup_is_bounded_by_remaining_attempt_time() {
     let dropped = Rc::new(std::cell::Cell::new(false));
     let options = ClientOptions::default();
     let control = WorkControl::new();
-    let call = options.discover_with_timer("https://example.test", &control, &clock, |_| async {
-        Ok(HttpResponse {
-            status: 404,
-            final_url: None,
-            headers: vec![],
-            body: StatusBody(dropped.clone()),
-        })
-    });
+    let call = discover(
+        "https://example.test",
+        &options,
+        &control,
+        &clock,
+        |_| async {
+            Ok(HttpResponse {
+                status: 404,
+                final_url: None,
+                headers: vec![],
+                body: StatusBody(dropped.clone()),
+            })
+        },
+    );
     let (result, ()) = tokio::join!(call, async {
         tokio::task::yield_now().await;
         clock.advance(Duration::from_secs(30));
@@ -797,7 +843,7 @@ async fn status_cleanup_is_bounded_by_remaining_attempt_time() {
     assert_eq!(clock.dropped.get(), 1);
 }
 
-// HD-2: monotonic boundary checks discard an assessment completed after expiry.
+// HD-2: monotonic boundary checks discard an validation completed after expiry.
 #[tokio::test(flavor = "current_thread")]
 async fn validation_boundary_expiry_retains_complete_bytes_and_no_success() {
     struct BoundaryClock(std::cell::Cell<usize>);
@@ -817,7 +863,7 @@ async fn validation_boundary_expiry_retains_complete_bytes_and_no_success() {
     }
     struct Complete(bool);
     impl ResponseBody for Complete {
-        async fn read(&mut self, output: &mut [u8]) -> Result<usize, RequestFailure> {
+        async fn read(&mut self, output: &mut [u8]) -> Result<usize, RequestError> {
             if self.0 {
                 return Ok(0);
             }
@@ -827,27 +873,27 @@ async fn validation_boundary_expiry_retains_complete_bytes_and_no_success() {
         }
     }
     let clock = BoundaryClock(std::cell::Cell::new(0));
-    let result = ClientOptions::default()
-        .discover_with_timer(
-            "https://example.test",
-            &WorkControl::new(),
-            &clock,
-            |_| async {
-                Ok(HttpResponse {
-                    status: 200,
-                    final_url: None,
-                    headers: vec![],
-                    body: Complete(false),
-                })
-            },
-        )
-        .await
-        .unwrap();
+    let result = discover(
+        "https://example.test",
+        &ClientOptions::default(),
+        &WorkControl::new(),
+        &clock,
+        |_| async {
+            Ok(HttpResponse {
+                status: 200,
+                final_url: None,
+                headers: vec![],
+                body: Complete(false),
+            })
+        },
+    )
+    .await
+    .unwrap();
     assert!(matches!(result.outcome, DiscoveryOutcome::Timeout));
     assert_eq!(
         clock.0.get(),
         10,
-        "expiry must be observed after assessment"
+        "expiry must be observed after validation"
     );
     assert_eq!(result.body.as_deref(), Some(DOCUMENT));
     assert_eq!(result.metadata.unwrap().status, 200);
@@ -864,7 +910,7 @@ async fn eof_boundary_retains_complete_body_on_timeout_or_cancellation() {
         control: &'a WorkControl,
     }
     impl ResponseBody for EofBody<'_> {
-        async fn read(&mut self, output: &mut [u8]) -> Result<usize, RequestFailure> {
+        async fn read(&mut self, output: &mut [u8]) -> Result<usize, RequestError> {
             if !self.read {
                 self.read = true;
                 output[..DOCUMENT.len()].copy_from_slice(DOCUMENT);
@@ -887,8 +933,12 @@ async fn eof_boundary_retains_complete_body_on_timeout_or_cancellation() {
         for cancel in [false, true] {
             let clock = Clock::default();
             let control = WorkControl::new();
-            let r = ClientOptions::default()
-                .discover_with_timer("https://example.test", &control, &clock, |_| async {
+            let r = discover(
+                "https://example.test",
+                &ClientOptions::default(),
+                &control,
+                &clock,
+                |_| async {
                     Ok(HttpResponse {
                         status: 200,
                         final_url: None,
@@ -901,9 +951,10 @@ async fn eof_boundary_retains_complete_body_on_timeout_or_cancellation() {
                             control: &control,
                         },
                     })
-                })
-                .await
-                .unwrap();
+                },
+            )
+            .await
+            .unwrap();
             if cancel {
                 assert!(matches!(r.outcome, DiscoveryOutcome::Cancelled));
             } else {

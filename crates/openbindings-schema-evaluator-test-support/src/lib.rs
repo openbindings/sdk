@@ -39,7 +39,7 @@ pub struct Group {
     pub document: String,
     /// Keys of explicitly supplied resources in Suite::resources.
     pub resources: Vec<String>,
-    /// Finite observations sharing this prepared contract.
+    /// Finite observations sharing this prepared value contract.
     pub cases: Vec<Case>,
 }
 #[derive(Clone, Debug, Deserialize)]
@@ -237,10 +237,10 @@ pub fn run(evaluator: Arc<dyn SchemaEvaluator>, options: &Options) -> Report {
         let context = document
             .value_contracts(evaluator.clone(), resources)
             .expect("packaged interpretable document");
-        let prepared = context.prepare("op", Side::Input);
+        let prepared = context.prepare("op", Direction::Input);
         if !matches!(
             prepared,
-            ContractPreparation::Ready(_) | ContractPreparation::NoVerdict { .. }
+            ValueContractPreparation::Ready(_) | ValueContractPreparation::NoVerdict { .. }
         ) {
             report.configuration_failures.push(format!(
                 "{}: expected a schema preparation, observed {prepared:?}",
@@ -252,8 +252,8 @@ pub fn run(evaluator: Arc<dyn SchemaEvaluator>, options: &Options) -> Report {
             let value = JsonValue::parse(&case.value).expect("packaged instance JSON");
             let original = value.text().to_owned();
             let (outcome, preparation_refusal) = match &prepared {
-                ContractPreparation::Ready(contract) => (contract.validate(&value), None),
-                ContractPreparation::NoVerdict { detail } => (
+                ValueContractPreparation::Ready(contract) => (contract.validate(&value), None),
+                ValueContractPreparation::NoVerdict { detail } => (
                     ValueOutcome::NoVerdict {
                         detail: detail.clone(),
                     },
@@ -269,7 +269,7 @@ pub fn run(evaluator: Arc<dyn SchemaEvaluator>, options: &Options) -> Report {
                 used.insert(case.id.clone());
             }
             let mut failures = judge(case, &value, &outcome, allowed.is_some());
-            if let ContractPreparation::Ready(contract) = &prepared
+            if let ValueContractPreparation::Ready(contract) = &prepared
                 && let Some(failure) =
                     judge_resource_declaration(contract.resource_completeness(), &outcome)
             {

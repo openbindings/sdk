@@ -20,7 +20,7 @@ export function recoverAuthoringDraft() {
   const retried = authorDocument(draft);
   if (retried.status !== "authored") throw new Error(retried.error.code);
   try {
-    const checked = retried.document.validate();
+    const checked = retried.document.validated();
     if (checked.status !== "validated")
       throw new Error("Conformance was not established.");
     // Caller owns the validated handle; the parsed source can now be disposed.

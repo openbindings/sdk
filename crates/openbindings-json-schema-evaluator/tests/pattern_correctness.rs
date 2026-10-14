@@ -3,7 +3,7 @@ use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-fn prepare(schema: Value, resources: ResourceSet) -> ContractPreparation {
+fn prepare(schema: Value, resources: ResourceSet) -> ValueContractPreparation {
     let document = ParsedDocument::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
@@ -11,7 +11,7 @@ fn prepare(schema: Value, resources: ResourceSet) -> ContractPreparation {
     document
         .value_contracts(Arc::new(DefaultEvaluator::new()), resources)
         .unwrap()
-        .prepare("op", Side::Input)
+        .prepare("op", Direction::Input)
 }
 
 #[test]
@@ -34,7 +34,7 @@ fn node_surrogate_differential_for_both_pattern_keywords() {
                 json!({*input:null}),
             ),
         ] {
-            let ContractPreparation::Ready(contract) = prepare(schema, ResourceSet::default())
+            let ValueContractPreparation::Ready(contract) = prepare(schema, ResourceSet::default())
             else {
                 panic!("{id}/{keyword}")
             };
@@ -75,7 +75,7 @@ fn compilation_refusals_locate_authored_keywords_in_document_and_supplied_resour
             } else {
                 (schema, ResourceSet::default(), None, "/operations/op/input")
             };
-            let ContractPreparation::NoVerdict { detail } = prepare(entry, resources) else {
+            let ValueContractPreparation::NoVerdict { detail } = prepare(entry, resources) else {
                 panic!("{keyword}/{supplied}")
             };
             assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);

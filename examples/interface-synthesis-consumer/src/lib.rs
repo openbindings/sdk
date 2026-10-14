@@ -1,6 +1,6 @@
 //! Code-defined test kind, with independent source analysis shared by two roles.
 use openbindings::{
-    Binding, Dependency, DocumentBuilder, JsonValue, Operation, Source, WorkControl,
+    Binding, Dependency, Document, JsonValue, Operation, Source, WorkControl,
 };
 use openbindings_interface_synthesis::*;
 use openbindings_source_inspection as inspect;
@@ -116,7 +116,7 @@ pub fn derive(
         .iter()
         .map(|s| analyze(s.source))
         .collect::<Result<_, _>>()?;
-    let mut doc = DocumentBuilder::new();
+    let mut doc = Document::new();
     doc.openbindings = request
         .openbindings_version
         .unwrap_or(openbindings::AUTHORING_VERSION)
@@ -387,7 +387,7 @@ mod wasm {
     #[wasm_bindgen(js_name=synthesizeDocumentSource)]
     pub async fn synthesize_document_source(text: String) -> Result<String, JsValue> {
         async fn run(text: String) -> Result<String, Box<dyn std::error::Error>> {
-            let draft = DocumentBuilder::from_json(&JsonValue::parse(text)?)?;
+            let draft = Document::from_json(&JsonValue::parse(text)?)?;
             let source = draft
                 .sources
                 .and_then(|mut s| s.remove("catalog"))

@@ -156,7 +156,7 @@ pub struct CoverageDraft {
 /// Provider output; neither core conformance nor coverage correspondence is implied.
 #[derive(Clone, Debug)]
 pub struct SynthesisCandidate {
-    /// Retained immutable document to assess.
+    /// Retained immutable document to validate.
     pub document: ParsedDocument,
     /// Editable coverage claim.
     pub coverage: CoverageDraft,

@@ -203,7 +203,7 @@ test("invalid body chunks have a typed non-network failure", async () => {
 // HD-3/HD-4/HD-10: canonical CORS values, permissive default, exact reserved route spelling.
 test("publication uses serialized origins and matches the route exactly", async () => {
   const parsed = sdk.parseDocument(text).value;
-  const proof = parsed.validate().document;
+  const proof = parsed.validated().document;
   const publication = new discovery.DiscoveryPublication(proof);
   const response = publication.respond(
     new Request("https://example.test/.well-known/openbindings"),
@@ -225,11 +225,36 @@ test("publication uses serialized origins and matches the route exactly", async 
     "file://x",
   ])
     assert.throws(
-      () => new discovery.DiscoveryPublication(proof, { allowOrigin }),
+      () =>
+        new discovery.DiscoveryPublication(proof, {
+          allowOrigin: { origin: allowOrigin },
+        }),
+      { code: "invalid-allow-origin" },
+    );
+  for (const [allowOrigin, expected] of [
+    ["any", "*"],
+    ["null", "null"],
+    [{ origin: "https://client.example" }, "https://client.example"],
+  ]) {
+    const configured = new discovery.DiscoveryPublication(proof, {
+      allowOrigin,
+    });
+    assert.equal(
+      configured
+        .respond(new Request("https://example.test/.well-known/openbindings"))
+        .headers.get("access-control-allow-origin"),
+      expected,
+    );
+    configured.dispose();
+  }
+  for (const origin of ["", "*", "null"])
+    assert.throws(
+      () =>
+        new discovery.DiscoveryPublication(proof, { allowOrigin: { origin } }),
       { code: "invalid-allow-origin" },
     );
   const omitted = new discovery.DiscoveryPublication(proof, {
-    allowOrigin: "",
+    allowOrigin: "omit",
   });
   assert.equal(
     omitted

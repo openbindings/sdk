@@ -48,8 +48,8 @@ structure is a located interpretation error, independent of unrelated conformanc
 Every repeated name occurrence is ambiguous; even a one-key candidate list can
 represent repeated aliases in that operation.
 
-Replace `context.prepare(name, side).validate(value)` with a match on
-`ContractPreparation`. Only `Ready(contract)` calls `contract.validate(value)`.
+Replace `context.prepare(name, direction).validate(value)` with a match on
+`ValueContractPreparation`. Only `Ready(contract)` calls `contract.validate(value)`.
 Absent schema, missing/ambiguous operation and preparation refusal are setup states.
 `ValueOutcome` has exactly the three semantic evaluation branches; custom evaluator
 traits return those branches and the qualification kit reports setup separately.
@@ -64,7 +64,7 @@ in both phases. Known branch-independent values can now satisfy or fail with the
 original resource set; `anyOf(true, missing-U)` is a declared capability expansion.
 `anyOf(true, invalid-known-pattern)` still refuses. Ready owners remain bound to
 their original snapshots; supplying resources means creating a new context.
-Inspect `PreparedContract::resource_completeness()` / `resourceCompleteness` before
+Inspect `ValueContract::resource_completeness()` / `resourceCompleteness` before
 replacing a service/editor snapshot if the application requires complete resources.
 Ready plus Incomplete is usable for partial preview. Complete still allows budget,
 cancellation and unsupported-instance no verdicts. Rust evidence is borrowed;
@@ -100,7 +100,7 @@ TypeScript callers match the analogous tagged selection and preparation unions,
 check ordinary-value admission results, and dispose only actual found/ready owners.
 Use `SchemaResources` entries for atomic batches. Import HTTP helpers from
 `@openbindings/sdk/http-discovery`; it shares the root's initialization and handle
-realm. Construct TypeScript validated documents through `parsed.validate()` and narrow
+realm. Construct TypeScript validated documents through `parsed.validated()` and narrow
 `status === "validated"`; that branch is the sole public proof-construction route. The package guide gives
 complete before/after examples and nested exact-value ownership rules.
 

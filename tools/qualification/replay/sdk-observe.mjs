@@ -19,7 +19,7 @@ export function observe(sdk, request) {
             outcome: "no-verdict",
             detail: { reason: "undefined", code: "operation-ambiguous" },
           }
-        : { outcome: result.status };
+        : { outcome: result.status === "no-value-contract" ? "no-contract" : result.status };
   const output = { id: request.id, executed: true };
   const given = request.given;
   const bytes = Uint8Array.from(atob(given.documentBase64), (c) =>
@@ -27,7 +27,7 @@ export function observe(sdk, request) {
   );
   try {
     if (request.action === "validate-document") {
-      const assessment = sdk.assessDocument(bytes);
+      const assessment = sdk.validateDocument(bytes);
       if (assessment.status === "version-refused")
         return {
           ...output,
@@ -37,8 +37,8 @@ export function observe(sdk, request) {
       return {
         ...output,
         outcome: assessment.report.conclusion,
-        rules: assessment.report.evidence,
-        findings: assessment.report.findings,
+        rules: Object.fromEntries(Object.entries(assessment.report.evidence).map(([rule, evidence]) => [rule, evidence === "met" ? "satisfied" : evidence])),
+        findings: assessment.report.findings.map(finding => ({ ...finding, status: finding.status === "met" ? "satisfied" : finding.status, code: ((["OBI-06", "OBI-08"].includes(finding.rule) && finding.code === "unknown-operation") || (finding.rule === "OBI-07" && finding.code === "unknown-source")) ? "missing-target" : finding.code })),
       };
     }
     const doc = parsed(sdk.parseDocument(bytes));
@@ -80,16 +80,16 @@ export function observe(sdk, request) {
       resources.dispose();
       resources = next;
     }
-    const context = own(doc.contracts({ resources }));
+    const context = own(doc.valueContracts({ resources }));
     if (request.action === "validate-operation-values") {
       const preparation = context.prepare(given.operation, given.side);
       if (preparation.status !== "ready")
         return {
           ...output,
-          preparation,
+          preparation: { ...preparation, status: preparation.status === "no-value-contract" ? "no-contract" : preparation.status },
           values: given.valuesJson.map(() => preparationOutcome(preparation)),
         };
-      const prepared = own(preparation.contract);
+      const prepared = own(preparation.valueContract);
       return {
         ...output,
         preparation: { status: "ready" },
@@ -114,15 +114,15 @@ export function observe(sdk, request) {
       if (examples) {
         for (const name of Object.keys(JSON.parse(examples.text))) {
           const example = own(examples.get(name));
-          for (const side of ["input", "output"]) {
-            const value = own(example.get(side));
+          for (const direction of ["input", "output"]) {
+            const value = own(example.get(direction));
             if (value) {
-              const preparation = context.prepare(given.operation, side);
+              const preparation = context.prepare(given.operation, direction);
               const outcome =
                 preparation.status === "ready"
-                  ? own(preparation.contract).validate(value)
+                  ? own(preparation.valueContract).validate(value)
                   : preparationOutcome(preparation);
-              results.push({ ...outcome, example: name, side });
+              results.push({ ...outcome, example: name, side: direction });
             }
           }
         }

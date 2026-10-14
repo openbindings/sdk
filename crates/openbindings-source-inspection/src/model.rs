@@ -60,7 +60,7 @@ impl BindingFragment {
     ///
     /// Rejects illegal extension keys, including `operation` and `source`, even
     /// when a fragment was constructed directly rather than returned by inspection.
-    /// The completed document still needs ordinary core conformance assessment.
+    /// The completed document still needs ordinary core conformance validation.
     pub fn bind(
         self,
         operation: impl Into<String>,

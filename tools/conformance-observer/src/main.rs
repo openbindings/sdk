@@ -9,12 +9,27 @@ fn observe(request: &Value) -> Value {
         .unwrap();
     let mut out = json!({"id":request["id"],"executed":true});
     match request["action"].as_str().unwrap() {
-        "validate-document" => match assess_document(&data) {
+        "validate-document" => match validate_document(&data) {
             Ok(result) => {
                 let report = result.report();
                 out["outcome"] = json!(report.conclusion);
-                out["rules"] = json!(report.evidence);
+                // Translate SDK vocabulary to the frozen conformance-observation protocol.
+                out["rules"] = json!(report.evidence.iter().map(|(rule, evidence)| {
+                    (*rule, if *evidence == Evidence::Met { json!("satisfied") } else { json!(evidence) })
+                }).collect::<std::collections::BTreeMap<_, _>>());
                 out["findings"] = json!(report.findings);
+                if let Some(findings) = out["findings"].as_array_mut() {
+                    for finding in findings {
+                        if finding["status"] == "met" {
+                            finding["status"] = json!("satisfied");
+                        }
+                        if matches!((finding["rule"].as_str(), finding["code"].as_str()),
+                            (Some("OBI-06" | "OBI-08"), Some("unknown-operation")) |
+                            (Some("OBI-07"), Some("unknown-source"))) {
+                            finding["code"] = json!("missing-target");
+                        }
+                    }
+                }
             }
             Err(error) => {
                 out["outcome"] = json!("version-refused");
@@ -86,12 +101,12 @@ fn observe(request: &Value) -> Value {
             let contracts=doc.value_contracts(std::sync::Arc::new(openbindings_json_schema_evaluator::DefaultEvaluator::new()),resources).unwrap();
             let operation = given["operation"].as_str().unwrap();
             if request["action"] == "validate-operation-values" {
-                let side = if given["side"] == "input" {
-                    Side::Input
+                let direction = if given["side"] == "input" {
+                    Direction::Input
                 } else {
-                    Side::Output
+                    Direction::Output
                 };
-                let prepared = contracts.prepare(operation, side);
+                let prepared = contracts.prepare(operation, direction);
                 out["values"] = json!(
                     given["valuesJson"]
                         .as_array()
@@ -111,14 +126,14 @@ fn observe(request: &Value) -> Value {
                 let mut results = Vec::new();
                 if let Some(examples) = op.value().get("examples").and_then(|v| v.members()) {
                     for example in examples {
-                        for side in [Side::Input, Side::Output] {
-                            if let Some(value) = example.value.get(side.as_str()) {
+                        for direction in [Direction::Input, Direction::Output] {
+                            if let Some(value) = example.value.get(direction.as_str()) {
                                 let mut result = observe_value(
-                                    &contracts.prepare(operation, side),
+                                    &contracts.prepare(operation, direction),
                                     &value.to_owned(),
                                 );
                                 result["example"] = json!(example.name.as_str().unwrap());
-                                result["side"] = json!(side.as_str());
+                                result["side"] = json!(direction.as_str());
                                 results.push(result);
                             }
                         }
@@ -143,15 +158,15 @@ fn main() {
 
 // Corpus observation format predates setup/value separation. Preserve its wire
 // categories explicitly without manufacturing a compiled contract or value verdict.
-fn observe_value(preparation: &ContractPreparation, value: &JsonValue) -> Value {
+fn observe_value(preparation: &ValueContractPreparation, value: &JsonValue) -> Value {
     match preparation {
-        ContractPreparation::Ready(contract) => {
+        ValueContractPreparation::Ready(contract) => {
             serde_json::to_value(contract.validate(value)).unwrap()
         }
-        ContractPreparation::NoContract => json!({"outcome":"no-contract"}),
-        ContractPreparation::OperationMissing => json!({"outcome":"operation-missing"}),
-        ContractPreparation::OperationAmbiguous { .. } => json!({"outcome":"operation-missing"}),
-        ContractPreparation::NoVerdict { detail } => {
+        ValueContractPreparation::NoValueContract => json!({"outcome":"no-contract"}),
+        ValueContractPreparation::OperationMissing => json!({"outcome":"operation-missing"}),
+        ValueContractPreparation::OperationAmbiguous { .. } => json!({"outcome":"operation-missing"}),
+        ValueContractPreparation::NoVerdict { detail } => {
             json!({"outcome":"no-verdict","detail":detail})
         }
     }

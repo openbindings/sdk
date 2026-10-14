@@ -73,12 +73,8 @@ export type ParseResult<T> =
       value: T;
     }
   | InputFailure;
-/** Closed per-rule evidence partition: satisfied establishes the rule; violated establishes a counterexample; inconclusive lacks proof; not-applicable records a failed prerequisite. Findings explain evidence but do not replace it. */
-export type Evidence =
-  | "satisfied"
-  | "violated"
-  | "inconclusive"
-  | "not-applicable";
+/** Closed per-rule evidence partition: met establishes the rule; violated establishes a counterexample; inconclusive lacks proof; not-applicable records a failed prerequisite. Findings explain evidence but do not replace it. */
+export type Evidence = "met" | "violated" | "inconclusive" | "not-applicable";
 /** Coordinates in original UTF-8 source. byteOffset is zero-based; line and byteColumn are one-based. A byte column is not a JavaScript UTF-16 editor column: convert against the original source. Pointers are untrusted display data and repeated keys may share a pointer. */
 export interface SourceLocation {
   /** RFC 6901 pointer; empty string means root, null means unavailable. Use byteOffset to distinguish duplicate key occurrences. */
@@ -104,12 +100,12 @@ export interface Finding {
   message: string;
 }
 /** Normative OBI assessment at an exact specification revision. All rules retain independent evidence even if findings are omitted. Presentation retains at most 4096 findings and 8 MiB aggregate generated-pointer UTF-8 bytes; findingsTruncated records omissions without changing the conclusion. */
-export interface ConformanceReport {
+export interface ValidationReport {
   /** Applied specification release. */
   release: string;
   /** Exact applied specification Git revision. */
   revision: string;
-  /** Assessment-policy identifier. */
+  /** Validation-policy identifier. */
   policy: string;
   /** Aggregate normative conclusion derived from independent rule evidence. */
   conclusion: "conformant" | "non-conformant" | "undetermined";
@@ -120,13 +116,13 @@ export interface ConformanceReport {
   /** True when the 4096-finding or 8 MiB aggregate generated-pointer byte cap omitted findings. Omission never changes evidence or substitutes a shortened pointer. */
   findingsTruncated: boolean;
 }
-/** Normative assessment or a distinct unsupported-version refusal. An assessed report can be conformant, non-conformant or undetermined. This plain-data result owns no handles; use ParsedDocument.validate() to obtain a retained proof. */
-export type Assessment =
+/** Normative assessment or a distinct unsupported-version refusal. An assessed report can be conformant, non-conformant or undetermined. This plain-data result owns no handles; use ParsedDocument.validated() to obtain a retained proof. */
+export type DocumentValidation =
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
-      status: "assessed";
+      status: "report";
       /** Plain normative report for the exact snapshot. */
-      report: ConformanceReport;
+      report: ValidationReport;
     }
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
@@ -140,7 +136,7 @@ export type Assessment =
       };
     };
 /** Closed choice of the normative operation input or output schema field. */
-export type Side = "input" | "output";
+export type Direction = "input" | "output";
 /** Original schema resource/pointer identity. resource null denotes the OpenBindings document; supplied URIs identify explicit resources and never initiate acquisition. Private evaluator projection identities are not exposed. */
 export interface SchemaLocation {
   /** Original supplied-resource URI, or null for the OpenBindings document. */
@@ -148,7 +144,7 @@ export interface SchemaLocation {
   /** RFC 6901 pointer within that original source; empty string denotes root. */
   pointer: string;
 }
-/** Known refusal causes for this facade and its bundled engine. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. Undefined is reserved for proved semantic undefinedness; a potential cycle alone is conservative-preparation. Later package versions may add causes. Qualified partial contracts can prepare ready; values whose result depends on missing content return resource-unavailable during validation. For unavailable resources, ParsedDocument.references() exposes document-wide reference spellings and original keyword locations, not an exact per-contract missing-resource list; apply an application disclosure policy before logging them. */
+/** Known refusal causes for this facade and its bundled engine. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. Undefined is reserved for proved semantic undefinedness; a potential cycle alone is conservative-preparation. Later package versions may add causes. Qualified partial value contracts can prepare ready; values whose result depends on missing content return resource-unavailable during validation. For unavailable resources, ParsedDocument.references() exposes document-wide reference spellings and original keyword locations, not an exact per-value-contract missing-resource list; apply an application disclosure policy before logging them. */
 export type NoVerdictReason =
   | "unsupported-capability"
   | "conservative-preparation"
@@ -255,17 +251,17 @@ export type OperationSelection =
       /** Distinct primary keys in lexical order; repeated occurrences can yield one key. */
       candidates: readonly string[];
     };
-/** Setup partition: ready transfers a disposable PreparedContract; no-contract means the selected side is absent; operation-missing/operation-ambiguous are selection outcomes; no-verdict is preparation refusal. Present false is a contract. Ready can include qualified missing-resource contracts whose values may return no-verdict during validation. None of these setup refusals judges an instance. */
-export type ContractPreparation =
+/** Setup partition: ready transfers a disposable ValueContract; no-value-contract means the selected direction is absent; operation-missing/operation-ambiguous are selection outcomes; no-verdict is preparation refusal. Present false is a value contract. Ready can include qualified missing-resource value contracts whose values may return no-verdict during validation. None of these setup refusals judges an instance. */
+export type ValueContractPreparation =
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
       status: "ready";
-      /** Caller-owned prepared contract, valid independently of its context. */
-      contract: PreparedContract;
+      /** Caller-owned prepared value contract, valid independently of its context. */
+      valueContract: ValueContract;
     }
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
-      status: "no-contract" | "operation-missing";
+      status: "no-value-contract" | "operation-missing";
     }
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
@@ -366,7 +362,7 @@ export interface EvaluatorLimits {
   patternDepth: number;
 }
 /** Immutable context inputs and bounded preparation reuse. The built-in JSON Schema 2020-12 evaluator performs no resource I/O, treats format as annotation, declines unqualified Unicode property-escape matching, and may conservatively refuse potential non-progressing cycles. */
-export interface ContractOptions {
+export interface ValueContractOptions {
   /** Explicit resources retained by the context; omitted means an empty caller set. The passed owner remains caller-owned. */
   resources?: SchemaResources;
   /** Overrides for built-in evaluator budgets; unspecified entries use evaluatorLimits(). */
@@ -861,7 +857,7 @@ export function parseJson(input: ExactInput): ParseResult<ExactJson> {
     return failure(e);
   }
 }
-/** Parse an exact immutable document under default admission limits. The parsed branch transfers a disposable ParsedDocument but proves no OBI rules. Use validate() for a retained proof or assess() for plain evidence. Initialization, wrong input types and literal unpaired UTF-16 text throw; JSON escapes preserve such units. */
+/** Parse an exact immutable document under default admission limits. The parsed branch transfers a disposable ParsedDocument but proves no OBI rules. Use validated() for a retained proof or validate() for plain evidence. Initialization, wrong input types and literal unpaired UTF-16 text throw; JSON escapes preserve such units. */
 export function parseDocument(input: ExactInput): ParseResult<ParsedDocument> {
   requireReady();
   const data = bytes(input);
@@ -875,9 +871,9 @@ export function parseDocument(input: ExactInput): ParseResult<ParsedDocument> {
   }
 }
 /** Assess all normative document rules directly from exact source, including invalid JSON. Unsupported declared versions return version-refused; parse/limit failures become truthful evidence. Returns plain data with no handle to dispose. Initialization, wrong input types and literal unpaired UTF-16 text throw; represent unpaired units with JSON escapes or exact UTF-8 bytes. */
-export function assessDocument(input: ExactInput): Assessment {
+export function validateDocument(input: ExactInput): DocumentValidation {
   requireReady();
-  return decode(wasm.assessBytes(bytes(input)));
+  return decode(wasm.validateBytes(bytes(input)));
 }
 /** Return authoring default, supported specification line and exact applied specification revision. These identities are independent of the npm package version. */
 export function versionPolicy(): {
@@ -911,7 +907,7 @@ export function liveStorageOwners(): number {
   requireReady();
   return wasm.liveStorageOwners();
 }
-/** Disposable immutable exact snapshot without normative proof. retain() creates an independent owner. Assessment may be cached in Rust; operations caches frozen plain metadata. Owner-producing properties create fresh handles on every access and require separate disposal. */
+/** Disposable immutable exact snapshot without normative proof. retain() creates an independent owner. Validation may be cached in Rust; operations caches frozen plain metadata. Owner-producing properties create fresh handles on every access and require separate disposal. */
 export class ParsedDocument extends Managed {
   #operations?: readonly OperationMetadata[];
   #bindings?: readonly BindingMetadata[] | null;
@@ -933,14 +929,14 @@ export class ParsedDocument extends Managed {
     return new ExactJson(handle<wasm.WasmDocument>(this).value());
   }
   /** Return plain normative evidence or version refusal; no proof owner is created and no result needs disposal. */
-  assess(): Assessment {
-    return decode(handle<wasm.WasmDocument>(this).assess());
+  validate(): DocumentValidation {
+    return decode(handle<wasm.WasmDocument>(this).validate());
   }
   /** Establish normative conformance and, only on validated, return a NEW independent proof owner. The original document remains caller-owned. Other branches preserve plain evidence/refusal. */
-  validate(): ValidationResult {
+  validated(): ValidationResult {
     return validateParsed(this);
   }
-  /** Return cached frozen plain metadata in lexical primary-key order. No handles are created. Throws a located interpretation error for malformed typed namespace/metadata; does not assess all OBI rules. */
+  /** Return cached frozen plain metadata in lexical primary-key order. No handles are created. Throws a located interpretation error for malformed typed namespace/metadata; does not validate all OBI rules. */
   get operations(): readonly OperationMetadata[] {
     handle<wasm.WasmDocument>(this);
     return (this.#operations ??= Object.freeze(
@@ -1072,8 +1068,8 @@ export class ParsedDocument extends Managed {
       empty?.dispose();
     }
   }
-  /** Create a NEW disposable immutable evaluator/resource context. Eagerly validates the whole operation namespace, including unrelated aliases, throwing a specific interpretation error for malformed entries. Unrelated metadata may remain a draft. A later value verdict concerns only the selected schema; use validate() first when accepting a normative document. */
-  contracts(options: ContractOptions = {}): ValueContracts {
+  /** Create a NEW disposable immutable evaluator/resource context. Eagerly validates the whole operation namespace, including unrelated aliases, throwing a specific interpretation error for malformed entries. Unrelated metadata may remain a draft. A later value verdict concerns only the selected schema; use validated() first when accepting a normative document. */
+  valueContracts(options: ValueContractOptions = {}): ValueContracts {
     if (
       options.includeSchemaDetails !== undefined &&
       typeof options.includeSchemaDetails !== "boolean"
@@ -1098,7 +1094,7 @@ export class ParsedDocument extends Managed {
     try {
       return new ValueContracts(
         sdkCall(() =>
-          handle<wasm.WasmDocument>(this).contracts(
+          handle<wasm.WasmDocument>(this).valueContracts(
             resourceRaw(resources ?? empty!),
             limits,
             options.cacheCapacity,
@@ -1111,7 +1107,7 @@ export class ParsedDocument extends Managed {
     }
   }
 }
-/** Document proof acquisition: validated transfers an independent ValidatedDocument owner and report. Otherwise the original Assessment explains refusal, nonconformance or uncertainty; no proof owner is created. */
+/** Document proof acquisition: validated transfers an independent ValidatedDocument owner and report. Otherwise the original DocumentValidation explains refusal, nonconformance or uncertainty; no proof owner is created. */
 export type ValidationResult =
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
@@ -1119,25 +1115,25 @@ export type ValidationResult =
       /** Caller-owned document handle for this branch; dispose independently. */
       document: ValidatedDocument;
       /** Plain normative report for the exact snapshot. */
-      report: ConformanceReport;
+      report: ValidationReport;
     }
-  | Assessment;
+  | DocumentValidation;
 const conformanceToken = Symbol("established conformance");
 let validateParsed: (document: ParsedDocument) => ValidationResult;
-/** Retained proof for one immutable snapshot whose normative OBI rules were established. Obtain via ParsedDocument.validate(); preparation remains evaluator-dependent. It inherits exact inspection methods and deterministic disposal from ParsedDocument. */
+/** Retained proof for one immutable snapshot whose normative OBI rules were established. Obtain via ParsedDocument.validated(); preparation remains evaluator-dependent. It inherits exact inspection methods and deterministic disposal from ParsedDocument. */
 export class ValidatedDocument extends ParsedDocument {
   declare private readonly validatedDocumentBrand: void;
   private constructor(raw: wasm.WasmDocument, token: symbol) {
     if (token !== conformanceToken)
       throw new TypeError(
-        "Use ParsedDocument.validate() to establish conformance.",
+        "Use ParsedDocument.validated() to establish conformance.",
       );
     super(raw);
   }
   static {
     validateParsed = (document: ParsedDocument): ValidationResult => {
-      const result = document.assess();
-      return result.status === "assessed" &&
+      const result = document.validate();
+      return result.status === "report" &&
         result.report.conclusion === "conformant"
         ? {
             status: "validated",
@@ -1371,44 +1367,45 @@ export class SchemaResources extends Managed {
     return SchemaResources.fromRaw(handle<wasm.WasmResources>(this).retain());
   }
 }
-/** Disposable immutable document/resource/evaluator context with entry-bounded preparation reuse. Replacing an active context does not mutate existing prepared owners. Dispose the context to release its cache owners; independently retained PreparedContract handles remain valid. */
+/** Disposable immutable document/resource/evaluator context with entry-bounded preparation reuse. Replacing an active context does not mutate existing prepared owners. Dispose the context to release its cache owners; independently retained ValueContract handles remain valid. */
 export class ValueContracts extends Managed {
-  /** @internal */ constructor(raw: wasm.WasmContracts) {
+  /** @internal */ constructor(raw: wasm.WasmValueContracts) {
     super(raw);
   }
-  /** Select the named operation/alias and requested side, then return the complete ContractPreparation partition. Ready transfers a new disposable contract independent of this context/cache and does not promise every value is decidable. The default evaluator can prepare qualified missing-resource contracts, including a bare missing $ref and dual-polarity oneOf bounds. Validation establishes a verdict when independent of missing content, or returns resource-unavailable when dependent. Known errors and unsupported partial contexts still refuse preparation. Supply resources in a new context to recover; existing prepared owners retain their original snapshot. Deterministic preparations can be reused; cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
+  /** Select the named operation/alias and requested direction, then return the complete ValueContractPreparation partition. Ready transfers a new disposable value contract independent of this context/cache and does not promise every value is decidable. The default evaluator can prepare qualified missing-resource value contracts, including a bare missing $ref and dual-polarity oneOf bounds. Validation establishes a verdict when independent of missing content, or returns resource-unavailable when dependent. Known errors and unsupported partial contexts still refuse preparation. Supply resources in a new context to recover; existing prepared owners retain their original snapshot. Deterministic preparations can be reused; cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
   prepare(
     operation: string,
-    side: Side,
+    direction: Direction,
     options: WorkOptions = {},
-  ): ContractPreparation {
+  ): ValueContractPreparation {
     requireReady();
-    const raw = handle<wasm.WasmContracts>(this);
+    const raw = handle<wasm.WasmValueContracts>(this);
     scalar(operation);
     const signal = workSignal(options);
     const preparation = sdkCall(() =>
-      raw.prepare(operation, side, isAborted(signal)),
+      raw.prepare(operation, direction, isAborted(signal)),
     );
     try {
       const result = decode<
-        Exclude<ContractPreparation, { status: "ready" }> | { status: "ready" }
+        | Exclude<ValueContractPreparation, { status: "ready" }>
+        | { status: "ready" }
       >(preparation.result());
       if (result.status !== "ready") {
         if (result.status === "operation-ambiguous")
           freezeCandidates(result.candidates);
         else if (
-          !["no-contract", "operation-missing", "no-verdict"].includes(
+          !["no-value-contract", "operation-missing", "no-verdict"].includes(
             result.status,
           )
         )
           throw new Error("Invalid preparation result.");
         return result;
       }
-      const contract = preparation.takeContract();
+      const contract = preparation.takeValueContract();
       if (!contract)
-        throw new Error("Preparation invariant: ready contract missing.");
+        throw new Error("Preparation invariant: ready value contract missing.");
       try {
-        return { status: "ready", contract: new PreparedContract(contract) };
+        return { status: "ready", valueContract: new ValueContract(contract) };
       } catch (error) {
         contract.free();
         throw error;
@@ -1469,7 +1466,7 @@ function cancelledValue(): ValueOutcome {
     },
   };
 }
-/** Immutable resource evidence from the bundled evaluator for a selected prepared contract. Complete is not a decidability promise. The evidence contains original schema identities but no instance data. */
+/** Immutable resource evidence from the bundled evaluator for a selected prepared value contract. Complete is not a decidability promise. The evidence contains original schema identities but no instance data. */
 export type ResourceCompleteness =
   | {
       /** All resources reached by evaluation-relevant preparation were supplied. */
@@ -1478,14 +1475,14 @@ export type ResourceCompleteness =
   | {
       /** Prepared without at least one evaluation-relevant resource. */
       readonly status: "incomplete";
-      /** One missing reference of this contract; not an exhaustive list or necessarily the cause for a particular value. */
+      /** One missing reference of this value contract; not an exhaustive list or necessarily the cause for a particular value. */
       readonly evidence: Readonly<Omit<NoVerdict, "location">> & {
         /** Frozen original schema coordinate; contains no instance data. */
         readonly location: Readonly<SchemaLocation> | null;
       };
     };
 /** Disposable retained selected-schema validator, independent of document/context lifetime and cache eviction. Repeated validation borrows exact input; ordinary inputs are admitted and temporary owners released within the call. No verdict here proves whole-document conformance. */
-export class PreparedContract extends Managed {
+export class ValueContract extends Managed {
   #resourceCompleteness?: ResourceCompleteness;
   /** @internal */ constructor(raw: wasm.WasmPrepared) {
     super(raw);
@@ -1565,9 +1562,9 @@ export class PreparedContract extends Managed {
     }
   }
 
-  /** Return a NEW independently disposable owner sharing compiled state; it remains valid after the context or prior contract owner is disposed. */
-  retain(): PreparedContract {
-    const retained = new PreparedContract(
+  /** Return a NEW independently disposable owner sharing compiled state; it remains valid after the context or prior value contract owner is disposed. */
+  retain(): ValueContract {
+    const retained = new ValueContract(
       handle<wasm.WasmPrepared>(this).retain(),
     );
     retained.#resourceCompleteness = this.#resourceCompleteness;
@@ -1607,7 +1604,7 @@ export type DiscoveryFetch = (
 ) => Promise<Response>;
 /** One discovery attempt with an SDK-owned timer and AbortController. Fetch follows redirects; browser per-hop mixed-content and private-network policy is browser-owned and invisible to the SDK. */
 export interface DiscoveryOptions {
-  /** Decoded-body byte limit; omitted or zero selects 1 MiB. Must be a nonnegative safe integer. Bounds accepted/retained document bytes; Fetch may deliver a larger chunk before overflow is detected, so this does not bound host buffering. */
+  /** Decoded-body byte limit; omitted selects 1 MiB. Must be a positive safe integer; zero is refused. Bounds accepted/retained document bytes; Fetch may deliver a larger chunk before overflow is detected, so this does not bound host buffering. */
   maxDocumentBytes?: number;
   /** Whole-attempt milliseconds, default 30,000. Must be positive and finite; "unbounded" explicitly omits the deadline. Zero is refused. */
   timeoutMs?: number | "unbounded";
@@ -1629,7 +1626,7 @@ export interface DiscoveryMetadata {
   /** Frozen observed header strings under host Fetch combining/visibility rules. */
   headers: Readonly<Record<string, string>>;
 }
-/** Assessment of a complete bounded discovery body. Found owns proof; other document handles, when present, remain unproved parsed snapshots. */
+/** Validation of a complete bounded discovery body. Found owns proof; other document handles, when present, remain unproved parsed snapshots. */
 type DiscoveryBodyResult =
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
@@ -1637,7 +1634,7 @@ type DiscoveryBodyResult =
       /** Caller-owned document handle for this branch; dispose independently. */
       document: ValidatedDocument;
       /** Plain normative report for the exact snapshot. */
-      report: ConformanceReport;
+      report: ValidationReport;
     }
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
@@ -1645,7 +1642,7 @@ type DiscoveryBodyResult =
       /** Caller-owned document handle for this branch; dispose independently. */
       document?: ParsedDocument;
       /** Plain normative report for the exact snapshot. */
-      report: ConformanceReport;
+      report: ValidationReport;
     }
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
@@ -1725,7 +1722,7 @@ function interruptible<T>(
     );
   });
 }
-/** Retrieve decoded bytes, then assess them in Rust. Only 404 means absence.
+/** Retrieve decoded bytes, then validate them in Rust. Only 404 means absence.
  * Returned document handles belong to the caller and must be disposed.
  * The SDK timer covers headers, followed redirects, decoded reads and validation boundaries.
  * Caller cancellation wins a same-observation tie; the first observed cause is retained.
@@ -1740,11 +1737,11 @@ export async function discover(
   requireReady();
   const requestedUrl = discoveryEndpoint(origin),
     policy = discoveryPolicy();
-  const configured = options.maxDocumentBytes ?? 0;
-  if (!Number.isSafeInteger(configured) || configured < 0)
+  const configured = options.maxDocumentBytes ?? policy.defaultMaxDocumentBytes;
+  if (!Number.isSafeInteger(configured) || configured <= 0)
     throw new SdkError(
       "invalid-byte-limit",
-      "maxDocumentBytes must be a nonnegative safe integer.",
+      "maxDocumentBytes must be a positive safe integer.",
     );
   const timeout = options.timeoutMs ?? 30_000;
   if (timeout !== "unbounded" && (!Number.isFinite(timeout) || timeout <= 0))
@@ -1758,7 +1755,7 @@ export async function discover(
       "fetch-unavailable",
       "Supply a Fetch callback in this host.",
     );
-  const limit = configured || policy.defaultMaxDocumentBytes,
+  const limit = configured,
     controller = new AbortController(),
     signal = controller.signal,
     deadline = timeout === "unbounded" ? Infinity : performance.now() + timeout;
@@ -1924,7 +1921,7 @@ export async function discover(
       if (result.status === "found") {
         if (!document)
           throw new Error("Discovery invariant: conformant document missing.");
-        const validation = document.validate();
+        const validation = document.validated();
         document.dispose();
         document = undefined;
         if (validation.status !== "validated")
@@ -1968,19 +1965,49 @@ export async function discover(
     controller.abort();
   }
 }
+/** Publication CORS policy. Exact origins must be canonical ASCII tuple origins. */
+export type AllowOrigin =
+  | "any"
+  | "omit"
+  | "null"
+  | {
+      /** Canonical ASCII serialized tuple origin; sentinel spellings belong to the explicit choices. */
+      origin: string;
+    };
+
 /** Disposable immutable copy of a proved discovery document. Creates no listener or server; authorization and request routing remain caller-owned. Existing publication remains usable after the original proof is disposed. */
 export class DiscoveryPublication extends Managed {
-  /** Copy a ValidatedDocument into an independently owned publication. allowOrigin defaults to *; accepts empty for omission, null or an exact ASCII serialized tuple origin. Opaque schemes and noncanonical spellings are refused. Invalid configuration throws; the source proof remains caller-owned. */
+  /** Copy a ValidatedDocument into an independently owned publication. allowOrigin defaults to "any"; supports "omit", "null", or an exact ASCII serialized tuple origin. Opaque schemes and noncanonical spellings are refused. Invalid configuration throws; the source proof remains caller-owned. */
   constructor(
     document: ValidatedDocument,
     options: {
-      /** Optional CORS allow-origin spelling; omitted emits *, empty omits the header. Authentication, credentials and preflight remain application-owned. */
-      allowOrigin?: string;
+      /** Optional typed CORS policy; omitted emits *, "omit" omits the header. Authentication, credentials and preflight remain application-owned. */
+      allowOrigin?: AllowOrigin;
     } = {},
   ) {
     requireReady();
-    const allow = options.allowOrigin ?? "*";
-    scalar(allow);
+    const choice = options.allowOrigin ?? "any";
+    let allow: string;
+    if (choice === "any") allow = "*";
+    else if (choice === "omit") allow = "";
+    else if (choice === "null") allow = "null";
+    else if (
+      typeof choice === "object" &&
+      choice !== null &&
+      typeof choice.origin === "string"
+    ) {
+      allow = choice.origin;
+      scalar(allow);
+      if (["", "*", "null"].includes(allow))
+        throw new SdkError(
+          "invalid-allow-origin",
+          "Exact origin must be a canonical ASCII tuple origin.",
+        );
+    } else
+      throw new SdkError(
+        "invalid-allow-origin",
+        "Expected a typed allow-origin choice.",
+      );
     super(
       sdkCall(() => new wasm.WasmPublication(documentRaw(document), allow)),
     );

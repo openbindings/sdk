@@ -40,7 +40,7 @@ test("first-use caller keeps setup refusals separate and releases its owners", (
     {},
     '{"openbindings":"0.2.0","operations":{"lookup":{"description":42}}}',
   );
-  assert.equal(invalid.status, "assessed");
+  assert.equal(invalid.status, "report");
   assert.equal(invalid.report.conclusion, "non-conformant");
   assert.equal(liveStorageOwners(), baseline);
 });
@@ -55,7 +55,7 @@ test("source editor diagnoses a wrong field and commits only a corrected snapsho
   let retained;
   try {
     const rejected = editor.update(exampleDraft);
-    assert.equal(rejected.status, "assessed");
+    assert.equal(rejected.status, "report");
     assert.equal(rejected.report.conclusion, "non-conformant");
     const finding = rejected.report.findings.find(
       (item) => item.location?.pointer === "/operations/lookup/inputSchema",
@@ -78,7 +78,7 @@ test("source editor diagnoses a wrong field and commits only a corrected snapsho
       editor.update(
         '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"]}}}',
       ).status,
-      "no-contract",
+      "no-value-contract",
     );
     const refused = editor.update(
       '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"$ref":"https://schema.example/missing"}}}}',
@@ -122,7 +122,7 @@ test("editor presentation quotes original pointers and reports diagnostic trunca
       operations: { lookup: { [key]: true } },
     });
     const result = editor.update(text);
-    assert.equal(result.status, "assessed");
+    assert.equal(result.status, "report");
     const finding = result.report.findings.find(
       (item) => item.code === "schema-mismatch",
     );

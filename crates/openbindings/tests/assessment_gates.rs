@@ -1,7 +1,7 @@
 use openbindings::*;
 
-fn checked(text: &str) -> DocumentAssessment {
-    assess_document(text).unwrap()
+fn checked(text: &str) -> DocumentValidation {
+    validate_document(text).unwrap()
 }
 
 #[test]
@@ -16,9 +16,9 @@ fn independent_violations_survive_unpaired_and_deep_opaque_data() {
         (format!(r#"{{"openbindings":"0.2.0","x-d":{}0{}}}"#, "[".repeat(10001), "]".repeat(10001)), vec!["OBI-02"]),
         (format!(r#"{{"openbindings":"0.2.0","operations":{{"-bad":{{}}}},"x-d":{}0{}}}"#, "[".repeat(10001), "]".repeat(10001)), vec!["OBI-04"]),
     ] {
-        let assessment = checked(&text);
-        assert_eq!(assessment.report().conclusion, Conformance::NonConformant, "{rules:?}");
-        for rule in rules { assert_eq!(assessment.report().evidence[rule], Evidence::Violated, "{rule}"); }
+        let validation = checked(&text);
+        assert_eq!(validation.report().conclusion, Conformance::NonConformant, "{rules:?}");
+        for rule in rules { assert_eq!(validation.report().evidence[rule], Evidence::Violated, "{rule}"); }
     }
 }
 
@@ -34,15 +34,15 @@ fn opaque_and_fixed_schema_strings_are_lossless() {
         r#""dependencies":{"d":{"operation":"op","kinds":["\ud800","\udc00","\ue000d800;"]}}"#,
     ] {
         let text = format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{}}}},{fields}}}"#);
-        let assessment = checked(&text);
+        let validation = checked(&text);
         assert_eq!(
-            assessment.report().conclusion,
+            validation.report().conclusion,
             Conformance::Conformant,
             "{fields}: {:?}",
-            assessment.report().findings
+            validation.report().findings
         );
         assert_eq!(
-            assessment.validated().unwrap().original_bytes(),
+            validation.validated().unwrap().original_bytes(),
             text.as_bytes()
         );
     }
@@ -58,11 +58,11 @@ fn opaque_and_fixed_schema_strings_are_lossless() {
         (r#""schemas":{"s":{"$anchor":"\ud800"}}"#, "OBI-10"),
         (r#""schemas":{"s":{"$id":"x\ud800#bad"}}"#, "OBI-10"),
     ] {
-        let assessment = checked(&format!(
+        let validation = checked(&format!(
             r#"{{"openbindings":"0.2.0","operations":{{"op":{{}}}},{field}}}"#
         ));
         assert_eq!(
-            assessment.report().evidence[rule],
+            validation.report().evidence[rule],
             Evidence::Violated,
             "{field}"
         );
@@ -72,14 +72,14 @@ fn opaque_and_fixed_schema_strings_are_lossless() {
 #[test]
 fn native_names_compare_utf16_units_even_when_grammar_is_violated() {
     // CR-3/CR-5: invalid names still participate in exact namespace/reference rules.
-    let assessment = checked(
+    let validation = checked(
         r#"{"openbindings":"0.2.0","operations":{"\ud800":{"aliases":["\uD800"]}},"sources":{"\udc00":{"kind":"k"}},"bindings":{"b":{"operation":"\uD800","source":"\uDC00"}},"dependencies":{"d":{"operation":"\ud800"}}}"#,
     );
-    let evidence = &assessment.report().evidence;
+    let evidence = &validation.report().evidence;
     assert_eq!(evidence["OBI-04"], Evidence::Violated);
     assert_eq!(evidence["OBI-05"], Evidence::Violated);
     for rule in ["OBI-06", "OBI-07", "OBI-08"] {
-        assert_eq!(evidence[rule], Evidence::Satisfied);
+        assert_eq!(evidence[rule], Evidence::Met);
     }
 }
 
@@ -97,9 +97,9 @@ fn local_meta_checks_at_arbitrary_depth_on_small_stack() {
                     let text = format!(
                         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
                     );
-                    let assessment = checked(&text);
+                    let validation = checked(&text);
                     assert_eq!(
-                        assessment.report().conclusion,
+                        validation.report().conclusion,
                         if bad {
                             Conformance::NonConformant
                         } else {
@@ -108,11 +108,11 @@ fn local_meta_checks_at_arbitrary_depth_on_small_stack() {
                         "depth {depth}"
                     );
                     assert_eq!(
-                        assessment.report().evidence["OBI-10"],
+                        validation.report().evidence["OBI-10"],
                         if bad {
                             Evidence::Violated
                         } else {
-                            Evidence::Satisfied
+                            Evidence::Met
                         }
                     );
                 }
@@ -141,24 +141,24 @@ fn assessment_admission_is_caller_selected_and_precedes_version() {
             ..JsonLimits::default()
         },
     ] {
-        let assessment = assess_document_with_limits(text, limits).unwrap();
-        assert_eq!(assessment.report().conclusion, Conformance::Undetermined);
+        let validation = validate_document_with_limits(text, limits).unwrap();
+        assert_eq!(validation.report().conclusion, Conformance::Undetermined);
         assert!(
-            assessment
+            validation
                 .report()
                 .evidence
                 .values()
                 .all(|v| *v == Evidence::Inconclusive)
         );
         assert!(
-            assessment
+            validation
                 .report()
                 .findings
                 .iter()
                 .all(|f| f.code == "input-limit")
         );
     }
-    assert!(assess_document_with_limits(text, JsonLimits::default()).is_err());
+    assert!(validate_document_with_limits(text, JsonLimits::default()).is_err());
     let text = format!(
         r#"{{"openbindings":"0.2.0","operations":{{}},"x-data":[{}0]}}"#,
         "0,".repeat(1_000_000)
@@ -167,7 +167,7 @@ fn assessment_admission_is_caller_selected_and_precedes_version() {
         checked(&text).report().conclusion,
         Conformance::Undetermined
     );
-    let raised = assess_document_with_limits(
+    let raised = validate_document_with_limits(
         &text,
         JsonLimits {
             max_nodes: 1_000_100,
@@ -190,8 +190,8 @@ fn parse_findings_explain_the_syntax_failure() {
         ),
         ("1e", "exponent", "expected a digit in the number exponent"),
     ] {
-        let assessment = checked(text);
-        let finding = &assessment.report().findings[0];
+        let validation = checked(text);
+        let finding = &validation.report().findings[0];
         assert_eq!(finding.rule, "OBI-01");
         assert_eq!(finding.code, code);
         assert_eq!(finding.message, message);

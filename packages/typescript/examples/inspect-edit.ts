@@ -59,8 +59,8 @@ export function editMetadata(
   const built = authorDocument(editing.value);
   if (built.status !== "authored") return built;
   using revised = built.document;
-  const checked = revised.assess();
-  if (checked.status !== "assessed") return checked;
+  const checked = revised.validate();
+  if (checked.status !== "report") return checked;
   // Bytes and reports are ordinary values; no disposable owner escapes this call.
   // The caller decides whether a non-conformant edited document may be saved.
   return {
@@ -155,8 +155,8 @@ export function editExtensionMember(
   const built = authorDocument(editing.value);
   if (built.status !== "authored") return built;
   using revised = built.document;
-  const checked = revised.assess();
-  if (checked.status !== "assessed") return checked;
+  const checked = revised.validate();
+  if (checked.status !== "report") return checked;
   return {
     status: "edited" as const,
     bytes: revised.originalBytes,

@@ -25,7 +25,7 @@ pub const DOCUMENT_RULES: [&str; 13] = [
 /// Evidence for one normative document rule. This closed partition may be exhaustively matched; it is separate from explanatory findings.
 pub enum Evidence {
     /// The rule was established for this snapshot.
-    Satisfied,
+    Met,
     /// A rule violation was established, even if other work is inconclusive.
     Violated,
     /// The implementation could not establish satisfaction or violation.
@@ -60,12 +60,12 @@ pub struct Finding {
 }
 #[derive(Clone, Debug, Serialize)]
 /// Assessment of all normative document rules at the pinned specification revision. At most 4096 findings and 8 MiB of aggregate generated-pointer UTF-8 bytes are retained. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source.
-pub struct ConformanceReport {
+pub struct ValidationReport {
     /// Applied specification release, independent of package version.
     pub release: &'static str,
     /// Exact applied specification Git revision.
     pub revision: &'static str,
-    /// Identifier of the assessment policy used for this report.
+    /// Identifier of the validation policy used for this report.
     pub policy: &'static str,
     /// Aggregate normative conclusion derived from all rule evidence.
     pub conclusion: Conformance,
@@ -95,14 +95,14 @@ impl fmt::Display for VersionRefusal {
 }
 impl std::error::Error for VersionRefusal {}
 #[derive(Clone)]
-/// Immutable retained exact JSON snapshot, without a conformance claim. Clones share storage and lazily cached interpretation/assessment. Dropping all owners releases storage; it does not promise an immediate process RSS decrease.
+/// Immutable retained exact JSON snapshot, without a conformance claim. Clones share storage and lazily cached interpretation/validation. Dropping all owners releases storage; it does not promise an immediate process RSS decrease.
 pub struct ParsedDocument {
     pub(crate) inner: Arc<DocumentInner>,
 }
 pub(crate) struct DocumentInner {
     pub value: JsonValue,
     pub schemas: OnceLock<SchemaIndex>,
-    assessment: OnceLock<Result<Arc<ConformanceReport>, VersionRefusal>>,
+    validation: OnceLock<Result<Arc<ValidationReport>, VersionRefusal>>,
     interpretation: OnceLock<Result<(), InterpretationError>>,
     names: OnceLock<Result<NameIndex, InterpretationError>>,
     bindings: NamespaceCache,
@@ -118,12 +118,12 @@ impl fmt::Debug for ParsedDocument {
 }
 #[derive(Clone, Debug)]
 /// Normative evidence plus the parsed snapshot when one was admitted. Invalid JSON can still produce a report without a parsed document.
-pub struct DocumentAssessment {
+pub struct DocumentValidation {
     document: Option<ParsedDocument>,
-    report: Arc<ConformanceReport>,
+    report: Arc<ValidationReport>,
 }
 #[derive(Clone, Debug)]
-/// Retained proof that this immutable snapshot satisfied every applicable normative document rule. Obtain it through [`DocumentAssessment::validated`]; contract preparation is still a separate evaluator-dependent step.
+/// Retained proof that this immutable snapshot satisfied every applicable normative document rule. Obtain it through [`DocumentValidation::validated`]; value contract preparation is still a separate evaluator-dependent step.
 pub struct ValidatedDocument {
     document: ParsedDocument,
 }
@@ -181,20 +181,20 @@ impl InterpretationError {
 
 impl ParsedDocument {
     /// Parse and retain exact bytes and source locations without establishing conformance.
-    /// Use [`Self::assess`] before treating this as a conformant document. See the
+    /// Use [`Self::validate`] before treating this as a conformant document. See the
     /// [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
     /// for the progression from parsing to a prepared input contract.
     pub fn parse(input: impl AsRef<[u8]>) -> Result<Self, InputError> {
         JsonValue::parse(input).map(Self::from_json)
     }
-    /// Create a document snapshot from an exact value without assessment. A subtree is made standalone so subsequent document coordinates refer to its independent source.
+    /// Create a document snapshot from an exact value without validation. A subtree is made standalone so subsequent document coordinates refer to its independent source.
     pub fn from_json(value: JsonValue) -> Self {
         let value = backend::standalone(value);
         Self {
             inner: Arc::new(DocumentInner {
                 value,
                 schemas: OnceLock::new(),
-                assessment: OnceLock::new(),
+                validation: OnceLock::new(),
                 interpretation: OnceLock::new(),
                 names: OnceLock::new(),
                 bindings: OnceLock::new(),
@@ -212,21 +212,21 @@ impl ParsedDocument {
         self.value().original_source()
     }
     /// Copy representable normative fields into an editable draft. Refuses duplicates and invalid typed shapes; exact opaque fields retain their values. This conversion does not establish conformance.
-    pub fn to_authoring(&self) -> Result<DocumentBuilder, AuthoringError> {
-        DocumentBuilder::from_json(self.value())
+    pub fn to_authoring(&self) -> Result<Document, AuthoringError> {
+        Document::from_json(self.value())
     }
     /// Assess every document rule, retaining findings at original source locations.
     /// A supported version can still be nonconformant or undetermined; only
-    /// [`DocumentAssessment::validated`] yields a conformance proof. An unsupported
+    /// [`DocumentValidation::validated`] yields a conformance proof. An unsupported
     /// declared version is a separate refusal. Explanatory finding messages are
     /// human-readable guidance; use rule/code/evidence fields for program logic.
-    pub fn assess(&self) -> Result<DocumentAssessment, VersionRefusal> {
+    pub fn validate(&self) -> Result<DocumentValidation, VersionRefusal> {
         let report = self
             .inner
-            .assessment
+            .validation
             .get_or_init(|| assess_value(self).map(Arc::new))
             .clone()?;
-        Ok(DocumentAssessment {
+        Ok(DocumentValidation {
             document: Some(self.clone()),
             report,
         })
@@ -458,12 +458,12 @@ impl OperationView {
     }
     /// The exact input field, without interpreting or preparing its schema.
     /// `None` means absence; JSON null and false remain present exact values.
-    /// Use [`crate::ValueContracts::prepare`] to establish contract readiness.
+    /// Use [`crate::ValueContracts::prepare`] to establish value contract readiness.
     pub fn input(&self) -> Option<JsonRef<'_>> {
         self.value.get("input")
     }
     /// The exact output field, with the same absence/interpretation distinction
-    /// as [`Self::input`]. A present value is not proof of a supported contract.
+    /// as [`Self::input`]. A present value is not proof of a supported value contract.
     pub fn output(&self) -> Option<JsonRef<'_>> {
         self.value.get("output")
     }
@@ -506,9 +506,9 @@ impl OperationView {
         self.document.operation_bindings(&self.key)
     }
 }
-impl DocumentAssessment {
+impl DocumentValidation {
     /// Borrow complete per-rule evidence and the bounded findings list.
-    pub fn report(&self) -> &ConformanceReport {
+    pub fn report(&self) -> &ValidationReport {
         &self.report
     }
     /// Borrow the admitted snapshot, or `None` when input could not be parsed within admission limits.
@@ -527,7 +527,7 @@ impl DocumentAssessment {
     }
 }
 impl ValidatedDocument {
-    /// Borrow the exact snapshot certified by this proof, for interpretation or contract setup.
+    /// Borrow the exact snapshot certified by this proof, for interpretation or value contract setup.
     pub fn parsed(&self) -> &ParsedDocument {
         &self.document
     }
@@ -536,7 +536,7 @@ impl ValidatedDocument {
         self.document.original_bytes()
     }
 }
-impl DocumentBuilder {
+impl Document {
     /// Encode the current draft into a fresh independent parsed snapshot. May refuse collisions, unrepresentable fields or limits; does not establish conformance.
     pub fn build(&self) -> Result<ParsedDocument, AuthoringError> {
         self.to_json().map(ParsedDocument::from_json)
@@ -544,8 +544,8 @@ impl DocumentBuilder {
 }
 
 /// Assess bytes even when parsing fails. A version refusal is never conformance evidence.
-pub fn assess_document(input: impl AsRef<[u8]>) -> Result<DocumentAssessment, VersionRefusal> {
-    assess_document_with_limits(
+pub fn validate_document(input: impl AsRef<[u8]>) -> Result<DocumentValidation, VersionRefusal> {
+    validate_document_with_limits(
         input,
         JsonLimits {
             max_depth: usize::MAX,
@@ -557,14 +557,14 @@ pub fn assess_document(input: impl AsRef<[u8]>) -> Result<DocumentAssessment, Ve
 /// Assess bytes with caller-selected byte, node and nesting admission limits.
 /// Admission precedes version selection: if parsing exceeds a limit, no complete
 /// declaration is established and all rules are inconclusive, even for another line.
-/// [`assess_document`] uses default byte/node limits and unlimited nesting.
-pub fn assess_document_with_limits(
+/// [`validate_document`] uses default byte/node limits and unlimited nesting.
+pub fn validate_document_with_limits(
     input: impl AsRef<[u8]>,
     limits: JsonLimits,
-) -> Result<DocumentAssessment, VersionRefusal> {
+) -> Result<DocumentValidation, VersionRefusal> {
     let bytes = input.as_ref();
     match JsonValue::parse_with_limits(bytes, limits) {
-        Ok(value) => ParsedDocument::from_json(value).assess(),
+        Ok(value) => ParsedDocument::from_json(value).validate(),
         Err(error) => {
             let mut checks = Checks::new();
             let limit = error.kind == InputErrorKind::Limit;
@@ -597,7 +597,7 @@ pub fn assess_document_with_limits(
                 );
                 checks.not_applicable_after_json();
             }
-            Ok(DocumentAssessment {
+            Ok(DocumentValidation {
                 document: None,
                 report: Arc::new(checks.finish()),
             })
@@ -652,7 +652,7 @@ struct Checks<'a> {
 impl<'a> Checks<'a> {
     fn new() -> Self {
         Self {
-            evidence: [Evidence::Satisfied; 13],
+            evidence: [Evidence::Met; 13],
             findings: Vec::new(),
             pending_locations: Vec::new(),
             retained_at: HashMap::new(),
@@ -775,7 +775,7 @@ impl<'a> Checks<'a> {
     fn not_applicable_after_json(&mut self) {
         self.evidence[1..].fill(Evidence::NotApplicable);
     }
-    fn finish(mut self) -> ConformanceReport {
+    fn finish(mut self) -> ValidationReport {
         let nodes: Vec<_> = self.pending_locations.iter().map(|(_, at)| *at).collect();
         for ((index, _), location) in self
             .pending_locations
@@ -791,7 +791,7 @@ impl<'a> Checks<'a> {
         } else {
             Conformance::Conformant
         };
-        ConformanceReport {
+        ValidationReport {
             release: APPLIED_SPEC_RELEASE,
             revision: APPLIED_SPEC_REVISION,
             policy: "openbindings-rust/0.2.0-alpha.1",
@@ -843,7 +843,7 @@ pub fn valid_name(name: &str) -> bool {
             c.is_ascii_alphanumeric() || c == b'_' || (i > 0 && (c == b'-' || c == b'.'))
         })
 }
-fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionRefusal> {
+fn assess_value(document: &ParsedDocument) -> Result<ValidationReport, VersionRefusal> {
     let value = document.value();
     if let Some(refusal) = version_refusal(value) {
         return Err(refusal);
@@ -957,7 +957,11 @@ fn assess_value(document: &ParsedDocument) -> Result<ConformanceReport, VersionR
                     c.violation(
                         rule,
                         reference,
-                        "missing-target",
+                        if field == "source" {
+                            "unknown-source"
+                        } else {
+                            "unknown-operation"
+                        },
                         "reference must name an existing primary map key",
                     );
                 }

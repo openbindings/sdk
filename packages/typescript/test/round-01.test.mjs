@@ -380,7 +380,7 @@ test("draft conversion errors are located native refusals, independent of confor
     ],
   ]) {
     const source = parsed(text);
-    const before = source.assess().report;
+    const before = source.validate().report;
     assert.equal(before.conclusion, conclusion);
     const converted = source.toDraft();
     assert.equal(converted.status, "drafted");
@@ -389,7 +389,7 @@ test("draft conversion errors are located native refusals, independent of confor
       const result = sdk.authorDocument(converted.draft.value);
       assert.equal(result.status, "authored");
       try {
-        assert.equal(result.document.assess().report.conclusion, conclusion);
+        assert.equal(result.document.validate().report.conclusion, conclusion);
       } finally {
         result.document.dispose();
       }

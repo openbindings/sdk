@@ -20,10 +20,10 @@ export async function apiQualityCases(sdk, http) {
     check(r.status === "parsed", "exact admission");
     return own(r.value);
   };
-  const ready = (context, name, side = "input") => {
-    const r = context.prepare(name, side);
+  const ready = (context, name, direction = "input") => {
+    const r = context.prepare(name, direction);
     check(r.status === "ready", "ready " + name);
-    return own(r.contract);
+    return own(r.valueContract);
   };
   const throws = (fn, predicate, label) => {
     let error;
@@ -38,13 +38,13 @@ export async function apiQualityCases(sdk, http) {
   const warm = sdk.parseDocument(
     '{"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"}}}}',
   );
-  warm.value.assess();
-  const warmContext = warm.value.contracts();
+  warm.value.validate();
+  const warmContext = warm.value.valueContracts();
   const warmPrepared = warmContext.prepare("run", "input");
   if (warmPrepared.status !== "ready")
     throw new Error("Warmup did not prepare.");
-  warmPrepared.contract.validate(1);
-  warmPrepared.contract.dispose();
+  warmPrepared.valueContract.validate(1);
+  warmPrepared.valueContract.dispose();
   warmContext.dispose();
   warm.value.dispose();
   const baseline = sdk.liveStorageOwners();
@@ -121,16 +121,16 @@ export async function apiQualityCases(sdk, http) {
         e.location?.pointer === "/operations/run/aliases",
       "malformed alias primary lookup",
     );
-    const context = own(document.contracts());
+    const context = own(document.valueContracts());
     check(
-      context.prepare("empty", "input").status === "no-contract",
+      context.prepare("empty", "input").status === "no-value-contract",
       "absent contract setup",
     );
     check(
       context.prepare("missing", "input").status === "operation-missing",
       "missing operation setup",
     );
-    const ambContext = own(ambiguous.contracts());
+    const ambContext = own(ambiguous.valueContracts());
     check(
       ambContext.prepare("x", "input").status === "operation-ambiguous",
       "ambiguous setup",
@@ -140,8 +140,8 @@ export async function apiQualityCases(sdk, http) {
       remote.status === "ready",
       "qualified missing-resource contract prepares ready",
     );
-    own(remote.contract);
-    const remoteResult = remote.contract.validate(null);
+    own(remote.valueContract);
+    const remoteResult = remote.valueContract.validate(null);
     check(
       remoteResult.outcome === "no-verdict" &&
         remoteResult.detail.reason === "resource-unavailable",
@@ -173,7 +173,7 @@ export async function apiQualityCases(sdk, http) {
     );
     let nullContext;
     try {
-      nullContext = own(nullDoc.contracts());
+      nullContext = own(nullDoc.valueContracts());
     } catch (e) {
       check(e.code === "interpretation", "invalid schema construction refuses");
     }
@@ -338,8 +338,8 @@ export async function apiQualityCases(sdk, http) {
     const others = own(
       new sdk.SchemaResources([["https://schema.test/id", stringSchema]]),
     );
-    const first = own(document.contracts({ resources }));
-    const second = own(document.contracts({ resources: others }));
+    const first = own(document.valueContracts({ resources }));
+    const second = own(document.valueContracts({ resources: others }));
     const a = ready(first, "remote"),
       b = ready(second, "remote");
     check(
@@ -381,7 +381,7 @@ export async function apiQualityCases(sdk, http) {
     );
     check(sdk.liveStorageOwners() === beforeBatch, "iterator cleanup");
     own(new sdk.SchemaResources([["https://schema.test/healthy", intSchema]]));
-    const checked = document.validate();
+    const checked = document.validated();
     check(checked.status === "validated", "proof");
     const proof = own(checked.document);
     const publication = own(new http.DiscoveryPublication(proof));

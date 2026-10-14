@@ -35,8 +35,8 @@ fn present(outcome: AuthoringOutcome) {
                 inspection.targets.len()
             );
         }
-        AuthoringOutcome::NeedsRepair { draft, assessment } => {
-            for finding in &assessment.report().findings {
+        AuthoringOutcome::NeedsRepair { draft, validation } => {
+            for finding in &validation.report().findings {
                 println!(
                     "{} at {:?}: {}",
                     finding.code, finding.location, finding.message

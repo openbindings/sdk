@@ -1,6 +1,6 @@
 # OpenBindings JSON Schema evaluator
 
-This optional companion evaluates OpenBindings operation contracts using an explicit immutable resource context. It supports JSON Schema 2020-12 and exact JSON numbers. It never acquires HTTP or filesystem resources.
+This optional companion evaluates OpenBindings value contracts using an explicit immutable resource context. It supports JSON Schema 2020-12 and exact JSON numbers. It never acquires HTTP or filesystem resources.
 
 Use both `openbindings = "=0.2.0-alpha.1"` and this companion in your Cargo
 manifest. Packages are currently unpublished: consume locally built archives with
@@ -8,7 +8,7 @@ patches for their unpublished siblings, or use an exact source checkout. Rust ne
 no runtime initialization.
 
 ```rust
-use openbindings::{ContractPreparation, JsonValue, ParsedDocument, ResourceSet, Side, ValueOutcome};
+use openbindings::{ValueContractPreparation, JsonValue, ParsedDocument, ResourceSet, Direction, ValueOutcome};
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::sync::Arc;
 
@@ -16,20 +16,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let document = ParsedDocument::parse(
         br#"{"openbindings":"0.2.0","operations":{"lookup":{"input":{"type":"string"}}}}"#,
     )?;
-    let assessment = document.assess()?;
+    let assessment = document.validate()?;
     if assessment.validated().is_none() {
         return Err(format!("document conformance: {:?}; findings: {:?}",
             assessment.report().conclusion, assessment.report().findings).into());
     }
     let context = document.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())?;
-    let input = match context.prepare("lookup", Side::Input) {
-        ContractPreparation::Ready(input) => input,
-        ContractPreparation::NoContract => return Err("lookup has no input contract".into()),
-        ContractPreparation::OperationMissing => return Err("lookup is missing".into()),
-        ContractPreparation::OperationAmbiguous { candidates } => {
+    let input = match context.prepare("lookup", Direction::Input) {
+        ValueContractPreparation::Ready(input) => input,
+        ValueContractPreparation::NoValueContract => return Err("lookup has no input contract".into()),
+        ValueContractPreparation::OperationMissing => return Err("lookup is missing".into()),
+        ValueContractPreparation::OperationAmbiguous { candidates } => {
             return Err(format!("lookup is ambiguous: {candidates:?}").into());
         }
-        ContractPreparation::NoVerdict { detail } => {
+        ValueContractPreparation::NoVerdict { detail } => {
             return Err(format!("preparation refused ({:?}): {}", detail.reason, detail.message).into());
         }
     };
@@ -228,7 +228,7 @@ type lists use a fixed seven-name vocabulary. This bounds serialization, not tot
 heap, vector headers/capacity, the retained source snapshots, or transport copies.
 
 Prepared owners declare resource completeness through
-`PreparedContract::resource_completeness()`: Complete for strict preparation,
+`ValueContract::resource_completeness()`: Complete for strict preparation,
 Incomplete with borrowed missing-reference evidence for qualified partial preparation.
 Complete does not promise total decidability. Services may require Complete before
 replacement; partial previews may accept Incomplete. The evidence is one contract

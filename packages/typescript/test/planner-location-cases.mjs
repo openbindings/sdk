@@ -4,12 +4,12 @@ export function plannerLocationCases(sdk) {
   const warm = sdk.parseDocument(
     '{"openbindings":"0.2.0","operations":{"op":{"input":true}}}',
   ).value;
-  warm.assess();
-  const warmContext = warm.contracts();
+  warm.validate();
+  const warmContext = warm.valueContracts();
   const warmPrepared = warmContext.prepare("op", "input");
   if (warmPrepared.status !== "ready") throw Error("warm preparation");
-  warmPrepared.contract.validate(null);
-  warmPrepared.contract.dispose();
+  warmPrepared.valueContract.validate(null);
+  warmPrepared.valueContract.dispose();
   warmContext.dispose();
   warm.dispose();
   const initial = sdk.liveStorageOwners();
@@ -35,7 +35,7 @@ export function plannerLocationCases(sdk) {
     let resources, context;
     try {
       check(
-        document.assess().report.conclusion === "conformant",
+        document.validate().report.conclusion === "conformant",
         "conformant witness",
       );
       resources = new sdk.SchemaResources(
@@ -46,7 +46,7 @@ export function plannerLocationCases(sdk) {
           return [uri, parsed.value];
         }),
       );
-      context = document.contracts({ resources });
+      context = document.valueContracts({ resources });
       const cancelled = new AbortController();
       cancelled.abort();
       const stopped = context.prepare("op", "input", {
@@ -88,11 +88,11 @@ export function plannerLocationCases(sdk) {
       check(healthy.status === "ready", "healthy subsequent preparation");
       try {
         check(
-          healthy.contract.validate(null).outcome === "satisfies",
+          healthy.valueContract.validate(null).outcome === "satisfies",
           "healthy validation",
         );
       } finally {
-        healthy.contract.dispose();
+        healthy.valueContract.dispose();
       }
       observations.push({ code, location: detail.location });
     } finally {

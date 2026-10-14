@@ -1,4 +1,4 @@
-use openbindings::{DocumentBuilder, JsonValue, Source};
+use openbindings::{Document, JsonValue, Source};
 use openbindings_source_inspection::{InspectionErrorKind, Inspector};
 use source_inspection_consumer::{
     AuthoringFailure, AuthoringOutcome, CATALOG_KIND, CatalogInspector, author_selected,
@@ -58,7 +58,7 @@ async fn inventory_authoring_and_retained_values() {
     let AuthoringOutcome::Ready(authored) = author_selected(&source).await.unwrap() else {
         panic!("expected a ready document")
     };
-    let draft = DocumentBuilder::from_json(&authored).unwrap();
+    let draft = Document::from_json(&authored).unwrap();
     let binding = &draft.bindings.unwrap()["chosen.binding"];
     assert_eq!(binding.operation, "chosen.operation");
     assert_eq!(binding.source, "chosen.source");
@@ -128,14 +128,14 @@ async fn authoring_preserves_partial_inventory_and_document_repair_evidence() {
         author_target(&source, selected.clone()).unwrap(),
         AuthoringOutcome::Ready(_)
     ));
-    // A caller can edit framing after inspection. Retain the resulting assessment
+    // A caller can edit framing after inspection. Retain the resulting validation
     // and editable draft if that edit makes the final OBI invalid.
     let mut edited = selected;
     edited.operation = Some(openbindings::Operation {
         input: Some(JsonValue::parse("42").unwrap()),
         ..Default::default()
     });
-    let AuthoringOutcome::NeedsRepair { draft, assessment } =
+    let AuthoringOutcome::NeedsRepair { draft, validation } =
         author_target(&source, edited).unwrap()
     else {
         panic!("expected repair evidence")
@@ -148,8 +148,8 @@ async fn authoring_preserves_partial_inventory_and_document_repair_evidence() {
             .text(),
         "42"
     );
-    assert!(!assessment.report().findings.is_empty());
-    assert!(assessment.validated().is_none());
+    assert!(!validation.report().findings.is_empty());
+    assert!(validation.validated().is_none());
     let unsupported = Source {
         kind: "urn:other".into(),
         ..Default::default()

@@ -1,5 +1,7 @@
 mod support;
-use openbindings::{ContractPreparation, ParsedDocument, ResourceSet, Side, ValueOutcome};
+use openbindings::{
+    Direction, ParsedDocument, ResourceSet, ValueContractPreparation, ValueOutcome,
+};
 use openbindings_interface_synthesis::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::sync::Arc;
@@ -11,9 +13,9 @@ async fn sdk_policy_cases_and_interface_output_shapes_are_distinct() {
     let context = role
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
         .unwrap();
-    let ContractPreparation::Ready(contract) = context.prepare(
+    let ValueContractPreparation::Ready(contract) = context.prepare(
         "openbindings.interface-synthesizer.synthesizeInterfaceWithCoverage",
-        Side::Output,
+        Direction::Output,
     ) else {
         panic!("role contract failed")
     };
@@ -93,7 +95,7 @@ async fn sdk_policy_cases_and_interface_output_shapes_are_distinct() {
 
 #[test]
 fn sdk_policy_fixture_file_satisfies_its_local_schema() {
-    let mut draft = openbindings::DocumentBuilder::new();
+    let mut draft = openbindings::Document::new();
     draft.operations.insert(
         "check".into(),
         openbindings::Operation {
@@ -105,7 +107,8 @@ fn sdk_policy_fixture_file_satisfies_its_local_schema() {
     let context = doc
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
         .unwrap();
-    let ContractPreparation::Ready(contract) = context.prepare("check", Side::Input) else {
+    let ValueContractPreparation::Ready(contract) = context.prepare("check", Direction::Input)
+    else {
         panic!("fixture schema failed")
     };
     assert!(matches!(
@@ -121,9 +124,9 @@ fn independent_interface_examples_allow_variation_beyond_sdk_policy() {
     let context = role
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
         .unwrap();
-    let ContractPreparation::Ready(contract) = context.prepare(
+    let ValueContractPreparation::Ready(contract) = context.prepare(
         "openbindings.interface-synthesizer.synthesizeInterfaceWithCoverage",
-        Side::Output,
+        Direction::Output,
     ) else {
         panic!("role output contract failed")
     };

@@ -2,7 +2,7 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::sync::Arc;
 
-fn prepare(schema: &str, extra: &str) -> PreparedContract {
+fn prepare(schema: &str, extra: &str) -> ValueContract {
     let text = format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema},"examples":{{"e":{{"input":"\ud800"}}}}}}}}{extra}}}"#
     );
@@ -10,7 +10,8 @@ fn prepare(schema: &str, extra: &str) -> PreparedContract {
     let contracts = document
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
         .unwrap();
-    let ContractPreparation::Ready(contract) = contracts.prepare("op", Side::Input) else {
+    let ValueContractPreparation::Ready(contract) = contracts.prepare("op", Direction::Input)
+    else {
         panic!("{text}")
     };
     contract

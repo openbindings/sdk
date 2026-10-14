@@ -38,6 +38,6 @@ test("initialization rejects unavailable entropy and invalid modules, then permi
     '{"openbindings":"0.2.0","operations":{}}',
   );
   assert.equal(document.status, "parsed");
-  assert.equal(document.value.assess().report.conclusion, "conformant");
+  assert.equal(document.value.validate().report.conclusion, "conformant");
   document.value.dispose();
 });

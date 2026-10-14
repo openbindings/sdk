@@ -9,7 +9,7 @@ boundaries from the preserved harness source.
 
 | Series | Timed Rust work | Timed Go work | Valid interpretation |
 | --- | --- | --- | --- |
-| e2e | Parse, assess, new context, prepare, parse value, validate | Validate document, resolve context, compile, parse value, validate | Complete comparable caller work; headline. |
+| e2e | Parse, validate, new context, prepare, parse value, validate | Validate document, resolve context, compile, parse value, validate | Complete comparable caller work; headline. |
 | compile | New context plus prepare on an existing document | Compile on an existing resolved context | Different setup inclusion; not an isolated compiler speed ratio. |
 | reuse | Prepare again in a warmed context with caching | Repeated compilation in an existing resolved context | Public cache-policy comparison; not equal cold compilation. |
 | multi | Parse document, new context, 16 preparations/validations; one `{}` value parsed outside timer | Parse document, resolve, 16 compilations/validations; `{}` parsed within each iteration | Shared caller strategy with different value parsing; not an exact equivalent isolated stage ratio. |

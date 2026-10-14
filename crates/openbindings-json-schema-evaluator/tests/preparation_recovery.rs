@@ -20,17 +20,17 @@ fn prepare(
     schema: &str,
     entries: ResourceSet,
     evaluator: Arc<dyn SchemaEvaluator>,
-) -> PreparedContract {
+) -> ValueContract {
     match document(schema)
         .value_contracts(evaluator, entries)
         .unwrap()
-        .prepare("op", Side::Input)
+        .prepare("op", Direction::Input)
     {
-        ContractPreparation::Ready(contract) => contract,
+        ValueContractPreparation::Ready(contract) => contract,
         other => panic!("{other:?}"),
     }
 }
-fn evidence(contract: &PreparedContract) -> &NoVerdict {
+fn evidence(contract: &ValueContract) -> &NoVerdict {
     match contract.resource_completeness() {
         ResourceCompleteness::Incomplete { evidence, .. } => evidence,
         other => panic!("{other:?}"),
@@ -173,16 +173,16 @@ fn direct_bounds_keeps_planner_diagnostics_while_default_restores_strict_refusal
     let _ = doc
         .value_contracts(capture.clone(), ResourceSet::default())
         .unwrap()
-        .prepare("op", Side::Input);
+        .prepare("op", Direction::Input);
     let request = capture.0.lock().unwrap().take().unwrap();
     let strict = request.evaluation_program(&WorkControl::new()).unwrap_err();
     let direct = request.evaluation_bounds(&WorkControl::new()).unwrap_err();
     assert_eq!(direct.code, "partial-nonpositive-influence");
     assert_eq!(direct.reason, NoVerdictReason::ConservativePreparation);
-    let ContractPreparation::NoVerdict { detail } = doc
+    let ValueContractPreparation::NoVerdict { detail } = doc
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
         .unwrap()
-        .prepare("op", Side::Input)
+        .prepare("op", Direction::Input)
     else {
         panic!()
     };

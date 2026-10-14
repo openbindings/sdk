@@ -579,14 +579,14 @@ pub(crate) fn validate(
     request: &SynthesisRequest<'_>,
     candidate: SynthesisCandidate,
 ) -> Result<Synthesis, SynthesisError> {
-    let assessment = match candidate.document.assess() {
+    let validation = match candidate.document.validate() {
         Ok(a) => a,
         Err(v) => return Err(SynthesisError::invalid(candidate, None, None, Some(v))),
     };
-    let Some(document) = assessment.validated() else {
+    let Some(document) = validation.validated() else {
         return Err(SynthesisError::invalid(
             candidate,
-            Some(assessment),
+            Some(validation),
             None,
             None,
         ));
@@ -596,7 +596,7 @@ pub(crate) fn validate(
         Err(f) => {
             return Err(SynthesisError::invalid(
                 candidate,
-                Some(assessment),
+                Some(validation),
                 Some(f),
                 None,
             ));
@@ -688,7 +688,7 @@ mod numeric_tests {
                     content: Some(a),
                     ..Default::default()
                 };
-                let mut draft = openbindings::DocumentBuilder::new();
+                let mut draft = openbindings::Document::new();
                 draft.sources = Some(BTreeMap::from([(
                     "api".into(),
                     Source {

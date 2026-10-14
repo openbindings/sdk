@@ -1,4 +1,4 @@
-//! Retained operation contracts and the optional evaluator interface.
+//! Retained value contracts and the optional evaluator interface.
 use crate::{schema_space::SchemaSpace, *};
 use serde::Serialize;
 use std::{
@@ -10,13 +10,13 @@ use std::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "kebab-case")]
 /// Closed choice of the operation's input or output contract.
-pub enum Side {
+pub enum Direction {
     /// Select the operation's `input` schema.
     Input,
     /// Select the operation's `output` schema.
     Output,
 }
-impl Side {
+impl Direction {
     /// Return the normative field spelling, `input` or `output`.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -42,7 +42,7 @@ pub enum NoVerdictReason {
     /// is necessary to the instance's semantic verdict.
     /// Use [`ParsedDocument::references`] to inspect document-wide reference spellings
     /// and original keyword locations, then create a new context with supplied resources.
-    /// That inventory is not an exact per-contract missing-resource list.
+    /// That inventory is not an exact per-value-contract missing-resource list.
     /// Apply your disclosure policy before logging it.
     ResourceUnavailable,
     /// A configured work or representation limit prevented a verdict.
@@ -518,7 +518,7 @@ impl EvaluationProgram {
 /// let document = ParsedDocument::parse(
 ///     r#"{"openbindings":"0.2.0","operations":{"run":{"input":true}}}"#)?;
 /// let context = document.value_contracts(Arc::new(TrueOnly), ResourceSet::default())?;
-/// let ContractPreparation::Ready(contract) = context.prepare("run", Side::Input) else {
+/// let ValueContractPreparation::Ready(contract) = context.prepare("run", Direction::Input) else {
 ///     panic!("the true schema must be supported");
 /// };
 /// assert!(matches!(contract.validate(&JsonValue::null()), ValueOutcome::Satisfies));
@@ -532,7 +532,7 @@ pub trait SchemaEvaluator: Send + Sync {
         control: &WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict>;
 }
-/// What the evaluator declared about resources reached for this prepared contract.
+/// What the evaluator declared about resources reached for this prepared value contract.
 /// Complete does not promise decidability: budgets, cancellation and unsupported
 /// instances may still prevent a verdict. Evidence borrows the immutable prepared
 /// owner; inspection does not clone its potentially long original location.
@@ -573,7 +573,7 @@ pub trait PreparedSchema: Send + Sync {
     }
 }
 /// An immutable document/resource/evaluator context with bounded preparation reuse.
-/// Select a contract using [`Self::prepare`], then retain its ready owner for
+/// Select a value contract using [`Self::prepare`], then retain its ready owner for
 /// repeated validation. Replacing an application's active context does not
 /// mutate already prepared work. See the
 /// [Rust lifecycle guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md#retained-work-and-replacement).
@@ -627,13 +627,13 @@ enum ContractState {
     Ready(Arc<dyn PreparedSchema>),
     NoVerdict(NoVerdict),
 }
-/// Setup result. Only Ready owns a successfully prepared contract.
+/// Setup result. Only Ready owns a successfully prepared value contract.
 #[derive(Clone, Debug)]
-pub enum ContractPreparation {
-    /// A retained prepared contract, independently usable after context drop or cache eviction.
-    Ready(PreparedContract),
-    /// The selected operation exists but has no field for this side; this is distinct from the present boolean schema `false`.
-    NoContract,
+pub enum ValueContractPreparation {
+    /// A retained prepared value contract, independently usable after context drop or cache eviction.
+    Ready(ValueContract),
+    /// The selected operation exists but has no field for this direction; this is distinct from the present boolean schema `false`.
+    NoValueContract,
     /// No primary key or alias matches the request.
     OperationMissing,
     /// Multiple occurrences of the requested primary key or alias prevent selection.
@@ -641,25 +641,25 @@ pub enum ContractPreparation {
         #[doc = "Distinct matching primary keys in lexical order; repeated aliases can yield one candidate key."]
         candidates: Vec<String>,
     },
-    /// Selection found a contract, but preparation did not establish readiness.
+    /// Selection found a value contract, but preparation did not establish readiness.
     NoVerdict {
         #[doc = "Truthful preparation refusal; no instance was judged."]
         detail: NoVerdict,
     },
 }
-/// A ready contract that retains its required compiled state independently of
+/// A ready value contract that retains its required compiled state independently of
 /// document/context lifetime and cache eviction. Cloning shares immutable state;
 /// dropping the final owner releases that owner, without promising lower RSS.
 #[derive(Clone)]
-pub struct PreparedContract {
+pub struct ValueContract {
     schema: Arc<dyn PreparedSchema>,
 }
-impl fmt::Debug for PreparedContract {
+impl fmt::Debug for ValueContract {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("PreparedContract { .. }")
+        f.write_str("ValueContract { .. }")
     }
 }
-impl PreparedContract {
+impl ValueContract {
     /// Borrow the selected evaluator's immutable resource declaration without
     /// evaluating an instance. Core never infers completeness for custom evaluators.
     /// Retained clones preserve this evidence after context drop or replacement.
@@ -696,10 +696,10 @@ impl PreparedContract {
 impl ParsedDocument {
     /// Create a context with an explicitly selected evaluator and immutable
     /// resources. Malformed operation namespaces (including unrelated aliases)
-    /// return an [`InterpretationError`] here, before contract selection.
+    /// return an [`InterpretationError`] here, before value contract selection.
     /// No resource acquisition occurs; URIs in other contexts cannot
     /// change this one. This does not establish whole-document conformance: use
-    /// [`Self::assess`] if your application requires that before accepting a document.
+    /// [`Self::validate`] if your application requires that before accepting a document.
     ///
     /// Context construction validates the complete operation namespace, including
     /// unrelated aliases, and returns a located [`InterpretationError`] for malformed
@@ -707,7 +707,7 @@ impl ParsedDocument {
     /// concerns only the selected schema, not normative OBI conformance.
     ///
     /// The default cache retains four most-recent preparation entries. Match
-    /// [`ContractPreparation`] after [`ValueContracts::prepare`]; only its ready
+    /// [`ValueContractPreparation`] after [`ValueContracts::prepare`]; only its ready
     /// branch exposes validation. The optional `openbindings-json-schema-evaluator`
     /// companion supplies `DefaultEvaluator` and runnable first-use examples.
     pub fn value_contracts(
@@ -719,7 +719,7 @@ impl ParsedDocument {
     }
     /// Create the same explicit context as [`Self::value_contracts`] with a chosen
     /// cache entry capacity. Zero disables implicit retention. Eviction and context
-    /// drop release cache owners; caller-retained [`PreparedContract`] values stay
+    /// drop release cache owners; caller-retained [`ValueContract`] values stay
     /// usable. The entry count is not a byte or process-memory limit.
     pub fn value_contracts_with_options(
         &self,
@@ -743,14 +743,14 @@ impl ParsedDocument {
     }
 }
 impl ValueContracts {
-    /// Select a primary operation name or alias and prepare one side's contract.
-    /// Match every [`ContractPreparation`] branch: missing/ambiguous operation,
-    /// absent contract and preparation refusal are setup states, not instance failures.
-    /// Ready contracts can be retained beyond this context and validated repeatedly.
+    /// Select a primary operation name or alias and prepare one direction's value contract.
+    /// Match every [`ValueContractPreparation`] branch: missing/ambiguous operation,
+    /// absent value contract and preparation refusal are setup states, not instance failures.
+    /// Ready value contracts can be retained beyond this context and validated repeatedly.
     /// Deterministic preparations may be reused within the bounded context cache;
     /// concurrent first requests may prepare more than once.
-    pub fn prepare(&self, operation: &str, side: Side) -> ContractPreparation {
-        self.prepare_with_control(operation, side, &WorkControl::new())
+    pub fn prepare(&self, operation: &str, direction: Direction) -> ValueContractPreparation {
+        self.prepare_with_control(operation, direction, &WorkControl::new())
     }
     /// Prepare with cooperative cancellation. A cancelled attempt returns no ready
     /// owner. Cancellation and transient evaluator failures do not poison healthy
@@ -760,17 +760,17 @@ impl ValueContracts {
     pub fn prepare_with_control(
         &self,
         operation: &str,
-        side: Side,
+        direction: Direction,
         control: &WorkControl,
-    ) -> ContractPreparation {
+    ) -> ValueContractPreparation {
         if let Err(detail) = control.check() {
-            return ContractPreparation::NoVerdict { detail };
+            return ValueContractPreparation::NoVerdict { detail };
         }
         let op = match self.inner.space.document.resolve_operation(operation) {
             Ok(OperationSelection::Found(op)) => op,
-            Ok(OperationSelection::Missing) => return ContractPreparation::OperationMissing,
+            Ok(OperationSelection::Missing) => return ValueContractPreparation::OperationMissing,
             Ok(OperationSelection::Ambiguous { candidates }) => {
-                return ContractPreparation::OperationAmbiguous { candidates };
+                return ValueContractPreparation::OperationAmbiguous { candidates };
             }
             Err(error) => {
                 let mut detail = NoVerdict::new(
@@ -784,18 +784,18 @@ impl ValueContracts {
                         pointer: location.pointer.clone().unwrap_or_default(),
                     });
                 }
-                return ContractPreparation::NoVerdict { detail };
+                return ValueContractPreparation::NoVerdict { detail };
             }
         };
-        let Some(schema) = op.value().get(side.as_str()) else {
-            return ContractPreparation::NoContract;
+        let Some(schema) = op.value().get(direction.as_str()) else {
+            return ValueContractPreparation::NoValueContract;
         };
         let Some(entry) = self.inner.space.document_node(&schema.to_owned()) else {
-            return ContractPreparation::NoVerdict {
+            return ValueContractPreparation::NoVerdict {
                 detail: NoVerdict::new(
                     NoVerdictReason::ConservativePreparation,
                     "non-schema-entry",
-                    "the operation side is not a schema position",
+                    "the operation direction is not a schema position",
                 )
                 .located(SchemaLocation {
                     resource: None,
@@ -829,11 +829,13 @@ impl ValueContracts {
         };
         // An evaluator may finish while the caller cancels; no ready owner is returned.
         if let Err(detail) = control.check() {
-            return ContractPreparation::NoVerdict { detail };
+            return ValueContractPreparation::NoVerdict { detail };
         }
         match state {
-            ContractState::Ready(schema) => ContractPreparation::Ready(PreparedContract { schema }),
-            ContractState::NoVerdict(detail) => ContractPreparation::NoVerdict { detail },
+            ContractState::Ready(schema) => {
+                ValueContractPreparation::Ready(ValueContract { schema })
+            }
+            ContractState::NoVerdict(detail) => ValueContractPreparation::NoVerdict { detail },
         }
     }
 }

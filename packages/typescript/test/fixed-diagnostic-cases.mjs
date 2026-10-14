@@ -67,7 +67,7 @@ export function fixedDiagnosticCases(sdk) {
   const warm = sdk.parseDocument(cases.at(-1).text);
   check(warm.status === "parsed", "warm document parses");
   try {
-    warm.value.assess();
+    warm.value.validate();
   } finally {
     warm.value.dispose();
   }
@@ -77,8 +77,8 @@ export function fixedDiagnosticCases(sdk) {
     const parsed = sdk.parseDocument(fixture.text);
     check(parsed.status === "parsed", `${fixture.name}: exact parse`);
     try {
-      const assessment = parsed.value.assess();
-      check(assessment.status === "assessed", `${fixture.name}: assessment`);
+      const assessment = parsed.value.validate();
+      check(assessment.status === "report", `${fixture.name}: assessment`);
       const { report } = assessment;
       check(
         report.conclusion ===
@@ -183,11 +183,8 @@ export function fixedDiagnosticCases(sdk) {
       const parsed = sdk.parseDocument(source);
       check(parsed.status === "parsed", "saturated document parses");
       try {
-        const assessment = parsed.value.assess();
-        check(
-          assessment.status === "assessed",
-          "saturated assessment completes",
-        );
+        const assessment = parsed.value.validate();
+        check(assessment.status === "report", "saturated assessment completes");
         const report = assessment.report;
         check(
           report.conclusion === "non-conformant",
@@ -235,8 +232,8 @@ export function fixedDiagnosticCases(sdk) {
     const parsed = sdk.parseDocument(text);
     check(parsed.status === "parsed", "duplicate input parses exactly");
     try {
-      const assessed = parsed.value.assess();
-      check(assessed.status === "assessed", "duplicate assessment completes");
+      const assessed = parsed.value.validate();
+      check(assessed.status === "report", "duplicate assessment completes");
       const report = assessed.report;
       const expected = Math.min(
         count,
@@ -295,8 +292,8 @@ export function fixedDiagnosticCases(sdk) {
   );
   check(invalidName.status === "parsed", "invalid names parse");
   try {
-    const assessed = invalidName.value.assess();
-    check(assessed.status === "assessed", "invalid names assess");
+    const assessed = invalidName.value.validate();
+    check(assessed.status === "report", "invalid names validate");
     const names = assessed.report.findings.filter(
       (f) => f.code === "name-grammar",
     );

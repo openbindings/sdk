@@ -3,8 +3,8 @@ use openbindings::*;
 #[test]
 fn direct_type_explanation_preserves_rule_location_and_rejected_value_privacy() {
     let text = "{\n  \"openbindings\":\"0.2.0\",\n  \"name\":\"café\",\n  \"operations\":{\"lookup\":{\"description\":{\"private\":\"rejected-secret\"}}}\n}";
-    let assessment = assess_document(text).unwrap();
-    let report = assessment.report();
+    let validation = validate_document(text).unwrap();
+    let report = validation.report();
     assert_eq!(report.conclusion, Conformance::NonConformant);
     assert_eq!(report.evidence["OBI-02"], Evidence::Violated);
     assert_eq!(report.findings.len(), 1);
@@ -25,7 +25,7 @@ fn direct_type_explanation_preserves_rule_location_and_rejected_value_privacy() 
     assert!(!finding.message.contains("private"));
     assert!(!finding.message.contains("rejected-secret"));
     let corrected = text.replace("{\"private\":\"rejected-secret\"}", "\"Find an item\"");
-    let corrected = assess_document(corrected).unwrap();
+    let corrected = validate_document(corrected).unwrap();
     assert_eq!(corrected.report().conclusion, Conformance::Conformant);
     assert!(corrected.report().findings.is_empty());
 }
@@ -33,9 +33,9 @@ fn direct_type_explanation_preserves_rule_location_and_rejected_value_privacy() 
 #[test]
 fn required_explanation_points_at_the_original_containing_object() {
     let text = " \n {\"openbindings\":\"0.2.0\"}";
-    let assessment = assess_document(text).unwrap();
-    assert_eq!(assessment.report().findings.len(), 1);
-    let finding = &assessment.report().findings[0];
+    let validation = validate_document(text).unwrap();
+    assert_eq!(validation.report().findings.len(), 1);
+    let finding = &validation.report().findings[0];
     assert_eq!(finding.rule, "OBI-02");
     assert_eq!(finding.code, "schema-mismatch");
     assert_eq!(
@@ -46,7 +46,7 @@ fn required_explanation_points_at_the_original_containing_object() {
     assert_eq!(at.pointer.as_deref(), Some(""));
     assert_eq!((at.byte_offset, at.line, at.byte_column), (3, 2, 2));
 
-    let nested = assess_document(
+    let nested = validate_document(
         r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"content":"private-payload"}}}"#,
     )
     .unwrap();
@@ -66,10 +66,10 @@ fn required_explanation_points_at_the_original_containing_object() {
 
 #[test]
 fn complex_failure_stays_generic_while_explicit_type_union_is_explained() {
-    let assessment =
-        assess_document(r#"{"openbindings":"0.2.0","operations":{"lookup":{"input":null}}}"#)
+    let validation =
+        validate_document(r#"{"openbindings":"0.2.0","operations":{"lookup":{"input":null}}}"#)
             .unwrap();
-    let findings = &assessment.report().findings;
+    let findings = &validation.report().findings;
     let normative = findings.iter().find(|f| f.rule == "OBI-02").unwrap();
     assert_eq!(normative.code, "schema-mismatch");
     assert_eq!(normative.message, "value violates the anyOf constraint");
@@ -96,8 +96,8 @@ const UNEXPECTED: &str = "this member is not permitted here; extension member na
 #[test]
 fn unexpected_fields_locate_original_key_tokens_in_source_order() {
     let text = "{\r\n\"openbindings\":\"0.2.0\",\"name\":\"café 😀\",\"operations\":{},\n\"z/~\\n😀\":{\"secret\":42},\"a\":false}";
-    let assessment = assess_document(text).unwrap();
-    let report = assessment.report();
+    let validation = validate_document(text).unwrap();
+    let report = validation.report();
     assert_eq!(report.conclusion, Conformance::NonConformant);
     assert!(!report.findings_truncated);
     assert_eq!(report.findings.len(), 2);
@@ -127,8 +127,8 @@ fn unexpected_fields_locate_original_key_tokens_in_source_order() {
 #[test]
 fn all_closed_objects_are_diagnosed_without_entering_opaque_or_schema_values() {
     let text = r#"{"openbindings":"0.2.0","operations":{"run":{"badOperation":0,"input":{"customKeyword":{"inputs":1}},"examples":{"sample":{"badExample":0,"input":{"inputs":1},"x-extra":{"inputs":1}}},"x-extra":{"inputs":1}}},"dependencies":{"d":{"operation":"run","badDependency":0}},"sources":{"s":{"kind":"custom","badSource":0,"content":{"inputs":1}}},"bindings":{"b":{"operation":"run","source":"s","badBinding":0,"content":{"inputs":1}}},"badRoot":0,"x-extra":{"inputs":1}}"#;
-    let assessment = assess_document(text).unwrap();
-    let mut paths: Vec<_> = assessment
+    let validation = validate_document(text).unwrap();
+    let mut paths: Vec<_> = validation
         .report()
         .findings
         .iter()
@@ -147,7 +147,7 @@ fn all_closed_objects_are_diagnosed_without_entering_opaque_or_schema_values() {
             "/sources/s/badSource"
         ]
     );
-    assert_eq!(assessment.report().findings.len(), 6);
+    assert_eq!(validation.report().findings.len(), 6);
     let mut corrected = text.to_owned();
     for name in [
         "badRoot",
@@ -160,7 +160,7 @@ fn all_closed_objects_are_diagnosed_without_entering_opaque_or_schema_values() {
         corrected = corrected.replace(&format!("\"{name}\""), &format!("\"x-{name}\""));
     }
     assert_eq!(
-        assess_document(corrected).unwrap().report().conclusion,
+        validate_document(corrected).unwrap().report().conclusion,
         Conformance::Conformant
     );
 }
@@ -168,8 +168,8 @@ fn all_closed_objects_are_diagnosed_without_entering_opaque_or_schema_values() {
 #[test]
 fn name_guidance_describes_the_existing_grammar_for_every_name_position() {
     let text = r#"{"openbindings":"0.2.0","operations":{"/private":{"aliases":[".private",false],"examples":{"-private":{}}}}}"#;
-    let assessment = assess_document(text).unwrap();
-    let names: Vec<_> = assessment
+    let validation = validate_document(text).unwrap();
+    let names: Vec<_> = validation
         .report()
         .findings
         .iter()
@@ -201,13 +201,13 @@ fn expansion_saturation_preserves_all_rule_evidence_and_truthful_truncation() {
             .map(|i| format!(",\"bad{i}\":0"))
             .collect::<String>();
         let text = format!("{{\"openbindings\":\"0.2.0\",\"operations\":{{}}{fields}}}");
-        let assessment = assess_document(&text).unwrap();
-        assert_eq!(assessment.report().findings.len(), 4096);
-        assert_eq!(assessment.report().findings_truncated, count > 4096);
-        assert_eq!(assessment.report().evidence["OBI-02"], Evidence::Violated);
-        assert_eq!(assessment.report().evidence.len(), 13);
+        let validation = validate_document(&text).unwrap();
+        assert_eq!(validation.report().findings.len(), 4096);
+        assert_eq!(validation.report().findings_truncated, count > 4096);
+        assert_eq!(validation.report().evidence["OBI-02"], Evidence::Violated);
+        assert_eq!(validation.report().evidence.len(), 13);
         assert!(
-            assessment
+            validation
                 .report()
                 .findings
                 .iter()
@@ -217,20 +217,20 @@ fn expansion_saturation_preserves_all_rule_evidence_and_truthful_truncation() {
             "\"operations\":{}",
             "\"operations\":{},\"schemas\":{\"s\":{\"type\":7}}",
         );
-        let assessment = assess_document(bad_schema).unwrap();
-        assert_eq!(assessment.report().findings.len(), 4096);
-        assert!(assessment.report().findings_truncated);
-        assert_eq!(assessment.report().evidence["OBI-10"], Evidence::Violated);
+        let validation = validate_document(bad_schema).unwrap();
+        assert_eq!(validation.report().findings.len(), 4096);
+        assert!(validation.report().findings_truncated);
+        assert_eq!(validation.report().evidence["OBI-10"], Evidence::Violated);
         if count == 4096 {
             let deep = format!("{}true{}", "{\"not\":".repeat(300), "}".repeat(300));
             let source = text.replace(
                 "\"operations\":{}",
                 &format!("\"operations\":{{}},\"schemas\":{{\"s\":{deep}}}"),
             );
-            let assessment = assess_document(source).unwrap();
-            assert_eq!(assessment.report().findings.len(), 4096);
-            assert!(!assessment.report().findings_truncated);
-            assert_eq!(assessment.report().evidence["OBI-10"], Evidence::Satisfied);
+            let validation = validate_document(source).unwrap();
+            assert_eq!(validation.report().findings.len(), 4096);
+            assert!(!validation.report().findings_truncated);
+            assert_eq!(validation.report().evidence["OBI-10"], Evidence::Met);
         }
     }
 }
@@ -245,8 +245,8 @@ fn expansion_pointer_budget_prevents_large_ancestor_amplification() {
     let text = format!(
         "{{\"openbindings\":\"0.2.0\",\"operations\":{{\"{name}\":{{{fields}}},\"y\":{{\"bad\":0}},\"z\":{{\"description\":42}}}}}}"
     );
-    let assessment = assess_document(text).unwrap();
-    let report = assessment.report();
+    let validation = validate_document(text).unwrap();
+    let report = validation.report();
     assert_eq!(report.conclusion, Conformance::NonConformant);
     assert!(report.findings_truncated);
     assert!(report.findings.len() < 4096);
@@ -278,7 +278,7 @@ fn expansion_pointer_budget_prevents_large_ancestor_amplification() {
 #[test]
 fn ambiguous_json_refusals_are_not_replaced_by_field_guidance() {
     let duplicates =
-        assess_document(r#"{"openbindings":"0.2.0","operations":{},"bad":1,"bad":2}"#).unwrap();
+        validate_document(r#"{"openbindings":"0.2.0","operations":{},"bad":1,"bad":2}"#).unwrap();
     assert!(
         duplicates
             .report()
@@ -291,7 +291,7 @@ fn ambiguous_json_refusals_are_not_replaced_by_field_guidance() {
         Evidence::NotApplicable
     );
     let unpaired =
-        assess_document(r#"{"openbindings":"0.2.0","operations":{},"\ud800":0}"#).unwrap();
+        validate_document(r#"{"openbindings":"0.2.0","operations":{},"\ud800":0}"#).unwrap();
     assert_eq!(unpaired.report().evidence["OBI-02"], Evidence::Violated);
     assert_eq!(unpaired.report().findings[0].message, UNEXPECTED);
     assert_eq!(
@@ -308,14 +308,14 @@ fn ambiguous_json_refusals_are_not_replaced_by_field_guidance() {
 fn keyword_messages_are_value_free_and_property_names_locate_original_tokens() {
     // CR-6: use documented kind/path metadata, never rejected-instance payloads.
     let text = r#"{"openbindings":"0.2.0","operations":{"-secret":{},".private":{},"\ud800":{}},"dependencies":{"d":{"operation":"-secret","kinds":[]}},"schemas":{"s":{"$anchor":"1private","minLength":-1}}}"#;
-    let assessment = assess_document(text).unwrap();
+    let validation = validate_document(text).unwrap();
     for (pointer, keyword) in [
         ("/dependencies/d/kinds", "minItems"),
         ("/schemas/s/$anchor", "pattern"),
         ("/schemas/s/minLength", "minimum"),
     ] {
         assert!(
-            assessment
+            validation
                 .report()
                 .findings
                 .iter()
@@ -323,12 +323,12 @@ fn keyword_messages_are_value_free_and_property_names_locate_original_tokens() {
                     && f.location.as_ref().unwrap().pointer.as_deref() == Some(pointer)
                     && f.message.contains(keyword)),
             "{pointer}: {:?}",
-            assessment.report().findings
+            validation.report().findings
         );
     }
     for token in [r#""-secret""#, r#"".private""#, r#""\ud800""#] {
         assert!(
-            assessment
+            validation
                 .report()
                 .findings
                 .iter()
@@ -339,7 +339,7 @@ fn keyword_messages_are_value_free_and_property_names_locate_original_tokens() {
         );
     }
     assert!(
-        assessment
+        validation
             .report()
             .findings
             .iter()

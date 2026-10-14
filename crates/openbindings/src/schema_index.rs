@@ -99,8 +99,8 @@ impl SchemaIndex {
         }
         if let Some(operations) = document.get("operations").and_then(|v| v.members()) {
             for op in operations {
-                for side in ["input", "output"] {
-                    if let Some(v) = op.value.get(side) {
+                for direction in ["input", "output"] {
+                    if let Some(v) = op.value.get(direction) {
                         roots.push(v);
                     }
                 }

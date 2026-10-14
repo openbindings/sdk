@@ -24,7 +24,7 @@ export function partialResourceCases(sdk) {
     const document = parsed.value;
     let context, contract;
     try {
-      context = document.contracts();
+      context = document.valueContracts();
       const setup = context.prepare("op", "input");
       if (expected === "refuse") {
         check(
@@ -34,7 +34,7 @@ export function partialResourceCases(sdk) {
         return;
       }
       check(setup.status === "ready", "qualified partial preparation is ready");
-      contract = setup.contract;
+      contract = setup.valueContract;
       const owners = sdk.liveStorageOwners();
       const metadata = contract.resourceCompleteness;
       check(metadata.status === completeness, "declared resource completeness");
@@ -192,7 +192,7 @@ export function partialResourceCases(sdk) {
         operations: { op: { input: schema } },
       }),
     );
-    const context = parsed.value.contracts();
+    const context = parsed.value.valueContracts();
     try {
       const result = context.prepare("op", "input");
       check(
@@ -229,8 +229,8 @@ export function partialResourceCases(sdk) {
     JSON.stringify({ properties: { x: { $ref: V } } }),
   ).value;
   const supplied = new sdk.SchemaResources([[U, known]]);
-  const oldContext = doc.contracts({ resources: supplied });
-  const old = oldContext.prepare("op", "input").contract;
+  const oldContext = doc.valueContracts({ resources: supplied });
+  const old = oldContext.prepare("op", "input").valueContract;
   let completeResources, yes, newContext, next, retained;
   try {
     const info = old.resourceCompleteness;
@@ -249,8 +249,8 @@ export function partialResourceCases(sdk) {
     );
     yes = sdk.parseJson("true").value;
     completeResources = supplied.with(V, yes);
-    newContext = doc.contracts({ resources: completeResources });
-    next = newContext.prepare("op", "input").contract;
+    newContext = doc.valueContracts({ resources: completeResources });
+    next = newContext.prepare("op", "input").valueContract;
     check(
       next.resourceCompleteness.status === "complete",
       "new complete context ignores unselected references",

@@ -65,7 +65,7 @@ fn main() -> Result<()> {
         edit_extension_member(&original, "x-editor", "annotation", &replacement)?
     }; // Original, draft and replacement can all be dropped before using this.
     assert_eq!(
-        revised.assess()?.report().conclusion,
+        revised.validate()?.report().conclusion,
         Conformance::Conformant
     );
     for (key, token) in [

@@ -8,7 +8,7 @@ export function oneOfCases(sdk, fixtures) {
   const run = (
     text,
     operation,
-    side,
+    direction,
     valueText,
     entries = {},
     options = {},
@@ -23,13 +23,13 @@ export function oneOfCases(sdk, fixtures) {
     const resources = new sdk.SchemaResources(values);
     let context, contract, value;
     try {
-      context = parsed.value.contracts({ ...options, resources });
-      const setup = context.prepare(operation, side);
+      context = parsed.value.valueContracts({ ...options, resources });
+      const setup = context.prepare(operation, direction);
       check(
         setup.status === "ready",
         `oneOf prepared: ${JSON.stringify(setup)}`,
       );
-      contract = setup.contract;
+      contract = setup.valueContract;
       check(
         contract.resourceCompleteness.status === completeness,
         "oneOf resource evidence",

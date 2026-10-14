@@ -7,14 +7,14 @@ pub const SUPPORTED_VERSIONS: &str = "0.2.x";
 pub const AUTHORING_VERSION: &str = "0.2.0";
 /// Specification release whose document rules this build applies.
 pub const APPLIED_SPEC_RELEASE: &str = "0.2.0";
-/// Exact applied specification Git revision; identifies the rules behind assessment.
+/// Exact applied specification Git revision; identifies the rules behind validation.
 pub const APPLIED_SPEC_REVISION: &str = "2f7d754dc2da374058cd517064c17e50f7d95d99";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 /// Declared-version classification, independent of document conformance.
 pub enum VersionDecision {
-    /// Well-formed stable version in the supported line; document rules still need assessment.
+    /// Well-formed stable version in the supported line; document rules still need validation.
     Supported,
     /// The declaration is not syntactically valid SemVer.
     Malformed,

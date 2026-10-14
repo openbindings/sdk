@@ -1,7 +1,7 @@
 //! Independent wire-shape oracle: the pinned published role document, not a
 //! schema recreated from this implementation's native types.
 use openbindings::{
-    ContractPreparation, JsonValue, ParsedDocument, ResourceSet, Side, ValueOutcome,
+    Direction, JsonValue, ParsedDocument, ResourceSet, ValueContractPreparation, ValueOutcome,
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use openbindings_source_inspection::*;
@@ -14,9 +14,10 @@ fn inventories_validate_against_pinned_role_output_contract() {
     let context = document
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
         .unwrap();
-    let ContractPreparation::Ready(contract) =
-        context.prepare("openbindings.source-inspector.inspectSource", Side::Output)
-    else {
+    let ValueContractPreparation::Ready(contract) = context.prepare(
+        "openbindings.source-inspector.inspectSource",
+        Direction::Output,
+    ) else {
         panic!("role output contract did not prepare")
     };
     let target = BindableTarget {
@@ -66,9 +67,10 @@ fn duplicate_recovery_is_sdk_policy_not_an_interface_requirement() {
     let context = document
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
         .unwrap();
-    let ContractPreparation::Ready(contract) =
-        context.prepare("openbindings.source-inspector.inspectSource", Side::Output)
-    else {
+    let ValueContractPreparation::Ready(contract) = context.prepare(
+        "openbindings.source-inspector.inspectSource",
+        Direction::Output,
+    ) else {
         panic!("role output contract did not prepare")
     };
     // A consumer can retain repeated evidence or deduplicate it. Neither result
@@ -114,9 +116,10 @@ fn ro15_limitation_additional_evidence_matches_the_published_interface() {
     let context = document
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
         .unwrap();
-    let ContractPreparation::Ready(contract) =
-        context.prepare("openbindings.source-inspector.inspectSource", Side::Output)
-    else {
+    let ValueContractPreparation::Ready(contract) = context.prepare(
+        "openbindings.source-inspector.inspectSource",
+        Direction::Output,
+    ) else {
         panic!("role contract failed")
     };
     let mut limitation = InspectionLimitation {

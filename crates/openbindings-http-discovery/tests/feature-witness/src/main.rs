@@ -102,9 +102,9 @@ async fn main() {
         assert!(
             matches!(
                 r.outcome,
-                DiscoveryOutcome::BodyFailure {
-                    failure: RequestFailure {
-                        kind: FailureKind::Decode,
+                DiscoveryOutcome::BodyError {
+                    error: RequestError {
+                        kind: ErrorKind::Decode,
                         ..
                     }
                 }
@@ -161,10 +161,10 @@ async fn main() {
                 let (origin, worker) = server(bytes, coding);
                 let r = client.discover(&origin).await.unwrap();
                 worker.join().unwrap();
-                let DiscoveryOutcome::BodyFailure { failure } = r.outcome else {
+                let DiscoveryOutcome::BodyError { error: failure } = r.outcome else {
                     panic!("corrupt {coding}: {:?}", r.outcome);
                 };
-                assert_eq!(failure.kind, FailureKind::Network, "corrupt {coding}");
+                assert_eq!(failure.kind, ErrorKind::Network, "corrupt {coding}");
                 for message in upstream_messages {
                     assert!(
                         failure.message.contains(&message),
