@@ -106,6 +106,65 @@ fn translate_policy(suite: &mut Suite) {
         case.refusal_reason.clear();
     }
 }
+#[derive(Deserialize)]
+struct DocumentMigrations {
+    reexpressions: Vec<Reexpression>,
+    core_rejections: Vec<CoreRejection>,
+}
+#[derive(Deserialize)]
+struct Reexpression {
+    group: String,
+    case_ids: Vec<String>,
+    original_document: String,
+    document: String,
+    resource_key: String,
+    resource: Resource,
+}
+#[derive(Deserialize)]
+struct CoreRejection {
+    group: String,
+    case_ids: Vec<String>,
+    original_document: String,
+}
+fn translate_documents(suite: &mut Suite) {
+    let migrations: DocumentMigrations =
+        serde_json::from_str(include_str!("../fixtures/document-migrations.json"))
+            .expect("document migrations");
+    for m in migrations.reexpressions {
+        let group = suite
+            .groups
+            .iter_mut()
+            .find(|g| g.id == m.group)
+            .expect("migrated group");
+        assert_eq!(group.document, m.original_document);
+        assert_eq!(
+            group.cases.iter().map(|c| &c.id).collect::<Vec<_>>(),
+            m.case_ids.iter().collect::<Vec<_>>()
+        );
+        group.document = m.document;
+        group.resources.push(m.resource_key.clone());
+        assert!(suite.resources.insert(m.resource_key, m.resource).is_none());
+    }
+    for m in migrations.core_rejections {
+        let i = suite
+            .groups
+            .iter()
+            .position(|g| g.id == m.group)
+            .expect("core rejection group");
+        let group = suite.groups.remove(i);
+        assert_eq!(group.document, m.original_document);
+        assert_eq!(
+            group.cases.iter().map(|c| &c.id).collect::<Vec<_>>(),
+            m.case_ids.iter().collect::<Vec<_>>()
+        );
+        let validation = ParsedDocument::parse(&group.document)
+            .unwrap()
+            .validate()
+            .unwrap();
+        assert_eq!(validation.report().evidence["OBI-12"], Evidence::Violated);
+        assert!(validation.validated().is_none());
+    }
+}
 /// Frozen inputs. No network access, environment variables, or sibling checkout is needed.
 pub fn suite() -> &'static Suite {
     static SUITE: OnceLock<Suite> = OnceLock::new();
@@ -121,6 +180,7 @@ pub fn suite() -> &'static Suite {
         // Preserve the raw historical fixture. Admission changes are explicit
         // provenance shared with the independent browser qualification judge.
         translate_policy(&mut suite);
+        translate_documents(&mut suite);
         suite
     })
 }
@@ -170,7 +230,7 @@ pub struct Report {
     pub configuration_failures: Vec<String>,
 }
 impl Report {
-    /// Whether configuration is valid, every frozen case was observed and no observation violates the kit contract. Permitted refusals are not counted as verdicts.
+    /// Whether configuration is valid, every evaluator case was observed and no observation violates the kit contract. Permitted refusals are not counted as verdicts.
     pub fn is_success(&self) -> bool {
         self.configuration_failures.is_empty()
             && self.observations.iter().all(|o| o.failures.is_empty())
@@ -234,9 +294,12 @@ pub fn run(evaluator: Arc<dyn SchemaEvaluator>, options: &Options) -> Report {
             }
         }))
         .expect("packaged resource set");
-        let context = document
-            .value_contracts(evaluator.clone(), resources)
-            .expect("packaged interpretable document");
+        let validated = document
+            .validate()
+            .expect("supported fixture version")
+            .validated()
+            .expect("conformant fixture document");
+        let context = validated.value_contracts(evaluator.clone(), resources);
         let prepared = context.prepare("op", Direction::Input);
         if !matches!(
             prepared,

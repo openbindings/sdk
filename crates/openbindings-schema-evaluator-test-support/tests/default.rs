@@ -16,7 +16,7 @@ fn pinned_suite_and_adversarial_contracts() {
         }
     }
     assert!(report.is_success(), "{:?}", report.configuration_failures);
-    assert_eq!(report.observations.len(), 1566);
+    assert_eq!(report.observations.len(), 1564);
     assert_eq!(report.refusal_count(), 42);
 }
 #[test]

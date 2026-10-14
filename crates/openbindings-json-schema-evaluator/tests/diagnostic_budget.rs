@@ -9,8 +9,11 @@ fn prepared(schema: Value, limits: Limits, resources: ResourceSet) -> ValueContr
     )
     .unwrap();
     let context = doc
-        .value_contracts(Arc::new(DefaultEvaluator::with_limits(limits)), resources)
-        .unwrap();
+        .validate()
+        .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(Arc::new(DefaultEvaluator::with_limits(limits)), resources);
     match context.prepare("op", Direction::Input) {
         ValueContractPreparation::Ready(contract) => contract,
         other => panic!("{other:?}"),

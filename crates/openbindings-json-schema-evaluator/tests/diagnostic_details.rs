@@ -5,6 +5,10 @@ use std::sync::Arc;
 fn prepare(text: &str, resources: ResourceSet, bytes: usize, details: bool) -> ValueContract {
     let doc = ParsedDocument::parse(text).unwrap();
     let context = doc
+        .validate()
+        .unwrap()
+        .validated()
+        .expect("conformant document")
         .value_contracts(
             Arc::new(
                 DefaultEvaluator::with_limits(Limits {
@@ -14,8 +18,7 @@ fn prepare(text: &str, resources: ResourceSet, bytes: usize, details: bool) -> V
                 .with_schema_details(details),
             ),
             resources,
-        )
-        .unwrap();
+        );
     let ValueContractPreparation::Ready(contract) = context.prepare("op", Direction::Input) else {
         panic!("not ready")
     };

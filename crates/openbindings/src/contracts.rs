@@ -240,11 +240,12 @@ impl ResourceSet {
 pub struct SchemaRequest {
     pub(crate) space: Arc<SchemaSpace>,
     pub(crate) entry: usize,
+    document: ValidatedDocument,
 }
 impl SchemaRequest {
-    /// Borrow the original immutable OpenBindings snapshot, which may be a draft rather than normative proof.
-    pub fn document(&self) -> &ParsedDocument {
-        &self.space.document
+    /// Borrow the validated immutable snapshot owning this normative value contract.
+    pub fn document(&self) -> &ValidatedDocument {
+        &self.document
     }
     /// Borrow the immutable explicit resources for this context; evaluators must not substitute global URI caches.
     pub fn supplied_resources(&self) -> &ResourceSet {
@@ -510,7 +511,7 @@ impl EvaluationProgram {
 /// }
 /// let document = ParsedDocument::parse(
 ///     r#"{"openbindings":"0.2.0","operations":{"run":{"input":true}}}"#)?;
-/// let context = document.value_contracts(Arc::new(TrueOnly), ResourceSet::default())?;
+/// let context = document.validate().unwrap().validated().expect("conformant document").value_contracts(Arc::new(TrueOnly), ResourceSet::default());
 /// let ValueContractPreparation::Ready(contract) = context.prepare("run", Direction::Input) else {
 ///     panic!("the true schema must be supported");
 /// };
@@ -575,6 +576,7 @@ pub struct ValueContracts {
     inner: Arc<ContractsInner>,
 }
 struct ContractsInner {
+    document: ValidatedDocument,
     space: Arc<SchemaSpace>,
     evaluator: Arc<dyn SchemaEvaluator>,
 }
@@ -587,7 +589,7 @@ pub enum ValueContractPreparation {
     NoValueContract,
     /// No primary key or alias matches the request.
     OperationMissing,
-    /// Multiple occurrences of the requested primary key or alias prevent selection.
+    /// Retained selection branch; validated documents cannot produce it because OBI-05 proves unique names. Parsed editor selection reports ambiguity through OperationSelection.
     OperationAmbiguous {
         #[doc = "Distinct matching primary keys in lexical order; repeated aliases can yield one candidate key."]
         candidates: Vec<String>,
@@ -649,42 +651,41 @@ impl ValueContract {
         self.schema.validate(value, control)
     }
 }
-impl ParsedDocument {
-    /// Create a context with an explicitly selected evaluator and immutable
-    /// resources. Malformed operation namespaces (including unrelated aliases)
-    /// return an [`InterpretationError`] here, before value contract selection.
-    /// No resource acquisition occurs; URIs in other contexts cannot
-    /// change this one. This does not establish whole-document conformance: use
-    /// [`Self::validate`] if your application requires that before accepting a document.
-    ///
-    /// Context construction validates the complete operation namespace, including
-    /// unrelated aliases, and returns a located [`InterpretationError`] for malformed
-    /// entries. Unrelated metadata may still be a draft: an established value verdict
-    /// concerns only the selected schema, not normative OBI conformance.
-    ///
-    /// Each preparation compiles anew; retain its ready owner for reuse. Match
-    /// [`ValueContractPreparation`] after [`ValueContracts::prepare`]; only its ready
-    /// branch exposes validation. The optional `openbindings-json-schema-evaluator`
-    /// companion supplies `DefaultEvaluator` and runnable first-use examples.
+impl ValidatedDocument {
+    /// Select an evaluator and immutable supplied resources for normative value contracts.
+    /// Parsed snapshots cannot construct normative contracts:
+    /// ```compile_fail
+    /// use openbindings::*;
+    /// fn draft(doc: ParsedDocument, evaluator: std::sync::Arc<dyn SchemaEvaluator>) {
+    ///     doc.value_contracts(evaluator, ResourceSet::default());
+    /// }
+    /// ```
+    /// Raw prepared schemas cannot manufacture a normative contract:
+    /// ```compile_fail
+    /// use openbindings::*;
+    /// fn raw(schema: std::sync::Arc<dyn PreparedSchema>) { let _ = ValueContract { schema }; }
+    /// ```
+    /// No preparation or acquisition occurs. Each prepare compiles anew; retain
+    /// the ready ValueContract to reuse it. Ready means prepared, not guaranteed decidable.
     pub fn value_contracts(
         &self,
         evaluator: Arc<dyn SchemaEvaluator>,
         resources: ResourceSet,
-    ) -> Result<ValueContracts, InterpretationError> {
-        self.interpretable()?;
-        self.names()?;
-        Ok(ValueContracts {
+    ) -> ValueContracts {
+        ValueContracts {
             inner: Arc::new(ContractsInner {
-                space: Arc::new(SchemaSpace::new(self.clone(), resources)),
+                document: self.clone(),
+                space: Arc::new(SchemaSpace::new(self.parsed().clone(), resources)),
                 evaluator,
             }),
-        })
+        }
     }
 }
 impl ValueContracts {
     /// Select a primary operation name or alias and prepare one direction's value contract.
-    /// Match every [`ValueContractPreparation`] branch: missing/ambiguous operation,
+    /// Match every [`ValueContractPreparation`] branch: missing operation,
     /// absent value contract and preparation refusal are setup states, not instance failures.
+    /// The retained ambiguous branch is unreachable through validated documents.
     /// Ready value contracts can be retained beyond this context and validated repeatedly.
     /// Every call prepares independently, including aliases of the same operation.
     /// Retain and clone a ready [`ValueContract`] to validate without recompiling.
@@ -706,26 +707,8 @@ impl ValueContracts {
             let detail = detail.into();
             return ValueContractPreparation::NoVerdict { detail };
         }
-        let op = match self.inner.space.document.resolve_operation(operation) {
-            Ok(OperationSelection::Found(op)) => op,
-            Ok(OperationSelection::Missing) => return ValueContractPreparation::OperationMissing,
-            Ok(OperationSelection::Ambiguous { candidates }) => {
-                return ValueContractPreparation::OperationAmbiguous { candidates };
-            }
-            Err(error) => {
-                let mut detail = NoVerdict::new(
-                    NoVerdictReason::EvaluatorFailure,
-                    "operation-index-invariant",
-                    "the previously checked operation namespace could not be read",
-                );
-                if let Some(location) = error.source_location() {
-                    detail.location = Some(SchemaLocation {
-                        resource: None,
-                        pointer: location.pointer.clone().unwrap_or_default(),
-                    });
-                }
-                return ValueContractPreparation::NoVerdict { detail };
-            }
+        let Some(op) = self.inner.document.resolve_operation(operation) else {
+            return ValueContractPreparation::OperationMissing;
         };
         let Some(schema) = op.value().get(direction.as_str()) else {
             return ValueContractPreparation::NoValueContract;
@@ -744,6 +727,7 @@ impl ValueContracts {
             };
         };
         let request = SchemaRequest {
+            document: self.inner.document.clone(),
             space: self.inner.space.clone(),
             entry,
         };

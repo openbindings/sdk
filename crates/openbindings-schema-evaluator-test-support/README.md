@@ -12,13 +12,22 @@ assert!(report.is_success());
 
 The package carries 496 groups and 1,566 cases from pinned upstream JSON Schema and Go SDK adversarial inputs. `fixtures/provenance.json` records their identities, exact optional capability cases, and two intentional translations: exact identifier matching and non-exhaustive diagnostic multiplicity. The original licenses accompany the fixtures. No sibling checkout or network access is needed.
 
+The raw fixture remains unchanged. `fixtures/document-migrations.json` re-expresses
+nine custom-meta-schema cases through conformant documents referencing supplied
+resources (§5.2), preserving `$id` and every refusal reason/code. Diagnostic locations
+now identify the supplied resource. No raw evaluator seam is needed. The two
+`adversarial/unreached-uncopied-targets/{0,1}` cases move to core OBI-12 rejection
+tests because no public normative API can reach their former satisfies/fails states.
+The [full migration ledger](../../tools/qualification/inputs/s6c-migration-ledger.json) accounts for all 1,566 original IDs; the runtime kit has
+495 groups, 1,564 observations, 1,522 verdicts and 42 refusals.
+
 The raw fixture remains unchanged. Its provenance also records one explicit
 `runtime_policy_translations` entry for the current SDK admission policy:
 `adversarial/resource-uri-names-another-id/0` now expects satisfaction from the unique
 contained integer schema, preserving the historical conservative-refusal expectation
 in the fixture. Native and browser qualification apply the same recorded translation.
 This is an intentional supported-admission expansion, not a normative bug ruling.
-The current default evaluator records 42 refusals across the unchanged 1,566 cases;
+The current default evaluator records 42 refusals across 1,564 evaluator observations;
 competing-carrier alias/pointer/direct routes have separate maintained regressions.
 
 The report records preparation refusals separately from optional value outcomes. A preparation refusal does not manufacture a value-validation result. Permitted refusals are counted separately from validity verdicts. Options name exact cases with their predeclared capability reason. Unknown, blank, stale or unused declarations fail; a wrong Boolean verdict can never be exempted. Diagnostic checks verify instance paths and original schema locations. The kit itself has injected wrong-verdict, bogus-path and misclassified-cancellation controls.

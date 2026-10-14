@@ -53,7 +53,7 @@ fn original<'a>(
         let Some(found) = found else { return Ok(None) };
         found
     } else {
-        request.document().value().view()
+        request.document().value()
     };
     if at.pointer.is_empty() {
         return Ok(Some(value));
@@ -288,6 +288,10 @@ mod tests {
         ))
         .unwrap();
         let context = doc
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant document")
             .value_contracts(
                 Arc::new(
                     DefaultEvaluator::with_limits(Limits {
@@ -297,8 +301,7 @@ mod tests {
                     .with_schema_details(true),
                 ),
                 ResourceSet::default(),
-            )
-            .unwrap();
+            );
         let ValueContractPreparation::Ready(contract) = context.prepare("op", Direction::Input)
         else {
             panic!()

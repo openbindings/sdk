@@ -1,3 +1,4 @@
+import { validatedContracts } from "./validated-contracts.mjs";
 /** Maintained value-diagnostic resource controls; runs unchanged on package and browser hosts. */
 export function diagnosticBudgetCases(sdk) {
   let assertions = 0;
@@ -27,7 +28,7 @@ export function diagnosticBudgetCases(sdk) {
     );
     check(parsed.status === "parsed", "source admitted");
     try {
-      const context = parsed.value.valueContracts({
+      const context = validatedContracts(parsed.value, {
         limits: { diagnosticBytes, maxProblems },
         resources,
       });

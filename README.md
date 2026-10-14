@@ -7,7 +7,7 @@ version `0.2.0-alpha.1` is independent of the specification version.
 
 Core parses and preserves exact JSON, supports typed authoring, assesses all 13
 document rules, indexes operation names and aliases, inspects kinds and references,
-and creates value-contract contexts with explicit resources and evaluators. Optional
+and creates value-contract contexts from validated documents with explicit resources and evaluators. Optional
 companions provide a default evaluator, an evaluator qualification kit, HTTP
 discovery, and provisional Rust APIs for source inspection, interface synthesis,
 binding invocation and operation invocation. The SDK defines these roles, provider
@@ -48,10 +48,10 @@ assert!(validated.original_bytes().starts_with(b"{"));
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-Parsing preserves evidence; validation establishes conformance separately. For
+Parsing preserves evidence; validation establishes the proof required for value contracts and operation invocation. For
 operation values, select `openbindings-json-schema-evaluator` explicitly and pass
 an immutable `ResourceSet`. `ValueContractPreparation` distinguishes ready, absent
-contract, missing or ambiguous operation, and preparation refusal. Only a ready
+contract, missing operation, and preparation refusal. Ambiguity remains available on parsed editor reads. Only a ready
 contract validates values; `ValueOutcome` distinguishes satisfies, fails and
 no-verdict. Core never acquires references.
 The broader [six-workflow caller](examples/rust-consumer/src/main.rs) additionally

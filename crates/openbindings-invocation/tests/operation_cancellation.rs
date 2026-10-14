@@ -109,7 +109,7 @@ mod tests {
         let barrier = Arc::new(Barrier::new(2));
         let saw_cancel = Arc::new(AtomicBool::new(false));
         let invoker = Invoker::new(
-            doc(),
+            doc().validate().unwrap().validated().unwrap(),
             Provider {
                 repeat_poll: false,
                 eof: Arc::default(),
@@ -121,8 +121,7 @@ mod tests {
                 saw_cancel: saw_cancel.clone(),
             }),
             ResourceSet::default(),
-        )
-        .unwrap();
+        );
         let control = CancellationToken::new();
         let mut call = invoker.invoke_with_control(Request::binding("b"), &control);
         assert!(
@@ -154,7 +153,7 @@ mod tests {
     fn rejected_input_cannot_turn_into_eof_on_second_poll() {
         let eof = Arc::new(AtomicBool::new(false));
         let invoker = Invoker::new(
-            doc(),
+            doc().validate().unwrap().validated().unwrap(),
             Provider {
                 repeat_poll: true,
                 eof: eof.clone(),
@@ -166,8 +165,7 @@ mod tests {
                 saw_cancel: Arc::default(),
             }),
             ResourceSet::default(),
-        )
-        .unwrap();
+        );
         let mut call = invoker.invoke(Request::binding("b"));
         assert!(
             std::pin::pin!(call.write(JsonValue::null()))
@@ -238,7 +236,10 @@ mod tests {
     #[test]
     fn cancellation_during_poll_overrides_ready_provider_success() {
         let external = CancellationToken::new();
-        let invoker = Invoker::new(doc(), CancelThenComplete(external.clone()));
+        let invoker = Invoker::new(
+            doc().validate().unwrap().validated().unwrap(),
+            CancelThenComplete(external.clone()),
+        );
         let mut call = invoker.invoke_with_control(Request::binding("b"), &external);
         let result = std::pin::pin!(call.next()).poll(&mut Context::from_waker(Waker::noop()));
         let Poll::Ready(result) = result else {
@@ -253,7 +254,10 @@ mod tests {
     #[test]
     fn cancellation_during_poll_overrides_ready_preflight_success() {
         let external = CancellationToken::new();
-        let invoker = Invoker::new(doc(), CancelThenComplete(external.clone()));
+        let invoker = Invoker::new(
+            doc().validate().unwrap().validated().unwrap(),
+            CancelThenComplete(external.clone()),
+        );
         let result = std::pin::pin!(
             invoker.preflight_with_provider_and_control(Request::binding("b"), &external)
         )
@@ -291,15 +295,17 @@ mod tests {
     fn already_settled_validation_keeps_its_evidence_when_external_cancel_follows() {
         let external = CancellationToken::new();
         let document=ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"run":{"output":true}},"bindings":{"b":{"operation":"run","source":"s"}},"sources":{"s":{"kind":"test"}}}"#).unwrap();
-        let invoker = Invoker::new(document, RejectOutputThenCancel(external.clone()))
-            .with_evaluator(
-                Arc::new(Evaluator {
-                    barrier: None,
-                    saw_cancel: Arc::default(),
-                }),
-                ResourceSet::default(),
-            )
-            .unwrap();
+        let invoker = Invoker::new(
+            document.validate().unwrap().validated().unwrap(),
+            RejectOutputThenCancel(external.clone()),
+        )
+        .with_evaluator(
+            Arc::new(Evaluator {
+                barrier: None,
+                saw_cancel: Arc::default(),
+            }),
+            ResourceSet::default(),
+        );
         let mut call = invoker.invoke_with_control(Request::binding("b"), &external);
         let result = std::pin::pin!(call.next()).poll(&mut Context::from_waker(Waker::noop()));
         let Poll::Ready(result) = result else {
@@ -353,14 +359,13 @@ mod tests {
     fn external_cancel_reaches_preparation_in_current_poll() {
         let barrier = Arc::new(Barrier::new(2));
         let invoker = Invoker::new(
-            doc(),
+            doc().validate().unwrap().validated().unwrap(),
             Provider {
                 repeat_poll: false,
                 eof: Arc::default(),
             },
         )
-        .with_evaluator(Arc::new(Preparing(barrier.clone())), ResourceSet::default())
-        .unwrap();
+        .with_evaluator(Arc::new(Preparing(barrier.clone())), ResourceSet::default());
         let external = CancellationToken::new();
         let mut call = invoker.invoke_with_control(Request::binding("b"), &external);
         assert!(
@@ -415,14 +420,20 @@ mod tests {
     #[test]
     fn synchronous_provider_and_preflight_start_observe_relay() {
         let external = CancellationToken::new();
-        let invoker = Invoker::new(doc(), CancelDuringStart(external.clone()));
+        let invoker = Invoker::new(
+            doc().validate().unwrap().validated().unwrap(),
+            CancelDuringStart(external.clone()),
+        );
         let mut call = invoker.invoke_with_control(Request::binding("b"), &external);
         assert!(
             matches!(std::pin::pin!(call.next()).poll(&mut Context::from_waker(Waker::noop())),
             Poll::Ready(Some(Err(e))) if e.code() == "ERR_CANCELLED")
         );
         let external = CancellationToken::new();
-        let invoker = Invoker::new(doc(), CancelDuringStart(external.clone()));
+        let invoker = Invoker::new(
+            doc().validate().unwrap().validated().unwrap(),
+            CancelDuringStart(external.clone()),
+        );
         assert!(
             matches!(std::pin::pin!(invoker.preflight_with_provider_and_control(Request::binding("b"), &external))
             .poll(&mut Context::from_waker(Waker::noop())), Poll::Ready(Err(e)) if e.code() == "ERR_CANCELLED")

@@ -22,13 +22,20 @@ cargo run -p openbindings-json-schema-evaluator --example replacement
 
 `ParsedDocument::parse(bytes)` preserves exact JSON and source evidence. Parsing does not prove conformance. `document.validate()` returns a report for the supported specification line or a separate unsupported-version refusal. A report can be conformant, nonconformant or undetermined. Only `assessment.validated()` yields a conformant document owner.
 
-The first-use example requires conformance before continuing and prints findings when that policy is not met. For editor-style inspection you may choose to keep a parsed document and its findings instead. Creating a value-contract context does not silently establish whole-document conformance.
+The first-use example requires conformance before continuing and prints findings when that policy is not met. For editor-style inspection you may choose to keep a parsed document and its findings instead. Only the validated proof creates a normative value-contract context.
 
 `document.resolve_operation(name)` accepts either a primary name or an alias. Match `Found`, `Missing` and `Ambiguous`; ambiguity retains candidate primary keys. A found operation gives you `key()`, `description()`, `aliases()`, `bindings()` and its exact `value()`.
 
 There is a deliberate difference between typed metadata and exact schema access. `description()` and `aliases()` interpret strings and can return located errors. `input()` and `output()` return `Option<JsonRef>` with no `?`: absence is `None`, while a present null or false stays an exact value. A present field has not yet been established as a supported contract.
 
-Keep the returned conformance proof, select `DefaultEvaluator` from the optional companion, then call `proof.parsed().value_contracts(Arc::new(DefaultEvaluator::new()), resources)`. `ResourceSet::default()` supplies no external resources. The SDK never fetches a missing reference.
+Validated reads are infallible: `proof.resolve_operation(name)` returns an optional
+`ValidatedOperationView`, and `name()`, `version()` and `description()` return
+optional `JsonStringRef` values. `as_str()` is optional because JSON text may
+contain unpaired UTF-16; `utf16_units()` and `json()` preserve that text exactly.
+`openbindings()` is a scalar SemVer string. `schemas()` distinguishes an absent
+namespace from a present empty namespace, with exact object/boolean values.
+
+Keep the returned conformance proof, select `DefaultEvaluator` from the optional companion, then call `proof.value_contracts(Arc::new(DefaultEvaluator::new()), resources)`. `ResourceSet::default()` supplies no external resources. The SDK never fetches a missing reference.
 
 `context.prepare(name, Direction::Input)` has these setup outcomes:
 
@@ -37,7 +44,7 @@ Keep the returned conformance proof, select `DefaultEvaluator` from the optional
 | `Ready(input)` | Retain the owner and validate admitted values. |
 | `NoValueContract` | Decide whether the operation is usable without that contract. |
 | `OperationMissing` | Correct the selected name or choose another operation. |
-| `OperationAmbiguous { candidates }` | Resolve the document's repeated identifier occurrences. |
+| `OperationAmbiguous { candidates }` | Retained enum branch; unreachable from validated documents because OBI-05 proves uniqueness. |
 | `NoVerdict { detail }` | Inspect the reason/code/location; correct resources or capability/work conditions as appropriate. |
 
 Preparation refusal is not an input failure and does not prove that the schema has no meaning. Different applications may accept different setup states; the examples require a ready input.
@@ -70,8 +77,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let Some(proof) = assessment.validated() else {
         return Err(format!("document conformance: {:?}", assessment.report().conclusion).into());
     };
-    let context = proof.parsed().value_contracts(
-        Arc::new(DefaultEvaluator::new()), ResourceSet::default())?;
+    let context = proof.value_contracts(
+        Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     match context.prepare("lookup", Direction::Input) {
         ValueContractPreparation::Ready(_input) => { /* retain input for value validation */ }
         other => return Err(format!("input setup was refused: {other:?}").into()),

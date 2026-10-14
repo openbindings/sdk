@@ -126,8 +126,9 @@ use std::sync::Arc;
 async fn call<P: BindingInvoker>(document: ParsedDocument, provider: P)
     -> Result<(), Box<dyn std::error::Error>>
 {
-    let invoker = Invoker::new(document, provider)
-        .with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default())?;
+    let proof = document.validate()?.validated().ok_or("document is not conformant")?;
+    let invoker = Invoker::new(proof, provider)
+        .with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let prepared = invoker.prepare("echo")?; // Keep for further attempts.
     let mut invocation = prepared.invoke(Attempt::new());
     invocation.write(JsonValue::parse("42")?).await?;
@@ -174,12 +175,14 @@ Unsupported automatic/ordered candidates are skipped; an unsupported explicit
 binding yields `ERR_BINDING_NOT_FOUND` in invocation and preflight. Metadata and provider registration order never choose a binding.
 Use `.with_context(&context)` to forward one opaque object unchanged.
 
-The retained snapshot need not have a whole-document conformance certificate.
-Core interpretation rules still apply: malformed interpreted structures refuse,
-missing or ambiguous operations remain unresolved, and a binding's operation must
-be a primary key. Accepting an invocation does not certify document conformance.
-Use core assessment separately when application policy requires that certificate.
-`preflight` uses the same selection rules and never prepares value contracts.
+`operation::Invoker::new` requires a `ValidatedDocument`, including when no evaluator
+is configured. Invalid documents are rejected before invocation construction;
+parsed editor reads still report malformed fields and ambiguous names.
+`with_evaluator` is infallible and performs no preparation. A non-scalar source kind
+cannot match a provider's scalar kind declaration. Other exact metadata that cannot
+fit a role carrier returns `ERR_REFUSED` before dispatch, with a local
+`boundary_error()` identifying the field. `preflight` uses the same selection rules
+and never prepares value contracts.
 
 Input is validated before delivery to the provider; successful output is validated
 before entering the committed output queue. Invalid input **does not become clean

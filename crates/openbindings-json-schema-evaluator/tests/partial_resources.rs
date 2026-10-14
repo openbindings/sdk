@@ -23,8 +23,11 @@ fn resources(values: &[(&str, &str)]) -> ResourceSet {
 }
 fn context(schema: &str, supplied: ResourceSet, evaluator: DefaultEvaluator) -> ValueContracts {
     document(schema)
-        .value_contracts(Arc::new(evaluator), supplied)
+        .validate()
         .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(Arc::new(evaluator), supplied)
 }
 fn ready(schema: &str) -> ValueContract {
     let result = context(schema, ResourceSet::default(), DefaultEvaluator::new())
@@ -64,8 +67,11 @@ fn strict_refusal(schema: &str) -> NoVerdict {
         }
     }
     match document(schema)
-        .value_contracts(Arc::new(Strict), ResourceSet::default())
+        .validate()
         .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(Arc::new(Strict), ResourceSet::default())
         .prepare("op", Direction::Input)
     {
         ValueContractPreparation::NoVerdict { detail } => detail,
@@ -335,6 +341,16 @@ fn missing_carriers_are_distinct_from_bad_fragments_or_known_targets() {
     }
     for fragment in ["#/~2", "#/~", "#9invalid", "#/%ff", "#%"] {
         let schema = format!(r#"{{"anyOf":[true,{{"$ref":"{U}{fragment}"}}]}}"#);
+        if fragment == "#%" {
+            let doc = ParsedDocument::parse(format!(
+                r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
+            ))
+            .unwrap();
+            let validation = doc.validate().unwrap();
+            assert_eq!(validation.report().evidence["OBI-11"], Evidence::Violated);
+            assert!(validation.validated().is_none());
+            continue;
+        }
         assert_ne!(
             refusal(&schema, ResourceSet::default()).reason,
             NoVerdictReason::ResourceUnavailable
@@ -468,11 +484,14 @@ fn custom_evaluator_gets_original_request_and_is_not_retried_or_reinterpreted() 
         captured: Mutex::new(None),
     });
     let contracts = document(&schema)
+        .validate()
+        .unwrap()
+        .validated()
+        .expect("conformant document")
         .value_contracts(
             custom.clone(),
             resources(&[("https://review.invalid/unused", "false")]),
-        )
-        .unwrap();
+        );
     let ValueContractPreparation::NoVerdict { detail } = contracts.prepare("op", Direction::Input)
     else {
         panic!()
@@ -602,8 +621,11 @@ fn original_five_frozen_values_and_empty_resource_sets() {
         let doc = ParsedDocument::parse(source).unwrap();
         let evaluator = Arc::new(DefaultEvaluator::new().with_schema_details(true));
         let empty = doc
-            .value_contracts(evaluator.clone(), ResourceSet::default())
-            .unwrap();
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant document")
+            .value_contracts(evaluator.clone(), ResourceSet::default());
         let ValueContractPreparation::Ready(partial) = empty.prepare(operation, Direction::Input)
         else {
             panic!("{operation}")
@@ -611,8 +633,11 @@ fn original_five_frozen_values_and_empty_resource_sets() {
         let result = partial.validate(&json(input));
         assert_eq!(label(result.clone()), expected);
         let full = doc
-            .value_contracts(evaluator, resources(&[(supplied_uri, supplied_text)]))
-            .unwrap();
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant document")
+            .value_contracts(evaluator, resources(&[(supplied_uri, supplied_text)]));
         let ValueContractPreparation::Ready(full) = full.prepare(operation, Direction::Input)
         else {
             panic!()
@@ -660,9 +685,15 @@ fn oneof_alias_into_advancing_recursive_graph_retains_hole_dependence() {
 #[test]
 fn known_reference_errors_and_contained_id_anchor_identity_survive_holes() {
     let schema = format!(r#"{{"allOf":[{{"$ref":"{U}"}},{{"$ref":"relative"}}]}}"#);
-    assert_eq!(
-        refusal(&schema, ResourceSet::default()).code,
-        "anonymous-relative-reference"
+    let doc = ParsedDocument::parse(format!(
+        r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
+    ))
+    .unwrap();
+    let validation = doc.validate().unwrap();
+    assert_eq!(validation.report().evidence["OBI-11"], Evidence::Violated);
+    assert!(validation.validated().is_none());
+    assert!(
+        matches!(&doc.references().unwrap().references[1].resolution, ReferenceResolution::Unresolved { detail } if detail.code == "anonymous-relative-reference")
     );
     let schema =
         format!(r#"{{"allOf":[{{"$ref":"{U}"}},{{"$ref":"https://review.invalid/K#dup"}}]}}"#);

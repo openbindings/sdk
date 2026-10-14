@@ -1,3 +1,4 @@
+import { validatedContracts } from "./validated-contracts.mjs";
 /** Public diagnostic policy checks shared with a freshly installed package. */
 export function diagnosticPolicyCases(sdk) {
   let assertions = 0;
@@ -60,12 +61,13 @@ export function diagnosticPolicyCases(sdk) {
       ],
     ]) {
       const doc = document(text);
+      check(
+        doc.validated().status === "report",
+        "invalid document cannot construct contracts",
+      );
       const raw = own(doc.value);
       const source = own(raw.at(pointer));
-      for (const call of [
-        () => doc.valueContracts(),
-        () => doc.resolveOperation("op"),
-      ]) {
+      for (const call of [() => doc.resolveOperation("op")]) {
         const error = thrown(call);
         check(
           error instanceof sdk.SdkError &&
@@ -87,7 +89,11 @@ export function diagnosticPolicyCases(sdk) {
     const duplicate = document(
       '{"openbindings":"0.2.0","operations":{"op":{"input":true,"input":false}}}',
     );
-    const duplicateError = thrown(() => duplicate.valueContracts());
+    const duplicateError = thrown(() => duplicate.resolveOperation("op"));
+    check(
+      duplicate.validated().status === "report",
+      "duplicate document cannot construct contracts",
+    );
     check(
       duplicateError instanceof sdk.SdkError &&
         duplicateError.code === "interpretation" &&
@@ -112,14 +118,25 @@ export function diagnosticPolicyCases(sdk) {
       draft.validate().report.conclusion === "non-conformant",
       "draft metadata remains nonconformant",
     );
-    const ctx = own(draft.valueContracts());
+    check(
+      draft.validated().status === "report",
+      "nonconformant metadata cannot construct contracts",
+    );
+    check(
+      draft.resolveOperation("shared").status === "ambiguous",
+      "parsed ambiguity remains visible",
+    );
+    const ctx = own(
+      validatedContracts(
+        document({
+          openbindings: "0.2.0",
+          operations: { op: { input: false }, empty: {} },
+        }),
+      ),
+    );
     check(
       ctx.prepare("missing", "input").status === "operation-missing",
       "missing remains setup state",
-    );
-    check(
-      ctx.prepare("shared", "input").status === "operation-ambiguous",
-      "ambiguous remains setup state",
     );
     check(
       ctx.prepare("empty", "input").status === "no-value-contract",
@@ -128,7 +145,7 @@ export function diagnosticPolicyCases(sdk) {
     const prepared = ctx.prepare("op", "input");
     check(
       prepared.status === "ready",
-      "nonconformant metadata allows draft preparation",
+      "conformant document allows preparation",
     );
     const contract = own(prepared.valueContract);
     check(
@@ -150,7 +167,7 @@ export function diagnosticPolicyCases(sdk) {
       { $ref: "#/operations/op/input" },
       { anyOf: [true, { $ref: "#/operations/op/input" }] },
     ]) {
-      const state = own(withSchema(schema).valueContracts()).prepare(
+      const state = own(validatedContracts(withSchema(schema))).prepare(
         "op",
         "input",
       );
@@ -188,10 +205,9 @@ export function diagnosticPolicyCases(sdk) {
           ],
           [{ $ref: patternUri }, { resources }, patternUri, ""],
         ]) {
-          const state = own(withSchema(entry).valueContracts(options)).prepare(
-            "op",
-            "input",
-          );
+          const state = own(
+            validatedContracts(withSchema(entry), options),
+          ).prepare("op", "input");
           check(
             state.status === "no-verdict" &&
               state.detail.reason === "conservative-preparation" &&
@@ -225,7 +241,16 @@ export function diagnosticPolicyCases(sdk) {
         "explicit source spelling preserved",
       );
       safe(report.references[0].resolution.detail.message);
-      const state = own(doc.valueContracts()).prepare("op", "input");
+      if (!qualified) {
+        const validation = doc.validated();
+        check(
+          validation.status === "report" &&
+            validation.report.evidence["OBI-11"] === "violated",
+          "malformed reference rejects document before setup",
+        );
+        continue;
+      }
+      const state = own(validatedContracts(doc)).prepare("op", "input");
       if (qualified) {
         check(state.status === "ready", "qualified missing reference prepares");
         const result = own(state.valueContract).validate(null);
@@ -297,7 +322,7 @@ export function diagnosticPolicyCases(sdk) {
         "object is missing a required member; inspect the required keyword at the schema location",
       ],
     ]) {
-      const state = own(withSchema(schema).valueContracts()).prepare(
+      const state = own(validatedContracts(withSchema(schema))).prepare(
         "op",
         "input",
       );

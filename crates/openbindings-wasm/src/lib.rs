@@ -204,11 +204,65 @@ impl WasmDocument {
     pub fn original_bytes(&self) -> Vec<u8> {
         self.document.original_bytes().into()
     }
-    pub fn validate(&self) -> String {
-        match self.document.validate() {
-            Ok(a) => encoded(json!({"status":"report","report":a.report()})),
-            Err(e) => encoded(json!({"status":"version-refused","refusal":e})),
+    pub fn validate(&self) -> WasmDocumentValidation {
+        WasmDocumentValidation {
+            validation: self.document.validate(),
+            taken: false,
         }
+    }
+    pub fn metadata(&self) -> Result<String, JsValue> {
+        Ok(exact_metadata(
+            json!({}),
+            &[
+                (
+                    "openbindings",
+                    self.document
+                        .openbindings()
+                        .map_err(interpretation_error)?
+                        .map(|v| v.json().text().to_owned()),
+                ),
+                (
+                    "name",
+                    self.document
+                        .name()
+                        .map_err(interpretation_error)?
+                        .map(|v| v.json().text().to_owned()),
+                ),
+                (
+                    "version",
+                    self.document
+                        .version()
+                        .map_err(interpretation_error)?
+                        .map(|v| v.json().text().to_owned()),
+                ),
+                (
+                    "description",
+                    self.document
+                        .description()
+                        .map_err(interpretation_error)?
+                        .map(|v| v.json().text().to_owned()),
+                ),
+            ],
+        ))
+    }
+    #[wasm_bindgen(js_name=schemaNames)]
+    pub fn schema_names(&self) -> Result<String, JsValue> {
+        self.document
+            .schemas()
+            .map(|v| {
+                encoded(v.map(|rows| rows.into_iter().map(|(key, _)| key).collect::<Vec<_>>()))
+            })
+            .map_err(interpretation_error)
+    }
+    pub fn schema(&self, key: &str) -> Result<Option<WasmJson>, JsValue> {
+        self.document
+            .schema(key)
+            .map(|v| {
+                v.map(|v| WasmJson {
+                    value: v.to_owned(),
+                })
+            })
+            .map_err(interpretation_error)
     }
     /// Small metadata is materialized once by TypeScript for repeated UI reads.
     pub fn operations(&self) -> Result<String, JsValue> {
@@ -216,7 +270,7 @@ impl WasmDocument {
         for operation in self.document.operations().map_err(interpretation_error)? {
             result.push(operation_metadata(&operation)?);
         }
-        Ok(encoded(result))
+        Ok(format!("[{}]", result.join(",")))
     }
     #[wasm_bindgen(js_name=toDraft)]
     pub fn to_draft(&self) -> Result<WasmDraft, JsValue> {
@@ -231,7 +285,7 @@ impl WasmDocument {
                     .collect::<Result<Vec<_>, _>>()
             })
             .transpose()?;
-        Ok(encoded(metadata))
+        Ok(metadata.map_or_else(|| "null".into(), |rows| format!("[{}]", rows.join(","))))
     }
     pub fn binding(&self, key: &str) -> Result<Option<WasmBinding>, JsValue> {
         self.document
@@ -248,7 +302,7 @@ impl WasmDocument {
                     .collect::<Result<Vec<_>, _>>()
             })
             .transpose()?;
-        Ok(encoded(metadata))
+        Ok(metadata.map_or_else(|| "null".into(), |rows| format!("[{}]", rows.join(","))))
     }
     pub fn source(&self, key: &str) -> Result<Option<WasmSource>, JsValue> {
         self.document
@@ -265,7 +319,7 @@ impl WasmDocument {
                     .collect::<Result<Vec<_>, _>>()
             })
             .transpose()?;
-        Ok(encoded(metadata))
+        Ok(metadata.map_or_else(|| "null".into(), |rows| format!("[{}]", rows.join(","))))
     }
     pub fn dependency(&self, key: &str) -> Result<Option<WasmDependency>, JsValue> {
         self.document
@@ -288,8 +342,20 @@ impl WasmDocument {
         dependency: &str,
         kind: &str,
     ) -> Result<Option<bool>, JsValue> {
+        let exact = JsonValue::parse(kind).map_err(input_error)?;
+        let kind = exact
+            .view()
+            .as_string()
+            .ok_or_else(|| error("invalid-kind", "kind must be an encoded JSON string"))?;
         self.document
-            .dependency_accepts_kind(dependency, kind)
+            .dependency(dependency)
+            .map_err(interpretation_error)?
+            .map(|view| {
+                view.kinds().map(|kinds| {
+                    kinds.is_none_or(|mut kinds| kinds.any(|candidate| candidate == kind))
+                })
+            })
+            .transpose()
             .map_err(interpretation_error)
     }
     pub fn references(
@@ -302,6 +368,51 @@ impl WasmDocument {
             .map(encoded)
             .map_err(interpretation_error)
     }
+}
+/// Evidence and single-use proof transfer tied to the same Rust snapshot.
+#[wasm_bindgen]
+pub struct WasmDocumentValidation {
+    validation: Result<DocumentValidation, VersionRefusal>,
+    taken: bool,
+}
+#[wasm_bindgen]
+impl WasmDocumentValidation {
+    pub fn report(&self) -> String {
+        match &self.validation {
+            Ok(v) => encoded(json!({"status":"report", "report":v.report()})),
+            Err(e) => encoded(json!({"status":"version-refused", "refusal":e})),
+        }
+    }
+    #[wasm_bindgen(js_name=takeValidated)]
+    pub fn take_validated(&mut self) -> Option<WasmValidatedDocument> {
+        if self.taken {
+            return None;
+        }
+        self.taken = true;
+        self.validation
+            .as_ref()
+            .ok()?
+            .validated()
+            .map(|document| WasmValidatedDocument { document })
+    }
+}
+/// A Rust-owned conformance proof; there is no public unchecked constructor.
+#[wasm_bindgen]
+pub struct WasmValidatedDocument {
+    document: ValidatedDocument,
+}
+#[wasm_bindgen]
+impl WasmValidatedDocument {
+    pub fn retain(&self) -> WasmValidatedDocument {
+        Self {
+            document: self.document.clone(),
+        }
+    }
+    pub fn parsed(&self) -> WasmDocument {
+        WasmDocument {
+            document: self.document.parsed().clone(),
+        }
+    }
     #[wasm_bindgen(js_name=valueContracts)]
     pub fn value_contracts(
         &self,
@@ -311,16 +422,77 @@ impl WasmDocument {
     ) -> Result<WasmValueContracts, JsValue> {
         let limits: Limits =
             serde_json::from_str(limits).map_err(|e| error("invalid-evaluator-limits", e))?;
-        self.document
-            .value_contracts(
-                Arc::new(
-                    DefaultEvaluator::with_limits(limits)
-                        .with_schema_details(include_schema_details),
-                ),
-                resources.resources.clone(),
-            )
-            .map(|contracts| WasmValueContracts { contracts })
-            .map_err(interpretation_error)
+        let contracts = self.document.value_contracts(
+            Arc::new(
+                DefaultEvaluator::with_limits(limits).with_schema_details(include_schema_details),
+            ),
+            resources.resources.clone(),
+        );
+        Ok(WasmValueContracts { contracts })
+    }
+    pub fn value(&self) -> WasmJson {
+        self.parsed().value()
+    }
+    #[wasm_bindgen(js_name=originalBytes)]
+    pub fn original_bytes(&self) -> Vec<u8> {
+        self.parsed().original_bytes()
+    }
+    pub fn validate(&self) -> WasmDocumentValidation {
+        self.parsed().validate()
+    }
+    pub fn metadata(&self) -> Result<String, JsValue> {
+        self.parsed().metadata()
+    }
+    #[wasm_bindgen(js_name=schemaNames)]
+    pub fn schema_names(&self) -> Result<String, JsValue> {
+        self.parsed().schema_names()
+    }
+    pub fn schema(&self, key: &str) -> Result<Option<WasmJson>, JsValue> {
+        self.parsed().schema(key)
+    }
+    pub fn operations(&self) -> Result<String, JsValue> {
+        self.parsed().operations()
+    }
+    #[wasm_bindgen(js_name=toDraft)]
+    pub fn to_draft(&self) -> Result<WasmDraft, JsValue> {
+        self.parsed().to_draft()
+    }
+    pub fn bindings(&self) -> Result<String, JsValue> {
+        self.parsed().bindings()
+    }
+    pub fn binding(&self, key: &str) -> Result<Option<WasmBinding>, JsValue> {
+        self.parsed().binding(key)
+    }
+    pub fn sources(&self) -> Result<String, JsValue> {
+        self.parsed().sources()
+    }
+    pub fn source(&self, key: &str) -> Result<Option<WasmSource>, JsValue> {
+        self.parsed().source(key)
+    }
+    pub fn dependencies(&self) -> Result<String, JsValue> {
+        self.parsed().dependencies()
+    }
+    pub fn dependency(&self, key: &str) -> Result<Option<WasmDependency>, JsValue> {
+        self.parsed().dependency(key)
+    }
+    #[wasm_bindgen(js_name=resolveOperation)]
+    pub fn resolve_operation(&self, name: &str) -> Result<WasmOperationSelection, JsValue> {
+        self.parsed().resolve_operation(name)
+    }
+    #[wasm_bindgen(js_name=dependencyAcceptsKind)]
+    pub fn dependency_accepts_kind(
+        &self,
+        dependency: &str,
+        kind: &str,
+    ) -> Result<Option<bool>, JsValue> {
+        self.parsed().dependency_accepts_kind(dependency, kind)
+    }
+    pub fn references(
+        &self,
+        resources: &WasmResources,
+        cancelled: bool,
+    ) -> Result<String, JsValue> {
+        self.parsed().references(resources, cancelled)
     }
 }
 /// A private transfer wrapper. Dropping it drops an untaken operation owner.
@@ -362,8 +534,18 @@ impl WasmOperation {
             value: self.op.value().to_owned(),
         }
     }
+    pub fn input(&self) -> Option<WasmJson> {
+        self.op.input().map(|v| WasmJson {
+            value: v.to_owned(),
+        })
+    }
+    pub fn output(&self) -> Option<WasmJson> {
+        self.op.output().map(|v| WasmJson {
+            value: v.to_owned(),
+        })
+    }
     pub fn metadata(&self) -> Result<String, JsValue> {
-        operation_metadata(&self.op).map(encoded)
+        operation_metadata(&self.op)
     }
     pub fn examples(&self) -> Result<String, JsValue> {
         let rows = self.op.examples().map_err(interpretation_error)?;
@@ -374,7 +556,7 @@ impl WasmOperation {
                     .collect::<Result<Vec<_>, _>>()
             })
             .transpose()?;
-        Ok(encoded(metadata))
+        Ok(metadata.map_or_else(|| "null".into(), |rows| format!("[{}]", rows.join(","))))
     }
     pub fn example(&self, key: &str) -> Result<Option<WasmExample>, JsValue> {
         self.op
@@ -389,42 +571,101 @@ impl WasmOperation {
             .map_err(interpretation_error)
     }
 }
-fn operation_metadata(view: &OperationView) -> Result<serde_json::Value, JsValue> {
-    Ok(
-        json!({"key":view.key(),"description":view.description().map_err(interpretation_error)?,
+// Exact text crosses the bridge as escaped JSON, never through Rust scalar strings.
+fn exact_metadata(fields: serde_json::Value, exact: &[(&str, Option<String>)]) -> String {
+    let mut result = encoded(fields);
+    result.pop();
+    for (key, value) in exact {
+        if result.len() > 1 {
+            result.push(',');
+        }
+        result.push_str(&encoded(key));
+        result.push(':');
+        result.push_str(value.as_deref().unwrap_or("null"));
+    }
+    result.push('}');
+    result
+}
+fn text_token(value: Option<JsonStringRef<'_>>) -> Option<String> {
+    value.map(|v| v.json().text().to_owned())
+}
+fn text_tokens<'a>(values: Option<impl Iterator<Item = JsonStringRef<'a>>>) -> Option<String> {
+    values.map(|v| {
+        format!(
+            "[{}]",
+            v.map(|v| v.json().text()).collect::<Vec<_>>().join(",")
+        )
+    })
+}
+fn operation_metadata(view: &OperationView) -> Result<String, JsValue> {
+    Ok(exact_metadata(
+        json!({"key":view.key(),
       "aliases":view.aliases().map_err(interpretation_error)?.map(|v|v.collect::<Vec<_>>()),
-      "tags":view.tags().map_err(interpretation_error)?.map(|v|v.collect::<Vec<_>>()),
       "deprecated":view.deprecated().map_err(interpretation_error)?,
       "has_input":view.input().is_some(),"has_output":view.output().is_some()}),
-    )
+        &[
+            (
+                "description",
+                text_token(view.description().map_err(interpretation_error)?),
+            ),
+            (
+                "tags",
+                text_tokens(view.tags().map_err(interpretation_error)?),
+            ),
+        ],
+    ))
 }
-fn binding_metadata(view: &BindingView) -> Result<serde_json::Value, JsValue> {
-    Ok(
+fn binding_metadata(view: &BindingView) -> Result<String, JsValue> {
+    Ok(exact_metadata(
         json!({"key":view.key(),"operation":view.operation().map_err(interpretation_error)?,
-      "source":view.source().map_err(interpretation_error)?,"description":view.description().map_err(interpretation_error)?,
+      "source":view.source().map_err(interpretation_error)?,
       "preference":view.preference().map_err(interpretation_error)?.map(|v|v.get()),
       "idempotent":view.idempotent().map_err(interpretation_error)?,"deprecated":view.deprecated().map_err(interpretation_error)?,
       "has_content":view.content().is_some()}),
-    )
+        &[(
+            "description",
+            text_token(view.description().map_err(interpretation_error)?),
+        )],
+    ))
 }
-fn source_metadata(view: &SourceView) -> Result<serde_json::Value, JsValue> {
-    Ok(
-        json!({"key":view.key(),"kind":view.kind().map_err(interpretation_error)?,
-      "description":view.description().map_err(interpretation_error)?,"has_content":view.content().is_some()}),
-    )
+fn source_metadata(view: &SourceView) -> Result<String, JsValue> {
+    Ok(exact_metadata(
+        json!({"key":view.key(),"has_content":view.content().is_some()}),
+        &[
+            (
+                "description",
+                text_token(view.description().map_err(interpretation_error)?),
+            ),
+            (
+                "kind",
+                text_token(Some(view.kind().map_err(interpretation_error)?)),
+            ),
+        ],
+    ))
 }
-fn dependency_metadata(view: &DependencyView) -> Result<serde_json::Value, JsValue> {
-    Ok(
-        json!({"key":view.key(),"operation":view.operation().map_err(interpretation_error)?,
-      "description":view.description().map_err(interpretation_error)?,
-      "kinds":view.kinds().map_err(interpretation_error)?.map(|v|v.collect::<Vec<_>>())}),
-    )
+fn dependency_metadata(view: &DependencyView) -> Result<String, JsValue> {
+    Ok(exact_metadata(
+        json!({"key":view.key(),"operation":view.operation().map_err(interpretation_error)?}),
+        &[
+            (
+                "description",
+                text_token(view.description().map_err(interpretation_error)?),
+            ),
+            (
+                "kinds",
+                text_tokens(view.kinds().map_err(interpretation_error)?),
+            ),
+        ],
+    ))
 }
-fn example_metadata(view: &ExampleView) -> Result<serde_json::Value, JsValue> {
-    Ok(
-        json!({"key":view.key(),"description":view.description().map_err(interpretation_error)?,
-      "has_input":view.input().is_some(),"has_output":view.output().is_some()}),
-    )
+fn example_metadata(view: &ExampleView) -> Result<String, JsValue> {
+    Ok(exact_metadata(
+        json!({"key":view.key(),"has_input":view.input().is_some(),"has_output":view.output().is_some()}),
+        &[(
+            "description",
+            text_token(view.description().map_err(interpretation_error)?),
+        )],
+    ))
 }
 #[wasm_bindgen]
 pub struct WasmBinding {
@@ -438,7 +679,7 @@ impl WasmBinding {
         }
     }
     pub fn metadata(&self) -> Result<String, JsValue> {
-        binding_metadata(&self.view).map(encoded)
+        binding_metadata(&self.view)
     }
     pub fn value(&self) -> WasmJson {
         WasmJson {
@@ -463,7 +704,7 @@ impl WasmSource {
         }
     }
     pub fn metadata(&self) -> Result<String, JsValue> {
-        source_metadata(&self.view).map(encoded)
+        source_metadata(&self.view)
     }
     pub fn value(&self) -> WasmJson {
         WasmJson {
@@ -488,7 +729,7 @@ impl WasmDependency {
         }
     }
     pub fn metadata(&self) -> Result<String, JsValue> {
-        dependency_metadata(&self.view).map(encoded)
+        dependency_metadata(&self.view)
     }
     pub fn value(&self) -> WasmJson {
         WasmJson {
@@ -508,7 +749,7 @@ impl WasmExample {
         }
     }
     pub fn metadata(&self) -> Result<String, JsValue> {
-        example_metadata(&self.view).map(encoded)
+        example_metadata(&self.view)
     }
     pub fn value(&self) -> WasmJson {
         WasmJson {
@@ -720,19 +961,12 @@ pub struct WasmPublication {
 #[wasm_bindgen]
 impl WasmPublication {
     #[wasm_bindgen(constructor)]
-    pub fn new(document: &WasmDocument, allow_origin: &str) -> Result<WasmPublication, JsValue> {
-        let assessed = document
-            .document
-            .validate()
-            .map_err(|e| error("version-refused", e))?;
-        let validated = assessed.validated().ok_or_else(|| {
-            error(
-                "publication-conformance",
-                "publication requires established conformance",
-            )
-        })?;
+    pub fn new(
+        document: &WasmValidatedDocument,
+        allow_origin: &str,
+    ) -> Result<WasmPublication, JsValue> {
         openbindings_http_discovery::Publication::new(
-            &validated,
+            &document.document,
             openbindings_http_discovery::PublicationOptions {
                 allow_origin: match allow_origin {
                     "*" => openbindings_http_discovery::AllowOrigin::Any,

@@ -21,7 +21,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err(format!("document conformance: {:?}; findings: {:?}",
             assessment.report().conclusion, assessment.report().findings).into());
     }
-    let context = document.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())?;
+    let proof = assessment.validated().ok_or("document is not conformant")?;
+    let context = proof.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let input = match context.prepare("lookup", Direction::Input) {
         ValueContractPreparation::Ready(input) => input,
         ValueContractPreparation::NoValueContract => return Err("lookup has no input contract".into()),

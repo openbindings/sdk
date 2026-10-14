@@ -1,5 +1,6 @@
 use openbindings::{
-    Conformance, ValueContractPreparation, JsonValue, ParsedDocument, ResourceSet, Direction, ValueOutcome,
+    Conformance, Direction, JsonValue, ParsedDocument, ResourceSet, ValueContractPreparation,
+    ValueOutcome,
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::{Value, json};
@@ -25,11 +26,12 @@ fn once(
     let (validation, ms) = measured(timed, || document.validate().unwrap());
     row.insert("assess", ms);
     assert_eq!(validation.report().conclusion, Conformance::Conformant);
+    let proof = validation.validated().expect("conformant document");
     let ((context, contract), ms) = measured(timed, || {
-        let context = document
-            .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
-            .unwrap();
-        let ValueContractPreparation::Ready(contract) = context.prepare("check", Direction::Input) else {
+        let context =
+            proof.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
+        let ValueContractPreparation::Ready(contract) = context.prepare("check", Direction::Input)
+        else {
             panic!("must prepare")
         };
         (context, contract)
@@ -150,9 +152,13 @@ fn main() {
     };
     let document = ParsedDocument::parse(&source("document")).unwrap();
     let context = document
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
-        .unwrap();
-    let ValueContractPreparation::Ready(contract) = context.prepare("check", Direction::Input) else {
+        .validate()
+        .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
+    let ValueContractPreparation::Ready(contract) = context.prepare("check", Direction::Input)
+    else {
         panic!("witness prepares")
     };
     let value = JsonValue::parse(&source("invalid")).unwrap();

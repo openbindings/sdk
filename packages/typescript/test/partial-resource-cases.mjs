@@ -1,3 +1,4 @@
+import { validatedContracts } from "./validated-contracts.mjs";
 // Shared Node/browser tests: the facade keeps the same context → prepare → validate workflow.
 export function partialResourceCases(sdk) {
   let count = 0;
@@ -24,7 +25,7 @@ export function partialResourceCases(sdk) {
     const document = parsed.value;
     let context, contract;
     try {
-      context = document.valueContracts();
+      context = validatedContracts(document);
       const setup = context.prepare("op", "input");
       if (expected === "refuse") {
         check(
@@ -192,7 +193,7 @@ export function partialResourceCases(sdk) {
         operations: { op: { input: schema } },
       }),
     );
-    const context = parsed.value.valueContracts();
+    const context = validatedContracts(parsed.value);
     try {
       const result = context.prepare("op", "input");
       check(
@@ -229,7 +230,7 @@ export function partialResourceCases(sdk) {
     JSON.stringify({ properties: { x: { $ref: V } } }),
   ).value;
   const supplied = new sdk.SchemaResources([[U, known]]);
-  const oldContext = doc.valueContracts({ resources: supplied });
+  const oldContext = validatedContracts(doc, { resources: supplied });
   const old = oldContext.prepare("op", "input").valueContract;
   let completeResources, yes, newContext, next, retained;
   try {
@@ -249,7 +250,7 @@ export function partialResourceCases(sdk) {
     );
     yes = sdk.parseJson("true").value;
     completeResources = supplied.with(V, yes);
-    newContext = doc.valueContracts({ resources: completeResources });
+    newContext = validatedContracts(doc, { resources: completeResources });
     next = newContext.prepare("op", "input").valueContract;
     check(
       next.resourceCompleteness.status === "complete",

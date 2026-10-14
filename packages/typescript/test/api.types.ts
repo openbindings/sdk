@@ -48,7 +48,10 @@ async function caller(
     using schema = resource.value;
     using empty = new SchemaResources();
     using resources = empty.with("https://example.test/schema", schema);
-    using contracts = document.valueContracts({
+    const proof = document.validated();
+    if (proof.status !== "validated") return undefined;
+    using validated = proof.document;
+    using contracts = validated.valueContracts({
       resources,
       includeSchemaDetails: true,
       limits: { maxProblems: 4 },
@@ -325,3 +328,26 @@ const omittedAllowOrigin: import("../dist/http-discovery.js").AllowOrigin =
 // @ts-expect-error CORS wildcard spelling is represented by the typed "any" choice
 const oldAllowOrigin: import("../dist/http-discovery.js").AllowOrigin = "*";
 void [exactAllowOrigin, omittedAllowOrigin, oldAllowOrigin];
+
+// @ts-expect-error parsed documents cannot construct normative value contracts
+parsedOnly.valueContracts();
+
+function validatedReads(proof: ValidatedDocument, parsed: ParsedDocument) {
+  proof.openbindings satisfies string;
+  proof.name satisfies string | undefined;
+  proof.version satisfies string | undefined;
+  proof.description satisfies string | undefined;
+  const schemas: ReadonlyMap<string, ExactJson> | undefined = proof.schemas;
+  for (const value of schemas?.values() ?? []) value.dispose();
+  using editor = proof.parsed();
+  const selection = parsed.resolveOperation("run");
+  if (selection.status === "found") {
+    using operation = selection.operation;
+    using input = operation.input;
+    using output = operation.output;
+    input satisfies ExactJson | undefined;
+    output satisfies ExactJson | undefined;
+  }
+  return editor.name;
+}
+void validatedReads;

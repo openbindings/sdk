@@ -68,6 +68,19 @@ fn string<'a>(
         })
         .transpose()
 }
+fn exact_string<'a>(
+    value: &'a JsonValue,
+    field: &str,
+    code: &'static str,
+) -> Result<Option<JsonStringRef<'a>>, InterpretationError> {
+    value
+        .get(field)
+        .map(|v| {
+            v.as_string()
+                .ok_or_else(|| InterpretationError::invalid(code, v))
+        })
+        .transpose()
+}
 fn required_string<'a>(
     value: &'a JsonValue,
     field: &str,
@@ -95,7 +108,7 @@ fn strings<'a>(
     field: &str,
     array_code: &'static str,
     item_code: &'static str,
-) -> Result<Option<impl ExactSizeIterator<Item = &'a str>>, InterpretationError> {
+) -> Result<Option<impl ExactSizeIterator<Item = JsonStringRef<'a>>>, InterpretationError> {
     value
         .get(field)
         .map(|value| {
@@ -103,11 +116,11 @@ fn strings<'a>(
                 .elements()
                 .ok_or_else(|| InterpretationError::invalid(array_code, value))?;
             for item in value.elements().expect("checked array") {
-                if item.as_str().is_none() {
+                if item.as_string().is_none() {
                     return Err(InterpretationError::invalid(item_code, item));
                 }
             }
-            Ok(items.map(|item| item.as_str().expect("checked string list")))
+            Ok(items.map(|item| item.as_string().expect("checked string list")))
         })
         .transpose()
 }
@@ -137,8 +150,8 @@ macro_rules! view {
                 self.value.view()
             }
             /// Interpret only this optional description, retaining original error coordinates.
-            pub fn description(&self) -> Result<Option<&str>, InterpretationError> {
-                string(&self.value, "description", $description_code)
+            pub fn description(&self) -> Result<Option<JsonStringRef<'_>>, InterpretationError> {
+                exact_string(&self.value, "description", $description_code)
             }
         }
     };
@@ -254,13 +267,9 @@ impl BindingView {
 }
 impl SourceView {
     /// Read the required declared kind without interpreting or executing it.
-    pub fn kind(&self) -> Result<&str, InterpretationError> {
-        required_string(
-            &self.value,
-            "kind",
-            "missing-source-kind",
-            "invalid-source-kind",
-        )
+    pub fn kind(&self) -> Result<JsonStringRef<'_>, InterpretationError> {
+        exact_string(&self.value, "kind", "invalid-source-kind")?
+            .ok_or_else(|| InterpretationError::invalid("missing-source-kind", self.value()))
     }
     /// Borrow opaque source content; absence differs from present JSON null.
     pub fn content(&self) -> Option<JsonRef<'_>> {
@@ -282,7 +291,7 @@ impl DependencyView {
     /// nonempty. This does not establish conformance or select a provider.
     pub fn kinds(
         &self,
-    ) -> Result<Option<impl ExactSizeIterator<Item = &str>>, InterpretationError> {
+    ) -> Result<Option<impl ExactSizeIterator<Item = JsonStringRef<'_>>>, InterpretationError> {
         strings(
             &self.value,
             "kinds",
@@ -303,7 +312,9 @@ impl ExampleView {
 }
 impl OperationView {
     /// Read optional tags after checking every item. Absence and an empty array differ.
-    pub fn tags(&self) -> Result<Option<impl ExactSizeIterator<Item = &str>>, InterpretationError> {
+    pub fn tags(
+        &self,
+    ) -> Result<Option<impl ExactSizeIterator<Item = JsonStringRef<'_>>>, InterpretationError> {
         strings(
             &self.value,
             "tags",
@@ -346,6 +357,62 @@ impl OperationView {
         .and_then(|index| index.entries.get_key_value(key))
         .map(|(key, value)| ExampleView::new(key, value))
         .transpose()
+    }
+}
+
+impl ParsedDocument {
+    /// Read the supported declaration, preserving absence separately from malformed text.
+    pub fn openbindings(&self) -> Result<Option<JsonStringRef<'_>>, InterpretationError> {
+        self.interpretable()?;
+        exact_string(self.value(), "openbindings", "invalid-openbindings")
+    }
+    /// Read optional exact interface name; unpaired UTF-16 remains a string.
+    pub fn name(&self) -> Result<Option<JsonStringRef<'_>>, InterpretationError> {
+        self.interpretable()?;
+        exact_string(self.value(), "name", "invalid-name")
+    }
+    /// Read the optional opaque interface version, distinct from the spec declaration.
+    pub fn version(&self) -> Result<Option<JsonStringRef<'_>>, InterpretationError> {
+        self.interpretable()?;
+        exact_string(self.value(), "version", "invalid-version")
+    }
+    /// Read optional exact descriptive text with located shape errors.
+    pub fn description(&self) -> Result<Option<JsonStringRef<'_>>, InterpretationError> {
+        self.interpretable()?;
+        exact_string(self.value(), "description", "invalid-description")
+    }
+    /// Read optional schema declarations in lexical key order. Values remain exact;
+    /// no schema is prepared. None and an empty vector distinguish absence and empty.
+    pub fn schemas(&self) -> Result<Option<Vec<(&str, JsonRef<'_>)>>, InterpretationError> {
+        self.interpretable()?;
+        self.value()
+            .get("schemas")
+            .map(|v| {
+                let members = v
+                    .members()
+                    .ok_or_else(|| InterpretationError::invalid("invalid-schemas-object", v))?;
+                let mut rows = Vec::new();
+                for m in members {
+                    let key = m.name.as_str().ok_or_else(|| {
+                        InterpretationError::invalid("invalid-schema-key", m.name)
+                    })?;
+                    if !matches!(m.value.kind(), JsonKind::Object | JsonKind::Boolean) {
+                        return Err(InterpretationError::invalid("invalid-schema", m.value));
+                    }
+                    rows.push((key, m.value));
+                }
+                rows.sort_by_key(|(key, _)| *key);
+                Ok(rows)
+            })
+            .transpose()
+    }
+    /// Borrow one exact schema declaration after checking the namespace shape.
+    pub fn schema(&self, name: &str) -> Result<Option<JsonRef<'_>>, InterpretationError> {
+        Ok(self.schemas()?.and_then(|rows| {
+            rows.into_iter()
+                .find(|(key, _)| *key == name)
+                .map(|(_, v)| v)
+        }))
     }
 }
 

@@ -1,0 +1,5 @@
+{"openbindings":"0.2.0","operations":{"op":{"input":{"type":"string","$defs":{
+		"id":{"$ref":"https://ex.invalid/other"},"resource":{"$ref":"https://ex.invalid/supplied"},
+		"enum":{"$ref":"#/operations/op/input/$defs/values/enum"},"const":{"$ref":"#/operations/op/input/$defs/values/const"},
+		"definitions":{"$ref":"#/operations/op/input/$defs/legacy/definitions"},
+		"values":{"enum":[1],"const":{"a":1}},"legacy":{"definitions":{"x":{}}}}}}},"schemas":{"Other":{"$id":"https://ex.invalid/other","type":"null"}}}

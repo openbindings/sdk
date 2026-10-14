@@ -419,7 +419,10 @@ select or invoke anything. A contract context retains its immutable document,
 supplied resources, configuration and prepared state:
 
 ```ts
-using contracts = document.valueContracts({ resources, limits: { maxProblems: 16 } });
+const validation = document.validated();
+if (validation.status !== "validated") throw new Error("Document is not conformant");
+using proof = validation.document;
+using contracts = proof.valueContracts({ resources, limits: { maxProblems: 16 } });
 const setup = contracts.prepare('lookup', 'input');
 if (setup.status === 'ready') {
   using input = setup.valueContract;
@@ -596,13 +599,22 @@ Dependency notices and compiler attribution are included; this candidate is not 
 
 ### Interpretation errors and diagnostic text
 
-`document.valueContracts()` and `document.resolveOperation()` check the complete
-operation namespace, including unrelated malformed operations or aliases. They
-throw `SdkError` with broad `code: "interpretation"`, an optional specific
-`interpretationCode` (such as `"invalid-operation-alias"`), and an original source
-`location` when available. Other error categories leave `interpretationCode`
-undefined. Unrelated metadata may remain nonconformant during draft evaluation;
-applications choose when to require whole-document conformance.
+`ParsedDocument.resolveOperation()` checks the complete operation namespace,
+including unrelated malformed operations or aliases. It throws `SdkError` with
+`code: "interpretation"`, a specific `interpretationCode` and an original source
+`location` when available. Parsed reads remain useful for invalid editor drafts.
+Only a `ValidatedDocument` has `valueContracts()`: acquire proof through
+`parsed.validated()` and handle nonconformance, uncertainty or version refusal.
+The Wasm bridge owns this proof; a plain report cannot manufacture it.
+
+Both documents expose `openbindings`, `name`, `version`, `description` and `schemas`.
+Text preserves JavaScript UTF-16 exactly, including lone units; optional text is
+undefined when absent. Validated field reads cannot fail on document shape.
+`schemas` returns undefined for absence or a lexical map whose values are NEW
+independently disposable `ExactJson` owners on every read. The operation view's
+`input` and `output` getters likewise acquire independent owners; undefined means
+absent, while null, true, false and objects remain exact values. Dispose every
+acquired schema/value. `validated.parsed()` acquires an independent parsed owner.
 
 The established value-failure tag is `"fails"`. Default messages omit reference
 identifiers, rejected instance data and user-schema enum/member strings. Type
@@ -624,7 +636,7 @@ are described in the [API reference guide](https://github.com/openbindings/sdk/b
 Value diagnostics default to an aggregate `diagnosticBytes` allowance of 1 MiB of
 retained UTF-8 strings (pointers, resource URIs, codes, messages and requested detail strings), alongside
 `maxProblems` (default 256, minimum count allowance one). Set these in
-`document.valueContracts({ limits: { diagnosticBytes: 65536, maxProblems: 32 } })`.
+`proof.valueContracts({ limits: { diagnosticBytes: 65536, maxProblems: 32 } })`.
 Only complete problems are retained in deterministic order. Zero or an oversized
 first problem preserves `outcome: "fails"` with `problems: []` and
 `problemsComplete: false`; an empty problem list is not success. Pre-verdict limits
@@ -645,7 +657,7 @@ for scratch allowances and scope.
 Default messages keep schema operands private. An authoring application can opt in:
 
 ```ts
-const contracts = document.valueContracts({ includeSchemaDetails: true });
+const contracts = proof.valueContracts({ includeSchemaDetails: true });
 // Reuse contracts/ready.valueContract normally; dispose their owners when finished.
 ```
 

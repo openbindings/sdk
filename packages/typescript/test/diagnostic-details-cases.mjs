@@ -1,3 +1,4 @@
+import { validatedContracts } from "./validated-contracts.mjs";
 /** Public-package detail/privacy/retention controls; portable across Node and browsers. */
 export function diagnosticDetailsCases(sdk) {
   let assertions = 0;
@@ -20,7 +21,7 @@ export function diagnosticDetailsCases(sdk) {
       const checked = parsed.value.validated();
       check(checked.status === "validated", "proof");
       proof = checked.document;
-      context = proof.valueContracts(options);
+      context = validatedContracts(proof, options);
       const ready = context.prepare("op", "input");
       check(ready.status === "ready", "ready");
       return ready.valueContract;
@@ -211,7 +212,7 @@ export function diagnosticDetailsCases(sdk) {
   try {
     let error;
     try {
-      probe.value.valueContracts({ includeSchemaDetails: "yes" });
+      validatedContracts(probe.value, { includeSchemaDetails: "yes" });
     } catch (e) {
       error = e;
     }

@@ -196,3 +196,9 @@ Publication copies validated bytes and handles GET/HEAD, 405/Allow and exact pat
 routing. It emits `Access-Control-Allow-Origin: *` by default; explicit omission
 or a browser-serialized origin can be configured. Reserved `%2F` stays escaped.
 Server auth, credentialed CORS and preflight remain application policy.
+
+Normative value contracts and operation invocation require `ValidatedDocument`.
+Validated typed reads include top-level metadata and schemas, and preserve exact
+UTF-16 descriptive text. Parsed editor reads remain available on rejected documents.
+TypeScript operation input/output getters preserve presence separately from null;
+each acquired value is independently disposable.

@@ -36,6 +36,14 @@ for (const name of [
   "wasm/openbindings_wasm_bg.wasm",
 ]) {
   const bytes = await fs.readFile(path.join(packageRoot, "dist", name));
+  files.set(
+    "/validated-contracts.mjs",
+    await fs.readFile(path.join(packageRoot, "test/validated-contracts.mjs")),
+  );
+  files.set(
+    "/using/validated-contracts.mjs",
+    await fs.readFile(path.join(packageRoot, "test/validated-contracts.mjs")),
+  );
   files.set("/dist/" + name, bytes); // match the installed package layout
 }
 for (const name of [

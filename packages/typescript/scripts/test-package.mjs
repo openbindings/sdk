@@ -133,6 +133,10 @@ console.log("Installed README TypeScript first-use block compiled and ran verbat
     join(root, "test/inspect-edit-example-cases.mjs"),
     join(temporary, "inspect-edit-example-cases.mjs"),
   );
+  copyFileSync(
+    join(root, "test/validated-contracts.mjs"),
+    join(temporary, "validated-contracts.mjs"),
+  );
   const declaration = readFileSync(
     join(installed, "dist/internal.d.ts"),
     "utf8",

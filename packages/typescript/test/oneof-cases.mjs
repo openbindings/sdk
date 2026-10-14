@@ -1,3 +1,4 @@
+import { validatedContracts } from "./validated-contracts.mjs";
 // Shared Node/browser controls. Fixtures retain frozen independent expected truths.
 export function oneOfCases(sdk, fixtures) {
   let checks = 0;
@@ -23,7 +24,7 @@ export function oneOfCases(sdk, fixtures) {
     const resources = new sdk.SchemaResources(values);
     let context, contract, value;
     try {
-      context = parsed.value.valueContracts({ ...options, resources });
+      context = validatedContracts(parsed.value, { ...options, resources });
       const setup = context.prepare(operation, direction);
       check(
         setup.status === "ready",

@@ -24,7 +24,12 @@ fn typed_inspection_checks_the_namespace_and_retains_unrelated_metadata() {
     };
     drop(doc);
     assert_eq!(op.key(), "z");
-    assert_eq!(op.description().unwrap(), Some("last"));
+    assert_eq!(
+        op.description()
+            .unwrap()
+            .map(|s| s.as_str().expect("scalar fixture")),
+        Some("last")
+    );
     assert_eq!(op.aliases().unwrap().unwrap().collect::<Vec<_>>(), ["go"]);
     assert_eq!(op.input().unwrap().as_bool(), Some(false));
     assert_eq!(op.output().unwrap().kind(), JsonKind::Null);

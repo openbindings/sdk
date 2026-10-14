@@ -80,7 +80,10 @@ export function observe(sdk, request) {
       resources.dispose();
       resources = next;
     }
-    const context = own(doc.valueContracts({ resources }));
+    const validation = doc.validated();
+    if (validation.status !== "validated") throw new Error("Fixture document lacks conformance proof");
+    const validated = own(validation.document);
+    const context = own(validated.valueContracts({ resources }));
     if (request.action === "validate-operation-values") {
       const preparation = context.prepare(given.operation, given.side);
       if (preparation.status !== "ready")

@@ -1,3 +1,4 @@
+import { validatedContracts } from "./validated-contracts.mjs";
 import * as sdk from "@openbindings/sdk";
 
 function check(condition, message) {
@@ -20,7 +21,7 @@ const warm = sdk.parseDocument(
 check(warm.status === "parsed", "warm document");
 try {
   warm.value.validate();
-  const context = warm.value.valueContracts();
+  const context = validatedContracts(warm.value);
   try {
     const setup = context.prepare("run", "input");
     check(setup.status === "ready", "warm contract");

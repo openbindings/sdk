@@ -1,0 +1,77 @@
+{
+  "reexpressions": [
+    {
+      "group": "suite/draft2020-12/optional/format-assertion.json#0 schema that uses custom metaschema with format-assertion: false",
+      "case_ids": [
+        "suite/draft2020-12/optional/format-assertion.json#0/0 schema that uses custom metaschema with format-assertion: false/format-assertion: false: valid string",
+        "suite/draft2020-12/optional/format-assertion.json#0/1 schema that uses custom metaschema with format-assertion: false/format-assertion: false: invalid string"
+      ],
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\n            \"$id\": \"https://schema/using/format-assertion/false\",\n            \"$schema\": \"http://localhost:1234/draft2020-12/format-assertion-false.json\",\n            \"format\": \"ipv4\"\n        }}}}",
+      "document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"https://schema/using/format-assertion/false\"}}}}",
+      "resource_key": "s6c/https://schema/using/format-assertion/false",
+      "resource": {
+        "uri": "https://schema/using/format-assertion/false",
+        "documentJson": "{\"$id\":\"https://schema/using/format-assertion/false\",\"$schema\":\"http://localhost:1234/draft2020-12/format-assertion-false.json\",\"format\":\"ipv4\"}"
+      },
+      "reason": "Section 5.2 permits supplied resources with another dialect; preserves $id, schema content and refusal reason/code. Diagnostic location follows the supplied resource."
+    },
+    {
+      "group": "suite/draft2020-12/optional/format-assertion.json#1 schema that uses custom metaschema with format-assertion: true",
+      "case_ids": [
+        "suite/draft2020-12/optional/format-assertion.json#1/0 schema that uses custom metaschema with format-assertion: true/format-assertion: true: valid string",
+        "suite/draft2020-12/optional/format-assertion.json#1/1 schema that uses custom metaschema with format-assertion: true/format-assertion: true: invalid string"
+      ],
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\n            \"$id\": \"https://schema/using/format-assertion/true\",\n            \"$schema\": \"http://localhost:1234/draft2020-12/format-assertion-true.json\",\n            \"format\": \"ipv4\"\n        }}}}",
+      "document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"https://schema/using/format-assertion/true\"}}}}",
+      "resource_key": "s6c/https://schema/using/format-assertion/true",
+      "resource": {
+        "uri": "https://schema/using/format-assertion/true",
+        "documentJson": "{\"$id\":\"https://schema/using/format-assertion/true\",\"$schema\":\"http://localhost:1234/draft2020-12/format-assertion-true.json\",\"format\":\"ipv4\"}"
+      },
+      "reason": "Section 5.2 permits supplied resources with another dialect; preserves $id, schema content and refusal reason/code. Diagnostic location follows the supplied resource."
+    },
+    {
+      "group": "suite/draft2020-12/vocabulary.json#0 schema that uses custom metaschema with with no validation vocabulary",
+      "case_ids": [
+        "suite/draft2020-12/vocabulary.json#0/0 schema that uses custom metaschema with with no validation vocabulary/applicator vocabulary still works",
+        "suite/draft2020-12/vocabulary.json#0/1 schema that uses custom metaschema with with no validation vocabulary/no validation: valid number",
+        "suite/draft2020-12/vocabulary.json#0/2 schema that uses custom metaschema with with no validation vocabulary/no validation: invalid number, but it still validates"
+      ],
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\n            \"$id\": \"https://schema/using/no/validation\",\n            \"$schema\": \"http://localhost:1234/draft2020-12/metaschema-no-validation.json\",\n            \"properties\": {\n                \"badProperty\": false,\n                \"numberProperty\": {\n                    \"minimum\": 10\n                }\n            }\n        }}}}",
+      "document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"https://schema/using/no/validation\"}}}}",
+      "resource_key": "s6c/https://schema/using/no/validation",
+      "resource": {
+        "uri": "https://schema/using/no/validation",
+        "documentJson": "{\"$id\":\"https://schema/using/no/validation\",\"$schema\":\"http://localhost:1234/draft2020-12/metaschema-no-validation.json\",\"properties\":{\"badProperty\":false,\"numberProperty\":{\"minimum\":10}}}"
+      },
+      "reason": "Section 5.2 permits supplied resources with another dialect; preserves $id, schema content and refusal reason/code. Diagnostic location follows the supplied resource."
+    },
+    {
+      "group": "suite/draft2020-12/vocabulary.json#1 ignore unrecognized optional vocabulary",
+      "case_ids": [
+        "suite/draft2020-12/vocabulary.json#1/0 ignore unrecognized optional vocabulary/string value",
+        "suite/draft2020-12/vocabulary.json#1/1 ignore unrecognized optional vocabulary/number value"
+      ],
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"http://localhost:1234/draft2020-12/metaschema-optional-vocabulary.json\",\"type\":\"number\"}}}}",
+      "document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"https://suite.openbindings.invalid/schema.json\"}}}}",
+      "resource_key": "s6c/https://suite.openbindings.invalid/schema.json",
+      "resource": {
+        "uri": "https://suite.openbindings.invalid/schema.json",
+        "documentJson": "{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"http://localhost:1234/draft2020-12/metaschema-optional-vocabulary.json\",\"type\":\"number\"}"
+      },
+      "reason": "Section 5.2 permits supplied resources with another dialect; preserves $id, schema content and refusal reason/code. Diagnostic location follows the supplied resource."
+    }
+  ],
+  "core_rejections": [
+    {
+      "group": "adversarial/unreached-uncopied-targets",
+      "case_ids": [
+        "adversarial/unreached-uncopied-targets/0",
+        "adversarial/unreached-uncopied-targets/1"
+      ],
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"type\":\"string\",\"$defs\":{\n\t\t\"id\":{\"$ref\":\"https://ex.invalid/other\"},\"resource\":{\"$ref\":\"https://ex.invalid/supplied\"},\n\t\t\"enum\":{\"$ref\":\"#/operations/op/input/$defs/values/enum\"},\"const\":{\"$ref\":\"#/operations/op/input/$defs/values/const\"},\n\t\t\"definitions\":{\"$ref\":\"#/operations/op/input/$defs/legacy/definitions\"},\n\t\t\"values\":{\"enum\":[1],\"const\":{\"a\":1}},\"legacy\":{\"definitions\":{\"x\":{}}}}}}},\"schemas\":{\"Other\":{\"$id\":\"https://ex.invalid/other\",\"type\":\"null\"}}}",
+      "rule": "OBI-12",
+      "reason": "A ref target in an opaque value is not a schema; the document cannot construct a normative value contract. Both cases move to core rejection tests."
+    }
+  ]
+}

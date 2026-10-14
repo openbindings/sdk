@@ -11,8 +11,11 @@ async fn sdk_policy_cases_and_interface_output_shapes_are_distinct() {
     let role =
         ParsedDocument::parse(include_bytes!("fixtures/interface-synthesizer-0.2.json")).unwrap();
     let context = role
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
-        .unwrap();
+        .validate()
+        .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let ValueContractPreparation::Ready(contract) = context.prepare(
         "openbindings.interface-synthesizer.synthesizeInterfaceWithCoverage",
         Direction::Output,
@@ -105,8 +108,11 @@ fn sdk_policy_fixture_file_satisfies_its_local_schema() {
     );
     let doc = draft.build().unwrap();
     let context = doc
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
-        .unwrap();
+        .validate()
+        .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let ValueContractPreparation::Ready(contract) = context.prepare("check", Direction::Input)
     else {
         panic!("fixture schema failed")
@@ -122,8 +128,11 @@ fn independent_interface_examples_allow_variation_beyond_sdk_policy() {
     let role =
         ParsedDocument::parse(include_bytes!("fixtures/interface-synthesizer-0.2.json")).unwrap();
     let context = role
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
-        .unwrap();
+        .validate()
+        .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let ValueContractPreparation::Ready(contract) = context.prepare(
         "openbindings.interface-synthesizer.synthesizeInterfaceWithCoverage",
         Direction::Output,

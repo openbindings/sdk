@@ -67,7 +67,12 @@ fn keyed_lookup_and_each_field_are_local() {
     assert!(doc.operations().is_err());
     let good = doc.source("good").unwrap().unwrap();
     assert_eq!(good.kind().unwrap(), "good-kind");
-    assert_eq!(good.description().unwrap(), Some("ok"));
+    assert_eq!(
+        good.description()
+            .unwrap()
+            .map(|s| s.as_str().expect("scalar fixture")),
+        Some("ok")
+    );
     let bad = doc.source("bad").unwrap().unwrap();
     assert_eq!(bad.kind().unwrap(), "valid-kind");
     location(

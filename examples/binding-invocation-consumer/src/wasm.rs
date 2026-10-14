@@ -226,23 +226,22 @@ impl InvocationBridge {
     ) -> Result<InvocationBridge, JsValue> {
         let document = openbindings::ParsedDocument::parse(document)
             .map_err(|_| JsValue::from_str("INVALID_DOCUMENT"))?;
+        let proof = document
+            .validate()
+            .map_err(|_| JsValue::from_str("INVALID_DOCUMENT"))?
+            .validated()
+            .ok_or_else(|| JsValue::from_str("INVALID_DOCUMENT"))?;
         let provider = Local {
             token: Rc::new(Count::new(&TOKENS)),
             gate,
             mode,
         };
-        let mut facade =
-            openbindings_invocation::operation::Invoker::new(document, Rc::new(provider));
+        let mut facade = openbindings_invocation::operation::Invoker::new(proof, Rc::new(provider));
         if validate {
-            facade =
-                facade
-                    .with_evaluator(
-                        std::sync::Arc::new(
-                            openbindings_json_schema_evaluator::DefaultEvaluator::new(),
-                        ),
-                        openbindings::ResourceSet::default(),
-                    )
-                    .map_err(|_| JsValue::from_str("INVALID_DOCUMENT"))?;
+            facade = facade.with_evaluator(
+                std::sync::Arc::new(openbindings_json_schema_evaluator::DefaultEvaluator::new()),
+                openbindings::ResourceSet::default(),
+            );
         }
         let shared = Shared::default();
         let state = shared.clone();

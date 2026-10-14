@@ -52,7 +52,14 @@ impl BindingInvoker for InvokeOnly {
 // RO-5: all selection paths and both advisory paths use the specific code.
 #[tokio::test]
 async fn ro5_unsupported_explicit_and_ordered_bindings_are_not_found() {
-    let facade = operation::Invoker::new(document("{}"), SendProvider);
+    let facade = operation::Invoker::new(
+        document("{}")
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant invocation document"),
+        SendProvider,
+    );
     for selection in [Request::binding("u"), Request::ordered("run", &["u"])] {
         let mut call = facade.invoke(selection);
         call.close();
@@ -156,15 +163,29 @@ async fn ro6_generic_send_preflight_and_invoke_only_default() {
             .is_none()
     );
     assert!(
-        operation::Invoker::new(document("{}"), InvokeOnly)
-            .preflight(Request::binding("b"))
-            .await
-            .unwrap()
-            .is_none()
+        operation::Invoker::new(
+            document("{}")
+                .validate()
+                .unwrap()
+                .validated()
+                .expect("conformant invocation document"),
+            InvokeOnly
+        )
+        .preflight(Request::binding("b"))
+        .await
+        .unwrap()
+        .is_none()
     );
     send_provider(
         &Invoker::new(SendProvider),
-        &operation::Invoker::new(document("{}"), SendProvider),
+        &operation::Invoker::new(
+            document("{}")
+                .validate()
+                .unwrap()
+                .validated()
+                .expect("conformant invocation document"),
+            SendProvider,
+        ),
         request,
     )
     .await;
@@ -206,7 +227,14 @@ async fn ro6_local_rc_preflight_and_ro18_forwarding_preserve_hooks() {
     let calls = Rc::new(Cell::new(0));
     let provider = Rc::new(LocalProvider(calls.clone()));
     let binding = Invoker::new(provider.clone());
-    let operation = operation::Invoker::new(document("{}"), &provider);
+    let operation = operation::Invoker::new(
+        document("{}")
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant invocation document"),
+        &provider,
+    );
     let source = source();
     let value = BindingValue::default();
     assert!(
@@ -233,7 +261,14 @@ async fn ro6_local_rc_preflight_and_ro18_forwarding_preserve_hooks() {
     let shared = Arc::new(SendProvider);
     send_provider(
         &Invoker::new(shared.clone()),
-        &operation::Invoker::new(document("{}"), shared),
+        &operation::Invoker::new(
+            document("{}")
+                .validate()
+                .unwrap()
+                .validated()
+                .expect("conformant invocation document"),
+            shared,
+        ),
         request(&source, &value),
     )
     .await;
@@ -325,7 +360,14 @@ async fn ro8_reserved_provider_invocation_and_preflight_codes_are_rejected() {
         "ERR_SCHEMA_UNRESOLVED",
     ] {
         let binding = Invoker::new(Failure(code));
-        let operation = operation::Invoker::new(document("{}"), Failure(code));
+        let operation = operation::Invoker::new(
+            document("{}")
+                .validate()
+                .unwrap()
+                .validated()
+                .expect("conformant invocation document"),
+            Failure(code),
+        );
         let mut calls = [binding.invoke(request(&source, &value))];
         let mut operation_call = operation.invoke(Request::binding("b"));
         calls[0].close();
@@ -380,7 +422,14 @@ async fn ro8_reserved_provider_invocation_and_preflight_codes_are_rejected() {
 // and codes even though the provider-result path rejects those same spellings.
 #[tokio::test]
 async fn ro8_sdk_selection_and_validation_errors_still_surface() {
-    let facade = operation::Invoker::new(document("{}"), InvokeOnly);
+    let facade = operation::Invoker::new(
+        document("{}")
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant invocation document"),
+        InvokeOnly,
+    );
     for (request, code) in [
         (Request::operation("absent"), "ERR_OPERATION_NOT_FOUND"),
         (Request::binding("absent"), "ERR_BINDING_NOT_FOUND"),
@@ -408,7 +457,16 @@ async fn ro8_sdk_selection_and_validation_errors_still_surface() {
             "ERR_UNKNOWN_SOURCE",
         ),
     ] {
-        let facade = operation::Invoker::new(ParsedDocument::parse(text).unwrap(), InvokeOnly);
+        let validation = ParsedDocument::parse(text).unwrap().validate().unwrap();
+        if code == "ERR_UNKNOWN_SOURCE" {
+            assert_eq!(
+                validation.report().evidence["OBI-07"],
+                openbindings::Evidence::Violated
+            );
+            assert!(validation.validated().is_none());
+            continue;
+        }
+        let facade = operation::Invoker::new(validation.validated().unwrap(), InvokeOnly);
         let mut call = facade.invoke(request);
         assert_eq!(call.next().await.unwrap().unwrap_err().code(), code);
         assert_eq!(facade.preflight(request).await.unwrap_err().code(), code);
@@ -433,11 +491,16 @@ async fn ro8_sdk_selection_and_validation_errors_still_surface() {
         }
     }
     for evaluated in [false, true] {
-        let facade = operation::Invoker::new(document(r#"{"input":false}"#), Reads);
-        let facade = if evaluated {
-            facade
-                .with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
+        let facade = operation::Invoker::new(
+            document(r#"{"input":false}"#)
+                .validate()
                 .unwrap()
+                .validated()
+                .expect("conformant invocation document"),
+            Reads,
+        );
+        let facade = if evaluated {
+            facade.with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
         } else {
             facade
         };
