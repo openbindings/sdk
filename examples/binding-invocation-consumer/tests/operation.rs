@@ -1,8 +1,8 @@
 //! External-consumer checks: literal catalog expectations, public APIs only.
 use binding_invocation_consumer::{Catalog, KIND, yield_once};
 use openbindings::{
-    JsonValue, NoVerdict, NoVerdictReason, ParsedDocument, PreparedSchema, ResourceSet,
-    SchemaEvaluator, SchemaRequest, Direction, Source, ValueOutcome, ValueProblem, WorkControl,
+    Direction, JsonValue, NoVerdict, NoVerdictReason, ParsedDocument, PreparedSchema, ResourceSet,
+    SchemaEvaluator, SchemaRequest, Source, ValueOutcome, ValueProblem, WorkControl,
 };
 use openbindings_interface_synthesis::{
     CoverageStatus, SynthesisRequest, SynthesisSource, Synthesizer,
@@ -10,7 +10,7 @@ use openbindings_interface_synthesis::{
 use openbindings_invocation::{
     BindingRequest, InvocationError, ProviderIo,
     binding::BindingInvoker,
-    operation::{Invoker, Request, ValidationStage},
+    operation::{Attempt, Invoker, Request, ValidationStage},
 };
 use std::{
     future::Future,
@@ -137,9 +137,10 @@ async fn inspect_synthesize_and_invoke_operation_preserves_exact_values() {
         "1e400",
         r#"{"nested":[-0,{"unicode":"空.🚲"}]}"#,
     ];
+    let prepared = invoker.prepare("s0.u0").unwrap();
     let mut retained = Vec::new();
     for _ in 0..2 {
-        let mut call = invoker.invoke(Request::operation("s0.u0"));
+        let mut call = prepared.invoke(Attempt::new());
         send(&call);
         for value in expected {
             call.write(json(value)).await.unwrap();
@@ -162,6 +163,7 @@ async fn inspect_synthesize_and_invoke_operation_preserves_exact_values() {
         provider.last_target.lock().unwrap().as_deref(),
         Some("空.🚲")
     );
+    drop(prepared);
     drop(invoker);
     drop(provider);
     assert_eq!(retained[0].text(), "9007199254740993");

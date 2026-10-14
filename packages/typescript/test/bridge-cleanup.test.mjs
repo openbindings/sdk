@@ -14,7 +14,7 @@ test("owned selection and preparation wrappers release untaken children on decod
   const document = sdk.parseDocument(
     '{"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"}}}}',
   ).value;
-  const context = document.valueContracts({ cacheCapacity: 0 });
+  const context = document.valueContracts();
   try {
     for (const [prototype, invoke, take] of [
       [

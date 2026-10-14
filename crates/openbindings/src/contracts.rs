@@ -1,11 +1,7 @@
 //! Retained value contracts and the optional evaluator interface.
 use crate::{schema_space::SchemaSpace, *};
 use serde::Serialize;
-use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
-    fmt,
-    sync::{Arc, Mutex, OnceLock},
-};
+use std::{collections::BTreeMap, fmt, sync::Arc};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -91,12 +87,6 @@ impl NoVerdict {
     pub(crate) fn located(mut self, location: SchemaLocation) -> Self {
         self.location = Some(location);
         self
-    }
-    fn cacheable(&self) -> bool {
-        !matches!(
-            self.reason,
-            NoVerdictReason::Cancelled | NoVerdictReason::EvaluatorFailure
-        )
     }
 }
 impl fmt::Display for NoVerdict {
@@ -572,7 +562,7 @@ pub trait PreparedSchema: Send + Sync {
         ResourceCompleteness::Undeclared
     }
 }
-/// An immutable document/resource/evaluator context with bounded preparation reuse.
+/// An immutable document/resource/evaluator context with caller-owned preparation.
 /// Select a value contract using [`Self::prepare`], then retain its ready owner for
 /// repeated validation. Replacing an application's active context does not
 /// mutate already prepared work. See the
@@ -581,56 +571,14 @@ pub trait PreparedSchema: Send + Sync {
 pub struct ValueContracts {
     inner: Arc<ContractsInner>,
 }
-/// Retention policy for preparation reuse. Explicitly retained handles are
-/// independent of this cache and remain usable after eviction or context drop.
-#[derive(Clone, Copy, Debug)]
-pub struct ValueContractOptions {
-    /// Most-recently-used preparation entries retained by this context.
-    /// Default is four. Zero disables retention. This limits entries, not total allocation bytes.
-    pub cache_capacity: usize,
-}
-impl Default for ValueContractOptions {
-    fn default() -> Self {
-        Self { cache_capacity: 4 }
-    }
-}
 struct ContractsInner {
     space: Arc<SchemaSpace>,
     evaluator: Arc<dyn SchemaEvaluator>,
-    prepared: Mutex<PreparationCache>,
-}
-struct PreparationCache {
-    capacity: usize,
-    entries: HashMap<usize, Arc<OnceLock<ContractState>>>,
-    recency: VecDeque<usize>,
-}
-impl PreparationCache {
-    fn entry(&mut self, key: usize) -> Arc<OnceLock<ContractState>> {
-        if self.capacity == 0 {
-            return Arc::default();
-        }
-        if let Some(found) = self.entries.get(&key) {
-            self.recency.retain(|&entry| entry != key);
-            self.recency.push_back(key);
-            return found.clone();
-        }
-        if self.entries.len() == self.capacity {
-            let oldest = self.recency.pop_front().expect("occupied cache has a key");
-            self.entries.remove(&oldest);
-        }
-        self.recency.push_back(key);
-        self.entries.entry(key).or_default().clone()
-    }
-}
-#[derive(Clone)]
-enum ContractState {
-    Ready(Arc<dyn PreparedSchema>),
-    NoVerdict(NoVerdict),
 }
 /// Setup result. Only Ready owns a successfully prepared value contract.
 #[derive(Clone, Debug)]
 pub enum ValueContractPreparation {
-    /// A retained prepared value contract, independently usable after context drop or cache eviction.
+    /// A retained prepared value contract, independently usable after context drop.
     Ready(ValueContract),
     /// The selected operation exists but has no field for this direction; this is distinct from the present boolean schema `false`.
     NoValueContract,
@@ -648,7 +596,7 @@ pub enum ValueContractPreparation {
     },
 }
 /// A ready value contract that retains its required compiled state independently of
-/// document/context lifetime and cache eviction. Cloning shares immutable state;
+/// document/context lifetime. Cloning shares immutable state;
 /// dropping the final owner releases that owner, without promising lower RSS.
 #[derive(Clone)]
 pub struct ValueContract {
@@ -706,7 +654,7 @@ impl ParsedDocument {
     /// entries. Unrelated metadata may still be a draft: an established value verdict
     /// concerns only the selected schema, not normative OBI conformance.
     ///
-    /// The default cache retains four most-recent preparation entries. Match
+    /// Each preparation compiles anew; retain its ready owner for reuse. Match
     /// [`ValueContractPreparation`] after [`ValueContracts::prepare`]; only its ready
     /// branch exposes validation. The optional `openbindings-json-schema-evaluator`
     /// companion supplies `DefaultEvaluator` and runnable first-use examples.
@@ -715,29 +663,12 @@ impl ParsedDocument {
         evaluator: Arc<dyn SchemaEvaluator>,
         resources: ResourceSet,
     ) -> Result<ValueContracts, InterpretationError> {
-        self.value_contracts_with_options(evaluator, resources, ValueContractOptions::default())
-    }
-    /// Create the same explicit context as [`Self::value_contracts`] with a chosen
-    /// cache entry capacity. Zero disables implicit retention. Eviction and context
-    /// drop release cache owners; caller-retained [`ValueContract`] values stay
-    /// usable. The entry count is not a byte or process-memory limit.
-    pub fn value_contracts_with_options(
-        &self,
-        evaluator: Arc<dyn SchemaEvaluator>,
-        resources: ResourceSet,
-        options: ValueContractOptions,
-    ) -> Result<ValueContracts, InterpretationError> {
         self.interpretable()?;
         self.names()?;
         Ok(ValueContracts {
             inner: Arc::new(ContractsInner {
                 space: Arc::new(SchemaSpace::new(self.clone(), resources)),
                 evaluator,
-                prepared: Mutex::new(PreparationCache {
-                    capacity: options.cache_capacity,
-                    entries: HashMap::new(),
-                    recency: VecDeque::new(),
-                }),
             }),
         })
     }
@@ -747,8 +678,8 @@ impl ValueContracts {
     /// Match every [`ValueContractPreparation`] branch: missing/ambiguous operation,
     /// absent value contract and preparation refusal are setup states, not instance failures.
     /// Ready value contracts can be retained beyond this context and validated repeatedly.
-    /// Deterministic preparations may be reused within the bounded context cache;
-    /// concurrent first requests may prepare more than once.
+    /// Every call prepares independently, including aliases of the same operation.
+    /// Retain and clone a ready [`ValueContract`] to validate without recompiling.
     pub fn prepare(&self, operation: &str, direction: Direction) -> ValueContractPreparation {
         self.prepare_with_control(operation, direction, &WorkControl::new())
     }
@@ -803,39 +734,18 @@ impl ValueContracts {
                 }),
             };
         };
-        let cell = {
-            let mut prepared = self
-                .inner
-                .prepared
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
-            prepared.entry(entry)
+        let request = SchemaRequest {
+            space: self.inner.space.clone(),
+            entry,
         };
-        let state = if let Some(state) = cell.get() {
-            state.clone()
-        } else {
-            let request = SchemaRequest {
-                space: self.inner.space.clone(),
-                entry,
-            };
-            let state = match self.inner.evaluator.prepare(&request, control) {
-                Ok(schema) => ContractState::Ready(schema),
-                Err(detail) => ContractState::NoVerdict(detail),
-            };
-            if !matches!(&state, ContractState::NoVerdict(detail) if !detail.cacheable()) {
-                let _ = cell.set(state.clone());
-            }
-            state
-        };
+        let prepared = self.inner.evaluator.prepare(&request, control);
         // An evaluator may finish while the caller cancels; no ready owner is returned.
         if let Err(detail) = control.check() {
             return ValueContractPreparation::NoVerdict { detail };
         }
-        match state {
-            ContractState::Ready(schema) => {
-                ValueContractPreparation::Ready(ValueContract { schema })
-            }
-            ContractState::NoVerdict(detail) => ValueContractPreparation::NoVerdict { detail },
+        match prepared {
+            Ok(schema) => ValueContractPreparation::Ready(ValueContract { schema }),
+            Err(detail) => ValueContractPreparation::NoVerdict { detail },
         }
     }
 }

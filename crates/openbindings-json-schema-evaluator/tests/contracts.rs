@@ -119,7 +119,7 @@ fn deep_literal_and_opaque_data_do_not_inherit_compiler_tree_depth() {
     }
 }
 #[test]
-fn preparation_cache_is_bounded_lru_and_eviction_preserves_owned_handles() {
+fn explicit_preparation_and_retained_validation_have_caller_owned_lifetimes() {
     struct Probe {
         calls: Arc<AtomicUsize>,
         live: Arc<AtomicUsize>,
@@ -146,7 +146,7 @@ fn preparation_cache_is_bounded_lru_and_eviction_preserves_owned_handles() {
             Ok(Arc::new(Held(self.live.clone())))
         }
     }
-    let document=ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"a":{"input":true},"b":{"input":true},"c":{"input":true}}}"#).unwrap();
+    let document=ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"a":{"aliases":["alias"],"input":true},"b":{"input":true},"c":{"input":true}}}"#).unwrap();
     let calls = Arc::new(AtomicUsize::new(0));
     let live = Arc::new(AtomicUsize::new(0));
     let evaluator = Arc::new(Probe {
@@ -154,39 +154,31 @@ fn preparation_cache_is_bounded_lru_and_eviction_preserves_owned_handles() {
         live: live.clone(),
     });
     let context = document
-        .value_contracts_with_options(
-            evaluator.clone(),
-            ResourceSet::default(),
-            ValueContractOptions { cache_capacity: 2 },
-        )
+        .value_contracts(evaluator, ResourceSet::default())
         .unwrap();
     let retained = context.prepare("a", Direction::Input);
-    drop(context.prepare("b", Direction::Input));
-    drop(context.prepare("a", Direction::Input)); // a is now most recent.
-    assert_eq!(calls.load(Ordering::SeqCst), 2);
-    drop(context.prepare("c", Direction::Input)); // b is evicted and freed.
-    assert_eq!(live.load(Ordering::SeqCst), 2);
-    drop(context.prepare("b", Direction::Input)); // b is recompiled; retained a survives eviction.
-    assert_eq!(calls.load(Ordering::SeqCst), 4);
-    assert_eq!(live.load(Ordering::SeqCst), 3);
-    drop(context);
+    drop(context.prepare("a", Direction::Input));
+    drop(context.prepare("alias", Direction::Input));
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
     assert_eq!(live.load(Ordering::SeqCst), 1);
-    assert!(matches!(
-        retained.validate(&value("7")),
-        ValueOutcome::Satisfies
-    ));
+    std::thread::scope(|scope| {
+        for _ in 0..4 {
+            scope.spawn(|| drop(context.prepare("a", Direction::Input)));
+        }
+    });
+    assert_eq!(calls.load(Ordering::SeqCst), 7);
+    assert_eq!(live.load(Ordering::SeqCst), 1);
+    drop(context);
+    drop(document);
+    for _ in 0..100 {
+        assert!(matches!(
+            retained.validate(&value("7")),
+            ValueOutcome::Satisfies
+        ));
+    }
+    assert_eq!(calls.load(Ordering::SeqCst), 7);
+    assert_eq!(live.load(Ordering::SeqCst), 1);
     drop(retained);
-    assert_eq!(live.load(Ordering::SeqCst), 0);
-    let uncached = document
-        .value_contracts_with_options(
-            evaluator,
-            ResourceSet::default(),
-            ValueContractOptions { cache_capacity: 0 },
-        )
-        .unwrap();
-    drop(uncached.prepare("a", Direction::Input));
-    drop(uncached.prepare("a", Direction::Input));
-    assert_eq!(calls.load(Ordering::SeqCst), 6);
     assert_eq!(live.load(Ordering::SeqCst), 0);
 }
 #[test]
@@ -307,7 +299,7 @@ impl SchemaEvaluator for CancelOnce {
     }
 }
 #[test]
-fn cancellation_during_preparation_is_not_cached() {
+fn cancellation_during_preparation_allows_independent_retries() {
     let evaluator = Arc::new(CancelOnce {
         calls: AtomicUsize::new(0),
     });
@@ -336,7 +328,7 @@ fn cancellation_during_preparation_is_not_cached() {
             .validate(&value("2")),
         ValueOutcome::Satisfies
     ));
-    assert_eq!(evaluator.calls.load(Ordering::SeqCst), 2);
+    assert_eq!(evaluator.calls.load(Ordering::SeqCst), 3);
 }
 #[test]
 fn review_f01_f06_conservative_preparation_is_not_semantic_undefinedness() {

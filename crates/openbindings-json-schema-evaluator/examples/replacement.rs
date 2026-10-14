@@ -78,7 +78,7 @@ fn candidate(
             Err(LoadFailure::MissingResources(evidence.clone()))
         }
         _ => Err(LoadFailure::UndeclaredResources),
-    } // document/context/cache owners end; the returned owner remains usable.
+    } // document/context owners end; the returned owner remains usable.
 }
 
 fn satisfies(input: &ValueContract, value: &JsonValue) {
@@ -92,15 +92,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let healthy = WorkControl::new();
     let old_value = JsonValue::parse("9007199254740993")?;
     let new_value = JsonValue::from_serializable(&9_007_199_254_740_994_u64)?;
-    // Fixture-only cache demonstration: reusable candidate loading requires no output.
+    // Fixture-only retention demonstration: reusable candidate loading requires no output.
     {
         let document = ParsedDocument::parse(DOCUMENT)?;
         let validation = document.validate()?;
         let proof = validation.validated().ok_or("fixture must be conformant")?;
-        let context = proof.parsed().value_contracts_with_options(
+        let context = proof.parsed().value_contracts(
             Arc::new(DefaultEvaluator::new()),
             resources(r#"{"const":9007199254740993}"#)?,
-            ValueContractOptions { cache_capacity: 1 },
         )?;
         let ValueContractPreparation::Ready(retained) = context.prepare("find", Direction::Input)
         else {
@@ -109,9 +108,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         assert!(matches!(
             context.prepare("lookup", Direction::Output),
             ValueContractPreparation::Ready(_)
-        )); // preparing output evicts the input's cached owner
+        )); // each direction prepares independently
         drop(context);
-        satisfies(&retained, &old_value); // explicit owner survives eviction and context drop
+        satisfies(&retained, &old_value); // explicit owner survives context drop
     }
     // A caller can also load an input-only operation through the reusable helper.
     let input_only = candidate(

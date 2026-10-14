@@ -465,11 +465,9 @@ options are checked before cancellation. A pre-cancelled call returns
 releases its temporary before returning cancellation. Work options contain only
 an optional genuine `AbortSignal`. Exact overloads never return `input-error`.
 
-A context caches the four most recently prepared contracts by default. Set
-`cacheCapacity` to another nonnegative integer; zero disables context caching.
-Eviction releases only the context's owner: a retained contract stays valid and
-validates without recompilation. The entry count bounds implicit retention, not
-total bytes; retain only the handles the application needs.
+Every `prepare` call compiles independently. Retain the ready `valueContract`
+for repeated validation without recompilation. Disposing the context leaves that
+contract usable; dispose the contract when the application no longer needs it.
 
 `new SchemaResources([[uri, exactDocument], ...])` constructs an immutable batch.
 Input handles are borrowed. Duplicate normalized URIs are rejected, even for equal

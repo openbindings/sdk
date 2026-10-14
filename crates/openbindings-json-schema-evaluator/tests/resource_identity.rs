@@ -827,19 +827,18 @@ fn ri25_27_contexts_and_retained_owners_are_independent() {
     assert_eq!(failed_location(&first, r#""x""#).resource, None);
     let doc = document(
         json!({}),
-        json!({"op":{"input":{"$ref":V}},"evict":{"input":true}}),
+        json!({"op":{"input":{"$ref":V}},"other":{"input":true}}),
     );
     let mut retained = Vec::new();
     for kind in ["integer", "string"] {
         let ctx = doc
-            .value_contracts_with_options(
+            .value_contracts(
                 Arc::new(DefaultEvaluator::new()),
                 resources(&[(V, json!({"type":kind}))]),
-                ValueContractOptions { cache_capacity: 1 },
             )
             .unwrap();
         retained.push(ready(&ctx, "op"));
-        ready(&ctx, "evict");
+        ready(&ctx, "other");
         ready(&ctx, "op");
         drop(ctx);
     }

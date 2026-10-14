@@ -53,7 +53,7 @@ Replace `context.prepare(name, direction).validate(value)` with a match on
 Absent schema, missing/ambiguous operation and preparation refusal are setup states.
 `ValueOutcome` has exactly the three semantic evaluation branches; custom evaluator
 traits return those branches and the qualification kit reports setup separately.
-Ready owners survive document/context drop and cache eviction. Cancellation of
+Every preparation compiles anew; retain and clone ready owners for reuse after document/context drop. Cancellation of
 preparation yields no ready owner; retry uses a healthy context. Cancellation of a
 value check leaves a retained ready contract usable.
 

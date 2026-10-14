@@ -118,7 +118,7 @@ resolves names and pure support at call construction, then returns the **same
 
 ```rust
 use openbindings::{JsonValue, ParsedDocument, ResourceSet};
-use openbindings_invocation::{binding::BindingInvoker, operation::{Invoker, Request}};
+use openbindings_invocation::{binding::BindingInvoker, operation::{Attempt, Invoker}};
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::sync::Arc;
 
@@ -127,7 +127,8 @@ async fn call<P: BindingInvoker>(document: ParsedDocument, provider: P)
 {
     let invoker = Invoker::new(document, provider)
         .with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default())?;
-    let mut invocation = invoker.invoke(Request::operation("echo"));
+    let prepared = invoker.prepare("echo")?; // Keep for further attempts.
+    let mut invocation = prepared.invoke(Attempt::new());
     invocation.write(JsonValue::parse("42")?).await?;
     invocation.close();
     while let Some(result) = invocation.next().await {
@@ -141,13 +142,31 @@ async fn call<P: BindingInvoker>(document: ParsedDocument, provider: P)
 The optional evaluator package is an explicit application dependency. Without
 `.with_evaluator`, absent schemas still forward values; a declared schema yields
 `ERR_SCHEMA_UNRESOLVED` on its first actual value. Supplying an evaluator builds
-one immutable document/resource context, with core's bounded preparation cache.
-Each used direction prepares lazily once per attempt and retains that contract for
-its stream; zero values do not trigger preparation. There is no network retrieval
+one immutable document/resource context. Plain `invoke` prepares each used
+direction lazily once per attempt and retains that contract for its stream; zero
+values do not trigger preparation. Fresh attempts prepare again. There is no network retrieval
 or whole-graph readiness gate.
 
-Use `Request::operation("name-or-alias")` when exactly one supported binding
-exists, `Request::ordered("name", &["preferred", "fallback"])` for caller policy,
+For repeated attempts, call `let prepared = invoker.prepare("echo")?` and then
+`prepared.invoke(Attempt::new())`. The `operation::PreparedOperation`
+handle borrows the invoker and eagerly retains both declared value contracts.
+It performs no provider work and pins no binding or context. Each call takes an
+`Attempt` with no operation name: `Attempt::new()` requires a sole supported
+binding, `Attempt::ordered(&["preferred", "fallback"])` supplies an ordered list,
+and `Attempt::binding("exact-key")` selects one binding of the prepared operation.
+Use `.with_context(&context)` to supply an opaque object per attempt. Every
+ordered key must belong to the operation; an exact binding belonging to another
+operation returns `ERR_OPERATION_NOT_FOUND` before provider work. Attempt Debug
+output redacts binding choices and context contents. Absent directions need no
+evaluator.
+Failed preparation returns `ERR_SCHEMA_UNRESOLVED` and releases partial work;
+`prepare_with_control` returns `ERR_CANCELLED` when cancelled, leaving no handle.
+A ready contract can still return no verdict for a particular value.
+`PreparedOperation::invoke_with_control` isolates each attempt's cancellation,
+queues and validation evidence, so concurrent attempts can share one handle.
+
+For plain invocation, use `Request::operation("name-or-alias")` when exactly one
+supported binding exists, `Request::ordered("name", &["preferred", "fallback"])` for caller policy,
 or `Request::binding("exact-key")` to select directly. Every ordered key must
 belong to the operation, including entries after the first supported one.
 Unsupported automatic/ordered candidates are skipped; an unsupported explicit

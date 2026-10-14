@@ -65,8 +65,6 @@ pub struct ValidationReport {
     pub release: &'static str,
     /// Exact applied specification Git revision.
     pub revision: &'static str,
-    /// Identifier of the validation policy used for this report.
-    pub policy: &'static str,
     /// Aggregate normative conclusion derived from all rule evidence.
     pub conclusion: Conformance,
     /// One entry for every [`DOCUMENT_RULES`] identifier, including inconclusive and not-applicable rules.
@@ -794,7 +792,6 @@ impl<'a> Checks<'a> {
         ValidationReport {
             release: APPLIED_SPEC_RELEASE,
             revision: APPLIED_SPEC_REVISION,
-            policy: "openbindings-rust/0.2.0-alpha.1",
             conclusion,
             evidence: DOCUMENT_RULES.into_iter().zip(self.evidence).collect(),
             findings: self.findings,
