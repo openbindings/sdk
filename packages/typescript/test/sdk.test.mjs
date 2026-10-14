@@ -397,3 +397,16 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   resources.dispose();
   document.dispose();
 });
+
+test("Wasm reports retain specification evidence without application policy", () => {
+  const document = parsed('{"openbindings":"0.2.0"}');
+  assert.deepEqual(Object.keys(document.validate().report).sort(), [
+    "conclusion",
+    "evidence",
+    "findings",
+    "findingsTruncated",
+    "release",
+    "revision",
+  ]);
+  document.dispose();
+});

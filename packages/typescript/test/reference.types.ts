@@ -24,7 +24,6 @@ export async function referenceExample(wasmBytes: Uint8Array, source: string) {
   using validated = proof.document;
   using publication = new DiscoveryPublication(validated);
   using context = validated.valueContracts({
-    cacheCapacity: 0,
     limits: { maxProblems: 4 },
   });
   const setup: ValueContractPreparation = context.prepare("run", "input");

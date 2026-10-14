@@ -67,7 +67,7 @@ ordinary Rust value is a separate fallible step from validating it. Use
 or retained views directly instead of admitting them again through Serde.
 
 
-A prepared contract retains its resources after the document/context is dropped. Preparation reuses deterministic results within a context. The context retains four most-recent prepared entries by default; `ValueContractOptions.cache_capacity` controls this count, including zero to disable caching. Caller-retained contracts survive eviction; this is an entry cap, not a byte cap. Concurrent first calls may perform duplicate preparation before one result is retained. Cancellation and transient evaluator failures are not cached. Different contexts never share resource identities or compiled contracts.
+A prepared contract retains its resources after the document/context is dropped. Every `prepare` call compiles independently, including concurrent calls and aliases of the same operation. Retain and clone the returned `ValueContract` for repeated validation without recompilation; dropping its final owner releases compiled state. Failed or cancelled preparation retains nothing in the context, and a fresh call can retry. Different contexts never share resource identities or compiled contracts.
 
 `NoVerdict` distinguishes unsupported capabilities, conservative preparation,
 missing resources, limits and cancellation. After complete-resource preparation

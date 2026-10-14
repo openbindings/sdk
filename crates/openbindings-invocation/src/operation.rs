@@ -13,7 +13,7 @@ use crate::{
 use openbindings::{
     BindingView, Direction, InterpretationError, JsonKind, JsonValue, NoVerdict, NoVerdictReason,
     OperationSelection, OperationView, ParsedDocument, ResourceSet, SchemaEvaluator, Source,
-    ValueContractPreparation, ValueContracts, ValueOutcome, WorkControl,
+    ValueContract, ValueContractPreparation, ValueContracts, ValueOutcome, WorkControl,
 };
 use std::{
     collections::HashMap,
@@ -82,8 +82,67 @@ impl fmt::Debug for Request<'_> {
     }
 }
 
-/// Reusable document/provider pair. Cloned document storage and prepared schema
-/// caches are retained, without a registry, implicit evaluator, network access,
+#[derive(Clone, Copy)]
+enum BindingChoice<'a> {
+    Sole,
+    Ordered(&'a [&'a str]),
+    Exact(&'a str),
+}
+/// One prepared operation attempt's binding choice and optional opaque context.
+/// The operation is fixed by the [`PreparedOperation`] handle.
+#[derive(Clone, Copy)]
+pub struct Attempt<'a> {
+    selection: BindingChoice<'a>,
+    context: Option<&'a JsonValue>,
+}
+impl<'a> Attempt<'a> {
+    /// Require a sole supported binding for the prepared operation.
+    pub fn new() -> Self {
+        Self {
+            selection: BindingChoice::Sole,
+            context: None,
+        }
+    }
+    /// Use the first supported binding in this caller-ordered list. Every key
+    /// must belong to the prepared operation, including keys after the first
+    /// supported entry. Empty lists or empty keys are refused as malformed attempts.
+    pub fn ordered(selection: &'a [&'a str]) -> Self {
+        Self {
+            selection: BindingChoice::Ordered(selection),
+            context: None,
+        }
+    }
+    /// Invoke this exact binding of the prepared operation. A binding belonging
+    /// to another operation yields `ERR_OPERATION_NOT_FOUND` before provider work;
+    /// missing bindings or unsupported kinds yield `ERR_BINDING_NOT_FOUND`.
+    pub fn binding(key: &'a str) -> Self {
+        Self {
+            selection: BindingChoice::Exact(key),
+            context: None,
+        }
+    }
+    /// Supply an opaque object unchanged for this attempt; never resolve credentials.
+    pub fn with_context(mut self, context: &'a JsonValue) -> Self {
+        self.context = Some(context);
+        self
+    }
+}
+impl Default for Attempt<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl fmt::Debug for Attempt<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Attempt")
+            .field("selection", &"<redacted>")
+            .field("context_present", &self.context.is_some())
+            .finish()
+    }
+}
+
+/// Reusable document/provider pair. Cloned document storage is retained,
+/// without a preparation cache, registry, implicit evaluator, network access,
 /// retry policy, or whole-document conformance gate.
 ///
 /// The caller must supply a provider whose pure exact-kind support represents
@@ -109,8 +168,8 @@ impl<P: BindingInvoker> Invoker<P> {
             bindings: OnceLock::new(),
         }
     }
-    /// Set the explicit evaluator and immutable supplied resources, using core's
-    /// bounded preparation cache. No schema is prepared and no URI is fetched.
+    /// Set the explicit evaluator and immutable supplied resources.
+    /// No schema is prepared and no URI is fetched.
     /// Malformed operation namespaces produce a core interpretation error here.
     pub fn with_evaluator(
         mut self,
@@ -124,6 +183,62 @@ impl<P: BindingInvoker> Invoker<P> {
     pub fn with_limits(mut self, limits: InvocationLimits) -> Result<Self, LimitError> {
         self.binding.limits = limits.validate()?;
         Ok(self)
+    }
+    /// Prepare both declared value contracts for a primary operation name or alias.
+    /// Retain the returned handle to reuse compiled state across attempts. This
+    /// synchronously prepares schemas, without selecting a binding or calling the
+    /// provider. Absent schemas need no evaluator; a declared schema without one
+    /// returns `ERR_SCHEMA_UNRESOLVED`. Missing/ambiguous names return
+    /// `ERR_OPERATION_NOT_FOUND`; other interpretation failures return `ERR_REFUSED`.
+    /// Preparation refusal returns `ERR_SCHEMA_UNRESOLVED` and retains no handle.
+    /// Ready means prepared, not that every value will receive a verdict.
+    pub fn prepare(&self, operation: &str) -> Result<PreparedOperation<'_, P>, InvocationError> {
+        self.prepare_with_control(operation, &WorkControl::new())
+    }
+    /// Prepare with cooperative caller cancellation. Cancellation returns
+    /// `ERR_CANCELLED`; any contracts prepared so far are released on error.
+    /// A failed call stores nothing in this invoker; a fresh call prepares anew.
+    pub fn prepare_with_control(
+        &self,
+        operation: &str,
+        control: &WorkControl,
+    ) -> Result<PreparedOperation<'_, P>, InvocationError> {
+        if control.is_cancelled() {
+            return Err(InvocationError::cancelled());
+        }
+        let operation = self.operation(operation)?;
+        let prepare = |direction: Direction| {
+            if control.is_cancelled() {
+                return Err(InvocationError::cancelled());
+            }
+            if operation.value().get(direction.as_str()).is_none() {
+                return Ok(None);
+            }
+            let contracts = self
+                .contracts
+                .as_ref()
+                .ok_or_else(|| error("ERR_SCHEMA_UNRESOLVED"))?;
+            match contracts.prepare_with_control(operation.key(), direction, control) {
+                ValueContractPreparation::Ready(contract) => Ok(Some(contract)),
+                ValueContractPreparation::NoVerdict { detail }
+                    if detail.reason == NoVerdictReason::Cancelled =>
+                {
+                    Err(InvocationError::cancelled())
+                }
+                _ => Err(error("ERR_SCHEMA_UNRESOLVED")),
+            }
+        };
+        let input = prepare(Direction::Input)?;
+        let output = prepare(Direction::Output)?;
+        if control.is_cancelled() {
+            return Err(InvocationError::cancelled());
+        }
+        Ok(PreparedOperation {
+            invoker: self,
+            operation: operation.key().into(),
+            input,
+            output,
+        })
     }
     /// Resolve names and pure support synchronously, then construct a lazy provider
     /// invocation using the shared binding invocation lifecycle. No schema is
@@ -141,6 +256,14 @@ impl<P: BindingInvoker> Invoker<P> {
         request: Request<'a>,
         control: &WorkControl,
     ) -> Invocation<impl Future<Output = Result<(), InvocationError>> + 'a + use<'a, P>> {
+        self.invoke_prepared_with_control(request, control, None)
+    }
+    fn invoke_prepared_with_control<'a>(
+        &'a self,
+        request: Request<'a>,
+        control: &WorkControl,
+        prepared: Option<&'a PreparedOperation<'_, P>>,
+    ) -> Invocation<impl Future<Output = Result<(), InvocationError>> + 'a + use<'a, P>> {
         let shared = Shared::new(self.binding.limits);
         let state = shared.clone();
         let local = shared.control();
@@ -150,7 +273,7 @@ impl<P: BindingInvoker> Invoker<P> {
         let selected = if external.is_cancelled() {
             Err(InvocationError::cancelled())
         } else {
-            self.resolve(request)
+            self.resolve(request, prepared.map(|p| p.operation.as_str()))
         };
         let io_external = external.clone();
         let provider_control = local.clone();
@@ -159,8 +282,18 @@ impl<P: BindingInvoker> Invoker<P> {
                 let selected = selected?;
                 let io = ProviderIo::with_gates(
                     state.clone(),
-                    self.gate(&selected.operation, Direction::Input, &io_external),
-                    self.gate(&selected.operation, Direction::Output, &io_external),
+                    self.gate(
+                        &selected.operation,
+                        Direction::Input,
+                        &io_external,
+                        prepared.and_then(|p| p.input.as_ref()),
+                    ),
+                    self.gate(
+                        &selected.operation,
+                        Direction::Output,
+                        &io_external,
+                        prepared.and_then(|p| p.output.as_ref()),
+                    ),
                 );
                 let binding_request = BindingRequest {
                     source: selected.source,
@@ -208,7 +341,7 @@ impl<P: BindingInvoker> Invoker<P> {
         if control.is_cancelled() {
             return Err(InvocationError::cancelled());
         }
-        let selected = self.resolve(request)?;
+        let selected = self.resolve(request, None)?;
         self.binding
             .preflight_with_control(
                 BindingRequest {
@@ -244,7 +377,7 @@ impl<P: BindingInvoker> Invoker<P> {
         if control.is_cancelled() {
             return Err(InvocationError::cancelled());
         }
-        let selected = self.resolve(request)?;
+        let selected = self.resolve(request, None)?;
         self.binding
             .preflight_with_provider_and_control(
                 BindingRequest {
@@ -261,12 +394,13 @@ impl<P: BindingInvoker> Invoker<P> {
         operation: &OperationView,
         direction: Direction,
         external: &WorkControl,
+        prepared: Option<&ValueContract>,
     ) -> Option<Gate> {
         operation.value().get(direction.as_str()).map(|_| Gate {
             contracts: self.contracts.clone(),
             operation: operation.key().into(),
             direction,
-            prepared: None,
+            prepared: prepared.cloned().map(ValueContractPreparation::Ready),
             external: external.clone(),
         })
     }
@@ -300,7 +434,11 @@ impl<P: BindingInvoker> Invoker<P> {
         let kind = source.kind().map_err(|_| InvocationError::refused())?;
         Ok(!kind.is_empty() && self.binding.provider.supports_kind(kind))
     }
-    fn resolve(&self, request: Request<'_>) -> Result<Resolved<'_>, InvocationError> {
+    fn resolve(
+        &self,
+        request: Request<'_>,
+        prepared_operation: Option<&str>,
+    ) -> Result<Resolved<'_>, InvocationError> {
         if request
             .context
             .is_some_and(|v| v.kind() != JsonKind::Object)
@@ -313,6 +451,9 @@ impl<P: BindingInvoker> Invoker<P> {
                 let name = binding
                     .operation()
                     .map_err(|_| InvocationError::refused())?;
+                if prepared_operation.is_some_and(|operation| operation != name) {
+                    return Err(error("ERR_OPERATION_NOT_FOUND"));
+                }
                 let operation = self.operation(name)?;
                 if operation.key() != name {
                     return Err(error("ERR_OPERATION_NOT_FOUND"));
@@ -415,6 +556,56 @@ impl<P: BindingInvoker> Invoker<P> {
             .map_err(|_| InvocationError::refused())
     }
 }
+/// Caller-owned prepared input and output contracts for one operation.
+///
+/// Obtain this handle through [`Invoker::prepare`] or [`Invoker::prepare_with_control`].
+/// It borrows its invoker, keeping the document, provider, evaluator and resources
+/// fixed for its lifetime. Each attempt supplies its own binding selection and
+/// context, with independent cancellation, queues and validation evidence. Sharing
+/// a handle does not share attempt state. Dropping it releases its contract owners.
+pub struct PreparedOperation<'a, P> {
+    invoker: &'a Invoker<P>,
+    operation: String,
+    input: Option<ValueContract>,
+    output: Option<ValueContract>,
+}
+impl<P: BindingInvoker> PreparedOperation<'_, P> {
+    /// Invoke using retained contracts and this attempt's selection and context.
+    /// The operation is fixed by this handle. An exact binding belonging to
+    /// another operation returns `ERR_OPERATION_NOT_FOUND`. Binding selection
+    /// follows [`Invoker::invoke`], and provider work remains lazy until polling.
+    pub fn invoke<'a>(
+        &'a self,
+        attempt: Attempt<'a>,
+    ) -> Invocation<impl Future<Output = Result<(), InvocationError>> + 'a + use<'a, P>> {
+        self.invoke_with_control(attempt, &WorkControl::new())
+    }
+    /// Invoke with caller cancellation isolated from this handle and all sibling
+    /// attempts. Cancellation does not discard the retained prepared contracts.
+    pub fn invoke_with_control<'a>(
+        &'a self,
+        attempt: Attempt<'a>,
+        control: &WorkControl,
+    ) -> Invocation<impl Future<Output = Result<(), InvocationError>> + 'a + use<'a, P>> {
+        let target = match attempt.selection {
+            BindingChoice::Sole => Target::Operation {
+                name: &self.operation,
+                selection: None,
+            },
+            BindingChoice::Ordered(selection) => Target::Operation {
+                name: &self.operation,
+                selection: Some(selection),
+            },
+            BindingChoice::Exact(key) => Target::Binding(key),
+        };
+        let request = Request {
+            target,
+            context: attempt.context,
+        };
+        self.invoker
+            .invoke_prepared_with_control(request, control, Some(self))
+    }
+}
 type CarrierCache<T> = OnceLock<HashMap<String, OnceLock<Result<T, crate::BoundaryError>>>>;
 struct Resolved<'a> {
     operation: OperationView,
@@ -425,7 +616,8 @@ fn error(code: &str) -> InvocationError {
     InvocationError::new(code, None).expect("fixed nonempty code")
 }
 
-/// Where operation validation stopped. Preparation is lazy, on the first value.
+/// Where operation validation stopped. Plain invocation prepares lazily on the
+/// first value; a prepared operation has already completed preparation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValidationStage {
     /// A declared schema could not be prepared with the supplied evaluator/resources.

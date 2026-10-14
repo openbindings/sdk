@@ -54,9 +54,9 @@ This helper is example code, not another SDK export or a general JSON Patch API.
 Operation validation uses explicit `ResourceSet`, `SchemaEvaluator` and immutable
 `ValueContracts`. Select the separate `openbindings-json-schema-evaluator` companion
 or implement the trait. Prepared contracts retain required owners after document
-or context drop. The default context cache has four entries, configurable through
-`ValueContractOptions`; retained contracts survive eviction. Cancellation and
-transient failures are retryable. Handle every `ValueContractPreparation` branch: ready, no-value-contract, operation-missing,
+or context drop. Every `prepare` call compiles independently; retain and clone a
+ready `ValueContract` to validate repeatedly without recompilation. Cancellation
+and transient failures are retryable. Handle every `ValueContractPreparation` branch: ready, no-value-contract, operation-missing,
 operation-ambiguous and no-verdict. Only ready contracts expose value validation;
 `ValueOutcome` is satisfies, fails or no-verdict. Preparation refusal is not
 proof of semantic undefinedness. `openbindings-schema-evaluator-test-support`

@@ -17,6 +17,10 @@ boundaries from the preserved harness source.
 | retained | Validate an already parsed value against a retained contract | Same retained-value strategy | Reused validation; excludes preparation and value parse. |
 | empty/full | Parse value then validate against retained contract | ValidateJSON parses value then validates retained contract | Value conversion is inside both timers. |
 
+The historical `reuse` row describes the former core preparation cache. Current
+`ValueContracts::prepare` compiles on every call. Reuse now comes from retaining a
+ready `ValueContract`, or an invocation `operation::PreparedOperation` handle.
+
 Rust's context includes resource indexing/projection setup. Native `time -l` RSS
 includes process setup and warmup; it is not allocated-byte traffic. Browser
 initialization was in fresh contexts, not necessarily fresh browser processes;

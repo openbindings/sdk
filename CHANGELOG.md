@@ -2,6 +2,21 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- Caller-owned preparation: remove the core preparation cache, Rust
+  `ValueContractOptions` / `value_contracts_with_options`, the Wasm cache argument
+  and TypeScript `cacheCapacity`. Every explicit preparation compiles anew;
+  retain a ready `ValueContract` for reuse. Add `operation::PreparedOperation`
+  through `Invoker::prepare` / `prepare_with_control`, with `invoke` /
+  `invoke_with_control` on the handle taking `operation::Attempt`: `new()`,
+  `ordered(&[..])`, `binding(key)` and `.with_context(ctx)` carry binding choice
+  and opaque context without repeating the operation name. Foreign exact bindings
+  return `ERR_OPERATION_NOT_FOUND` before provider work. Both declared contracts
+  are prepared once; selection, context and cancellation remain per attempt.
+  Failed or cancelled preparation leaves no handle. Plain invocation keeps
+  `Request` and prepares lazily per attempt. Remove `ValidationReport.policy`;
+  retain specification identity,
+  conclusion, evidence, findings and truncation.
+
 - Vocabulary pass (V), a breaking working-draft migration without compatibility aliases:
 
   | Previous surface | Replacement |

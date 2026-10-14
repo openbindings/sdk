@@ -105,8 +105,6 @@ export interface ValidationReport {
   release: string;
   /** Exact applied specification Git revision. */
   revision: string;
-  /** Validation-policy identifier. */
-  policy: string;
   /** Aggregate normative conclusion derived from independent rule evidence. */
   conclusion: "conformant" | "non-conformant" | "undetermined";
   /** Entry for every OBI rule, including inconclusive and not-applicable. */
@@ -361,14 +359,12 @@ export interface EvaluatorLimits {
   /** Maximum regex parenthesis nesting; default 256. */
   patternDepth: number;
 }
-/** Immutable context inputs and bounded preparation reuse. The built-in JSON Schema 2020-12 evaluator performs no resource I/O, treats format as annotation, declines unqualified Unicode property-escape matching, and may conservatively refuse potential non-progressing cycles. */
+/** Immutable context inputs for caller-owned preparation. The built-in JSON Schema 2020-12 evaluator performs no resource I/O, treats format as annotation, declines unqualified Unicode property-escape matching, and may conservatively refuse potential non-progressing cycles. */
 export interface ValueContractOptions {
   /** Explicit resources retained by the context; omitted means an empty caller set. The passed owner remains caller-owned. */
   resources?: SchemaResources;
   /** Overrides for built-in evaluator budgets; unspecified entries use evaluatorLimits(). */
   limits?: Partial<EvaluatorLimits>;
-  /** Most-recently-used preparations retained by the context; default 4, zero disables caching. */
-  cacheCapacity?: number;
   /** Opt into source-controlled schema facts (default false). Ready validators then retain original document/resource snapshots until their last owner is released. Details obey diagnosticBytes, may expose secrets, and never include rejected instance values. Invalid non-boolean values throw SdkError. */
   includeSchemaDetails?: boolean;
 }
@@ -1078,16 +1074,6 @@ export class ParsedDocument extends Managed {
         "invalid-schema-details",
         "includeSchemaDetails must be a boolean.",
       );
-    if (
-      options.cacheCapacity !== undefined &&
-      (!Number.isSafeInteger(options.cacheCapacity) ||
-        options.cacheCapacity < 0 ||
-        options.cacheCapacity > 0xffffffff)
-    )
-      throw new SdkError(
-        "invalid-cache-capacity",
-        "cacheCapacity must be a nonnegative 32-bit integer.",
-      );
     const resources = options.resources,
       limits = encodedLimits(options.limits),
       empty = resources ? undefined : new SchemaResources();
@@ -1097,7 +1083,6 @@ export class ParsedDocument extends Managed {
           handle<wasm.WasmDocument>(this).valueContracts(
             resourceRaw(resources ?? empty!),
             limits,
-            options.cacheCapacity,
             options.includeSchemaDetails ?? false,
           ),
         ),
@@ -1367,12 +1352,12 @@ export class SchemaResources extends Managed {
     return SchemaResources.fromRaw(handle<wasm.WasmResources>(this).retain());
   }
 }
-/** Disposable immutable document/resource/evaluator context with entry-bounded preparation reuse. Replacing an active context does not mutate existing prepared owners. Dispose the context to release its cache owners; independently retained ValueContract handles remain valid. */
+/** Disposable immutable document/resource/evaluator context. Every prepare call compiles anew; retain a ready ValueContract for repeated validation. Replacing or disposing the context does not invalidate retained contracts. */
 export class ValueContracts extends Managed {
   /** @internal */ constructor(raw: wasm.WasmValueContracts) {
     super(raw);
   }
-  /** Select the named operation/alias and requested direction, then return the complete ValueContractPreparation partition. Ready transfers a new disposable value contract independent of this context/cache and does not promise every value is decidable. The default evaluator can prepare qualified missing-resource value contracts, including a bare missing $ref and dual-polarity oneOf bounds. Validation establishes a verdict when independent of missing content, or returns resource-unavailable when dependent. Known errors and unsupported partial contexts still refuse preparation. Supply resources in a new context to recover; existing prepared owners retain their original snapshot. Deterministic preparations can be reused; cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
+  /** Select the named operation/alias and requested direction, then return the complete ValueContractPreparation partition. Ready transfers a new disposable value contract independent of this context and does not promise every value is decidable. The default evaluator can prepare qualified missing-resource value contracts, including a bare missing $ref and dual-polarity oneOf bounds. Validation establishes a verdict when independent of missing content, or returns resource-unavailable when dependent. Known errors and unsupported partial contexts still refuse preparation. Supply resources in a new context to recover; existing prepared owners retain their original snapshot. Each call prepares independently; retain the ready owner to reuse compiled state. Cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
   prepare(
     operation: string,
     direction: Direction,
@@ -1481,7 +1466,7 @@ export type ResourceCompleteness =
         readonly location: Readonly<SchemaLocation> | null;
       };
     };
-/** Disposable retained selected-schema validator, independent of document/context lifetime and cache eviction. Repeated validation borrows exact input; ordinary inputs are admitted and temporary owners released within the call. No verdict here proves whole-document conformance. */
+/** Disposable retained selected-schema validator, independent of document/context lifetime. Repeated validation borrows exact input; ordinary inputs are admitted and temporary owners released within the call. No verdict here proves whole-document conformance. */
 export class ValueContract extends Managed {
   #resourceCompleteness?: ResourceCompleteness;
   /** @internal */ constructor(raw: wasm.WasmPrepared) {

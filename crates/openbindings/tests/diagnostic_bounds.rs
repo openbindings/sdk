@@ -170,3 +170,26 @@ fn identical_invalid_schemas_at_distinct_locations_are_both_reported() {
     assert_eq!(unique.len(), schema.len());
     assert!(!report.findings_truncated);
 }
+
+#[test]
+fn report_serialization_keeps_specification_evidence_without_application_policy() {
+    let validation = openbindings::validate_document(r#"{"openbindings":"0.2.0"}"#).unwrap();
+    let encoded = serde_json::to_value(validation.report()).unwrap();
+    let keys = encoded
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(
+        keys,
+        std::collections::BTreeSet::from([
+            "release",
+            "revision",
+            "conclusion",
+            "evidence",
+            "findings",
+            "findings_truncated",
+        ])
+    );
+}

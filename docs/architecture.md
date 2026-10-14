@@ -12,9 +12,9 @@ objects and preserve additional exact fields. Building and establishing conforma
 are separate steps. Source views keep their owner's storage, not borrowed external
 buffers; standalone document views rebase byte locations correctly.
 
-`ValueContracts` owns a document, an explicit immutable `ResourceSet`, evaluator and
-bounded preparation cache. A `ValueContract` owns required compiled state and
-survives eviction or source-handle disposal. Cancellation and transient failures do
+`ValueContracts` owns a document, an explicit immutable `ResourceSet` and evaluator.
+Each preparation compiles independently. A caller-retained `ValueContract` owns
+required compiled state and survives context or source-handle disposal. Cancellation and transient failures do
 not poison healthy subsequent preparation. Resources with the same URI in distinct
 contexts never share an implicit registry. The schema-space compiler builds a
 private graph/projection preserving resource boundaries and dynamic scope. Only

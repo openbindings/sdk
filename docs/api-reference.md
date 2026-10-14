@@ -69,9 +69,8 @@ and its associated future is Send; local futures and Rc providers remain support
   that are still reachable. Individual leaf finalizers provide best-effort cleanup.
   Byte/text copies are ordinary host values. Dispose owners deterministically; release
   does not promise lower process RSS or reduced Wasm capacity.
-- Preparation cache capacity counts entries, not bytes. Its default is four; zero
-  disables implicit retention. Caller-retained contracts survive context drop and
-  eviction. Resource sets are immutable, explicit and scoped to each context; URI
+- Every preparation compiles independently. Retain a ready `ValueContract` for
+  repeated validation without recompilation; it survives context drop. Resource sets are immutable, explicit and scoped to each context; URI
   identity never authorizes I/O. Core and default schema evaluation do no acquisition.
   For a missing resource, Rust `ParsedDocument::references()` and TypeScript
   `ParsedDocument.references()` expose explicit reference spellings and keyword
@@ -319,3 +318,29 @@ Exact bounds and enum choices remain JSON token strings. Existing Rust evaluator
 implementations constructing `ValueProblem` must add `details: None` to preserve
 their previous output. The enum is non-exhaustive; match future variants safely.
 See the [evaluator resource contract](../crates/openbindings-json-schema-evaluator/README.md).
+
+## Caller-owned operation preparation
+
+`operation::Invoker::prepare(name)` and `prepare_with_control(name, &control)`
+return `Result<PreparedOperation<'_, P>, InvocationError>`. The handle borrows the
+invoker, eagerly prepares both declared directions and owns their compiled state.
+Absent directions need no evaluator. Failed or cancelled preparation releases all
+partial work and returns no handle. Preparation does not select bindings or call
+providers; ready means prepared, not that every value is decidable.
+
+`PreparedOperation::invoke(attempt)` and `invoke_with_control(attempt, &control)`
+take `operation::Attempt`, which carries only what varies per call: binding choice
+and optional opaque context. `Attempt::new()` (also `Default`) requires a sole
+supported binding; `Attempt::ordered(&[..])` chooses the first supported binding
+in the supplied list; `Attempt::binding(key)` selects one exact binding. Every
+ordered key must belong to the prepared operation, including keys after the first
+supported entry. An exact binding belonging to another operation returns
+`ERR_OPERATION_NOT_FOUND` before provider work. `.with_context(&context)` forwards
+an opaque object; Debug redacts binding choices and context contents. Binding
+support and selection are checked anew, and cancellation, queues and validation
+evidence are independent. Plain `Invoker::invoke` keeps `Request` and still
+prepares lazily once per used direction per attempt.
+
+`ValidationReport` retains release, revision, conclusion, evidence, findings and
+`findingsTruncated`; it has no application policy identifier. Applications attach
+policy provenance to their own records.
