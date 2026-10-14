@@ -15,6 +15,7 @@
   | TS `ContractOptions`, `contracts()`, ready `contract` | `ValueContractOptions`, `valueContracts()`, `valueContract` |
   | Wasm `WasmContracts`, `contracts`, `take_contract` / `takeContract` | `WasmValueContracts`, `value_contracts` / `valueContracts`, `take_value_contract` / `takeValueContract` |
   | `Side`, directional `side` parameters/accessor | `Direction`, `direction` |
+  | TypeScript error code `invalid-side` | `invalid-direction` |
   | `Satisfied` / `satisfied`, TS evidence `assessed` | `Met` / `met`, `report` (proof `validated` stays) |
   | OBI-06/08 `missing-target`; OBI-07 `missing-target` | `unknown-operation`; `unknown-source` |
   | `operation-contract-invariant` | `value-contract-invariant` |

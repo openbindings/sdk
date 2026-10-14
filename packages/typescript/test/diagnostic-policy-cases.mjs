@@ -139,10 +139,10 @@ export function diagnosticPolicyCases(sdk) {
       contract.validate(NaN).outcome === "input-error",
       "ordinary input errors remain admission outcomes",
     );
-    const error = thrown(() => ctx.prepare("op", "invalid-side"));
+    const error = thrown(() => ctx.prepare("op", "sideways"));
     check(
       error instanceof sdk.SdkError &&
-        error.code === "invalid-side" &&
+        error.code === "invalid-direction" &&
         error.interpretationCode === undefined,
       "non-interpretation errors retain broad code only",
     );

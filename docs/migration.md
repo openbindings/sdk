@@ -107,7 +107,7 @@ complete before/after examples and nested exact-value ownership rules.
 
 Optional default-evaluator schema facts use
 `DefaultEvaluator::new().with_schema_details(true)` (TS
-`contracts({ includeSchemaDetails: true })`). They retain original source snapshots
+`valueContracts({ includeSchemaDetails: true })`). They retain original source snapshots
 and share the diagnostic string-byte budget. `ValueProblemDetails::Truncated`
 sets result completeness false; absent details mean disabled or unavailable.
 Exact bounds and enum choices remain JSON token strings. Existing Rust evaluator

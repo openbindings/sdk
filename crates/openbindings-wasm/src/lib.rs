@@ -34,7 +34,10 @@ fn direction(direction: &str) -> Result<Direction, JsValue> {
     match direction {
         "input" => Ok(Direction::Input),
         "output" => Ok(Direction::Output),
-        _ => Err(error("invalid-side", "direction must be input or output")),
+        _ => Err(error(
+            "invalid-direction",
+            "direction must be input or output",
+        )),
     }
 }
 fn control(cancelled: bool) -> WorkControl {
