@@ -2,7 +2,7 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
-- S8a: default value failures now use `Diagnostics::Coarse`: a fixed value-free
+- Default value failures now use `Diagnostics::Coarse`: a fixed value-free
   `message`, no problems, and incomplete diagnostics. Migrate
   `with_schema_details(true)` to `with_diagnostics(Diagnostics::Upstream)` and
   `includeSchemaDetails: true` to `diagnostics: "upstream"`; false/omission becomes
@@ -10,13 +10,15 @@
   allocation and stack use (including possible stack overflow on deep values).
   Remove `max_problems`/`maxProblems` and `diagnostic_bytes`/`diagnosticBytes`.
   Rust `ValueOutcome::Fails` literals must now include `message`.
-- OBI-02/OBI-10 diagnostics use one first error per document/localized schema-node
-  check. Keyword messages, original member locations, finding caps and rule
-  evidence remain independent. The diagnostic memory probe detects amplification
-  in the current pinned document and meta schemas; see the
-  [S8a verification receipt](tools/qualification/inputs/s8a-verification.json).
+- OBI-02/OBI-10 use library validity only and the fixed message
+  `value violates the fixed normative schema`. Document findings retain original
+  source locations, lose keyword wording, and may report several failing positions.
+  OBI-02 descends through member/name and array-element constraints and local
+  pointer references; container failures stay at the container. OBI-10 stays at
+  each checked schema node. Location work and findings caps never change evidence.
+  See the [diagnostics verification receipt](tools/qualification/inputs/diagnostics-verification.json).
 - Evaluator kit/corpus diagnostics migrate by case ID; verdict and refusal
-  partitions are unchanged. See `tools/qualification/inputs/s8a-diagnostics-ledger.json`.
+  partitions are unchanged. See `tools/qualification/inputs/diagnostics-migration-ledger.json`.
 
 - S6d/e review fixes: make inspection string presentation injective, translate
   pointer references consistently, and select a collision-free synthetic root.

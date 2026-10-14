@@ -1,9 +1,283 @@
 {
-  "slice": "S8a",
+  "subject": "diagnostics modes and document locations",
   "policy": "Verdicts, refusal stages/reasons/codes, and rule evidence unchanged; only diagnostics differ.",
   "counts": {
     "kit": 1564,
     "corpus": 435
+  },
+  "document_locations": {
+    "correction": "The probe changed 19 case locations: 5 enclosing arrays and 14 localized OBI-10 schema nodes, not 19 arrays.",
+    "cases": [
+      {
+        "id": "document/OBI-02.json#/tests/22",
+        "kind": "array-element",
+        "rule": "OBI-02",
+        "first_error_pointers": [
+          "/dependencies/delivery/kinds/0"
+        ],
+        "probe_pointers": [
+          "/dependencies/delivery/kinds"
+        ],
+        "expected_pointers": [
+          "/dependencies/delivery/kinds/0"
+        ]
+      },
+      {
+        "id": "document/OBI-02.json#/tests/23",
+        "kind": "array-element",
+        "rule": "OBI-02",
+        "first_error_pointers": [
+          "/dependencies/delivery/kinds/0"
+        ],
+        "probe_pointers": [
+          "/dependencies/delivery/kinds"
+        ],
+        "expected_pointers": [
+          "/dependencies/delivery/kinds/0"
+        ]
+      },
+      {
+        "id": "document/OBI-02.json#/tests/49",
+        "kind": "array-element",
+        "rule": "OBI-02",
+        "first_error_pointers": [
+          "/operations/createTask/tags/1"
+        ],
+        "probe_pointers": [
+          "/operations/createTask/tags"
+        ],
+        "expected_pointers": [
+          "/operations/createTask/tags/1"
+        ]
+      },
+      {
+        "id": "document/OBI-04.json#/tests/23",
+        "kind": "array-element",
+        "rule": "OBI-02",
+        "first_error_pointers": [
+          "/operations/createTask/aliases/0"
+        ],
+        "probe_pointers": [
+          "/operations/createTask/aliases"
+        ],
+        "expected_pointers": [
+          "/operations/createTask/aliases/0"
+        ]
+      },
+      {
+        "id": "document/OBI-04.json#/tests/25",
+        "kind": "array-element",
+        "rule": "OBI-02",
+        "first_error_pointers": [
+          "/operations/createTask/aliases/0"
+        ],
+        "probe_pointers": [
+          "/operations/createTask/aliases"
+        ],
+        "expected_pointers": [
+          "/operations/createTask/aliases/0"
+        ]
+      },
+      {
+        "id": "document/OBI-10.json#/tests/9",
+        "kind": "localized-schema-node",
+        "rule": "OBI-10",
+        "first_error_pointers": [
+          "/operations/createTask/input/type"
+        ],
+        "probe_pointers": [
+          "/operations/createTask/input"
+        ],
+        "expected_pointers": [
+          "/operations/createTask/input"
+        ]
+      },
+      {
+        "id": "document/OBI-10.json#/tests/10",
+        "kind": "localized-schema-node",
+        "rule": "OBI-10",
+        "first_error_pointers": [
+          "/operations/createTask/input/type"
+        ],
+        "probe_pointers": [
+          "/operations/createTask/input"
+        ],
+        "expected_pointers": [
+          "/operations/createTask/input"
+        ]
+      },
+      {
+        "id": "document/OBI-10.json#/tests/13",
+        "kind": "localized-schema-node",
+        "rule": "OBI-10",
+        "first_error_pointers": [
+          "/schemas/Task/properties/title/minLength"
+        ],
+        "probe_pointers": [
+          "/schemas/Task/properties/title"
+        ],
+        "expected_pointers": [
+          "/schemas/Task/properties/title"
+        ]
+      },
+      {
+        "id": "document/OBI-10.json#/tests/14",
+        "kind": "localized-schema-node",
+        "rule": "OBI-10",
+        "first_error_pointers": [
+          "/operations/createTasks/input/items/required"
+        ],
+        "probe_pointers": [
+          "/operations/createTasks/input/items"
+        ],
+        "expected_pointers": [
+          "/operations/createTasks/input/items"
+        ]
+      },
+      {
+        "id": "document/OBI-10.json#/tests/15",
+        "kind": "localized-schema-node",
+        "rule": "OBI-10",
+        "first_error_pointers": [
+          "/operations/getTask/output/oneOf"
+        ],
+        "probe_pointers": [
+          "/operations/getTask/output"
+        ],
+        "expected_pointers": [
+          "/operations/getTask/output"
+        ]
+      },
+      {
+        "id": "document/OBI-10.json#/tests/16",
+        "kind": "localized-schema-node",
+        "rule": "OBI-10",
+        "first_error_pointers": [
+          "/operations/getTask/output/anyOf/1"
+        ],
+        "probe_pointers": [
+          "/operations/getTask/output"
+        ],
+        "expected_pointers": [
+          "/operations/getTask/output"
+        ]
+      },
+      {
+        "id": "document/OBI-10.json#/tests/19",
+        "kind": "localized-schema-node",
+        "rule": "OBI-10",
+        "first_error_pointers": [
+          "/operations/a/input/$anchor"
+        ],
+        "probe_pointers": [
+          "/operations/a/input"
+        ],
+        "expected_pointers": [
+          "/operations/a/input"
+        ]
+      },
+      {
+        "id": "document/OBI-10.json#/tests/21",
+        "kind": "localized-schema-node",
+        "rule": "OBI-10",
+        "first_error_pointers": [
+          "/schemas/A/type"
+        ],
+        "probe_pointers": [
+          "/schemas/A"
+        ],
+        "expected_pointers": [
+          "/schemas/A"
+        ]
+      },
+      {
+        "id": "document/OBI-10.json#/tests/22",
+        "kind": "localized-schema-node",
+        "rule": "OBI-10",
+        "first_error_pointers": [
+          "/schemas/A/$anchor",
+          "/schemas/B/$anchor"
+        ],
+        "probe_pointers": [
+          "/schemas/A",
+          "/schemas/B"
+        ],
+        "expected_pointers": [
+          "/schemas/A",
+          "/schemas/B"
+        ]
+      },
+      {
+        "id": "document/OBI-10.json#/tests/23",
+        "kind": "localized-schema-node",
+        "rule": "OBI-10",
+        "first_error_pointers": [
+          "/operations/op/input/items"
+        ],
+        "probe_pointers": [
+          "/operations/op/input"
+        ],
+        "expected_pointers": [
+          "/operations/op/input"
+        ]
+      },
+      {
+        "id": "document/OBI-10.json#/tests/25",
+        "kind": "localized-schema-node",
+        "rule": "OBI-10",
+        "first_error_pointers": [
+          "/schemas/Task/$defs/Inner/properties/id/type"
+        ],
+        "probe_pointers": [
+          "/schemas/Task/$defs/Inner/properties/id"
+        ],
+        "expected_pointers": [
+          "/schemas/Task/$defs/Inner/properties/id"
+        ]
+      },
+      {
+        "id": "document/OBI-10.json#/tests/26",
+        "kind": "localized-schema-node",
+        "rule": "OBI-10",
+        "first_error_pointers": [
+          "/operations/op/input/minLength"
+        ],
+        "probe_pointers": [
+          "/operations/op/input"
+        ],
+        "expected_pointers": [
+          "/operations/op/input"
+        ]
+      },
+      {
+        "id": "document/OBI-12.json#/tests/40",
+        "kind": "localized-schema-node",
+        "rule": "OBI-10",
+        "first_error_pointers": [
+          "/schemas/A/$anchor"
+        ],
+        "probe_pointers": [
+          "/schemas/A"
+        ],
+        "expected_pointers": [
+          "/schemas/A"
+        ]
+      },
+      {
+        "id": "document/OBI-13.json#/tests/14",
+        "kind": "localized-schema-node",
+        "rule": "OBI-10",
+        "first_error_pointers": [
+          "/schemas/A/type"
+        ],
+        "probe_pointers": [
+          "/schemas/A"
+        ],
+        "expected_pointers": [
+          "/schemas/A"
+        ]
+      }
+    ]
   },
   "kit_coarse": [
     {
@@ -48978,6 +49252,789 @@
       }
     },
     {
+      "id": "document/OBI-02.json#/tests/1",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "object is missing required field \"operations\"",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/10",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 66,
+              "byte_offset": 65,
+              "line": 1,
+              "pointer": "/operations/createTask/deprecated"
+            },
+            "message": "expected JSON type: boolean",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 66,
+              "byte_offset": 65,
+              "line": 1,
+              "pointer": "/operations/createTask/deprecated"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/13",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 127,
+              "byte_offset": 126,
+              "line": 1,
+              "pointer": "/dependencies/delivery/description"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 127,
+              "byte_offset": 126,
+              "line": 1,
+              "pointer": "/dependencies/delivery/description"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/14",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 56,
+              "byte_offset": 55,
+              "line": 1,
+              "pointer": "/dependencies"
+            },
+            "message": "expected JSON type: object",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 56,
+              "byte_offset": 55,
+              "line": 1,
+              "pointer": "/dependencies"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/15",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 85,
+              "byte_offset": 84,
+              "line": 1,
+              "pointer": "/dependencies/delivery"
+            },
+            "message": "expected JSON type: object",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 85,
+              "byte_offset": 84,
+              "line": 1,
+              "pointer": "/dependencies/delivery"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/16",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 85,
+              "byte_offset": 84,
+              "line": 1,
+              "pointer": "/dependencies/delivery"
+            },
+            "message": "object is missing required field \"operation\"",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 85,
+              "byte_offset": 84,
+              "line": 1,
+              "pointer": "/dependencies/delivery"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/17",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 98,
+              "byte_offset": 97,
+              "line": 1,
+              "pointer": "/dependencies/delivery/operation"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "missing-target",
+            "location": {
+              "byte_column": 98,
+              "byte_offset": 97,
+              "line": 1,
+              "pointer": "/dependencies/delivery/operation"
+            },
+            "message": "reference must name an existing primary map key",
+            "rule": "OBI-08",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 98,
+              "byte_offset": 97,
+              "line": 1,
+              "pointer": "/dependencies/delivery/operation"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "missing-target",
+            "location": {
+              "byte_column": 98,
+              "byte_offset": 97,
+              "line": 1,
+              "pointer": "/dependencies/delivery/operation"
+            },
+            "message": "reference must name an existing primary map key",
+            "rule": "OBI-08",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/18",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 121,
+              "byte_offset": 120,
+              "line": 1,
+              "pointer": "/dependencies/delivery/kinds"
+            },
+            "message": "expected JSON type: array",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 121,
+              "byte_offset": 120,
+              "line": 1,
+              "pointer": "/dependencies/delivery/kinds"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/19",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 121,
+              "byte_offset": 120,
+              "line": 1,
+              "pointer": "/dependencies/delivery/kinds"
+            },
+            "message": "array violates the minItems constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 121,
+              "byte_offset": 120,
+              "line": 1,
+              "pointer": "/dependencies/delivery/kinds"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/2",
+      "before": {
+        "findings": [
+          {
+            "code": "missing-version",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "required openbindings member is absent",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "object is missing required field \"openbindings\"",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "missing-version",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "required openbindings member is absent",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/21",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 121,
+              "byte_offset": 120,
+              "line": 1,
+              "pointer": "/dependencies/delivery/kinds"
+            },
+            "message": "array violates the uniqueItems constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 121,
+              "byte_offset": 120,
+              "line": 1,
+              "pointer": "/dependencies/delivery/kinds"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/22",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 122,
+              "byte_offset": 121,
+              "line": 1,
+              "pointer": "/dependencies/delivery/kinds/0"
+            },
+            "message": "string violates the minLength constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 122,
+              "byte_offset": 121,
+              "line": 1,
+              "pointer": "/dependencies/delivery/kinds/0"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/23",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 122,
+              "byte_offset": 121,
+              "line": 1,
+              "pointer": "/dependencies/delivery/kinds/0"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 122,
+              "byte_offset": 121,
+              "line": 1,
+              "pointer": "/dependencies/delivery/kinds/0"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/24",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 79,
+              "byte_offset": 78,
+              "line": 1,
+              "pointer": "/operations/createTask/outpt"
+            },
+            "message": "this member is not permitted here; extension member names begin with x-",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 79,
+              "byte_offset": 78,
+              "line": 1,
+              "pointer": "/operations/createTask/outpt"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/25",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 153,
+              "byte_offset": 152,
+              "line": 1,
+              "pointer": "/bindings/b/Content"
+            },
+            "message": "this member is not permitted here; extension member names begin with x-",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 153,
+              "byte_offset": 152,
+              "line": 1,
+              "pointer": "/bindings/b/Content"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/26",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 96,
+              "byte_offset": 95,
+              "line": 1,
+              "pointer": "/sources/s/location"
+            },
+            "message": "this member is not permitted here; extension member names begin with x-",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 96,
+              "byte_offset": 95,
+              "line": 1,
+              "pointer": "/sources/s/location"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/27",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 81,
+              "byte_offset": 80,
+              "line": 1,
+              "pointer": "/sources/s/bindingSpec"
+            },
+            "message": "this member is not permitted here; extension member names begin with x-",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 81,
+              "byte_offset": 80,
+              "line": 1,
+              "pointer": "/sources/s/bindingSpec"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/28",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 86,
+              "byte_offset": 85,
+              "line": 1,
+              "pointer": "/dependencies/d/bindingSpecs"
+            },
+            "message": "this member is not permitted here; extension member names begin with x-",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 86,
+              "byte_offset": 85,
+              "line": 1,
+              "pointer": "/dependencies/d/bindingSpecs"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/29",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 56,
+              "byte_offset": 55,
+              "line": 1,
+              "pointer": "/info"
+            },
+            "message": "this member is not permitted here; extension member names begin with x-",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 56,
+              "byte_offset": 55,
+              "line": 1,
+              "pointer": "/info"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/3",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 63,
+              "byte_offset": 62,
+              "line": 1,
+              "pointer": "/operations/createTask/aliases"
+            },
+            "message": "expected JSON type: array",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 63,
+              "byte_offset": 62,
+              "line": 1,
+              "pointer": "/operations/createTask/aliases"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/30",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 56,
+              "byte_offset": 55,
+              "line": 1,
+              "pointer": "/transforms"
+            },
+            "message": "this member is not permitted here; extension member names begin with x-",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 56,
+              "byte_offset": 55,
+              "line": 1,
+              "pointer": "/transforms"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
       "id": "document/OBI-02.json#/tests/31",
       "before": {
         "findings": [
@@ -49029,7 +50086,4228 @@
               "line": 1,
               "pointer": "/bindings/b.selector/selector"
             },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 246,
+              "byte_offset": 245,
+              "line": 1,
+              "pointer": "/bindings/b.input/inputTransform"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 318,
+              "byte_offset": 317,
+              "line": 1,
+              "pointer": "/bindings/b.output/outputTransform"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/38",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 32,
+              "byte_offset": 31,
+              "line": 1,
+              "pointer": "/name"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 32,
+              "byte_offset": 31,
+              "line": 1,
+              "pointer": "/name"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/39",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 35,
+              "byte_offset": 34,
+              "line": 1,
+              "pointer": "/version"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 35,
+              "byte_offset": 34,
+              "line": 1,
+              "pointer": "/version"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/4",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 137,
+              "byte_offset": 136,
+              "line": 1,
+              "pointer": "/bindings/createTask.http"
+            },
+            "message": "object is missing required field \"operation\"",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 137,
+              "byte_offset": 136,
+              "line": 1,
+              "pointer": "/bindings/createTask.http"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/40",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 35,
+              "byte_offset": 34,
+              "line": 1,
+              "pointer": "/version"
+            },
+            "message": "string violates the minLength constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 35,
+              "byte_offset": 34,
+              "line": 1,
+              "pointer": "/version"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/41",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/description"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/description"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/42",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 35,
+              "byte_offset": 34,
+              "line": 1,
+              "pointer": "/schemas"
+            },
+            "message": "expected JSON type: object",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 35,
+              "byte_offset": 34,
+              "line": 1,
+              "pointer": "/schemas"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/43",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 38,
+              "byte_offset": 37,
+              "line": 1,
+              "pointer": "/operations"
+            },
+            "message": "expected JSON type: object",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 38,
+              "byte_offset": 37,
+              "line": 1,
+              "pointer": "/operations"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/44",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 51,
+              "byte_offset": 50,
+              "line": 1,
+              "pointer": "/sources"
+            },
+            "message": "expected JSON type: object",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 51,
+              "byte_offset": 50,
+              "line": 1,
+              "pointer": "/sources"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/45",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 52,
+              "byte_offset": 51,
+              "line": 1,
+              "pointer": "/bindings"
+            },
+            "message": "expected JSON type: object",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 52,
+              "byte_offset": 51,
+              "line": 1,
+              "pointer": "/bindings"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/46",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 52,
+              "byte_offset": 51,
+              "line": 1,
+              "pointer": "/operations/createTask"
+            },
+            "message": "expected JSON type: object",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 52,
+              "byte_offset": 51,
+              "line": 1,
+              "pointer": "/operations/createTask"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/47",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 67,
+              "byte_offset": 66,
+              "line": 1,
+              "pointer": "/operations/createTask/description"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 67,
+              "byte_offset": 66,
+              "line": 1,
+              "pointer": "/operations/createTask/description"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/48",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 60,
+              "byte_offset": 59,
+              "line": 1,
+              "pointer": "/operations/createTask/tags"
+            },
+            "message": "expected JSON type: array",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 60,
+              "byte_offset": 59,
+              "line": 1,
+              "pointer": "/operations/createTask/tags"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/49",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 69,
+              "byte_offset": 68,
+              "line": 1,
+              "pointer": "/operations/createTask/tags/1"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 69,
+              "byte_offset": 68,
+              "line": 1,
+              "pointer": "/operations/createTask/tags/1"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/5",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 77,
+              "byte_offset": 76,
+              "line": 1,
+              "pointer": "/sources/httpApi"
+            },
+            "message": "object is missing required field \"kind\"",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 77,
+              "byte_offset": 76,
+              "line": 1,
+              "pointer": "/sources/httpApi"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/50",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 64,
+              "byte_offset": 63,
+              "line": 1,
+              "pointer": "/operations/createTask/examples"
+            },
+            "message": "expected JSON type: object",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 64,
+              "byte_offset": 63,
+              "line": 1,
+              "pointer": "/operations/createTask/examples"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/51",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 73,
+              "byte_offset": 72,
+              "line": 1,
+              "pointer": "/operations/createTask/examples/basic"
+            },
+            "message": "expected JSON type: object",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 73,
+              "byte_offset": 72,
+              "line": 1,
+              "pointer": "/operations/createTask/examples/basic"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/52",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 74,
+              "byte_offset": 73,
+              "line": 1,
+              "pointer": "/operations/createTask/examples/basic/value"
+            },
             "message": "this member is not permitted here; extension member names begin with x-",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 74,
+              "byte_offset": 73,
+              "line": 1,
+              "pointer": "/operations/createTask/examples/basic/value"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/53",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 88,
+              "byte_offset": 87,
+              "line": 1,
+              "pointer": "/operations/createTask/examples/basic/description"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 88,
+              "byte_offset": 87,
+              "line": 1,
+              "pointer": "/operations/createTask/examples/basic/description"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/54",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 71,
+              "byte_offset": 70,
+              "line": 1,
+              "pointer": "/sources/s"
+            },
+            "message": "expected JSON type: object",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 71,
+              "byte_offset": 70,
+              "line": 1,
+              "pointer": "/sources/s"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/55",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 79,
+              "byte_offset": 78,
+              "line": 1,
+              "pointer": "/sources/s/kind"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 79,
+              "byte_offset": 78,
+              "line": 1,
+              "pointer": "/sources/s/kind"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/56",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 110,
+              "byte_offset": 109,
+              "line": 1,
+              "pointer": "/sources/s/description"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 110,
+              "byte_offset": 109,
+              "line": 1,
+              "pointer": "/sources/s/description"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/57",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 114,
+              "byte_offset": 113,
+              "line": 1,
+              "pointer": "/bindings/b"
+            },
+            "message": "expected JSON type: object",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 114,
+              "byte_offset": 113,
+              "line": 1,
+              "pointer": "/bindings/b"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/58",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 127,
+              "byte_offset": 126,
+              "line": 1,
+              "pointer": "/bindings/b/operation"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "missing-target",
+            "location": {
+              "byte_column": 127,
+              "byte_offset": 126,
+              "line": 1,
+              "pointer": "/bindings/b/operation"
+            },
+            "message": "reference must name an existing primary map key",
+            "rule": "OBI-06",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 127,
+              "byte_offset": 126,
+              "line": 1,
+              "pointer": "/bindings/b/operation"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "missing-target",
+            "location": {
+              "byte_column": 127,
+              "byte_offset": 126,
+              "line": 1,
+              "pointer": "/bindings/b/operation"
+            },
+            "message": "reference must name an existing primary map key",
+            "rule": "OBI-06",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/59",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 127,
+              "byte_offset": 126,
+              "line": 1,
+              "pointer": "/bindings/b/operation"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "missing-target",
+            "location": {
+              "byte_column": 127,
+              "byte_offset": 126,
+              "line": 1,
+              "pointer": "/bindings/b/operation"
+            },
+            "message": "reference must name an existing primary map key",
+            "rule": "OBI-06",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 127,
+              "byte_offset": 126,
+              "line": 1,
+              "pointer": "/bindings/b/operation"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "missing-target",
+            "location": {
+              "byte_column": 127,
+              "byte_offset": 126,
+              "line": 1,
+              "pointer": "/bindings/b/operation"
+            },
+            "message": "reference must name an existing primary map key",
+            "rule": "OBI-06",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/6",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 85,
+              "byte_offset": 84,
+              "line": 1,
+              "pointer": "/sources/httpApi/kind"
+            },
+            "message": "string violates the minLength constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 85,
+              "byte_offset": 84,
+              "line": 1,
+              "pointer": "/sources/httpApi/kind"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/60",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 149,
+              "byte_offset": 148,
+              "line": 1,
+              "pointer": "/bindings/b/source"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "missing-target",
+            "location": {
+              "byte_column": 149,
+              "byte_offset": 148,
+              "line": 1,
+              "pointer": "/bindings/b/source"
+            },
+            "message": "reference must name an existing primary map key",
+            "rule": "OBI-07",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 149,
+              "byte_offset": 148,
+              "line": 1,
+              "pointer": "/bindings/b/source"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "missing-target",
+            "location": {
+              "byte_column": 149,
+              "byte_offset": 148,
+              "line": 1,
+              "pointer": "/bindings/b/source"
+            },
+            "message": "reference must name an existing primary map key",
+            "rule": "OBI-07",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/61",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 149,
+              "byte_offset": 148,
+              "line": 1,
+              "pointer": "/bindings/b/source"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "missing-target",
+            "location": {
+              "byte_column": 149,
+              "byte_offset": 148,
+              "line": 1,
+              "pointer": "/bindings/b/source"
+            },
+            "message": "reference must name an existing primary map key",
+            "rule": "OBI-07",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 149,
+              "byte_offset": 148,
+              "line": 1,
+              "pointer": "/bindings/b/source"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "missing-target",
+            "location": {
+              "byte_column": 149,
+              "byte_offset": 148,
+              "line": 1,
+              "pointer": "/bindings/b/source"
+            },
+            "message": "reference must name an existing primary map key",
+            "rule": "OBI-07",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/62",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 98,
+              "byte_offset": 97,
+              "line": 1,
+              "pointer": "/dependencies/delivery/operation"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "missing-target",
+            "location": {
+              "byte_column": 98,
+              "byte_offset": 97,
+              "line": 1,
+              "pointer": "/dependencies/delivery/operation"
+            },
+            "message": "reference must name an existing primary map key",
+            "rule": "OBI-08",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 98,
+              "byte_offset": 97,
+              "line": 1,
+              "pointer": "/dependencies/delivery/operation"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "missing-target",
+            "location": {
+              "byte_column": 98,
+              "byte_offset": 97,
+              "line": 1,
+              "pointer": "/dependencies/delivery/operation"
+            },
+            "message": "reference must name an existing primary map key",
+            "rule": "OBI-08",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/63",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 166,
+              "byte_offset": 165,
+              "line": 1,
+              "pointer": "/bindings/b/idempotent"
+            },
+            "message": "expected JSON type: boolean",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 166,
+              "byte_offset": 165,
+              "line": 1,
+              "pointer": "/bindings/b/idempotent"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/64",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 166,
+              "byte_offset": 165,
+              "line": 1,
+              "pointer": "/bindings/b/preference"
+            },
+            "message": "expected JSON type: integer",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 166,
+              "byte_offset": 165,
+              "line": 1,
+              "pointer": "/bindings/b/preference"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/65",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 166,
+              "byte_offset": 165,
+              "line": 1,
+              "pointer": "/bindings/b/preference"
+            },
+            "message": "number violates the maximum constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 166,
+              "byte_offset": 165,
+              "line": 1,
+              "pointer": "/bindings/b/preference"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/66",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 166,
+              "byte_offset": 165,
+              "line": 1,
+              "pointer": "/bindings/b/preference"
+            },
+            "message": "number violates the minimum constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 166,
+              "byte_offset": 165,
+              "line": 1,
+              "pointer": "/bindings/b/preference"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/67",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 167,
+              "byte_offset": 166,
+              "line": 1,
+              "pointer": "/bindings/b/description"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 167,
+              "byte_offset": 166,
+              "line": 1,
+              "pointer": "/bindings/b/description"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/68",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 166,
+              "byte_offset": 165,
+              "line": 1,
+              "pointer": "/bindings/b/deprecated"
+            },
+            "message": "expected JSON type: boolean",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 166,
+              "byte_offset": 165,
+              "line": 1,
+              "pointer": "/bindings/b/deprecated"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-02.json#/tests/69",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 25,
+              "byte_offset": 24,
+              "line": 1,
+              "pointer": "/X-owner"
+            },
+            "message": "this member is not permitted here; extension member names begin with x-",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 25,
+              "byte_offset": 24,
+              "line": 1,
+              "pointer": "/X-owner"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-03.json#/tests/10",
+      "before": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-03.json#/tests/11",
+      "before": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-03.json#/tests/12",
+      "before": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-03.json#/tests/13",
+      "before": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-03.json#/tests/14",
+      "before": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-03.json#/tests/15",
+      "before": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-03.json#/tests/16",
+      "before": {
+        "findings": [
+          {
+            "code": "missing-version",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "required openbindings member is absent",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "object is missing required field \"openbindings\"",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "missing-version",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "required openbindings member is absent",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-03.json#/tests/17",
+      "before": {
+        "findings": [
+          {
+            "code": "missing-version",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "required openbindings member is absent",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "object is missing required field \"openbindings\"",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "missing-version",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "required openbindings member is absent",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-03.json#/tests/18",
+      "before": {
+        "findings": [
+          {
+            "code": "missing-version",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "required openbindings member is absent",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "expected JSON type: object",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "missing-version",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "required openbindings member is absent",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 1,
+              "byte_offset": 0,
+              "line": 1,
+              "pointer": ""
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-03.json#/tests/3",
+      "before": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-03.json#/tests/4",
+      "before": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-03.json#/tests/5",
+      "before": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-03.json#/tests/6",
+      "before": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-03.json#/tests/7",
+      "before": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-03.json#/tests/8",
+      "before": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-03.json#/tests/9",
+      "before": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "semver",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "openbindings must be a SemVer 2.0.0 string",
+            "rule": "OBI-03",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 17,
+              "byte_offset": 16,
+              "line": 1,
+              "pointer": "/openbindings"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-04.json#/tests/10",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/create~1task"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/create~1task"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/create~1task"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/create~1task"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-04.json#/tests/11",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/cr\u00e9erT\u00e2che"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/cr\u00e9erT\u00e2che"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/cr\u00e9erT\u00e2che"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/cr\u00e9erT\u00e2che"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-04.json#/tests/13",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 67,
+              "byte_offset": 66,
+              "line": 1,
+              "pointer": "/sources/http api"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 67,
+              "byte_offset": 66,
+              "line": 1,
+              "pointer": "/sources/http api"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 67,
+              "byte_offset": 66,
+              "line": 1,
+              "pointer": "/sources/http api"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 67,
+              "byte_offset": 66,
+              "line": 1,
+              "pointer": "/sources/http api"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-04.json#/tests/15",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-04.json#/tests/20",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/-badKey"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/-badKey"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          },
+          {
+            "code": "missing-target",
+            "location": {
+              "byte_column": 147,
+              "byte_offset": 146,
+              "line": 1,
+              "pointer": "/bindings/createTask.http/operation"
+            },
+            "message": "reference must name an existing primary map key",
+            "rule": "OBI-06",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/-badKey"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/-badKey"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          },
+          {
+            "code": "missing-target",
+            "location": {
+              "byte_column": 147,
+              "byte_offset": 146,
+              "line": 1,
+              "pointer": "/bindings/createTask.http/operation"
+            },
+            "message": "reference must name an existing primary map key",
+            "rule": "OBI-06",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-04.json#/tests/22",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 74,
+              "byte_offset": 73,
+              "line": 1,
+              "pointer": "/dependencies/customer delivery"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 74,
+              "byte_offset": 73,
+              "line": 1,
+              "pointer": "/dependencies/customer delivery"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 74,
+              "byte_offset": 73,
+              "line": 1,
+              "pointer": "/dependencies/customer delivery"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 74,
+              "byte_offset": 73,
+              "line": 1,
+              "pointer": "/dependencies/customer delivery"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-04.json#/tests/23",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 64,
+              "byte_offset": 63,
+              "line": 1,
+              "pointer": "/operations/createTask/aliases/0"
+            },
+            "message": "expected JSON type: string",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 64,
+              "byte_offset": 63,
+              "line": 1,
+              "pointer": "/operations/createTask/aliases/0"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 64,
+              "byte_offset": 63,
+              "line": 1,
+              "pointer": "/operations/createTask/aliases/0"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 64,
+              "byte_offset": 63,
+              "line": 1,
+              "pointer": "/operations/createTask/aliases/0"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-04.json#/tests/24",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/createTask\n"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/createTask\n"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/createTask\n"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/createTask\n"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-04.json#/tests/25",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 64,
+              "byte_offset": 63,
+              "line": 1,
+              "pointer": "/operations/createTask/aliases/0"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 64,
+              "byte_offset": 63,
+              "line": 1,
+              "pointer": "/operations/createTask/aliases/0"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 64,
+              "byte_offset": 63,
+              "line": 1,
+              "pointer": "/operations/createTask/aliases/0"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 64,
+              "byte_offset": 63,
+              "line": 1,
+              "pointer": "/operations/createTask/aliases/0"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-04.json#/tests/26",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 119,
+              "byte_offset": 118,
+              "line": 1,
+              "pointer": "/bindings/createTask http"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 119,
+              "byte_offset": 118,
+              "line": 1,
+              "pointer": "/bindings/createTask http"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 119,
+              "byte_offset": 118,
+              "line": 1,
+              "pointer": "/bindings/createTask http"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 119,
+              "byte_offset": 118,
+              "line": 1,
+              "pointer": "/bindings/createTask http"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-04.json#/tests/27",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 36,
+              "byte_offset": 35,
+              "line": 1,
+              "pointer": "/schemas/-Task"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 36,
+              "byte_offset": 35,
+              "line": 1,
+              "pointer": "/schemas/-Task"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 36,
+              "byte_offset": 35,
+              "line": 1,
+              "pointer": "/schemas/-Task"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 36,
+              "byte_offset": 35,
+              "line": 1,
+              "pointer": "/schemas/-Task"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-04.json#/tests/28",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 65,
+              "byte_offset": 64,
+              "line": 1,
+              "pointer": "/operations/createTask/examples/basic example"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 65,
+              "byte_offset": 64,
+              "line": 1,
+              "pointer": "/operations/createTask/examples/basic example"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 65,
+              "byte_offset": 64,
+              "line": 1,
+              "pointer": "/operations/createTask/examples/basic example"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 65,
+              "byte_offset": 64,
+              "line": 1,
+              "pointer": "/operations/createTask/examples/basic example"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-04.json#/tests/8",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/-createTask"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/-createTask"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/-createTask"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/-createTask"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-04.json#/tests/9",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/create task"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/create task"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/create task"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "name-grammar",
+            "location": {
+              "byte_column": 39,
+              "byte_offset": 38,
+              "line": 1,
+              "pointer": "/operations/create task"
+            },
+            "message": "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens",
+            "rule": "OBI-04",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-05.json#/tests/3",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 63,
+              "byte_offset": 62,
+              "line": 1,
+              "pointer": "/operations/createTask/aliases"
+            },
+            "message": "array violates the uniqueItems constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "duplicate-operation-name",
+            "location": {
+              "byte_column": 74,
+              "byte_offset": 73,
+              "line": 1,
+              "pointer": "/operations/createTask/aliases/1"
+            },
+            "message": "operation keys and aliases must be distinct",
+            "rule": "OBI-05",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 63,
+              "byte_offset": 62,
+              "line": 1,
+              "pointer": "/operations/createTask/aliases"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "duplicate-operation-name",
+            "location": {
+              "byte_column": 74,
+              "byte_offset": 73,
+              "line": 1,
+              "pointer": "/operations/createTask/aliases/1"
+            },
+            "message": "operation keys and aliases must be distinct",
+            "rule": "OBI-05",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-09.json#/tests/3",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 43,
+              "byte_offset": 42,
+              "line": 1,
+              "pointer": "/schemas/Task"
+            },
+            "message": "value violates the anyOf constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "schema-dialect",
+            "location": {
+              "byte_column": 99,
+              "byte_offset": 98,
+              "line": 1,
+              "pointer": "/schemas/Task/$schema"
+            },
+            "message": "contained schemas must name the 2020-12 dialect",
+            "rule": "OBI-09",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 43,
+              "byte_offset": 42,
+              "line": 1,
+              "pointer": "/schemas/Task"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "schema-dialect",
+            "location": {
+              "byte_column": 99,
+              "byte_offset": 98,
+              "line": 1,
+              "pointer": "/schemas/Task/$schema"
+            },
+            "message": "contained schemas must name the 2020-12 dialect",
+            "rule": "OBI-09",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-09.json#/tests/4",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 43,
+              "byte_offset": 42,
+              "line": 1,
+              "pointer": "/schemas/Task"
+            },
+            "message": "value violates the anyOf constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "schema-dialect",
+            "location": {
+              "byte_column": 99,
+              "byte_offset": 98,
+              "line": 1,
+              "pointer": "/schemas/Task/$schema"
+            },
+            "message": "contained schemas must name the 2020-12 dialect",
+            "rule": "OBI-09",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 43,
+              "byte_offset": 42,
+              "line": 1,
+              "pointer": "/schemas/Task"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "schema-dialect",
+            "location": {
+              "byte_column": 99,
+              "byte_offset": 98,
+              "line": 1,
+              "pointer": "/schemas/Task/$schema"
+            },
+            "message": "contained schemas must name the 2020-12 dialect",
+            "rule": "OBI-09",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-09.json#/tests/5",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 61,
+              "byte_offset": 60,
+              "line": 1,
+              "pointer": "/operations/createTask/input"
+            },
+            "message": "value violates the anyOf constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "schema-dialect",
+            "location": {
+              "byte_column": 124,
+              "byte_offset": 123,
+              "line": 1,
+              "pointer": "/operations/createTask/input/$schema"
+            },
+            "message": "contained schemas must name the 2020-12 dialect",
+            "rule": "OBI-09",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 61,
+              "byte_offset": 60,
+              "line": 1,
+              "pointer": "/operations/createTask/input"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "schema-dialect",
+            "location": {
+              "byte_column": 124,
+              "byte_offset": 123,
+              "line": 1,
+              "pointer": "/operations/createTask/input/$schema"
+            },
+            "message": "contained schemas must name the 2020-12 dialect",
+            "rule": "OBI-09",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-10.json#/tests/10",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 69,
+              "byte_offset": 68,
+              "line": 1,
+              "pointer": "/operations/createTask/input/type"
+            },
+            "message": "value violates the anyOf constraint",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 61,
+              "byte_offset": 60,
+              "line": 1,
+              "pointer": "/operations/createTask/input"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-10.json#/tests/11",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 62,
+              "byte_offset": 61,
+              "line": 1,
+              "pointer": "/operations/createTask/output"
+            },
+            "message": "value violates the anyOf constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 62,
+              "byte_offset": 61,
+              "line": 1,
+              "pointer": "/operations/createTask/output"
+            },
+            "message": "expected one of these JSON types: boolean, object",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 62,
+              "byte_offset": 61,
+              "line": 1,
+              "pointer": "/operations/createTask/output"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 62,
+              "byte_offset": 61,
+              "line": 1,
+              "pointer": "/operations/createTask/output"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-10.json#/tests/12",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 43,
+              "byte_offset": 42,
+              "line": 1,
+              "pointer": "/schemas/Task"
+            },
+            "message": "value violates the anyOf constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 43,
+              "byte_offset": 42,
+              "line": 1,
+              "pointer": "/schemas/Task"
+            },
+            "message": "expected one of these JSON types: boolean, object",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 43,
+              "byte_offset": 42,
+              "line": 1,
+              "pointer": "/schemas/Task"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 43,
+              "byte_offset": 42,
+              "line": 1,
+              "pointer": "/schemas/Task"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-10.json#/tests/13",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 111,
+              "byte_offset": 110,
+              "line": 1,
+              "pointer": "/schemas/Task/properties/title/minLength"
+            },
+            "message": "expected JSON type: integer",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 82,
+              "byte_offset": 81,
+              "line": 1,
+              "pointer": "/schemas/Task/properties/title"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-10.json#/tests/14",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 114,
+              "byte_offset": 113,
+              "line": 1,
+              "pointer": "/operations/createTasks/input/items/required"
+            },
+            "message": "expected JSON type: array",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 86,
+              "byte_offset": 85,
+              "line": 1,
+              "pointer": "/operations/createTasks/input/items"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-10.json#/tests/15",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 68,
+              "byte_offset": 67,
+              "line": 1,
+              "pointer": "/operations/getTask/output/oneOf"
+            },
+            "message": "expected JSON type: array",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 59,
+              "byte_offset": 58,
+              "line": 1,
+              "pointer": "/operations/getTask/output"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-10.json#/tests/16",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 87,
+              "byte_offset": 86,
+              "line": 1,
+              "pointer": "/operations/getTask/output/anyOf/1"
+            },
+            "message": "expected one of these JSON types: boolean, object",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 59,
+              "byte_offset": 58,
+              "line": 1,
+              "pointer": "/operations/getTask/output"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-10.json#/tests/19",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 63,
+              "byte_offset": 62,
+              "line": 1,
+              "pointer": "/operations/a/input/$anchor"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 52,
+              "byte_offset": 51,
+              "line": 1,
+              "pointer": "/operations/a/input"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-10.json#/tests/21",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 48,
+              "byte_offset": 47,
+              "line": 1,
+              "pointer": "/schemas/A/type"
+            },
+            "message": "value violates the anyOf constraint",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 40,
+              "byte_offset": 39,
+              "line": 1,
+              "pointer": "/schemas/A"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-10.json#/tests/22",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 51,
+              "byte_offset": 50,
+              "line": 1,
+              "pointer": "/schemas/A/$anchor"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-10",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 78,
+              "byte_offset": 77,
+              "line": 1,
+              "pointer": "/schemas/B/$anchor"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 40,
+              "byte_offset": 39,
+              "line": 1,
+              "pointer": "/schemas/A"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 67,
+              "byte_offset": 66,
+              "line": 1,
+              "pointer": "/schemas/B"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-10.json#/tests/23",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 77,
+              "byte_offset": 76,
+              "line": 1,
+              "pointer": "/operations/op/input/items"
+            },
+            "message": "expected one of these JSON types: boolean, object",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 53,
+              "byte_offset": 52,
+              "line": 1,
+              "pointer": "/operations/op/input"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-10.json#/tests/25",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 212,
+              "byte_offset": 211,
+              "line": 1,
+              "pointer": "/schemas/Task/$defs/Inner/properties/id/type"
+            },
+            "message": "value violates the anyOf constraint",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 204,
+              "byte_offset": 203,
+              "line": 1,
+              "pointer": "/schemas/Task/$defs/Inner/properties/id"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-10.json#/tests/26",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 82,
+              "byte_offset": 81,
+              "line": 1,
+              "pointer": "/operations/op/input/minLength"
+            },
+            "message": "expected JSON type: integer",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 53,
+              "byte_offset": 52,
+              "line": 1,
+              "pointer": "/operations/op/input"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-10.json#/tests/9",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 69,
+              "byte_offset": 68,
+              "line": 1,
+              "pointer": "/operations/createTask/input/type"
+            },
+            "message": "value violates the anyOf constraint",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 61,
+              "byte_offset": 60,
+              "line": 1,
+              "pointer": "/operations/createTask/input"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-12.json#/tests/40",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 51,
+              "byte_offset": 50,
+              "line": 1,
+              "pointer": "/schemas/A/$anchor"
+            },
+            "message": "string violates the pattern constraint",
+            "rule": "OBI-10",
+            "status": "violated"
+          },
+          {
+            "code": "reference-target",
+            "location": {
+              "byte_column": 116,
+              "byte_offset": 115,
+              "line": 1,
+              "pointer": "/operations/op/input/$ref"
+            },
+            "message": "same-document reference identifies no schema at an OBI position",
+            "rule": "OBI-12",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 40,
+              "byte_offset": 39,
+              "line": 1,
+              "pointer": "/schemas/A"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          },
+          {
+            "code": "reference-target",
+            "location": {
+              "byte_column": 116,
+              "byte_offset": 115,
+              "line": 1,
+              "pointer": "/operations/op/input/$ref"
+            },
+            "message": "same-document reference identifies no schema at an OBI position",
+            "rule": "OBI-12",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-12.json#/tests/41",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 52,
+              "byte_offset": 51,
+              "line": 1,
+              "pointer": "/operations/a/input"
+            },
+            "message": "value violates the anyOf constraint",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 52,
+              "byte_offset": 51,
+              "line": 1,
+              "pointer": "/operations/a/input"
+            },
+            "message": "expected one of these JSON types: boolean, object",
+            "rule": "OBI-10",
+            "status": "violated"
+          },
+          {
+            "code": "reference-target",
+            "location": {
+              "byte_column": 79,
+              "byte_offset": 78,
+              "line": 1,
+              "pointer": "/operations/b/input/$ref"
+            },
+            "message": "same-document reference identifies no schema at an OBI position",
+            "rule": "OBI-12",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 52,
+              "byte_offset": 51,
+              "line": 1,
+              "pointer": "/operations/a/input"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-02",
+            "status": "violated"
+          },
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 52,
+              "byte_offset": 51,
+              "line": 1,
+              "pointer": "/operations/a/input"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          },
+          {
+            "code": "reference-target",
+            "location": {
+              "byte_column": 79,
+              "byte_offset": 78,
+              "line": 1,
+              "pointer": "/operations/b/input/$ref"
+            },
+            "message": "same-document reference identifies no schema at an OBI position",
+            "rule": "OBI-12",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/OBI-13.json#/tests/14",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 48,
+              "byte_offset": 47,
+              "line": 1,
+              "pointer": "/schemas/A/type"
+            },
+            "message": "value violates the anyOf constraint",
+            "rule": "OBI-10",
+            "status": "violated"
+          },
+          {
+            "code": "duplicate-anchor",
+            "location": {
+              "byte_column": 61,
+              "byte_offset": 60,
+              "line": 1,
+              "pointer": "/schemas/A/$anchor"
+            },
+            "message": "plain name is declared more than once in the document resource",
+            "rule": "OBI-13",
+            "status": "violated"
+          },
+          {
+            "code": "duplicate-anchor",
+            "location": {
+              "byte_column": 84,
+              "byte_offset": 83,
+              "line": 1,
+              "pointer": "/schemas/B/$anchor"
+            },
+            "message": "plain name is declared more than once in the document resource",
+            "rule": "OBI-13",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 40,
+              "byte_offset": 39,
+              "line": 1,
+              "pointer": "/schemas/A"
+            },
+            "message": "value violates the fixed normative schema",
+            "rule": "OBI-10",
+            "status": "violated"
+          },
+          {
+            "code": "duplicate-anchor",
+            "location": {
+              "byte_column": 61,
+              "byte_offset": 60,
+              "line": 1,
+              "pointer": "/schemas/A/$anchor"
+            },
+            "message": "plain name is declared more than once in the document resource",
+            "rule": "OBI-13",
+            "status": "violated"
+          },
+          {
+            "code": "duplicate-anchor",
+            "location": {
+              "byte_column": 84,
+              "byte_offset": 83,
+              "line": 1,
+              "pointer": "/schemas/B/$anchor"
+            },
+            "message": "plain name is declared more than once in the document resource",
+            "rule": "OBI-13",
+            "status": "violated"
+          }
+        ]
+      }
+    },
+    {
+      "id": "document/section-12.json#/tests/4",
+      "before": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 44,
+              "byte_offset": 43,
+              "line": 1,
+              "pointer": "/operations/f/X-note"
+            },
+            "message": "this member is not permitted here; extension member names begin with x-",
+            "rule": "OBI-02",
+            "status": "violated"
+          }
+        ]
+      },
+      "after": {
+        "findings": [
+          {
+            "code": "schema-mismatch",
+            "location": {
+              "byte_column": 44,
+              "byte_offset": 43,
+              "line": 1,
+              "pointer": "/operations/f/X-note"
+            },
+            "message": "value violates the fixed normative schema",
             "rule": "OBI-02",
             "status": "violated"
           }

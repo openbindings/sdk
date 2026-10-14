@@ -48,6 +48,6 @@ causes. Prepared objects expose no completeness declaration. The qualification
 kit does not impose the default evaluator's private planning policy on a BYO evaluator.
 
 S8a preserves every verdict/refusal and records each changed observation in
-[`s8a-diagnostics-ledger.json`](../../tools/qualification/inputs/s8a-diagnostics-ledger.json).
+[`diagnostics-migration-ledger.json`](../../tools/qualification/inputs/diagnostics-migration-ledger.json).
 Both Coarse and Upstream are replayed; incomplete diagnostic subsets never imply
 missing rule evidence or authorize a wrong verdict/refusal.

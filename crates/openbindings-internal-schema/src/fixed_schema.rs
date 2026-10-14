@@ -8,12 +8,12 @@ use openbindings_internal_json::{
 use serde_json::Value;
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap},
     sync::{Arc, OnceLock},
 };
 
 #[derive(Clone)]
-struct LocalResources(Arc<BTreeMap<String, Value>>);
+pub(super) struct LocalResources(Arc<BTreeMap<String, Value>>);
 impl Retrieve for LocalResources {
     fn retrieve(
         &self,
@@ -35,91 +35,53 @@ pub struct Problem<'a> {
     pub message: Cow<'static, str>,
 }
 const GENERIC_MESSAGE: &str = "value violates the fixed normative schema";
-const UNEXPECTED_MEMBER_MESSAGE: &str =
-    "this member is not permitted here; extension member names begin with x-";
-// Additional-property expansion must not multiply a large ancestor key by every
-// retained child. This budget applies only to the new expanded source pointers.
+// Source pointer retention shares the document findings allowance.
 const MAX_EXPANDED_POINTER_BYTES: usize = 8 * 1024 * 1024;
-const MAX_MESSAGE_BYTES: usize = 512;
-const MAX_REQUIRED_NAME_BYTES: usize = 64;
-
-// Called only for validators compiled from the embedded document/meta schemas.
-// In particular, Required.property comes from those trusted schemas, never the
-// rejected instance. Do not format a vendor error or descend into union branches.
-fn diagnostic_message(kind: &jsonschema::error::ValidationErrorKind) -> Cow<'static, str> {
-    use jsonschema::error::{TypeKind, ValidationErrorKind as Kind};
-    let message = match kind {
-        Kind::Type {
-            kind: TypeKind::Single(expected),
-        } => {
-            format!("expected JSON type: {}", expected.as_str())
-        }
-        Kind::Type {
-            kind: TypeKind::Multiple(expected),
-        } => {
-            // The type set contains at most the seven fixed JSON type names.
-            let names: Vec<_> = expected.iter().map(|kind| kind.as_str()).collect();
-            if names.is_empty() {
-                return GENERIC_MESSAGE.into();
-            }
-            format!("expected one of these JSON types: {}", names.join(", "))
-        }
-        Kind::Required { property } => {
-            let Some(name) = property
-                .as_str()
-                .filter(|name| name.len() <= MAX_REQUIRED_NAME_BYTES)
-            else {
-                return GENERIC_MESSAGE.into();
-            };
-            // Quoting keeps even a future embedded name's controls unambiguous.
-            let Ok(quoted) = serde_json::to_string(name) else {
-                return GENERIC_MESSAGE.into();
-            };
-            format!("object is missing required field {quoted}")
-        }
-        Kind::AnyOf { .. } => "value violates the anyOf constraint".into(),
-        Kind::OneOfNotValid { .. } | Kind::OneOfMultipleValid { .. } => {
-            "value violates the oneOf constraint".into()
-        }
-        Kind::Pattern { .. } => "string violates the pattern constraint".into(),
-        Kind::MinItems { .. } => "array violates the minItems constraint".into(),
-        Kind::MaxItems { .. } => "array violates the maxItems constraint".into(),
-        Kind::MinLength { .. } => "string violates the minLength constraint".into(),
-        Kind::MaxLength { .. } => "string violates the maxLength constraint".into(),
-        Kind::UniqueItems => "array violates the uniqueItems constraint".into(),
-        Kind::Enum { .. } => "value violates the enum constraint".into(),
-        Kind::Minimum { .. } => "number violates the minimum constraint".into(),
-        Kind::Maximum { .. } => "number violates the maximum constraint".into(),
-        Kind::ExclusiveMinimum { .. } => "number violates the exclusiveMinimum constraint".into(),
-        Kind::ExclusiveMaximum { .. } => "number violates the exclusiveMaximum constraint".into(),
-        Kind::Custom { keyword, .. }
-            if matches!(
-                keyword.as_str(),
-                "minimum" | "maximum" | "exclusiveMinimum" | "exclusiveMaximum" | "multipleOf"
-            ) =>
-        {
-            format!("number violates the {keyword} constraint")
-        }
-        Kind::PropertyNames { error } => return diagnostic_message(error.kind()),
-        _ => return GENERIC_MESSAGE.into(),
-    };
-    if message.len() > MAX_MESSAGE_BYTES {
-        GENERIC_MESSAGE.into()
-    } else {
-        message.into()
-    }
-}
 type Compiled = Result<Validator<FlatJson>, String>;
 static DOCUMENT: OnceLock<Compiled> = OnceLock::new();
 static META: OnceLock<Compiled> = OnceLock::new();
 
-fn compile(schema: &Value, resources: BTreeMap<String, Value>) -> Compiled {
+pub(super) fn options(
+    resources: BTreeMap<String, Value>,
+) -> jsonschema::ValidationOptions<'static, Arc<dyn Retrieve>, FlatJson> {
     numeric::apply(jsonschema::options_for::<FlatJson>())
         .with_draft(Draft::Draft202012)
         .with_retriever(LocalResources(Arc::new(resources)))
         .should_validate_formats(false)
-        .build(schema)
-        .map_err(|e| e.to_string())
+}
+pub(super) fn compile(schema: &Value, resources: BTreeMap<String, Value>) -> Compiled {
+    options(resources).build(schema).map_err(|e| e.to_string())
+}
+/// Compile the pinned location map separately for allocation qualification.
+pub fn compile_locations() -> Result<super::fixed_locations::LocationMap, String> {
+    let schema: Value = serde_json::from_str(include_str!("../schemas/openbindings.schema.json"))
+        .map_err(|e| e.to_string())?;
+    super::fixed_locations::LocationMap::compile(&schema)
+}
+fn locations() -> &'static Result<super::fixed_locations::LocationMap, String> {
+    static LOCATIONS: OnceLock<Result<super::fixed_locations::LocationMap, String>> =
+        OnceLock::new();
+    LOCATIONS.get_or_init(compile_locations)
+}
+const WORK: usize = 2_000_000;
+// Nested scopes consume the enclosing check's remaining allowance. Never expose
+// an is_valid result from an incomplete work or pattern scope as rule evidence.
+pub(super) fn bounded_valid(
+    validator: &Validator<FlatJson>,
+    at: JsonRef<'_>,
+) -> Result<bool, String> {
+    jsonschema::ob_work::bounded(WORK, 1024, || {
+        jsonschema::ob_ecma::top_level(WORK, || validator.is_valid(view(&at.to_owned())))
+    })
+    .map_err(|e| format!("fixed validation work limit: {e:?}"))?
+    .map_err(|_| "fixed pattern work limit".into())
+}
+/// The authoritative check alone, also used to qualify diagnostic allocation.
+pub fn validity(value: &JsonValue, is_meta: bool) -> Result<bool, String> {
+    let validator = (if is_meta { meta() } else { document() })
+        .as_ref()
+        .map_err(Clone::clone)?;
+    backend::fixed_strings(|| bounded_valid(validator, value.view()))
 }
 fn document() -> &'static Compiled {
     DOCUMENT.get_or_init(|| {
@@ -269,26 +231,6 @@ impl<'a> ProblemCollector<'a> {
     }
 }
 
-fn fixed_at<'a>(mut value: JsonRef<'a>, path: &str) -> Option<JsonRef<'a>> {
-    if !path.contains('\u{e000}') {
-        return value.at(path);
-    }
-    if path.is_empty() {
-        return Some(value);
-    }
-    for token in path.strip_prefix('/')?.split('/') {
-        let token = token.replace("~1", "/").replace("~0", "~");
-        value = if let Some(mut members) = value.members() {
-            members
-                .find(|m| backend::fixed_string(m.name).as_deref() == Some(&token))?
-                .value
-        } else {
-            value.element(token.parse().ok()?)?
-        };
-    }
-    Some(value)
-}
-
 pub fn check(
     value: &JsonValue,
     is_meta: bool,
@@ -305,117 +247,79 @@ pub fn check_with_retained<'a>(
     let validator = (if is_meta { meta() } else { document() })
         .as_ref()
         .map_err(Clone::clone)?;
+    // Compilation is schema-only and cached, outside the per-document budget.
+    let map = if is_meta {
+        None
+    } else {
+        locations().as_ref().ok()
+    };
     backend::fixed_strings(|| {
-        jsonschema::ob_work::bounded(2_000_000, 1024, || {
-            jsonschema::ob_ecma::top_level(2_000_000, || {
-                let mut collector = ProblemCollector::new(max_problems);
-                let mut checked_names = HashSet::new();
-                // One library first error per localized check. Its owned contexts
-                // are dropped before the next document/schema-node check.
-                'errors: for error in validator.validate(view(value)).err().into_iter() {
-                    collector.violated = true;
-                    // Once a distinct expanded pointer was omitted, the expansion
-                    // allowance stays closed; ordinary errors remain eligible.
-                    if !is_meta
-                        && collector.expansion_exhausted
-                        && matches!(
-                            error.kind(),
-                            jsonschema::error::ValidationErrorKind::AdditionalProperties { .. }
-                        )
-                    {
-                        continue;
-                    }
-                    let at = fixed_at(value.view(), error.instance_path().as_str())
-                        .unwrap_or(value.view());
-                    // Upstream PropertyNames errors give the container and schema path,
-                    // not a member token. Recheck the trusted name constraint once per
-                    // container/path, without reading an error's rejected-instance payload.
-                    if !is_meta
-                        && matches!(
-                            error.kind(),
-                            jsonschema::error::ValidationErrorKind::PropertyNames { .. }
-                        )
-                        && let Some((prefix, _)) =
-                            error.schema_path().as_str().split_once("/propertyNames")
-                    {
-                        let path = format!("{prefix}/propertyNames");
-                        if !checked_names.insert((occurrence(at), path.clone())) {
-                            continue;
-                        }
-                        let schema: Result<Value, _> = serde_json::from_str(include_str!(
-                            "../schemas/openbindings.schema.json"
-                        ))
-                        .map_err(|e| e.to_string());
-                        if let Ok(schema) = schema
-                            && let Some(constraint) = schema.pointer(&path)
-                            && let Ok(names) = compile(constraint, BTreeMap::new())
-                            && let Some(members) = at.members()
-                        {
-                            for member in members {
-                                if !names.is_valid(view(&member.name.to_owned()))
-                                    && !collector.offer(
-                                        member.name,
-                                        diagnostic_message(error.kind()),
-                                        true,
-                                        &already_retained,
-                                    )
-                                {
-                                    break 'errors;
-                                }
-                            }
-                            continue;
-                        }
-                    }
-                    if !is_meta
-                        && let jsonschema::error::ValidationErrorKind::AdditionalProperties {
-                            unexpected,
-                        } = error.kind()
-                        && let Some(members) = at.members()
-                    {
-                        let names: HashSet<_> = unexpected.iter().map(String::as_str).collect();
-                        let mut matched = false;
-                        for member in members {
-                            if backend::fixed_string(member.name)
-                                .is_some_and(|name| names.contains(name.as_ref()))
-                            {
-                                matched = true;
-                                if !collector.offer(
-                                    member.name,
-                                    UNEXPECTED_MEMBER_MESSAGE.into(),
-                                    true,
-                                    &already_retained,
-                                ) {
-                                    break 'errors;
-                                }
-                                if collector.expansion_exhausted {
-                                    continue 'errors;
-                                }
-                            }
-                        }
-                        if matched {
-                            continue;
-                        }
-                    }
-                    if !collector.offer(
-                        at,
-                        diagnostic_message(error.kind()),
-                        false,
-                        &already_retained,
-                    ) {
-                        break;
+        let mut collector = ProblemCollector::new(max_problems);
+        let mut decision = Err("fixed validation did not complete".into());
+        let _walk_status = jsonschema::ob_work::bounded(WORK, 1024, || {
+            let _pattern_status = jsonschema::ob_ecma::top_level(WORK, || {
+                decision = bounded_valid(validator, value.view());
+                if decision != Ok(false) {
+                    return;
+                }
+                collector.violated = true;
+                if let Some(map) = map {
+                    let mut offered = false;
+                    let limited = map.locate(value.view(), |at| {
+                        offered = true;
+                        collector.offer(at, GENERIC_MESSAGE.into(), true, &already_retained)
+                            && !collector.expansion_exhausted
+                    });
+                    collector.truncated |= limited;
+                    if offered {
+                        return;
                     }
                 }
-                collector.finish()
-            })
-        })
-        .map_err(|e| format!("fixed validation work limit: {e:?}"))?
-        .map_err(|_| "fixed pattern work limit".into())
+                collector.offer(
+                    value.view(),
+                    GENERIC_MESSAGE.into(),
+                    false,
+                    &already_retained,
+                );
+            });
+        });
+        // A location budget stop cannot erase a failure already established by
+        // validity. A failed validity scope still returns its original refusal.
+        decision?;
+        Ok(collector.finish())
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
+    #[test]
+    fn location_work_limit_preserves_established_failure_and_scope_recovers() {
+        let value = JsonValue::parse(r#"{"openbindings":"0.2.0","name":0}"#).unwrap();
+        let healthy = JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{}}"#).unwrap();
+        let mut saw_limited_failure = false;
+        for work in 1..100 {
+            let mut result = None;
+            let _ = jsonschema::ob_work::bounded(work, 1024, || {
+                result = Some(check(&value, false, 100));
+            });
+            if let Some(Ok(problems)) = result {
+                assert!(problems.violated);
+                assert!(!problems.entries.is_empty());
+                assert!(
+                    problems
+                        .entries
+                        .iter()
+                        .all(|p| p.message == GENERIC_MESSAGE)
+                );
+                saw_limited_failure |= problems.truncated;
+            }
+            assert!(validity(&healthy, false).unwrap());
+        }
+        assert!(saw_limited_failure);
+    }
+
     #[test]
     fn retained_problem_identity_precedes_both_allowances() {
         let value = JsonValue::parse(r#"{"a":null,"b":null}"#).unwrap();
@@ -485,51 +389,19 @@ mod tests {
     }
 
     #[test]
-    fn fixed_messages_are_bounded_and_do_not_guess_union_branches() {
-        use jsonschema::error::{TypeKind, ValidationErrorKind as Kind};
-        use jsonschema_value::types::JsonType;
-        let types = JsonType::Boolean | JsonType::Object;
-        assert_eq!(
-            diagnostic_message(&Kind::Type {
-                kind: TypeKind::Multiple(types)
-            }),
-            "expected one of these JSON types: boolean, object"
-        );
-        for kind in [
-            Kind::Required {
-                property: Value::String("x".repeat(MAX_REQUIRED_NAME_BYTES + 1)),
-            },
-            Kind::Required {
-                property: Value::Null,
-            },
-        ] {
-            assert_eq!(diagnostic_message(&kind), GENERIC_MESSAGE);
-        }
-        let message = diagnostic_message(&Kind::Required {
-            property: Value::String("\n".repeat(MAX_REQUIRED_NAME_BYTES)),
-        });
-        assert!(!message.contains('\n'));
-        assert!(message.len() <= MAX_MESSAGE_BYTES);
-        let longest_escaped = diagnostic_message(&Kind::Required {
-            property: Value::String("\u{0000}".repeat(MAX_REQUIRED_NAME_BYTES)),
-        });
-        assert!(longest_escaped.len() <= MAX_MESSAGE_BYTES);
-    }
-
-    #[test]
     fn fixed_problem_count_paths_and_truncation_are_preserved() {
         let value = JsonValue::parse(
             r#"{"openbindings":"0.2.0","operations":{"a":{"description":1,"deprecated":2,"aliases":3}}}"#,
         ).unwrap();
         let all = check(&value, false, 100).unwrap();
-        assert_eq!(all.entries.len(), 1);
+        assert_eq!(all.entries.len(), 3);
         assert!(!all.truncated);
         for capacity in [0, 1, 2, 3] {
             let bounded = check(&value, false, capacity).unwrap();
-            let retained = capacity.min(1);
+            let retained = capacity.min(3);
             assert_eq!(bounded.entries.len(), retained);
             assert!(bounded.violated);
-            assert_eq!(bounded.truncated, capacity < 1);
+            assert_eq!(bounded.truncated, capacity < 3);
             for (actual, expected) in bounded.entries.iter().zip(&all.entries) {
                 assert_eq!(actual.at.location(), expected.at.location());
                 assert_eq!(actual.message, expected.message);
@@ -544,14 +416,14 @@ mod tests {
         for capacity in [0, 1, 2, 3] {
             let problems = check(&value, false, capacity).unwrap();
             assert!(problems.violated);
-            assert_eq!(problems.entries.len(), capacity.min(1));
-            assert_eq!(problems.truncated, capacity < 1);
+            assert_eq!(problems.entries.len(), capacity.min(2));
+            assert_eq!(problems.truncated, capacity < 2);
             let paths: Vec<_> = problems
                 .entries
                 .iter()
                 .map(|p| p.at.location().pointer.unwrap())
                 .collect();
-            assert_eq!(paths, ["/z", "/a"][..capacity.min(1)]);
+            assert_eq!(paths, ["/z", "/a"][..capacity.min(2)]);
         }
         let healthy = JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{}}"#).unwrap();
         let problems = check(&healthy, false, 0).unwrap();

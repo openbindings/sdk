@@ -100,12 +100,21 @@ below for behavioral dependency changes. Keep every `publish = false` guard.
 - `src/error.rs`, `src/keywords/custom.rs`: retain lazy exact instance views through custom-keyword error context; avoid recursive materialization/drop of 10,000-level literals. Internal diagnostics expose bounded metadata and original locations, not whole instance values.
 - `src/keywords/additional_properties.rs`, `any_of.rs`, `helpers.rs`, `items.rs`, `min_length.rs`, `properties.rs`, `property_names.rs`, `required.rs`, `unevaluated_items.rs`, `unevaluated_properties.rs`, and `src/properties.rs`: preserve generic flat-value operation, scoped evaluation/diagnostic work, ECMAScript matching and dynamic reference behavior in the affected applicator/keyword paths. Check the full diff when rebasing; these are evaluator-sensitive changes, not mechanical wrappers.
 
-S8a stops invoking the vendored diagnostic metadata/count patch. The patch sources
-remain untouched for S8b. Coarse mode calls only `is_valid`; Upstream uses the
-library's `validate()` first error with no SDK construction-memory promise.
-`tools/verify-diagnostics.py` measures pinned-document first-error allocations and
-includes an amplifying negative control. Its current failure requires correction
-of D-DIAGNOSTICS's pinned-schema premise before claiming this lane is qualified.
+Fixed OBI-02/OBI-10 checks now call only `is_valid`; the location map uses
+`build_map` / `get` / `is_valid`. They no longer enter `Validator::validate`,
+`Validator::iter_errors`, `Validator::evaluate`, keyword `validate` / `collect_errors`
+or error-context ownership (`ValidationError::to_owned`, `anyOf` contexts and
+unexpected-name error vectors). No SDK caller activates `ob_work::diagnostics` or
+`ob_work::diagnostic_metadata`; the diagnostic count, copy-admission, metadata-only,
+payload and schema-detail scopes remain in the fork solely for later removal.
+One inert hook is still called by `PropertyNamesValidator::is_valid`:
+`ob_work::diagnostic_copy` immediately admits the name when no diagnostic scope is
+active. This validity scratch is measured; it is not a bounded error-construction
+path. S8b can remove the diagnostic patch, not the separate work/depth/regex guards.
+Explicit value Upstream diagnostics still use the library's `validate()` first
+error, with no SDK construction-memory promise. No vendored source is edited here.
+`tools/verify-diagnostics.py` measures validity, location compilation, fixed findings
+and complete document validation against the pinned generators and corpus.
 
 ## jsonschema-value
 

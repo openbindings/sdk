@@ -8,6 +8,7 @@ publish = false
 [workspace]
 
 [dependencies]
+openbindings = { path = "../../crates/openbindings" }
 openbindings-internal-schema = { path = "../../crates/openbindings-internal-schema" }
 openbindings-internal-json = { path = "../../crates/openbindings-internal-json" }
 jsonschema = { package = "openbindings-internal-jsonschema", path = "../../vendor/openbindings-internal-jsonschema", default-features = false, features = ["arbitrary-precision"] }

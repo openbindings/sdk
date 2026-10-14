@@ -1,0 +1,284 @@
+{
+  "subject": "Value diagnostics modes and validity-only document findings",
+  "authority": "D-DIAGNOSTICS, Question 2 revisited; no diagnostic patch, size gate or document opt-in.",
+  "status": "Implementation and offline qualification complete; ten native listener tests and both browser runners denied loopback permission.",
+  "constraints": {
+    "network": "No external network; offline Cargo/npm environment",
+    "git": "No Git writes; changes uncommitted",
+    "vendor": "No vendored source edits",
+    "value_diagnostics": "Existing Coarse/Upstream implementation unchanged"
+  },
+  "implementation": {
+    "fixed_checks": "is_valid only; OBI-02 compiled map follows properties, patternProperties, additionalProperties, propertyNames, prefixItems, items and local pointer references; OBI-10 keeps checked nodes.",
+    "message": "value violates the fixed normative schema",
+    "limits": "Whole-check validity is authoritative. Guidance shares the existing 2,000,000 work / 1,024 depth and pattern budgets; a walk stop retains failure and deepest known position. Existing 4,096 finding and 8 MiB pointer caps remain.",
+    "fork_boundary": "No instance validate/iter_errors/evaluate, keyword error collection, error-context ownership or active diagnostic count/metadata scope. PropertyNamesValidator::is_valid still calls inert diagnostic_copy, which immediately admits when inactive. See DEPENDENCY-MAINTENANCE.md."
+  },
+  "checks": {
+    "rust_format": "passed: workspace and standalone memory probe",
+    "clippy": "passed: workspace/all-targets/native and standalone probe, -D warnings; unchanged vendored deprecation warning remains dependency-capped",
+    "workspace_tests": {
+      "passed": 437,
+      "failed": 10,
+      "ignored": 2,
+      "status": "only loopback denials",
+      "loopback_denials": [
+        "real_http_media_types_statuses_compression_and_location_independence",
+        "malformed_native_location_is_a_typed_policy_refusal",
+        "redirects_all_five_statuses_honor_policy_and_strip_cross_origin_credentials",
+        "cancellation_timeout_bounded_status_cleanup_and_connection_reuse",
+        "normalized_loopback_http_and_non_loopback_admission",
+        "credential_origin_chains_refuse_only_cross_origin_then_same_origin",
+        "safe_native_constructor_follows_five_statuses_relative_locations_and_ten_hops",
+        "truncated_native_body_is_network_without_coding_evidence",
+        "sdk_deadline_covers_slow_headers_and_slow_body",
+        "tls_uses_private_ca_and_downgrade_chain_is_refused_before_plaintext_dispatch"
+      ],
+      "log": "target/document-diagnostics/workspace.log"
+    },
+    "location_tests": "passed: supported applicators, overlapping patterns, local refs and siblings, source names, arrays, deliberate stops, pinned keyword inventory, work-limit failure preservation and scope recovery",
+    "roles_archives_and_wasm": {
+      "inspection": {
+        "status": "passed",
+        "receipt": "target/source-inspection-qualification/archives/receipt.json",
+        "sha256": "a837d8ab39cd2b66cd881c719bee625a8aefaddc7447276ec581f3013ab83491",
+        "archives": {
+          "openbindings-0.2.0-alpha.1.crate": "621ac5c60b18872716f8af932119d8519ee377d75bafcdb0b00330572d6bdbfd",
+          "openbindings-internal-json-0.2.0-alpha.1.crate": "ff3f46875db31c2665acf11b222b8a76cf6cdd07777efd9dbacf0f9772561827",
+          "openbindings-internal-cancellation-0.2.0-alpha.1.crate": "0d1e1966df4add21bd229a9475643a852fa785e06ec4398c17378fd7c7c1de0d",
+          "openbindings-internal-schema-0.2.0-alpha.1.crate": "b54118c9b7d797456b4dd482482eeddec6aabca6f418e12771eeed9bca89cd5d",
+          "openbindings-source-inspection-0.2.0-alpha.1.crate": "61d4f5c4884fe64619018a37e145bc164dae9f34b1416f0f8f7b6c387d6c7fed",
+          "openbindings-internal-jsonschema-0.58.6-ob.1.crate": "726c3d04d3edd6226d0035c4c6cc33195344c443e5d3bb7f8747566f0bbb4dba",
+          "openbindings-internal-jsonschema-value-0.58.6-ob.1.crate": "98b2df948661e779bfbef72198939bc913ee5b1811d9e70b8de513f754065066",
+          "openbindings-internal-serde-json-1.0.151-ob.1.crate": "23b4a6b87143d943a688e8df095e60de81250bb0ee16d1e0adaee113ac27c7b3",
+          "openbindings-internal-referencing-0.58.6-ob.1.crate": "ba43b99d57dbbe5c57e97f9675cd94cbe8df7bd1415d7accaff580b8e22fc841",
+          "openbindings-internal-regress-0.12.0-ob.1.crate": "ef7c31b1c705f6f5e660f2c09ad00d0767a174ef0abcec5aa829645d1d890e87"
+        }
+      },
+      "synthesis": {
+        "status": "passed",
+        "receipt": "target/interface-synthesis-qualification/archives/receipt.json",
+        "sha256": "bbdd1fd4cd13fb40a440e25408de75edd967de62c1c49a5b0db2083d89662414",
+        "archives": {
+          "openbindings-0.2.0-alpha.1.crate": "621ac5c60b18872716f8af932119d8519ee377d75bafcdb0b00330572d6bdbfd",
+          "openbindings-internal-json-0.2.0-alpha.1.crate": "ff3f46875db31c2665acf11b222b8a76cf6cdd07777efd9dbacf0f9772561827",
+          "openbindings-internal-cancellation-0.2.0-alpha.1.crate": "0d1e1966df4add21bd229a9475643a852fa785e06ec4398c17378fd7c7c1de0d",
+          "openbindings-internal-schema-0.2.0-alpha.1.crate": "b54118c9b7d797456b4dd482482eeddec6aabca6f418e12771eeed9bca89cd5d",
+          "openbindings-interface-synthesis-0.2.0-alpha.1.crate": "c83bd35addfc70de0639b7fcc0661693a64d65be6b809cdf3f7a2d8a7d191377",
+          "openbindings-source-inspection-0.2.0-alpha.1.crate": "61d4f5c4884fe64619018a37e145bc164dae9f34b1416f0f8f7b6c387d6c7fed",
+          "openbindings-internal-jsonschema-0.58.6-ob.1.crate": "726c3d04d3edd6226d0035c4c6cc33195344c443e5d3bb7f8747566f0bbb4dba",
+          "openbindings-internal-jsonschema-value-0.58.6-ob.1.crate": "98b2df948661e779bfbef72198939bc913ee5b1811d9e70b8de513f754065066",
+          "openbindings-internal-serde-json-1.0.151-ob.1.crate": "23b4a6b87143d943a688e8df095e60de81250bb0ee16d1e0adaee113ac27c7b3",
+          "openbindings-internal-referencing-0.58.6-ob.1.crate": "ba43b99d57dbbe5c57e97f9675cd94cbe8df7bd1415d7accaff580b8e22fc841",
+          "openbindings-internal-regress-0.12.0-ob.1.crate": "ef7c31b1c705f6f5e660f2c09ad00d0767a174ef0abcec5aa829645d1d890e87"
+        }
+      },
+      "invocation": {
+        "status": "passed",
+        "receipt": "target/binding-invocation-qualification/archives/receipt.json",
+        "sha256": "d89da0e79beeef251710f225d57aec6bd7ea3b964a34aab129197f004ac176a2",
+        "archives": {
+          "openbindings-0.2.0-alpha.1.crate": "621ac5c60b18872716f8af932119d8519ee377d75bafcdb0b00330572d6bdbfd",
+          "openbindings-internal-json-0.2.0-alpha.1.crate": "ff3f46875db31c2665acf11b222b8a76cf6cdd07777efd9dbacf0f9772561827",
+          "openbindings-internal-cancellation-0.2.0-alpha.1.crate": "0d1e1966df4add21bd229a9475643a852fa785e06ec4398c17378fd7c7c1de0d",
+          "openbindings-internal-schema-0.2.0-alpha.1.crate": "b54118c9b7d797456b4dd482482eeddec6aabca6f418e12771eeed9bca89cd5d",
+          "openbindings-interface-synthesis-0.2.0-alpha.1.crate": "c83bd35addfc70de0639b7fcc0661693a64d65be6b809cdf3f7a2d8a7d191377",
+          "openbindings-source-inspection-0.2.0-alpha.1.crate": "61d4f5c4884fe64619018a37e145bc164dae9f34b1416f0f8f7b6c387d6c7fed",
+          "openbindings-invocation-0.2.0-alpha.1.crate": "7e6e95af5cfe8861181e4662107b3e579f1fadc94dae151aff9b904d6531ded1",
+          "openbindings-json-schema-evaluator-0.2.0-alpha.1.crate": "639181f5b670e54a327575d416f71e332c38acd4dac319460092a1900803ab95",
+          "openbindings-internal-jsonschema-0.58.6-ob.1.crate": "726c3d04d3edd6226d0035c4c6cc33195344c443e5d3bb7f8747566f0bbb4dba",
+          "openbindings-internal-jsonschema-value-0.58.6-ob.1.crate": "98b2df948661e779bfbef72198939bc913ee5b1811d9e70b8de513f754065066",
+          "openbindings-internal-serde-json-1.0.151-ob.1.crate": "23b4a6b87143d943a688e8df095e60de81250bb0ee16d1e0adaee113ac27c7b3",
+          "openbindings-internal-referencing-0.58.6-ob.1.crate": "ba43b99d57dbbe5c57e97f9675cd94cbe8df7bd1415d7accaff580b8e22fc841",
+          "openbindings-internal-regress-0.12.0-ob.1.crate": "ef7c31b1c705f6f5e660f2c09ad00d0767a174ef0abcec5aa829645d1d890e87"
+        }
+      }
+    },
+    "api_reference": {
+      "status": "passed",
+      "exports": 83,
+      "entries": 460,
+      "log": "target/document-diagnostics/api-reference.log"
+    },
+    "attribution": "passed: all four files match offline closures",
+    "kit": {
+      "modes": [
+        "coarse",
+        "upstream"
+      ],
+      "observations_per_mode": 1564,
+      "satisfies": 860,
+      "fails": 662,
+      "preparation_refusals": 21,
+      "evaluation_no_verdict": 21,
+      "document_admissions": 495,
+      "status": "pass; exact verdict/refusal/evidence invariance"
+    },
+    "corpus": {
+      "native": 435,
+      "typescript": 435,
+      "status": "pass; exact verdict/refusal/evidence invariance and normalized native/TypeScript findings parity",
+      "native_receipt": "tools/qualification/corpus/5e835cf6-4fcf-410a-80bc-71885bb76175/full-actual.jsonl",
+      "typescript_receipt": "target/document-diagnostics/ts-corpus.jsonl"
+    },
+    "diagnostic_changes": {
+      "ledger": "tools/qualification/inputs/diagnostics-migration-ledger.json",
+      "kit_coarse": 662,
+      "kit_upstream": 662,
+      "kit_document_findings": 0,
+      "corpus": 152
+    },
+    "probe_location_correction": {
+      "previous_claim": "19 enclosing arrays",
+      "actual": "5 arrays now locate failing elements; 14 OBI-10 cases stay at checked nodes as required",
+      "cases": "tools/qualification/inputs/document-location-expectations.json"
+    },
+    "memory": {
+      "status": "passed",
+      "large_documents": 69,
+      "investigation_generators": 67,
+      "retention_controls": 2,
+      "corpus_parsed": 300,
+      "corpus_parse_refusals": 5,
+      "repetitions": 3,
+      "bounds_bytes": {
+        "validity": 18874368,
+        "fixed_above_validity": 10485760,
+        "sdk_above_validity": 12582912
+      },
+      "compilation": [
+        {
+          "nanos": 3350542,
+          "peak_bytes": 1116066,
+          "phase": "location-map-compilation",
+          "repetition": 0
+        },
+        {
+          "nanos": 686167,
+          "peak_bytes": 569351,
+          "phase": "location-map-compilation",
+          "repetition": 1
+        },
+        {
+          "nanos": 661000,
+          "peak_bytes": 569351,
+          "phase": "location-map-compilation",
+          "repetition": 2
+        }
+      ],
+      "summary": {
+        "large": {
+          "cases": 69,
+          "samples": 207,
+          "validity": {
+            "max_peak_bytes": 17573888,
+            "max_peak_case": "document-aliases-unique",
+            "median_nanos": 1344125,
+            "max_nanos": 58046208
+          },
+          "location": {
+            "max_peak_bytes": 17574216,
+            "max_peak_case": "document-aliases-unique",
+            "median_nanos": 42,
+            "max_nanos": 66201917
+          },
+          "fixed": {
+            "max_peak_bytes": 17574216,
+            "max_peak_case": "document-aliases-unique",
+            "median_nanos": 2336416,
+            "max_nanos": 80852791
+          },
+          "sdk": {
+            "max_peak_bytes": 17949677,
+            "max_peak_case": "document-aliases-unique",
+            "median_nanos": 2348250,
+            "max_nanos": 100965750
+          },
+          "location_walk_cases": 30,
+          "median_active_location_nanos": 1184333.5,
+          "max_fixed_minus_validity_bytes": 8472586,
+          "max_sdk_minus_validity_bytes": 8797823,
+          "median_fixed_minus_validity_nanos": 9834
+        },
+        "corpus": {
+          "cases": 300,
+          "samples": 900,
+          "validity": {
+            "max_peak_bytes": 1120,
+            "max_peak_case": "document/OBI-10.json#/tests/0",
+            "median_nanos": 2083.0,
+            "max_nanos": 39209
+          },
+          "location": {
+            "max_peak_bytes": 1024,
+            "max_peak_case": "document/OBI-02.json#/tests/1",
+            "median_nanos": 42.0,
+            "max_nanos": 11083
+          },
+          "fixed": {
+            "max_peak_bytes": 1024,
+            "max_peak_case": "document/OBI-02.json#/tests/1",
+            "median_nanos": 2562.5,
+            "max_nanos": 12625
+          },
+          "sdk": {
+            "max_peak_bytes": 3930,
+            "max_peak_case": "document/OBI-12.json#/tests/32",
+            "median_nanos": 4541.0,
+            "max_nanos": 18292
+          },
+          "location_walk_cases": 95,
+          "median_active_location_nanos": 3041,
+          "max_fixed_minus_validity_bytes": 1000,
+          "max_sdk_minus_validity_bytes": 2930,
+          "median_fixed_minus_validity_nanos": -42.0
+        }
+      },
+      "raw_numbers": "tools/qualification/inputs/document-allocation-samples.json",
+      "method": "tools/diagnostic-memory-probe/README.md"
+    },
+    "typescript": {
+      "wasm_build": "passed",
+      "build": "passed",
+      "tests": {
+        "passed": 73,
+        "failed": 0
+      },
+      "types": "passed",
+      "format": "passed",
+      "installed_package": "passed",
+      "corpus": "435/435 with normalized native parity",
+      "browsers": {
+        "chromium": "listen EPERM 127.0.0.1 before launch",
+        "webkit": "listen EPERM 127.0.0.1 before launch"
+      }
+    }
+  },
+  "commands": [
+    "source /Users/matt/Code/ob-pj/design/rust-quality-program-2026-10-13/work/env.sh",
+    "cargo fmt --all --check",
+    "cargo fmt --manifest-path tools/diagnostic-memory-probe/Cargo.toml --check",
+    "cargo clippy --locked --workspace --all-targets --features openbindings-http-discovery/native -- -D warnings",
+    "cargo test --locked --workspace --features openbindings-http-discovery/native --no-fail-fast",
+    "python3 tools/verify-source-inspection.py --archives --wasm",
+    "python3 tools/verify-interface-synthesis.py --archives --wasm",
+    "python3 tools/verify-binding-invocation.py --archives --wasm",
+    "python3 tools/verify-api-reference.py",
+    "python3 tools/attribution.py --check",
+    "python3 tools/verify-diagnostics.py",
+    "cargo clippy --locked --manifest-path tools/diagnostic-memory-probe/Cargo.toml -- -D warnings",
+    "cargo build --locked --manifest-path tools/conformance-observer/Cargo.toml",
+    "python3 tools/qualification/replay/corpus.py",
+    "python3 tools/qualification/replay/production-corpus.py --binary tools/conformance-observer/target/debug/sdk-production-observer",
+    "cargo run --locked -p openbindings-schema-evaluator-test-support --example replay",
+    "cargo run --locked -p openbindings-schema-evaluator-test-support --example replay -- --upstream",
+    "python3 tools/qualification/replay/check-diagnostics-migrations.py --before-kit target/s8a/kit-before.json --coarse-kit target/document-diagnostics/kit-coarse.json --upstream-kit target/document-diagnostics/kit-upstream.json --before-corpus tools/qualification/corpus/5cc6dbf2-7370-4ae4-8fe2-cb1a00c208d4/full-actual.jsonl --after-corpus tools/qualification/corpus/5e835cf6-4fcf-410a-80bc-71885bb76175/full-actual.jsonl",
+    "npm run build:wasm; npm run build; npm test; npm run test:types; npm run format:check; npm run test:package (packages/typescript)",
+    "node tools/qualification/replay/node-corpus.mjs tools/qualification/corpus/full-requests.jsonl",
+    "python3 tools/qualification/replay/check-corpus-parity.py --native tools/qualification/corpus/5e835cf6-4fcf-410a-80bc-71885bb76175/full-actual.jsonl --typescript target/document-diagnostics/ts-corpus.jsonl",
+    "python3 tools/qualification/replay/prepare-browser-fixtures.py",
+    "node packages/typescript/test/browser.mjs chromium",
+    "node packages/typescript/test/browser.mjs webkit"
+  ],
+  "logs": "target/document-diagnostics/"
+}

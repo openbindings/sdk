@@ -61,10 +61,7 @@ test("source editor requires conformance and retains prepared partial snapshots"
       (item) => item.location?.pointer === "/operations/lookup/inputSchema",
     );
     assert.equal(finding.code, "schema-mismatch");
-    assert.equal(
-      finding.message,
-      "this member is not permitted here; extension member names begin with x-",
-    );
+    assert.equal(finding.message, "value violates the fixed normative schema");
     assert.match(formatEditorResult(rejected), /UTF-8 byte column/);
     assert.equal(editor.snapshot(), undefined);
 

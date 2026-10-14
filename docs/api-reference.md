@@ -218,7 +218,7 @@ code-based Display representation.
 | `escape` | OBI-01 | A JSON string escape is invalid. |
 | `unicode-escape` | OBI-01 | A Unicode escape lacks four hexadecimal digits. |
 | `duplicate-member` | OBI-01 | An object repeats a decoded member name. |
-| `schema-mismatch` | OBI-02, OBI-10 | A constraint in the derived schema or meta-schemas failed. The message identifies the keyword without including instance values. |
+| `schema-mismatch` | OBI-02, OBI-10 | A constraint in the derived schema or meta-schemas failed. The fixed message is `value violates the fixed normative schema`; locations identify deepest checked document positions or the checked schema node. |
 | `fixed-schema-limit-or-failure` | OBI-02, OBI-10 | Fixed-schema checking could not complete within its capability or work limit. |
 | `semver` | OBI-03 | The openbindings value is not a SemVer string. |
 | `missing-version` | OBI-03 | The openbindings member is absent. |
@@ -405,3 +405,22 @@ token, and providers receive an owned token. Token `check()` returns `Cancelled`
 not a value verdict. Contract boundaries convert it to `caller-cancelled`; async
 consumers retain their existing cancellation outcomes. Invocation retains its
 synchronous relay and isolated local tokens. See the [offline primitive comparison](../crates/openbindings-internal-cancellation/README.md).
+
+
+Document findings are independent of the value diagnostics mode. OBI-02 and OBI-10
+use the library's validity API only, with the fixed message
+`value violates the fixed normative schema`, their rule, and original source
+coordinates. OBI-02 follows failing object members, member names and array elements
+through the pinned schema's compiled validator map and local pointer references.
+It reports each deepest failing position under the findings cap. Missing members,
+container constraints and unsupported descent constructs stay at their container;
+an empty walk falls back to the root. OBI-10 reports the schema node checked by its
+localized walk. Location work shares the existing work budget; stopping retains
+the deepest established failing node and marks findings truncated. Locations and
+missing detail never change validity or rule evidence. No document opt-in, size
+gate, library error construction or active diagnostic patch is involved.
+
+Migration: document findings keep source locations, lose keyword-specific wording,
+and can now contain several positions. OBI-10 uses the checked node rather than a
+keyword within it. Use rule, code and evidence for logic, not message text or
+finding count.

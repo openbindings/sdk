@@ -1,5 +1,6 @@
 //! Private, shared OpenBindings embedding implementation. No evaluator planning.
 pub use openbindings_internal_json::{JsonKind, JsonRef, JsonValue};
+pub mod fixed_locations;
 pub mod fixed_schema;
 mod input_policy;
 pub mod schema_index;

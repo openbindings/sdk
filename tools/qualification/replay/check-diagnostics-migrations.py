@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Pin S8a diagnostic-only migrations by ID; reject verdict/refusal/evidence drift."""
+"""Pin diagnostic-only migrations by ID; reject verdict/refusal/evidence drift."""
 import argparse
 import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-LEDGER = ROOT / 'tools/qualification/inputs/s8a-diagnostics-ledger.json'
+LEDGER = ROOT / 'tools/qualification/inputs/diagnostics-migration-ledger.json'
 
 def load(path):
     return json.loads(Path(path).read_text())
@@ -52,10 +52,16 @@ def main():
         assert all(not r['failures'] for r in receipt['report']['observations'])
     corpus = lambda path: [json.loads(line) for line in Path(path).read_text().splitlines()]
     old_corpus, new_corpus = map(corpus, [args.before_corpus, args.after_corpus])
+    locations = load(ROOT / 'tools/qualification/inputs/document-location-expectations.json')
+    by_id = indexed(new_corpus)
+    for case in locations['cases']:
+        actual = [f['location']['pointer'] for f in by_id[case['id']]['findings'] if f['rule'] == case['rule']]
+        assert all(pointer in actual for pointer in case['expected_pointers']), (case['id'], actual)
     ledger = {
-        'slice': 'S8a',
+        'subject': 'diagnostics modes and document locations',
         'policy': 'Verdicts, refusal stages/reasons/codes, and rule evidence unchanged; only diagnostics differ.',
         'counts': {'kit': len(before['report']['observations']), 'corpus': len(old_corpus)},
+        'document_locations': locations,
         'kit_coarse': compare(before['report']['observations'], coarse['report']['observations']),
         'kit_upstream': compare(before['report']['observations'], upstream['report']['observations']),
         'kit_document_findings': compare(before['admission'], coarse['admission']),

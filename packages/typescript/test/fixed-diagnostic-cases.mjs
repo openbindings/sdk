@@ -5,8 +5,7 @@ export function fixedDiagnosticCases(sdk) {
     if (!condition) throw new Error(message);
   };
   const byteLength = (text) => new TextEncoder().encode(text).length;
-  const unexpectedMessage =
-    "this member is not permitted here; extension member names begin with x-";
+  const unexpectedMessage = "value violates the fixed normative schema";
   const cases = [
     {
       name: "unexpected member identifies escaped original key after multibyte prefix",
@@ -51,8 +50,8 @@ export function fixedDiagnosticCases(sdk) {
       required: "kind",
     },
     {
-      // CR-6: identify anyOf without inventing a repair for one of its branches.
-      name: "complex failure names its keyword without inventing a branch repair",
+      // A union failure keeps the checked position and fixed message.
+      name: "complex failure keeps its position without inventing a branch repair",
       text: '{"openbindings":"0.2.0","operations":{"x":{"input":null}}}',
       pointer: "/operations/x/input",
       token: "null",
@@ -133,31 +132,10 @@ export function fixedDiagnosticCases(sdk) {
             byteLength(preceding.slice(preceding.lastIndexOf("\n") + 1)) + 1,
           `${fixture.name}: original byte column`,
         );
-        if (fixture.unexpected)
-          check(
-            finding.message === unexpectedMessage,
-            `${fixture.name}: disallowed member explained`,
-          );
-        if (fixture.expectedType)
-          check(
-            finding.message.includes(fixture.expectedType),
-            `${fixture.name}: expected type explained`,
-          );
-        if (fixture.required)
-          check(
-            finding.message.includes(JSON.stringify(fixture.required)),
-            `${fixture.name}: required member explained`,
-          );
-        if (fixture.keyword) {
-          check(
-            finding.message.includes(fixture.keyword),
-            `${fixture.name}: failing keyword explained`,
-          );
-          check(
-            !/\b(?:boolean|object|array|string)\b/i.test(finding.message),
-            `${fixture.name}: no invented branch repair`,
-          );
-        }
+        check(
+          finding.message === unexpectedMessage,
+          `${fixture.name}: fixed message`,
+        );
       }
       results.push({ name: fixture.name, conclusion: report.conclusion });
     } finally {
@@ -167,6 +145,35 @@ export function fixedDiagnosticCases(sdk) {
       sdk.liveStorageOwners() === arenas,
       `${fixture.name}: released document storage`,
     );
+  }
+  {
+    const parsed = sdk.parseDocument(
+      '{"openbindings":"0.2.0","operations":{"run":{"aliases":["valid",false,42],"description":0,"input":{"type":42}}}}',
+    );
+    try {
+      const report = parsed.value.validate().report;
+      const fixed = report.findings.filter((f) => f.code === "schema-mismatch");
+      check(
+        JSON.stringify(fixed.map((f) => [f.rule, f.location.pointer])) ===
+          JSON.stringify([
+            ["OBI-02", "/operations/run/aliases/1"],
+            ["OBI-02", "/operations/run/aliases/2"],
+            ["OBI-02", "/operations/run/description"],
+            ["OBI-10", "/operations/run/input"],
+          ]),
+        "multiple positions and localized meta node",
+      );
+      check(
+        fixed.every((f) => f.message === unexpectedMessage),
+        "fixed messages in both rules",
+      );
+    } finally {
+      parsed.value.dispose();
+    }
+    results.push({
+      name: "multiple positions and localized meta node",
+      conclusion: "non-conformant",
+    });
   }
   for (const count of [4096, 4097]) {
     const schemas = Object.fromEntries(
