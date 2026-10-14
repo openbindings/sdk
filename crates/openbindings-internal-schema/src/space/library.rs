@@ -3,7 +3,10 @@
 use super::*;
 use jsonschema::{Draft, Registry, Retrieve, Uri};
 use serde_json::Value;
-use std::sync::{Arc, Mutex};
+use std::{
+    borrow::Cow,
+    sync::{Arc, Mutex},
+};
 
 #[derive(Clone)]
 pub(super) struct Refusal {
@@ -55,11 +58,48 @@ impl Drop for Tree {
     }
 }
 fn scalar(value: JsonRef<'_>) -> String {
-    value.as_str().map(str::to_owned).unwrap_or_else(|| {
-        openbindings_internal_json::backend::fixed_string(value)
-            .expect("JSON string")
-            .into_owned()
-    })
+    // Use one injective presentation for every name, including scalar names
+    // containing the literal marker. Otherwise a surrogate and its spelling can
+    // collapse into one map entry and corrupt both lookup and provenance.
+    openbindings_internal_json::backend::fixed_string(value)
+        .expect("JSON string")
+        .into_owned()
+}
+
+fn presented_reference(reference: &str) -> Cow<'_, str> {
+    let Some((base, fragment)) = reference.split_once('#') else {
+        return Cow::Borrowed(reference);
+    };
+    if !fragment.starts_with('/') {
+        // Classification belongs to the library: an encoded leading slash is
+        // still a plain name, not a pointer to translate.
+        return Cow::Borrowed(reference);
+    }
+    // In URI pointer tokens, the scalar presentation's U+E000 marker is UTF-8
+    // percent-encoded. Double only that spelling (case-insensitively); preserve
+    // all other percent and ~ escapes verbatim for the library to interpret.
+    // In particular, %25EE%2580%2580 remains literal percent text.
+    const MARKER: &[u8] = b"%EE%80%80";
+    let mut cursor = base.len() + 1;
+    let mut copied = 0;
+    let mut out = String::new();
+    while let Some(offset) = reference.as_bytes()[cursor..]
+        .windows(MARKER.len())
+        .position(|window| window.eq_ignore_ascii_case(MARKER))
+    {
+        let marker = cursor + offset;
+        let end = marker + MARKER.len();
+        out.push_str(&reference[copied..end]);
+        out.push_str(&reference[marker..end]);
+        copied = end;
+        cursor = end;
+    }
+    if copied == 0 {
+        Cow::Borrowed(reference)
+    } else {
+        out.push_str(&reference[copied..]);
+        Cow::Owned(out)
+    }
 }
 fn copy(value: &JsonValue) -> Tree {
     let mut stack = vec![(value.view(), false)];
@@ -89,7 +129,16 @@ fn copy(value: &JsonValue) -> Tree {
             JsonKind::Object => Value::Object(
                 node.members()
                     .unwrap()
-                    .map(|m| (scalar(m.name), child(m.value)))
+                    .map(|m| {
+                        let mut value = child(m.value);
+                        if matches!(m.name.as_str(), Some("$ref" | "$dynamicRef"))
+                            && let Value::String(reference) = &mut value
+                            && let Cow::Owned(presented) = presented_reference(reference)
+                        {
+                            *reference = presented;
+                        }
+                        (scalar(m.name), value)
+                    })
                     .collect(),
             ),
         };
@@ -208,6 +257,15 @@ impl SchemaSpace {
         // Ask the retriever through preparation, including every distinct absent
         // resource. No absent resource can be mistaken for a resolved schema.
         if !absent.is_empty() {
+            // Known reference carriers are already in `names`; borrow the
+            // remaining carrier names rather than copying all identity strings.
+            let missing_names: HashSet<_> = absent.iter().map(|(_, name)| name.as_str()).collect();
+            let mut inspection_uri = "urn:openbindings:missing-inspection".to_owned();
+            while self.names.contains_key(&inspection_uri)
+                || missing_names.contains(inspection_uri.as_str())
+            {
+                inspection_uri.push('-');
+            }
             let recording = Recording::default();
             let refs: Vec<_> = absent
                 .iter()
@@ -216,10 +274,7 @@ impl SchemaSpace {
             let _inspection = Registry::new()
                 .draft(Draft::Draft202012)
                 .retriever(recording.clone())
-                .add(
-                    "urn:openbindings:missing-inspection",
-                    serde_json::json!({"allOf":refs}),
-                )
+                .add(&inspection_uri, serde_json::json!({"allOf":refs}))
                 .expect("private URI")
                 .prepare();
             let recorded = recording.requested.lock().unwrap();
@@ -314,7 +369,7 @@ impl SchemaSpace {
                             .unwrap_or("urn:openbindings:anonymous-inspection");
                         let resolved = registry
                             .resolver(Uri::parse(base.to_owned()).expect("admitted base URI"))
-                            .lookup(&key.1);
+                            .lookup(&presented_reference(&key.1));
                         match resolved {
                             Ok(resolved) => match identity
                                 .get(&(std::ptr::from_ref(resolved.contents()) as usize))
@@ -347,6 +402,10 @@ impl SchemaSpace {
                             }),
                         }
                     }
+                    // The documented preparation API processes the carrier,
+                    // including unused malformed siblings. Keep this honest
+                    // conservative limit; S9's static-reference-defect fragment
+                    // will handle such defects as holes, without a private resolver.
                     Err(_) => Err(Refusal::invalid(
                         "resource-inspection",
                         "the resource could not be prepared for static inspection",

@@ -193,3 +193,63 @@ fn encoded_plain_names_keep_document_decoding_and_follow_the_library_elsewhere()
         }
     }
 }
+
+#[test]
+fn documented_registry_routes_require_preparing_the_malformed_carrier() {
+    const BASE: &str = "https://probe.invalid/root";
+    struct Carrier(Value);
+    impl jsonschema::Retrieve for Carrier {
+        fn retrieve(
+            &self,
+            uri: &jsonschema::Uri<String>,
+        ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+            assert_eq!(uri.as_str(), BASE);
+            Ok(self.0.clone())
+        }
+    }
+    for bad in [json!({"not":{"$ref":"%"}}), json!({"$id":"%"})] {
+        let schema = json!({"$id":BASE,"$defs":{"good":{"type":"string"},"bad":bad}});
+        let borrowed = jsonschema::Registry::new()
+            .draft(jsonschema::Draft::Draft202012)
+            .retriever(Recording::default())
+            .add(BASE, &schema)
+            .unwrap()
+            .prepare();
+        assert!(borrowed.is_err(), "borrowed carrier unexpectedly prepared");
+        let owned = jsonschema::Registry::new()
+            .draft(jsonschema::Draft::Draft202012)
+            .retriever(Recording::default())
+            .add(BASE, schema.clone())
+            .unwrap()
+            .prepare();
+        assert!(owned.is_err(), "owned carrier unexpectedly prepared");
+        // Start with only the desired reference and let the documented retriever
+        // supply its carrier. Preparation still refuses the unused bad sibling.
+        let queried = jsonschema::Registry::new()
+            .draft(jsonschema::Draft::Draft202012)
+            .retriever(Carrier(schema.clone()))
+            .add(
+                "urn:probe:query",
+                json!({"$ref":format!("{BASE}#/$defs/good")}),
+            )
+            .unwrap()
+            .prepare();
+        assert!(
+            queried.is_err(),
+            "query-only registration unexpectedly prepared"
+        );
+        let empty = jsonschema::Registry::new()
+            .draft(jsonschema::Draft::Draft202012)
+            .retriever(Recording::default())
+            .prepare()
+            .unwrap();
+        assert!(empty.add(BASE, &schema).unwrap().prepare().is_err());
+        let healthy = json!({"$id":BASE,"$defs":{"good":{"type":"string"}}});
+        let registry = empty.add(BASE, &healthy).unwrap().prepare().unwrap();
+        let resolved = registry
+            .resolver(jsonschema::Uri::parse(BASE.to_owned()).unwrap())
+            .lookup("#/$defs/good")
+            .unwrap();
+        assert!(std::ptr::eq(resolved.contents(), &healthy["$defs"]["good"]));
+    }
+}

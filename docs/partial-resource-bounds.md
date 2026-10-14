@@ -319,3 +319,29 @@ host case, default port and unreserved percent spellings. Encoded plain names in
 `$id` and external resources follow the library's refusal. Duplicate plain-name
 and non-schema-pointer refusals remain until S9. The [migration ledger](../tools/qualification/inputs/s6de-migration-ledger.json)
 records approved case changes; these are not new document conformance violations.
+
+## Review round 1: inspection presentation and limits
+
+Inspection copies now use S2's injective string presentation for every name:
+literal U+E000 markers double, while lone surrogates have distinct marked spellings.
+JSON Pointer references apply the same marker encoding, preserving other percent
+and tilde escapes for the library. Both query strings and references carried in
+inspection copies are translated. Provenance stays keyed by each copied node's
+pointer identity, so distinct original names cannot alias one copied target.
+The synthetic missing-reference root is selected deterministically outside all
+normalized inspected resource names and reference carriers.
+
+An unused malformed `$ref: "%"` or `$id: "%"` can still cause full-carrier
+preparation to refuse a valid sibling target with `resource-inspection`. Documented
+borrowed/owned registration, extension of a prepared registry, and registration of
+only the desired query followed by retrieval all retain this failure. No documented
+query-scoped preparation route was found. This is a conservative implementation
+limit under §5.2, not an undefinedness verdict. S9's approved static-reference-defect
+fragment will restore it by treating malformed references as holes; no private
+resolver or carrier-pruning fallback is introduced here.
+
+Review round 1 explicitly accepts `#%2F$defs%2Fgood` as another ordinary spelling
+migration: inside `$id` and supplied resources the library treats the encoded
+leading slash as a plain name and refuses it. The gate test remains. The document
+resource still follows §7.3 decoding before classification. Probe IDs and their
+individual dispositions are in the S6d/e migration ledger.

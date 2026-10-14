@@ -154,5 +154,41 @@
       "test": "ev9_bare_and_aliased_holes_are_ready_but_not_is_a_preparation_refusal",
       "reason": "Ready means prepared: bare missing $ref and alias return no verdict at validation; not around one returns the preserved preparation refusal."
     }
-  ]
+  ],
+  "review_round_1": {
+    "base_revision": "b650aa03f90b2706d2e6874dde63d427f19b232d",
+    "authority": "Claude review round 1 instructions, 2026-10-14; applied §7.4 delegates ordinary fragment spelling to JSON Schema. §7.3 document-resource decoding is unchanged.",
+    "corrected_probe_ids": [
+      "surrogate-collision-True",
+      "surrogate-collision-True-supplied",
+      "missing-private-uri",
+      "missing-private-uri-dominant"
+    ],
+    "corrected_probe_reasons": {
+      "surrogate-collision-True": "Injective inspection names and translated pointer tokens restore the contained literal-marker target, its verdicts, and its original coordinates.",
+      "surrogate-collision-True-supplied": "The same correction restores the supplied literal-marker target, its verdicts, and its original resource coordinates.",
+      "missing-private-uri": "A unique synthetic root allows retrieval to record the authored missing URI, restoring Ready with resource-unavailable outcomes.",
+      "missing-private-uri-dominant": "Correct missing-resource classification restores the anyOf true branch's decisive satisfying verdict."
+    },
+    "retained_conservative_limits": [
+      {
+        "case_id": "unused-{\"not\": {\"$ref\": \"%\"}}",
+        "reason": "Documented full-carrier preparation refuses the unused malformed reference. Borrowed/owned registration, extending a prepared registry, and query-only registration with retrieval do not isolate it. Truthful conservative resource-inspection refusal retained under §5.2; S9 static-reference-defect holes will restore this fragment."
+      },
+      {
+        "case_id": "unused-{\"$id\": \"%\"}",
+        "reason": "The same documented preparation routes reject a malformed sibling identifier. Conservative resource-inspection refusal retained; no private lookup or rewritten carrier removes the defect."
+      }
+    ],
+    "accepted_fragment_migrations": [
+      {
+        "case_id": "pointer-#%2F$defs%2Fgood",
+        "reason": "The library treats an encoded leading slash as a plain name in $id and supplied resources, refusing anchor-missing. Explicitly accepted in review round 1 under §7.4; document-resource §7.3 still decodes before classification."
+      },
+      {
+        "case_id": "pointer-#g%6Fod",
+        "reason": "Previously accepted percent-encoded plain-name refusal under D-S6; unchanged by review fixes."
+      }
+    ]
+  }
 }

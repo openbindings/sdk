@@ -74,7 +74,10 @@ OBI-13 alone retains exact compared spelling after RFC §5.2 resolution and
 empty-fragment removal. A host-case-only difference can pass OBI-13 while resolving
 to an ambiguous identity. Supplied normalized peers likewise refuse. Encoded plain
 names in `$id` and external resources follow the library's refusal; document-resource
-decoding remains §7.3. Duplicate anchors and non-schema pointers retain their
+decoding remains §7.3. An encoded leading slash likewise follows the library's
+plain-name refusal in ordinary resources. Unused malformed `$ref` or `$id` siblings
+can cause conservative `resource-inspection` refusal of the whole carrier until
+S9's static-reference-defect handling. Duplicate anchors and non-schema pointers retain their
 current refusals until S9. Trusted fixed assessment is separate.
 
 Default limits: 2,000,000 evaluation steps per verdict/diagnostic pass; evaluation

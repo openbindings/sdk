@@ -2,6 +2,12 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- S6d/e review fixes: make inspection string presentation injective, translate
+  pointer references consistently, and select a collision-free synthetic root.
+  Preserve original provenance for contained/supplied surrogate-name collisions.
+  Pin the conservative unused-malformed-sibling limit pending S9; explicitly
+  accept the library's encoded-leading-slash refusal under §7.4.
+
 - Integrate S6d/e: move bounds planning, paired compilation and guarded source
   mapping into private evaluator modules. Remove `ResourceCompleteness`, its
   Rust/TypeScript accessors, `SchemaRequest::evaluation_bounds`, `EvaluationBounds`,
