@@ -960,7 +960,8 @@ pub struct Reach {
     pub targets: HashMap<(usize, String), Target>,
     pub dynamic: BTreeMap<String, Vec<usize>>,
 }
-pub(crate) fn embedded_resources() -> &'static [ProjectedResource] {
+/// Borrow pinned original meta-schema snapshots for source-location lookup.
+pub fn embedded_resources() -> &'static [ProjectedResource] {
     static RESOURCES: std::sync::OnceLock<Vec<ProjectedResource>> = std::sync::OnceLock::new();
     RESOURCES.get_or_init(|| {
         let files = [

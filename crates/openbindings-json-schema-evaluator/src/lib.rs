@@ -299,6 +299,13 @@ impl Compiled {
                         .original_location(uri.as_str())
                         .map(original_location)
                 });
+                let location = match location {
+                    Some(at) => match details::enclosing_location(source, at, control) {
+                        Ok(location) => location,
+                        Err(()) => return Ok(None),
+                    },
+                    None => None,
+                };
                 // Generated partial-program errors are not original schema evidence.
                 if original_only && location.is_none() {
                     return Ok(None);
