@@ -1,4 +1,4 @@
-//! OpenBindings qualification patch: compact exact decimal operations.
+//! Compact exact decimal operations for OpenBindings §5.
 //! Inputs are already lexically validated JSON numbers. No exponent expansion.
 use num_bigint::BigUint;
 use num_traits::Zero;

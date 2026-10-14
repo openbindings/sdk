@@ -16,13 +16,6 @@ use crate::{compiler, paths::Location, types::JsonType, Json, ValidationError};
 /// `None` for anything that is not a non-negative integer under this draft; the caller turns that
 /// into a compilation error.
 pub(crate) fn size_limit<F: Json>(ctx: &compiler::Context<F>, schema: &Value) -> Option<u64> {
-    #[cfg(feature = "arbitrary-precision")]
-    if ctx.supports_integer_valued_numbers() {
-        return schema.as_number().and_then(|n| {
-            jsonschema_value::ob_decimal::Decimal::parse(n.as_str())
-                .nonnegative_integer_u64_saturating()
-        });
-    }
     if let Some(limit) = schema.as_u64() {
         return Some(limit);
     }

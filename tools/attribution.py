@@ -13,8 +13,7 @@ Rules inferred from the existing DEPENDENCIES.json / THIRD-PARTY-NOTICES.txt:
   Omit authored workspace members from attribution, but include reachable
   registry packages and vendored packages as distinct package identities.
 * JSON keys are target, scope, packages; package keys are name, version,
-  declared_license, repository, notices, then upstream for the two mechanical
-  identity forks. Notice keys are path, sha256, retrieved_from. License and
+  declared_license, repository, notices. Notice keys are path, sha256, retrieved_from. License and
   repository come verbatim from Cargo metadata. JSON uses two-space indentation,
   ASCII escaping, a final LF, and lexicographic (name, version) package ordering.
 * Recursively select files whose case-insensitive basename starts with LICENSE,
@@ -25,10 +24,8 @@ Rules inferred from the existing DEPENDENCIES.json / THIRD-PARTY-NOTICES.txt:
   entries in attribution/retrieved/index.json. These texts were extracted from
   the original checked-in notices, stored once by SHA-256, and retain the
   recorded immutable upstream URL. Verify the digest and pinned URL; never fetch.
-* Notice sections sort lexicographically by (name, version), except mechanical
-  referencing and serde_json forks occupy their upstream identities' positions;
-  the shared registry serde_json section follows all other sections. Preserve
-  the mechanical forks' two explanatory lines and JSON upstream annotation.
+* Notice sections sort lexicographically by (name, version), with the shared
+  registry serde_json section last for stable inventory ordering.
 * Notice text is UTF-8: universal-newline normalization converts CRLF and CR to
   LF; preserve all other whitespace, including each source's trailing spaces
   and number of final newlines. Digests remain over unnormalized bytes.
@@ -51,7 +48,6 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-import tomllib
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -63,10 +59,6 @@ PREAMBLE = (
     "Declared license expressions are metadata, not a replacement for the "
     "reproduced terms.\n"
 )
-MECHANICAL = {
-    "openbindings-internal-referencing": "referencing",
-    "openbindings-internal-serde-json": "serde_json",
-}
 INVENTORIES = (
     {
         "directory": Path("."),
@@ -206,22 +198,12 @@ def package_record(package, retrieved, texts):
         "repository": package["repository"],
         "notices": notices,
     }
-    if package["name"] in MECHANICAL:
-        upstream = tomllib.loads((source / "UPSTREAM-Cargo.toml").read_text(encoding="utf-8"))["package"]
-        if upstream["name"] != MECHANICAL[package["name"]]:
-            raise ValueError(f"unexpected upstream package identity: {source}")
-        record["upstream"] = {
-            "name": upstream["name"],
-            "version": upstream["version"],
-            "modifications": "Package identity and internal dependency wiring only; Rust source unchanged",
-        }
     return record, bodies
 
 
 def notice_order(item):
     record = item[0]
-    upstream = record.get("upstream", record)
-    return (record["name"] == "serde_json", upstream["name"], upstream["version"], record["name"])
+    return (record["name"] == "serde_json", record["name"], record["version"])
 
 
 def render_notices(items):
@@ -229,13 +211,6 @@ def render_notices(items):
     for record, bodies in sorted(items, key=notice_order):
         result += "\n\n" + "=" * 72 + "\n"
         result += f"{record['name']} {record['version']}\n"
-        if "upstream" in record:
-            upstream = record["upstream"]
-            result += (
-                f"Based on {upstream['name']} {upstream['version']}; "
-                "package identity and internal dependency wiring modified.\n"
-                "Upstream Rust source is unchanged.\n"
-            )
         result += f"Declared license: {record['declared_license']}\n"
         result += f"Repository: {record['repository']}\n"
         for notice in record["notices"]:

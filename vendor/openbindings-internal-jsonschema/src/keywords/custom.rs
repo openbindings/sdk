@@ -34,12 +34,9 @@ impl<F: Json> Validate<F> for CustomKeyword<F> {
         _ctx: &mut ValidationContext,
     ) -> Result<(), ValidationError<'i>> {
         self.inner.validate(instance.clone()).map_err(|err| {
-            err.with_context(
-                instance.lazy_value(),
-                instance_path,
-                &self.location,
-                &self.keyword,
-            )
+            let value = instance.to_value();
+            err.with_context(&value, instance_path, &self.location, &self.keyword)
+                .to_owned()
         })
     }
 
@@ -59,20 +56,11 @@ impl<F: Json> Validate<F> for CustomKeyword<F> {
         if inner_errors.peek().is_none() {
             return;
         }
-        for err in inner_errors {
-            if !crate::ob_work::diagnostic_admit() {
-                break;
-            }
-            let err = err.with_context(
-                instance.lazy_value(),
-                instance_path,
-                &self.location,
-                &self.keyword,
-            );
-            if !crate::ob_work::metadata_exhausted() {
-                errors.push(err);
-            }
-        }
+        let value = instance.to_value();
+        errors.extend(inner_errors.map(|err| {
+            err.with_context(&value, instance_path, &self.location, &self.keyword)
+                .to_owned()
+        }));
     }
 }
 

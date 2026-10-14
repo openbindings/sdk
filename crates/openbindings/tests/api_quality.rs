@@ -425,16 +425,15 @@ fn serde_profile_depth_is_explicit_and_smaller_limits_apply() {
 #[test]
 fn serde_json_numbers_preserve_tokens_and_protocol_cannot_inject_json() {
     use serde::ser::SerializeStruct;
-    let text = r#"{"small":1,"wide":9007199254740993,"decimal":0.12345678901234567890123456789,"huge":1e99999999999999999999999999999999999}"#;
-    let value: serde_json::Value = serde_json::from_str(text).unwrap();
-    let admitted = JsonValue::from_serializable(&value).unwrap();
-    for (key, token) in [
-        ("small", "1"),
-        ("wide", "9007199254740993"),
-        ("decimal", "0.12345678901234567890123456789"),
-        ("huge", "1e+99999999999999999999999999999999999"),
-    ] {
-        assert_eq!(admitted.get(key).unwrap().number_text(), Some(token));
+    // Plain serde_json preserves its emitted primitive values. Extra digits
+    // discarded by the caller before admission cannot be recovered by the SDK.
+    // Actual arbitrary-precision Number values are exercised by consumer-compat/AP.
+    for token in ["1", "9007199254740993", "0.12345678901234567890123456789"] {
+        let number: serde_json::Number = serde_json::from_str(token).unwrap();
+        assert_eq!(
+            JsonValue::from_serializable(&number).unwrap().text(),
+            number.to_string()
+        );
     }
     struct Protocol<'a> {
         token: &'a str,
@@ -455,6 +454,19 @@ fn serde_json_numbers_preserve_tokens_and_protocol_cannot_inject_json() {
             }
             st.end()
         }
+    }
+    for token in [
+        "1e400",
+        "1e99999999999999999999999999999999999",
+        "0.12345678901234567890123456789",
+        "-0.00",
+    ] {
+        assert_eq!(
+            JsonValue::from_serializable(&Protocol { token, mode: 0 })
+                .unwrap()
+                .text(),
+            token
+        );
     }
     for p in [
         Protocol {

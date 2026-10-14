@@ -1,128 +1,110 @@
 # Internal dependency maintenance contract
 
-The SDK carries five renamed internal dependency packages: three behaviorally modified forks and two mechanical package-identity forks. They are implementation details, not supported extension APIs. Their upstream versions and complete crate checksums are recorded by `tools/dependency-patches.py`; that script compares every file with the original downloaded crate archive and emits a full diff plus before/after digests. The original upstream Git identities are retained as `UPSTREAM-VCS.json`; original manifests are retained as `UPSTREAM-Cargo.toml`. Cargo-reserved generated filenames were renamed so the internal packages can themselves be archived. Cargo extraction completion stamps are removed. Retained upstream lockfiles are provenance; the SDK workspace lock is the development/build authority.
+The SDK carries two renamed forks: jsonschema 0.58.6 and regress 0.12.0.
+Both are private implementation dependencies. jsonschema-value 0.58.6,
+referencing 0.58.6 and serde_json 1.0.151 now use their unmodified registry
+identities. `docs/dependency-isolation.json` records the three upstream archive
+checksums and complete Rust source digests. `tools/verify-dependency-isolation.py`
+checks those sources, the single-serde graph, absence of SDK-requested arbitrary
+precision, retained fork identities, and the cancellation/schema boundaries.
+Its optional `--upstream-dir` additionally checks the downloaded archives.
 
-Refresh both dependency inventories and their third-party notices offline with `python3 tools/attribution.py` (use `--check` to verify them).
+`tools/dependency-patches.py` compares every retained fork file with its exact
+upstream crate archive, emitting applicable patches and before/after hashes.
+Original manifests and Git identities remain `UPSTREAM-Cargo.toml` and
+`UPSTREAM-VCS.json`; licenses and publish guards remain. Retained upstream locks
+are provenance; the SDK workspace lock is the build authority.
+Refresh both attribution inventories and notices offline with
+`python3 tools/attribution.py`; verify with `--check`. The upstream value crate's
+omitted license is retained as a hash-verified supplement from the same pinned
+upstream revision, not dropped when its fork disappears.
 
-| Upstream | Applied package | Upstream revision |
-| --- | --- | --- |
-| jsonschema 0.58.6 | openbindings-internal-jsonschema 0.58.6-ob.1 | 55ac1664384793c5d3b20745d3f9c169dfe2c06f |
-| jsonschema-value 0.58.6 | openbindings-internal-jsonschema-value 0.58.6-ob.1 | 55ac1664384793c5d3b20745d3f9c169dfe2c06f |
-| regress 0.12.0 | openbindings-internal-regress 0.12.0-ob.1 | See its retained upstream VCS record and archive checksum |
-| serde_json 1.0.151 | openbindings-internal-serde-json 1.0.151-ob.1 | See its retained upstream VCS record and archive checksum; Rust source unchanged |
-| referencing 0.58.6 | openbindings-internal-referencing 0.58.6-ob.1 | 55ac1664384793c5d3b20745d3f9c169dfe2c06f; Rust source unchanged |
+## Numeric ownership and consumer features
 
-## Consumer dependency policy and isolation
+Exact Decimal arithmetic belongs to `openbindings-internal-json/src/decimal.rs`.
+It retains the normalized coefficient and signed decimal exponent implementation
+and its tests; no power expansion occurs. Divisibility has the same finite
+coefficient/exponent admission and explicit arithmetic-limit refusal. Public
+semantic equality, preference validation, adapter integer classification and
+uniqueness share this implementation.
 
-Adding the SDK must preserve ordinary `serde_json` numeric buffering behavior.
-Both mandatory validator packages require arbitrary precision. A Cargo alias or
-optional ordinary-value conversion cannot isolate that feature. The SDK therefore
-uses a distinct internal `serde_json` package throughout its validator graph.
-`referencing` must use that same identity because its registry, resources and
-retriever interfaces carry `serde_json::Value` into the compiler. Its own distinct
-package prevents an application's unrelated `referencing` dependency acquiring
-the private value identity. A shared `serde_json` feature bridge enables only
-`raw_value`, preserving the existing public `JsonValue` Serde protocol even when
-the consumer declares plain `serde_json`. It enables neither arbitrary precision,
-float roundtripping nor unbounded depth. Rust implementation code uses the private
-copy; the shared edge exists only to retain protocol recognition in consumers.
+`numeric.rs` registers exact comparisons and division with documented
+`with_keyword` / `Keyword` APIs. The evaluator's `operands.rs` replaces numeric
+bounds with positive handles and const/enum with handles into exact flat storage.
+Every size operand, including minContains/maxContains, is normalized to a
+nonnegative u64, saturating only above the physically realizable collection
+size. Native contains and its annotations remain the library's responsibility.
+Type and uniqueItems use documented JsonNumber::is_integer and Array::is_unique
+overrides; fixed schemas use exact comparisons with their trusted small operands.
+Original schemas are validated before substitution.
 
-The alternative of removing `Number` from the existing exact adapter requires
-changes to numeric schema projection, cold `Value`/`LazyInstance` materialization,
-`JsonNumber` interfaces and validator numeric/canonical paths. These paths admit
-values such as `1e400` that ordinary `serde_json::Number` cannot represent. A
-floating-point or placeholder substitution would lose the existing contract.
-The selected identity changes add upstream-update bookkeeping while preserving
-Rust source byte-for-byte in both added packages. They avoid adding numerical
-behavior to rebase. They can add a second JSON implementation to a native consumer
-that also uses upstream `serde_json`; source bytes do not establish executable
-size or startup cost. Only the internal JSON package is referenced by SDK Rust implementation code; the raw-value feature bridge is also present in the graph. Linked Wasm cost must be measured.
+Inspection resources substitute numeric leaves without changing their shape.
+Their pointer-identity table is built alongside each stable boxed copy, paired
+structurally with original occurrences, never inferred from JSON equality.
+Runtime diagnostic schema facts use the projection's original-source provenance.
 
-Public SDK and evaluator APIs expose SDK values and shared Serde traits; the
-private JSON and registry types are not supported public extension types. The
-ordinary-value conversion still checks the emitted `$serde_json::private::Number`
-protocol as exactly one valid JSON number, with its existing budgets and error
-locations. Consumers explicitly enabling upstream arbitrary precision retain
-that upstream behavior, including its decimal flatten/untagged limitations. The
-SDK preserves emitted Number tokens and cannot restore digits already rounded
-by the consumer. Exact parsing and RawValue serialization retain source spelling.
+The private FlatJson adapter redacts cold Node::to_value/JsonNumber::to_number
+payloads. These documented cold APIs cannot represent every exact JSON number.
+They are never the source of a verdict or a reported instance/schema fact:
+equality, uniqueness, integer classification and numeric keywords have exact
+implementations. The SDK does not expose library error Display/Debug or payloads.
+Upstream diagnostic kind/path metadata still comes from validate(); bounds and
+enum choices are read from original schema tokens. Coarse mode never requests
+library errors. Upstream mode retains its documented library allocation/stack
+exposure; this is not a new bounded diagnostic implementation.
 
-Shared direct runtime requirements use caret ranges from the tested floors:
-Serde 1.0.229, serde_json 1.0.151 (raw-value protocol only), itoa 1.0.18,
-fluent-uri 0.4.1, url 2.5.8 (discovery URL/host normalization), and, for native HTTP, reqwest 0.13.5,
-Tokio 1.53.2 and bytes 1.12.1. These are supported direct dependency floors, not
-a claim about the minimum version of every transitive dependency. Coupled SDK
-packages, internal forks and the Wasm binding generator remain exact. The
-workspace lock fixes CI. Contradictory exact consumer requirements need not
-resolve. The external regression witness currently qualifies upstream serde_json
-1.0.151; arbitrary precision is confined to the distinct internal identity.
+Shared serde_json enables raw_value and unbounded_depth for exact RawValue
+interoperation and admitted schema decoding. Upstream jsonschema/value additionally
+enable float_roundtrip. The SDK never enables arbitrary_precision. Consumers may
+explicitly enable it on the same identity; Number protocol admission remains
+checked and preserves only the spelling/value the consumer actually emits.
+Ordinary Serde flatten/untagged behavior is covered by the external consumer tests.
 
-`tools/verify.py` runs the source-identity guard and seven external consumer
-configurations: baseline, explicit arbitrary precision, core with and without
-explicit arbitrary precision, evaluator, and native discovery with and without
-explicit arbitrary precision. The hook checks actual Cargo build feature trees;
-`cargo metadata` alone also reports weak optional macro feature edges and can
-overstate the activated graph. Checked Number shape/injection/limit cases and
-cross-package Number/RawValue cases are maintained in `tools/consumer-compat`.
-
-For a dependency update, additionally run `tools/verify-consumer-compat.py
---resolution minimum` and `--resolution latest`, retaining `--output` receipts.
-The first selects the documented direct floors; the latter asks Cargo for the
-newest resolvable graph. Use `CARGO_NET_OFFLINE=true` only when intentionally
-qualifying the cached graph and label that limitation. The initial isolation
-qualification's minimum, locked and newest offline-resolvable shared versions
-coincide; it does not claim multiple versions were tested or a crates.io head run.
-
-## Mechanical serde_json and referencing updates
-
-Their Rust files, including build scripts and upstream tests, must match the
-downloaded upstream archives exactly. `docs/dependency-isolation.json` records
-archive checksums and every Rust source digest; `tools/verify-dependency-isolation.py`
-checks the entire file set and dependency wiring on every source replay. Pass
-`--upstream-dir <crate-archives>` to also verify those archive identities and
-their source digests. No Rust-source modification is approved by this policy.
-
-When updating either package: acquire and checksum the upstream crate; retain its
-licenses, original manifest and VCS record; rename package identity; apply only
-the exact sibling dependency pins; regenerate the source manifest from the
-archive, never from the modified checkout; compare the complete patch inventory;
-then run source identity, all consumer modes, D03/API-quality and exact evaluator
-tests, and applicable native/Wasm/package/browser qualification. Serde protocol
-changes require explicit cross-package checks. Follow the broader update gates
-below for behavioral dependency changes. Keep every `publish = false` guard.
+Shared runtime version floors remain Serde 1.0.229, serde_json 1.0.151,
+itoa 1.0.18, fluent-uri 0.4.1, url 2.5.8, reqwest 0.13.5, Tokio 1.53.2 and
+bytes 1.12.1. The relocated arithmetic uses num-bigint 0.4.8 and num-traits
+0.2.19; both floors are included in consumer resolution checks. SDK packages, retained forks, jsonschema-value and wasm-bindgen
+remain exact at their declared versions. The workspace lock fixes qualification.
+`tools/verify-consumer-compat.py` checks twelve configurations: baseline/AP,
+core/AP, evaluator/AP, portable discovery, all three roles, and native discovery/AP.
+It asserts one serde identity using actual normal/build feature trees and records
+package counts. Run its `--resolution minimum` and `--resolution latest` modes for
+dependency updates, retaining `--output` receipts. Offline latest means newest
+cached resolvable graph, not a crates.io-head claim.
 
 ## jsonschema
 
-- `Cargo.toml`: unique private package identity and explicit sibling package dependencies prevent accidental resolution to an unpatched evaluator/value/regex implementation. Public crate names and upstream licenses are retained.
-- `src/lib.rs`: exposes internal budget/regex support needed by the adapter.
-- `src/ob_work.rs`, `src/node.rs`, `src/validator.rs`, `src/compiler.rs`: scoped evaluation steps, depth, recursion/cycle handling and diagnostic accumulation. Guards restore thread-local state after return, nested exhaustion and unwinding. Arithmetic exhaustion is separate from false validity. Entry and primitive traversal limits are not advertised as nanosecond deadlines.
-- `src/ob_ecma.rs`, `src/regex.rs`, `src/canonical/context.rs`: route qualified dynamic patterns through the ECMAScript interpreter, preserve pattern preparation failures, and distinguish selected unsupported Unicode-property matching from work exhaustion.
-- `src/error.rs`, `src/keywords/custom.rs`: retain lazy exact instance views through custom-keyword error context; avoid recursive materialization/drop of 10,000-level literals. Internal diagnostics expose bounded metadata and original locations, not whole instance values.
-- `src/keywords/additional_properties.rs`, `any_of.rs`, `helpers.rs`, `items.rs`, `min_length.rs`, `properties.rs`, `property_names.rs`, `required.rs`, `unevaluated_items.rs`, `unevaluated_properties.rs`, and `src/properties.rs`: preserve generic flat-value operation, scoped evaluation/diagnostic work, ECMAScript matching and dynamic reference behavior in the affected applicator/keyword paths. Check the full diff when rebasing; these are evaluator-sensitive changes, not mechanical wrappers.
+Upstream revision: `55ac1664384793c5d3b20745d3f9c169dfe2c06f`.
+Applied package: `openbindings-internal-jsonschema 0.58.6-ob.1`.
+The complete remaining Rust delta is **+300/-14 lines in ten files** against the
+0.58.6 archive (physical added/removed lines, including comments and blanks):
 
-Fixed OBI-02/OBI-10 checks now call only `is_valid`; the location map uses
-`build_map` / `get` / `is_valid`. They no longer enter `Validator::validate`,
-`Validator::iter_errors`, `Validator::evaluate`, keyword `validate` / `collect_errors`
-or error-context ownership (`ValidationError::to_owned`, `anyOf` contexts and
-unexpected-name error vectors). No SDK caller activates `ob_work::diagnostics` or
-`ob_work::diagnostic_metadata`; the diagnostic count, copy-admission, metadata-only,
-payload and schema-detail scopes remain in the fork solely for later removal.
-One inert hook is still called by `PropertyNamesValidator::is_valid`:
-`ob_work::diagnostic_copy` immediately admits the name when no diagnostic scope is
-active. This validity scratch is measured; it is not a bounded error-construction
-path. Remove the unused diagnostic admission and metadata patch, including its inert
-property-name copy hook; retain the separate work/depth/regex guards.
-Explicit value Upstream diagnostics still use the library's `validate()` first
-error, with no SDK construction-memory promise. No vendored source is edited here.
-`tools/verify-diagnostics.py` measures validity, location compilation, fixed findings
-and complete document validation against the pinned generators and corpus.
+| File under src/ | Added | Removed | Why retained |
+| --- | ---: | ---: | --- |
+| canonical/context.rs | 2 | 2 | Use the ECMA matcher without Rust-regex translation in canonical pattern compilation. |
+| compiler.rs | 3 | 3 | Cache and compile that same matcher, preserving authored pattern syntax. |
+| keywords/additional_properties.rs | 2 | 2 | Route both specialized patternProperties/additionalProperties paths through ECMA matching. |
+| keywords/unevaluated_properties.rs | 1 | 1 | Keep annotation matching on the same ECMA engine. |
+| lib.rs | 5 | 0 | Export private adapter work and regex controls. |
+| node.rs | 38 | 1 | Charge schema entries/depth and signal detected cycles; the outer adapter refuses any stopped result. |
+| ob_ecma.rs | 117 | 0 | Select regress ES2020 Unicode behavior, scoped regex work, and the qualified Unicode-property refusal. |
+| ob_work.rs | 127 | 0 | Scoped work/depth/cycle/arithmetic stop accounting, including nested scope restoration. |
+| properties.rs | 1 | 1 | Use the same matcher type for property validators. |
+| regex.rs | 4 | 4 | Route the library's internal matcher/builder through regress. |
 
-## jsonschema-value
+These guards have no complete equivalent in documented upstream APIs. All
+ordinary resolution, compilation, applicators and error construction remain the
+library's implementation. Numeric semantics use its public extension APIs instead
+of forked equality/type/size internals. Cargo changes only select the private
+package/regress identities and ordinary upstream value/registry/serde dependencies.
 
-- `Cargo.toml`: private package identity and bounded-integer arithmetic dependencies.
-- `src/lib.rs`, `src/types.rs`, `src/cmp.rs`: exact decimal hooks for value representations; equality, ordering and hashing must agree across numerically equivalent spellings.
-- `src/ob_decimal.rs`: normalized coefficient plus signed decimal exponent. Exponent parsing, comparison and small offsets avoid constructing an enormous integer/power. Expensive divisibility uses bounded coefficients/powers and returns explicit non-admission. Zero, negative zero, signed exponents, non-integral divisors, normalization shifts, and equivalent spellings must remain correct.
-- `LICENSE`: restored from the exact upstream Git revision because the published jsonschema-value archive omits the standalone license text. The upstream MIT grant and copyright are retained.
+The entire diagnostic patch is removed: admission/count/metadata/copy/payload and
+schema-detail scopes, the property-name copy hook, diagnostic_text, lazy custom
+error alterations, error-vector guards and validator-list coordinate alteration.
+Fixed checks use is_valid and build_map/get/is_valid; value diagnostics are Coarse
+by default and validate() first-error only on explicit Upstream request.
+`tools/verify-diagnostics.py` continues to enforce the pinned allocation ceilings
+and value allocation checks. No construction-memory guarantee is made for Upstream.
 
 ## regress
 
@@ -132,13 +114,13 @@ and complete document validation against the pinned generators and corpus.
 - Empty quantifier semantics (EV-4): `src/classicalbacktrack.rs` treats an unrepresentable single-character atom as matching zero characters only when its quantifier admits zero repetitions, including lazy extension. Lone-surrogate escapes still match no scalar code point. `tests/fixtures/lone-surrogate.mjs` computes the checked-in 470-row differential fixture using Node's `RegExp` with the `u` flag (Node v22.19.0, V8 12.4.254.21-node.29); `tests/tests.rs` asserts every row, and the evaluator's `pattern_correctness` integration test runs every row through `pattern` and `patternProperties`.
 - Backtrack budget restoration (EV-5): both mid-interpreter budget exits truncate the backtrack stack to its exhaustion sentinel. The direct matcher regression uses `^(a+)+$` on 28 `a` characters plus `b`, without `catch_unwind`, at budgets 0–255 in debug tests; positive/negative lookaround variants and fresh-scope recovery are also checked. Re-run the fork with `cargo test --manifest-path vendor/openbindings-internal-regress/Cargo.toml --no-default-features --features std` to select the SDK's classical matcher configuration.
 
-`OPENBINDINGS-PATCH.md` in each package identifies it as modified. These records and the full file diffs are the patch inventory; the line count alone is not evidence that the maintenance burden is small.
+`OPENBINDINGS-PATCH.md` identifies each retained fork and links this contract.
 
 ## Invariants and regression gates
 
 Keep exact input in the SDK's flat immutable arena. Do not convert values through f64 or serde_json::Value as an authoritative convenience path. The private compiler projection can strip annotations only because the declared evaluator is a validity evaluator with format assertion disabled; original SDK documents and diagnostics preserve original content. The adapter's const/enum and numeric keywords preserve exact values and charge work.
 
-Core resources are explicit. Both the registry and evaluator use a denying retriever. A host enabling dependency HTTP/file features must still fail to produce any HTTP/FIFO trap hit through the SDK; direct dependency positive controls prove the traps work.
+Core resources are explicit. The evaluator denies retrieval; static inspection uses a recording retriever with inert resources that never supply a verdict. A host enabling dependency HTTP/file features must still fail to produce any HTTP/FIFO trap hit through the SDK; direct dependency positive controls prove the traps work.
 
 Before adopting an upstream update:
 
@@ -172,39 +154,9 @@ artifact gates described above on the same committed candidate. Exact source
 reconstruction is a maintenance rehearsal; it neither upgrades the dependency
 nor establishes that a future upstream rebase will be straightforward.
 
-The upstream regress suite and jsonschema-value library/numeric suite pass in the
-SDK-relevant configuration. The jsonschema library suite has 17 exact dispositions:
-two Draft 4/non-u regex cases, four finite huge-number integer cases, three legacy
-non-u character-class forms, one previous regex-engine failure expectation, three
-alternate Rust-regex-backend whitespace cases and four Unicode-property raw-API
-cases. They are not SDK correctness exemptions. The supported SDK path has explicit
-public regression witnesses for its ECMA u behavior, exact integers, valid empty
-match and guarded unsupported-property outcome. The upstream crate omitted a
-referenced draft7 fixture; replay supplies that file from the separately pinned
-JSON Schema Test Suite. Full names, resolved upstream-test locks, original failures
-and rerun receipts are preserved in the migration evidence. A change to this exact
-failure set requires investigation, not a broader skip filter.
-
-These forks are private implementation dependencies. Their unguarded alternate
-backends, legacy drafts and old engine-failure behavior are not supported SDK APIs.
-The 435-case normative corpus, 1,566-case evaluator kit, explicit public regression
-witnesses and no-I/O controls govern the supported product behavior.
-
-## Precise witness attribution
-
-[The per-test mapping](docs/upstream-disposition-witnesses.json) supplements the
-historical 17-entry disposition ledger without changing old receipts. Two Draft4
-escaped-dash tests are excluded by the supported 2020-12/ECMA-u scope; they have
-no claimed direct public test. The ordinary huge-number type, legacy class,
-empty-match and whitespace assertions are named directly. Huge-number `items`
-wrappers share the exact numeric predicate but are not exercised by the root-type
-witness itself. The Unicode-property witness directly covers the selected matched
-`patternProperties` shape; `$ref`, `allOf` and `then` variants additionally rely
-on the documented enclosing guard/source reasoning. That single test does not
-claim four distinct wrapper executions or the entire raw test's unmatched branch.
-No new Draft4 capability or fresh upstream-suite run is claimed in the facade repair.
-
-
-Upstream schema facts are recovered from original snapshots, without activating
-vendored diagnostic metadata scopes. Exact token/source-location tests remain
-required when removing the unused diagnostic admission and metadata patches.
+Historical upstream-test dispositions remain in
+`docs/upstream-disposition-witnesses.json`; they describe the former full fork,
+not fresh qualification of removed patches. They must never become broad skip
+filters. The maintained SDK exact-operand, ECMA, resolver, diagnostic, corpus and
+kit tests govern this supported graph. Re-run upstream source suites when updating
+the corresponding library and investigate each changed result explicitly.

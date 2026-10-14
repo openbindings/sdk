@@ -1,9 +1,10 @@
 //! Shared internal adapter: the schema engine reads immutable flat JSON without re-parsing.
+use crate::decimal::Decimal;
 use crate::raw::{Arena, Id, Kind, Member};
 use jsonschema::json::{Array, Json, JsonNumber, Node, NodeIdentity, Object};
-use jsonschema_value::{LazyInstance, ob_decimal::Decimal, types::JsonType};
+use jsonschema_value::types::JsonType;
 use serde_json::Value;
-use std::{borrow::Cow, sync::OnceLock};
+use std::borrow::Cow;
 
 /// Borrow one object member by source position, without visiting preceding members.
 /// This internal bridge helper preserves duplicate names and exact name tokens.
@@ -151,64 +152,13 @@ impl JsonNumber for Number<'_> {
     fn as_str(&self) -> Cow<'_, str> {
         Cow::Borrowed(self.0)
     }
+    // Opaque cold-path payload, never an authoritative number or SDK report.
     fn to_number(&self) -> Cow<'_, serde_json::Number> {
-        Cow::Owned(self.0.parse().unwrap())
+        Cow::Owned(0.into())
     }
     fn is_integer(&self) -> bool {
         Decimal::parse(self.0).is_integer()
     }
-}
-fn cold_value(bytes: &[u8], _: u32) -> Value {
-    // Iterative materialization for the internal dependency interface. SDK diagnostics
-    // expose paths and advisory text, so deep values are not materialized or dropped here.
-    let arena = Arena::parse(
-        bytes,
-        crate::raw::Limits {
-            max_depth: usize::MAX,
-            max_nodes: usize::MAX,
-        },
-    )
-    .expect("previously admitted JSON");
-    let mut values: Vec<Option<Value>> = (0..arena.nodes.len()).map(|_| None).collect();
-    for id in (0..arena.nodes.len()).rev() {
-        let value = match &arena.nodes[id].kind {
-            Kind::Null => Value::Null,
-            Kind::Bool(b) => Value::Bool(*b),
-            Kind::Number => Value::Number(arena.raw(id).parse().expect("admitted number")),
-            Kind::String { .. } => Value::String(
-                present_string(&arena, id)
-                    .expect("string node")
-                    .into_owned(),
-            ),
-            Kind::Array(items) => Value::Array(
-                items
-                    .iter()
-                    .map(|&id| {
-                        values[id]
-                            .take()
-                            .expect("child precedes parent consumption")
-                    })
-                    .collect(),
-            ),
-            Kind::Object(members) => Value::Object(
-                members
-                    .iter()
-                    .map(|m| {
-                        (
-                            present_string(&arena, m.key)
-                                .expect("member name")
-                                .into_owned(),
-                            values[m.value]
-                                .take()
-                                .expect("child precedes parent consumption"),
-                        )
-                    })
-                    .collect(),
-            ),
-        };
-        values[id] = Some(value);
-    }
-    values[0].take().expect("nonempty JSON")
 }
 impl<'a> Node<'a, FlatJson> for View<'a> {
     type Object = ObjectView<'a>;
@@ -296,7 +246,7 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
                 Value::Number(n) => {
                     if left
                         .as_number()
-                        .is_none_or(|m| Decimal::parse(m.0) != Decimal::parse(n.as_str()))
+                        .is_none_or(|m| Decimal::parse(m.0) != Decimal::parse(&n.to_string()))
                     {
                         return false;
                     }
@@ -328,35 +278,12 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
         }
         true
     }
+    // Documented cold-path payload only. The SDK never exposes or formats it.
+    // Equality, uniqueness, integer classification and numeric constraints use
+    // the exact overrides; schema facts are recovered from original sources.
+    // Redact the entire value rather than materializing unrepresentable numbers.
     fn to_value(&self) -> Cow<'a, Value> {
-        Cow::Owned(match self {
-            Self::Text(s) => Value::String((*s).to_owned()),
-            Self::Stored(a, id) => cold_value(a.raw(*id).as_bytes(), 0),
-        })
-    }
-    fn diagnostic_text(&self) -> String {
-        match self {
-            Self::Stored(a, id) => {
-                let raw = a.raw(*id);
-                if raw.len() <= 4096 {
-                    raw.into()
-                } else {
-                    format!("<JSON value: {} bytes>", raw.len())
-                }
-            }
-            Self::Text(s) => serde_json::to_string(s).expect("Rust string"),
-        }
-    }
-    fn lazy_value(&self) -> LazyInstance<'a> {
-        match self {
-            Self::Text(s) => LazyInstance::Ready(Cow::Owned(Value::String((*s).to_owned()))),
-            Self::Stored(a, id) => LazyInstance::Deferred {
-                bytes: a.raw(*id).as_bytes(),
-                tag: 0,
-                make: cold_value,
-                cell: OnceLock::new(),
-            },
-        }
+        Cow::Borrowed(&Value::Null)
     }
     fn identity(&self) -> Option<NodeIdentity> {
         match self {

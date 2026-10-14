@@ -119,42 +119,20 @@ mod tests {
             assert_eq!(serde_json::to_string(&exact).unwrap(), token);
             let decoded: JsonValue = serde_json::from_str(token).unwrap();
             assert_eq!(decoded.text(), token);
-            // The unchanged internal Number protocol and SDK checked serializer interoperate.
-            let private: private_json::Number = private_json::from_str(token).unwrap();
-            assert_eq!(
-                JsonValue::from_serializable(&private).unwrap().text(),
-                private.to_string()
-            );
             let raw: Box<serde_json::value::RawValue> = serde_json::from_str(token).unwrap();
-            let private_raw: Box<private_json::value::RawValue> =
-                private_json::from_str(token).unwrap();
-            assert_eq!(private_json::to_string(&raw).unwrap(), token);
-            assert_eq!(serde_json::to_string(&private_raw).unwrap(), token);
-            // Raw JSON remains forbidden at the ordinary checked-data admission boundary.
-            assert_eq!(
-                JsonValue::from_serializable(&raw).unwrap_err().kind(),
-                openbindings::ValueConversionErrorKind::UnsupportedRepresentation
-            );
+            assert_eq!(serde_json::to_string(&raw).unwrap(), token);
+            assert_eq!(JsonValue::from_serializable(&raw).unwrap_err().kind(),
+                openbindings::ValueConversionErrorKind::UnsupportedRepresentation);
+            // Consumer-enabled AP uses the same identity. Preserve its emitted
+            // Number protocol; spelling already normalized by serde is not recovered.
             #[cfg(feature = "ap")]
             {
-                let public: Number = serde_json::from_str(token).unwrap();
-                let ordinary = serde_json::json!({"n": public});
+                let number: Number = serde_json::from_str(token).unwrap();
+                let expected = number.to_string();
+                assert_eq!(JsonValue::from_serializable(&number).unwrap().text(), expected);
+                let ordinary = serde_json::json!({"n": number});
                 let admitted = JsonValue::from_serializable(&ordinary).unwrap();
-                assert_eq!(
-                    admitted.get("n").unwrap().number_text(),
-                    Some(private.to_string().as_str())
-                );
-                assert_eq!(
-                    private_json::to_string(&ordinary).unwrap(),
-                    serde_json::to_string(&ordinary).unwrap()
-                );
-                assert_eq!(
-                    serde_json::to_string(&private).unwrap(),
-                    private.to_string()
-                );
-                let roundtrip: Number =
-                    serde_json::from_str(&private_json::to_string(&public).unwrap()).unwrap();
-                assert_eq!(roundtrip, public);
+                assert_eq!(admitted.get("n").unwrap().number_text(), Some(expected.as_str()));
             }
         }
         let ordinary: Value = serde_json::from_str(r#"{"n":1.25,"i":9007199254740993}"#).unwrap();

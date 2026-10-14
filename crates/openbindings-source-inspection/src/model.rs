@@ -226,7 +226,7 @@ impl SourceInspection {
             bytes: Vec::new(),
             max: limits.max_bytes,
         };
-        serde_json_compat::to_writer(&mut output, &InspectionFields(self))
+        serde_json::to_writer(&mut output, &InspectionFields(self))
             .map_err(|error| encoding(error.to_string()))?;
         JsonValue::parse_with_limits(output.bytes, limits)
             .map_err(|error| encoding(error.to_string()))

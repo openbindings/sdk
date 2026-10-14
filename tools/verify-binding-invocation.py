@@ -23,9 +23,6 @@ LOCAL = [
     "crates/openbindings-interface-synthesis", "crates/openbindings-source-inspection",
     "crates/openbindings-invocation", "crates/openbindings-json-schema-evaluator",
     "vendor/openbindings-internal-jsonschema",
-    "vendor/openbindings-internal-jsonschema-value",
-    "vendor/openbindings-internal-serde-json",
-    "vendor/openbindings-internal-referencing",
     "vendor/openbindings-internal-regress",
 ]
 

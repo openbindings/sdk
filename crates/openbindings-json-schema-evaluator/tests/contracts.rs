@@ -545,12 +545,7 @@ fn internal_work_scopes_restore_after_nested_exhaustion_unwind_and_threads() {
         .build(&serde_json::json!({"required":["a","b"]}))
         .unwrap();
     let instance = serde_json::json!({});
-    assert!(matches!(
-        ob_work::diagnostics(0, || validator.iter_errors(&instance).count()),
-        Err(ob_work::Stop::Diagnostics)
-    ));
-    assert_eq!(validator.iter_errors(&instance).count(), 2);
-    let _ = std::panic::catch_unwind(|| ob_work::diagnostics(0, || panic!("scope probe")));
+    let _ = std::panic::catch_unwind(|| ob_work::bounded(0, 100, || panic!("scope probe")));
     assert_eq!(validator.iter_errors(&instance).count(), 2);
     assert!(
         ob_work::bounded(100, 100, || ob_work::bounded(0, 100, || validator

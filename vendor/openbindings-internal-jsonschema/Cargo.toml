@@ -251,9 +251,7 @@ optional = true
 version = "0.58.6"
 
 [dependencies.jsonschema-value]
-package = "openbindings-internal-jsonschema-value"
-path = "../openbindings-internal-jsonschema-value"
-version = "=0.58.6-ob.1"
+version = "0.58.6"
 
 [dependencies.magnus]
 version = "0.9"
@@ -278,9 +276,7 @@ version = "0.29"
 optional = true
 
 [dependencies.referencing]
-package = "openbindings-internal-referencing"
-path = "../openbindings-internal-referencing"
-version = "=0.58.6-ob.1"
+version = "0.58.6"
 
 [dependencies.regex]
 version = "1.11.1"
@@ -290,9 +286,7 @@ version = "1.0"
 features = ["derive"]
 
 [dependencies.serde_json]
-package = "openbindings-internal-serde-json"
-path = "../openbindings-internal-serde-json"
-version = "=1.0.151-ob.1"
+version = "1.0.151"
 features = ["float_roundtrip"]
 
 [dependencies.strum]

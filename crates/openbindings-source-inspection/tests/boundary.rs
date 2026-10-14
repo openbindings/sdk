@@ -493,7 +493,7 @@ async fn every_inventory_output_path_refuses_the_same_invalid_results() {
     };
     for item in [&forbidden_framing, &empty_id] {
         assert!(
-            serde_json_compat::to_string(item).is_err(),
+            serde_json::to_string(item).is_err(),
             "standalone target bypassed validation"
         );
     }
@@ -519,7 +519,7 @@ async fn every_inventory_output_path_refuses_the_same_invalid_results() {
     for inventory in invalid {
         assert!(inventory.validate().is_err());
         assert!(inventory.to_json().is_err());
-        assert!(serde_json_compat::to_string(&inventory).is_err());
+        assert!(serde_json::to_string(&inventory).is_err());
         let (inspector, _) = inspector(Some(inventory));
         assert_eq!(
             inspector.inspect(&source()).await.unwrap_err().kind(),
@@ -541,7 +541,7 @@ fn source_ref_uniqueness_is_exact_and_valid_serializers_agree() {
     assert!(inventory.validate().is_ok());
     assert_eq!(
         inventory.to_json().unwrap().text(),
-        serde_json_compat::to_string(&inventory).unwrap()
+        serde_json::to_string(&inventory).unwrap()
     );
 }
 
@@ -561,10 +561,10 @@ async fn ro15_operation_framing_refuses_unknown_non_extension_members() {
             ..target()
         };
         let valid = key.starts_with("x-");
-        assert_eq!(serde_json_compat::to_string(&item).is_ok(), valid);
+        assert_eq!(serde_json::to_string(&item).is_ok(), valid);
         let inventory = SourceInspection::complete(vec![item]);
         assert_eq!(inventory.to_json().is_ok(), valid);
-        assert_eq!(serde_json_compat::to_string(&inventory).is_ok(), valid);
+        assert_eq!(serde_json::to_string(&inventory).is_ok(), valid);
         let (facade, _) = inspector(Some(inventory));
         assert_eq!(facade.inspect(&source()).await.is_ok(), valid);
     }

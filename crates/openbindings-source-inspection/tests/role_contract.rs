@@ -142,10 +142,7 @@ fn ro15_limitation_additional_evidence_matches_the_published_interface() {
     };
     let inventory = SourceInspection::partial(vec![], limitation.clone());
     let wire = inventory.to_json().unwrap();
-    assert_eq!(
-        wire.text(),
-        serde_json_compat::to_string(&inventory).unwrap()
-    );
+    assert_eq!(wire.text(), serde_json::to_string(&inventory).unwrap());
     assert_eq!(
         wire.view()
             .at("/limitation/evidence/count")
@@ -158,7 +155,7 @@ fn ro15_limitation_additional_evidence_matches_the_published_interface() {
         limitation
             .additional_fields
             .insert(key.into(), JsonValue::null());
-        assert!(serde_json_compat::to_string(&limitation).is_err());
+        assert!(serde_json::to_string(&limitation).is_err());
         assert!(
             SourceInspection::partial(vec![], limitation.clone())
                 .to_json()

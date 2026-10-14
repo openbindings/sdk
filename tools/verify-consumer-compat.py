@@ -71,7 +71,8 @@ with tempfile.TemporaryDirectory(prefix='openbindings-consumer-') as temporary:
     (fixture / 'Cargo.toml').write_text(text, encoding='utf-8')
     shutil.copyfile(source / 'Cargo.lock', fixture / 'Cargo.lock')
     floors = {'serde': '1.0.229', 'serde_json': '1.0.151', 'itoa': '1.0.18',
-              'fluent-uri': '0.4.1', 'reqwest': '0.13.5', 'tokio': '1.53.2', 'bytes': '1.12.1'}
+              'fluent-uri': '0.4.1', 'reqwest': '0.13.5', 'tokio': '1.53.2', 'bytes': '1.12.1',
+              'num-bigint': '0.4.8', 'num-traits': '0.2.19'}
     if a.resolution == 'minimum':
         for package, version in floors.items():
             run(['cargo', 'update', '-p', package, '--precise', version], fixture)
@@ -83,7 +84,7 @@ with tempfile.TemporaryDirectory(prefix='openbindings-consumer-') as temporary:
                 if line.startswith('host: '))
     receipts = []
     baseline = None
-    for features in ['', 'ap', 'sdk', 'sdk,ap', 'evaluator', 'native', 'native,ap']:
+    for features in ['', 'ap', 'sdk', 'sdk,ap', 'evaluator', 'evaluator,ap', 'portable', 'inspection', 'synthesis', 'invocation', 'native', 'native,ap']:
         label = features.replace(',', '-') or 'baseline'
         selection = ['--no-default-features'] + (['--features', features] if features else [])
         metadata = json.loads(run(['cargo', 'metadata', '--locked', '--format-version', '1', '--filter-platform', host, *selection], fixture).stdout)
@@ -92,9 +93,11 @@ with tempfile.TemporaryDirectory(prefix='openbindings-consumer-') as temporary:
         tree = run(['cargo', 'tree', '--locked', '--prefix', 'none', '--no-dedupe',
                     '--edges', 'normal,build', '--format', '{p}|{f}', *selection], fixture).stdout
         nodes = {}
+        identities = set()
         for line in tree.splitlines():
             identity, feature_text = line.split('|', 1)
             name, version_path = identity.split(' v', 1)
+            identities.add(identity)
             nodes[name] = {'identity': identity, 'version': version_path.split(' ', 1)[0],
                            'features': feature_text.split(',') if feature_text else []}
         shared = nodes['serde_json']
@@ -106,18 +109,17 @@ with tempfile.TemporaryDirectory(prefix='openbindings-consumer-') as temporary:
         if 'ap' in features.split(','):
             expected.add('arbitrary_precision')
         if features not in ['', 'ap']:
-            expected.add('raw_value')  # Preserve the public JsonValue Serde protocol.
+            expected.update(['raw_value', 'unbounded_depth', 'float_roundtrip'])
         assert shared_features == sorted(expected), (label, shared_features)
+        assert private is None, label
+        assert len([i for i in identities if i.startswith('serde_json v')]) == 1, label
+        assert not {'openbindings-internal-referencing', 'openbindings-internal-jsonschema-value'} & nodes.keys(), label
         if features not in ['', 'ap']:
-            assert private is not None and 'arbitrary_precision' in private['features'], label
-            assert private['identity'] != shared['identity'], label
-            assert 'openbindings-internal-referencing' in nodes, label
-            assert 'referencing' not in nodes, label
-        else:
-            assert private is None, label
+            assert 'referencing' in nodes and 'jsonschema-value' in nodes, label
         result = run(['cargo', 'test', '--locked', *selection], fixture)
         row = {'configuration': label, 'serde_json_features': shared_features,
-               'internal_json_features': sorted(private['features']) if private else [],
+               'serde_json_identities': sorted(i for i in identities if i.startswith('serde_json v')),
+               'normal_and_build_packages_excluding_consumer': len(identities) - 1,
                'direct_shared_versions': {name: nodes[name]['version']
                                           for name in floors if name in nodes}, 'tests': 'passed'}
         if a.resolution == 'minimum':

@@ -144,14 +144,10 @@ impl<F: Json> Validate<F> for LengthRangeValidator {
         if let Some(length) = instance.string_length() {
             // `minLength` above `maxLength` fails both at once, as two validators would
             if length < self.minimum {
-                crate::ob_work::push_error(errors, || {
-                    self.min_error::<F>(instance, location, tracker)
-                });
+                errors.push(self.min_error::<F>(instance, location, tracker));
             }
             if length > self.maximum {
-                crate::ob_work::push_error(errors, || {
-                    self.max_error::<F>(instance, location, tracker)
-                });
+                errors.push(self.max_error::<F>(instance, location, tracker));
             }
         }
     }

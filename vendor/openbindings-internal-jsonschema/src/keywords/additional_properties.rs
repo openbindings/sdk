@@ -284,19 +284,17 @@ impl<F: Json, M: PropertiesValidatorsMap<F>> Validate<F>
             if let Some((name, node)) = self.properties.get_key_validator(property.as_ref()) {
                 node.collect_errors(&value, &location.push(name), tracker, ctx, errors);
             } else {
-                crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
+                unexpected.push(property.as_ref().to_owned());
             }
         }
         if !unexpected.is_empty() {
-            crate::ob_work::push_error(errors, || {
-                ValidationError::additional_properties(
-                    self.location.clone(),
-                    crate::paths::capture_evaluation_path(tracker, &self.location),
-                    location.into(),
-                    instance.lazy_value(),
-                    unexpected,
-                )
-            });
+            errors.push(ValidationError::additional_properties(
+                self.location.clone(),
+                crate::paths::capture_evaluation_path(tracker, &self.location),
+                location.into(),
+                instance.lazy_value(),
+                unexpected,
+            ));
         }
     }
 
@@ -320,7 +318,7 @@ impl<F: Json, M: PropertiesValidatorsMap<F>> Validate<F>
                     );
                     children.push(&mut ctx.arena, child);
                 } else {
-                    crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
+                    unexpected.push(property.as_ref().to_owned());
                 }
             }
             let mut result = EvaluationResult::from_children(children);
@@ -505,24 +503,20 @@ impl<F: Json, M: PropertiesValidatorsMap<F>> Validate<F>
                     found_required = true;
                 }
             } else {
-                crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
+                unexpected.push(property.as_ref().to_owned());
             }
         }
         if !unexpected.is_empty() {
-            crate::ob_work::push_error(errors, || {
-                ValidationError::additional_properties(
-                    self.location.clone(),
-                    crate::paths::capture_evaluation_path(tracker, &self.location),
-                    location.into(),
-                    instance.lazy_value(),
-                    unexpected,
-                )
-            });
+            errors.push(ValidationError::additional_properties(
+                self.location.clone(),
+                crate::paths::capture_evaluation_path(tracker, &self.location),
+                location.into(),
+                instance.lazy_value(),
+                unexpected,
+            ));
         }
         if !found_required {
-            crate::ob_work::push_error(errors, || {
-                self.missing_required::<F>(instance, location, tracker)
-            });
+            errors.push(self.missing_required::<F>(instance, location, tracker));
         }
     }
 
@@ -550,7 +544,7 @@ impl<F: Json, M: PropertiesValidatorsMap<F>> Validate<F>
                         found_required = true;
                     }
                 } else {
-                    crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
+                    unexpected.push(property.as_ref().to_owned());
                 }
             }
             let mut result = EvaluationResult::from_children(children);
@@ -1022,19 +1016,17 @@ impl<F: Json, R: RegexEngine> Validate<F> for AdditionalPropertiesWithPatternsFa
                 }
             }
             if !has_match {
-                crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
+                unexpected.push(property.as_ref().to_owned());
             }
         }
         if !unexpected.is_empty() {
-            crate::ob_work::push_error(errors, || {
-                ValidationError::additional_properties(
-                    self.location.clone(),
-                    crate::paths::capture_evaluation_path(tracker, &self.location),
-                    location.into(),
-                    instance.lazy_value(),
-                    unexpected,
-                )
-            });
+            errors.push(ValidationError::additional_properties(
+                self.location.clone(),
+                crate::paths::capture_evaluation_path(tracker, &self.location),
+                location.into(),
+                instance.lazy_value(),
+                unexpected,
+            ));
         }
     }
 
@@ -1061,7 +1053,7 @@ impl<F: Json, R: RegexEngine> Validate<F> for AdditionalPropertiesWithPatternsFa
                     }
                 }
                 if !has_match {
-                    crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
+                    unexpected.push(property.as_ref().to_owned());
                 }
             }
             if !pattern_matched_props.is_empty() {
@@ -1498,20 +1490,18 @@ impl<F: Json, M: PropertiesValidatorsMap<F>, R: RegexEngine> Validate<F>
                     }
                 }
                 if !has_match {
-                    crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
+                    unexpected.push(property.as_ref().to_owned());
                 }
             }
         }
         if !unexpected.is_empty() {
-            crate::ob_work::push_error(errors, || {
-                ValidationError::additional_properties(
-                    self.location.clone(),
-                    crate::paths::capture_evaluation_path(tracker, &self.location),
-                    location.into(),
-                    instance.lazy_value(),
-                    unexpected,
-                )
-            });
+            errors.push(ValidationError::additional_properties(
+                self.location.clone(),
+                crate::paths::capture_evaluation_path(tracker, &self.location),
+                location.into(),
+                instance.lazy_value(),
+                unexpected,
+            ));
         }
     }
 
@@ -1552,7 +1542,7 @@ impl<F: Json, M: PropertiesValidatorsMap<F>, R: RegexEngine> Validate<F>
                         }
                     }
                     if !has_match {
-                        crate::ob_work::push_diagnostic_name(&mut unexpected, property.as_ref());
+                        unexpected.push(property.as_ref().to_owned());
                     }
                 }
             }

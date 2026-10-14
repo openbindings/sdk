@@ -8,7 +8,10 @@ use serde_json::{Map, Value};
 use std::sync::Arc;
 
 #[derive(Default)]
-pub(crate) struct Literals(Vec<Arc<[JsonValue]>>);
+pub(crate) struct Operands {
+    literals: Vec<Arc<[JsonValue]>>,
+    numbers: openbindings_internal_json::numeric::Operands,
+}
 struct Constraint(Arc<[JsonValue]>);
 impl<'i> Keyword<'i, FlatJson> for Constraint {
     fn is_valid(&self, instance: View<'i>) -> bool {
@@ -26,7 +29,7 @@ impl<'i> Keyword<'i, FlatJson> for Constraint {
         }
     }
 }
-impl Literals {
+impl Operands {
     pub(crate) fn resource(
         &mut self,
         resource: &JsonValue,
@@ -56,9 +59,25 @@ impl Literals {
                             for field in member.value.members().expect("admitted schema object") {
                                 let key = field.name.as_str().expect("admitted scalar name");
                                 let value = match key {
+                                    "minimum" | "maximum" | "exclusiveMinimum"
+                                    | "exclusiveMaximum" | "multipleOf" => {
+                                        self.numbers.insert(field.value.text())
+                                    }
+                                    // No finite JSON collection can reach u64::MAX elements.
+                                    // Preserve contains annotations by keeping its native keyword;
+                                    // normalize every size operand without exponent expansion.
+                                    "minLength" | "maxLength" | "minItems" | "maxItems"
+                                    | "minProperties" | "maxProperties" | "minContains"
+                                    | "maxContains" => Value::from(
+                                        openbindings_internal_json::decimal::Decimal::parse(
+                                            field.value.text(),
+                                        )
+                                        .nonnegative_integer_u64_saturating()
+                                        .expect("admitted size operand"),
+                                    ),
                                     "const" => {
-                                        let id = self.0.len();
-                                        self.0.push(Arc::from([field.value.to_owned()]));
+                                        let id = self.literals.len();
+                                        self.literals.push(Arc::from([field.value.to_owned()]));
                                         Value::from(id)
                                     }
                                     "enum" => {
@@ -68,8 +87,8 @@ impl Literals {
                                             .expect("admitted enum array")
                                             .map(|v| v.to_owned())
                                             .collect();
-                                        let id = self.0.len();
-                                        self.0.push(choices.into());
+                                        let id = self.literals.len();
+                                        self.literals.push(choices.into());
                                         Value::Array(vec![Value::from(id)])
                                     }
                                     // Annotations and unknown-keyword data do not affect this
@@ -78,21 +97,8 @@ impl Literals {
                                     | "$dynamicRef"
                                     | "$dynamicAnchor"
                                     | "type"
-                                    | "multipleOf"
-                                    | "maximum"
-                                    | "exclusiveMaximum"
-                                    | "minimum"
-                                    | "exclusiveMinimum"
-                                    | "maxLength"
-                                    | "minLength"
                                     | "pattern"
-                                    | "maxItems"
-                                    | "minItems"
                                     | "uniqueItems"
-                                    | "maxContains"
-                                    | "minContains"
-                                    | "maxProperties"
-                                    | "minProperties"
                                     | "required"
                                     | "dependentRequired"
                                     | "properties"
@@ -132,7 +138,8 @@ impl Literals {
         self,
         mut options: ValidationOptions<'_, R, FlatJson>,
     ) -> ValidationOptions<'_, R, FlatJson> {
-        let literals = Arc::new(self.0);
+        options = self.numbers.apply(options);
+        let literals = Arc::new(self.literals);
         for keyword in ["const", "enum"] {
             let literals = literals.clone();
             options = options.with_keyword(keyword, move |_, value, _| {

@@ -137,7 +137,7 @@ impl<F: Json> Validate<F> for RequiredValidator<F> {
                     crate::paths::capture_evaluation_path(tracker, &self.location),
                     location.into(),
                     instance.lazy_value(),
-                    crate::ob_work::diagnostic_required_name(property_name.as_str()),
+                    Value::String(property_name.as_str().to_owned()),
                 ));
             }
         }
@@ -160,15 +160,13 @@ impl<F: Json> Validate<F> for RequiredValidator<F> {
                     None => object.get(key).is_some(),
                 };
                 if !present {
-                    crate::ob_work::push_error(errors, || {
-                        ValidationError::required(
-                            self.location.clone(),
-                            eval_path.clone(),
-                            location.into(),
-                            instance.lazy_value(),
-                            crate::ob_work::diagnostic_required_name(property_name.as_str()),
-                        )
-                    });
+                    errors.push(ValidationError::required(
+                        self.location.clone(),
+                        eval_path.clone(),
+                        location.into(),
+                        instance.lazy_value(),
+                        Value::String(property_name.as_str().to_owned()),
+                    ));
                 }
             }
         }
@@ -206,7 +204,7 @@ impl<F: Json> Validate<F> for SingleItemRequiredValidator<F> {
                 crate::paths::capture_evaluation_path(tracker, &self.location),
                 location.into(),
                 instance.lazy_value(),
-                crate::ob_work::diagnostic_required_name(&self.value),
+                Value::String(self.value.clone()),
             ));
         }
         Ok(())
@@ -277,7 +275,7 @@ impl<F: Json> Validate<F> for Required2Validator<F> {
                     crate::paths::capture_evaluation_path(tracker, &self.location),
                     location.into(),
                     instance.lazy_value(),
-                    crate::ob_work::diagnostic_required_name(self.first.as_str()),
+                    Value::String(self.first.as_str().to_owned()),
                 ));
             }
             if object.get(&self.second_key).is_none() {
@@ -286,7 +284,7 @@ impl<F: Json> Validate<F> for Required2Validator<F> {
                     crate::paths::capture_evaluation_path(tracker, &self.location),
                     location.into(),
                     instance.lazy_value(),
-                    crate::ob_work::diagnostic_required_name(self.second.as_str()),
+                    Value::String(self.second.as_str().to_owned()),
                 ));
             }
         }
@@ -304,26 +302,22 @@ impl<F: Json> Validate<F> for Required2Validator<F> {
         if let Some(object) = instance.as_object() {
             let eval_path = crate::paths::capture_evaluation_path(tracker, &self.location);
             if object.get(&self.first_key).is_none() {
-                crate::ob_work::push_error(errors, || {
-                    ValidationError::required(
-                        self.location.clone(),
-                        eval_path.clone(),
-                        location.into(),
-                        instance.lazy_value(),
-                        crate::ob_work::diagnostic_required_name(self.first.as_str()),
-                    )
-                });
+                errors.push(ValidationError::required(
+                    self.location.clone(),
+                    eval_path.clone(),
+                    location.into(),
+                    instance.lazy_value(),
+                    Value::String(self.first.as_str().to_owned()),
+                ));
             }
             if object.get(&self.second_key).is_none() {
-                crate::ob_work::push_error(errors, || {
-                    ValidationError::required(
-                        self.location.clone(),
-                        eval_path,
-                        location.into(),
-                        instance.lazy_value(),
-                        crate::ob_work::diagnostic_required_name(self.second.as_str()),
-                    )
-                });
+                errors.push(ValidationError::required(
+                    self.location.clone(),
+                    eval_path,
+                    location.into(),
+                    instance.lazy_value(),
+                    Value::String(self.second.as_str().to_owned()),
+                ));
             }
         }
     }
@@ -429,7 +423,7 @@ impl<F: Json> Validate<F> for Required3Validator<F> {
                     crate::paths::capture_evaluation_path(tracker, &self.location),
                     location.into(),
                     instance.lazy_value(),
-                    crate::ob_work::diagnostic_required_name(missing.as_str()),
+                    Value::String(missing.as_str().to_owned()),
                 ));
             }
         }
@@ -448,37 +442,31 @@ impl<F: Json> Validate<F> for Required3Validator<F> {
             let eval_path = crate::paths::capture_evaluation_path(tracker, &self.location);
             let found = self.found(&object);
             if found & 0b001 == 0 {
-                crate::ob_work::push_error(errors, || {
-                    ValidationError::required(
-                        self.location.clone(),
-                        eval_path.clone(),
-                        location.into(),
-                        instance.lazy_value(),
-                        crate::ob_work::diagnostic_required_name(self.first.as_str()),
-                    )
-                });
+                errors.push(ValidationError::required(
+                    self.location.clone(),
+                    eval_path.clone(),
+                    location.into(),
+                    instance.lazy_value(),
+                    Value::String(self.first.as_str().to_owned()),
+                ));
             }
             if found & 0b010 == 0 {
-                crate::ob_work::push_error(errors, || {
-                    ValidationError::required(
-                        self.location.clone(),
-                        eval_path.clone(),
-                        location.into(),
-                        instance.lazy_value(),
-                        crate::ob_work::diagnostic_required_name(self.second.as_str()),
-                    )
-                });
+                errors.push(ValidationError::required(
+                    self.location.clone(),
+                    eval_path.clone(),
+                    location.into(),
+                    instance.lazy_value(),
+                    Value::String(self.second.as_str().to_owned()),
+                ));
             }
             if found & 0b100 == 0 {
-                crate::ob_work::push_error(errors, || {
-                    ValidationError::required(
-                        self.location.clone(),
-                        eval_path,
-                        location.into(),
-                        instance.lazy_value(),
-                        crate::ob_work::diagnostic_required_name(self.third.as_str()),
-                    )
-                });
+                errors.push(ValidationError::required(
+                    self.location.clone(),
+                    eval_path,
+                    location.into(),
+                    instance.lazy_value(),
+                    Value::String(self.third.as_str().to_owned()),
+                ));
             }
         }
     }

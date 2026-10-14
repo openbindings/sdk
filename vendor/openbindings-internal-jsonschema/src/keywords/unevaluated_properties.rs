@@ -887,10 +887,7 @@ impl<F: Json> Validate<F> for UnevaluatedPropertiesValidator<F> {
                     }
                     match &self.validators.unevaluated {
                         Some(schema) if schema.is_valid(&value, ctx) => {}
-                        _ => crate::ob_work::push_diagnostic_name(
-                            &mut unevaluated,
-                            property.as_ref(),
-                        ),
+                        _ => unevaluated.push(property.as_ref().to_owned()),
                     }
                 }
                 if unevaluated.is_empty() {
@@ -924,11 +921,11 @@ impl<F: Json> Validate<F> for UnevaluatedPropertiesValidator<F> {
                 // Check against unevaluatedProperties schema
                 if let Some(unevaluated_schema) = &self.validators.unevaluated {
                     if !unevaluated_schema.is_valid(&value, ctx) {
-                        crate::ob_work::push_diagnostic_name(&mut unevaluated, property.as_ref());
+                        unevaluated.push(property.as_ref().to_owned());
                     }
                 } else {
                     // No unevaluatedProperties schema means false (reject all)
-                    crate::ob_work::push_diagnostic_name(&mut unevaluated, property.as_ref());
+                    unevaluated.push(property.as_ref().to_owned());
                 }
             }
 
@@ -1015,12 +1012,12 @@ impl<F: Json> Validate<F> for UnevaluatedPropertiesValidator<F> {
                     );
                     if !child.valid {
                         invalid = true;
-                        crate::ob_work::push_diagnostic_name(&mut unevaluated, property.as_ref());
+                        unevaluated.push(property.as_ref().to_owned());
                     }
                     children.push(&mut ctx.arena, child);
                 } else {
                     invalid = true;
-                    crate::ob_work::push_diagnostic_name(&mut unevaluated, property.as_ref());
+                    unevaluated.push(property.as_ref().to_owned());
                 }
             }
 

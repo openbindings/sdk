@@ -1,6 +1,6 @@
 //! Exact JSON values and source-backed views.
+use crate::decimal::Decimal;
 use crate::raw::{Arena, Id, Kind, Limits};
-use jsonschema_value::ob_decimal::Decimal;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{collections::HashMap, fmt, sync::Arc};
 

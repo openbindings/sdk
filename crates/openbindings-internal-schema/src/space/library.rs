@@ -44,10 +44,10 @@ impl Retrieve for Recording {
 }
 
 // Arbitrarily deep literal data must not recurse when the inspection copy drops.
-struct Tree(Value);
+struct Tree(Box<Value>);
 impl Drop for Tree {
     fn drop(&mut self) {
-        let mut pending = vec![std::mem::take(&mut self.0)];
+        let mut pending = vec![std::mem::take(&mut *self.0)];
         while let Some(value) = pending.pop() {
             match value {
                 Value::Array(values) => pending.extend(values),
@@ -101,7 +101,7 @@ fn presented_reference(reference: &str) -> Cow<'_, str> {
         Cow::Owned(out)
     }
 }
-fn copy(value: &JsonValue) -> Tree {
+fn copy(value: &JsonValue, positions: &HashMap<usize, usize>) -> (Tree, HashMap<usize, usize>) {
     let mut stack = vec![(value.view(), false)];
     let mut values = HashMap::new();
     while let Some((node, visited)) = stack.pop() {
@@ -123,7 +123,7 @@ fn copy(value: &JsonValue) -> Tree {
         let copied = match node.kind() {
             JsonKind::Null => Value::Null,
             JsonKind::Boolean => Value::Bool(node.as_bool().unwrap()),
-            JsonKind::Number => Value::Number(node.text().parse().expect("admitted exact number")),
+            JsonKind::Number => Value::from(0), // Inspection never evaluates numeric operands.
             JsonKind::String => Value::String(scalar(node)),
             JsonKind::Array => Value::Array(node.elements().unwrap().map(&mut child).collect()),
             JsonKind::Object => Value::Object(
@@ -144,7 +144,27 @@ fn copy(value: &JsonValue) -> Tree {
         };
         values.insert(node_id(&node.to_owned()), copied);
     }
-    Tree(values.remove(&node_id(value)).expect("copied root"))
+    let tree = Tree(Box::new(
+        values.remove(&node_id(value)).expect("copied root"),
+    ));
+    let mut identity = HashMap::new();
+    let mut stack = vec![(value.view(), &*tree.0)];
+    while let Some((original, copied)) = stack.pop() {
+        if let Some(id) = positions.get(&node_id(&original.to_owned())) {
+            identity.insert(std::ptr::from_ref(copied) as usize, *id);
+        }
+        if let (Some(items), Some(copies)) = (original.elements(), copied.as_array()) {
+            stack.extend(items.zip(copies));
+        }
+        if let (Some(members), Some(copies)) = (original.members(), copied.as_object()) {
+            for member in members {
+                if let Some(value) = copies.get(&scalar(member.name)) {
+                    stack.push((member.value, value));
+                }
+            }
+        }
+    }
+    (tree, identity)
 }
 
 impl SchemaSpace {
@@ -299,36 +319,14 @@ impl SchemaSpace {
             let resource = &self.resources[resource_id];
             let Some(root) = resource.root else { continue };
             let original = &self.nodes[root].value;
-            let mut tree = copy(original);
+            let (mut tree, identity) =
+                copy(original, &self.sources[self.nodes[root].source].positions);
             let canonical = resource.base.as_ref().unwrap_or(&queries[0].2).clone();
             // Registering a detached nested resource must preserve its already
             // established base. This only changes the root registration identity;
             // nested references and identifiers are interpreted by the library.
             if let Some(id) = tree.0.get_mut("$id") {
                 *id = Value::String(canonical.clone());
-            }
-            // S8 integration point: build this identity table at the place copies
-            // are made. Numeric-substituted copies must be paired with the same
-            // original nodes here, never matched later by JSON equality.
-            let mut identity = HashMap::new();
-            let mut stack = vec![(original.view(), &tree.0)];
-            while let Some((original, copied)) = stack.pop() {
-                if let Some(id) = self.sources[self.nodes[root].source]
-                    .positions
-                    .get(&node_id(&original.to_owned()))
-                {
-                    identity.insert(std::ptr::from_ref(copied) as usize, *id);
-                }
-                if let (Some(items), Some(copies)) = (original.elements(), copied.as_array()) {
-                    stack.extend(items.zip(copies));
-                }
-                if let (Some(members), Some(copies)) = (original.members(), copied.as_object()) {
-                    for member in members {
-                        if let Some(value) = copies.get(&scalar(member.name)) {
-                            stack.push((member.value, value));
-                        }
-                    }
-                }
             }
             let recording = Recording::default();
             let builder = Registry::new()
@@ -340,7 +338,7 @@ impl SchemaSpace {
                 .chain(std::iter::once(canonical.as_str()))
                 .collect();
             let registry = builder
-                .extend(names.into_iter().map(|name| (name, &tree.0)))
+                .extend(names.into_iter().map(|name| (name, &*tree.0)))
                 .and_then(|b| b.prepare());
             for (holder, reference, _, fragment) in queries {
                 let key = (holder, reference);
