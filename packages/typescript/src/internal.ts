@@ -951,22 +951,31 @@ export class ParsedDocument extends Managed {
   }
   /** Read the declaration as exact JavaScript UTF-16 text. Invalid typed fields throw. */
   get openbindings(): string | undefined {
-    return this.documentMetadata().openbindings ?? undefined;
+    return (
+      decode<string | null>(sdkCall(() => documentRaw(this).openbindings())) ??
+      undefined
+    );
   }
   /** Read optional exact interface name; undefined means absent. */
   get name(): string | undefined {
-    return this.documentMetadata().name ?? undefined;
+    return (
+      decode<string | null>(sdkCall(() => documentRaw(this).name())) ??
+      undefined
+    );
   }
   /** Read the optional opaque interface version label. */
   get version(): string | undefined {
-    return this.documentMetadata().version ?? undefined;
+    return (
+      decode<string | null>(sdkCall(() => documentRaw(this).version())) ??
+      undefined
+    );
   }
   /** Read optional exact description, including lone UTF-16 units. */
   get description(): string | undefined {
-    return this.documentMetadata().description ?? undefined;
-  }
-  private documentMetadata(): Record<string, string | null> {
-    return decode(sdkCall(() => documentRaw(this).metadata()));
+    return (
+      decode<string | null>(sdkCall(() => documentRaw(this).description())) ??
+      undefined
+    );
   }
   /** Acquire a NEW independent ExactJson owner for each declared schema on every read. Dispose each value. Undefined means absent; an empty map means present-empty. */
   get schemas(): ReadonlyMap<string, ExactJson> | undefined {
@@ -1166,7 +1175,10 @@ export class ValidatedDocument extends ParsedDocument {
   }
   /** Retain an independent Rust proof for this same immutable snapshot. */
   override retain(): ValidatedDocument {
-    return new ValidatedDocument(validatedRaw(this).retain(), conformanceToken);
+    return new ValidatedDocument(
+      sdkCall(() => validatedRaw(this).retain()),
+      conformanceToken,
+    );
   }
   /** Acquire an independent parsed owner for editor reads. */
   parsed(): ParsedDocument {

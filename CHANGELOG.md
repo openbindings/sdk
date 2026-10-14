@@ -2,6 +2,11 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- Recheck cached Rust document conformance at every proof-requiring Wasm entry,
+  including raw receiver substitution, retention, transfer and publication. Keep
+  TypeScript top-level text reads field-local so malformed siblings do not hide
+  readable fields or absence.
+
 - Require a validated document for normative value contracts and operation invocation
   across Rust, Wasm and TypeScript. Add infallible validated views and top-level
   metadata/schema reads; preserve exact UTF-16 with Rust `JsonStringRef` and JavaScript

@@ -166,6 +166,17 @@ async function main(): Promise<void> {
 }
 const timeout = setTimeout(() => { throw Error('Wasm qualification timed out'); }, 15000);
 async function operationValidation(): Promise<void> {
+  const before = JSON.stringify(stats());
+  for (const document of [
+    '{"openbindings":"0.2.0","name":7,"operations":{"echo":{"input":true}}}',
+    '{"openbindings":"0.3.0","operations":{"echo":{"input":true}}}',
+  ]) for (const validate of [false, true]) {
+    let refused = false;
+    try { InvocationBridge.forOperation(document, 'echo', 'echo', Promise.resolve(), validate); }
+    catch (error) { assert(String(error) === 'INVALID_DOCUMENT', 'Wrong operation document refusal'); refused = true; }
+    assert(refused, 'Operation bridge accepted a document without proof');
+    assert(JSON.stringify(stats()) === before, 'Rejected operation document caused provider effects');
+  }
   const document = '{"openbindings":"0.2.0","operations":{"echo":{"input":{"type":"integer"},"output":{"type":"integer"}}},"bindings":{"b":{"operation":"echo","source":"s"}},"sources":{"s":{"kind":"example.wasm-local"}}}';
   const call = new Invocation(InvocationBridge.forOperation(document, 'echo', 'echo', Promise.resolve(), true));
   const out = call.outputs[Symbol.asyncIterator]();
@@ -179,6 +190,6 @@ async function operationValidation(): Promise<void> {
   await unresolved.write('1');
   await failure(unresolved.outputs[Symbol.asyncIterator]().next(), 'ERR_SCHEMA_UNRESOLVED');
   unresolved.dispose(); await released();
-  console.log(JSON.stringify({result:'passed',checks:['operation exact integer validation', 'input mismatch terminal', 'missing evaluator no verdict'],final:stats()}));
+  console.log(JSON.stringify({result:'passed',checks:['operation document proof before provider effects', 'operation exact integer validation', 'input mismatch terminal', 'missing evaluator no verdict'],final:stats()}));
 }
 void (async () => { await main(); operationPath = true; await main(); await operationValidation(); })().then(() => clearTimeout(timeout), error => { clearTimeout(timeout); console.error(error); throw error; });

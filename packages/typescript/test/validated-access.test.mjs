@@ -61,6 +61,172 @@ test("Rust proof transfer is single-use and unavailable to parsed or forged hand
   draft.dispose();
 });
 
+test("raw document receiver substitution rechecks proof at every authority entry", () => {
+  const resources = new bridge.WasmResources();
+  const refuses = (code) => (error) => JSON.parse(error).code === code;
+  try {
+    for (const source of [
+      '{"openbindings":"0.2.0","name":7,"operations":{"op":{"input":true}}}',
+      '{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"#/name"}}},"name":"opaque"}',
+      '{"openbindings":"0.3.0","operations":{"op":{"input":true}}}',
+    ]) {
+      const parsed = bridge.WasmDocument.parseBytes(
+        new TextEncoder().encode(source),
+      );
+      const transfer = parsed.validate();
+      try {
+        assert.equal(transfer.takeValidated(), undefined);
+        // Claude's exact receiver-substitution probe: no pointer or prototype edits.
+        // Exercise both live snapshot carriers, including consumed evidence.
+        for (const receiver of [parsed, transfer]) {
+          assert.throws(
+            () =>
+              bridge.WasmValidatedDocument.prototype.valueContracts.call(
+                receiver,
+                resources,
+                "{}",
+                false,
+              ),
+            refuses("document-conformance"),
+          );
+          assert.throws(
+            () => bridge.WasmValidatedDocument.prototype.retain.call(receiver),
+            refuses("document-conformance"),
+          );
+          assert.equal(
+            bridge.WasmDocumentValidation.prototype.takeValidated.call(
+              receiver,
+            ),
+            undefined,
+          );
+          const again =
+            bridge.WasmValidatedDocument.prototype.validate.call(receiver);
+          assert.equal(again.takeValidated(), undefined);
+          again.free();
+          const editor =
+            bridge.WasmValidatedDocument.prototype.parsed.call(receiver);
+          assert.throws(
+            () => bridge.WasmValidatedDocument.prototype.retain.call(editor),
+            refuses("document-conformance"),
+          );
+          editor.free();
+          // Publication's generated argument check uses instanceof. Pass that
+          // check deliberately to verify Rust still derives the actual proof.
+          const originalPrototype = Object.getPrototypeOf(receiver);
+          try {
+            Object.setPrototypeOf(
+              receiver,
+              bridge.WasmValidatedDocument.prototype,
+            );
+            assert.throws(
+              () => new bridge.WasmPublication(receiver, "*"),
+              refuses("publication-conformance"),
+            );
+          } finally {
+            Object.setPrototypeOf(receiver, originalPrototype);
+          }
+        }
+      } finally {
+        transfer.free();
+        parsed.free();
+      }
+    }
+    // A substituted conformant snapshot can derive real proof, but only for
+    // itself. Keep owners after dropping the original receiver and transfer.
+    const parsed = bridge.WasmDocument.parseBytes(
+      new TextEncoder().encode(
+        '{"openbindings":"0.2.0","name":"readable","operations":{"op":{"input":true}}}',
+      ),
+    );
+    const retained = bridge.WasmValidatedDocument.prototype.retain.call(parsed);
+    const proof =
+      bridge.WasmDocumentValidation.prototype.takeValidated.call(parsed);
+    assert.ok(proof);
+    assert.equal(
+      bridge.WasmDocumentValidation.prototype.takeValidated.call(parsed),
+      undefined,
+    );
+    const context = bridge.WasmValidatedDocument.prototype.valueContracts.call(
+      parsed,
+      resources,
+      "{}",
+      false,
+    );
+    parsed.free();
+    const publication = new bridge.WasmPublication(proof, "*");
+    publication.free();
+    proof.free();
+    retained.free();
+    const preparation = context.prepare("op", "input", false);
+    assert.equal(JSON.parse(preparation.result()).status, "ready");
+    const contract = preparation.takeValueContract();
+    const value = bridge.WasmJson.parseBytes(new TextEncoder().encode("42"));
+    assert.equal(
+      JSON.parse(contract.validate(value, false)).outcome,
+      "satisfies",
+    );
+    value.free();
+    contract.free();
+    preparation.free();
+    context.free();
+  } finally {
+    resources.free();
+  }
+});
+
+test("top-level editor reads preserve field-local errors, exact text and absence", () => {
+  // Claude's metadata-parity probe: only the version field is malformed.
+  const parsed = sdk.parseDocument(
+    '{"openbindings":"0.2.0","name":"readable","version":7,"operations":{}}',
+  ).value;
+  assert.equal(parsed.openbindings, "0.2.0");
+  assert.equal(parsed.name, "readable");
+  assert.equal(parsed.description, undefined);
+  assert.throws(
+    () => parsed.version,
+    (error) =>
+      error.code === "interpretation" &&
+      error.interpretationCode === "invalid-version" &&
+      error.location.pointer === "/version",
+  );
+  parsed.dispose();
+  for (const bad of ["name", "version", "description"]) {
+    const values = {
+      openbindings: "0.2.0",
+      name: "",
+      version: "\ud800",
+      description: "\udc00",
+    };
+    const source = JSON.stringify({ ...values, [bad]: 7, operations: {} });
+    const doc = sdk.parseDocument(source).value;
+    const raw = bridge.WasmDocument.parseBytes(
+      new TextEncoder().encode(source),
+    );
+    try {
+      for (const [field, expected] of Object.entries(values)) {
+        if (field === bad) {
+          assert.throws(
+            () => doc[field],
+            (error) =>
+              error.interpretationCode === `invalid-${bad}` &&
+              error.location.pointer === `/${bad}`,
+          );
+          assert.throws(
+            () => raw[field](),
+            (error) => JSON.parse(error).location.pointer === `/${bad}`,
+          );
+        } else {
+          assert.equal(doc[field], expected);
+          assert.equal(JSON.parse(raw[field]()), expected);
+        }
+      }
+    } finally {
+      raw.free();
+      doc.dispose();
+    }
+  }
+});
+
 test("validated text and retained reads preserve exact UTF-16 and presence", () => {
   const draft = sdk.parseDocument(text).value;
   const result = draft.validated();

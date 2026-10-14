@@ -272,6 +272,8 @@ prefix identifies the additional proof, following `ValidatedDocument`.
 TypeScript keeps its existing metadata and selection shapes. Validated documents
 inherit exact editor reads and add `valueContracts()` and `parsed()`. Top-level
 text is exact JavaScript UTF-16; optional text uses undefined for absence.
+Each top-level text getter checks only its own field, preserving valid siblings
+and absence when another metadata field is malformed.
 `schemas` creates a new ExactJson owner for each map value on every access.
 `OperationView.input` and `.output` each create a new independent ExactJson owner,
 preserving undefined separately from null, false, true and objects. Dispose each
@@ -279,7 +281,10 @@ acquisition; these getters keep the established ownership convention.
 
 The raw bridge transfers proof with `WasmDocument.validate()` returning
 `WasmDocumentValidation`; `report()` returns evidence and `takeValidated()` takes
-at most one `WasmValidatedDocument`. Only that Rust-owned proof has `valueContracts`.
+at most one `WasmValidatedDocument`. Bridge wrapper classes are not proof authority:
+contract construction, validated retention, proof transfer and publication derive
+proof from the actual snapshot's cached Rust validation at each call, including
+when a raw caller substitutes a document-family method receiver.
 
 ## Inspection and exact editing additions
 
