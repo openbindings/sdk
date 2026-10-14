@@ -85,7 +85,7 @@ async fn main() {
         let client = native::Client::new(
             reqwest::Client::builder().no_proxy(),
             ClientOptions {
-                max_document_bytes: DOCUMENT.len() as i64 - 1,
+                max_document_bytes: DOCUMENT.len() - 1,
                 ..Default::default()
             },
         )

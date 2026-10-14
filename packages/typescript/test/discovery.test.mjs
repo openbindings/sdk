@@ -123,21 +123,33 @@ test("SDK deadline interrupts stalled acquisition and retains body-phase metadat
 
 // HD-2: already-ready cancellation wins a tie; first observed expiry stays timeout.
 test("caller cancellation and timeout remain distinct with deterministic ties", async () => {
-  const control = new AbortController();
-  const result = await discovery.discover("https://example.test", {
-    timeoutMs: 1,
-    signal: control.signal,
-    fetch: async () => {
-      const start = performance.now();
-      while (performance.now() - start < 5) {
-        /* synchronous host boundary */
-      }
-      control.abort();
-      return new Response(text);
-    },
+  // A controlled clock makes the tie exact: the deadline passes and the caller
+  // aborts at the same observation, independent of how fast the host runs.
+  const original = performance.now.bind(performance);
+  let now = 0;
+  Object.defineProperty(performance, "now", {
+    configurable: true,
+    value: () => now,
   });
-  assert.equal(result.status, "cancelled");
-  assert.equal(result.reason, "aborted");
+  try {
+    const control = new AbortController();
+    const result = await discovery.discover("https://example.test", {
+      timeoutMs: 1,
+      signal: control.signal,
+      fetch: async () => {
+        now = 10;
+        control.abort();
+        return new Response(text);
+      },
+    });
+    assert.equal(result.status, "cancelled");
+    assert.equal(result.reason, "aborted");
+  } finally {
+    Object.defineProperty(performance, "now", {
+      configurable: true,
+      value: original,
+    });
+  }
   const timeout = await discovery.discover("https://example.test", {
     signal: AbortSignal.timeout(5),
     timeoutMs: 100,
