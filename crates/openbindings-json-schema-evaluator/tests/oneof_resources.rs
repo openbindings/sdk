@@ -450,8 +450,8 @@ fn diagnostic_bytes_privacy_and_partial_work_do_not_fabricate_results() {
         assert_eq!(problems.len(), usize::from(allowance == bytes));
         assert_eq!(problems_complete, allowance == bytes);
     }
-    let cancelled = WorkControl::new();
-    cancelled.cancel();
+    let cancelled = std::sync::atomic::AtomicBool::new(false);
+    cancelled.store(true, std::sync::atomic::Ordering::Release);
     assert!(
         matches!(regular.validate_with_control(&value, &cancelled), ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled)
     );
@@ -485,7 +485,7 @@ fn adapters_receive_unmodified_requests_and_each_bound_compiles_without_the_othe
         fn prepare(
             &self,
             request: &SchemaRequest,
-            control: &WorkControl,
+            control: &dyn WorkControl,
         ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             assert!(request.entry().get("oneOf").is_some());

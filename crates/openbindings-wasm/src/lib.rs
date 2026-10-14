@@ -40,12 +40,8 @@ fn direction(direction: &str) -> Result<Direction, JsValue> {
         )),
     }
 }
-fn control(cancelled: bool) -> WorkControl {
-    let control = WorkControl::new();
-    if cancelled {
-        control.cancel();
-    }
-    control
+fn control(cancelled: bool) -> std::sync::atomic::AtomicBool {
+    std::sync::atomic::AtomicBool::new(cancelled)
 }
 #[wasm_bindgen]
 pub struct WasmJson {

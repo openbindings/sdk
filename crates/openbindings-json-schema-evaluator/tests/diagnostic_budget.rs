@@ -157,8 +157,8 @@ fn external_uri_oversize_and_verdict_cancellation_reuse() {
             },
             ResourceSet::default(),
         );
-        let control = WorkControl::new();
-        control.cancel();
+        let control = std::sync::atomic::AtomicBool::new(false);
+        control.store(true, std::sync::atomic::Ordering::Release);
         assert!(matches!(
             contract.validate_with_control(&JsonValue::parse("0").unwrap(), &control),
             ValueOutcome::NoVerdict {

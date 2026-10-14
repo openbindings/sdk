@@ -1,5 +1,6 @@
 //! Application policy around retained partial results and typed refusals.
-use openbindings::{JsonValue, Source, WorkControl};
+use openbindings::{JsonValue, Source};
+use openbindings_source_inspection::CancellationToken;
 use openbindings_source_inspection::{InspectionError, InspectionErrorKind, Inspector};
 use source_inspection_consumer::{
     AuthoringFailure, AuthoringOutcome, CATALOG_KIND, CatalogInspector, author_selected,
@@ -81,7 +82,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let provider = CatalogInspector;
     let inspector = Inspector::new(&provider);
-    let cancelled = WorkControl::new();
+    let cancelled = CancellationToken::new();
     cancelled.cancel();
     explain_refusal(
         &inspector

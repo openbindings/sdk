@@ -58,7 +58,7 @@ fn strict_refusal(schema: &str) -> NoVerdict {
         fn prepare(
             &self,
             request: &SchemaRequest,
-            control: &WorkControl,
+            control: &dyn WorkControl,
         ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
             Err(request.evaluation_program(control).unwrap_err())
         }
@@ -444,7 +444,7 @@ fn custom_evaluator_gets_original_request_and_is_not_retried_or_reinterpreted() 
         fn prepare(
             &self,
             request: &SchemaRequest,
-            control: &WorkControl,
+            control: &dyn WorkControl,
         ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             assert_eq!(request.entry().text(), self.original);
@@ -480,7 +480,9 @@ fn custom_evaluator_gets_original_request_and_is_not_retried_or_reinterpreted() 
     assert_eq!(detail.code, "custom-refusal");
     assert_eq!(custom.calls.load(Ordering::SeqCst), 1);
     let request = custom.captured.lock().unwrap().take().unwrap();
-    let bounds = request.evaluation_bounds(&WorkControl::new()).unwrap();
+    let bounds = request
+        .evaluation_bounds(&std::sync::atomic::AtomicBool::new(false))
+        .unwrap();
     assert!(bounds.unavailable().is_some());
     assert!(bounds.lower_program().resources.iter().all(|r| r.uri != U));
     let (lower, upper, evidence) = bounds.into_parts();
@@ -509,8 +511,8 @@ fn custom_evaluator_gets_original_request_and_is_not_retried_or_reinterpreted() 
 fn cancellation_limits_and_concurrent_calls_do_not_poison_prepared_owners() {
     let schema = format!(r#"{{"properties":{{"x":{{"$ref":"{U}"}}}},"type":"object"}}"#);
     let contracts = context(&schema, ResourceSet::default(), DefaultEvaluator::new());
-    let cancelled = WorkControl::new();
-    cancelled.cancel();
+    let cancelled = std::sync::atomic::AtomicBool::new(false);
+    cancelled.store(true, std::sync::atomic::Ordering::Release);
     assert!(
         matches!(contracts.prepare_with_control("op", Direction::Input, &cancelled), ValueContractPreparation::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled)
     );

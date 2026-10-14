@@ -1,5 +1,6 @@
+use crate::CancellationToken;
 use crate::*;
-use openbindings::{ValidatedDocument, WorkControl};
+use openbindings::ValidatedDocument;
 use std::{
     collections::HashSet,
     future::{Future, poll_fn},
@@ -28,7 +29,7 @@ pub trait InterfaceSynthesizer {
     fn synthesize<'a>(
         &'a self,
         request: &'a SynthesisRequest<'a>,
-        control: WorkControl,
+        control: CancellationToken,
     ) -> Self::Synthesis<'a>;
 }
 macro_rules! forward {($($wrapper:ty),+)=>{$(
@@ -36,7 +37,7 @@ macro_rules! forward {($($wrapper:ty),+)=>{$(
         type Synthesis<'a>=P::Synthesis<'a> where Self:'a;
         fn supports_kind(&self,k:&str)->bool{(**self).supports_kind(k)}
         fn supported_kinds(&self)->Vec<SupportedKind>{(**self).supported_kinds()}
-        fn synthesize<'a>(&'a self,r:&'a SynthesisRequest<'a>,c:WorkControl)->Self::Synthesis<'a>{(**self).synthesize(r,c)}
+        fn synthesize<'a>(&'a self,r:&'a SynthesisRequest<'a>,c:CancellationToken)->Self::Synthesis<'a>{(**self).synthesize(r,c)}
     }
 )+};}
 forward!(&P, std::sync::Arc<P>, std::rc::Rc<P>);
@@ -95,13 +96,13 @@ impl<P: InterfaceSynthesizer> Synthesizer<P> {
         &'a self,
         r: &'a SynthesisRequest<'a>,
     ) -> impl Future<Output = Result<ValidatedDocument, SynthesisError>> + 'a {
-        strict(self.with_control(r, WorkControl::new()))
+        strict(self.with_control(r, CancellationToken::new()))
     }
     /// Strict synthesis with shared caller cancellation.
     pub fn synthesize_with_control<'a>(
         &'a self,
         r: &'a SynthesisRequest<'a>,
-        c: &WorkControl,
+        c: &CancellationToken,
     ) -> impl Future<Output = Result<ValidatedDocument, SynthesisError>> + 'a {
         strict(self.with_control(r, c.clone()))
     }
@@ -110,20 +111,20 @@ impl<P: InterfaceSynthesizer> Synthesizer<P> {
         &'a self,
         r: &'a SynthesisRequest<'a>,
     ) -> impl Future<Output = Result<Synthesis, SynthesisError>> + 'a {
-        self.with_control(r, WorkControl::new())
+        self.with_control(r, CancellationToken::new())
     }
     /// Coverage synthesis with shared cancellation; does not borrow the control handle.
     pub fn synthesize_with_coverage_and_control<'a>(
         &'a self,
         r: &'a SynthesisRequest<'a>,
-        c: &WorkControl,
+        c: &CancellationToken,
     ) -> impl Future<Output = Result<Synthesis, SynthesisError>> + 'a {
         self.with_control(r, c.clone())
     }
     fn with_control<'a>(
         &'a self,
         r: &'a SynthesisRequest<'a>,
-        control: WorkControl,
+        control: CancellationToken,
     ) -> impl Future<Output = Result<Synthesis, SynthesisError>> + 'a {
         let provider_control = control.clone();
         checked(
@@ -154,7 +155,7 @@ impl<P: InterfaceSynthesizer> Synthesizer<P> {
 async fn checked<'a, F: Future<Output = Result<SynthesisCandidate, SynthesisError>>>(
     start: impl FnOnce() -> Result<F, SynthesisError>,
     request: &'a SynthesisRequest<'a>,
-    control: WorkControl,
+    control: CancellationToken,
 ) -> Result<Synthesis, SynthesisError> {
     let mut work = pin!(start()?);
     let mut cancelled = pin!(control.cancelled());

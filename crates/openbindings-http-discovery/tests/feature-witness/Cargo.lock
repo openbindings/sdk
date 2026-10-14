@@ -991,10 +991,18 @@ dependencies = [
  "bytes",
  "fluent-uri",
  "openbindings",
+ "openbindings-internal-cancellation",
  "reqwest",
  "serde",
  "tokio",
  "url",
+]
+
+[[package]]
+name = "openbindings-internal-cancellation"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
 ]
 
 [[package]]

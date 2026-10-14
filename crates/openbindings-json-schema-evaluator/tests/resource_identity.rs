@@ -59,7 +59,7 @@ fn verdicts(contract: &ValueContract, cases: &[(&str, &str)]) {
 struct Project(bool);
 struct Projected;
 impl PreparedSchema for Projected {
-    fn validate(&self, _: &JsonValue, _: &WorkControl) -> ValueOutcome {
+    fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
         ValueOutcome::Satisfies
     }
 }
@@ -67,7 +67,7 @@ impl SchemaEvaluator for Project {
     fn prepare(
         &self,
         request: &SchemaRequest,
-        control: &WorkControl,
+        control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         if self.0 {
             request.evaluation_bounds(control)?;
@@ -119,7 +119,7 @@ fn identity_refusal(doc: &ParsedDocument, supplied: &ResourceSet, operation: &st
     }
 }
 fn reference(doc: &ParsedDocument, supplied: &ResourceSet, pointer: &str) -> ReferenceResolution {
-    doc.references_with_resources(supplied.clone(), &WorkControl::new())
+    doc.references_with_resources(supplied.clone(), &std::sync::atomic::AtomicBool::new(false))
         .unwrap()
         .references
         .into_iter()
@@ -256,7 +256,7 @@ fn ri04_05_contained_authority_ignores_supplied_body_and_keeps_raw_catalog() {
         fn prepare(
             &self,
             request: &SchemaRequest,
-            control: &WorkControl,
+            control: &dyn WorkControl,
         ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
             *self.0.lock().unwrap() = request
                 .supplied_resources()
@@ -883,8 +883,8 @@ fn ri30_precancellation_and_fresh_retry_preserve_identity_policy() {
     let doc = one(owner(), json!({"$ref":U}));
     let supplied = resources(&[(U, json!(false))]);
     let ctx = context(&doc, &supplied);
-    let control = WorkControl::new();
-    control.cancel();
+    let control = std::sync::atomic::AtomicBool::new(false);
+    control.store(true, std::sync::atomic::Ordering::Release);
     assert_eq!(
         refusal(ctx.prepare_with_control("op", Direction::Input, &control)).reason,
         NoVerdictReason::Cancelled

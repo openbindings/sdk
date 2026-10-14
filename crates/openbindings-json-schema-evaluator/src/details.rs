@@ -10,7 +10,7 @@ pub(crate) enum Collection {
     Truncated,
     Interrupted,
 }
-fn work(control: &WorkControl, units: usize) -> bool {
+fn work(control: &dyn WorkControl, units: usize) -> bool {
     !control.is_cancelled() && jsonschema::ob_work::charge(units.max(1))
 }
 // A JSON Pointer segment can be compared to a borrowed name without decoding it
@@ -37,7 +37,7 @@ fn segment_eq(name: &str, token: &str) -> bool {
 fn original<'a>(
     request: &'a SchemaRequest,
     at: &SchemaLocation,
-    control: &WorkControl,
+    control: &dyn WorkControl,
 ) -> Result<Option<JsonRef<'a>>, ()> {
     let mut value = if let Some(uri) = &at.resource {
         let mut found = None;
@@ -119,7 +119,7 @@ pub(crate) fn collect(
     at: Option<&SchemaLocation>,
     kind: &Kind,
     budget: usize,
-    control: &WorkControl,
+    control: &dyn WorkControl,
 ) -> Collection {
     if let Kind::Type { kind } = kind {
         let cost = match kind {

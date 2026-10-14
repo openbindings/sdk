@@ -67,7 +67,7 @@ decision:
 - A real security contact, compatibility/support statement, and clear migration
   guidance. See `SECURITY.md`, `docs/migration.md`, and `docs/api-reference.md`.
 
-Publish the dependency closure of the four supported Rust libraries in manifest
+Publish the dependency closure of the supported Rust libraries in manifest
 order. `openbindings-wasm` is an internal build crate: retain its Cargo publication
 guard unless a separate consumer need is accepted. Its compiled engine is shipped
 in npm. Internal dependency crates are published only because the supported Rust
@@ -97,3 +97,8 @@ authorized process. Confirm the actual public links and installation examples.
 
 This component release does not migrate applications, retire legacy SDKs, or
 promote an OpenBindings project cohort.
+
+The internal cancellation delivery package is included in the Rust archive closure
+for all four async companions. Its Apache-2.0 license and notice ship in its archive;
+its token and future are imported through the companion roles. The default core
+and evaluator graphs do not depend on this package.

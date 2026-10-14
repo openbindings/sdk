@@ -1,5 +1,6 @@
 use interface_synthesis_consumer::*;
-use openbindings::{JsonValue, Source, WorkControl};
+use openbindings::{JsonValue, Source};
+use openbindings_interface_synthesis::CancellationToken;
 use openbindings_interface_synthesis::*;
 use std::sync::{Arc, atomic::Ordering};
 fn source(text: &str) -> Source {
@@ -39,7 +40,7 @@ async fn standalone_and_shared_provider_consumers() {
     let work = borrowed.synthesize_with_coverage(&request);
     send(&work);
     let result = work.await.unwrap();
-    let control = WorkControl::new();
+    let control = CancellationToken::new();
     let strict = shared.synthesize_with_control(&request, &control);
     send(&strict);
     drop(control);
@@ -208,7 +209,7 @@ async fn borrowed_unboxed_future_needs_no_static_provider() {
         fn synthesize<'a>(
             &'a self,
             r: &'a SynthesisRequest<'a>,
-            c: WorkControl,
+            c: CancellationToken,
         ) -> Self::Synthesis<'a> {
             self.0.fetch_add(1, Ordering::Relaxed);
             ready(derive(r, &c, false))

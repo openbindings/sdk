@@ -2,11 +2,12 @@
 use binding_invocation_consumer::{Catalog, KIND, yield_once};
 use openbindings::{
     Direction, JsonValue, NoVerdict, NoVerdictReason, ParsedDocument, PreparedSchema, ResourceSet,
-    SchemaEvaluator, SchemaRequest, Source, ValueOutcome, ValueProblem, WorkControl,
+    SchemaEvaluator, SchemaRequest, Source, ValueOutcome, ValueProblem,
 };
 use openbindings_interface_synthesis::{
     CoverageStatus, SynthesisRequest, SynthesisSource, Synthesizer,
 };
+use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
     BindingRequest, InvocationError, ProviderIo,
     binding::BindingInvoker,
@@ -48,7 +49,7 @@ impl SchemaEvaluator for Booleans {
     fn prepare(
         &self,
         request: &SchemaRequest,
-        control: &WorkControl,
+        control: &dyn openbindings::WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         control.check()?;
         self.preparations.fetch_add(1, Ordering::Relaxed);
@@ -67,8 +68,9 @@ impl SchemaEvaluator for Booleans {
     }
 }
 impl PreparedSchema for BooleanContract {
-    fn validate(&self, _: &JsonValue, control: &WorkControl) -> ValueOutcome {
+    fn validate(&self, _: &JsonValue, control: &dyn openbindings::WorkControl) -> ValueOutcome {
         if let Err(detail) = control.check() {
+            let detail = detail.into();
             return ValueOutcome::NoVerdict { detail };
         }
         if self.0 {
@@ -408,7 +410,7 @@ impl BindingInvoker for Borrowed<'_> {
         &'a self,
         request: BindingRequest<'a>,
         mut io: ProviderIo,
-        _: WorkControl,
+        _: CancellationToken,
     ) -> Self::Invocation<'a> {
         Box::pin(async move {
             yield_once().await;
@@ -429,7 +431,7 @@ impl BindingInvoker for Local {
         &'a self,
         _: BindingRequest<'a>,
         mut io: ProviderIo,
-        _: WorkControl,
+        _: CancellationToken,
     ) -> Self::Invocation<'a> {
         Box::pin(async move {
             let retained = self.0.clone();

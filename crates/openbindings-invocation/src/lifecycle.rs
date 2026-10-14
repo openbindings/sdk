@@ -1,9 +1,10 @@
+use crate::CancellationToken;
 use crate::{
     BoundaryError, InvocationError,
     operation::{Gate, ValidationFailure},
 };
 use futures_core::Stream;
-use openbindings::{JsonLimits, JsonValue, WorkControl};
+use openbindings::{JsonLimits, JsonValue};
 use std::{
     collections::{HashMap, VecDeque},
     fmt,
@@ -159,7 +160,7 @@ pub(crate) struct Shared {
     signal: Arc<Signal>,
     provider_read: Arc<Signal>,
     provider_write: Arc<Signal>,
-    local: WorkControl,
+    local: CancellationToken,
     limits: InvocationLimits,
 }
 impl Shared {
@@ -179,11 +180,11 @@ impl Shared {
             signal: Arc::default(),
             provider_read: Arc::default(),
             provider_write: Arc::default(),
-            local: WorkControl::new(),
+            local: CancellationToken::new(),
             limits,
         })
     }
-    pub(crate) fn control(&self) -> WorkControl {
+    pub(crate) fn control(&self) -> CancellationToken {
         self.local.clone()
     }
     pub(crate) fn record_finding(&self, finding: BoundaryError) {

@@ -1,7 +1,7 @@
+use crate::CancellationToken;
 use crate::*;
 use openbindings::{
-    Conformance, DocumentValidation, ValidatedDocument, VersionRefusal, WorkControl,
-    validate_document,
+    Conformance, DocumentValidation, ValidatedDocument, VersionRefusal, validate_document,
 };
 use serde::Serialize;
 use std::{
@@ -181,7 +181,7 @@ impl Default for ClientOptions {
 pub async fn discover<B, F, T, C>(
     origin: &str,
     options: &ClientOptions,
-    control: &WorkControl,
+    control: &CancellationToken,
     timer: &C,
     transport: T,
 ) -> Result<DiscoveryResult, ConfigurationError>
@@ -211,7 +211,7 @@ impl ClientOptions {
     pub(crate) async fn discover_using<B, F, T, C>(
         &self,
         origin: &str,
-        control: &WorkControl,
+        control: &CancellationToken,
         timer: &C,
         mut transport: T,
         individual_hops: bool,
@@ -425,7 +425,7 @@ fn policy_failure(message: &str) -> DiscoveryOutcome {
     }
 }
 fn stopped<C: DiscoveryTimer>(
-    control: &WorkControl,
+    control: &CancellationToken,
     timer: &C,
     deadline: Option<std::time::Duration>,
 ) -> Option<DiscoveryOutcome> {
@@ -439,7 +439,7 @@ fn stopped<C: DiscoveryTimer>(
     }
 }
 async fn until_stopped<C: DiscoveryTimer, F: Future, E: Future<Output = ()>>(
-    control: &WorkControl,
+    control: &CancellationToken,
     timer: &C,
     deadline: Option<std::time::Duration>,
     mut expiry: std::pin::Pin<&mut E>,
@@ -576,7 +576,7 @@ mod review_tests {
             let r = ClientOptions::default()
                 .discover_using(
                     "https://example.test",
-                    &WorkControl::new(),
+                    &CancellationToken::new(),
                     &Clock,
                     |_| async {
                         Ok(HttpResponse {

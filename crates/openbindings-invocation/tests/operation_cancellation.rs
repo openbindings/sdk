@@ -3,8 +3,9 @@
 mod tests {
     use openbindings::{
         JsonValue, NoVerdict, ParsedDocument, PreparedSchema, ResourceSet, SchemaEvaluator,
-        SchemaRequest, ValueOutcome, ValueProblem, WorkControl,
+        SchemaRequest, ValueOutcome, ValueProblem,
     };
+    use openbindings_invocation::CancellationToken;
     use openbindings_invocation::{
         BindingRequest, InvocationError, ProviderIo,
         binding::BindingInvoker,
@@ -36,7 +37,7 @@ mod tests {
         fn prepare(
             &self,
             _: &SchemaRequest,
-            _: &WorkControl,
+            _: &dyn openbindings::WorkControl,
         ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
             Ok(Arc::new(Prepared {
                 barrier: self.barrier.clone(),
@@ -45,7 +46,7 @@ mod tests {
         }
     }
     impl PreparedSchema for Prepared {
-        fn validate(&self, _: &JsonValue, c: &WorkControl) -> ValueOutcome {
+        fn validate(&self, _: &JsonValue, c: &dyn openbindings::WorkControl) -> ValueOutcome {
             if let Some(barrier) = &self.barrier {
                 barrier.wait();
                 let until = Instant::now() + Duration::from_secs(2);
@@ -83,7 +84,7 @@ mod tests {
             &'a self,
             _: BindingRequest<'a>,
             mut io: ProviderIo,
-            _: WorkControl,
+            _: CancellationToken,
         ) -> Self::Invocation<'a> {
             Box::pin(async move {
                 let value = if self.repeat_poll {
@@ -122,7 +123,7 @@ mod tests {
             ResourceSet::default(),
         )
         .unwrap();
-        let control = WorkControl::new();
+        let control = CancellationToken::new();
         let mut call = invoker.invoke_with_control(Request::binding("b"), &control);
         assert!(
             std::pin::pin!(call.write(JsonValue::null()))
@@ -186,7 +187,7 @@ mod tests {
             "rejected input was observed by provider as clean EOF"
         );
     }
-    struct CancelThenComplete(WorkControl);
+    struct CancelThenComplete(CancellationToken);
     impl BindingInvoker for CancelThenComplete {
         type Invocation<'a> =
             Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
@@ -197,7 +198,7 @@ mod tests {
             &'a self,
             _: BindingRequest<'a>,
             _: ProviderIo,
-            local: WorkControl,
+            local: CancellationToken,
         ) -> Self::Invocation<'a> {
             Box::pin(async move {
                 self.0.cancel();
@@ -224,7 +225,7 @@ mod tests {
         fn preflight<'a>(
             &'a self,
             _: BindingRequest<'a>,
-            local: WorkControl,
+            local: CancellationToken,
         ) -> Self::Preflight<'a> {
             Box::pin(async move {
                 self.0.cancel();
@@ -236,7 +237,7 @@ mod tests {
 
     #[test]
     fn cancellation_during_poll_overrides_ready_provider_success() {
-        let external = WorkControl::new();
+        let external = CancellationToken::new();
         let invoker = Invoker::new(doc(), CancelThenComplete(external.clone()));
         let mut call = invoker.invoke_with_control(Request::binding("b"), &external);
         let result = std::pin::pin!(call.next()).poll(&mut Context::from_waker(Waker::noop()));
@@ -251,7 +252,7 @@ mod tests {
 
     #[test]
     fn cancellation_during_poll_overrides_ready_preflight_success() {
-        let external = WorkControl::new();
+        let external = CancellationToken::new();
         let invoker = Invoker::new(doc(), CancelThenComplete(external.clone()));
         let result = std::pin::pin!(
             invoker.preflight_with_provider_and_control(Request::binding("b"), &external)
@@ -263,7 +264,7 @@ mod tests {
         assert_eq!(result.unwrap_err().code(), "ERR_CANCELLED");
         assert!(external.is_cancelled());
     }
-    struct RejectOutputThenCancel(WorkControl);
+    struct RejectOutputThenCancel(CancellationToken);
     impl BindingInvoker for RejectOutputThenCancel {
         type Invocation<'a> =
             Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
@@ -274,7 +275,7 @@ mod tests {
             &'a self,
             _: BindingRequest<'a>,
             mut io: ProviderIo,
-            _: WorkControl,
+            _: CancellationToken,
         ) -> Self::Invocation<'a> {
             Box::pin(async move {
                 assert_eq!(
@@ -288,7 +289,7 @@ mod tests {
     }
     #[test]
     fn already_settled_validation_keeps_its_evidence_when_external_cancel_follows() {
-        let external = WorkControl::new();
+        let external = CancellationToken::new();
         let document=ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"run":{"output":true}},"bindings":{"b":{"operation":"run","source":"s"}},"sources":{"s":{"kind":"test"}}}"#).unwrap();
         let invoker = Invoker::new(document, RejectOutputThenCancel(external.clone()))
             .with_evaluator(
@@ -326,5 +327,105 @@ mod tests {
             std::pin::pin!(call.next()).poll(&mut Context::from_waker(Waker::noop())),
             Poll::Ready(None)
         ));
+    }
+
+    struct Preparing(Arc<Barrier>);
+    impl SchemaEvaluator for Preparing {
+        fn prepare(
+            &self,
+            _: &SchemaRequest,
+            control: &dyn openbindings::WorkControl,
+        ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+            self.0.wait();
+            let until = Instant::now() + Duration::from_secs(5);
+            while !control.is_cancelled() && Instant::now() < until {
+                std::thread::yield_now();
+            }
+            assert!(
+                control.is_cancelled(),
+                "relay must reach synchronous preparation"
+            );
+            control.check()?;
+            unreachable!()
+        }
+    }
+    #[test]
+    fn external_cancel_reaches_preparation_in_current_poll() {
+        let barrier = Arc::new(Barrier::new(2));
+        let invoker = Invoker::new(
+            doc(),
+            Provider {
+                repeat_poll: false,
+                eof: Arc::default(),
+            },
+        )
+        .with_evaluator(Arc::new(Preparing(barrier.clone())), ResourceSet::default())
+        .unwrap();
+        let external = CancellationToken::new();
+        let mut call = invoker.invoke_with_control(Request::binding("b"), &external);
+        assert!(
+            std::pin::pin!(call.write(JsonValue::null()))
+                .poll(&mut Context::from_waker(Waker::noop()))
+                .is_ready()
+        );
+        let thread = std::thread::spawn(move || {
+            barrier.wait();
+            external.cancel();
+        });
+        let result = std::pin::pin!(call.next()).poll(&mut Context::from_waker(Waker::noop()));
+        thread.join().unwrap();
+        assert!(matches!(result, Poll::Ready(Some(Err(e))) if e.code() == "ERR_CANCELLED"));
+        assert!(call.validation_failure().is_none());
+    }
+
+    struct CancelDuringStart(CancellationToken);
+    impl BindingInvoker for CancelDuringStart {
+        type Invocation<'a> = std::future::Ready<Result<(), InvocationError>>;
+        fn supports_kind(&self, _: &str) -> bool {
+            true
+        }
+        fn invoke<'a>(
+            &'a self,
+            _: BindingRequest<'a>,
+            _: ProviderIo,
+            local: CancellationToken,
+        ) -> Self::Invocation<'a> {
+            self.0.cancel();
+            assert!(local.is_cancelled(), "relay must be installed before start");
+            std::future::ready(Ok(()))
+        }
+    }
+    impl openbindings_invocation::binding::BindingPreflight for CancelDuringStart {
+        type Preflight<'a> = std::future::Ready<
+            Result<Option<openbindings_invocation::ContextChallenge>, InvocationError>,
+        >;
+        fn preflight<'a>(
+            &'a self,
+            _: BindingRequest<'a>,
+            local: CancellationToken,
+        ) -> Self::Preflight<'a> {
+            self.0.cancel();
+            assert!(
+                local.is_cancelled(),
+                "relay must be installed before preflight start"
+            );
+            std::future::ready(Ok(None))
+        }
+    }
+    #[test]
+    fn synchronous_provider_and_preflight_start_observe_relay() {
+        let external = CancellationToken::new();
+        let invoker = Invoker::new(doc(), CancelDuringStart(external.clone()));
+        let mut call = invoker.invoke_with_control(Request::binding("b"), &external);
+        assert!(
+            matches!(std::pin::pin!(call.next()).poll(&mut Context::from_waker(Waker::noop())),
+            Poll::Ready(Some(Err(e))) if e.code() == "ERR_CANCELLED")
+        );
+        let external = CancellationToken::new();
+        let invoker = Invoker::new(doc(), CancelDuringStart(external.clone()));
+        assert!(
+            matches!(std::pin::pin!(invoker.preflight_with_provider_and_control(Request::binding("b"), &external))
+            .poll(&mut Context::from_waker(Waker::noop())), Poll::Ready(Err(e)) if e.code() == "ERR_CANCELLED")
+        );
     }
 }

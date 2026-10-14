@@ -1,4 +1,5 @@
-use openbindings::{JsonValue, Source, WorkControl};
+use openbindings::{JsonValue, Source};
+use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
     BindingRequest, BindingValue, ContextChallenge, InvocationError, InvocationLimits, ProviderIo,
     WriteError,
@@ -67,7 +68,7 @@ struct Fixture<'a> {
     calls: Arc<AtomicUsize>,
     live: Arc<AtomicUsize>,
     effects: Arc<AtomicUsize>,
-    gate: WorkControl,
+    gate: CancellationToken,
 }
 impl Fixture<'_> {
     fn new(mode: Mode) -> Self {
@@ -77,7 +78,7 @@ impl Fixture<'_> {
             calls: Arc::default(),
             live: Arc::default(),
             effects: Arc::default(),
-            gate: WorkControl::new(),
+            gate: CancellationToken::new(),
         }
     }
 }
@@ -99,7 +100,7 @@ impl BindingInvoker for Fixture<'_> {
         &'a self,
         _r: BindingRequest<'a>,
         mut io: ProviderIo,
-        _c: WorkControl,
+        _c: CancellationToken,
     ) -> Self::Invocation<'a> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Box::pin(async move {
@@ -399,12 +400,12 @@ async fn pre_cancel_external_control_and_output_abandonment_do_not_cancel_siblin
     let b = BindingValue::default();
     let p = Fixture::new(Mode::Park);
     let f = Invoker::new(&p);
-    let external = WorkControl::new();
+    let external = CancellationToken::new();
     external.cancel();
     let mut call = f.invoke_with_control(request(&s, &b), &external);
     assert_eq!(code(call.next().await), "ERR_CANCELLED");
     assert_eq!(p.calls.load(Ordering::SeqCst), 0);
-    let external = WorkControl::new();
+    let external = CancellationToken::new();
     let mut a = f.invoke_with_control(request(&s, &b), &external);
     let mut bcall = f.invoke_with_control(request(&s, &b), &external);
     {
@@ -558,7 +559,7 @@ impl BindingInvoker for Advisory {
         &'a self,
         _: BindingRequest<'a>,
         _: ProviderIo,
-        _: WorkControl,
+        _: CancellationToken,
     ) -> Self::Invocation<'a> {
         std::future::ready(Ok(()))
     }
@@ -578,7 +579,7 @@ impl openbindings_invocation::binding::BindingPreflight for Advisory {
     >
     where
         Self: 'a;
-    fn preflight<'a>(&'a self, r: BindingRequest<'a>, _: WorkControl) -> Self::Preflight<'a> {
+    fn preflight<'a>(&'a self, r: BindingRequest<'a>, _: CancellationToken) -> Self::Preflight<'a> {
         Box::pin(async move {
             if r.context.is_some() {
                 Err(InvocationError::new("custom.preflight", None).unwrap())
@@ -720,7 +721,7 @@ impl BindingInvoker for LargeFailure {
         &'a self,
         r: BindingRequest<'a>,
         _: ProviderIo,
-        _: WorkControl,
+        _: CancellationToken,
     ) -> Self::Invocation<'a> {
         std::future::ready(Err(InvocationError::new(
             "custom.large",
@@ -744,7 +745,7 @@ impl openbindings_invocation::binding::BindingPreflight for LargeFailure {
     >
     where
         Self: 'a;
-    fn preflight<'a>(&'a self, r: BindingRequest<'a>, _: WorkControl) -> Self::Preflight<'a> {
+    fn preflight<'a>(&'a self, r: BindingRequest<'a>, _: CancellationToken) -> Self::Preflight<'a> {
         Box::pin(async move {
             if r.source.content.is_none() {
                 Err(InvocationError::challenge(challenge()))
@@ -797,4 +798,48 @@ async fn preflight_requires_context_challenges_in_the_result_not_the_error_chann
         .unwrap_err();
     assert_eq!(error.code(), "ERR_EXECUTION_FAILED");
     assert!(error.context_required().is_none());
+}
+
+#[tokio::test]
+async fn dropped_and_cancelled_attempts_preserve_siblings_and_other_parents() {
+    let s = source();
+    let b = BindingValue::default();
+    // All providers wait on the same independent completion gate.
+    let p = Fixture::new(Mode::GateEcho);
+    let facade = Invoker::new(&p);
+    let external = CancellationToken::new();
+    let unrelated = CancellationToken::new();
+    let mut first = facade.invoke_with_control(request(&s, &b), &external);
+    let mut sibling = facade.invoke_with_control(request(&s, &b), &external);
+    let mut third = facade.invoke_with_control(request(&s, &b), &unrelated);
+    for call in [&mut first, &mut sibling, &mut third] {
+        call.close();
+        assert!(poll(pin!(call.next()).as_mut()).is_pending());
+    }
+    drop(first);
+    assert!(!external.is_cancelled() && !unrelated.is_cancelled());
+    p.gate.cancel();
+    assert!(sibling.next().await.is_none());
+    assert!(third.next().await.is_none());
+    assert_eq!(p.live.load(Ordering::SeqCst), 0);
+
+    let p = Fixture::new(Mode::Park);
+    let facade = Invoker::new(&p);
+    let mut a = facade.invoke_with_control(request(&s, &b), &external);
+    let mut bcall = facade.invoke_with_control(request(&s, &b), &external);
+    let mut third = facade.invoke_with_control(request(&s, &b), &unrelated);
+    for call in [&mut a, &mut bcall, &mut third] {
+        assert!(poll(pin!(call.next()).as_mut()).is_pending());
+    }
+    // Explicit local cancellation also leaves both parents healthy.
+    a.control().cancel();
+    assert_eq!(code(a.next().await), "ERR_CANCELLED");
+    assert!(!external.is_cancelled() && !unrelated.is_cancelled());
+    assert!(poll(pin!(bcall.next()).as_mut()).is_pending());
+    external.cancel();
+    assert_eq!(code(bcall.next().await), "ERR_CANCELLED");
+    assert!(poll(pin!(third.next()).as_mut()).is_pending());
+    assert!(!unrelated.is_cancelled());
+    drop(third);
+    assert_eq!(p.live.load(Ordering::SeqCst), 0);
 }

@@ -261,7 +261,7 @@ impl SchemaRequest {
     /// Build a finite evaluator projection with private resource identities, original-location mapping and cooperative cancellation. Refuses unsupported/ambiguous/unavailable references instead of retrieving data.
     pub fn evaluation_program(
         &self,
-        control: &WorkControl,
+        control: &dyn WorkControl,
     ) -> Result<EvaluationProgram, NoVerdict> {
         self.space.program(self.entry, control)
     }
@@ -275,7 +275,10 @@ impl SchemaRequest {
     /// aggregate projection failures identify the selected schema. Existing
     /// resolver locations are retained. Optional location text is guarded
     /// separately from successful paired-program text; cancellation may be unlocated.
-    pub fn evaluation_bounds(&self, control: &WorkControl) -> Result<EvaluationBounds, NoVerdict> {
+    pub fn evaluation_bounds(
+        &self,
+        control: &dyn WorkControl,
+    ) -> Result<EvaluationBounds, NoVerdict> {
         self.space.bounds(self.entry, control)
     }
 }
@@ -348,7 +351,7 @@ impl EvaluationBounds {
     /// # use openbindings::{SchemaRequest, WorkControl, NoVerdict};
     /// # fn adapter(request: &SchemaRequest) -> Result<(), NoVerdict> {
     /// let (lower, upper, unavailable) = request
-    ///     .evaluation_bounds(&WorkControl::new())?.into_parts();
+    ///     .evaluation_bounds(&std::sync::atomic::AtomicBool::new(false))?.into_parts();
     /// // Compile upper first; compare complete verdicts under one shared budget.
     /// # let _ = (lower, upper, unavailable);
     /// # Ok(()) }
@@ -482,7 +485,7 @@ impl EvaluationProgram {
 /// use std::sync::Arc;
 /// struct TrueOnly;
 /// impl SchemaEvaluator for TrueOnly {
-///     fn prepare(&self, request: &SchemaRequest, control: &WorkControl)
+///     fn prepare(&self, request: &SchemaRequest, control: &dyn WorkControl)
 ///         -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
 ///         control.check()?;
 ///         if request.entry().view().as_bool() == Some(true) {
@@ -498,10 +501,10 @@ impl EvaluationProgram {
 ///     }
 /// }
 /// impl PreparedSchema for TrueOnly {
-///     fn validate(&self, _: &JsonValue, control: &WorkControl) -> ValueOutcome {
+///     fn validate(&self, _: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
 ///         match control.check() {
 ///             Ok(()) => ValueOutcome::Satisfies,
-///             Err(detail) => ValueOutcome::NoVerdict { detail },
+///             Err(detail) => ValueOutcome::NoVerdict { detail: detail.into() },
 ///         }
 ///     }
 /// }
@@ -519,7 +522,7 @@ pub trait SchemaEvaluator: Send + Sync {
     fn prepare(
         &self,
         request: &SchemaRequest,
-        control: &WorkControl,
+        control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict>;
 }
 /// What the evaluator declared about resources reached for this prepared value contract.
@@ -553,7 +556,7 @@ impl<'a> ResourceCompleteness<'a> {
 /// Thread-safe retained validator returned by a [`SchemaEvaluator`]. Repeated calls must preserve caller input and retain no accidental borrow of a completed request. Only claim established semantic verdicts; bound diagnostic work separately and report incompleteness.
 pub trait PreparedSchema: Send + Sync {
     /// Return only established verdicts. Resource/capability/work failures are NoVerdict.
-    fn validate(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome;
+    fn validate(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome;
     /// Declare immutable resource evidence for this owner. The default makes no
     /// claim, preserving existing custom evaluators. Complete declarations must
     /// not return ResourceUnavailable; incomplete evidence must be located and
@@ -620,13 +623,18 @@ impl ValueContract {
     /// separate from validation. Failure diagnostics can be incomplete; inspect
     /// `problems_complete` rather than assuming every failed keyword is reported.
     pub fn validate(&self, value: &JsonValue) -> ValueOutcome {
-        self.validate_with_control(value, &WorkControl::new())
+        self.validate_with_control(value, &crate::work_control::NeverCancelled)
     }
     /// Validate with cooperative cancellation. Cancellation yields no-verdict,
     /// not failure, and leaves this owner usable with a fresh healthy control.
     /// This is not a preemptive wall-clock deadline; applications schedule work.
-    pub fn validate_with_control(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
+    pub fn validate_with_control(
+        &self,
+        value: &JsonValue,
+        control: &dyn WorkControl,
+    ) -> ValueOutcome {
         if let Err(detail) = control.check() {
+            let detail = detail.into();
             return ValueOutcome::NoVerdict { detail };
         }
         if value.has_duplicate_names() {
@@ -681,7 +689,7 @@ impl ValueContracts {
     /// Every call prepares independently, including aliases of the same operation.
     /// Retain and clone a ready [`ValueContract`] to validate without recompiling.
     pub fn prepare(&self, operation: &str, direction: Direction) -> ValueContractPreparation {
-        self.prepare_with_control(operation, direction, &WorkControl::new())
+        self.prepare_with_control(operation, direction, &crate::work_control::NeverCancelled)
     }
     /// Prepare with cooperative cancellation. A cancelled attempt returns no ready
     /// owner. Cancellation and transient evaluator failures do not poison healthy
@@ -692,9 +700,10 @@ impl ValueContracts {
         &self,
         operation: &str,
         direction: Direction,
-        control: &WorkControl,
+        control: &dyn WorkControl,
     ) -> ValueContractPreparation {
         if let Err(detail) = control.check() {
+            let detail = detail.into();
             return ValueContractPreparation::NoVerdict { detail };
         }
         let op = match self.inner.space.document.resolve_operation(operation) {
@@ -741,6 +750,7 @@ impl ValueContracts {
         let prepared = self.inner.evaluator.prepare(&request, control);
         // An evaluator may finish while the caller cancels; no ready owner is returned.
         if let Err(detail) = control.check() {
+            let detail = detail.into();
             return ValueContractPreparation::NoVerdict { detail };
         }
         match prepared {

@@ -1,5 +1,6 @@
 #![cfg(feature = "native")]
-use openbindings::WorkControl;
+
+use openbindings_http_discovery::CancellationToken;
 use openbindings_http_discovery::*;
 use std::{
     collections::BTreeMap,
@@ -415,7 +416,7 @@ async fn redirects_all_five_statuses_honor_policy_and_strip_cross_origin_credent
 async fn cancellation_timeout_bounded_status_cleanup_and_connection_reuse() {
     let server = Server::new();
     let client = client("stall");
-    let control = WorkControl::new();
+    let control = CancellationToken::new();
     let (result, ()) = tokio::join!(
         client.discover_with_control(&server.origin, &control),
         async {
@@ -439,7 +440,7 @@ async fn cancellation_timeout_bounded_status_cleanup_and_connection_reuse() {
         .await
         .unwrap();
     assert!(matches!(r.outcome, DiscoveryOutcome::Timeout));
-    let control = WorkControl::new();
+    let control = CancellationToken::new();
     let start = Instant::now();
     let r = self::client("status-stall")
         .discover_with_control(&server.origin, &control)
@@ -692,7 +693,7 @@ async fn sdk_deadline_covers_slow_headers_and_slow_body() {
 #[tokio::test(flavor = "current_thread")]
 async fn native_pre_cancelled_attempt_has_no_dispatch_and_overrides_are_explicit() {
     // HD-2: cancellation wins before dispatch, including an otherwise expiring attempt.
-    let control = WorkControl::new();
+    let control = CancellationToken::new();
     control.cancel();
     let client = native::Client::new(
         reqwest::Client::builder().no_proxy(),
@@ -774,7 +775,7 @@ async fn native_cancellation_wins_when_timer_and_caller_are_ready_together() {
         },
     )
     .unwrap();
-    let control = WorkControl::new();
+    let control = CancellationToken::new();
     let (result, ()) = tokio::join!(
         client.discover_with_control("https://discovery.test", &control),
         async {

@@ -1,4 +1,5 @@
-use openbindings::{Conformance, WorkControl};
+use openbindings::Conformance;
+use openbindings_http_discovery::CancellationToken;
 use openbindings_http_discovery::*;
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
@@ -82,7 +83,7 @@ async fn get(status: u16, bytes: &[u8], limit: usize) -> (DiscoveryResult, Rc<Re
             max_document_bytes: limit,
             ..ClientOptions::default()
         },
-        &WorkControl::new(),
+        &CancellationToken::new(),
         &Timer::new(),
         |request| {
             let body_counts = body_counts.clone();
@@ -337,7 +338,7 @@ async fn size_is_decoded_bytes_with_one_sentinel_and_no_prefix_assessment() {
 }
 #[tokio::test(flavor = "current_thread")]
 async fn cancellation_during_pending_io_wakes_without_transport_cooperation() {
-    let control = WorkControl::new();
+    let control = CancellationToken::new();
     control.cancel();
     let r = discover(
         "https://example.test",
@@ -354,7 +355,7 @@ async fn cancellation_during_pending_io_wakes_without_transport_cooperation() {
     .unwrap();
     assert!(matches!(r.outcome, DiscoveryOutcome::Cancelled));
     assert!(r.metadata.is_none());
-    let control = WorkControl::new();
+    let control = CancellationToken::new();
     let counts = Rc::new(RefCell::new(Counts::default()));
     let options = ClientOptions::default();
     let timer = Timer::new();
@@ -384,7 +385,7 @@ async fn cancellation_during_pending_io_wakes_without_transport_cooperation() {
 #[tokio::test(flavor = "current_thread")]
 async fn incomplete_body_transport_failure_and_missing_final_url_are_distinct() {
     let options = ClientOptions::default();
-    let control = WorkControl::new();
+    let control = CancellationToken::new();
     let counts = Rc::new(RefCell::new(Counts::default()));
     let r = discover(
         "https://example.test",
@@ -529,7 +530,7 @@ async fn zero_timeout_refuses_before_io() {
             timeout: AttemptTimeout::After(Duration::ZERO),
             ..Default::default()
         },
-        &WorkControl::new(),
+        &CancellationToken::new(),
         &Timer::new(),
         |_| async { panic!("dispatched with zero timeout") },
     )
@@ -594,7 +595,7 @@ async fn whole_attempt_timer_wakes_pending_io_and_cancellation_wins_ties() {
     for body_phase in [false, true] {
         for cancel in [false, true] {
             let clock = Clock::default();
-            let control = WorkControl::new();
+            let control = CancellationToken::new();
             let counts = Rc::new(RefCell::new(Counts::default()));
             let options = ClientOptions::default();
             let call = discover(
@@ -643,7 +644,7 @@ async fn portable_redirects_obey_statuses_relative_location_limit_and_total_time
         let r = discover(
             "https://example.test",
             &ClientOptions::default(),
-            &WorkControl::new(),
+            &CancellationToken::new(),
             &clock,
             |request| {
                 let n = calls.get();
@@ -677,7 +678,7 @@ async fn portable_redirects_obey_statuses_relative_location_limit_and_total_time
         let r = discover(
             "https://example.test",
             &ClientOptions::default(),
-            &WorkControl::new(),
+            &CancellationToken::new(),
             &Clock::default(),
             |request| {
                 calls.set(calls.get() + 1);
@@ -708,7 +709,7 @@ async fn portable_redirects_obey_statuses_relative_location_limit_and_total_time
         let r = discover(
             "https://example.test",
             &ClientOptions::default(),
-            &WorkControl::new(),
+            &CancellationToken::new(),
             &clock,
             |request| {
                 calls.set(calls.get() + 1);
@@ -750,7 +751,7 @@ async fn portable_hidden_redirect_is_a_typed_policy_refusal() {
     let r = discover(
         "https://example.test",
         &ClientOptions::default(),
-        &WorkControl::new(),
+        &CancellationToken::new(),
         &Timer::new(),
         |_| async {
             let mut r = response(200, DOCUMENT, Rc::default());
@@ -818,7 +819,7 @@ async fn status_cleanup_is_bounded_by_remaining_attempt_time() {
     let clock = Clock::default();
     let dropped = Rc::new(std::cell::Cell::new(false));
     let options = ClientOptions::default();
-    let control = WorkControl::new();
+    let control = CancellationToken::new();
     let call = discover(
         "https://example.test",
         &options,
@@ -876,7 +877,7 @@ async fn validation_boundary_expiry_retains_complete_bytes_and_no_success() {
     let result = discover(
         "https://example.test",
         &ClientOptions::default(),
-        &WorkControl::new(),
+        &CancellationToken::new(),
         &clock,
         |_| async {
             Ok(HttpResponse {
@@ -907,7 +908,7 @@ async fn eof_boundary_retains_complete_body_on_timeout_or_cancellation() {
         eof: bool,
         cancel: bool,
         clock: &'a Clock,
-        control: &'a WorkControl,
+        control: &'a CancellationToken,
     }
     impl ResponseBody for EofBody<'_> {
         async fn read(&mut self, output: &mut [u8]) -> Result<usize, RequestError> {
@@ -932,7 +933,7 @@ async fn eof_boundary_retains_complete_body_on_timeout_or_cancellation() {
     for eof in [false, true] {
         for cancel in [false, true] {
             let clock = Clock::default();
-            let control = WorkControl::new();
+            let control = CancellationToken::new();
             let r = discover(
                 "https://example.test",
                 &ClientOptions::default(),

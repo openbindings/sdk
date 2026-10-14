@@ -69,7 +69,7 @@ impl SchemaEvaluator for OriginalContextAdapter {
     fn prepare(
         &self,
         request: &SchemaRequest,
-        control: &WorkControl,
+        control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         control.check()?;
         let original = request
@@ -96,13 +96,13 @@ impl SchemaEvaluator for Wrong {
     fn prepare(
         &self,
         _: &SchemaRequest,
-        _: &WorkControl,
+        _: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         Ok(Arc::new(WrongPrepared))
     }
 }
 impl PreparedSchema for WrongPrepared {
-    fn validate(&self, _: &JsonValue, _: &WorkControl) -> ValueOutcome {
+    fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
         ValueOutcome::Satisfies
     }
 }
@@ -142,7 +142,7 @@ impl SchemaEvaluator for FaultyAdapter {
     fn prepare(
         &self,
         request: &SchemaRequest,
-        control: &WorkControl,
+        control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         let prepared = openbindings_json_schema_evaluator::DefaultEvaluator::new()
             .prepare(request, control)?;
@@ -150,7 +150,7 @@ impl SchemaEvaluator for FaultyAdapter {
     }
 }
 impl PreparedSchema for FaultyContract {
-    fn validate(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
+    fn validate(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
         let outcome = self.0.validate(value, control);
         match self.1 {
             Fault::EmptyMismatch => ValueOutcome::Fails {
@@ -211,7 +211,7 @@ impl SchemaEvaluator for LeakyAdapter {
     fn prepare(
         &self,
         request: &SchemaRequest,
-        control: &WorkControl,
+        control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         let mut cache = self.0.lock().unwrap();
         if let Some(prepared) = &*cache {

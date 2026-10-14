@@ -1,4 +1,5 @@
 use openbindings::{Document, JsonValue, Source};
+use openbindings_source_inspection::CancellationToken;
 use openbindings_source_inspection::{InspectionErrorKind, Inspector};
 use source_inspection_consumer::{
     AuthoringFailure, AuthoringOutcome, CATALOG_KIND, CatalogInspector, author_selected,
@@ -182,7 +183,6 @@ async fn unestablished_framing_is_omitted_without_losing_admitted_targets() {
 
 #[tokio::test]
 async fn borrowed_and_shared_non_clone_provider_keep_the_same_state_and_send_future() {
-    use openbindings::WorkControl;
     use openbindings_source_inspection::{
         InspectionError, SourceInspection, SourceInspector, SupportedKind,
     };
@@ -214,7 +214,11 @@ async fn borrowed_and_shared_non_clone_provider_keep_the_same_state_and_send_fut
                 description: None,
             }]
         }
-        fn inspect<'a>(&'a self, source: &'a Source, control: WorkControl) -> Self::Inspection<'a> {
+        fn inspect<'a>(
+            &'a self,
+            source: &'a Source,
+            control: CancellationToken,
+        ) -> Self::Inspection<'a> {
             Box::pin(async move {
                 self.calls.fetch_add(1, Ordering::Relaxed);
                 CatalogInspector.inspect(source, control).await
@@ -246,7 +250,6 @@ async fn borrowed_and_shared_non_clone_provider_keep_the_same_state_and_send_fut
 
 #[tokio::test]
 async fn stack_borrowed_provider_has_an_unboxed_send_future() {
-    use openbindings::WorkControl;
     use openbindings_source_inspection::{InspectionError, SourceInspection, SourceInspector};
     use std::{
         future::Future,
@@ -271,7 +274,7 @@ async fn stack_borrowed_provider_has_an_unboxed_send_future() {
         fn supports_kind(&self, kind: &str) -> bool {
             kind == CATALOG_KIND
         }
-        fn inspect<'a>(&'a self, _: &'a Source, _: WorkControl) -> Self::Inspection<'a> {
+        fn inspect<'a>(&'a self, _: &'a Source, _: CancellationToken) -> Self::Inspection<'a> {
             Work(self.0)
         }
     }
@@ -284,7 +287,7 @@ async fn stack_borrowed_provider_has_an_unboxed_send_future() {
     send(&future);
     assert_eq!(calls.load(Ordering::SeqCst), 0);
     future.await.unwrap();
-    let control = WorkControl::new();
+    let control = CancellationToken::new();
     let future = inspector.inspect_with_control(&source, &control);
     send(&future);
     // The future retains shared cancellation state without borrowing this handle.

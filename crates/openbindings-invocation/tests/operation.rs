@@ -1,7 +1,8 @@
 use openbindings::{
     Direction, JsonValue, NoVerdict, ParsedDocument, PreparedSchema, ResourceSet, SchemaEvaluator,
-    SchemaRequest, ValueOutcome, WorkControl,
+    SchemaRequest, ValueOutcome,
 };
+use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
     BindingRequest, InvocationError, ProviderIo,
     binding::BindingInvoker,
@@ -79,7 +80,7 @@ impl BindingInvoker for Provider<'_> {
         &'a self,
         r: BindingRequest<'a>,
         mut io: ProviderIo,
-        _: WorkControl,
+        _: CancellationToken,
     ) -> Self::Invocation<'a> {
         Box::pin(async move {
             self.calls.fetch_add(1, Ordering::SeqCst);
@@ -137,7 +138,7 @@ impl openbindings_invocation::binding::BindingPreflight for Provider<'_> {
     >
     where
         Self: 'a;
-    fn preflight<'a>(&'a self, _: BindingRequest<'a>, _: WorkControl) -> Self::Preflight<'a> {
+    fn preflight<'a>(&'a self, _: BindingRequest<'a>, _: CancellationToken) -> Self::Preflight<'a> {
         Box::pin(async move { Ok(challenge().context_required()) })
     }
 }
@@ -429,7 +430,7 @@ impl SchemaEvaluator for Counted {
     fn prepare(
         &self,
         r: &SchemaRequest,
-        c: &WorkControl,
+        c: &dyn openbindings::WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         self.prepares.fetch_add(1, Ordering::SeqCst);
         Ok(Arc::new(Prepared {
@@ -439,7 +440,7 @@ impl SchemaEvaluator for Counted {
     }
 }
 impl PreparedSchema for Prepared {
-    fn validate(&self, v: &JsonValue, c: &WorkControl) -> ValueOutcome {
+    fn validate(&self, v: &JsonValue, c: &dyn openbindings::WorkControl) -> ValueOutcome {
         self.evaluations.fetch_add(1, Ordering::SeqCst);
         self.inner.validate(v, c)
     }
@@ -505,7 +506,7 @@ async fn borrowed_send_and_local_rc_and_cancellation_release() {
     );
     assert_eq!(p.live.load(Ordering::SeqCst), 0);
     assert!(control.validation_failure().is_none());
-    let external = WorkControl::new();
+    let external = CancellationToken::new();
     external.cancel();
     let mut call = i.invoke_with_control(Request::operation("echo"), &external);
     assert_eq!(
@@ -526,7 +527,7 @@ fn failed_or_cancelled_prepare_releases_partial_work_and_can_retry() {
         calls: AtomicUsize,
         live: Arc<AtomicUsize>,
         stop_at: AtomicUsize,
-        cancel: bool,
+        cancel: Option<CancellationToken>,
     }
     struct Held(Arc<AtomicUsize>);
     impl Drop for Held {
@@ -535,7 +536,7 @@ fn failed_or_cancelled_prepare_releases_partial_work_and_can_retry() {
         }
     }
     impl PreparedSchema for Held {
-        fn validate(&self, _: &JsonValue, _: &WorkControl) -> ValueOutcome {
+        fn validate(&self, _: &JsonValue, _: &dyn openbindings::WorkControl) -> ValueOutcome {
             ValueOutcome::Satisfies
         }
     }
@@ -543,11 +544,11 @@ fn failed_or_cancelled_prepare_releases_partial_work_and_can_retry() {
         fn prepare(
             &self,
             _: &SchemaRequest,
-            control: &WorkControl,
+            _control: &dyn openbindings::WorkControl,
         ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
             let call = self.calls.fetch_add(1, Ordering::SeqCst) + 1;
             if call == self.stop_at.load(Ordering::SeqCst) {
-                if self.cancel {
+                if let Some(control) = &self.cancel {
                     // Simulate cancellation while the evaluator is preparing,
                     // including a late successful return after cancellation.
                     control.cancel();
@@ -564,17 +565,18 @@ fn failed_or_cancelled_prepare_releases_partial_work_and_can_retry() {
         }
     }
     for cancel in [false, true] {
+        let control = CancellationToken::new();
         let probe = Arc::new(Probe {
             calls: AtomicUsize::new(0),
             live: Arc::default(),
             stop_at: AtomicUsize::new(2),
-            cancel,
+            cancel: cancel.then(|| control.clone()),
         });
         let p = Provider::new(Mode::Empty);
         let i = Invoker::new(one(r#"{"input":true,"output":true}"#), &p)
             .with_evaluator(probe.clone(), ResourceSet::default())
             .unwrap();
-        let cancelled = WorkControl::new();
+        let cancelled = CancellationToken::new();
         cancelled.cancel();
         assert_eq!(
             i.prepare_with_control("echo", &cancelled)
@@ -584,7 +586,6 @@ fn failed_or_cancelled_prepare_releases_partial_work_and_can_retry() {
             "ERR_CANCELLED"
         );
         assert_eq!(probe.calls.load(Ordering::SeqCst), 0);
-        let control = WorkControl::new();
         let error = i.prepare_with_control("echo", &control).err().unwrap();
         assert_eq!(
             error.code(),
@@ -637,7 +638,7 @@ async fn shared_prepared_attempts_keep_selection_context_and_cancellation_separa
             &'a self,
             request: BindingRequest<'a>,
             mut io: ProviderIo,
-            _: WorkControl,
+            _: CancellationToken,
         ) -> Self::Invocation<'a> {
             Box::pin(async move {
                 io.emit(request.context.unwrap().clone()).await?;
@@ -660,7 +661,7 @@ async fn shared_prepared_attempts_keep_selection_context_and_cancellation_separa
     let prepared = i.prepare("say").unwrap();
     let first_context = json(r#"{"attempt":1}"#);
     let second_context = json(r#"{"attempt":2}"#);
-    let external = WorkControl::new();
+    let external = CancellationToken::new();
     let mut first = prepared.invoke_with_control(
         Attempt::ordered(&["a", "b"]).with_context(&first_context),
         &external,
@@ -720,7 +721,7 @@ async fn prepared_foreign_exact_binding_is_refused_before_any_provider_work() {
             &'a self,
             _: BindingRequest<'a>,
             _: ProviderIo,
-            _: WorkControl,
+            _: CancellationToken,
         ) -> Self::Invocation<'a> {
             panic!("foreign binding must be refused before constructing provider work");
         }

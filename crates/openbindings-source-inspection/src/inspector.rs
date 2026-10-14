@@ -1,7 +1,8 @@
+use crate::CancellationToken;
 use crate::{
     InspectionError, InspectionErrorKind, KindSupportVerdict, SourceInspection, SupportedKind,
 };
-use openbindings::{Source, WorkControl};
+use openbindings::Source;
 use std::{
     collections::HashSet,
     future::{Future, poll_fn},
@@ -47,7 +48,11 @@ pub trait SourceInspector {
     /// retained across suspension without borrowing a facade-local token.
     /// The facade drops a pending future on cancellation, but
     /// cannot preempt a blocking poll or undo detached work started by a provider.
-    fn inspect<'a>(&'a self, source: &'a Source, control: WorkControl) -> Self::Inspection<'a>;
+    fn inspect<'a>(
+        &'a self,
+        source: &'a Source,
+        control: CancellationToken,
+    ) -> Self::Inspection<'a>;
 }
 
 // Preserve the underlying future rather than boxing or changing its Send bounds.
@@ -64,7 +69,7 @@ macro_rules! forward_inspector {
                 (**self).supported_kinds()
             }
 
-            fn inspect<'a>(&'a self, source: &'a Source, control: WorkControl) -> Self::Inspection<'a> {
+            fn inspect<'a>(&'a self, source: &'a Source, control: CancellationToken) -> Self::Inspection<'a> {
                 (**self).inspect(source, control)
             }
         }
@@ -133,7 +138,7 @@ impl<P: SourceInspector> Inspector<P> {
         &'a self,
         source: &'a Source,
     ) -> impl Future<Output = Result<SourceInspection, InspectionError>> + 'a {
-        self.inspect_owned(source, WorkControl::new())
+        self.inspect_owned(source, CancellationToken::new())
     }
     /// Inspect with caller-owned cancellation. The control is cloned, sharing
     /// its cancellation state; the future does not borrow the caller's handle.
@@ -143,14 +148,14 @@ impl<P: SourceInspector> Inspector<P> {
     pub fn inspect_with_control<'a>(
         &'a self,
         source: &'a Source,
-        control: &WorkControl,
+        control: &CancellationToken,
     ) -> impl Future<Output = Result<SourceInspection, InspectionError>> + 'a {
         self.inspect_owned(source, control.clone())
     }
     fn inspect_owned<'a>(
         &'a self,
         source: &'a Source,
-        control: WorkControl,
+        control: CancellationToken,
     ) -> impl Future<Output = Result<SourceInspection, InspectionError>> + 'a {
         let provider_control = control.clone();
         run_checked(
@@ -189,7 +194,7 @@ impl<P: SourceInspector> Inspector<P> {
 // also keeps admission and provider invocation lazy.
 async fn run_checked<F>(
     start: impl FnOnce() -> Result<F, InspectionError>,
-    control: WorkControl,
+    control: CancellationToken,
 ) -> Result<SourceInspection, InspectionError>
 where
     F: Future<Output = Result<SourceInspection, InspectionError>>,

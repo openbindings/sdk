@@ -155,7 +155,7 @@ impl SchemaEvaluator for Capture {
     fn prepare(
         &self,
         request: &SchemaRequest,
-        _: &WorkControl,
+        _: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         *self.0.lock().unwrap() = Some(request.clone());
         Err(NoVerdict::new(
@@ -175,8 +175,12 @@ fn direct_bounds_keeps_planner_diagnostics_while_default_restores_strict_refusal
         .unwrap()
         .prepare("op", Direction::Input);
     let request = capture.0.lock().unwrap().take().unwrap();
-    let strict = request.evaluation_program(&WorkControl::new()).unwrap_err();
-    let direct = request.evaluation_bounds(&WorkControl::new()).unwrap_err();
+    let strict = request
+        .evaluation_program(&std::sync::atomic::AtomicBool::new(false))
+        .unwrap_err();
+    let direct = request
+        .evaluation_bounds(&std::sync::atomic::AtomicBool::new(false))
+        .unwrap_err();
     assert_eq!(direct.code, "partial-nonpositive-influence");
     assert_eq!(direct.reason, NoVerdictReason::ConservativePreparation);
     let ValueContractPreparation::NoVerdict { detail } = doc
@@ -187,8 +191,8 @@ fn direct_bounds_keeps_planner_diagnostics_while_default_restores_strict_refusal
         panic!()
     };
     assert_eq!(detail_json(&detail), detail_json(&strict));
-    let cancelled = WorkControl::new();
-    cancelled.cancel();
+    let cancelled = std::sync::atomic::AtomicBool::new(false);
+    cancelled.store(true, std::sync::atomic::Ordering::Release);
     assert_eq!(
         request.evaluation_bounds(&cancelled).unwrap_err().reason,
         NoVerdictReason::Cancelled
@@ -199,13 +203,13 @@ impl SchemaEvaluator for Legacy {
     fn prepare(
         &self,
         _: &SchemaRequest,
-        _: &WorkControl,
+        _: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         Ok(Arc::new(Legacy))
     }
 }
 impl PreparedSchema for Legacy {
-    fn validate(&self, _: &JsonValue, _: &WorkControl) -> ValueOutcome {
+    fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
         ValueOutcome::Satisfies
     }
 }
@@ -214,13 +218,13 @@ impl SchemaEvaluator for Declared {
     fn prepare(
         &self,
         _: &SchemaRequest,
-        _: &WorkControl,
+        _: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         Ok(Arc::new(Self(self.0.clone())))
     }
 }
 impl PreparedSchema for Declared {
-    fn validate(&self, _: &JsonValue, _: &WorkControl) -> ValueOutcome {
+    fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
         ValueOutcome::NoVerdict {
             detail: self.0.clone(),
         }

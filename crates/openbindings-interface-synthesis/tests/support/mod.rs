@@ -1,5 +1,6 @@
 #![allow(dead_code)]
-use openbindings::{Document, JsonRef, JsonValue, ParsedDocument, Source, WorkControl};
+use openbindings::{Document, JsonRef, JsonValue, ParsedDocument, Source};
+use openbindings_interface_synthesis::CancellationToken;
 use openbindings_interface_synthesis::*;
 use std::{
     collections::BTreeMap,
@@ -48,7 +49,7 @@ impl InterfaceSynthesizer for Fixed {
     fn synthesize<'a>(
         &'a self,
         _: &'a SynthesisRequest<'a>,
-        _: WorkControl,
+        _: CancellationToken,
     ) -> Self::Synthesis<'a> {
         self.calls.fetch_add(1, Ordering::Relaxed);
         ready(self.output.clone())

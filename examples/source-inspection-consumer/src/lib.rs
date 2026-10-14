@@ -1,6 +1,7 @@
 //! An independent inspector-only provider and authoring consumer.
 //! The catalog is a deliberately small test kind, not an OpenBindings standard.
-use openbindings::{Document, JsonValue, Operation, Source, WorkControl};
+use openbindings::{Document, JsonValue, Operation, Source};
+use openbindings_source_inspection::CancellationToken;
 use openbindings_source_inspection::{
     BindableTarget, BindingFragment, InspectionError, InspectionErrorKind, InspectionLimitation,
     Inspector, SourceInspection, SourceInspector,
@@ -26,7 +27,11 @@ impl SourceInspector for CatalogInspector {
         kind == CATALOG_KIND
     }
 
-    fn inspect<'a>(&'a self, source: &'a Source, control: WorkControl) -> Self::Inspection<'a> {
+    fn inspect<'a>(
+        &'a self,
+        source: &'a Source,
+        control: CancellationToken,
+    ) -> Self::Inspection<'a> {
         Box::pin(async move {
             // Exercise actual suspension without selecting a runtime dependency.
             let mut yielded = false;
@@ -61,7 +66,7 @@ fn unreadable(message: &str) -> InspectionError {
 /// Target admission does not depend on that hint. No acquisition is performed.
 pub fn inspect_catalog(
     source: &Source,
-    control: &WorkControl,
+    control: &dyn openbindings::WorkControl,
 ) -> Result<SourceInspection, InspectionError> {
     let entries = source
         .content
@@ -242,7 +247,11 @@ mod wasm {
         fn supports_kind(&self, kind: &str) -> bool {
             kind == CATALOG_KIND
         }
-        fn inspect<'a>(&'a self, source: &'a Source, control: WorkControl) -> Self::Inspection<'a> {
+        fn inspect<'a>(
+            &'a self,
+            source: &'a Source,
+            control: CancellationToken,
+        ) -> Self::Inspection<'a> {
             Box::pin(async move {
                 // A local Rc and JavaScript Promise deliberately cross an await.
                 let local = self.0.clone();

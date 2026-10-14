@@ -80,7 +80,7 @@ TLS, response headers, the redirect chain, body acquisition and validation.
 `AttemptTimeout::After(Duration)` accepts a positive finite override;
 `AttemptTimeout::Unbounded` explicitly omits the deadline. Zero is an error.
 Native discovery owns one Tokio timer. A shorter application-client timeout is
-an additional bound and yields `Timeout`. Caller `WorkControl` cancellation
+an additional bound and yields `Timeout`. Caller `CancellationToken` cancellation
 remains `Cancelled`; caller cancellation wins when both sources are ready at the
 same poll, and the first observed terminal cause ends acquisition.
 

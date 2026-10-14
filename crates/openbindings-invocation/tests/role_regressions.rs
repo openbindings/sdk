@@ -1,4 +1,5 @@
-use openbindings::{JsonValue, ParsedDocument, ResourceSet, Source, WorkControl};
+use openbindings::{JsonValue, ParsedDocument, ResourceSet, Source};
+use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
     BindingRequest, BindingValue, ContextChallenge, InvocationError, ProviderIo,
     binding::{BindingInvoker, BindingPreflight, Invoker},
@@ -42,7 +43,7 @@ impl BindingInvoker for InvokeOnly {
         &'a self,
         _: BindingRequest<'a>,
         _: ProviderIo,
-        _: WorkControl,
+        _: CancellationToken,
     ) -> Self::Invocation<'a> {
         ready(Ok(()))
     }
@@ -129,14 +130,14 @@ impl BindingInvoker for SendProvider {
         &'a self,
         _: BindingRequest<'a>,
         _: ProviderIo,
-        _: WorkControl,
+        _: CancellationToken,
     ) -> Self::Invocation<'a> {
         ready(Ok(()))
     }
 }
 impl BindingPreflight for SendProvider {
     type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
-    fn preflight<'a>(&'a self, _: BindingRequest<'a>, _: WorkControl) -> Self::Preflight<'a> {
+    fn preflight<'a>(&'a self, _: BindingRequest<'a>, _: CancellationToken) -> Self::Preflight<'a> {
         ready(Ok(None))
     }
 }
@@ -179,7 +180,7 @@ impl BindingInvoker for LocalProvider {
         &'a self,
         _: BindingRequest<'a>,
         _: ProviderIo,
-        _: WorkControl,
+        _: CancellationToken,
     ) -> Self::Invocation<'a> {
         Box::pin(async move {
             self.0.set(self.0.get() + 1);
@@ -190,7 +191,7 @@ impl BindingInvoker for LocalProvider {
 impl BindingPreflight for LocalProvider {
     type Preflight<'a> =
         Pin<Box<dyn Future<Output = Result<Option<ContextChallenge>, InvocationError>> + 'a>>;
-    fn preflight<'a>(&'a self, _: BindingRequest<'a>, _: WorkControl) -> Self::Preflight<'a> {
+    fn preflight<'a>(&'a self, _: BindingRequest<'a>, _: CancellationToken) -> Self::Preflight<'a> {
         Box::pin(async move {
             self.0.set(self.0.get() + 1);
             Ok(None)
@@ -294,7 +295,7 @@ impl BindingInvoker for Failure {
         &'a self,
         _: BindingRequest<'a>,
         _: ProviderIo,
-        _: WorkControl,
+        _: CancellationToken,
     ) -> Self::Invocation<'a> {
         ready(Err(
             InvocationError::new(self.0, Some(JsonValue::null())).unwrap()
@@ -303,7 +304,7 @@ impl BindingInvoker for Failure {
 }
 impl BindingPreflight for Failure {
     type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
-    fn preflight<'a>(&'a self, _: BindingRequest<'a>, _: WorkControl) -> Self::Preflight<'a> {
+    fn preflight<'a>(&'a self, _: BindingRequest<'a>, _: CancellationToken) -> Self::Preflight<'a> {
         ready(Err(
             InvocationError::new(self.0, Some(JsonValue::null())).unwrap()
         ))
@@ -423,7 +424,7 @@ async fn ro8_sdk_selection_and_validation_errors_still_surface() {
             &'a self,
             _: BindingRequest<'a>,
             mut io: ProviderIo,
-            _: WorkControl,
+            _: CancellationToken,
         ) -> Self::Invocation<'a> {
             Box::pin(async move {
                 while io.next().await.is_some() {}

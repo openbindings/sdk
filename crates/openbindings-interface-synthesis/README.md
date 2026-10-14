@@ -21,14 +21,15 @@ a document with coverage, request strict synthesis, inspect retained partial
 results, and serialize checked results. No public TypeScript role API is released.
 
 ```rust
-use openbindings::{Document, WorkControl};
+use openbindings_interface_synthesis::CancellationToken;
+use openbindings::{Document, };
 use openbindings_interface_synthesis::*;
 use std::future::{Ready, ready};
 struct Skeleton;
 impl InterfaceSynthesizer for Skeleton {
     type Synthesis<'a> = Ready<Result<SynthesisCandidate, SynthesisError>>;
     fn supports_kind(&self, _: &str) -> bool { false }
-    fn synthesize<'a>(&'a self, request: &'a SynthesisRequest<'a>, _: WorkControl)
+    fn synthesize<'a>(&'a self, request: &'a SynthesisRequest<'a>, _: CancellationToken)
         -> Self::Synthesis<'a>
     {
         let mut draft = Document::new();

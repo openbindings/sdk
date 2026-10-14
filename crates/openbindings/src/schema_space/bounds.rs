@@ -51,13 +51,13 @@ struct OutputFault {
     decoded: isize,
     nodes: isize,
     edges: isize,
-    cancel: bool,
+    cancel: Option<&'static std::sync::atomic::AtomicBool>,
 }
 #[cfg(test)]
 impl OutputFault {
-    fn bytes(self, size: usize, decoded: usize, control: &WorkControl) -> (usize, usize) {
-        if self.cancel {
-            control.cancel();
+    fn bytes(self, size: usize, decoded: usize) -> (usize, usize) {
+        if let Some(control) = self.cancel {
+            control.store(true, std::sync::atomic::Ordering::Release);
         }
         (
             size.checked_add_signed(self.size)
@@ -144,8 +144,12 @@ fn output_mismatch() -> NoVerdict {
         "projection output does not match the admitted counts",
     )
 }
-fn output_failure(control: &WorkControl) -> NoVerdict {
-    control.check().err().unwrap_or_else(output_mismatch)
+fn output_failure(control: &dyn WorkControl) -> NoVerdict {
+    control
+        .check()
+        .err()
+        .map(NoVerdict::from)
+        .unwrap_or_else(output_mismatch)
 }
 fn add_bytes(total: &mut usize, size: usize, cap: usize) -> Result<(), NoVerdict> {
     *total = total
@@ -188,7 +192,7 @@ impl Plan {
     fn qualify(
         &mut self,
         space: &SchemaSpace,
-        control: &WorkControl,
+        control: &dyn WorkControl,
         cap: Admission,
     ) -> Result<(), NoVerdict> {
         let mut reverse: HashMap<usize, Vec<&Edge>> = HashMap::new();
@@ -261,7 +265,7 @@ impl SchemaSpace {
     pub(crate) fn bounds(
         &self,
         entry: usize,
-        control: &WorkControl,
+        control: &dyn WorkControl,
     ) -> Result<EvaluationBounds, NoVerdict> {
         self.bounds_admitted(entry, control, Admission::default())
     }
@@ -287,7 +291,7 @@ impl SchemaSpace {
     fn partial_reach(
         &self,
         entry: usize,
-        control: &WorkControl,
+        control: &dyn WorkControl,
         cap: Admission,
     ) -> Result<Plan, NoVerdict> {
         let mut out = Plan::default();
@@ -448,7 +452,7 @@ impl SchemaSpace {
     fn bounds_admitted(
         &self,
         entry: usize,
-        control: &WorkControl,
+        control: &dyn WorkControl,
         cap: Admission,
     ) -> Result<EvaluationBounds, NoVerdict> {
         self.project_bounds(entry, control, cap).map_err(|detail| {
@@ -474,7 +478,7 @@ impl SchemaSpace {
     fn project_bounds(
         &self,
         entry: usize,
-        control: &WorkControl,
+        control: &dyn WorkControl,
         cap: Admission,
     ) -> Result<EvaluationBounds, NoVerdict> {
         let plan = self.partial_reach(entry, control, cap)?;
@@ -512,7 +516,13 @@ impl SchemaSpace {
             for (&resource, ids) in &groups {
                 let mut count = Sink::count(cap.text - total);
                 self.write_resource(&mut count, resource, ids, entry, &plan, control)
-                    .map_err(|_| control.check().err().unwrap_or_else(text_limit))?;
+                    .map_err(|_| {
+                        control
+                            .check()
+                            .err()
+                            .map(NoVerdict::from)
+                            .unwrap_or_else(text_limit)
+                    })?;
                 add_bytes(&mut total, count.size + count.decoded, cap.text)?;
                 sizes[pass].push((count.size, count.decoded));
                 let mut uri_count = Sink::count(cap.text);
@@ -554,7 +564,7 @@ impl SchemaSpace {
             for ((&resource, ids), &(size, decoded)) in groups.iter().zip(&sizes[pass]) {
                 control.check()?;
                 #[cfg(test)]
-                let (size, decoded) = cap.output_fault.bytes(size, decoded, control);
+                let (size, decoded) = cap.output_fault.bytes(size, decoded);
                 let mut sink = Sink::output(size, decoded);
                 self.write_resource(&mut sink, resource, ids, entry, &plan, control)
                     .map_err(|_| output_failure(control))?;
@@ -599,7 +609,7 @@ impl SchemaSpace {
         ids: &[usize],
         entry: usize,
         plan: &Plan,
-        control: &WorkControl,
+        control: &dyn WorkControl,
     ) -> fmt::Result {
         sink.write_str("{\"$id\":\"")?;
         resource_uri(sink, plan.namespace, resource)?;
@@ -805,7 +815,7 @@ impl Sink {
             expected: Some((size, decoded)),
         }
     }
-    fn finish(self, control: &WorkControl) -> Result<String, NoVerdict> {
+    fn finish(self, control: &dyn WorkControl) -> Result<String, NoVerdict> {
         control.check()?;
         if self.expected != Some((self.size, self.decoded)) {
             return Err(output_mismatch());
@@ -904,7 +914,7 @@ mod tests {
         r#"{"description":"quoted\"","oneOf":[true,{"$ref":"https://absent.invalid/U"}]}"#;
     fn output_mismatch(schema: &str, fault: OutputFault) {
         let (space, entry) = space(schema);
-        let control = WorkControl::new();
+        let control = std::sync::atomic::AtomicBool::new(false);
         let detail = space
             .bounds_admitted(
                 entry,
@@ -928,7 +938,11 @@ mod tests {
                 pointer: "/operations/op/input".into(),
             }
         );
-        assert!(space.bounds(entry, &WorkControl::new()).is_ok());
+        assert!(
+            space
+                .bounds(entry, &std::sync::atomic::AtomicBool::new(false))
+                .is_ok()
+        );
     }
     #[test]
     fn positive_output_undercount_is_an_internal_failure() {
@@ -1036,9 +1050,14 @@ mod tests {
         let mut exact = Sink::output(2, 1);
         exact.write_str("ab").unwrap();
         exact.add_decoded(1).unwrap();
-        assert_eq!(exact.finish(&WorkControl::new()).unwrap(), "ab");
-        let stopped = WorkControl::new();
-        stopped.cancel();
+        assert_eq!(
+            exact
+                .finish(&std::sync::atomic::AtomicBool::new(false))
+                .unwrap(),
+            "ab"
+        );
+        let stopped = std::sync::atomic::AtomicBool::new(false);
+        stopped.store(true, std::sync::atomic::Ordering::Release);
         let detail = Sink::output(1, 0).finish(&stopped).unwrap_err();
         assert_eq!(detail.reason, NoVerdictReason::Cancelled);
         assert!(detail.location.is_none());
@@ -1058,24 +1077,27 @@ mod tests {
     }
     #[test]
     fn output_faults_do_not_change_count_limits_or_cancellation_priority() {
+        static CANCELLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         for schema in [POSITIVE_OUTPUT, ONEOF_OUTPUT] {
             let (space, entry) = space(schema);
             for size in [-1, 1] {
-                let control = WorkControl::new();
+                CANCELLED.store(false, std::sync::atomic::Ordering::Release);
+                let control = &CANCELLED;
                 let cap = Admission {
                     output_fault: OutputFault {
                         size,
-                        cancel: true,
+                        cancel: Some(&CANCELLED),
                         ..OutputFault::default()
                     },
                     ..Admission::default()
                 };
-                let detail = space.bounds_admitted(entry, &control, cap).unwrap_err();
+                let detail = space.bounds_admitted(entry, control, cap).unwrap_err();
                 assert_eq!(detail.reason, NoVerdictReason::Cancelled);
                 assert!(detail.location.is_none());
-                let control = WorkControl::new();
+                CANCELLED.store(false, std::sync::atomic::Ordering::Release);
+                let control = &CANCELLED;
                 let detail = space
-                    .bounds_admitted(entry, &control, Admission { text: 1, ..cap })
+                    .bounds_admitted(entry, control, Admission { text: 1, ..cap })
                     .unwrap_err();
                 assert_eq!(detail.reason, NoVerdictReason::LimitExceeded);
                 assert_eq!(detail.code, "partial-program-byte-limit");
@@ -1087,16 +1109,17 @@ mod tests {
             (0, 200_000, "partial-generated-node-limit"),
             (100_000, 0, "partial-generated-edge-limit"),
         ] {
-            let control = WorkControl::new();
+            CANCELLED.store(false, std::sync::atomic::Ordering::Release);
+            let control = &CANCELLED;
             let detail = space
                 .bounds_admitted(
                     entry,
-                    &control,
+                    control,
                     Admission {
                         generated_nodes: nodes,
                         generated_edges: edges,
                         output_fault: OutputFault {
-                            cancel: true,
+                            cancel: Some(&CANCELLED),
                             ..OutputFault::default()
                         },
                         ..Admission::default()
@@ -1118,7 +1141,9 @@ mod tests {
             "true",
         ] {
             let (space, entry) = space(schema);
-            let bounds = space.bounds(entry, &WorkControl::new()).unwrap();
+            let bounds = space
+                .bounds(entry, &std::sync::atomic::AtomicBool::new(false))
+                .unwrap();
             let size = text_size(&bounds);
             let cap = Admission {
                 text: size,
@@ -1127,7 +1152,7 @@ mod tests {
             assert_eq!(
                 text_size(
                     &space
-                        .bounds_admitted(entry, &WorkControl::new(), cap)
+                        .bounds_admitted(entry, &std::sync::atomic::AtomicBool::new(false), cap)
                         .unwrap()
                 ),
                 size
@@ -1135,7 +1160,7 @@ mod tests {
             let refused = space
                 .bounds_admitted(
                     entry,
-                    &WorkControl::new(),
+                    &std::sync::atomic::AtomicBool::new(false),
                     Admission {
                         text: size - 1,
                         ..cap
@@ -1213,7 +1238,11 @@ mod tests {
             ))
         };
         let (small, entry) = witness(0);
-        let base = text_size(&small.bounds(entry, &WorkControl::new()).unwrap());
+        let base = text_size(
+            &small
+                .bounds(entry, &std::sync::atomic::AtomicBool::new(false))
+                .unwrap(),
+        );
         assert_eq!(base, 1273); // Frozen independent review witness.
         let largest = (TEXT_LIMIT - base) / 4;
         for (n, admitted) in [
@@ -1223,7 +1252,7 @@ mod tests {
         ] {
             let (space, entry) = witness(n);
             let expected = base + 4 * n;
-            let result = space.bounds(entry, &WorkControl::new());
+            let result = space.bounds(entry, &std::sync::atomic::AtomicBool::new(false));
             if admitted {
                 let actual = text_size(&result.unwrap());
                 assert_eq!(actual, expected);
@@ -1247,7 +1276,7 @@ mod tests {
         let (space, entry) = space(
             r##"{"$id":"https://review.invalid/root","$defs":{"shared":{"$ref":"https://absent.invalid/U"}},"allOf":[{"$ref":"#/$defs/shared"},{"$ref":"#/$defs/shared"}]}"##,
         );
-        let control = WorkControl::new();
+        let control = std::sync::atomic::AtomicBool::new(false);
         let plan = space
             .partial_reach(entry, &control, Admission::default())
             .unwrap();
@@ -1336,7 +1365,7 @@ mod tests {
             (cap, "partial-scratch-limit"),
         ] {
             let detail = space
-                .bounds_admitted(entry, &WorkControl::new(), cap)
+                .bounds_admitted(entry, &std::sync::atomic::AtomicBool::new(false), cap)
                 .unwrap_err();
             assert_eq!(detail.reason, NoVerdictReason::LimitExceeded);
             assert_eq!(detail.code, code); // location admission cannot replace the cause
@@ -1368,8 +1397,8 @@ mod tests {
             serde_json::to_value(retained).unwrap(),
             serde_json::to_value(precise).unwrap()
         );
-        let cancelled = WorkControl::new();
-        cancelled.cancel();
+        let cancelled = std::sync::atomic::AtomicBool::new(false);
+        cancelled.store(true, std::sync::atomic::Ordering::Release);
         assert!(
             space
                 .bounds_admitted(entry, &cancelled, cap)
@@ -1464,7 +1493,9 @@ mod tests {
             .join(",");
         let schema = format!(r#"{{"$id":"{NAMESPACE}base","anyOf":[true,{refs}]}}"#);
         let (space, entry) = space(&schema);
-        let bounds = space.bounds(entry, &WorkControl::new()).unwrap();
+        let bounds = space
+            .bounds(entry, &std::sync::atomic::AtomicBool::new(false))
+            .unwrap();
         for program in [&bounds.lower, &bounds.upper] {
             for resource in &program.resources {
                 for i in 0..12 {
@@ -1484,7 +1515,7 @@ mod tests {
             space
                 .bounds_admitted(
                     entry,
-                    &WorkControl::new(),
+                    &std::sync::atomic::AtomicBool::new(false),
                     Admission {
                         text: size,
                         ..Admission::default()
@@ -1496,7 +1527,7 @@ mod tests {
             space
                 .bounds_admitted(
                     entry,
-                    &WorkControl::new(),
+                    &std::sync::atomic::AtomicBool::new(false),
                     Admission {
                         text: size - 1,
                         ..Admission::default()
@@ -1528,11 +1559,19 @@ mod tests {
         );
         let (space, entry) = space(&schema);
         let plan = space
-            .partial_reach(entry, &WorkControl::new(), Admission::default())
+            .partial_reach(
+                entry,
+                &std::sync::atomic::AtomicBool::new(false),
+                Admission::default(),
+            )
             .unwrap();
         assert_eq!(plan.holes.len(), 1);
         assert_eq!(plan.reach.nodes.len(), 2003);
         assert_eq!(plan.edge_count, 4002);
-        assert!(space.bounds(entry, &WorkControl::new()).is_ok());
+        assert!(
+            space
+                .bounds(entry, &std::sync::atomic::AtomicBool::new(false))
+                .is_ok()
+        );
     }
 }

@@ -79,7 +79,7 @@ fn skip(keyword: &str, has_if: bool, body: bool) -> bool {
 struct Emitter<'a> {
     space: &'a SchemaSpace,
     plan: &'a Plan,
-    control: &'a WorkControl,
+    control: &'a dyn WorkControl,
     cap: Admission,
     sink: Sink,
     nodes: usize,
@@ -95,7 +95,7 @@ impl<'a> Emitter<'a> {
     fn new(
         space: &'a SchemaSpace,
         plan: &'a Plan,
-        control: &'a WorkControl,
+        control: &'a dyn WorkControl,
         cap: Admission,
         sink: Sink,
         discovering: bool,
@@ -122,7 +122,7 @@ impl<'a> Emitter<'a> {
     }
     fn check(&mut self) -> fmt::Result {
         if let Err(error) = self.control.check() {
-            return self.stop(error);
+            return self.stop(error.into());
         }
         Ok(())
     }
@@ -461,7 +461,7 @@ impl SchemaSpace {
         &self,
         plan: &Plan,
         symbols: &BTreeSet<Symbol>,
-        control: &WorkControl,
+        control: &dyn WorkControl,
         mut visit: impl FnMut(
             Option<Symbol>,
             Option<&str>,
@@ -507,7 +507,7 @@ impl SchemaSpace {
     pub(super) fn oneof_bounds(
         &self,
         entry: usize,
-        control: &WorkControl,
+        control: &dyn WorkControl,
         cap: Admission,
         plan: &Plan,
     ) -> Result<EvaluationBounds, NoVerdict> {
@@ -605,7 +605,7 @@ impl SchemaSpace {
             control.check()?;
             let (size, decoded) = (count.sink.size, count.sink.decoded);
             #[cfg(test)]
-            let (size, decoded) = cap.output_fault.bytes(size, decoded, control);
+            let (size, decoded) = cap.output_fault.bytes(size, decoded);
             let output_cap = Admission {
                 generated_nodes: count.nodes,
                 generated_edges: count.edges,
@@ -719,7 +719,7 @@ mod tests {
         ];
         for schema in schemas {
             let (space, entry) = space(schema);
-            let control = WorkControl::new();
+            let control = std::sync::atomic::AtomicBool::new(false);
             let bounds = space.bounds(entry, &control).unwrap();
             let (mut nodes, mut edges) = (0, 0);
             for program in [&bounds.lower, &bounds.upper] {
@@ -782,7 +782,7 @@ mod tests {
             space
                 .bounds_admitted(
                     entry,
-                    &WorkControl::new(),
+                    &std::sync::atomic::AtomicBool::new(false),
                     Admission {
                         generated_nodes: 0,
                         generated_edges: 0,
@@ -802,7 +802,9 @@ mod tests {
         let (space, entry) = space(
             r#"{"oneOf":[true,true,{"$ref":"https://bounds.invalid/U"}],"title":"original"}"#,
         );
-        let bounds = space.bounds(entry, &WorkControl::new()).unwrap();
+        let bounds = space
+            .bounds(entry, &std::sync::atomic::AtomicBool::new(false))
+            .unwrap();
         let p = &bounds.upper;
         let (uri, at) = p
             .locations
@@ -838,7 +840,7 @@ mod tests {
         let (space, entry) = space(
             r#"{"oneOf":[{"$ref":"https://sdk-bounds.openbindings.invalid/0/dual"},{"$ref":"https://sdk-bounds.openbindings.invalid/1/dual#/$defs/holeu"}]}"#,
         );
-        let control = WorkControl::new();
+        let control = std::sync::atomic::AtomicBool::new(false);
         let plan = space
             .partial_reach(entry, &control, Admission::default())
             .unwrap();
@@ -888,7 +890,7 @@ mod tests {
         emitter.cap.generated_edges = usize::MAX;
         assert!(emitter.edge().is_err());
         assert_eq!(emitter.failure().code, "partial-generated-edge-limit");
-        control.cancel();
+        control.store(true, std::sync::atomic::Ordering::Release);
         assert!(emitter.header().is_err());
         assert_eq!(emitter.failure().reason, NoVerdictReason::Cancelled);
         assert_eq!(

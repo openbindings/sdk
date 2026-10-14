@@ -7,7 +7,7 @@ impl SchemaEvaluator for BooleanEvaluator {
     fn prepare(
         &self,
         request: &SchemaRequest,
-        control: &WorkControl,
+        control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         control.check()?;
         match request.entry().view().as_bool() {
@@ -21,8 +21,9 @@ impl SchemaEvaluator for BooleanEvaluator {
     }
 }
 impl PreparedSchema for BooleanContract {
-    fn validate(&self, _: &JsonValue, control: &WorkControl) -> ValueOutcome {
+    fn validate(&self, _: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
         if let Err(detail) = control.check() {
+            let detail = detail.into();
             return ValueOutcome::NoVerdict { detail };
         }
         if self.0 {

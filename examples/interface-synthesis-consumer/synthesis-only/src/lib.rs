@@ -1,5 +1,6 @@
 //! Compiles without the inspection companion anywhere in its dependency graph.
-use openbindings::{Document, WorkControl};
+use openbindings::Document;
+use openbindings_interface_synthesis::CancellationToken;
 use openbindings_interface_synthesis::*;
 use std::future::{Ready, ready};
 pub struct Skeleton;
@@ -11,7 +12,7 @@ impl InterfaceSynthesizer for Skeleton {
     fn synthesize<'a>(
         &'a self,
         r: &'a SynthesisRequest<'a>,
-        _: WorkControl,
+        _: CancellationToken,
     ) -> Self::Synthesis<'a> {
         let mut draft = Document::new();
         draft.openbindings = r
