@@ -15,9 +15,9 @@ run(['cargo', 'fmt', '--all', '--check'])
 run(['cargo', 'clippy', '--locked', '--workspace', '--all-targets', '--features', 'openbindings-http-discovery/native', '--', '-D', 'warnings'])
 run(['cargo', 'test', '--locked', '--workspace', '--features', 'openbindings-http-discovery/native'])
 run([sys.executable, 'tools/verify-api-reference.py', '--rust-only'])
-run([sys.executable, 'tools/verify-dependency-isolation.py'])
-# The inventories include other platforms' dependencies; fetch them all, then check offline.
+# Offline checks below read every platform's dependencies; fetch them all first.
 run(['cargo', 'fetch', '--locked'])
+run([sys.executable, 'tools/verify-dependency-isolation.py'])
 run([sys.executable, 'tools/attribution.py', '--check'])
 run([sys.executable, 'tools/verify-consumer-compat.py'])
 for example in ['first_use', 'replacement']:
