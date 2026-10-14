@@ -20,7 +20,7 @@ cargo run -p openbindings-json-schema-evaluator --example replacement
 
 ## Load, inspect and prepare
 
-`ParsedDocument::parse(bytes)` preserves exact JSON and source evidence. Parsing does not prove conformance. `document.assess()` returns a report for the supported specification line or a separate unsupported-version refusal. A report can be conformant, nonconformant or undetermined. Only `assessment.validated()` yields a conformant document owner.
+`ParsedDocument::parse(bytes)` preserves exact JSON and source evidence. Parsing does not prove conformance. `document.validate()` returns a report for the supported specification line or a separate unsupported-version refusal. A report can be conformant, nonconformant or undetermined. Only `assessment.validated()` yields a conformant document owner.
 
 The first-use example requires conformance before continuing and prints findings when that policy is not met. For editor-style inspection you may choose to keep a parsed document and its findings instead. Creating a value-contract context does not silently establish whole-document conformance.
 
@@ -30,12 +30,12 @@ There is a deliberate difference between typed metadata and exact schema access.
 
 Keep the returned conformance proof, select `DefaultEvaluator` from the optional companion, then call `proof.parsed().value_contracts(Arc::new(DefaultEvaluator::new()), resources)`. `ResourceSet::default()` supplies no external resources. The SDK never fetches a missing reference.
 
-`context.prepare(name, Side::Input)` has these setup outcomes:
+`context.prepare(name, Direction::Input)` has these setup outcomes:
 
 | Outcome | Application decision |
 | --- | --- |
 | `Ready(input)` | Retain the owner and validate admitted values. |
-| `NoContract` | Decide whether the operation is usable without that contract. |
+| `NoValueContract` | Decide whether the operation is usable without that contract. |
 | `OperationMissing` | Correct the selected name or choose another operation. |
 | `OperationAmbiguous { candidates }` | Resolve the document's repeated identifier occurrences. |
 | `NoVerdict { detail }` | Inspect the reason/code/location; correct resources or capability/work conditions as appropriate. |
@@ -47,14 +47,14 @@ Preparation refusal is not an input failure and does not prove that the schema h
 For example, this editor draft uses `inputSchema` where the normative operation member is `input`. Parsing succeeds; assessment locates the unexpected member:
 
 ```rust
-use openbindings::{ContractPreparation, ParsedDocument, ResourceSet, Side};
+use openbindings::{ValueContractPreparation, ParsedDocument, ResourceSet, Direction};
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::sync::Arc;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let text = r#"{"openbindings":"0.2.0","operations":{"lookup":{"inputSchema":{"type":"integer"}}}}"#;
     let document = ParsedDocument::parse(text)?;
-    let assessment = document.assess()?;
+    let assessment = document.validate()?;
     for finding in &assessment.report().findings {
         // Debug quotes and escapes the pointer, including any control characters.
         println!("{}/{} ({:?}) at {:?}: {}",
@@ -66,14 +66,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Correct this known fixture's original source, not a normalized JSON value.
     let corrected = text.replace("\"inputSchema\":", "\"input\":");
     let corrected = ParsedDocument::parse(corrected)?;
-    let assessment = corrected.assess()?;
+    let assessment = corrected.validate()?;
     let Some(proof) = assessment.validated() else {
         return Err(format!("document conformance: {:?}", assessment.report().conclusion).into());
     };
     let context = proof.parsed().value_contracts(
         Arc::new(DefaultEvaluator::new()), ResourceSet::default())?;
-    match context.prepare("lookup", Side::Input) {
-        ContractPreparation::Ready(_input) => { /* retain input for value validation */ }
+    match context.prepare("lookup", Direction::Input) {
+        ValueContractPreparation::Ready(_input) => { /* retain input for value validation */ }
         other => return Err(format!("input setup was refused: {other:?}").into()),
     }
     Ok(())
@@ -86,8 +86,8 @@ Locations use original JSON Pointers, zero-based UTF-8 byte offsets, and one-bas
 
 ## Edit a document while preserving exact opaque values
 
-`ParsedDocument::to_authoring()` returns an owned `DocumentBuilder`. Change its
-typed fields and call `build()` to obtain a new snapshot; assess that snapshot
+`ParsedDocument::to_authoring()` returns an owned `Document`. Change its
+typed fields and call `build()` to obtain a new snapshot; validate that snapshot
 before treating it as conformant. Renaming an operation does not rewrite its
 references. Typed fields are re-encoded: an integer preference spelled `1.0` or
 `1e0` becomes `1`, and `-0` becomes `0`. Opaque exact values keep their numeric
@@ -127,7 +127,7 @@ Failure problems identify instance pointers and original schema locations when a
 
 ## Retained work and replacement
 
-The replacement example owns an `active: PreparedContract` slot. Its `candidate` helper parses a prospective document, establishes conformance, constructs immutable resources, and requires a ready input declaring `ResourceCompleteness::Complete`. Only a successful result is assigned to `active`. The helper retains distinct parse, version, conformance, interpretation and preparation failures with their diagnostics.
+The replacement example owns an `active: ValueContract` slot. Its `candidate` helper parses a prospective document, establishes conformance, constructs immutable resources, and requires a ready input declaring `ResourceCompleteness::Complete`. Only a successful result is assigned to `active`. The helper retains distinct parse, version, conformance, interpretation and preparation failures with their diagnostics.
 
 A qualified missing-resource contract can be ready and declare Incomplete. The
 example's candidate helper checks borrowed completeness evidence before accepting it,
@@ -169,7 +169,7 @@ them. Custom evaluator messages are supplied by their authors.
 
 Optional default-evaluator schema facts use
 `DefaultEvaluator::new().with_schema_details(true)` (TS
-`contracts({ includeSchemaDetails: true })`). They retain original source snapshots
+`valueContracts({ includeSchemaDetails: true })`). They retain original source snapshots
 and share the diagnostic string-byte budget. `ValueProblemDetails::Truncated`
 sets result completeness false; absent details mean disabled or unavailable.
 Exact bounds and enum choices remain JSON token strings. Existing Rust evaluator

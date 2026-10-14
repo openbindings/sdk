@@ -32,9 +32,9 @@ separate work. Local Wasm probes qualify the Rust role seams.
 The flat immutable JSON arena preserves numeric spellings, negative zero, duplicate
 object members and escaped UTF-16 code units. Parse does not establish document
 conformance. Default parsing admission is 64 MiB, 10,000 levels of JSON container
-nesting and 1,000,000 nodes. Whole-document `assess_document` uses the default byte
+nesting and 1,000,000 nodes. Whole-document `validate_document` uses the default byte
 and node limits with no nesting cap and checks admitted schemas locally at any
-depth. `assess_document_with_limits` accepts caller-selected byte, node and depth
+depth. `validate_document_with_limits` accepts caller-selected byte, node and depth
 limits. Admission precedes version selection: an admission refusal leaves every
 rule inconclusive, even if a fragment appears to declare another specification line.
 Limits are observable errors, not silently truncated values. Structural/source
@@ -177,11 +177,11 @@ zero timeout is refused. Timeout and caller cancellation are distinct, with call
 cancellation winning a simultaneous observation. Timers cannot preempt blocking
 polls or synchronous validation; boundary checks discard late success.
 
-The decoded response-body limit defaults to 1 MiB (zero selects that byte default;
-negative limits are rejected). The SDK enables no reqwest gzip, brotli, deflate or
+The decoded response-body limit defaults to 1 MiB (Rust Default or TypeScript omission selects it;
+zero and invalid limits are rejected). The SDK enables no reqwest gzip, brotli, deflate or
 stream features; application clients own decoding. Native `Decode` is only the
 SDK's refusal of Content-Encoding left undecoded by the host. Native body-read
-errors, including truncated or corrupt-coded bodies, are `BodyFailure` with
+errors, including truncated or corrupt-coded bodies, are `BodyError` with
 `Network` and retain upstream messages; identified deadlines yield `Timeout`.
 Portable transports may report their own decoding failures. Only complete bounded
 200 bodies enter assessment; partial prefixes are never retained as documents.

@@ -49,7 +49,7 @@ fn optional<T>(
         fields.push((key.into(), map(value)));
     }
 }
-impl Project for DocumentBuilder {
+impl Project for Document {
     fn project(self, p: &mut Projection) -> Node {
         let mut fields = vec![
             ("openbindings".into(), plain(self.openbindings)),
@@ -82,7 +82,7 @@ impl Project for Operation {
         Node::Object(fields)
     }
 }
-impl Project for OperationExample {
+impl Project for Example {
     fn project(self, p: &mut Projection) -> Node {
         let mut fields = vec![];
         optional(&mut fields, "description", self.description, plain);
@@ -149,7 +149,7 @@ impl WasmDraft {
     }
 }
 pub(crate) fn convert(value: &JsonValue) -> Result<WasmDraft, JsValue> {
-    let builder = DocumentBuilder::from_json(value).map_err(|error| {
+    let builder = Document::from_json(value).map_err(|error| {
         let code = match error.kind() {
             AuthoringErrorKind::InvalidField => "invalid-field",
             AuthoringErrorKind::DuplicateMembers => "duplicate-members",

@@ -12,22 +12,22 @@ check(
 );
 await sdk.initialize();
 const coldOwners = sdk.liveStorageOwners();
-// Assessment/preparation retain instance-lifetime meta-schema state. Establish
+// DocumentValidation/preparation retain instance-lifetime meta-schema state. Establish
 // that fixed baseline before checking whether the examples release their owners.
 const warm = sdk.parseDocument(
   '{"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"}}}}',
 );
 check(warm.status === "parsed", "warm document");
 try {
-  warm.value.assess();
-  const context = warm.value.contracts();
+  warm.value.validate();
+  const context = warm.value.valueContracts();
   try {
     const setup = context.prepare("run", "input");
     check(setup.status === "ready", "warm contract");
     try {
-      setup.contract.validate(1);
+      setup.valueContract.validate(1);
     } finally {
-      setup.contract.dispose();
+      setup.valueContract.dispose();
     }
   } finally {
     context.dispose();

@@ -299,7 +299,8 @@ mod tests {
                 ResourceSet::default(),
             )
             .unwrap();
-        let ContractPreparation::Ready(contract) = context.prepare("op", Side::Input) else {
+        let ValueContractPreparation::Ready(contract) = context.prepare("op", Direction::Input)
+        else {
             panic!()
         };
         COPIED_DETAIL_BYTES.set(0);

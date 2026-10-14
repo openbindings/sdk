@@ -2,7 +2,7 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use std::sync::Arc;
 
-fn prepare(text: &str, resources: ResourceSet, bytes: usize, details: bool) -> PreparedContract {
+fn prepare(text: &str, resources: ResourceSet, bytes: usize, details: bool) -> ValueContract {
     let doc = ParsedDocument::parse(text).unwrap();
     let context = doc
         .value_contracts(
@@ -16,7 +16,7 @@ fn prepare(text: &str, resources: ResourceSet, bytes: usize, details: bool) -> P
             resources,
         )
         .unwrap();
-    let ContractPreparation::Ready(contract) = context.prepare("op", Side::Input) else {
+    let ValueContractPreparation::Ready(contract) = context.prepare("op", Direction::Input) else {
         panic!("not ready")
     };
     contract

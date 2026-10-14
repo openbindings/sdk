@@ -15,16 +15,16 @@ fn label(outcome: &ValueOutcome) -> &'static str {
 fn ready(
     document: &ParsedDocument,
     op: &str,
-    side: Side,
+    direction: Direction,
     resources: ResourceSet,
     limits: Limits,
-) -> PreparedContract {
+) -> ValueContract {
     match document
         .value_contracts(Arc::new(DefaultEvaluator::with_limits(limits)), resources)
         .unwrap()
-        .prepare(op, side)
+        .prepare(op, direction)
     {
-        ContractPreparation::Ready(contract) => contract,
+        ValueContractPreparation::Ready(contract) => contract,
         other => panic!("expected ready: {other:?}"),
     }
 }
@@ -46,7 +46,7 @@ fn frozen_c22_original_values_and_renamed_operation_keep_their_independent_truth
         let contract = ready(
             &document,
             op,
-            Side::Output,
+            Direction::Output,
             ResourceSet::default(),
             Limits::default(),
         );
@@ -98,7 +98,7 @@ fn evaluate(schema: &str, value: &str) -> ValueOutcome {
     ready(
         &document(schema),
         "probe",
-        Side::Input,
+        Direction::Input,
         ResourceSet::default(),
         Limits::default(),
     )
@@ -131,7 +131,13 @@ fn nested_endpoint_success_does_not_prove_resource_independence() {
                 ),
             ])
         });
-        let contract = ready(&document, "probe", Side::Input, supplied, Limits::default());
+        let contract = ready(
+            &document,
+            "probe",
+            Direction::Input,
+            supplied,
+            Limits::default(),
+        );
         assert_eq!(
             matches!(
                 contract.resource_completeness(),
@@ -166,7 +172,7 @@ fn frozen_owner_controls_cover_endpoints_siblings_nested_and_original_summaries(
         let contract = ready(
             &document(&schema),
             "probe",
-            Side::Input,
+            Direction::Input,
             resources(&entries),
             Limits::default(),
         );
@@ -261,7 +267,7 @@ fn distinct_hole_truth_tables_are_corroborated_by_all_small_complete_resource_se
                 let complete = ready(
                     &document,
                     "probe",
-                    Side::Input,
+                    Direction::Input,
                     resources(&entries),
                     Limits::default(),
                 );
@@ -379,8 +385,8 @@ fn unsupported_influence_and_known_closure_defects_remain_refusals() {
         let setup = document(schema)
             .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
             .unwrap()
-            .prepare("probe", Side::Input);
-        let ContractPreparation::NoVerdict { detail } = setup else {
+            .prepare("probe", Direction::Input);
+        let ValueContractPreparation::NoVerdict { detail } = setup else {
             panic!("{setup:?}")
         };
         assert_eq!(detail.reason, reason, "{schema}");
@@ -395,7 +401,7 @@ fn diagnostic_bytes_privacy_and_partial_work_do_not_fabricate_results() {
     let regular = ready(
         &document,
         "probe",
-        Side::Input,
+        Direction::Input,
         ResourceSet::default(),
         Limits::default(),
     );
@@ -427,7 +433,7 @@ fn diagnostic_bytes_privacy_and_partial_work_do_not_fabricate_results() {
         let contract = ready(
             &document,
             "probe",
-            Side::Input,
+            Direction::Input,
             ResourceSet::default(),
             Limits {
                 diagnostic_bytes: allowance,
@@ -453,7 +459,7 @@ fn diagnostic_bytes_privacy_and_partial_work_do_not_fabricate_results() {
     let limited = ready(
         &document,
         "probe",
-        Side::Input,
+        Direction::Input,
         ResourceSet::default(),
         Limits {
             evaluation_steps: 0,
@@ -512,7 +518,8 @@ fn adapters_receive_unmodified_requests_and_each_bound_compiles_without_the_othe
     let context = document(r#"{"oneOf":[true,{"$ref":"https://oneof.invalid/U"}]}"#)
         .value_contracts(custom.clone(), ResourceSet::default())
         .unwrap();
-    let ContractPreparation::NoVerdict { detail } = context.prepare("probe", Side::Input) else {
+    let ValueContractPreparation::NoVerdict { detail } = context.prepare("probe", Direction::Input)
+    else {
         panic!()
     };
     assert_eq!(detail.code, "my-adapter");
@@ -550,21 +557,21 @@ fn old_partial_and_new_complete_snapshots_remain_independent() {
     let old = ready(
         &document,
         "probe",
-        Side::Input,
+        Direction::Input,
         ResourceSet::default(),
         Limits::default(),
     );
     let no_match = ready(
         &document,
         "probe",
-        Side::Input,
+        Direction::Input,
         resources(&[("https://oneof.invalid/U", "false")]),
         Limits::default(),
     );
     let two_match = ready(
         &document,
         "probe",
-        Side::Input,
+        Direction::Input,
         resources(&[("https://oneof.invalid/U", "true")]),
         Limits::default(),
     );
@@ -588,7 +595,7 @@ fn bounded_nested_runtime_and_original_exact_details_retain_separate_policies() 
     let finite = ready(
         &document,
         "probe",
-        Side::Input,
+        Direction::Input,
         ResourceSet::default(),
         Limits {
             evaluation_steps: 30,
@@ -605,7 +612,8 @@ fn bounded_nested_runtime_and_original_exact_details_retain_separate_policies() 
             ResourceSet::default(),
         )
         .unwrap();
-    let ContractPreparation::Ready(contract) = contracts.prepare("probe", Side::Input) else {
+    let ValueContractPreparation::Ready(contract) = contracts.prepare("probe", Direction::Input)
+    else {
         panic!()
     };
     let ValueOutcome::Fails { problems, .. } =

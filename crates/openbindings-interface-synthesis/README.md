@@ -21,7 +21,7 @@ a document with coverage, request strict synthesis, inspect retained partial
 results, and serialize checked results. No public TypeScript role API is released.
 
 ```rust
-use openbindings::{DocumentBuilder, WorkControl};
+use openbindings::{Document, WorkControl};
 use openbindings_interface_synthesis::*;
 use std::future::{Ready, ready};
 struct Skeleton;
@@ -31,7 +31,7 @@ impl InterfaceSynthesizer for Skeleton {
     fn synthesize<'a>(&'a self, request: &'a SynthesisRequest<'a>, _: WorkControl)
         -> Self::Synthesis<'a>
     {
-        let mut draft = DocumentBuilder::new();
+        let mut draft = Document::new();
         draft.openbindings = request.openbindings_version.unwrap_or(openbindings::AUTHORING_VERSION).into();
         draft.name = request.name.map(str::to_owned);
         draft.version = request.version.map(str::to_owned);
@@ -68,7 +68,7 @@ unpolled futures do no provider work. Cancellation cannot preempt a blocking pol
 Core assessment checks document conformance, not source semantics. The facade also
 checks source preservation, output paths, unique coverage identities, supplied dependency
 references and evidence structure. A provider remains responsible for truthful
-inventory, sound framing, deterministic observed-state behavior and absence of side
+inventory, sound framing, deterministic observed-state behavior and absence of direction
 effects. Partial coverage never excuses an unsound binding. Multi-source capability
 is provider-specific; it must refuse unsupported composition before acquisition.
 

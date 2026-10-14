@@ -6,14 +6,14 @@ layer. A private schema engine supports normative document-schema checking; the
 optional default operation evaluator implements the public Rust trait boundary.
 
 `ParsedDocument` owns an immutable exact JSON arena and lazily indexed names.
-`DocumentAssessment` carries evidence for every rule; only a conformant assessment
-can yield `ValidatedDocument`. Typed `DocumentBuilder` fields represent normative
+`DocumentValidation` carries evidence for every rule; only a conformant assessment
+can yield `ValidatedDocument`. Typed `Document` fields represent normative
 objects and preserve additional exact fields. Building and establishing conformance
 are separate steps. Source views keep their owner's storage, not borrowed external
 buffers; standalone document views rebase byte locations correctly.
 
 `ValueContracts` owns a document, an explicit immutable `ResourceSet`, evaluator and
-bounded preparation cache. A `PreparedContract` owns required compiled state and
+bounded preparation cache. A `ValueContract` owns required compiled state and
 survives eviction or source-handle disposal. Cancellation and transient failures do
 not poison healthy subsequent preparation. Resources with the same URI in distinct
 contexts never share an implicit registry. The schema-space compiler builds a

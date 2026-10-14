@@ -14,7 +14,7 @@ test("owned selection and preparation wrappers release untaken children on decod
   const document = sdk.parseDocument(
     '{"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"}}}}',
   ).value;
-  const context = document.contracts({ cacheCapacity: 0 });
+  const context = document.valueContracts({ cacheCapacity: 0 });
   try {
     for (const [prototype, invoke, take] of [
       [
@@ -25,7 +25,7 @@ test("owned selection and preparation wrappers release untaken children on decod
       [
         bridge.WasmPreparation.prototype,
         () => context.prepare("run", "input"),
-        "takeContract",
+        "takeValueContract",
       ],
     ]) {
       for (const fault of [
@@ -77,8 +77,8 @@ test("owned selection and preparation wrappers release untaken children on decod
     selected.operation.dispose();
     const prepared = context.prepare("run", "input");
     assert.equal(prepared.status, "ready");
-    assert.equal(prepared.contract.validate(7).outcome, "satisfies");
-    prepared.contract.dispose();
+    assert.equal(prepared.valueContract.validate(7).outcome, "satisfies");
+    prepared.valueContract.dispose();
   } finally {
     context.dispose();
     document.dispose();
@@ -89,10 +89,10 @@ test("ordinary admission maps only known engine limits and preserves unexpected 
   const document = sdk.parseDocument(
     '{"openbindings":"0.2.0","operations":{"run":{"input":true}}}',
   ).value;
-  const context = document.contracts();
+  const context = document.valueContracts();
   const setup = context.prepare("run", "input");
   assert.equal(setup.status, "ready");
-  const prepared = setup.contract;
+  const prepared = setup.valueContract;
   const parse = bridge.WasmJson.parseText;
   try {
     const before = sdk.liveStorageOwners();

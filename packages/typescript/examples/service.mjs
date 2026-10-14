@@ -6,11 +6,11 @@ export function prepareService(documentBytes, entries = []) {
   if (parsed.status !== "parsed") return parsed;
   let proof, resources, context;
   try {
-    const checked = parsed.value.validate();
+    const checked = parsed.value.validated();
     if (checked.status !== "validated") return checked;
     proof = checked.document;
     resources = new SchemaResources(entries); // borrowed schema owners
-    context = proof.contracts({ resources });
+    context = proof.valueContracts({ resources });
     // A ready result owns its contract independently of setup locals.
     return context.prepare("lookup", "input");
   } finally {

@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use openbindings::{DocumentBuilder, JsonRef, JsonValue, ParsedDocument, Source, WorkControl};
+use openbindings::{Document, JsonRef, JsonValue, ParsedDocument, Source, WorkControl};
 use openbindings_interface_synthesis::*;
 use std::{
     collections::BTreeMap,
@@ -18,7 +18,7 @@ pub fn source(s: Option<&str>) -> Source {
     }
 }
 pub fn candidate(s: &Source) -> SynthesisCandidate {
-    let mut b = DocumentBuilder::new();
+    let mut b = Document::new();
     b.sources = Some(BTreeMap::from([("api".into(), s.clone())]));
     SynthesisCandidate {
         document: b.build().unwrap(),

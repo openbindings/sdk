@@ -335,7 +335,7 @@ async fn optional_operation_examples_cannot_shadow_typed_members() {
     item.operation = Some(Operation {
         examples: Some(BTreeMap::from([(
             "sample".into(),
-            openbindings::OperationExample {
+            openbindings::Example {
                 additional_fields: BTreeMap::from([("input".into(), JsonValue::null())]),
                 ..Default::default()
             },

@@ -1,5 +1,5 @@
 use openbindings::{
-    Conformance, ContractPreparation, JsonValue, ParsedDocument, ResourceSet, Side, ValueOutcome,
+    Conformance, ValueContractPreparation, JsonValue, ParsedDocument, ResourceSet, Direction, ValueOutcome,
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::{Value, json};
@@ -22,14 +22,14 @@ fn once(
     let mut row = BTreeMap::new();
     let (document, ms) = measured(timed, || ParsedDocument::parse(document).unwrap());
     row.insert("parseDocument", ms);
-    let (assessment, ms) = measured(timed, || document.assess().unwrap());
+    let (validation, ms) = measured(timed, || document.validate().unwrap());
     row.insert("assess", ms);
-    assert_eq!(assessment.report().conclusion, Conformance::Conformant);
+    assert_eq!(validation.report().conclusion, Conformance::Conformant);
     let ((context, contract), ms) = measured(timed, || {
         let context = document
             .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
             .unwrap();
-        let ContractPreparation::Ready(contract) = context.prepare("check", Side::Input) else {
+        let ValueContractPreparation::Ready(contract) = context.prepare("check", Direction::Input) else {
             panic!("must prepare")
         };
         (context, contract)
@@ -62,7 +62,7 @@ fn once(
     let observation = json!({"valid":first,"invalid":serde_json::from_str::<Value>(&wire).unwrap(),"invalidWireBytes":wire.len()});
     let (_, ms) = measured(timed, || {
         drop((
-            failed, invalid, hot, first, value, contract, context, assessment, document,
+            failed, invalid, hot, first, value, contract, context, validation, document,
         ))
     });
     row.insert("cleanup", ms);
@@ -152,7 +152,7 @@ fn main() {
     let context = document
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
         .unwrap();
-    let ContractPreparation::Ready(contract) = context.prepare("check", Side::Input) else {
+    let ValueContractPreparation::Ready(contract) = context.prepare("check", Direction::Input) else {
         panic!("witness prepares")
     };
     let value = JsonValue::parse(&source("invalid")).unwrap();

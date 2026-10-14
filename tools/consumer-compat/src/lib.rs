@@ -218,7 +218,7 @@ mod tests {
         let context = document
             .value_contracts(Arc::new(ExactConstant), ResourceSet::default())
             .unwrap();
-        let ContractPreparation::Ready(contract) = context.prepare("read", Side::Input) else {
+        let ValueContractPreparation::Ready(contract) = context.prepare("read", Direction::Input) else {
             panic!("custom evaluator must prepare")
         };
         assert!(matches!(

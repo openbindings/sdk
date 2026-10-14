@@ -15,7 +15,8 @@ fn default_diagnostics_do_not_amplify_long_locations_beyond_one_mib() {
         .unwrap();
     let fields: serde_json::Map<_, _> = (0..257).map(|i| (format!("f{i}"), json!(0))).collect();
     let input = JsonValue::parse(json!({&key:fields}).to_string()).unwrap();
-    let ContractPreparation::Ready(contract) = context.prepare("check", Side::Input) else {
+    let ValueContractPreparation::Ready(contract) = context.prepare("check", Direction::Input)
+    else {
         panic!("expected ready contract");
     };
     let result = contract.validate(&input);

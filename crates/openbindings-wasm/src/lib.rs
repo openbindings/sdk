@@ -30,11 +30,14 @@ fn interpretation_error(e: InterpretationError) -> JsValue {
         json!({"code":"interpretation", "message":e.to_string(), "interpretation_code":e.code(), "location":e.source_location()}),
     ))
 }
-fn side(side: &str) -> Result<Side, JsValue> {
-    match side {
-        "input" => Ok(Side::Input),
-        "output" => Ok(Side::Output),
-        _ => Err(error("invalid-side", "side must be input or output")),
+fn direction(direction: &str) -> Result<Direction, JsValue> {
+    match direction {
+        "input" => Ok(Direction::Input),
+        "output" => Ok(Direction::Output),
+        _ => Err(error(
+            "invalid-direction",
+            "direction must be input or output",
+        )),
     }
 }
 fn control(cancelled: bool) -> WorkControl {
@@ -109,7 +112,7 @@ impl WasmJson {
     /// Typed authoring checks known members while retaining exact/unknown fields.
     #[wasm_bindgen(js_name=authorDocument)]
     pub fn author_document(&self) -> Result<WasmDocument, JsValue> {
-        DocumentBuilder::from_json(&self.value)
+        Document::from_json(&self.value)
             .and_then(|b| b.build())
             .map(|document| WasmDocument { document })
             .map_err(|e| error("authoring", e))
@@ -205,9 +208,9 @@ impl WasmDocument {
     pub fn original_bytes(&self) -> Vec<u8> {
         self.document.original_bytes().into()
     }
-    pub fn assess(&self) -> String {
-        match self.document.assess() {
-            Ok(a) => encoded(json!({"status":"assessed","report":a.report()})),
+    pub fn validate(&self) -> String {
+        match self.document.validate() {
+            Ok(a) => encoded(json!({"status":"report","report":a.report()})),
             Err(e) => encoded(json!({"status":"version-refused","refusal":e})),
         }
     }
@@ -303,13 +306,14 @@ impl WasmDocument {
             .map(encoded)
             .map_err(interpretation_error)
     }
-    pub fn contracts(
+    #[wasm_bindgen(js_name=valueContracts)]
+    pub fn value_contracts(
         &self,
         resources: &WasmResources,
         limits: &str,
         cache_capacity: Option<usize>,
         include_schema_details: bool,
-    ) -> Result<WasmContracts, JsValue> {
+    ) -> Result<WasmValueContracts, JsValue> {
         let limits: Limits =
             serde_json::from_str(limits).map_err(|e| error("invalid-evaluator-limits", e))?;
         self.document
@@ -324,7 +328,7 @@ impl WasmDocument {
                         .unwrap_or_else(|| ValueContractOptions::default().cache_capacity),
                 },
             )
-            .map(|contracts| WasmContracts { contracts })
+            .map(|contracts| WasmValueContracts { contracts })
             .map_err(interpretation_error)
     }
 }
@@ -563,60 +567,62 @@ impl Default for WasmResources {
     }
 }
 #[wasm_bindgen]
-pub struct WasmContracts {
+pub struct WasmValueContracts {
     contracts: ValueContracts,
 }
 #[wasm_bindgen]
-impl WasmContracts {
+impl WasmValueContracts {
     pub fn prepare(
         &self,
         operation: &str,
-        side_name: &str,
+        direction_name: &str,
         cancelled: bool,
     ) -> Result<WasmPreparation, JsValue> {
         Ok(WasmPreparation {
             preparation: Some(self.contracts.prepare_with_control(
                 operation,
-                side(side_name)?,
+                direction(direction_name)?,
                 &control(cancelled),
             )),
         })
     }
 }
-/// A private transfer wrapper. Dropping it drops any untaken compiled contract.
+/// A private transfer wrapper. Dropping it drops any untaken compiled value contract.
 #[wasm_bindgen]
 pub struct WasmPreparation {
-    preparation: Option<ContractPreparation>,
+    preparation: Option<ValueContractPreparation>,
 }
 #[wasm_bindgen]
 impl WasmPreparation {
     pub fn result(&self) -> String {
         match &self.preparation {
-            Some(ContractPreparation::Ready(_)) => encoded(json!({"status":"ready"})),
-            Some(ContractPreparation::NoContract) => encoded(json!({"status":"no-contract"})),
-            Some(ContractPreparation::OperationMissing) => {
+            Some(ValueContractPreparation::Ready(_)) => encoded(json!({"status":"ready"})),
+            Some(ValueContractPreparation::NoValueContract) => {
+                encoded(json!({"status":"no-value-contract"}))
+            }
+            Some(ValueContractPreparation::OperationMissing) => {
                 encoded(json!({"status":"operation-missing"}))
             }
-            Some(ContractPreparation::OperationAmbiguous { candidates }) => {
+            Some(ValueContractPreparation::OperationAmbiguous { candidates }) => {
                 encoded(json!({"status":"operation-ambiguous","candidates":candidates}))
             }
-            Some(ContractPreparation::NoVerdict { detail }) => {
+            Some(ValueContractPreparation::NoVerdict { detail }) => {
                 encoded(json!({"status":"no-verdict","detail":detail}))
             }
             None => encoded(json!({"status":"consumed"})),
         }
     }
-    #[wasm_bindgen(js_name=takeContract)]
-    pub fn take_contract(&mut self) -> Option<WasmPrepared> {
+    #[wasm_bindgen(js_name=takeValueContract)]
+    pub fn take_value_contract(&mut self) -> Option<WasmPrepared> {
         match self.preparation.take()? {
-            ContractPreparation::Ready(prepared) => Some(WasmPrepared { prepared }),
+            ValueContractPreparation::Ready(prepared) => Some(WasmPrepared { prepared }),
             _ => None,
         }
     }
 }
 #[wasm_bindgen]
 pub struct WasmPrepared {
-    prepared: PreparedContract,
+    prepared: ValueContract,
 }
 #[wasm_bindgen]
 impl WasmPrepared {
@@ -635,11 +641,11 @@ impl WasmPrepared {
         }
     }
 }
-#[wasm_bindgen(js_name=assessBytes)]
-pub fn assess_bytes(bytes: &[u8]) -> String {
-    match assess_document(bytes) {
+#[wasm_bindgen(js_name=validateBytes)]
+pub fn validate_bytes(bytes: &[u8]) -> String {
+    match validate_document(bytes) {
         Ok(a) => {
-            encoded(json!({"status":"assessed","report":a.report(),"parsed":a.parsed().is_some()}))
+            encoded(json!({"status":"report","report":a.report(),"parsed":a.parsed().is_some()}))
         }
         Err(e) => encoded(json!({"status":"version-refused","refusal":e})),
     }
@@ -683,32 +689,32 @@ impl WasmDiscovery {
     #[wasm_bindgen(constructor)]
     pub fn new(bytes: &[u8]) -> WasmDiscovery {
         Self {
-            outcome: openbindings_http_discovery::assess_body(bytes),
+            outcome: openbindings_http_discovery::validate_body(bytes),
         }
     }
     pub fn result(&self) -> String {
         use openbindings_http_discovery::DiscoveryOutcome::*;
         match &self.outcome {
             Found { document } => encoded(
-                json!({"status":"found","report":document.parsed().assess().unwrap().report()}),
+                json!({"status":"found","report":document.parsed().validate().unwrap().report()}),
             ),
-            NonConformant { assessment } => {
-                encoded(json!({"status":"non-conformant","report":assessment.report()}))
+            NonConformant { validation } => {
+                encoded(json!({"status":"non-conformant","report":validation.report()}))
             }
-            Undetermined { assessment } => {
-                encoded(json!({"status":"undetermined","report":assessment.report()}))
+            Undetermined { validation } => {
+                encoded(json!({"status":"undetermined","report":validation.report()}))
             }
             VersionRefused { refusal } => {
                 encoded(json!({"status":"version-refused","refusal":refusal}))
             }
-            _ => unreachable!("complete body assessment only"),
+            _ => unreachable!("complete body validation only"),
         }
     }
     pub fn document(&self) -> Option<WasmDocument> {
         use openbindings_http_discovery::DiscoveryOutcome::*;
         let document = match &self.outcome {
             Found { document } => Some(document.parsed()),
-            NonConformant { assessment } | Undetermined { assessment } => assessment.parsed(),
+            NonConformant { validation } | Undetermined { validation } => validation.parsed(),
             _ => None,
         };
         document.map(|d| WasmDocument {
@@ -726,7 +732,7 @@ impl WasmPublication {
     pub fn new(document: &WasmDocument, allow_origin: &str) -> Result<WasmPublication, JsValue> {
         let assessed = document
             .document
-            .assess()
+            .validate()
             .map_err(|e| error("version-refused", e))?;
         let validated = assessed.validated().ok_or_else(|| {
             error(
@@ -737,7 +743,12 @@ impl WasmPublication {
         openbindings_http_discovery::Publication::new(
             &validated,
             openbindings_http_discovery::PublicationOptions {
-                allow_origin: allow_origin.into(),
+                allow_origin: match allow_origin {
+                    "*" => openbindings_http_discovery::AllowOrigin::Any,
+                    "" => openbindings_http_discovery::AllowOrigin::Omit,
+                    "null" => openbindings_http_discovery::AllowOrigin::Null,
+                    origin => openbindings_http_discovery::AllowOrigin::Exact(origin.into()),
+                },
             },
         )
         .map(|publication| Self { publication })

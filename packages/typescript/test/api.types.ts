@@ -29,18 +29,17 @@ async function caller(
   });
   if (authored.status === "authored") {
     using document = authored.document;
-    const checked = document.validate();
+    const checked = document.validated();
     if (checked.status === "validated") {
       using validated = checked.document;
       using publication = new DiscoveryPublication(validated, {
-        allowOrigin: "*",
+        allowOrigin: "any",
       });
       return publication.respond(request);
     }
     if (checked.status === "version-refused")
       checked.refusal.declared satisfies string;
-    if (checked.status === "assessed")
-      checked.report.conclusion satisfies string;
+    if (checked.status === "report") checked.report.conclusion satisfies string;
   }
   const parsed = parseDocument(bytes),
     resource = parseJson('{"type":"integer"}');
@@ -49,7 +48,7 @@ async function caller(
     using schema = resource.value;
     using empty = new SchemaResources();
     using resources = empty.with("https://example.test/schema", schema);
-    using contracts = document.contracts({
+    using contracts = document.valueContracts({
       resources,
       includeSchemaDetails: true,
       limits: { maxProblems: 4 },
@@ -58,7 +57,7 @@ async function caller(
       signal: new AbortController().signal,
     });
     if (prepared.status !== "ready") return undefined;
-    using input = prepared.contract;
+    using input = prepared.valueContract;
     using value = ExactJson.from(7);
     const result: ValueOutcome = input.validate(value);
     if (result.outcome === "fails") {
@@ -118,7 +117,7 @@ ValidatedDocument.fromParsed(parsedOnly);
 // @ts-expect-error root no longer exports the HTTP companion
 import { discover as rootDiscovery } from "../dist/index.js";
 
-declare const preparedContract: import("../dist/index.js").PreparedContract;
+declare const preparedContract: import("../dist/index.js").ValueContract;
 declare const exactInput: ExactJson;
 const exactOutcome: ValueOutcome = preparedContract.validate(exactInput);
 const ordinaryOutcome: import("../dist/index.js").ValueCheck =
@@ -287,10 +286,10 @@ void roundOneTypes;
 void inaccessibleConstructors;
 
 function preparedResources(
-  contract: import("../dist/index.js").PreparedContract,
+  valueContract: import("../dist/index.js").ValueContract,
 ) {
   const metadata: import("../dist/index.js").ResourceCompleteness =
-    contract.resourceCompleteness;
+    valueContract.resourceCompleteness;
   if (metadata.status === "incomplete") {
     // @ts-expect-error evidence fields are immutable
     metadata.evidence.message = "changed";
@@ -317,3 +316,12 @@ const inventedDiscoveryDecode: DiscoveryFailureKind = "decode";
 void observableDiscoveryFailure;
 void obsoleteDiscoveryTimeout;
 void inventedDiscoveryDecode;
+
+const exactAllowOrigin: import("../dist/http-discovery.js").AllowOrigin = {
+  origin: "https://client.example",
+};
+const omittedAllowOrigin: import("../dist/http-discovery.js").AllowOrigin =
+  "omit";
+// @ts-expect-error CORS wildcard spelling is represented by the typed "any" choice
+const oldAllowOrigin: import("../dist/http-discovery.js").AllowOrigin = "*";
+void [exactAllowOrigin, omittedAllowOrigin, oldAllowOrigin];

@@ -1,7 +1,7 @@
 use crate::*;
 use openbindings::{
-    Conformance, DocumentAssessment, ValidatedDocument, VersionRefusal, WorkControl,
-    assess_document,
+    Conformance, DocumentValidation, ValidatedDocument, VersionRefusal, WorkControl,
+    validate_document,
 };
 use serde::Serialize;
 use std::{
@@ -29,13 +29,13 @@ impl Header {
     }
 }
 #[derive(Clone, Debug, Serialize)]
-/// Response facts retained independently from body acquisition or document assessment.
+/// Response facts retained independently from body acquisition or document validation.
 pub struct ResponseMetadata {
     /// Constructed discovery URL sent to the caller's transport.
     pub requested_url: String,
     /// None when a custom transport or host cannot expose the final URL.
     pub final_url: Option<String>,
-    /// Observed HTTP status code; only 200 bodies enter assessment.
+    /// Observed HTTP status code; only 200 bodies enter validation.
     pub status: u16,
     /// Owned observed headers, retaining repeated names and raw values.
     pub headers: Vec<Header>,
@@ -52,7 +52,7 @@ impl ResponseMetadata {
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 /// Transport-provided failure category; distinct from document evidence and HTTP response status.
-pub enum FailureKind {
+pub enum ErrorKind {
     /// The transport could not complete a network operation.
     Network,
     /// A transport-owned deadline expired.
@@ -71,25 +71,25 @@ pub enum FailureKind {
 }
 #[derive(Clone, Debug, Serialize)]
 /// Caller-transport failure during request or body reading. Its message is supplied by the adapter, not normative evidence.
-pub struct RequestFailure {
+pub struct RequestError {
     /// Transport failure category.
-    pub kind: FailureKind,
+    pub kind: ErrorKind,
     /// Adapter-provided explanation; adapters should remove credentials, URLs and source data from default diagnostics.
     pub message: String,
 }
-impl std::fmt::Display for RequestFailure {
+impl std::fmt::Display for RequestError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.message)
     }
 }
-impl std::error::Error for RequestFailure {}
+impl std::error::Error for RequestError {}
 
 /// A decoded response body. `read` must not write outside `output` and returns
 /// zero only at EOF. Dropping the body must release/cancel host response state.
 /// Futures need not be Send, permitting local browser/Worker transports.
 pub trait ResponseBody {
     /// Read at most `output.len()` decoded bytes and return their count; zero means EOF. Do not return more than the buffer length. Dropping the body must release/cancel acquisition; futures need not be `Send`.
-    fn read(&mut self, output: &mut [u8]) -> impl Future<Output = Result<usize, RequestFailure>>;
+    fn read(&mut self, output: &mut [u8]) -> impl Future<Output = Result<usize, RequestError>>;
     /// Optional bounded cleanup for connection reuse. The default closes on drop.
     /// Implementations must bound their own cleanup time and bytes; failures must
     /// never replace an already observed HTTP status.
@@ -156,66 +156,56 @@ pub trait DiscoveryTimer {
     fn sleep_until(&self, deadline: std::time::Duration) -> impl Future<Output = ()>;
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 /// Portable discovery configuration. Defaults to 1 MiB and thirty seconds.
 pub struct ClientOptions {
-    /// Bound on decoded bytes. Zero selects 1 MiB; negative values are refused.
-    pub max_document_bytes: i64,
+    /// Positive bound on decoded bytes, with room for one over-limit sentinel.
+    pub max_document_bytes: usize,
     /// Whole-attempt deadline, never reset by redirects or successful reads.
     pub timeout: AttemptTimeout,
 }
-impl ClientOptions {
-    /// Resolve the decoded-byte limit with room for one over-limit sentinel.
-    pub fn byte_limit(&self) -> Result<usize, ConfigurationError> {
-        if self.max_document_bytes == 0 {
-            return Ok(DEFAULT_MAX_DOCUMENT_BYTES);
+impl Default for ClientOptions {
+    fn default() -> Self {
+        Self {
+            max_document_bytes: DEFAULT_MAX_DOCUMENT_BYTES,
+            timeout: AttemptTimeout::default(),
         }
-        usize::try_from(self.max_document_bytes).ok().filter(|n| *n < usize::MAX)
-            .ok_or(ConfigurationError { code: "invalid-byte-limit", message: "maximum document bytes must be nonnegative and fit the host's address space with one sentinel byte" })
     }
+}
 
-    /// A callback without a timer facility is refused before I/O. Use
-    /// `discover_with_timer` to supply a monotonic clock and functioning timer.
-    pub async fn discover_with<B, F, T>(
-        &self,
-        origin: &str,
-        _control: &WorkControl,
-        _transport: T,
-    ) -> Result<DiscoveryResult, ConfigurationError>
-    where
-        B: ResponseBody,
-        F: Future<Output = Result<HttpResponse<B>, RequestFailure>>,
-        T: FnMut(DiscoveryRequest) -> F,
-    {
-        self.byte_limit()?;
-        self.timeout.duration()?;
-        endpoint(origin)?;
-        Err(ConfigurationError {
-            code: "timer-unavailable",
-            message: "portable discovery requires a monotonic clock and wake-capable timer",
-        })
-    }
+/// Retrieve individual hops with a host-owned timer. The callback MUST NOT
+/// follow redirects, must dispatch the supplied normalized URL unchanged,
+/// enforce application DNS/peer/proxy restrictions at connection time, deliver
+/// decoded bytes (or a typed decode refusal), and cancel/release work on drop.
+/// The SDK follows at most ten admitted DISC-C-02 redirects. It stores no cache.
+pub async fn discover<B, F, T, C>(
+    origin: &str,
+    options: &ClientOptions,
+    control: &WorkControl,
+    timer: &C,
+    transport: T,
+) -> Result<DiscoveryResult, ConfigurationError>
+where
+    B: ResponseBody,
+    F: Future<Output = Result<HttpResponse<B>, RequestError>>,
+    T: FnMut(DiscoveryRequest) -> F,
+    C: DiscoveryTimer,
+{
+    options
+        .discover_using(origin, control, timer, transport, true)
+        .await
+}
 
-    /// Retrieve individual hops with a host-owned timer. The callback MUST NOT
-    /// follow redirects, must dispatch the supplied normalized URL unchanged,
-    /// enforce application DNS/peer/proxy restrictions at connection time, deliver
-    /// decoded bytes (or a typed decode refusal), and cancel/release work on drop.
-    /// The SDK follows at most ten admitted DISC-C-02 redirects. It stores no cache.
-    pub async fn discover_with_timer<B, F, T, C>(
-        &self,
-        origin: &str,
-        control: &WorkControl,
-        timer: &C,
-        transport: T,
-    ) -> Result<DiscoveryResult, ConfigurationError>
-    where
-        B: ResponseBody,
-        F: Future<Output = Result<HttpResponse<B>, RequestFailure>>,
-        T: FnMut(DiscoveryRequest) -> F,
-        C: DiscoveryTimer,
-    {
-        self.discover_using(origin, control, timer, transport, true)
-            .await
+impl ClientOptions {
+    /// Resolve the positive decoded-byte limit with room for one over-limit sentinel.
+    pub fn byte_limit(&self) -> Result<usize, ConfigurationError> {
+        match self.max_document_bytes {
+            0 | usize::MAX => Err(ConfigurationError {
+                code: "invalid-byte-limit",
+                message: "maximum document bytes must be positive and fit the host's address space with one sentinel byte",
+            }),
+            limit => Ok(limit),
+        }
     }
 
     pub(crate) async fn discover_using<B, F, T, C>(
@@ -228,7 +218,7 @@ impl ClientOptions {
     ) -> Result<DiscoveryResult, ConfigurationError>
     where
         B: ResponseBody,
-        F: Future<Output = Result<HttpResponse<B>, RequestFailure>>,
+        F: Future<Output = Result<HttpResponse<B>, RequestError>>,
         T: FnMut(DiscoveryRequest) -> F,
         C: DiscoveryTimer,
     {
@@ -391,9 +381,9 @@ impl ClientOptions {
                 Ok(Ok(0)) => break,
                 Ok(Ok(n)) if n <= remaining => body.extend_from_slice(&buffer[..n]),
                 Ok(Ok(_)) => {
-                    result.outcome = DiscoveryOutcome::BodyFailure {
-                        failure: RequestFailure {
-                            kind: FailureKind::Other,
+                    result.outcome = DiscoveryOutcome::BodyError {
+                        error: RequestError {
+                            kind: ErrorKind::Other,
                             message: "transport returned more bytes than the provided buffer"
                                 .into(),
                         },
@@ -410,26 +400,26 @@ impl ClientOptions {
             result.outcome = outcome;
             return Ok(result);
         }
-        result.outcome = assess_body(result.body.as_deref().unwrap());
+        result.outcome = validate_body(result.body.as_deref().unwrap());
         if let Some(outcome) = stopped(control, timer, deadline) {
             result.outcome = outcome;
         }
         Ok(result)
     }
 }
-fn request_failure(failure: RequestFailure, body: bool) -> DiscoveryOutcome {
-    if failure.kind == FailureKind::Timeout {
+fn request_failure(error: RequestError, body: bool) -> DiscoveryOutcome {
+    if error.kind == ErrorKind::Timeout {
         DiscoveryOutcome::Timeout
     } else if body {
-        DiscoveryOutcome::BodyFailure { failure }
+        DiscoveryOutcome::BodyError { error }
     } else {
-        DiscoveryOutcome::TransportFailure { failure }
+        DiscoveryOutcome::TransportError { error }
     }
 }
 fn policy_failure(message: &str) -> DiscoveryOutcome {
-    DiscoveryOutcome::TransportFailure {
-        failure: RequestFailure {
-            kind: FailureKind::RedirectPolicy,
+    DiscoveryOutcome::TransportError {
+        error: RequestError {
+            kind: ErrorKind::RedirectPolicy,
             message: message.into(),
         },
     }
@@ -478,7 +468,7 @@ async fn until_stopped<C: DiscoveryTimer, F: Future, E: Future<Output = ()>>(
     .await
 }
 #[derive(Clone, Debug)]
-/// Acquisition and assessment partition. Only `Found` carries normative proof; HTTP status, refusal and incomplete work remain distinct.
+/// Acquisition and validation partition. Only `Found` carries normative proof; HTTP status, refusal and incomplete work remain distinct.
 pub enum DiscoveryOutcome {
     /// A complete bounded 200 body established normative document conformance.
     Found {
@@ -488,12 +478,12 @@ pub enum DiscoveryOutcome {
     /// A complete 200 body established at least one normative violation, including invalid JSON.
     NonConformant {
         #[doc = "Report and parsed snapshot when input was admitted."]
-        assessment: DocumentAssessment,
+        validation: DocumentValidation,
     },
     /// A complete 200 body could not be proved conformant or nonconformant within supported limits/capabilities.
     Undetermined {
         #[doc = "Report preserving inconclusive evidence and any admitted snapshot."]
-        assessment: DocumentAssessment,
+        validation: DocumentValidation,
     },
     /// A complete 200 body declared a well-formed unsupported version.
     VersionRefused {
@@ -511,25 +501,25 @@ pub enum DiscoveryOutcome {
         #[doc = "Effective decoded-byte limit, in bytes."]
         limit: usize,
     },
-    /// Caller cancellation was observed during acquisition or at assessment boundaries.
+    /// Caller cancellation was observed during acquisition or at validation boundaries.
     Cancelled,
     /// The whole-attempt or shorter transport deadline expired. Distinct from caller cancellation.
     Timeout,
     /// The request failed before response metadata was available.
-    TransportFailure {
+    TransportError {
         #[doc = "Transport classification and adapter-owned explanation."]
-        failure: RequestFailure,
+        error: RequestError,
     },
     /// The response was obtained but decoded-body reading failed; response metadata remains available.
-    BodyFailure {
+    BodyError {
         #[doc = "Body-reader classification and adapter-owned explanation."]
-        failure: RequestFailure,
+        error: RequestError,
     },
 }
 #[derive(Clone)]
 /// Finite discovery receipt: semantic outcome, observed response metadata and complete bounded body when available. No response cache or server is created.
 pub struct DiscoveryResult {
-    /// Distinct acquisition or assessment outcome; do not collapse absence, gating and inability into invalidity.
+    /// Distinct acquisition or validation outcome; do not collapse absence, gating and inability into invalidity.
     pub outcome: DiscoveryOutcome,
     /// Present once a response has been received, including body failures.
     pub metadata: Option<ResponseMetadata>,
@@ -546,17 +536,17 @@ impl std::fmt::Debug for DiscoveryResult {
     }
 }
 /// Classify a complete bounded body. Acquisition metadata is deliberately absent.
-pub fn assess_body(body: &[u8]) -> DiscoveryOutcome {
-    match assess_document(body) {
+pub fn validate_body(body: &[u8]) -> DiscoveryOutcome {
+    match validate_document(body) {
         Err(refusal) => DiscoveryOutcome::VersionRefused { refusal },
-        Ok(assessment) => match assessment.report().conclusion {
+        Ok(validation) => match validation.report().conclusion {
             Conformance::Conformant => DiscoveryOutcome::Found {
-                document: assessment
+                document: validation
                     .validated()
-                    .expect("conformant assessment has a document"),
+                    .expect("conformant validation has a document"),
             },
-            Conformance::NonConformant => DiscoveryOutcome::NonConformant { assessment },
-            Conformance::Undetermined => DiscoveryOutcome::Undetermined { assessment },
+            Conformance::NonConformant => DiscoveryOutcome::NonConformant { validation },
+            Conformance::Undetermined => DiscoveryOutcome::Undetermined { validation },
         },
     }
 }
@@ -575,7 +565,7 @@ mod review_tests {
     }
     struct Empty;
     impl ResponseBody for Empty {
-        async fn read(&mut self, _: &mut [u8]) -> Result<usize, RequestFailure> {
+        async fn read(&mut self, _: &mut [u8]) -> Result<usize, RequestError> {
             panic!("redirect body must not be read")
         }
     }
@@ -602,9 +592,9 @@ mod review_tests {
                 .unwrap();
             assert!(matches!(
                 r.outcome,
-                DiscoveryOutcome::TransportFailure {
-                    failure: RequestFailure {
-                        kind: FailureKind::RedirectPolicy,
+                DiscoveryOutcome::TransportError {
+                    error: RequestError {
+                        kind: ErrorKind::RedirectPolicy,
                         ..
                     }
                 }

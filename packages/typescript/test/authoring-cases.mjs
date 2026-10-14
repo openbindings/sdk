@@ -134,7 +134,7 @@ export async function runCases(sdk, ids, http) {
             "/sources/s/content/loop",
           );
           const d = good();
-          const v = d.validate();
+          const v = d.validated();
           equal("healthy after cycle", v.status, "validated");
           v.document.dispose();
           d.dispose();
@@ -278,7 +278,7 @@ export async function runCases(sdk, ids, http) {
           field(d, "/operations/run/examples/e/output", "null");
           equal(
             "unknown retained, conformance separate",
-            d.assess().report.conclusion,
+            d.validate().report.conclusion,
             "non-conformant",
           );
           d.dispose();
@@ -315,7 +315,7 @@ export async function runCases(sdk, ids, http) {
           for (const key of segments.slice(0, -1)) parent = parent[key];
           delete parent[segments.at(-1)];
           const d = good(draft);
-          const v = d.validate();
+          const v = d.validated();
           equal("editor retry", v.status, "validated");
           v.document.dispose();
           d.dispose();
@@ -324,7 +324,7 @@ export async function runCases(sdk, ids, http) {
         case "P01": {
           const draft = { operations: { run: {} } };
           const d = good(draft);
-          const v = d.validate();
+          const v = d.validated();
           equal("narrow", v.status, "validated");
           const retained = v.document.retain();
           v.document.dispose();

@@ -28,14 +28,14 @@ export function firstUse(
   if (parsed.status !== "parsed") return parsed;
   let proof, context, contract;
   try {
-    const checked = parsed.value.validate();
+    const checked = parsed.value.validated();
     if (checked.status !== "validated") return checked;
     proof = checked.document;
     const operations = proof.operations;
-    context = proof.contracts();
+    context = proof.valueContracts();
     const setup = context.prepare(operation, "input"); // primary name or alias
     if (setup.status !== "ready") return setup;
-    contract = setup.contract;
+    contract = setup.valueContract;
     return { status: "checked", operations, result: contract.validate(input) };
   } finally {
     contract?.dispose();

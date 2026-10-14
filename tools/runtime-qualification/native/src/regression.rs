@@ -1,17 +1,17 @@
 use openbindings::{
-    Conformance, ContractPreparation, Evidence, JsonValue, ParsedDocument, ResourceSet, Side,
+    Conformance, ValueContractPreparation, Evidence, JsonValue, ParsedDocument, ResourceSet, Direction,
     ValueOutcome,
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::json;
 use std::{hint::black_box, sync::Arc, time::Instant};
 
-fn prepare(source: &str) -> openbindings::PreparedContract {
+fn prepare(source: &str) -> openbindings::ValueContract {
     let document = ParsedDocument::parse(source).unwrap();
     let context = document
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
         .unwrap();
-    let ContractPreparation::Ready(contract) = context.prepare("run", Side::Input) else {
+    let ValueContractPreparation::Ready(contract) = context.prepare("run", Direction::Input) else {
         panic!("contract must prepare")
     };
     contract
@@ -37,8 +37,8 @@ fn main() {
         json!({"outcome":"satisfies"})
     } else {
         let document = ParsedDocument::parse(&source).unwrap();
-        let assessment = document.assess().unwrap();
-        let report = assessment.report();
+        let validation = document.validate().unwrap();
+        let report = validation.report();
         if name == "healthy" {
             assert_eq!(report.conclusion, Conformance::Conformant);
             assert!(report.findings.is_empty() && !report.findings_truncated);
@@ -112,17 +112,17 @@ fn main() {
         } else if lane == "assess" {
             let document = ParsedDocument::parse(black_box(&source)).unwrap();
             let start = Instant::now();
-            let assessment = black_box(document.assess().unwrap());
+            let validation = black_box(document.validate().unwrap());
             let elapsed = start.elapsed().as_nanos();
-            drop((assessment, document));
+            drop((validation, document));
             elapsed
         } else {
             assert_eq!(lane, "parse-assess");
             let start = Instant::now();
             let document = ParsedDocument::parse(black_box(&source)).unwrap();
-            let assessment = black_box(document.assess().unwrap());
+            let validation = black_box(document.validate().unwrap());
             let elapsed = start.elapsed().as_nanos();
-            drop((assessment, document));
+            drop((validation, document));
             elapsed
         }
     };

@@ -7,6 +7,7 @@ export {
   SdkError,
 } from "./internal.js";
 export type {
+  AllowOrigin,
   DiscoveryFetch,
   DiscoveryOptions,
   DiscoveryMetadata,

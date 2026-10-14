@@ -2,6 +2,29 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- Vocabulary pass (V), a breaking working-draft migration without compatibility aliases:
+
+  | Previous surface | Replacement |
+  | --- | --- |
+  | Rust `DocumentBuilder`, `OperationExample` | `Document`, `Example` |
+  | `assess_document`, `assess_document_with_limits`, `ParsedDocument::assess`, `assess_body`, Wasm `assess_bytes` / `assessBytes` | `validate_document`, `validate_document_with_limits`, `validate`, `validate_body`, `validate_bytes` / `validateBytes` |
+  | `ConformanceReport`, Rust `DocumentAssessment`, TS `Assessment` | `ValidationReport`, `DocumentValidation` |
+  | TS `assessDocument`, document `assess()`, document `validate()` | `validateDocument`, `validate()` (evidence), `validated()` (proof) |
+  | `RejectedSynthesis.assessment`, discovery `assessment` payloads | `validation` |
+  | `PreparedContract`, `ContractPreparation`, `NoContract` / `no-contract` | `ValueContract`, `ValueContractPreparation`, `NoValueContract` / `no-value-contract` |
+  | TS `ContractOptions`, `contracts()`, ready `contract` | `ValueContractOptions`, `valueContracts()`, `valueContract` |
+  | Wasm `WasmContracts`, `contracts`, `take_contract` / `takeContract` | `WasmValueContracts`, `value_contracts` / `valueContracts`, `take_value_contract` / `takeValueContract` |
+  | `Side`, directional `side` parameters/accessor | `Direction`, `direction` |
+  | TypeScript error code `invalid-side` | `invalid-direction` |
+  | `Satisfied` / `satisfied`, TS evidence `assessed` | `Met` / `met`, `report` (proof `validated` stays) |
+  | OBI-06/08 `missing-target`; OBI-07 `missing-target` | `unknown-operation`; `unknown-source` |
+  | `operation-contract-invariant` | `value-contract-invariant` |
+  | Rust discovery `RequestFailure`, `FailureKind`, `TransportFailure`, `BodyFailure`, `failure` payload | `RequestError`, `ErrorKind`, `TransportError`, `BodyError`, `error` payload |
+  | Rust `max_document_bytes: i64`; zero selects default | `usize`; `Default` selects 1 MiB; zero and `usize::MAX` refused. TS omission selects 1 MiB; zero refused. |
+  | String CORS options and empty-string omission | Rust `AllowOrigin::{Any, Omit, Null, Exact(String)}`; TS `"any" | "omit" | "null" | { origin: string }`; default any, exact origins canonical |
+  | `ClientOptions::discover_with_timer`, always-refusing `discover_with` | Free `discover(origin, &options, &control, &timer, transport)`; native `Client::discover` stays |
+
+
 - Evaluator correctness. A supplied resource, nested `$id` or retrieval alias that
   claims a packaged standard identity is now an identity conflict instead of replacing
   it, so a completion can no longer invert a verdict established with a missing

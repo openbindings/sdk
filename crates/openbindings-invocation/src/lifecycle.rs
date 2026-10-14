@@ -445,7 +445,7 @@ impl<F: Future<Output = Outcome>> Control<F> {
     pub fn validation_failure(&self) -> Option<Arc<ValidationFailure>> {
         self.shared.validation_failure()
     }
-    /// Whether either side has ended input acceptance. This is nonterminal.
+    /// Whether either direction has ended input acceptance. This is nonterminal.
     pub fn input_is_closed(&self) -> bool {
         let s = self.shared.state.lock().unwrap();
         s.caller_closed || s.provider_closed

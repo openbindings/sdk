@@ -16,7 +16,7 @@ function candidate(input) {
     }),
   );
   assert.equal(result.status, "ready");
-  return result.contract;
+  return result.valueContract;
 }
 test("service replacement requires complete resources and retains in-flight work", async () => {
   const warm = candidate(true);

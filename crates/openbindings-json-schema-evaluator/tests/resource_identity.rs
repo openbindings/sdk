@@ -36,9 +36,9 @@ fn context(doc: &ParsedDocument, supplied: &ResourceSet) -> ValueContracts {
     doc.value_contracts(Arc::new(DefaultEvaluator::new()), supplied.clone())
         .unwrap()
 }
-fn ready(ctx: &ValueContracts, operation: &str) -> PreparedContract {
-    match ctx.prepare(operation, Side::Input) {
-        ContractPreparation::Ready(contract) => contract,
+fn ready(ctx: &ValueContracts, operation: &str) -> ValueContract {
+    match ctx.prepare(operation, Direction::Input) {
+        ValueContractPreparation::Ready(contract) => contract,
         other => panic!("expected ready {operation}: {other:?}"),
     }
 }
@@ -49,7 +49,7 @@ fn label(result: ValueOutcome) -> &'static str {
         ValueOutcome::NoVerdict { .. } => "no-verdict",
     }
 }
-fn verdicts(contract: &PreparedContract, cases: &[(&str, &str)]) {
+fn verdicts(contract: &ValueContract, cases: &[(&str, &str)]) {
     for (text, expected) in cases {
         assert_eq!(label(contract.validate(&value(text))), *expected, "{text}");
     }
@@ -85,9 +85,9 @@ fn helpers_ready(doc: &ParsedDocument, supplied: &ResourceSet, operation: &str) 
         ready(&ctx, operation);
     }
 }
-fn refusal(prepared: ContractPreparation) -> NoVerdict {
+fn refusal(prepared: ValueContractPreparation) -> NoVerdict {
     match prepared {
-        ContractPreparation::NoVerdict { detail } => detail,
+        ValueContractPreparation::NoVerdict { detail } => detail,
         other => panic!("expected setup refusal: {other:?}"),
     }
 }
@@ -101,7 +101,7 @@ fn identity_refusal(doc: &ParsedDocument, supplied: &ResourceSet, operation: &st
         let detail = refusal(
             doc.value_contracts(evaluator, supplied.clone())
                 .unwrap()
-                .prepare(operation, Side::Input),
+                .prepare(operation, Direction::Input),
         );
         assert_eq!(
             detail.reason,
@@ -162,7 +162,7 @@ fn unresolved_identity(doc: &ParsedDocument, supplied: &ResourceSet, pointer: &s
         other => panic!("{other:?}"),
     }
 }
-fn failed_location(contract: &PreparedContract, text: &str) -> SchemaLocation {
+fn failed_location(contract: &ValueContract, text: &str) -> SchemaLocation {
     let ValueOutcome::Fails { problems, .. } = contract.validate(&value(text)) else {
         panic!("expected failure")
     };
@@ -205,17 +205,17 @@ fn ri01_03_exact_b32_original_and_edited_resources() {
             } else {
                 &local
             };
-            let side = if case["side"] == "input" {
-                Side::Input
+            let direction = if case["side"] == "input" {
+                Direction::Input
             } else {
-                Side::Output
+                Direction::Output
             };
-            let result = ctx.prepare(case["operation"].as_str().unwrap(), side);
+            let result = ctx.prepare(case["operation"].as_str().unwrap(), direction);
             let actual = match result {
-                ContractPreparation::Ready(contract) => {
+                ValueContractPreparation::Ready(contract) => {
                     label(contract.validate(&value(case["valueText"].as_str().unwrap())))
                 }
-                ContractPreparation::NoContract => "no-contract",
+                ValueContractPreparation::NoValueContract => "no-contract",
                 other => panic!("{} edited={edited}: {other:?}", case["id"]),
             };
             let expected = match (edited, case["id"].as_str().unwrap()) {
@@ -234,7 +234,9 @@ fn ri01_03_exact_b32_original_and_edited_resources() {
             (&external, "satisfies"),
             (&local, if edited { "satisfies" } else { "no-verdict" }),
         ] {
-            let ContractPreparation::Ready(contract) = ctx.prepare("run_job", Side::Output) else {
+            let ValueContractPreparation::Ready(contract) =
+                ctx.prepare("run_job", Direction::Output)
+            else {
                 panic!("finished example setup")
             };
             assert_eq!(
@@ -310,7 +312,7 @@ fn ri06_duplicate_contained_owners_refuse_lookup_and_direct_entry() {
     );
     let supplied = resources(&[(U, json!(true))]);
     assert_eq!(
-        doc.assess().unwrap().report().evidence["OBI-13"],
+        doc.validate().unwrap().report().evidence["OBI-13"],
         Evidence::Violated
     );
     identity_refusal(&doc, &supplied, "direct");
@@ -350,7 +352,7 @@ fn ri08_12_aliases_cannot_bypass_canonical_conflicts() {
         );
         identity_refusal(&doc, &supplied, "alias");
         unresolved_identity(&doc, &supplied, "/operations/alias/input/$ref");
-        let detail = refusal(context(&doc, &supplied).prepare("dynamic", Side::Input));
+        let detail = refusal(context(&doc, &supplied).prepare("dynamic", Direction::Input));
         assert_eq!(detail.code, "resource-identity-conflict");
         unresolved_identity(&doc, &supplied, "/operations/dynamic/input/$dynamicRef");
     }
@@ -621,7 +623,7 @@ fn ri20_34_missing_winner_fragments_never_fall_back_to_loser() {
         ("$ref", "/$defs/target"),
     ] {
         let doc = one(owner(), json!({keyword:format!("{U}#{fragment}")}));
-        let detail = refusal(context(&doc, &supplied).prepare("op", Side::Input));
+        let detail = refusal(context(&doc, &supplied).prepare("op", Direction::Input));
         assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
         assert!(
             matches!(detail.code.as_str(), "anchor-missing" | "non-schema-target"),
@@ -635,7 +637,10 @@ fn ri20_34_missing_winner_fragments_never_fall_back_to_loser() {
             let ctx = doc
                 .value_contracts(Arc::new(Project(true)), supplied.clone())
                 .unwrap();
-            assert_eq!(refusal(ctx.prepare("op", Side::Input)).code, detail.code);
+            assert_eq!(
+                refusal(ctx.prepare("op", Direction::Input)).code,
+                detail.code
+            );
         }
     }
 }
@@ -699,7 +704,7 @@ fn ri22_23_original_dialect_follows_selected_resource() {
         Arc::new(Project(true)),
     ] {
         let ctx = doc.value_contracts(engine, supplied.clone()).unwrap();
-        let detail = refusal(ctx.prepare("nested", Side::Input));
+        let detail = refusal(ctx.prepare("nested", Direction::Input));
         assert_eq!(detail.reason, NoVerdictReason::UnsupportedCapability);
         assert_eq!(detail.code, "schema-dialect");
         assert_eq!(
@@ -728,7 +733,7 @@ fn ri22_23_original_dialect_follows_selected_resource() {
     );
     let ctx = context(&doc, &supplied);
     assert_eq!(
-        refusal(ctx.prepare("old", Side::Input)).reason,
+        refusal(ctx.prepare("old", Direction::Input)).reason,
         NoVerdictReason::UnsupportedCapability
     );
     verdicts(
@@ -753,12 +758,12 @@ fn ri24_user_standard_names_do_not_replace_trusted_assessment() {
         );
         helpers_ready(&doc, &supplied, "op");
         assert_eq!(
-            doc.assess().unwrap().report().evidence["OBI-10"],
+            doc.validate().unwrap().report().evidence["OBI-10"],
             Evidence::Violated
         );
         let malformed=ParsedDocument::parse(json!({"openbindings":"0.2.0","operations":{},"unexpected":true,"schemas":{"E":{"$id":uri}}}).to_string()).unwrap();
         assert_eq!(
-            malformed.assess().unwrap().report().evidence["OBI-02"],
+            malformed.validate().unwrap().report().evidence["OBI-02"],
             Evidence::Violated
         );
     }
@@ -766,8 +771,10 @@ fn ri24_user_standard_names_do_not_replace_trusted_assessment() {
     let standard = "https://json-schema.org/draft/2020-12/schema";
     let doc = one(json!({}), json!({"$ref":standard}));
     assert_eq!(
-        refusal(context(&doc, &resources(&[(standard, json!(false))])).prepare("op", Side::Input))
-            .code,
+        refusal(
+            context(&doc, &resources(&[(standard, json!(false))])).prepare("op", Direction::Input)
+        )
+        .code,
         "ambiguous-resource"
     );
 }
@@ -867,7 +874,7 @@ fn ri28_29_conflicts_do_not_poison_healthy_preparation_or_become_holes() {
         Arc::new(Project(true)),
     ] {
         let ctx = doc.value_contracts(engine, supplied.clone()).unwrap();
-        let detail = refusal(ctx.prepare("mixed", Side::Input));
+        let detail = refusal(ctx.prepare("mixed", Direction::Input));
         assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
         assert_eq!(detail.code, "resource-identity-conflict");
     }
@@ -880,7 +887,7 @@ fn ri30_precancellation_and_fresh_retry_preserve_identity_policy() {
     let control = WorkControl::new();
     control.cancel();
     assert_eq!(
-        refusal(ctx.prepare_with_control("op", Side::Input, &control)).reason,
+        refusal(ctx.prepare_with_control("op", Direction::Input, &control)).reason,
         NoVerdictReason::Cancelled
     );
     assert!(
@@ -916,7 +923,7 @@ fn ri30_oversized_supplied_closure_keeps_limits_and_healthy_catalog_entries() {
         let ctx = doc.value_contracts(evaluator, supplied.clone()).unwrap();
         ready(&ctx, "healthy");
         assert_eq!(
-            refusal(ctx.prepare("deep", Side::Input)).reason,
+            refusal(ctx.prepare("deep", Direction::Input)).reason,
             NoVerdictReason::LimitExceeded
         );
         ready(&ctx, "healthy");
@@ -936,7 +943,7 @@ fn identity_refusal_location_is_optional_and_measured_before_copy() {
             let detail = refusal(
                 doc.value_contracts(engine, supplied.clone())
                     .unwrap()
-                    .prepare("op", Side::Input),
+                    .prepare("op", Direction::Input),
             );
             assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
             assert_eq!(detail.code, "resource-identity-conflict");
@@ -968,7 +975,7 @@ fn ri32_selected_unsupported_or_invalid_owner_never_falls_back() {
                 refusal(
                     doc.value_contracts(engine, supplied.clone())
                         .unwrap()
-                        .prepare("op", Side::Input)
+                        .prepare("op", Direction::Input)
                 )
                 .reason,
                 reason
@@ -997,7 +1004,7 @@ fn ri33_anonymous_document_has_no_acquisition_or_generated_identity() {
             .value_contracts(Arc::new(Project(false)), supplied.clone())
             .unwrap();
         assert_eq!(
-            refusal(strict.prepare("op", Side::Input)).reason,
+            refusal(strict.prepare("op", Direction::Input)).reason,
             NoVerdictReason::ResourceUnavailable
         );
         assert!(matches!(
@@ -1034,7 +1041,7 @@ fn ri28_unused_contained_and_supplied_peer_conflicts_are_local() {
                 &ready(&ctx, "healthy"),
                 &[("true", "satisfies"), ("2", "fails")],
             );
-            let detail = refusal(ctx.prepare("conflict", Side::Input));
+            let detail = refusal(ctx.prepare("conflict", Direction::Input));
             assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
             assert_eq!(detail.code, "ambiguous-resource");
         }
@@ -1143,7 +1150,7 @@ fn s3_collision_policy_matrix_used_and_unused() {
                     let detail = refusal(
                         doc.value_contracts(engine, supplied.clone())
                             .unwrap()
-                            .prepare("used", Side::Input),
+                            .prepare("used", Direction::Input),
                     );
                     assert_eq!(detail.code, "ambiguous-resource", "{left:?}/{right:?}");
                     assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
@@ -1174,7 +1181,7 @@ fn s3_packaged_retrieval_aliases_conflict_even_with_a_different_declared_id() {
             );
             let ctx = context(&doc, &supplied);
             assert_eq!(
-                refusal(ctx.prepare("used", Side::Input)).code,
+                refusal(ctx.prepare("used", Direction::Input)).code,
                 "ambiguous-resource",
                 "{uri}"
             );
@@ -1205,7 +1212,7 @@ fn s3_standard_identity_completions_cannot_invert_partial_verdicts() {
             resources(&[(U, json!(replacement)), (A, json!({"$defs":{"x":claim}}))]),
             resources(&[(U, json!(replacement)), (standard, claim)]),
         ] {
-            let detail = refusal(context(&doc, &supplied).prepare("op", Side::Input));
+            let detail = refusal(context(&doc, &supplied).prepare("op", Direction::Input));
             assert_eq!(detail.code, "ambiguous-resource", "{keyword}");
             assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
         }

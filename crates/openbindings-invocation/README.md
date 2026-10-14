@@ -81,7 +81,7 @@ let receive = async {
     assert_eq!(count, 1); // Successful exhaustion is distinct from one JSON null.
     Ok::<_, InvocationError>(())
 };
-// The SDK needs no executor of its own. Tokio is one caller-side choice.
+// The SDK needs no executor of its own. Tokio is one caller-direction choice.
 let (write_result, terminal_result) = tokio::join!(send, receive);
 terminal_result?; // Preserve the authoritative output failure if writing closed.
 write_result?;
@@ -142,7 +142,7 @@ The optional evaluator package is an explicit application dependency. Without
 `.with_evaluator`, absent schemas still forward values; a declared schema yields
 `ERR_SCHEMA_UNRESOLVED` on its first actual value. Supplying an evaluator builds
 one immutable document/resource context, with core's bounded preparation cache.
-Each used side prepares lazily once per attempt and retains that contract for
+Each used direction prepares lazily once per attempt and retains that contract for
 its stream; zero values do not trigger preparation. There is no network retrieval
 or whole-graph readiness gate.
 
@@ -173,7 +173,7 @@ forwarded without applying the successful-output schema.
 An established mismatch yields code-only `ERR_OPERATION_VALIDATION_FAILED`;
 preparation or evaluation without a verdict yields code-only `ERR_SCHEMA_UNRESOLVED`.
 `Invocation`, `Outputs` and `Control` expose `validation_failure()` for the winning
-terminal's local evidence: side, preparation/evaluation stage, and the original
+terminal's local evidence: direction, preparation/evaluation stage, and the original
 core `ValueOutcome`, including diagnostic completeness. The evidence is never
 portable error data. Debug redacts it; custom evaluator messages and locations
 require an application disclosure policy. Diagnostic limits come from the chosen

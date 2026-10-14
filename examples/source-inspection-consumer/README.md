@@ -2,7 +2,7 @@
 
 This independent Cargo workspace has version-only public SDK dependencies. It
 implements a catalog inspector without synthesis or invocation, then uses inspection
-to author and assess a document. The fixture kind is defined in `src/lib.rs`; it is
+to author and validate a document. The fixture kind is defined in `src/lib.rs`; it is
 not a proposed OpenBindings kind specification.
 
 From the SDK repository root:

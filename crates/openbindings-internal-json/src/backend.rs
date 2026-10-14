@@ -602,7 +602,7 @@ pub fn location_pointer_size(value: crate::JsonRef<'_>, limit: usize) -> Option<
 }
 
 /// Locate a bounded diagnostic batch while scanning each arena's source prefix
-/// once. Sorting is assessment-local; healthy documents build no line index.
+/// once. Sorting is validation-local; healthy documents build no line index.
 /// Output order matches input order, including repeated nodes and mixed arenas.
 pub fn locations(values: &[crate::JsonRef<'_>]) -> Vec<crate::SourceLocation> {
     locations_with_work(values).0
@@ -770,7 +770,7 @@ pub fn standalone(value: crate::JsonValue) -> crate::JsonValue {
 }
 /// Borrow duplicate-containing objects in parse order without materializing
 /// pointers or coordinates. Callers cap this iterator before collecting nodes.
-/// Document assessment passes a standalone root, so this covers its whole arena.
+/// Document validation passes a standalone root, so this covers its whole arena.
 pub fn duplicate_nodes(
     value: &crate::JsonValue,
 ) -> impl ExactSizeIterator<Item = crate::JsonRef<'_>> {

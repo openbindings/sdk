@@ -1,7 +1,7 @@
 //! Document-based operation invocation over an explicitly supplied binding provider.
 //!
 //! Selection is caller-owned. Validation uses an explicitly supplied evaluator;
-//! without one, a declared contract cannot yield a verdict. Neither construction
+//! without one, a declared value contract cannot yield a verdict. Neither construction
 //! nor preflight prepares schemas or establishes whole-document conformance.
 use crate::{
     BindingRequest, BindingValue, ContextChallenge, Invocation, InvocationError, InvocationLimits,
@@ -11,9 +11,9 @@ use crate::{
     value::source_from_json,
 };
 use openbindings::{
-    BindingView, ContractPreparation, InterpretationError, JsonKind, JsonValue, NoVerdict,
-    NoVerdictReason, OperationSelection, OperationView, ParsedDocument, ResourceSet,
-    SchemaEvaluator, Side, Source, ValueContracts, ValueOutcome, WorkControl,
+    BindingView, Direction, InterpretationError, JsonKind, JsonValue, NoVerdict, NoVerdictReason,
+    OperationSelection, OperationView, ParsedDocument, ResourceSet, SchemaEvaluator, Source,
+    ValueContractPreparation, ValueContracts, ValueOutcome, WorkControl,
 };
 use std::{
     collections::HashMap,
@@ -159,8 +159,8 @@ impl<P: BindingInvoker> Invoker<P> {
                 let selected = selected?;
                 let io = ProviderIo::with_gates(
                     state.clone(),
-                    self.gate(&selected.operation, Side::Input, &io_external),
-                    self.gate(&selected.operation, Side::Output, &io_external),
+                    self.gate(&selected.operation, Direction::Input, &io_external),
+                    self.gate(&selected.operation, Direction::Output, &io_external),
                 );
                 let binding_request = BindingRequest {
                     source: selected.source,
@@ -256,11 +256,16 @@ impl<P: BindingInvoker> Invoker<P> {
             )
             .await
     }
-    fn gate(&self, operation: &OperationView, side: Side, external: &WorkControl) -> Option<Gate> {
-        operation.value().get(side.as_str()).map(|_| Gate {
+    fn gate(
+        &self,
+        operation: &OperationView,
+        direction: Direction,
+        external: &WorkControl,
+    ) -> Option<Gate> {
+        operation.value().get(direction.as_str()).map(|_| Gate {
             contracts: self.contracts.clone(),
             operation: operation.key().into(),
-            side,
+            direction,
             prepared: None,
             external: external.clone(),
         })
@@ -432,16 +437,16 @@ pub enum ValidationStage {
 /// in portable error data. Custom evaluator text and source locations can be
 /// sensitive: inspect deliberately under your application's disclosure policy.
 /// Debug intentionally omits that evidence. Retaining this record retains its
-/// diagnostic storage, not a value, provider, document, or prepared contract.
+/// diagnostic storage, not a value, provider, document, or prepared value contract.
 pub struct ValidationFailure {
-    side: Side,
+    direction: Direction,
     stage: ValidationStage,
     outcome: ValueOutcome,
 }
 impl ValidationFailure {
-    /// Input or output side whose value was withheld.
-    pub fn side(&self) -> Side {
-        self.side
+    /// Input or output direction whose value was withheld.
+    pub fn direction(&self) -> Direction {
+        self.direction
     }
     /// Whether preparation or evaluation could not establish satisfaction.
     pub fn stage(&self) -> ValidationStage {
@@ -455,7 +460,7 @@ impl ValidationFailure {
 impl fmt::Debug for ValidationFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ValidationFailure")
-            .field("side", &self.side)
+            .field("direction", &self.direction)
             .field("stage", &self.stage)
             .finish_non_exhaustive()
     }
@@ -463,8 +468,8 @@ impl fmt::Debug for ValidationFailure {
 pub(crate) struct Gate {
     contracts: Option<ValueContracts>,
     operation: String,
-    side: Side,
-    prepared: Option<ContractPreparation>,
+    direction: Direction,
+    prepared: Option<ValueContractPreparation>,
     external: WorkControl,
 }
 impl Gate {
@@ -477,34 +482,36 @@ impl Gate {
             return Err((InvocationError::cancelled(), None));
         }
         let prepared = self.prepared.get_or_insert_with(|| match &self.contracts {
-            Some(contracts) => contracts.prepare_with_control(&self.operation, self.side, local),
-            None => ContractPreparation::NoVerdict {
+            Some(contracts) => {
+                contracts.prepare_with_control(&self.operation, self.direction, local)
+            }
+            None => ValueContractPreparation::NoVerdict {
                 detail: NoVerdict::new(
                     NoVerdictReason::UnsupportedCapability,
                     "operation-evaluator-missing",
-                    "supply a schema evaluator to validate declared operation contracts",
+                    "supply a schema evaluator to validate declared value contracts",
                 ),
             },
         });
         let (stage, outcome) = match prepared {
-            ContractPreparation::Ready(contract) => (
+            ValueContractPreparation::Ready(contract) => (
                 ValidationStage::Evaluation,
                 contract.validate_with_control(value, local),
             ),
-            ContractPreparation::NoVerdict { detail } => (
+            ValueContractPreparation::NoVerdict { detail } => (
                 ValidationStage::Preparation,
                 ValueOutcome::NoVerdict {
                     detail: detail.clone(),
                 },
             ),
-            // The immutable, uniquely resolved operation had a declared side.
+            // The immutable, uniquely resolved operation had a declared direction.
             _ => (
                 ValidationStage::Preparation,
                 ValueOutcome::NoVerdict {
                     detail: NoVerdict::new(
                         NoVerdictReason::EvaluatorFailure,
-                        "operation-contract-invariant",
-                        "the selected declared operation contract could not be prepared",
+                        "value-contract-invariant",
+                        "the selected declared value contract could not be prepared",
                     ),
                 },
             ),
@@ -520,7 +527,7 @@ impl Gate {
         Err((
             error(code),
             Some(Arc::new(ValidationFailure {
-                side: self.side,
+                direction: self.direction,
                 stage,
                 outcome,
             })),

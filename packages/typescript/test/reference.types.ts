@@ -6,7 +6,7 @@ import {
   type JsonInput,
   type ValueOutcome,
   type ValueCheck,
-  type ContractPreparation,
+  type ValueContractPreparation,
   type ValidationResult,
 } from "../dist/index.js";
 import { DiscoveryPublication } from "../dist/http-discovery.js";
@@ -19,17 +19,17 @@ export async function referenceExample(wasmBytes: Uint8Array, source: string) {
   // Every access returns its own owner; this one is scoped independently.
   using original = document.value;
   const copy: Uint8Array = original.bytes;
-  const proof: ValidationResult = document.validate();
+  const proof: ValidationResult = document.validated();
   if (proof.status !== "validated") return proof;
   using validated = proof.document;
   using publication = new DiscoveryPublication(validated);
-  using context = validated.contracts({
+  using context = validated.valueContracts({
     cacheCapacity: 0,
     limits: { maxProblems: 4 },
   });
-  const setup: ContractPreparation = context.prepare("run", "input");
+  const setup: ValueContractPreparation = context.prepare("run", "input");
   if (setup.status !== "ready") return setup;
-  using contract = setup.contract;
+  using contract = setup.valueContract;
   const exact = parseJson("9007199254740993");
   if (exact.status !== "parsed") return exact.error;
   using value = exact.value;

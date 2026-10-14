@@ -64,10 +64,10 @@ the same obligations. Ordinary browser Fetch cannot expose DNS or peer addresses
 The SDK does not enable reqwest gzip, brotli, deflate or stream features. An
 application needing decoding enables those features in its own manifest and
 configures its supplied builder/client. Decoded bytes remain bounded at 1 MiB by
-default; zero selects that byte default and negative limits are refused. Native
-responses yield `FailureKind::Decode` only when the SDK refuses a response whose
+default; `ClientOptions::default()` selects that byte default; explicit zero and `usize::MAX` are refused. Native
+responses yield `ErrorKind::Decode` only when the SDK refuses a response whose
 Content-Encoding the host left undecoded. Native body-read errors, including
-truncated and corrupt-coded bodies, yield `BodyFailure` with `FailureKind::Network`
+truncated and corrupt-coded bodies, yield `BodyError` with `ErrorKind::Network`
 and retain upstream error and source messages for humans. Reqwest exposes no
 documented API establishing a codec failure behind `Response::chunk`; its decode
 label alone is insufficient. Identified transport deadlines still yield `Timeout`.
@@ -84,13 +84,12 @@ an additional bound and yields `Timeout`. Caller `WorkControl` cancellation
 remains `Cancelled`; caller cancellation wins when both sources are ready at the
 same poll, and the first observed terminal cause ends acquisition.
 
-Portable `ClientOptions::discover_with_timer` requires a host `DiscoveryTimer`
+Portable `discover(origin, &options, &control, &timer, transport)` requires a host `DiscoveryTimer`
 providing monotonic time and a wake-capable absolute timer. Its repeatable
 callback returns one hop, never follows redirects internally, dispatches the
 supplied normalized URL unchanged, delivers decoded bytes or a typed refusal,
 and releases work when dropped. Observable hidden following is a policy failure;
-this contract cannot sandbox arbitrary callback code. `discover_with` without a
-timer refuses before I/O, including when unbounded duration is requested. Local
+this contract cannot sandbox arbitrary callback code. Local
 non-Send futures are supported. The SDK races and drops one host timer per attempt;
 redirects and chunk reads never reset it.
 
@@ -131,8 +130,9 @@ assert_eq!(&*response.body, source);
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-Publication emits `Access-Control-Allow-Origin: *` by default. Empty explicitly
-omits CORS; `null` or an exact ASCII browser-serialized tuple origin is accepted.
+Publication defaults to `AllowOrigin::Any`, emitting `Access-Control-Allow-Origin: *`.
+`AllowOrigin::Omit` omits CORS; `AllowOrigin::Null` emits `null`, and
+`AllowOrigin::Exact(String)` accepts a canonical ASCII browser-serialized tuple origin.
 Noncanonical case/default ports and opaque schemes such as `file:` are refused.
 Credentials, preflight and request-dependent Origin selection with `Vary: Origin`
 belong to application middleware. Pass the exact route path excluding query and

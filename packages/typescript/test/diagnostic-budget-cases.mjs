@@ -27,7 +27,7 @@ export function diagnosticBudgetCases(sdk) {
     );
     check(parsed.status === "parsed", "source admitted");
     try {
-      const context = parsed.value.contracts({
+      const context = parsed.value.valueContracts({
         limits: { diagnosticBytes, maxProblems },
         resources,
       });
@@ -35,9 +35,9 @@ export function diagnosticBudgetCases(sdk) {
         const setup = context.prepare("op", "input");
         check(setup.status === "ready", "contract ready");
         try {
-          return setup.contract.validate(input);
+          return setup.valueContract.validate(input);
         } finally {
-          setup.contract.dispose();
+          setup.valueContract.dispose();
         }
       } finally {
         context.dispose();

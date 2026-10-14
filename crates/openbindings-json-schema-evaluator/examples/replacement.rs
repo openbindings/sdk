@@ -13,9 +13,9 @@ const DOCUMENT: &str = r#"{"openbindings":"0.2.0","operations":{"lookup":{"alias
 enum LoadFailure {
     Parse(InputError),
     Version(VersionRefusal),
-    Conformance(ConformanceReport),
+    Conformance(ValidationReport),
     Interpretation(InterpretationError),
-    Preparation(ContractPreparation),
+    Preparation(ValueContractPreparation),
     MissingResources(NoVerdict),
     UndeclaredResources,
 }
@@ -52,19 +52,19 @@ fn candidate(
     text: &str,
     resources: ResourceSet,
     control: &WorkControl,
-) -> Result<PreparedContract, LoadFailure> {
+) -> Result<ValueContract, LoadFailure> {
     let document = ParsedDocument::parse(text).map_err(LoadFailure::Parse)?;
-    let assessment = document.assess().map_err(LoadFailure::Version)?;
-    let Some(proof) = assessment.validated() else {
-        return Err(LoadFailure::Conformance(assessment.report().clone()));
+    let validation = document.validate().map_err(LoadFailure::Version)?;
+    let Some(proof) = validation.validated() else {
+        return Err(LoadFailure::Conformance(validation.report().clone()));
     };
     let context = proof
         .parsed()
         .value_contracts(Arc::new(DefaultEvaluator::new()), resources)
         .map_err(LoadFailure::Interpretation)?;
-    let input = match context.prepare_with_control("find", Side::Input, control) {
-        ContractPreparation::Ready(input) => input,
-        ContractPreparation::NoVerdict { detail }
+    let input = match context.prepare_with_control("find", Direction::Input, control) {
+        ValueContractPreparation::Ready(input) => input,
+        ValueContractPreparation::NoVerdict { detail }
             if detail.reason == NoVerdictReason::ResourceUnavailable =>
         {
             return Err(LoadFailure::MissingResources(detail));
@@ -81,10 +81,10 @@ fn candidate(
     } // document/context/cache owners end; the returned owner remains usable.
 }
 
-fn satisfies(input: &PreparedContract, value: &JsonValue) {
+fn satisfies(input: &ValueContract, value: &JsonValue) {
     assert!(matches!(input.validate(value), ValueOutcome::Satisfies));
 }
-fn mismatch(input: &PreparedContract, value: &JsonValue) {
+fn mismatch(input: &ValueContract, value: &JsonValue) {
     assert!(matches!(input.validate(value), ValueOutcome::Fails { .. }));
 }
 
@@ -95,19 +95,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Fixture-only cache demonstration: reusable candidate loading requires no output.
     {
         let document = ParsedDocument::parse(DOCUMENT)?;
-        let assessment = document.assess()?;
-        let proof = assessment.validated().ok_or("fixture must be conformant")?;
+        let validation = document.validate()?;
+        let proof = validation.validated().ok_or("fixture must be conformant")?;
         let context = proof.parsed().value_contracts_with_options(
             Arc::new(DefaultEvaluator::new()),
             resources(r#"{"const":9007199254740993}"#)?,
             ValueContractOptions { cache_capacity: 1 },
         )?;
-        let ContractPreparation::Ready(retained) = context.prepare("find", Side::Input) else {
+        let ValueContractPreparation::Ready(retained) = context.prepare("find", Direction::Input)
+        else {
             panic!("fixture must have a ready input");
         };
         assert!(matches!(
-            context.prepare("lookup", Side::Output),
-            ContractPreparation::Ready(_)
+            context.prepare("lookup", Direction::Output),
+            ValueContractPreparation::Ready(_)
         )); // preparing output evicts the input's cached owner
         drop(context);
         satisfies(&retained, &old_value); // explicit owner survives eviction and context drop
@@ -173,7 +174,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cancelled = WorkControl::new();
     cancelled.cancel();
     match candidate(DOCUMENT, resources(r#"{"const":7}"#)?, &cancelled) {
-        Err(LoadFailure::Preparation(ContractPreparation::NoVerdict { detail })) => {
+        Err(LoadFailure::Preparation(ValueContractPreparation::NoVerdict { detail })) => {
             assert_eq!(detail.reason, NoVerdictReason::Cancelled);
         }
         other => panic!("expected cancelled preparation: {other:?}"),

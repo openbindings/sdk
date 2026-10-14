@@ -13,10 +13,10 @@ export function prepare(sdk, source) {
   const document = parsed(sdk, source, true);
   let context;
   try {
-    context = document.contracts();
+    context = document.valueContracts();
     const result = context.prepare("check", "input");
     check(result.status === "ready", JSON.stringify(result));
-    return result.contract;
+    return result.valueContract;
   } finally {
     context?.dispose();
     document.dispose();
@@ -112,17 +112,17 @@ export function runTier(sdk, fixture, timed = true) {
       document = take("parseDocument", () =>
         parsed(sdk, fixture.document, true),
       );
-      const assessment = take("assess", () => document.assess());
+      const assessment = take("assess", () => document.validate());
       check(
-        assessment.status === "assessed" &&
+        assessment.status === "report" &&
           assessment.report.conclusion === "conformant",
         JSON.stringify(assessment),
       );
       contract = take("contextAndPrepare", () => {
-        context = document.contracts();
+        context = document.valueContracts();
         const result = context.prepare("check", "input");
         check(result.status === "ready", JSON.stringify(result));
-        return result.contract;
+        return result.valueContract;
       });
       value = take("parseValue", () => parsed(sdk, fixture.valid));
       const first = take("firstValidation", () => contract.validate(value));
@@ -281,15 +281,15 @@ export function lifetime(sdk, fixture, timed = true) {
     );
     let context;
     try {
-      context = document.contracts({ resources });
+      context = document.valueContracts({ resources });
       const result = context.prepare("run", "input");
       check(result.status === "ready", JSON.stringify(result));
       for (let n = 0; n < 6; n++) {
         const other = context.prepare(`op${n}`, "input");
         check(other.status === "ready", "cache entry");
-        other.contract.dispose();
+        other.valueContract.dispose();
       }
-      return result.contract; // survives original cache eviction and all parent disposal
+      return result.valueContract; // survives original cache eviction and all parent disposal
     } finally {
       context?.dispose();
       document.dispose();

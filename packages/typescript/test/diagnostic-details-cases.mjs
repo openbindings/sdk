@@ -17,13 +17,13 @@ export function diagnosticDetailsCases(sdk) {
     check(parsed.status === "parsed", "parse");
     let proof, context;
     try {
-      const checked = parsed.value.validate();
+      const checked = parsed.value.validated();
       check(checked.status === "validated", "proof");
       proof = checked.document;
-      context = proof.contracts(options);
+      context = proof.valueContracts(options);
       const ready = context.prepare("op", "input");
       check(ready.status === "ready", "ready");
-      return ready.contract;
+      return ready.valueContract;
     } finally {
       context?.dispose();
       proof?.dispose();
@@ -211,7 +211,7 @@ export function diagnosticDetailsCases(sdk) {
   try {
     let error;
     try {
-      probe.value.contracts({ includeSchemaDetails: "yes" });
+      probe.value.valueContracts({ includeSchemaDetails: "yes" });
     } catch (e) {
       error = e;
     }

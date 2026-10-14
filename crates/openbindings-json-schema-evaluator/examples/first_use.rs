@@ -1,7 +1,7 @@
 //! Run with: cargo run -p openbindings-json-schema-evaluator --example first_use
 use openbindings::{
-    ConformanceReport, ContractPreparation, JsonValue, OperationSelection, ParsedDocument,
-    ResourceSet, Side, ValueOutcome,
+    Direction, JsonValue, OperationSelection, ParsedDocument, ResourceSet, ValidationReport,
+    ValueContractPreparation, ValueOutcome,
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde::Serialize;
@@ -12,7 +12,7 @@ struct Input {
     id: u64,
 }
 
-fn print_findings(report: &ConformanceReport) {
+fn print_findings(report: &ValidationReport) {
     println!("document conformance: {:?}", report.conclusion);
     for finding in &report.findings {
         // Debug quotes/escapes caller-controlled pointers, including control characters.
@@ -46,16 +46,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         }"#;
     // Valid JSON can still contain an unrecognized normative member.
     let draft = ParsedDocument::parse(draft_text)?;
-    print_findings(draft.assess()?.report());
+    print_findings(draft.validate()?.report());
     // The application corrects this known fixture's original text, not a normalized value
     // or a parsed diagnostic message. Existing snapshots remain immutable.
     let corrected_text = draft_text.replace("\"inputSchema\":", "\"input\":");
     println!("corrected source:\n{corrected_text}");
     let document = ParsedDocument::parse(corrected_text)?;
-    let assessment = document.assess()?;
-    let Some(proof) = assessment.validated() else {
-        print_findings(assessment.report());
-        return Err(format!("document conformance: {:?}", assessment.report().conclusion).into());
+    let validation = document.validate()?;
+    let Some(proof) = validation.validated() else {
+        print_findings(validation.report());
+        return Err(format!("document conformance: {:?}", validation.report().conclusion).into());
     };
     println!("corrected document is conformant");
     // Primary names and aliases use the same selection API.
@@ -79,14 +79,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     let context = proof
         .parsed()
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())?;
-    let input = match context.prepare("lookup", Side::Input) {
-        ContractPreparation::Ready(input) => input,
-        ContractPreparation::NoContract => return Err("operation has no input contract".into()),
-        ContractPreparation::OperationMissing => return Err("operation is missing".into()),
-        ContractPreparation::OperationAmbiguous { candidates } => {
+    let input = match context.prepare("lookup", Direction::Input) {
+        ValueContractPreparation::Ready(input) => input,
+        ValueContractPreparation::NoValueContract => {
+            return Err("operation has no input contract".into());
+        }
+        ValueContractPreparation::OperationMissing => return Err("operation is missing".into()),
+        ValueContractPreparation::OperationAmbiguous { candidates } => {
             return Err(format!("operation is ambiguous: {candidates:?}").into());
         }
-        ContractPreparation::NoVerdict { detail } => {
+        ValueContractPreparation::NoVerdict { detail } => {
             return Err(format!(
                 "preparation refused ({:?}, {}): {}",
                 detail.reason, detail.code, detail.message

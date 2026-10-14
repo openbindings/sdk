@@ -37,12 +37,12 @@ contracts. The companion ships separate runnable
 examples. Core authoring by itself needs no evaluator:
 
 ```rust
-use openbindings::{DocumentBuilder, Operation};
+use openbindings::{Document, Operation};
 
-let mut draft = DocumentBuilder::new();
+let mut draft = Document::new();
 draft.operations.insert("lookup".into(), Operation::default());
 let parsed = draft.build()?;
-let assessment = parsed.assess()?;
+let assessment = parsed.validate()?;
 let validated = assessment.validated().ok_or("document is not conformant")?;
 assert!(validated.original_bytes().starts_with(b"{"));
 # Ok::<(), Box<dyn std::error::Error>>(())
@@ -50,7 +50,7 @@ assert!(validated.original_bytes().starts_with(b"{"));
 
 Parsing preserves evidence; validation establishes conformance separately. For
 operation values, select `openbindings-json-schema-evaluator` explicitly and pass
-an immutable `ResourceSet`. `ContractPreparation` distinguishes ready, absent
+an immutable `ResourceSet`. `ValueContractPreparation` distinguishes ready, absent
 contract, missing or ambiguous operation, and preparation refusal. Only a ready
 contract validates values; `ValueOutcome` distinguishes satisfies, fails and
 no-verdict. Core never acquires references.

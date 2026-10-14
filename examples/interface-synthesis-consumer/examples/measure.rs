@@ -78,10 +78,10 @@ async fn main() {
             assert_eq!(result.coverage().entries().len(), size);
             let fresh = ParsedDocument::parse(seed.document.original_bytes()).unwrap();
             let t = Instant::now();
-            black_box(fresh.assess().unwrap().validated().unwrap());
+            black_box(fresh.validate().unwrap().validated().unwrap());
             cold_assessment.push(t.elapsed().as_nanos());
             let t = Instant::now();
-            black_box(fresh.assess().unwrap());
+            black_box(fresh.validate().unwrap());
             warm_assessment.push(t.elapsed().as_nanos());
             let mut candidate = seed.clone();
             candidate.document = fresh;

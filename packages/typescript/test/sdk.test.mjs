@@ -8,10 +8,10 @@ await sdk.initialize(
     new URL("../dist/wasm/openbindings_wasm_bg.wasm", import.meta.url),
   ),
 );
-const ready = (context, operation, side) => {
-  const result = context.prepare(operation, side);
+const ready = (context, operation, direction) => {
+  const result = context.prepare(operation, direction);
   assert.equal(result.status, "ready");
-  return result.contract;
+  return result.valueContract;
 };
 const text =
   ' {"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"},"aliases":["execute"]}}} ';
@@ -56,7 +56,7 @@ test("author every normative object; absence/null and exact opaque values surviv
   });
   large.dispose();
   assert.equal(result.status, "authored");
-  const validation = result.document.validate();
+  const validation = result.document.validated();
   assert.equal(validation.status, "validated");
   const value = result.document.value;
   assert.equal(value.get("description"), undefined);
@@ -133,7 +133,7 @@ test("ordinary conversion rejects lossy/side-effecting values and exact handles 
 });
 test("retained contracts and metadata support repeated native-feeling caller use", () => {
   const warmDocument = parsed(text),
-    warmContext = warmDocument.contracts(),
+    warmContext = warmDocument.valueContracts(),
     warmContract = ready(warmContext, "run", "input");
   warmContract.dispose();
   warmContext.dispose();
@@ -149,7 +149,7 @@ test("retained contracts and metadata support repeated native-feeling caller use
     assert.equal(op.key, "run");
     assert.deepEqual(op.bindings, []);
     op.dispose();
-    const context = document.contracts();
+    const context = document.valueContracts();
     const input = ready(context, "run", "input");
     const output = context.prepare("run", "output");
     context.dispose();
@@ -160,7 +160,7 @@ test("retained contracts and metadata support repeated native-feeling caller use
     const mismatch = input.validate(bad);
     assert.equal(mismatch.outcome, "fails");
     assert.ok(!JSON.stringify(mismatch).includes("private-value"));
-    assert.equal(output.status, "no-contract");
+    assert.equal(output.status, "no-value-contract");
     good.dispose();
     bad.dispose();
     input.dispose();
@@ -169,10 +169,10 @@ test("retained contracts and metadata support repeated native-feeling caller use
 });
 test("publication copies the snapshot and uses ordinary Fetch request/response values", async () => {
   const document = parsed(text),
-    valid = document.validate();
+    valid = document.validated();
   assert.equal(valid.status, "validated");
   const publication = new discovery.DiscoveryPublication(valid.document, {
-    allowOrigin: "*",
+    allowOrigin: "any",
   });
   valid.document.dispose();
   document.dispose();
@@ -280,7 +280,7 @@ test("Fetch discovery keeps assessment and transport distinctions with complete 
     assert.equal(new TextDecoder().decode(r.body), body);
     r.document?.dispose();
   }
-  for (const limit of [0, text.length, text.length - 1]) {
+  for (const limit of [undefined, text.length, text.length - 1]) {
     const r = await discovery.discover("https://example.test", {
       maxDocumentBytes: limit,
       fetch: async () => new Response(text),
@@ -288,10 +288,12 @@ test("Fetch discovery keeps assessment and transport distinctions with complete 
     assert.equal(r.status, limit === text.length - 1 ? "body-limit" : "found");
     r.document?.dispose();
   }
-  await assert.rejects(
-    () => discovery.discover("https://example.test", { maxDocumentBytes: -1 }),
-    (e) => e instanceof sdk.SdkError && e.code === "invalid-byte-limit",
-  );
+  for (const maxDocumentBytes of [-1, 0, Number.MAX_SAFE_INTEGER + 1]) {
+    await assert.rejects(
+      () => discovery.discover("https://example.test", { maxDocumentBytes }),
+      (e) => e instanceof sdk.SdkError && e.code === "invalid-byte-limit",
+    );
+  }
   const broken = await discovery.discover("https://example.test", {
     fetch: async () =>
       new Response(
@@ -354,7 +356,7 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   assert.equal(references.references[0].resolution.outcome, "located");
   const control = new AbortController();
   control.abort();
-  const contracts = document.contracts({ resources });
+  const contracts = document.valueContracts({ resources });
   const cancelled = contracts.prepare("run", "input", {
     signal: control.signal,
   });
@@ -368,7 +370,7 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
     "cancelled",
   );
   assert.equal(healthy.validate(value).outcome, "satisfies");
-  const limited = document.contracts({
+  const limited = document.valueContracts({
       resources,
       limits: { evaluationSteps: 0 },
     }),
@@ -380,11 +382,11 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   assert.equal(partial.complete, false);
   assert.equal(partial.limitation.reason, "cancelled");
   assert.throws(
-    () => document.contracts({ limits: { evaluationSteps: -1 } }),
+    () => document.valueContracts({ limits: { evaluationSteps: -1 } }),
     (e) => e.code === "invalid-evaluator-limits",
   );
   assert.throws(
-    () => document.contracts({ limits: { unknown: 1 } }),
+    () => document.valueContracts({ limits: { unknown: 1 } }),
     (e) => e.code === "invalid-evaluator-limits",
   );
   assert.equal("raw" in document, false);

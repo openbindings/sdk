@@ -12,8 +12,8 @@ use std::{
 fn exact(text: &str) -> JsonValue {
     JsonValue::parse(text).expect("example fixture")
 }
-fn author() -> Result<(DocumentBuilder, ParsedDocument), Box<dyn std::error::Error>> {
-    let mut draft = DocumentBuilder::new();
+fn author() -> Result<(Document, ParsedDocument), Box<dyn std::error::Error>> {
+    let mut draft = Document::new();
     draft.operations.insert(
         "run".into(),
         Operation {
@@ -22,7 +22,7 @@ fn author() -> Result<(DocumentBuilder, ParsedDocument), Box<dyn std::error::Err
             output: Some(exact("false")),
             examples: Some(BTreeMap::from([(
                 "demo".into(),
-                OperationExample {
+                Example {
                     input: Some(exact("9007199254740993")),
                     output: Some(JsonValue::null()),
                     ..Default::default()
@@ -66,33 +66,33 @@ fn author() -> Result<(DocumentBuilder, ParsedDocument), Box<dyn std::error::Err
         exact(r#"{"data":9007199254740993}"#),
     );
     let document = draft.build()?;
-    assert!(document.assess()?.validated().is_some());
+    assert!(document.validate()?.validated().is_some());
     let serialized = serde_json::to_vec(&draft)?;
     let round = ParsedDocument::parse(serialized)?;
     assert_eq!(document.value().semantic_eq(round.value()), Some(true));
     Ok((draft, document))
 }
 fn inspect() -> Result<(), Box<dyn std::error::Error>> {
-    let broken = assess_document("{broken")?;
+    let broken = validate_document("{broken")?;
     assert!(broken.validated().is_none());
     assert_eq!(broken.report().evidence["OBI-01"], Evidence::Violated);
-    let bad = assess_document(r#"{"openbindings":"0.2.0","operations":{},"unknown":true}"#)?;
+    let bad = validate_document(r#"{"openbindings":"0.2.0","operations":{},"unknown":true}"#)?;
     assert_eq!(bad.report().conclusion, Conformance::NonConformant);
     assert!(bad.validated().is_none());
     for finding in &bad.report().findings {
         println!("{}", serde_json::to_string(finding)?);
     }
-    assert!(assess_document(r#"{"openbindings":"8.0.0","operations":{}}"#).is_err());
+    assert!(validate_document(r#"{"openbindings":"8.0.0","operations":{}}"#).is_err());
     Ok(())
 }
-fn contracts(document: &ParsedDocument) -> Result<(), Box<dyn std::error::Error>> {
+fn value_contracts(document: &ParsedDocument) -> Result<(), Box<dyn std::error::Error>> {
     let resources = ResourceSet::new([SchemaResource {
         uri: "https://example.invalid/integer".into(),
         document: exact(r#"{"type":"integer","minimum":0}"#),
     }])?;
     let context = document.value_contracts(Arc::new(DefaultEvaluator::new()), resources)?;
-    let ContractPreparation::Ready(input) = context.prepare("run", Side::Input) else { return Err("input contract did not prepare".into()); };
-    let ContractPreparation::Ready(output) = context.prepare("run", Side::Output) else { return Err("output contract did not prepare".into()); };
+    let ValueContractPreparation::Ready(input) = context.prepare("run", Direction::Input) else { return Err("input contract did not prepare".into()); };
+    let ValueContractPreparation::Ready(output) = context.prepare("run", Direction::Output) else { return Err("output contract did not prepare".into()); };
     for text in ["7", "9007199254740993"] {
         assert!(matches!(
             input.validate(&exact(text)),
@@ -109,15 +109,15 @@ fn contracts(document: &ParsedDocument) -> Result<(), Box<dyn std::error::Error>
     ));
     assert!(matches!(
         context
-            .prepare("no_contract", Side::Input),
-        ContractPreparation::NoContract
+            .prepare("no_contract", Direction::Input),
+        ValueContractPreparation::NoValueContract
     ));
     let unavailable =
         document.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())?;
     assert!(matches!(
         unavailable
-            .prepare("run", Side::Input),
-        ContractPreparation::NoVerdict {
+            .prepare("run", Direction::Input),
+        ValueContractPreparation::NoVerdict {
             detail: NoVerdict {
                 reason: NoVerdictReason::ResourceUnavailable,
                 ..
@@ -144,9 +144,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let references = document.references()?;
     println!("references: {}", serde_json::to_string(&references)?);
-    contracts(&document)?;
+    valueContracts(&document)?;
     let valid = document
-        .assess()?
+        .validate()?
         .validated()
         .expect("conformance established");
     let original = valid.original_bytes().to_vec();

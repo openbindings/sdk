@@ -1,4 +1,4 @@
-use openbindings::{Conformance, Evidence, assess_document};
+use openbindings::{Conformance, Evidence, validate_document};
 
 #[test]
 fn duplicate_cap_preserves_order_coordinates_and_truthful_truncation() {
@@ -13,7 +13,7 @@ fn duplicate_cap_preserves_order_coordinates_and_truthful_truncation() {
             } else {
                 format!("{{\"k\":0{}}}", ",\"k\":0".repeat(count))
             };
-            let report = assess_document(&source).unwrap();
+            let report = validate_document(&source).unwrap();
             let report = report.report();
             assert_eq!(report.conclusion, Conformance::NonConformant);
             assert_eq!(report.evidence["OBI-01"], Evidence::Violated);
@@ -59,8 +59,8 @@ fn nonfixed_findings_keep_coordinates_and_evidence_after_the_cap() {
         "p".repeat(128 * 1024),
         aliases
     );
-    let assessment = assess_document(&source).unwrap();
-    let report = assessment.report();
+    let validation = validate_document(&source).unwrap();
+    let report = validation.report();
     assert_eq!(report.findings.len(), 4096);
     assert!(report.findings_truncated);
     assert_eq!(report.evidence["OBI-05"], Evidence::Violated);
@@ -87,8 +87,8 @@ fn aggregate_pointer_budget_applies_to_duplicates_and_keeps_rule_evidence() {
         "{{\"openbindings\":\"0.2.0\",\"operations\":{{}},\"{name}\":{{\"k\":0{}}}}}",
         ",\"k\":0".repeat(4096)
     );
-    let assessment = assess_document(&source).unwrap();
-    let report = assessment.report();
+    let validation = validate_document(&source).unwrap();
+    let report = validation.report();
     assert!(report.findings_truncated);
     assert_eq!(report.evidence["OBI-01"], Evidence::Violated);
     let bytes: usize = report
@@ -110,8 +110,8 @@ fn aggregate_pointer_budget_applies_to_duplicates_and_keeps_rule_evidence() {
 #[test]
 fn duplicate_under_unpaired_ancestor_keeps_original_byte_coordinates() {
     let source = r#"{"openbindings":"0.2.0","operations":{},"x":{"\ud800":{"k":0,"k":1}}}"#;
-    let assessment = assess_document(source).unwrap();
-    let report = assessment.report();
+    let validation = validate_document(source).unwrap();
+    let report = validation.report();
     assert_eq!(report.findings.len(), 1);
     assert!(!report.findings_truncated);
     let at = report.findings[0].location.as_ref().unwrap();
@@ -127,8 +127,8 @@ fn deep_duplicate_pointer_retains_its_original_coordinates() {
         "{\"x\":".repeat(depth),
         "}".repeat(depth)
     );
-    let assessment = assess_document(&source).unwrap();
-    let report = assessment.report();
+    let validation = validate_document(&source).unwrap();
+    let report = validation.report();
     assert_eq!(report.findings.len(), 1);
     assert!(!report.findings_truncated);
     let at = report.findings[0].location.as_ref().unwrap();
@@ -142,8 +142,8 @@ fn deep_duplicate_pointer_retains_its_original_coordinates() {
 #[test]
 fn identical_invalid_schemas_at_distinct_locations_are_both_reported() {
     let source = r#"{"openbindings":"0.2.0","operations":{"a":{"input":{"type":42}},"b":{"input":{"type":42}}}}"#;
-    let assessment = assess_document(source).unwrap();
-    let report = assessment.report();
+    let validation = validate_document(source).unwrap();
+    let report = validation.report();
     assert_eq!(report.conclusion, Conformance::NonConformant);
     let schema: Vec<_> = report
         .findings

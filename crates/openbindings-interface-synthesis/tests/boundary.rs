@@ -1,5 +1,5 @@
 mod support;
-use openbindings::{DocumentBuilder, JsonLimits, ParsedDocument, VersionRefusal, WorkControl};
+use openbindings::{Document, JsonLimits, ParsedDocument, VersionRefusal, WorkControl};
 use openbindings_interface_synthesis::*;
 use std::{
     collections::BTreeMap,
@@ -259,7 +259,7 @@ async fn source_indices_names_and_projection_identity() {
         .push(reused.coverage.entries[1].clone());
     assert!(deliver(&s, reused).await.is_err());
     let mut dropped = c.clone();
-    let b = DocumentBuilder::new();
+    let b = Document::new();
     dropped.document = b.build().unwrap();
     dropped.coverage.entries.clear();
     assert!(deliver(&s, dropped).await.is_err());
@@ -325,7 +325,7 @@ async fn every_boundary_failure_retains_a_repairable_candidate() {
         assert_eq!(e.kind(), SynthesisErrorKind::InvalidResult, "{mutation}");
         assert!(e.partial().is_none());
         let rejected = e.into_rejected().unwrap();
-        assert!(rejected.assessment.is_some() || mutation == 13);
+        assert!(rejected.validation.is_some() || mutation == 13);
         if mutation < 12 || mutation == 14 {
             assert!(rejected.finding.is_some());
         }
@@ -603,7 +603,7 @@ async fn undetermined_conformance_is_not_upgraded() {
         result
             .document()
             .parsed()
-            .assess()
+            .validate()
             .unwrap()
             .report()
             .conclusion,

@@ -36,11 +36,12 @@ fn request(document: &ParsedDocument, resources: ResourceSet) -> SchemaRequest {
     document
         .value_contracts(capture.clone(), resources)
         .unwrap()
-        .prepare("op", Side::Input);
+        .prepare("op", Direction::Input);
     capture.0.lock().unwrap().take().unwrap()
 }
 fn refused(context: &ValueContracts) -> NoVerdict {
-    let ContractPreparation::NoVerdict { detail } = context.prepare("op", Side::Input) else {
+    let ValueContractPreparation::NoVerdict { detail } = context.prepare("op", Direction::Input)
+    else {
         panic!("expected refusal")
     };
     detail
@@ -99,8 +100,8 @@ fn frozen_fragment_witnesses_and_escaped_supplied_source_keep_original_locations
                 serde_json::to_value(&detail).unwrap()
             );
             assert!(matches!(
-                context.prepare("healthy", Side::Input),
-                ContractPreparation::Ready(_)
+                context.prepare("healthy", Direction::Input),
+                ValueContractPreparation::Ready(_)
             ));
         }
     }
@@ -221,8 +222,8 @@ fn actual_production_node_and_edge_caps_preserve_known_limits_before_and_after_s
             );
             assert_eq!(detail.reason, NoVerdictReason::LimitExceeded);
             assert!(matches!(
-                context.prepare("healthy", Side::Input),
-                ContractPreparation::Ready(_)
+                context.prepare("healthy", Direction::Input),
+                ValueContractPreparation::Ready(_)
             ));
         }
     }

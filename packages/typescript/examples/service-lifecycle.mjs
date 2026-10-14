@@ -27,16 +27,16 @@ function prepare(schemaText, documentBytes = document) {
 function replace(service, schemaText, documentBytes = document) {
   const next = prepare(schemaText, documentBytes);
   if (next.status !== "ready") return next;
-  const completeness = next.contract.resourceCompleteness;
+  const completeness = next.valueContract.resourceCompleteness;
   if (completeness.status !== "complete") {
-    next.contract.dispose();
+    next.valueContract.dispose();
     return { status: "resources-missing", evidence: completeness.evidence };
   }
   try {
-    service.replace(next.contract); // ownership transfers only on success
+    service.replace(next.valueContract); // ownership transfers only on success
     return { status: "replaced" };
   } catch (error) {
-    next.contract.dispose();
+    next.valueContract.dispose();
     throw error;
   }
 }
@@ -47,15 +47,15 @@ const startupArenas = liveStorageOwners();
 const warm = prepare('{"type":"integer"}');
 assert.equal(warm.status, "ready");
 try {
-  assert.equal(warm.contract.validate(7).outcome, "satisfies");
+  assert.equal(warm.valueContract.validate(7).outcome, "satisfies");
 } finally {
-  warm.contract.dispose();
+  warm.valueContract.dispose();
 }
 const warmedArenas = liveStorageOwners();
 
 const setup = prepare('{"type":"integer","const":9007199254740993}');
 assert.equal(setup.status, "ready");
-const service = new ValidationService(setup.contract);
+const service = new ValidationService(setup.valueContract);
 let releaseBody, oldRequest;
 const outcomes = {};
 try {
@@ -77,7 +77,7 @@ try {
     '{"type":"integer"}',
     '{"openbindings":"0.2.0","operations":{"lookup":{"description":42}}}',
   );
-  assert.equal(outcomes.invalidReplacement.status, "assessed");
+  assert.equal(outcomes.invalidReplacement.status, "report");
   assert.equal(outcomes.invalidReplacement.report.conclusion, "non-conformant");
   outcomes.stillCurrent = service.check("replacement was refused");
   assert.equal(outcomes.stillCurrent.outcome, "satisfies");
@@ -117,16 +117,16 @@ try {
 const partial = prepareService(document, []);
 assert.equal(partial.status, "ready");
 try {
-  assert.equal(partial.contract.resourceCompleteness.status, "incomplete");
+  assert.equal(partial.valueContract.resourceCompleteness.status, "incomplete");
   assert.throws(
-    () => new ValidationService(partial.contract),
+    () => new ValidationService(partial.valueContract),
     /complete schema resources/,
   );
-  outcomes.missingResource = partial.contract.validate(7);
+  outcomes.missingResource = partial.valueContract.validate(7);
   assert.equal(outcomes.missingResource.outcome, "no-verdict");
   assert.equal(outcomes.missingResource.detail.reason, "resource-unavailable");
 } finally {
-  partial.contract.dispose();
+  partial.valueContract.dispose();
 }
 const releasedArenas = liveStorageOwners();
 assert.equal(releasedArenas, warmedArenas);

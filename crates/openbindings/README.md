@@ -4,11 +4,11 @@ Exact document semantics and authoring for OpenBindings 0.2. Core performs no
 HTTP/file acquisition, kind execution, binding selection or operation invocation.
 
 ```rust
-use openbindings::{DocumentBuilder, Operation, ParsedDocument};
-let mut draft = DocumentBuilder::new();
+use openbindings::{Document, Operation, ParsedDocument};
+let mut draft = Document::new();
 draft.operations.insert("lookup".into(), Operation::default());
 let document = draft.build()?;
-let assessment = document.assess()?;
+let assessment = document.validate()?;
 let conformant = assessment.validated().ok_or("document is not conformant")?;
 let round_trip = ParsedDocument::parse(conformant.original_bytes())?;
 assert!(matches!(round_trip.resolve_operation("lookup")?, openbindings::OperationSelection::Found(_)));
@@ -25,19 +25,19 @@ Rust has no runtime initialization step. The example above uses only core and
 establishes document conformance; evaluating operation values requires that explicit
 companion or your own evaluator.
 
-`ParsedDocument` preserves input and duplicate evidence. `DocumentAssessment`
+`ParsedDocument` preserves input and duplicate evidence. `DocumentValidation`
 reports all 13 rules; only established conformance produces `ValidatedDocument`.
 Names/aliases are indexed. Inspection does not perform preference selection.
 Version policy supports stable 0.2.x with an explicit applied specification revision.
 
 `JsonValue` preserves exact numeric tokens, unknown members, null/absence and
 source locations. Use its text/bytes for values such as 9007199254740993. Typed
-`DocumentBuilder` fields model normative objects; `additional_fields` retain exact
+`Document` fields model normative objects; `additional_fields` retain exact
 unknown members but cannot shadow typed fields. Building is separate from checking
 conformance. JSON input defaults to 64 MiB, 10,000 containers and 1,000,000 nodes.
 
 To edit an existing document, call `ParsedDocument::to_authoring()`, update the
-builder, then `build()` and assess the new snapshot. Typed fields are re-encoded:
+builder, then `build()` and validate the new snapshot. Typed fields are re-encoded:
 integer preferences such as `1.0` or `1e0` become `1`, and `-0` becomes `0`.
 Opaque exact values keep their numeric tokens. Operation renaming leaves reference
 updates to the caller.
@@ -56,7 +56,7 @@ Operation validation uses explicit `ResourceSet`, `SchemaEvaluator` and immutabl
 or implement the trait. Prepared contracts retain required owners after document
 or context drop. The default context cache has four entries, configurable through
 `ValueContractOptions`; retained contracts survive eviction. Cancellation and
-transient failures are retryable. Handle every `ContractPreparation` branch: ready, no-contract, operation-missing,
+transient failures are retryable. Handle every `ValueContractPreparation` branch: ready, no-value-contract, operation-missing,
 operation-ambiguous and no-verdict. Only ready contracts expose value validation;
 `ValueOutcome` is satisfies, fails or no-verdict. Preparation refusal is not
 proof of semantic undefinedness. `openbindings-schema-evaluator-test-support`

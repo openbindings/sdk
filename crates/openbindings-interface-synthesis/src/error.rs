@@ -1,5 +1,5 @@
 use crate::{Synthesis, SynthesisCandidate};
-use openbindings::{AuthoringError, DocumentAssessment, VersionRefusal};
+use openbindings::{AuthoringError, DocumentValidation, VersionRefusal};
 use std::fmt;
 /// Stable control-flow classifications; codes provide specific reasons.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,8 +39,8 @@ pub struct SynthesisFinding {
 pub struct RejectedSynthesis {
     /// Original candidate, available for diagnosis or explicit repair.
     pub candidate: SynthesisCandidate,
-    /// Core assessment when the declared version allowed one.
-    pub assessment: Option<DocumentAssessment>,
+    /// Core validation when the declared version allowed one.
+    pub validation: Option<DocumentValidation>,
     /// Specific structural/correspondence failure, if any.
     pub finding: Option<SynthesisFinding>,
 }
@@ -150,7 +150,7 @@ impl SynthesisError {
     }
     pub(crate) fn invalid(
         candidate: SynthesisCandidate,
-        assessment: Option<DocumentAssessment>,
+        validation: Option<DocumentValidation>,
         finding: Option<SynthesisFinding>,
         version: Option<VersionRefusal>,
     ) -> Self {
@@ -164,7 +164,7 @@ impl SynthesisError {
         );
         e.rejected = Some(Box::new(RejectedSynthesis {
             candidate,
-            assessment,
+            validation,
             finding,
         }));
         e.cause = version.map(|v| Box::new(Cause::Version(v)));

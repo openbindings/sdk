@@ -65,7 +65,7 @@ impl Client {
         self.discover_with_control(origin, &WorkControl::new())
             .await
     }
-    /// Run one cooperatively cancellable discovery attempt. Request/body work can be interrupted; synchronous assessment observes cancellation only at its boundaries.
+    /// Run one cooperatively cancellable discovery attempt. Request/body work can be interrupted; synchronous validation observes cancellation only at its boundaries.
     pub async fn discover_with_control(
         &self,
         origin: &str,
@@ -128,26 +128,26 @@ impl Client {
             .await
     }
 }
-fn failure(error: reqwest::Error) -> RequestFailure {
-    RequestFailure {
+fn failure(error: reqwest::Error) -> RequestError {
+    RequestError {
         kind: if error.is_timeout() {
-            FailureKind::Timeout
+            ErrorKind::Timeout
         } else if error.is_redirect() {
-            FailureKind::RedirectPolicy
+            ErrorKind::RedirectPolicy
         } else if error.is_builder() {
-            FailureKind::Other
+            ErrorKind::Other
         } else {
-            FailureKind::Network
+            ErrorKind::Network
         },
         message: error.without_url().to_string(),
     }
 }
-fn body_failure(error: reqwest::Error) -> RequestFailure {
-    RequestFailure {
+fn body_failure(error: reqwest::Error) -> RequestError {
+    RequestError {
         kind: if error.is_timeout() {
-            FailureKind::Timeout
+            ErrorKind::Timeout
         } else {
-            FailureKind::Network
+            ErrorKind::Network
         },
         message: message_with_sources(&error.without_url()),
     }
@@ -183,10 +183,10 @@ struct Body {
     unsupported_coding: bool,
 }
 impl ResponseBody for Body {
-    async fn read(&mut self, output: &mut [u8]) -> Result<usize, RequestFailure> {
+    async fn read(&mut self, output: &mut [u8]) -> Result<usize, RequestError> {
         if self.unsupported_coding {
-            return Err(RequestFailure {
-                kind: FailureKind::Decode,
+            return Err(RequestError {
+                kind: ErrorKind::Decode,
                 message: "host did not decode the response content coding".into(),
             });
         }

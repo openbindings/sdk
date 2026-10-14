@@ -14,7 +14,7 @@ export async function discoveryPage(browser, pageOrigin) {
   const parsed = sdk.parseDocument(
     '{"openbindings":"0.2.0","operations":{}}',
   ).value;
-  const proof = parsed.validate().document;
+  const proof = parsed.validated().document;
   const publication = new DiscoveryPublication(proof);
   let targetOrigin;
   const target = http.createServer(async (request, response) => {

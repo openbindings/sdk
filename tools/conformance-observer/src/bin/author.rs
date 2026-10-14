@@ -1,6 +1,6 @@
 use openbindings::*;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut draft = DocumentBuilder::new();
+    let mut draft = Document::new();
     draft.operations.insert(
         "lookup".into(),
         Operation {
@@ -31,11 +31,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .into(),
     );
     let snapshot = draft.build()?;
-    let checked = snapshot.assess()?;
+    let checked = snapshot.validate()?;
     assert_eq!(checked.report().conclusion, Conformance::Conformant);
     let valid = checked.validated().unwrap();
     drop(draft);
     assert_eq!(valid.parsed().operation_bindings("lookup")?, vec!["call"]);
-    println!("external typed authoring, exact content, assessment and immutable snapshot passed");
+    println!("external typed authoring, exact content, validation and immutable snapshot passed");
     Ok(())
 }

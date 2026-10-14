@@ -1,5 +1,5 @@
 //! Manual CR-1/CR-2 measurement, never a timing assertion.
-use openbindings::{Conformance, assess_document};
+use openbindings::{Conformance, validate_document};
 use std::{fmt::Write, hint::black_box, time::Instant};
 
 fn fixture(n: usize, duplicates: bool) -> String {
@@ -42,16 +42,16 @@ fn cr1_cr2_release_medians() {
             };
             for _ in 0..2 {
                 assert_eq!(
-                    assess_document(&text).unwrap().report().conclusion,
+                    validate_document(&text).unwrap().report().conclusion,
                     expected
                 );
             }
             let mut elapsed = Vec::new();
             for _ in 0..5 {
                 let start = Instant::now();
-                let assessment = black_box(assess_document(black_box(&text)).unwrap());
+                let validation = black_box(validate_document(black_box(&text)).unwrap());
                 elapsed.push(start.elapsed());
-                assert_eq!(assessment.report().conclusion, expected);
+                assert_eq!(validation.report().conclusion, expected);
             }
             elapsed.sort_unstable();
             println!(

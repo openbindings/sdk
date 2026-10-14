@@ -65,7 +65,8 @@ fn property_name_scratch_is_not_admitted_inside_applicator_validity_recheck() {
                 ResourceSet::default(),
             )
             .unwrap();
-        let ContractPreparation::Ready(contract) = context.prepare("op", Side::Input) else {
+        let ValueContractPreparation::Ready(contract) = context.prepare("op", Direction::Input)
+        else {
             panic!()
         };
         let outcome = contract.validate(&value);

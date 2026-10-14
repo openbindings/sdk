@@ -1,7 +1,7 @@
 // The Worker owns every Wasm handle. Only input bytes and plain results cross realms.
 import {
   initialize,
-  assessDocument,
+  validateDocument,
   parseDocument,
   parseJson,
 } from "@openbindings/sdk";
@@ -10,7 +10,7 @@ self.onmessage = async ({ data }) => {
     id,
     document: bytes,
     operation = "run",
-    side = "input",
+    direction = "input",
     value,
   } = data;
   let document, context, prepared, input;
@@ -24,8 +24,8 @@ self.onmessage = async ({ data }) => {
     if (value === undefined) {
       self.postMessage({
         id,
-        status: "assessed",
-        assessment: assessDocument(new Uint8Array(bytes)),
+        status: "report",
+        assessment: validateDocument(new Uint8Array(bytes)),
       });
       return;
     }
@@ -41,13 +41,13 @@ self.onmessage = async ({ data }) => {
       return;
     }
     input = parsedValue.value;
-    context = document.contracts();
-    const setup = context.prepare(operation, side);
+    context = document.valueContracts();
+    const setup = context.prepare(operation, direction);
     if (setup.status !== "ready") {
       self.postMessage({ id, status: "preparation", preparation: setup });
       return;
     }
-    prepared = setup.contract;
+    prepared = setup.valueContract;
     self.postMessage({
       id,
       status: "evaluated",

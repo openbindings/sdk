@@ -100,7 +100,7 @@ pub struct JsonMember<'a> {
     pub value: JsonRef<'a>,
 }
 impl JsonValue {
-    /// Parse UTF-8 JSON under [`JsonLimits::default`], copying source into an immutable arena. Preserves number spelling, duplicate members and escaped unpaired UTF-16 units; no normative assessment is performed.
+    /// Parse UTF-8 JSON under [`JsonLimits::default`], copying source into an immutable arena. Preserves number spelling, duplicate members and escaped unpaired UTF-16 units; no normative validation is performed.
     pub fn parse(input: impl AsRef<[u8]>) -> Result<Self, InputError> {
         Self::parse_with_limits(input, JsonLimits::default())
     }

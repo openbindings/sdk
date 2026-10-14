@@ -18,9 +18,9 @@ fn context(document: &ParsedDocument) -> ValueContracts {
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
         .unwrap()
 }
-fn ready(document: &ParsedDocument) -> PreparedContract {
-    match context(document).prepare("op", Side::Input) {
-        ContractPreparation::Ready(contract) => contract,
+fn ready(document: &ParsedDocument) -> ValueContract {
+    match context(document).prepare("op", Direction::Input) {
+        ValueContractPreparation::Ready(contract) => contract,
         state => panic!("expected ready: {state:?}"),
     }
 }
@@ -78,23 +78,23 @@ fn namespace_is_checked_before_context_creation_or_any_selection() {
 fn draft_metadata_and_semantic_setup_partitions_remain_distinct() {
     let doc = ParsedDocument::parse(r#"{"openbindings":"0.2.0","description":42,"operations":{"op":{"input":false,"aliases":["shared"]},"other":{"aliases":["shared"]}}}"#).unwrap();
     assert_eq!(
-        doc.assess().unwrap().report().conclusion,
+        doc.validate().unwrap().report().conclusion,
         Conformance::NonConformant
     );
     let context = context(&doc);
     assert!(matches!(
-        context.prepare("missing", Side::Input),
-        ContractPreparation::OperationMissing
+        context.prepare("missing", Direction::Input),
+        ValueContractPreparation::OperationMissing
     ));
     assert!(matches!(
-        context.prepare("shared", Side::Input),
-        ContractPreparation::OperationAmbiguous { .. }
+        context.prepare("shared", Direction::Input),
+        ValueContractPreparation::OperationAmbiguous { .. }
     ));
     assert!(matches!(
-        context.prepare("other", Side::Input),
-        ContractPreparation::NoContract
+        context.prepare("other", Direction::Input),
+        ValueContractPreparation::NoValueContract
     ));
-    let ContractPreparation::Ready(contract) = context.prepare("op", Side::Input) else {
+    let ValueContractPreparation::Ready(contract) = context.prepare("op", Direction::Input) else {
         panic!()
     };
     let outcome = contract.validate(&JsonValue::parse("null").unwrap());
@@ -107,8 +107,8 @@ fn cycles_are_conservative_even_with_a_dominating_success_branch() {
         serde_json::json!({"$ref":"#/operations/op/input"}),
         serde_json::json!({"anyOf":[true,{"$ref":"#/operations/op/input"}]}),
     ] {
-        let ContractPreparation::NoVerdict { detail } =
-            context(&document(schema)).prepare("op", Side::Input)
+        let ValueContractPreparation::NoVerdict { detail } =
+            context(&document(schema)).prepare("op", Direction::Input)
         else {
             panic!()
         };
@@ -161,7 +161,8 @@ fn pattern_preparation_failures_use_original_locations_and_safe_messages() {
                 let context = document(entry)
                     .value_contracts(Arc::new(DefaultEvaluator::new()), resources)
                     .unwrap();
-                let ContractPreparation::NoVerdict { detail } = context.prepare("op", Side::Input)
+                let ValueContractPreparation::NoVerdict { detail } =
+                    context.prepare("op", Direction::Input)
                 else {
                     panic!("an uncompilable pattern must refuse preparation")
                 };
@@ -212,8 +213,8 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
         );
         // Valid absent carriers now defer refusal to validation; malformed URI
         // syntax still refuses during preparation. Privacy applies in both phases.
-        let detail = match context(&doc).prepare("op", Side::Input) {
-            ContractPreparation::Ready(contract) => {
+        let detail = match context(&doc).prepare("op", Direction::Input) {
+            ValueContractPreparation::Ready(contract) => {
                 assert!(!reference.contains('\n'));
                 let ValueOutcome::NoVerdict { detail } =
                     contract.validate(&JsonValue::parse("null").unwrap())
@@ -223,7 +224,7 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
                 assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
                 detail
             }
-            ContractPreparation::NoVerdict { detail } => {
+            ValueContractPreparation::NoVerdict { detail } => {
                 assert!(reference.contains('\n'));
                 detail
             }
@@ -358,16 +359,16 @@ fn external_evaluator_construction_and_matching_stay_supported() {
     let context = document(serde_json::json!(true))
         .value_contracts(Arc::new(Custom(calls.clone())), ResourceSet::default())
         .unwrap();
-    let state = context.prepare("op", Side::Input);
+    let state = context.prepare("op", Direction::Input);
     match state {
-        ContractPreparation::Ready(contract) => assert_eq!(
+        ValueContractPreparation::Ready(contract) => assert_eq!(
             outcome_name(contract.validate(&JsonValue::parse("null").unwrap())),
             "fails"
         ),
-        ContractPreparation::NoContract
-        | ContractPreparation::OperationMissing
-        | ContractPreparation::OperationAmbiguous { .. }
-        | ContractPreparation::NoVerdict { .. } => panic!(),
+        ValueContractPreparation::NoValueContract
+        | ValueContractPreparation::OperationMissing
+        | ValueContractPreparation::OperationAmbiguous { .. }
+        | ValueContractPreparation::NoVerdict { .. } => panic!(),
     }
     let detail = NoVerdict {
         reason: NoVerdictReason::Undefined,

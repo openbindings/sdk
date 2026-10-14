@@ -123,21 +123,33 @@ test("SDK deadline interrupts stalled acquisition and retains body-phase metadat
 
 // HD-2: already-ready cancellation wins a tie; first observed expiry stays timeout.
 test("caller cancellation and timeout remain distinct with deterministic ties", async () => {
-  const control = new AbortController();
-  const result = await discovery.discover("https://example.test", {
-    timeoutMs: 1,
-    signal: control.signal,
-    fetch: async () => {
-      const start = performance.now();
-      while (performance.now() - start < 5) {
-        /* synchronous host boundary */
-      }
-      control.abort();
-      return new Response(text);
-    },
+  // A controlled clock makes the tie exact: the deadline passes and the caller
+  // aborts at the same observation, independent of how fast the host runs.
+  const original = performance.now.bind(performance);
+  let now = 0;
+  Object.defineProperty(performance, "now", {
+    configurable: true,
+    value: () => now,
   });
-  assert.equal(result.status, "cancelled");
-  assert.equal(result.reason, "aborted");
+  try {
+    const control = new AbortController();
+    const result = await discovery.discover("https://example.test", {
+      timeoutMs: 1,
+      signal: control.signal,
+      fetch: async () => {
+        now = 10;
+        control.abort();
+        return new Response(text);
+      },
+    });
+    assert.equal(result.status, "cancelled");
+    assert.equal(result.reason, "aborted");
+  } finally {
+    Object.defineProperty(performance, "now", {
+      configurable: true,
+      value: original,
+    });
+  }
   const timeout = await discovery.discover("https://example.test", {
     signal: AbortSignal.timeout(5),
     timeoutMs: 100,
@@ -203,7 +215,7 @@ test("invalid body chunks have a typed non-network failure", async () => {
 // HD-3/HD-4/HD-10: canonical CORS values, permissive default, exact reserved route spelling.
 test("publication uses serialized origins and matches the route exactly", async () => {
   const parsed = sdk.parseDocument(text).value;
-  const proof = parsed.validate().document;
+  const proof = parsed.validated().document;
   const publication = new discovery.DiscoveryPublication(proof);
   const response = publication.respond(
     new Request("https://example.test/.well-known/openbindings"),
@@ -225,11 +237,36 @@ test("publication uses serialized origins and matches the route exactly", async 
     "file://x",
   ])
     assert.throws(
-      () => new discovery.DiscoveryPublication(proof, { allowOrigin }),
+      () =>
+        new discovery.DiscoveryPublication(proof, {
+          allowOrigin: { origin: allowOrigin },
+        }),
+      { code: "invalid-allow-origin" },
+    );
+  for (const [allowOrigin, expected] of [
+    ["any", "*"],
+    ["null", "null"],
+    [{ origin: "https://client.example" }, "https://client.example"],
+  ]) {
+    const configured = new discovery.DiscoveryPublication(proof, {
+      allowOrigin,
+    });
+    assert.equal(
+      configured
+        .respond(new Request("https://example.test/.well-known/openbindings"))
+        .headers.get("access-control-allow-origin"),
+      expected,
+    );
+    configured.dispose();
+  }
+  for (const origin of ["", "*", "null"])
+    assert.throws(
+      () =>
+        new discovery.DiscoveryPublication(proof, { allowOrigin: { origin } }),
       { code: "invalid-allow-origin" },
     );
   const omitted = new discovery.DiscoveryPublication(proof, {
-    allowOrigin: "",
+    allowOrigin: "omit",
   });
   assert.equal(
     omitted

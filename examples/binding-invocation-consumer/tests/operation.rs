@@ -2,7 +2,7 @@
 use binding_invocation_consumer::{Catalog, KIND, yield_once};
 use openbindings::{
     JsonValue, NoVerdict, NoVerdictReason, ParsedDocument, PreparedSchema, ResourceSet,
-    SchemaEvaluator, SchemaRequest, Side, Source, ValueOutcome, ValueProblem, WorkControl,
+    SchemaEvaluator, SchemaRequest, Direction, Source, ValueOutcome, ValueProblem, WorkControl,
 };
 use openbindings_interface_synthesis::{
     CoverageStatus, SynthesisRequest, SynthesisSource, Synthesizer,
@@ -228,24 +228,24 @@ async fn manual_alias_ordered_selection_and_invalid_suffix_are_explicit() {
 
 #[tokio::test]
 async fn schema_rejection_withholds_values_and_retains_only_local_evidence() {
-    for (operation, side, stage, code, effects) in [
+    for (operation, direction, stage, code, effects) in [
         (
             r#"{"input":false}"#,
-            Side::Input,
+            Direction::Input,
             ValidationStage::Evaluation,
             "ERR_OPERATION_VALIDATION_FAILED",
             0,
         ),
         (
             r#"{"output":false}"#,
-            Side::Output,
+            Direction::Output,
             ValidationStage::Evaluation,
             "ERR_OPERATION_VALIDATION_FAILED",
             1,
         ),
         (
             r#"{"input":{"type":"null"}}"#,
-            Side::Input,
+            Direction::Input,
             ValidationStage::Preparation,
             "ERR_SCHEMA_UNRESOLVED",
             0,
@@ -267,7 +267,7 @@ async fn schema_rejection_withholds_values_and_retains_only_local_evidence() {
         assert_eq!(error.code(), code);
         assert!(error.data().is_none());
         let evidence = call.validation_failure().unwrap();
-        assert_eq!(evidence.side(), side);
+        assert_eq!(evidence.direction(), direction);
         assert_eq!(evidence.stage(), stage);
         match evidence.outcome() {
             ValueOutcome::Fails {
@@ -295,7 +295,7 @@ async fn schema_rejection_withholds_values_and_retains_only_local_evidence() {
         drop(control);
         drop(invoker);
         drop(provider);
-        assert_eq!(evidence.side(), side);
+        assert_eq!(evidence.direction(), direction);
     }
 }
 

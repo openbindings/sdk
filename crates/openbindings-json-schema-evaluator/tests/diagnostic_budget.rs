@@ -3,7 +3,7 @@ use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-fn prepared(schema: Value, limits: Limits, resources: ResourceSet) -> PreparedContract {
+fn prepared(schema: Value, limits: Limits, resources: ResourceSet) -> ValueContract {
     let doc = ParsedDocument::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
@@ -11,8 +11,8 @@ fn prepared(schema: Value, limits: Limits, resources: ResourceSet) -> PreparedCo
     let context = doc
         .value_contracts(Arc::new(DefaultEvaluator::with_limits(limits)), resources)
         .unwrap();
-    match context.prepare("op", Side::Input) {
-        ContractPreparation::Ready(contract) => contract,
+    match context.prepare("op", Direction::Input) {
+        ValueContractPreparation::Ready(contract) => contract,
         other => panic!("{other:?}"),
     }
 }

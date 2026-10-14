@@ -52,7 +52,7 @@ and its associated future is Send; local futures and Rc providers remain support
   conformance. Context construction checks the operation namespace, including unrelated
   malformed aliases; unrelated metadata may remain draft data.
 - The semantic partitions `Evidence`, `Conformance`, `ValueOutcome`,
-  `ContractPreparation` and `Side` are closed, supporting exhaustive handling.
+  `ValueContractPreparation` and `Direction` are closed, supporting exhaustive handling.
   Interpretation and no-verdict cause families are extensible. Rust matchers need a
   fallback for these causes. TypeScript exposes the known reason union for its
   version and is distributed with the matching Wasm engine; it does not add an
@@ -76,7 +76,7 @@ and its associated future is Send; local futures and Rc providers remain support
   For a missing resource, Rust `ParsedDocument::references()` and TypeScript
   `ParsedDocument.references()` expose explicit reference spellings and keyword
   locations; apply an application disclosure policy before logging these source facts.
-- `PreparedContract::resource_completeness()` borrows evaluator-declared Complete,
+- `ValueContract::resource_completeness()` borrows evaluator-declared Complete,
   Incomplete evidence, or Undeclared. Existing custom `PreparedSchema` implementations
   default to Undeclared. TypeScript's bundled evaluator exposes the complete/incomplete
   states through a frozen cached `resourceCompleteness` getter with no additional
@@ -127,21 +127,20 @@ Rust deadline and outcome items are defined in
 | --- | --- |
 | `AttemptTimeout::{Default, After(Duration), Unbounded}` | Whole-attempt policy: thirty seconds, a positive finite duration, or explicitly no deadline. Zero duration is a configuration error. Connect, TLS, headers, redirects, body and validation share one deadline. |
 | `AttemptTimeout::duration()` | Returns `Result<Option<Duration>, ConfigurationError>`; `None` denotes unbounded and zero returns `invalid-timeout`. |
-| `ClientOptions::timeout` | Defaults to `AttemptTimeout::Default`; successful reads and redirects never reset it. Byte-limit zero continues to select the default byte limit. |
+| `ClientOptions::timeout` | Defaults to `AttemptTimeout::Default`; successful reads and redirects never reset it. `max_document_bytes: usize` defaults to 1 MiB; explicit zero and `usize::MAX` are refused. |
 | `DiscoveryTimer::{now, sleep_until}` | Host monotonic time and a wake-capable absolute timer in the same epoch, expressed as `Duration`. Dropping the timer releases it; local futures are supported. |
-| `ClientOptions::discover_with_timer` | Races one host timer and caller `WorkControl` while invoking a repeatable one-hop callback. The callback must dispatch the normalized URL, expose redirects, deliver decoded bytes or a typed refusal, and release acquisition on drop. Connection-time DNS, peer and proxy policy belongs to the host. |
+| `discover(origin, &options, &control, &timer, transport)` | Races one host timer and caller `WorkControl` while invoking a repeatable one-hop callback. The callback must dispatch the normalized URL, expose redirects, deliver decoded bytes or a typed refusal, and release acquisition on drop. Connection-time DNS, peer and proxy policy belongs to the host. |
 | `DEFAULT_TIMEOUT_SECONDS` | Thirty-second SDK default. |
 | `MAX_REDIRECTS` | Ten followed redirects on native and portable checked paths. Browser Fetch owns its hidden redirect limit. |
 | `native::Client::new(ClientBuilder, ClientOptions)` | Installs SDK redirect policy last and builds the client, retaining application TLS, resolver, proxy, credential and decoding choices. Refuses downgrade and credential-replay hops before dispatch. Owns one Tokio attempt timer. |
 | `native::Client::with_delegated_policy(Client, ClientOptions)` | Accepts an already-built client through explicit host policy delegation. The application owns per-hop admission, the ten-redirect limit and credential handling. SDK deadline and cancellation handling still apply. |
 | `DiscoveryOutcome::Timeout` | SDK or identified transport deadline expired; distinct from caller `Cancelled`. Caller cancellation wins when both are ready at the same poll. Observed metadata and complete bounded body, if available, remain in the receipt. |
-| `FailureKind::RedirectPolicy` | Admission, downgrade, hop-limit, credential-replay or observable hidden/unfollowed redirect refusal; never document nonconformance or absence. |
-| `FailureKind::Decode` | Native only when the SDK refuses Content-Encoding left undecoded by the host. Native body-read errors yield `BodyFailure` with `Network` and upstream messages, including corrupt-coded and truncated bodies; identified deadlines yield `Timeout`. Portable transports may report their own decoding failures as `Decode`. |
+| `ErrorKind::RedirectPolicy` | Admission, downgrade, hop-limit, credential-replay or observable hidden/unfollowed redirect refusal; never document nonconformance or absence. |
+| `ErrorKind::Decode` | Native only when the SDK refuses Content-Encoding left undecoded by the host. Native body-read errors yield `BodyError` with `Network` and upstream messages, including corrupt-coded and truncated bodies; identified deadlines yield `Timeout`. Portable transports may report their own decoding failures as `Decode`. |
 
 Rust `ClientOptions` literals must supply `timeout` or use `..ClientOptions::default()`.
 Native callers now pass a builder to `Client::new`; built clients use the explicit
-delegated constructor. Portable `discover_with` without a timer returns
-`timer-unavailable` before I/O, including in unbounded mode. Other admission codes
+delegated constructor. Portable discovery requires an explicit host timer. Admission codes
 are `origin-policy`, `invalid-timeout` and `http-client-build`. Exhaustive outcome
 matches must handle `DiscoveryOutcome::Timeout`.
 
@@ -169,8 +168,9 @@ contexts and private-network rules govern hidden hops; the SDK cannot observe th
 Opaque/opaqueredirect responses mean policy cannot be established. Timers remain
 cooperative at blocking polls and synchronous validation boundaries.
 
-Publication defaults to CORS `*`; empty explicitly omits the header, while `null`
-or an exact ASCII browser-serialized tuple origin is accepted. Noncanonical scheme,
+Publication uses typed `AllowOrigin` choices: Rust `Any` (default), `Omit`, `Null`,
+or `Exact(String)`; TypeScript `"any"` (default), `"omit"`, `"null"`, or `{ origin: string }`.
+Exact origins must be canonical ASCII browser-serialized tuple origins. Noncanonical scheme,
 host or default-port spellings and opaque schemes are refused. Routes match the
 well-known path exactly, preserving reserved escapes. The SDK enables no reqwest
 gzip, brotli, deflate or stream features; applications opt into decoding on their
@@ -179,11 +179,11 @@ own dependency and client, with decoded-byte limits still enforced. See the
 
 ## Document assessment
 
-Rust `assess_document(input)` assesses exact JSON bytes using default admission
+Rust `validate_document(input)` assesses exact JSON bytes using default admission
 limits of 64 MiB and 1,000,000 nodes, with no nesting cap.
-`assess_document_with_limits(input, JsonLimits)` accepts caller-selected byte, node
+`validate_document_with_limits(input, JsonLimits)` accepts caller-selected byte, node
 and nesting limits, matching the explicit-limits shape of `JsonValue::parse_with_limits`.
-Both return `Result<DocumentAssessment, VersionRefusal>`; only a conformant
+Both return `Result<DocumentValidation, VersionRefusal>`; only a conformant
 assessment provides a `ValidatedDocument` proof.
 
 Admission precedes version selection. Until the complete JSON text is admitted,
@@ -228,7 +228,8 @@ code-based Display representation.
 | `missing-version` | OBI-03 | The openbindings member is absent. |
 | `name-grammar` | OBI-04 | A defined map key or operation alias violates the ASCII name grammar. |
 | `duplicate-operation-name` | OBI-05 | An operation key or alias repeats another occurrence in that namespace. |
-| `missing-target` | OBI-06, OBI-07, OBI-08 | A binding or dependency reference names no primary operation/source key. |
+| `unknown-operation` | OBI-06, OBI-08 | A binding or dependency reference names no primary operation key. |
+| `unknown-source` | OBI-07 | A binding reference names no primary source key. |
 | `schema-dialect` | OBI-09 | A contained schema names a dialect other than JSON Schema 2020-12. |
 | `absolute-schema-id` | OBI-11 | A document-resource schema ID is not an absolute URI. |
 | `reference-type` | OBI-11 | A schema reference cannot be interpreted as a URI-reference string. |
@@ -311,7 +312,7 @@ release checklist records those SDK-specific outcomes separately from source lan
 
 Optional default-evaluator schema facts use
 `DefaultEvaluator::new().with_schema_details(true)` (TS
-`contracts({ includeSchemaDetails: true })`). They retain original source snapshots
+`valueContracts({ includeSchemaDetails: true })`). They retain original source snapshots
 and share the diagnostic string-byte budget. `ValueProblemDetails::Truncated`
 sets result completeness false; absent details mean disabled or unavailable.
 Exact bounds and enum choices remain JSON token strings. Existing Rust evaluator
