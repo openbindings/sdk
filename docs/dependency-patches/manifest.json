@@ -20,7 +20,7 @@
         {
           "file": "Cargo.toml",
           "upstream_sha256": "a8318117cc87a9a88027d5820fc5507eda16cbf04e166cb35a26be5492a1f8d7",
-          "current_sha256": "b6354e7c8d86f8cb4c48a36ee5d544a5184953f5a11b7add95342738b0f1d78c"
+          "current_sha256": "62025bc7b44cca26565247221a3f77e1abcf414e35886afd0acf0358ada9da8c"
         },
         {
           "file": "Cargo.toml.orig",
@@ -30,7 +30,7 @@
         {
           "file": "OPENBINDINGS-PATCH.md",
           "upstream_sha256": null,
-          "current_sha256": "5ebf32ec4ae427f24c0f4678a97214bacc7d99a2844110c475a96b2970ed9e43"
+          "current_sha256": "adbf4f3674c9e6d918ebe2e302e23c98fb20c490f9530e82fdaf3f3e0718bd2c"
         },
         {
           "file": "UPSTREAM-Cargo.toml",
@@ -53,79 +53,14 @@
           "current_sha256": "00dbb3e1ff54034f6ab3a5d11187c5ce5a04fa00cd6fda37f1e0b98e47b77ddf"
         },
         {
-          "file": "src/error.rs",
-          "upstream_sha256": "f54132c4db6208ab441fd3a11841438601e0ca744b7278069a3e6a28b644a198",
-          "current_sha256": "02b4976e92b9b986e306c0cd04235eec6cc767ad5d443ec03458ffbe442eb225"
-        },
-        {
           "file": "src/keywords/additional_properties.rs",
           "upstream_sha256": "30f25ae93fc337472e19d6b7bb28f861395a8948170c387ac02eecf8ed8340e2",
-          "current_sha256": "8d3e91aee75a265b990894e6621d6a6a9e92ba8b517cf8ad4fc380d4bc7a941f"
-        },
-        {
-          "file": "src/keywords/any_of.rs",
-          "upstream_sha256": "3c53a84dc48b605e6295030eb920f70ea75ec91a10adb090dc5676dd11fd24de",
-          "current_sha256": "22ad056e673d759b7b8adc1e464551e260a81854968492737a6bdbd083c8d6e6"
-        },
-        {
-          "file": "src/keywords/custom.rs",
-          "upstream_sha256": "60c960a6c3abba037850e8d88c0640585de8e87006473f599d6f82b8ef8cccab",
-          "current_sha256": "6862dbca0be20216c91157c0db332279486e952c3fe43be2116ae166407fe4af"
-        },
-        {
-          "file": "src/keywords/helpers.rs",
-          "upstream_sha256": "018ad1041bbab2b720724d5a2b7cd2a34624d78c85507745e76b7a65bce7ae12",
-          "current_sha256": "1ce65140b234b731a8507e3baa7d3b496839a58227e1421f15bd84455c02d288"
-        },
-        {
-          "file": "src/keywords/items.rs",
-          "upstream_sha256": "1a996456706115b8ff7cfadc0ab4234b76e55748bd77ffb7ff70e34b451af07f",
-          "current_sha256": "1b8571fb9e03504029e21418f353d2b8d09e8e2a78168e9ed7c39430a56a6749"
-        },
-        {
-          "file": "src/keywords/min_length.rs",
-          "upstream_sha256": "cf7f3571345a3d9bfa369b5499f598a3b5b914e26067615bb4cdd3bcc8de2ee1",
-          "current_sha256": "11f85956708c57bd55e0d30cd6b65598594e6616e1b4b4a9fbfa67fd01de1cf0"
-        },
-        {
-          "file": "src/keywords/not.rs",
-          "upstream_sha256": "a8a01cc84db0a4c666331f0a01ea99465d262c1efb66d375c1b4ca91f6898680",
-          "current_sha256": "1a7e7d200321fc4daca426b329192e5ba247c1b09c8d28d888ca5913a1c2430e"
-        },
-        {
-          "file": "src/keywords/one_of.rs",
-          "upstream_sha256": "d54e1d6e8fa0e8b7009496eae18f1a95e7042bd26a30182e0f8ee2e49290f181",
-          "current_sha256": "43efb1f06f56e7f0427ef0364ce850c6b2fbb387ea04c2a1129cb63e3a5138ac"
-        },
-        {
-          "file": "src/keywords/pattern.rs",
-          "upstream_sha256": "10c06ddd49b4255b7da5e6afa41af82f15154e2b2924bb8cb710d7e4066e98f9",
-          "current_sha256": "4507e5f237d9ed354bef12999612492ab561abe5b7fb8aca75ff4db9fb6b06ca"
-        },
-        {
-          "file": "src/keywords/properties.rs",
-          "upstream_sha256": "1bda94fa03697ce44d205459a269d45b318a7f34e71d7e15599eeff411a9bae0",
-          "current_sha256": "01d851d83e8aa299fb1f2a6fe0af1f3515f15c7d75a180951cef28cd32c1603b"
-        },
-        {
-          "file": "src/keywords/property_names.rs",
-          "upstream_sha256": "3f62fcabf8c7c1b91441bd1162e033979419cb1d259763c4a640c429e7445a6e",
-          "current_sha256": "0fb164ef78cac9d68eb3dee4994849f53d012ab773f2919bed43f1fedf96d43f"
-        },
-        {
-          "file": "src/keywords/required.rs",
-          "upstream_sha256": "ad4190196899c15b802901bcaac5d96d418ef4796c278a1fa6343b3e34b1f3a7",
-          "current_sha256": "fec3b467727a2ead09e4f17eb83ea36e262a4aab5a760a237a1e323b80a4bbdc"
-        },
-        {
-          "file": "src/keywords/unevaluated_items.rs",
-          "upstream_sha256": "aa55739a28ee04128b3802fd106ab09c1359c2293a45b4dde6ae5266928eba87",
-          "current_sha256": "cb55a5cc255dc5486e8055c3f387a7fc9048d1d4a13285d077214c6502f626db"
+          "current_sha256": "4522aab171002ffd720c368c8638da9463066e6c063fa4f23915502a86a37be9"
         },
         {
           "file": "src/keywords/unevaluated_properties.rs",
           "upstream_sha256": "e2081d55a7f6f0675c76d3d55f904f1d9b9640f83e519ca0563c83c9e3bce341",
-          "current_sha256": "e290c62c5d36171c58f1a21b43dc42523548f1b39c2635d4f9d26c182be1622f"
+          "current_sha256": "d251a57c65bb34e0a3d5e6ce61856021286bf9690c47d554a37a7eefcac96a08"
         },
         {
           "file": "src/lib.rs",
@@ -135,7 +70,7 @@
         {
           "file": "src/node.rs",
           "upstream_sha256": "95f94125fc0df8101e698d3e4810d98de97dd43dc8ccd6cd68c2de663d7308ef",
-          "current_sha256": "fdf7a3e078c4b57bab1d401b2ff85a62180f12fa7c213f583025b7331927be17"
+          "current_sha256": "3ad9241a4ef93870fe70b1c87c1b125e54fa6021f19b8e28f8d63bf653901030"
         },
         {
           "file": "src/ob_ecma.rs",
@@ -145,12 +80,7 @@
         {
           "file": "src/ob_work.rs",
           "upstream_sha256": null,
-          "current_sha256": "5fb74bb9e63a92918a090028d8e2fee6b840f463ae8ca15887e2ddbb1ebe7f64"
-        },
-        {
-          "file": "src/paths.rs",
-          "upstream_sha256": "c8df21bbca8ed7cf86955a4b670254f69bbdc5fbedb7d2886f106335c7872747",
-          "current_sha256": "d1759e8c35b58d7c7b2e10fe751479ec1a01dca38190d5ace8f284f6d79220dc"
+          "current_sha256": "2bd505a7155617b7496127a656c150527ce6109e67d9772f7fd76b16d73a560f"
         },
         {
           "file": "src/properties.rs",
@@ -161,84 +91,9 @@
           "file": "src/regex.rs",
           "upstream_sha256": "dd26316b9d27a921859259e792d11b876f36e0ebc150e7c55eedd9b8ce9c8b83",
           "current_sha256": "da713520c737b552629ad5f97b832b557c4302743385a168aa6ae66b48c4711e"
-        },
-        {
-          "file": "src/validator.rs",
-          "upstream_sha256": "2df8295e15a93b704ad9d37154185b93056f0ebf3bda41381b32cb03e914a1c4",
-          "current_sha256": "a91004b9be660af62e9e35df93945042bcf95b05e0bd0115edc310202b96ed96"
         }
       ],
       "patch": "jsonschema.patch"
-    },
-    {
-      "upstream": "jsonschema-value",
-      "version": "0.58.6",
-      "upstream_archive_sha256": "39b7670345e5ce87371339d13705dbb9276b7e3e934bbe1efa2c6734a1f65a96",
-      "vcs": {
-        "git": {
-          "sha1": "55ac1664384793c5d3b20745d3f9c169dfe2c06f"
-        },
-        "path_in_vcs": "crates/jsonschema-value"
-      },
-      "modified_package": "openbindings-internal-jsonschema-value",
-      "changes": [
-        {
-          "file": ".cargo_vcs_info.json",
-          "upstream_sha256": "ee8166ff3889517d9b0ff72c62a57bea91d872c2d46160033de2c60340cb06dc",
-          "current_sha256": null
-        },
-        {
-          "file": "Cargo.toml",
-          "upstream_sha256": "8270a39ed0531eaf4de5ff516df9e09d17d3c2a697b0b428b02673a661f37844",
-          "current_sha256": "f0a69661a91623a51e04c1f9b20065fee701b6f34b966dd26f7b0aaa3420c45d"
-        },
-        {
-          "file": "Cargo.toml.orig",
-          "upstream_sha256": "fc9363e8e19857cdd58db66ce582a24cb0dd3047684955728e67b94b46b7e8cd",
-          "current_sha256": null
-        },
-        {
-          "file": "LICENSE",
-          "upstream_sha256": null,
-          "current_sha256": "117829c3ca21efb132d81a44b55363d395ab8eea18526873bc828da4c0e5f038"
-        },
-        {
-          "file": "OPENBINDINGS-PATCH.md",
-          "upstream_sha256": null,
-          "current_sha256": "84a97f02c31c02a8c825d45a369991727dc5958689a05fc94ac84a4d6c5eda7d"
-        },
-        {
-          "file": "UPSTREAM-Cargo.toml",
-          "upstream_sha256": null,
-          "current_sha256": "fc9363e8e19857cdd58db66ce582a24cb0dd3047684955728e67b94b46b7e8cd"
-        },
-        {
-          "file": "UPSTREAM-VCS.json",
-          "upstream_sha256": null,
-          "current_sha256": "ee8166ff3889517d9b0ff72c62a57bea91d872c2d46160033de2c60340cb06dc"
-        },
-        {
-          "file": "src/cmp.rs",
-          "upstream_sha256": "425eb00b7917714f42ade82a4dd7ed7d720e0221ad231c706ffb6d9e5219cde4",
-          "current_sha256": "5ab022709e3fc37b2288f90927466437b4416014f014de24a944b17a0328921f"
-        },
-        {
-          "file": "src/lib.rs",
-          "upstream_sha256": "2f33edb30dd9fec570e8a938b5f88a892940f5fec24170394999dc53011b7758",
-          "current_sha256": "cc164bb6057a8af2153fa0ad104c7106d60839b2328c76a5fc9da6f5bbbee1a0"
-        },
-        {
-          "file": "src/ob_decimal.rs",
-          "upstream_sha256": null,
-          "current_sha256": "fac24e79d504001b9f1221d41ee024ae4066cf4133b1aa33e4a06a170c28ba5c"
-        },
-        {
-          "file": "src/types.rs",
-          "upstream_sha256": "85386f9c610b1ee4a256ced203fe2f5deb172b3c261cb4610753cfe48b8bd2c1",
-          "current_sha256": "30190d963ed9a7992144f39a1402b12ee2278491841579276623f6d444620285"
-        }
-      ],
-      "patch": "jsonschema-value.patch"
     },
     {
       "upstream": "regress",
@@ -334,96 +189,6 @@
         }
       ],
       "patch": "regress.patch"
-    },
-    {
-      "upstream": "serde_json",
-      "version": "1.0.151",
-      "upstream_archive_sha256": "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14",
-      "vcs": {
-        "git": {
-          "sha1": "de8500740cdcabffb9734f503e4889def823cf10"
-        },
-        "path_in_vcs": ""
-      },
-      "modified_package": "openbindings-internal-serde-json",
-      "changes": [
-        {
-          "file": ".cargo_vcs_info.json",
-          "upstream_sha256": "5bfedd83df665d1746f17958cdf29a1e62743049730e95ffc64912a984336eb5",
-          "current_sha256": null
-        },
-        {
-          "file": "Cargo.toml",
-          "upstream_sha256": "00b920255c320a278bf25b962b491263a19d8c90e12e4a91c1d823db71eabb2f",
-          "current_sha256": "f0b97ae804a17411a31c78c92081e107de136f68d6443535d39de26fb93048ff"
-        },
-        {
-          "file": "Cargo.toml.orig",
-          "upstream_sha256": "ade7399c00ef7d8320fe5427e4c23f50686d6476584b2ea558a795cc9139f78a",
-          "current_sha256": null
-        },
-        {
-          "file": "OPENBINDINGS-PATCH.md",
-          "upstream_sha256": null,
-          "current_sha256": "b32284e2fd94c2cce8d5cf906480602025e07e64b961f5ad541defee4e3b50e0"
-        },
-        {
-          "file": "UPSTREAM-Cargo.toml",
-          "upstream_sha256": null,
-          "current_sha256": "ade7399c00ef7d8320fe5427e4c23f50686d6476584b2ea558a795cc9139f78a"
-        },
-        {
-          "file": "UPSTREAM-VCS.json",
-          "upstream_sha256": null,
-          "current_sha256": "5bfedd83df665d1746f17958cdf29a1e62743049730e95ffc64912a984336eb5"
-        }
-      ],
-      "patch": "serde_json.patch"
-    },
-    {
-      "upstream": "referencing",
-      "version": "0.58.6",
-      "upstream_archive_sha256": "558f3855529c0a7e78a48e409fa653456e55f1b167eab4109c16a255b7727e3f",
-      "vcs": {
-        "git": {
-          "sha1": "55ac1664384793c5d3b20745d3f9c169dfe2c06f"
-        },
-        "path_in_vcs": "crates/jsonschema-referencing"
-      },
-      "modified_package": "openbindings-internal-referencing",
-      "changes": [
-        {
-          "file": ".cargo_vcs_info.json",
-          "upstream_sha256": "34edc1152e075903e3833b3ec4b8ffaac81d5e718cfa61390340c34f0722b6d7",
-          "current_sha256": null
-        },
-        {
-          "file": "Cargo.toml",
-          "upstream_sha256": "b76476723bee5d0c68b8e970324254a5a4d75d7a264d6a31f1664f5abc1f87a4",
-          "current_sha256": "0125f266367aa2bb5a310791d41f649de8fd4c5de7afed6fef0b3b8557d07ce5"
-        },
-        {
-          "file": "Cargo.toml.orig",
-          "upstream_sha256": "67f56523e3bb341ee112a625cd236e84a03592285e95d96a7bf686d725d2f80b",
-          "current_sha256": null
-        },
-        {
-          "file": "OPENBINDINGS-PATCH.md",
-          "upstream_sha256": null,
-          "current_sha256": "0a06a27d61bd730249126a14fe24a2d88d3f7b7770b24938bf93cdfcb1474b66"
-        },
-        {
-          "file": "UPSTREAM-Cargo.toml",
-          "upstream_sha256": null,
-          "current_sha256": "67f56523e3bb341ee112a625cd236e84a03592285e95d96a7bf686d725d2f80b"
-        },
-        {
-          "file": "UPSTREAM-VCS.json",
-          "upstream_sha256": null,
-          "current_sha256": "34edc1152e075903e3833b3ec4b8ffaac81d5e718cfa61390340c34f0722b6d7"
-        }
-      ],
-      "patch": "referencing.patch"
     }
   ]
 }

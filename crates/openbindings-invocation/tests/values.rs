@@ -75,7 +75,7 @@ fn owned_input_preserves_opaque_exact_values_without_normalization() {
         again.binding.content.unwrap().text(),
         input.binding.content.as_ref().unwrap().text()
     );
-    let serde_wire = serde_json_compat::to_string(&input).unwrap();
+    let serde_wire = serde_json::to_string(&input).unwrap();
     assert_eq!(
         json(&serde_wire).get("context").unwrap().text(),
         input.context.as_ref().unwrap().text()
@@ -168,7 +168,7 @@ fn native_carriers_cannot_hide_illegal_or_shadowed_fields_in_extensions() {
         let mut binding = BindingValue::default();
         binding.extensions.insert(name.into(), json("null"));
         assert!(binding.to_json().is_err());
-        assert!(serde_json_compat::to_string(&binding).is_err());
+        assert!(serde_json::to_string(&binding).is_err());
     }
 }
 
@@ -329,10 +329,7 @@ fn portable_errors_preserve_unknown_codes_and_absent_null_exact_data() {
             data.as_ref().map(JsonValue::text)
         );
         assert!(decoded.context_required().is_none());
-        assert_eq!(
-            serde_json_compat::to_string(&error).unwrap(),
-            encoded.text()
-        );
+        assert_eq!(serde_json::to_string(&error).unwrap(), encoded.text());
     }
     for value in [
         r#"{"code":""}"#,

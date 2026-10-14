@@ -396,14 +396,10 @@ impl<F: Json> Validate<F> for SmallPropertiesWithRequired2Validator<F> {
         {
             // Check required
             if object.get(&self.first_key).is_none() {
-                crate::ob_work::push_error(errors, || {
-                    self.missing(&self.first, instance, location, tracker)
-                });
+                errors.push(self.missing(&self.first, instance, location, tracker));
             }
             if object.get(&self.second_key).is_none() {
-                crate::ob_work::push_error(errors, || {
-                    self.missing(&self.second, instance, location, tracker)
-                });
+                errors.push(self.missing(&self.second, instance, location, tracker));
             }
             if object.len() <= self.properties.len() {
                 for (name, value) in object.members() {

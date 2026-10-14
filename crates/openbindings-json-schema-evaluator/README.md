@@ -142,6 +142,8 @@ Select `DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream)` or
 `proof.valueContracts({ diagnostics: "upstream" })` to request the library's own
 first error through `validate()`. Messages remain value-free; available paths map
 to original locations and optional schema facts may expose source operands.
+A schema pointer absent from its original source is shortened to the nearest
+enclosing pointer that exists, without keyword-specific interpretation.
 This mode is **library-bounded**: construction can allocate in proportion to inputs
 and can overflow the stack on deep values. The SDK promises nothing stronger than
 the library. One first error does not establish diagnostic completeness, so the

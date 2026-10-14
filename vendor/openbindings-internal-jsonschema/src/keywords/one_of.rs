@@ -152,14 +152,12 @@ impl<F: Json> Validate<F> for SingleOneOfValidator<F> {
                 crate::paths::capture_evaluation_path(tracker, &self.location),
                 location.into(),
                 instance.lazy_value(),
-                crate::ob_work::diagnostic_payload(|| {
-                    vec![{
-                        let mut branch = Vec::new();
-                        self.node
-                            .collect_errors(instance, location, tracker, ctx, &mut branch);
-                        branch
-                    }]
-                }),
+                vec![{
+                    let mut branch = Vec::new();
+                    self.node
+                        .collect_errors(instance, location, tracker, ctx, &mut branch);
+                    branch
+                }],
             ))
         }
     }
@@ -210,22 +208,14 @@ impl<F: Json, D: Dispatch<F>> Validate<F> for OneOfValidator<F, D> {
                     crate::paths::capture_evaluation_path(tracker, &self.location),
                     location.into(),
                     instance.lazy_value(),
-                    crate::ob_work::diagnostic_payload(|| {
-                        self.schemas
-                            .iter()
-                            .map(|schema| {
-                                let mut branch = Vec::new();
-                                schema.collect_errors(
-                                    instance,
-                                    location,
-                                    tracker,
-                                    ctx,
-                                    &mut branch,
-                                );
-                                branch
-                            })
-                            .collect()
-                    }),
+                    self.schemas
+                        .iter()
+                        .map(|schema| {
+                            let mut branch = Vec::new();
+                            schema.collect_errors(instance, location, tracker, ctx, &mut branch);
+                            branch
+                        })
+                        .collect(),
                 ));
             }
             Ok(())
@@ -235,16 +225,14 @@ impl<F: Json, D: Dispatch<F>> Validate<F> for OneOfValidator<F, D> {
                 crate::paths::capture_evaluation_path(tracker, &self.location),
                 location.into(),
                 instance.lazy_value(),
-                crate::ob_work::diagnostic_payload(|| {
-                    self.schemas
-                        .iter()
-                        .map(|schema| {
-                            let mut branch = Vec::new();
-                            schema.collect_errors(instance, location, tracker, ctx, &mut branch);
-                            branch
-                        })
-                        .collect()
-                }),
+                self.schemas
+                    .iter()
+                    .map(|schema| {
+                        let mut branch = Vec::new();
+                        schema.collect_errors(instance, location, tracker, ctx, &mut branch);
+                        branch
+                    })
+                    .collect(),
             ))
         }
     }

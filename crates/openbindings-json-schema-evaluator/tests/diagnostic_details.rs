@@ -38,6 +38,93 @@ fn failure(result: &ValueOutcome) -> (&[ValueProblem], bool) {
     (problems, *problems_complete)
 }
 #[test]
+fn upstream_locations_exist_in_original_document_and_supplied_resources() {
+    let uri = "https://example.test/schema";
+    for (schema, input, expected) in [
+        (
+            r#"{"dependentRequired":{"a":["b"]}}"#,
+            r#"{"a":1}"#,
+            "/dependentRequired",
+        ),
+        (
+            r#"{"properties":{"a/~雪":{"dependentRequired":{"x":["y"]}}}}"#,
+            r#"{"a/~雪":{"x":1}}"#,
+            "/properties/a~1~0雪/dependentRequired",
+        ),
+        (
+            r#"{"prefixItems":[{"dependentRequired":{"a":["b"]}}]}"#,
+            r#"[{"a":1}]"#,
+            "/prefixItems/0/dependentRequired",
+        ),
+        (
+            r##"{"$id":"https://example.test/schema","$defs":{"dep":{"dependentRequired":{"a":["b"]}}},"$ref":"#/$defs/dep"}"##,
+            r#"{"a":1}"#,
+            "/$defs/dep/dependentRequired",
+        ),
+        (
+            r#"{"dependentSchemas":{"a":{"required":["b"]}}}"#,
+            r#"{"a":1}"#,
+            "/dependentSchemas/a/required",
+        ),
+        (
+            r#"{"contains":true,"minContains":2}"#,
+            "[1]",
+            "/minContains",
+        ),
+        (
+            r#"{"contains":true,"maxContains":0}"#,
+            "[1]",
+            "/maxContains",
+        ),
+        (
+            r#"{"propertyNames":{"pattern":"^a$"}}"#,
+            r#"{"b":1}"#,
+            "/propertyNames",
+        ),
+        (r#"{"unevaluatedItems":false}"#, "[1]", "/unevaluatedItems"),
+        (
+            r#"{"unevaluatedProperties":false}"#,
+            r#"{"a":1}"#,
+            "/unevaluatedProperties",
+        ),
+    ] {
+        for external in [false, true] {
+            let (entry, resources) = if external {
+                (
+                    format!(r#"{{"$ref":"{uri}"}}"#),
+                    ResourceSet::new([SchemaResource {
+                        uri: uri.into(),
+                        document: JsonValue::parse(schema).unwrap(),
+                    }])
+                    .unwrap(),
+                )
+            } else {
+                (schema.to_owned(), ResourceSet::default())
+            };
+            let text =
+                format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{entry}}}}}}}"#);
+            let value = JsonValue::parse(input).unwrap();
+            let coarse = prepare(&text, resources.clone(), false).validate(&value);
+            assert!(failure(&coarse).0.is_empty());
+            let upstream = prepare(&text, resources, true).validate(&value);
+            let location = failure(&upstream).0[0].schema_location.as_ref().unwrap();
+            assert_eq!(location.resource.as_deref(), external.then_some(uri));
+            assert_eq!(
+                location.pointer,
+                if external {
+                    expected.to_owned()
+                } else {
+                    format!("/operations/op/input{expected}")
+                },
+                "{schema}"
+            );
+            let source = JsonValue::parse(if external { schema } else { &text }).unwrap();
+            assert!(source.at(&location.pointer).is_some());
+        }
+    }
+}
+
+#[test]
 fn exact_facts_private_defaults_and_recovery() {
     let cases = [
         (r#"{"type":"integer"}"#, r#""SECRET-instance""#, "type"),

@@ -383,10 +383,7 @@ async fn exact_persistence_budgets_and_editing_do_not_reassign_evidence() {
     assert_eq!(result.coverage().source_keys(), ["api"]);
     let encoded = result.to_json().unwrap();
     assert!(encoded.text().contains("9007199254740993"));
-    assert_eq!(
-        encoded.text(),
-        serde_json_compat::to_string(&result).unwrap()
-    );
+    assert_eq!(encoded.text(), serde_json::to_string(&result).unwrap());
     let bytes = encoded.text().len();
     assert!(
         result

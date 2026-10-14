@@ -779,9 +779,8 @@ impl<F: Json> Validate<F> for UnevaluatedItemsValidator<F> {
             self.validators
                 .mark_evaluated_indexes(instance, &mut indexes, ctx);
             let mut unevaluated = vec![];
-            let mut invalid_indexes = vec![];
 
-            for (index, (item, is_evaluated)) in array.elements().zip(indexes).enumerate() {
+            for (item, is_evaluated) in array.elements().zip(indexes) {
                 if !is_evaluated {
                     let is_valid = if let Some(validator) = &self.validators.unevaluated {
                         validator.is_valid(&item, ctx)
@@ -790,12 +789,7 @@ impl<F: Json> Validate<F> for UnevaluatedItemsValidator<F> {
                     };
 
                     if !is_valid {
-                        if crate::ob_work::diagnostic_collection_item() {
-                            unevaluated.push(crate::ob_work::diagnostic_payload(|| {
-                                item.diagnostic_text()
-                            }));
-                            invalid_indexes.push(index);
-                        }
+                        unevaluated.push(item.to_value().to_string());
                     }
                 }
             }
@@ -807,8 +801,7 @@ impl<F: Json> Validate<F> for UnevaluatedItemsValidator<F> {
                     location.into(),
                     instance.lazy_value(),
                     unevaluated,
-                )
-                .with_unevaluated_indexes(invalid_indexes));
+                ));
             }
         }
         Ok(())
@@ -838,16 +831,12 @@ impl<F: Json> Validate<F> for UnevaluatedItemsValidator<F> {
                         validator.evaluate_instance_below(&item, &location.push(idx), tracker, ctx);
                     if !child.valid {
                         invalid = true;
-                        unevaluated.push(crate::ob_work::diagnostic_payload(|| {
-                            item.diagnostic_text()
-                        }));
+                        unevaluated.push(item.to_value().to_string());
                     }
                     children.push(&mut ctx.arena, child);
                 } else {
                     invalid = true;
-                    unevaluated.push(crate::ob_work::diagnostic_payload(|| {
-                        item.diagnostic_text()
-                    }));
+                    unevaluated.push(item.to_value().to_string());
                 }
             }
 

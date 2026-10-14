@@ -2,15 +2,12 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 mod details;
-mod literals;
+mod operands;
 #[cfg(test)]
 extern crate self as openbindings_json_schema_evaluator;
 mod planner;
 use openbindings::*;
-use openbindings_internal_json::{
-    backend::{self, FlatJson},
-    numeric,
-};
+use openbindings_internal_json::backend::{self, FlatJson};
 use openbindings_internal_schema::{
     Program as EvaluationProgram, ProjectedResource as SchemaResource,
 };
@@ -196,7 +193,7 @@ impl DefaultEvaluator {
         control: &dyn WorkControl,
     ) -> Result<Compiled, NoVerdict> {
         let mut registry = jsonschema::Registry::new().retriever(NoRetrieval);
-        let mut literals = literals::Literals::default();
+        let mut literals = operands::Operands::default();
         for resource in &program.resources {
             control.check()?;
             check_patterns(resource, &program, &self.limits, control)?;
@@ -233,7 +230,7 @@ impl DefaultEvaluator {
             )
         })?;
         let validator = literals
-            .apply(numeric::apply(jsonschema::options_for::<FlatJson>()))
+            .apply(jsonschema::options_for::<FlatJson>())
             .with_registry(&registry)
             .with_draft(jsonschema::Draft::Draft202012)
             .with_retriever(NoRetrieval)
@@ -301,6 +298,13 @@ impl Compiled {
                         .original_location(uri.as_str())
                         .map(original_location)
                 });
+                let location = match location {
+                    Some(at) => match details::enclosing_location(source, at, control) {
+                        Ok(location) => location,
+                        Err(()) => return Ok(None),
+                    },
+                    None => None,
+                };
                 // Generated partial-program errors are not original schema evidence.
                 if original_only && location.is_none() {
                     return Ok(None);
@@ -591,7 +595,7 @@ fn evaluation_stop(stop: jsonschema::ob_work::Stop) -> NoVerdict {
             "numeric-arithmetic-limit",
             "numeric arithmetic exceeds the admitted evaluation limit",
         ),
-        Stop::Work | Stop::Depth | Stop::Diagnostics => (
+        Stop::Work | Stop::Depth => (
             NoVerdictReason::LimitExceeded,
             "evaluation-work-limit",
             "evaluation work or depth limit reached",
@@ -650,7 +654,7 @@ mod diagnostic_tests {
         let cycle = evaluation_stop(Stop::Cycle);
         assert_eq!(cycle.reason, NoVerdictReason::ConservativePreparation);
         assert_eq!(cycle.code, "evaluation-cycle");
-        for stop in [Stop::Work, Stop::Depth, Stop::Diagnostics, Stop::Arithmetic] {
+        for stop in [Stop::Work, Stop::Depth, Stop::Arithmetic] {
             let stopped = evaluation_stop(stop);
             assert_eq!(stopped.reason, NoVerdictReason::LimitExceeded);
             assert_ne!(stopped.code, cycle.code);

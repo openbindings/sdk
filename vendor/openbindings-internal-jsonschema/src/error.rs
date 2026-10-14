@@ -330,10 +330,7 @@ pub enum ValidationErrorKind {
     /// When the input value doesn't match one or multiple required types.
     Type { kind: TypeKind },
     /// Unexpected items.
-    UnevaluatedItems {
-        unexpected: Vec<String>,
-        indexes: Vec<usize>,
-    },
+    UnevaluatedItems { unexpected: Vec<String> },
     /// Unexpected properties.
     UnevaluatedProperties { unexpected: Vec<String> },
     /// When the input array has non-unique elements.
@@ -408,16 +405,6 @@ pub struct ValidationErrorParts<'a> {
 
 /// Shortcuts for creation of specific error kinds.
 impl<'a> ValidationError<'a> {
-    pub(crate) fn with_unevaluated_indexes(mut self, indexes: Vec<usize>) -> Self {
-        if let ValidationErrorKind::UnevaluatedItems {
-            indexes: target, ..
-        } = &mut self.repr.kind
-        {
-            *target = indexes;
-        }
-        self
-    }
-
     /// Creates a new validation error from parts.
     #[inline]
     #[must_use]
@@ -565,17 +552,6 @@ impl<'a> ValidationError<'a> {
     /// Converts the `ValidationError` into an owned version with `'static` lifetime.
     #[must_use]
     pub fn to_owned(self) -> ValidationError<'static> {
-        if crate::ob_work::metadata_only() {
-            let repr = *self.repr;
-            return ValidationError::new(
-                LazyInstance::Ready(Cow::Owned(Value::Null)),
-                repr.kind,
-                repr.instance_path,
-                repr.schema_path,
-                LazyEvaluationPath::SameAsSchemaPath,
-            )
-            .with_absolute_keyword_location(repr.absolute_keyword_location);
-        }
         let parts = self.into_parts();
         ValidationError::new(
             LazyInstance::Ready(Cow::Owned(parts.instance.into_owned())),
@@ -1216,10 +1192,7 @@ impl<'a> ValidationError<'a> {
     ) -> ValidationError<'a> {
         Self::borrowed(
             instance,
-            ValidationErrorKind::UnevaluatedItems {
-                unexpected,
-                indexes: Vec::new(),
-            },
+            ValidationErrorKind::UnevaluatedItems { unexpected },
             instance_path,
             schema_path,
             tracker,
@@ -1307,7 +1280,7 @@ impl<'a> ValidationError<'a> {
     /// so evaluation path equals schema path.
     pub(crate) fn with_context<'i>(
         self,
-        instance: LazyInstance<'i>,
+        instance: &'i Value,
         instance_path: &LazyLocation,
         schema_path: &Location,
         keyword: &str,
@@ -1320,7 +1293,7 @@ impl<'a> ValidationError<'a> {
             other => other,
         };
         ValidationError::new(
-            instance,
+            LazyInstance::Ready(Cow::Borrowed(instance)),
             kind,
             instance_path.into(),
             schema_path.clone(),
@@ -1649,7 +1622,7 @@ impl fmt::Display for ValidationError<'_> {
                     multiple_of
                 )
             }
-            ValidationErrorKind::UnevaluatedItems { unexpected, .. } => {
+            ValidationErrorKind::UnevaluatedItems { unexpected } => {
                 f.write_str("Unevaluated items are not allowed (")?;
                 write_quoted_list(f, unexpected)?;
                 write_unexpected_suffix(f, unexpected.len())
@@ -1844,7 +1817,7 @@ impl fmt::Display for MaskedValidationError<'_, '_, '_> {
                     self.placeholder, multiple_of
                 )
             }
-            ValidationErrorKind::UnevaluatedItems { unexpected, .. } => {
+            ValidationErrorKind::UnevaluatedItems { unexpected } => {
                 f.write_str("Unevaluated items are not allowed (")?;
                 write_item_count(f, unexpected.len())
             }

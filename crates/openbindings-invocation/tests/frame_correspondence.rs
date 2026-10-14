@@ -680,7 +680,7 @@ fn malformed_output_and_invalid_safe_challenges_are_not_portable_successes() {
 
 #[test]
 fn operation_role_reuses_the_same_closed_frame_protocol() {
-    use serde_json_compat::Value;
+    use serde_json::Value;
     // Ignore explanatory annotations, retaining every executable schema keyword.
     fn executable(value: &mut Value) {
         match value {
@@ -699,9 +699,9 @@ fn operation_role_reuses_the_same_closed_frame_protocol() {
             _ => (),
         }
     }
-    let mut binding: Value = serde_json_compat::from_str(ROLE).unwrap();
+    let mut binding: Value = serde_json::from_str(ROLE).unwrap();
     let mut operation: Value =
-        serde_json_compat::from_str(include_str!("fixtures/operation-invoker-0.1.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/operation-invoker-0.1.json")).unwrap();
     executable(&mut binding);
     executable(&mut operation);
     assert_eq!(

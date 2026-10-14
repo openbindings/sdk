@@ -7,6 +7,7 @@ mod json;
 mod raw;
 pub use json::*;
 
+pub mod decimal;
 pub mod numeric;
 
 #[warn(missing_docs)]

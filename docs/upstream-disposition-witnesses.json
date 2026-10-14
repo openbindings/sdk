@@ -27,8 +27,8 @@
       "support_kind": "shared-source-reasoning",
       "support": [
         "crates/openbindings-json-schema-evaluator/tests/contracts.rs::upstream_test_dispositions_use_the_supported_exact_ecma_u_path",
-        "crates/openbindings-internal-json/src/numeric.rs",
-        "vendor/openbindings-internal-jsonschema-value/src/types.rs"
+        "crates/openbindings-internal-json/src/backend.rs",
+        "crates/openbindings-internal-json/src/decimal.rs"
       ],
       "claim": "Root integer +/-1e1000001 is directly tested. The raw items-array wrapper is not; it uses the same exact numeric predicate in the supported evaluator."
     },
@@ -38,8 +38,8 @@
       "support_kind": "shared-source-reasoning",
       "support": [
         "crates/openbindings-json-schema-evaluator/tests/contracts.rs::upstream_test_dispositions_use_the_supported_exact_ecma_u_path",
-        "crates/openbindings-internal-json/src/numeric.rs",
-        "vendor/openbindings-internal-jsonschema-value/src/types.rs"
+        "crates/openbindings-internal-json/src/backend.rs",
+        "crates/openbindings-internal-json/src/decimal.rs"
       ],
       "claim": "Root integer +/-1e1000001 is directly tested. The raw items-array wrapper is not; it uses the same exact numeric predicate in the supported evaluator."
     },

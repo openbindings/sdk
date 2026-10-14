@@ -904,23 +904,21 @@ impl<F: Json> Validate<F> for ArrayShapeValidator<F> {
         errors: &mut Vec<ValidationError<'i>>,
     ) {
         let Some(array) = instance.as_array() else {
-            crate::ob_work::push_error(errors, || {
-                self.absorbed.type_error::<F>(instance, location, tracker)
-            });
+            errors.push(self.absorbed.type_error::<F>(instance, location, tracker));
             return;
         };
         let count = array.len() as u64;
         if count < self.min_items {
-            crate::ob_work::push_error(errors, || {
+            errors.push(
                 self.absorbed
-                    .min_items_error::<F>(instance, location, tracker)
-            });
+                    .min_items_error::<F>(instance, location, tracker),
+            );
         }
         if count > self.max_items {
-            crate::ob_work::push_error(errors, || {
+            errors.push(
                 self.absorbed
-                    .max_items_error::<F>(instance, location, tracker)
-            });
+                    .max_items_error::<F>(instance, location, tracker),
+            );
         }
         match &self.items {
             FusedItems::Generic(node) => {

@@ -1,4 +1,4 @@
-"""Keep the two package-identity forks mechanical, and their private graph wired."""
+"""Audit upstream source identities, the single-serde graph, and SDK boundaries."""
 from pathlib import Path
 import argparse
 import hashlib
@@ -11,38 +11,34 @@ p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--upstream-dir', type=Path, help='Also verify the original downloaded crate archives')
 a = p.parse_args()
 root = Path(__file__).resolve().parents[1]
-records = json.loads((root / 'docs/dependency-isolation.json').read_text())['mechanical_packages']
+graph = json.loads(subprocess.check_output(
+    ['cargo', 'metadata', '--offline', '--locked', '--format-version', '1'], cwd=root))
+records = json.loads((root / 'docs/dependency-isolation.json').read_text())['registry_packages']
 for record in records:
-    package = root / 'vendor' / record['package']
-    actual = {path.relative_to(package).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
-              for path in package.rglob('*.rs') if 'target' not in path.parts}
-    assert actual == record['rust_files'], f"upstream Rust source changed: {record['package']}"
+    matches = [p for p in graph['packages'] if p['name'] == record['package']]
+    assert len(matches) == 1, record['package']
+    package = matches[0]
+    assert package['version'] == record['version'] and package['source'].startswith('registry+'), package
+    directory = Path(package['manifest_path']).parent
+    actual = {p.relative_to(directory).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+              for p in directory.rglob('*.rs') if 'target' not in p.parts}
+    assert actual == record['rust_files'], record['package']
     if a.upstream_dir:
-        archive = a.upstream_dir / (record['upstream'] + '-' + record['version'] + '.crate')
+        archive = a.upstream_dir / (record['package'] + '-' + record['version'] + '.crate')
         assert hashlib.sha256(archive.read_bytes()).hexdigest() == record['archive_sha256']
         with tarfile.open(archive) as tar:
-            upstream = {member.name.split('/', 1)[1]: hashlib.sha256(tar.extractfile(member).read()).hexdigest()
-                        for member in tar.getmembers() if member.isfile() and member.name.endswith('.rs')}
-        assert upstream == record['rust_files'], record['package']
-    manifest = tomllib.loads((package / 'Cargo.toml').read_text())
-    assert manifest['package']['name'] == record['package']
-    assert manifest['package']['publish'] is False
-
-for name in ['jsonschema', 'jsonschema-value', 'referencing']:
-    manifest = tomllib.loads((root / 'vendor' / ('openbindings-internal-' + name) / 'Cargo.toml').read_text())
-    dep = manifest['dependencies']['serde_json']
-    assert dep['package'] == 'openbindings-internal-serde-json'
-    assert dep['version'] == '=1.0.151-ob.1'
-    assert dep['path'] == '../openbindings-internal-serde-json'
-manifest = tomllib.loads((root / 'vendor/openbindings-internal-jsonschema/Cargo.toml').read_text())
-assert manifest['dependencies']['referencing'] == {
-    'package': 'openbindings-internal-referencing', 'path': '../openbindings-internal-referencing',
-    'version': '=0.58.6-ob.1',
-}
-manifest = tomllib.loads((root / 'Cargo.toml').read_text())
-bridge = manifest['workspace']['dependencies']['serde_json_compat']
-assert bridge == {'package': 'serde_json', 'version': '1.0.151', 'features': ['raw_value']}
-print('Two mechanical identity forks: upstream Rust file sets and SHA-256 digests match.')
+            original = {m.name.split('/', 1)[1]: hashlib.sha256(tar.extractfile(m).read()).hexdigest()
+                        for m in tar.getmembers() if m.isfile() and m.name.endswith('.rs')}
+        assert original == record['rust_files']
+removed = {'openbindings-internal-' + name for name in ['serde-json', 'referencing', 'jsonschema-value']}
+assert not removed & {p['name'] for p in graph['packages']}
+assert {p.name for p in (root / 'vendor').iterdir() if p.is_dir()} == {
+    'openbindings-internal-jsonschema', 'openbindings-internal-regress'}
+tree = subprocess.check_output(['cargo', 'tree', '--offline', '--locked', '--workspace',
+    '--edges', 'normal,build', '--no-dedupe', '--prefix', 'none', '--format', '{p}|{f}'], cwd=root, text=True)
+serde = {line for line in tree.splitlines() if line.startswith('serde_json v')}
+assert len(serde) == 1 and 'arbitrary_precision' not in next(iter(serde)), serde
+print('One registry serde_json identity; no SDK-requested arbitrary precision; three upstream source/archives audited; two retained forks.')
 
 # Cancellation has one delivery identity, with no async dependency entering core.
 cancellation = 'openbindings-internal-cancellation'

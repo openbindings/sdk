@@ -29,6 +29,13 @@
       "retrieved_from": "https://raw.githubusercontent.com/Stranger6667/jsonschema/55ac1664384793c5d3b20745d3f9c169dfe2c06f/LICENSE"
     },
     {
+      "name": "jsonschema-value",
+      "version": "0.58.6",
+      "path": "upstream/LICENSE",
+      "sha256": "117829c3ca21efb132d81a44b55363d395ab8eea18526873bc828da4c0e5f038",
+      "retrieved_from": "https://raw.githubusercontent.com/Stranger6667/jsonschema/55ac1664384793c5d3b20745d3f9c169dfe2c06f/LICENSE"
+    },
+    {
       "name": "uuid-simd",
       "version": "0.8.0",
       "path": "upstream/LICENSE",

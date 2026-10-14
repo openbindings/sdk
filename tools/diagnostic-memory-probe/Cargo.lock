@@ -173,16 +173,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
-name = "indexmap"
-version = "2.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
-dependencies = [
- "equivalent",
- "hashbrown",
-]
-
-[[package]]
 name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -199,41 +189,28 @@ dependencies = [
 ]
 
 [[package]]
-name = "jsonschema-macros"
-version = "0.58.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5553b59276ad81f2f49c80cd381a6d6d873e74139cdeb2bef0f9eb28a2ded2b6"
-dependencies = [
- "jsonschema-macros-core",
- "proc-macro2",
-]
-
-[[package]]
-name = "jsonschema-macros-core"
-version = "0.58.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf3ebe067f2c25a981a7d1b2f696fc213e10dbf80ba5fe997f7dc2e4fe261f26"
-dependencies = [
- "fancy-regex",
- "indexmap",
- "jsonschema-regex",
- "percent-encoding",
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "referencing",
- "regex",
- "serde_json",
- "syn 2.0.119",
-]
-
-[[package]]
 name = "jsonschema-regex"
 version = "0.58.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a968fffd387b2ab005bf00c1851f5d26e90df05b6f7ad609ed0d620033cca5e7"
 dependencies = [
  "regex-syntax",
+]
+
+[[package]]
+name = "jsonschema-value"
+version = "0.58.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39b7670345e5ce87371339d13705dbb9276b7e3e934bbe1efa2c6734a1f65a96"
+dependencies = [
+ "ahash",
+ "bytecount",
+ "fraction",
+ "getrandom",
+ "num-cmp",
+ "num-traits",
+ "serde_json",
+ "zmij",
 ]
 
 [[package]]
@@ -354,10 +331,9 @@ dependencies = [
  "fluent-uri",
  "openbindings-internal-json",
  "openbindings-internal-jsonschema",
- "openbindings-internal-jsonschema-value",
  "openbindings-internal-schema",
- "openbindings-internal-serde-json",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -368,8 +344,8 @@ dependencies = [
  "openbindings-internal-json",
  "openbindings-internal-jsonschema",
  "openbindings-internal-schema",
- "openbindings-internal-serde-json",
  "openbindings-json-schema-evaluator",
+ "serde_json",
 ]
 
 [[package]]
@@ -377,9 +353,10 @@ name = "openbindings-internal-json"
 version = "0.2.0-alpha.1"
 dependencies = [
  "itoa",
+ "jsonschema-value",
+ "num-bigint",
+ "num-traits",
  "openbindings-internal-jsonschema",
- "openbindings-internal-jsonschema-value",
- "openbindings-internal-serde-json",
  "serde",
  "serde_json",
 ]
@@ -396,51 +373,19 @@ dependencies = [
  "fraction",
  "getrandom",
  "itoa",
- "jsonschema-macros",
  "jsonschema-regex",
- "num-bigint",
+ "jsonschema-value",
  "num-cmp",
  "num-traits",
- "openbindings-internal-jsonschema-value",
- "openbindings-internal-referencing",
  "openbindings-internal-regress",
- "openbindings-internal-serde-json",
  "percent-encoding",
+ "referencing",
  "regex",
  "serde",
+ "serde_json",
  "strum",
  "unicode-general-category",
  "uuid-simd",
-]
-
-[[package]]
-name = "openbindings-internal-jsonschema-value"
-version = "0.58.6-ob.1"
-dependencies = [
- "ahash",
- "bytecount",
- "fraction",
- "getrandom",
- "num-bigint",
- "num-cmp",
- "num-traits",
- "openbindings-internal-serde-json",
- "zmij",
-]
-
-[[package]]
-name = "openbindings-internal-referencing"
-version = "0.58.6-ob.1"
-dependencies = [
- "ahash",
- "fluent-uri",
- "getrandom",
- "hashbrown",
- "itoa",
- "micromap",
- "openbindings-internal-serde-json",
- "parking_lot",
- "percent-encoding",
 ]
 
 [[package]]
@@ -457,33 +402,21 @@ dependencies = [
  "fluent-uri",
  "openbindings-internal-json",
  "openbindings-internal-jsonschema",
- "openbindings-internal-jsonschema-value",
- "openbindings-internal-serde-json",
  "serde",
-]
-
-[[package]]
-name = "openbindings-internal-serde-json"
-version = "1.0.151-ob.1"
-dependencies = [
- "itoa",
- "memchr",
- "serde",
- "serde_core",
- "zmij",
+ "serde_json",
 ]
 
 [[package]]
 name = "openbindings-json-schema-evaluator"
 version = "0.2.0-alpha.1"
 dependencies = [
+ "jsonschema-value",
  "openbindings",
  "openbindings-internal-json",
  "openbindings-internal-jsonschema",
- "openbindings-internal-jsonschema-value",
  "openbindings-internal-schema",
- "openbindings-internal-serde-json",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -520,15 +453,6 @@ name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
-
-[[package]]
-name = "proc-macro-crate"
-version = "3.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e67ba7e9b2b56446f1d419b1d807906278ffa1a658a8a5d8a39dcb1f5a78614f"
-dependencies = [
- "toml_edit",
-]
 
 [[package]]
 name = "proc-macro2"
@@ -734,36 +658,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "toml_datetime"
-version = "1.1.2+spec-1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b86d767906c6c42421dcba507eb9d203e779497710a47782a224bb871653053"
-dependencies = [
- "serde_core",
-]
-
-[[package]]
-name = "toml_edit"
-version = "0.25.17+spec-1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3641d5bbb5349a79e1020a242d251efbc546ad8048d133958323ce9c40a9c9c"
-dependencies = [
- "indexmap",
- "toml_datetime",
- "toml_parser",
- "winnow",
-]
-
-[[package]]
-name = "toml_parser"
-version = "1.1.5+spec-1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baa693a8032d7e1cada7d0041e96126df243179ff061456783ac7f12bda4744c"
-dependencies = [
- "winnow",
-]
-
-[[package]]
 name = "unicode-general-category"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -856,15 +750,6 @@ name = "windows-link"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
-
-[[package]]
-name = "winnow"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
-dependencies = [
- "memchr",
-]
 
 [[package]]
 name = "wit-bindgen"

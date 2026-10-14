@@ -21,9 +21,6 @@ LOCAL = [
     "crates/openbindings-internal-cancellation", "crates/openbindings-internal-schema",
     "crates/openbindings-source-inspection",
     "vendor/openbindings-internal-jsonschema",
-    "vendor/openbindings-internal-jsonschema-value",
-    "vendor/openbindings-internal-serde-json",
-    "vendor/openbindings-internal-referencing",
     "vendor/openbindings-internal-regress",
 ]
 

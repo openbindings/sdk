@@ -447,9 +447,9 @@ impl<F: Json> SchemaNode<F> {
         let absolute_path = ctx.absolute_location(&location);
         let validators = validators
             .into_iter()
-            .map(|validator| {
-                // This is a validator list, not an array in the source schema.
-                let location = ctx.location().clone();
+            .enumerate()
+            .map(|(index, validator)| {
+                let location = ctx.location().join(index);
                 let absolute_location = ctx.absolute_location(&location);
                 ArrayValidatorEntry {
                     validator,
@@ -854,9 +854,6 @@ impl<F: Json> Validate<F> for SchemaNode<F> {
         ctx: &mut ValidationContext,
         errors: &mut Vec<ValidationError<'i>>,
     ) {
-        if crate::ob_work::metadata_exhausted() {
-            return;
-        }
         let Some(_budget_frame) = crate::ob_work::enter() else {
             return;
         };

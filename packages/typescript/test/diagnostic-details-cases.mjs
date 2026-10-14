@@ -49,6 +49,39 @@ export function diagnosticDetailsCases(sdk) {
       "enum",
     ],
   ];
+  // Exact operands remain source facts after the engine's numeric substitution.
+  for (const token of [
+    "1e400",
+    "1e" + "9".repeat(1000),
+    "9007199254740993",
+    "-0.00",
+  ]) {
+    for (const diagnostics of ["coarse", "upstream"]) {
+      const result = run(`{"exclusiveMinimum":${token}}`, token, {
+        diagnostics,
+      });
+      check(result.outcome === "fails", "exact exclusive bound");
+      check(!result.problemsComplete, "truthful first-error completeness");
+      if (diagnostics === "coarse")
+        check(result.problems.length === 0, "coarse omits payloads");
+      else {
+        const problem = result.problems[0];
+        check(
+          problem.details.bound === token,
+          "original numeric token, never handle",
+        );
+        check(
+          problem.schemaLocation.pointer ===
+            "/operations/op/input/exclusiveMinimum",
+          "original numeric location",
+        );
+        check(
+          !problem.message.includes(token),
+          "no instance number in message",
+        );
+      }
+    }
+  }
   const examples = [];
   for (const [schema, input, kind] of cases) {
     const ordinary = run(schema, input),

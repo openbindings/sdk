@@ -496,24 +496,6 @@
       ]
     },
     {
-      "name": "indexmap",
-      "version": "2.14.2",
-      "declared_license": "Apache-2.0 OR MIT",
-      "repository": "https://github.com/indexmap-rs/indexmap",
-      "notices": [
-        {
-          "path": "LICENSE-APACHE",
-          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-MIT",
-          "sha256": "ecc269ef87fd38a1d98e30bfac9ba964a9dbd9315c3770fed98d4d7cb5882055",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
       "name": "itoa",
       "version": "1.0.18",
       "declared_license": "MIT OR Apache-2.0",
@@ -532,33 +514,20 @@
       ]
     },
     {
-      "name": "jsonschema-macros",
-      "version": "0.58.6",
-      "declared_license": "MIT",
-      "repository": "https://github.com/Stranger6667/jsonschema",
-      "notices": [
-        {
-          "path": "upstream/LICENSE",
-          "sha256": "117829c3ca21efb132d81a44b55363d395ab8eea18526873bc828da4c0e5f038",
-          "retrieved_from": "https://raw.githubusercontent.com/Stranger6667/jsonschema/55ac1664384793c5d3b20745d3f9c169dfe2c06f/LICENSE"
-        }
-      ]
-    },
-    {
-      "name": "jsonschema-macros-core",
-      "version": "0.58.6",
-      "declared_license": "MIT",
-      "repository": "https://github.com/Stranger6667/jsonschema",
-      "notices": [
-        {
-          "path": "upstream/LICENSE",
-          "sha256": "117829c3ca21efb132d81a44b55363d395ab8eea18526873bc828da4c0e5f038",
-          "retrieved_from": "https://raw.githubusercontent.com/Stranger6667/jsonschema/55ac1664384793c5d3b20745d3f9c169dfe2c06f/LICENSE"
-        }
-      ]
-    },
-    {
       "name": "jsonschema-regex",
+      "version": "0.58.6",
+      "declared_license": "MIT",
+      "repository": "https://github.com/Stranger6667/jsonschema",
+      "notices": [
+        {
+          "path": "upstream/LICENSE",
+          "sha256": "117829c3ca21efb132d81a44b55363d395ab8eea18526873bc828da4c0e5f038",
+          "retrieved_from": "https://raw.githubusercontent.com/Stranger6667/jsonschema/55ac1664384793c5d3b20745d3f9c169dfe2c06f/LICENSE"
+        }
+      ]
+    },
+    {
+      "name": "jsonschema-value",
       "version": "0.58.6",
       "declared_license": "MIT",
       "repository": "https://github.com/Stranger6667/jsonschema",
@@ -808,37 +777,6 @@
       ]
     },
     {
-      "name": "openbindings-internal-jsonschema-value",
-      "version": "0.58.6-ob.1",
-      "declared_license": "MIT",
-      "repository": "https://github.com/Stranger6667/jsonschema",
-      "notices": [
-        {
-          "path": "LICENSE",
-          "sha256": "117829c3ca21efb132d81a44b55363d395ab8eea18526873bc828da4c0e5f038",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "openbindings-internal-referencing",
-      "version": "0.58.6-ob.1",
-      "declared_license": "MIT",
-      "repository": "https://github.com/Stranger6667/jsonschema",
-      "notices": [
-        {
-          "path": "LICENSE",
-          "sha256": "117829c3ca21efb132d81a44b55363d395ab8eea18526873bc828da4c0e5f038",
-          "retrieved_from": null
-        }
-      ],
-      "upstream": {
-        "name": "referencing",
-        "version": "0.58.6",
-        "modifications": "Package identity and internal dependency wiring only; Rust source unchanged"
-      }
-    },
-    {
       "name": "openbindings-internal-regress",
       "version": "0.12.0-ob.1",
       "declared_license": "MIT OR Apache-2.0",
@@ -855,29 +793,6 @@
           "retrieved_from": null
         }
       ]
-    },
-    {
-      "name": "openbindings-internal-serde-json",
-      "version": "1.0.151-ob.1",
-      "declared_license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/serde-rs/json",
-      "notices": [
-        {
-          "path": "LICENSE-APACHE",
-          "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-MIT",
-          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
-          "retrieved_from": null
-        }
-      ],
-      "upstream": {
-        "name": "serde_json",
-        "version": "1.0.151",
-        "modifications": "Package identity and internal dependency wiring only; Rust source unchanged"
-      }
     },
     {
       "name": "outref",
@@ -955,24 +870,6 @@
         {
           "path": "LICENSE",
           "sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "proc-macro-crate",
-      "version": "3.5.0",
-      "declared_license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/bkchr/proc-macro-crate",
-      "notices": [
-        {
-          "path": "LICENSE-APACHE",
-          "sha256": "8ada45cd9f843acf64e4722ae262c622a2b3b3007c7310ef36ac1061a30f6adb",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-MIT",
-          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
           "retrieved_from": null
         }
       ]
@@ -1354,60 +1251,6 @@
       ]
     },
     {
-      "name": "toml_datetime",
-      "version": "1.1.2+spec-1.1.0",
-      "declared_license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/toml-rs/toml",
-      "notices": [
-        {
-          "path": "LICENSE-APACHE",
-          "sha256": "249fdb6694467dd615b259f7ddde07be3f8ae5a72cecebb0e24f6629af4215fe",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-MIT",
-          "sha256": "6efb0476a1cc085077ed49357026d8c173bf33017278ef440f222fb9cbcb66e6",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "toml_edit",
-      "version": "0.25.16+spec-1.1.0",
-      "declared_license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/toml-rs/toml",
-      "notices": [
-        {
-          "path": "LICENSE-APACHE",
-          "sha256": "249fdb6694467dd615b259f7ddde07be3f8ae5a72cecebb0e24f6629af4215fe",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-MIT",
-          "sha256": "6efb0476a1cc085077ed49357026d8c173bf33017278ef440f222fb9cbcb66e6",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "toml_parser",
-      "version": "1.1.4+spec-1.1.0",
-      "declared_license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/toml-rs/toml",
-      "notices": [
-        {
-          "path": "LICENSE-APACHE",
-          "sha256": "249fdb6694467dd615b259f7ddde07be3f8ae5a72cecebb0e24f6629af4215fe",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-MIT",
-          "sha256": "6efb0476a1cc085077ed49357026d8c173bf33017278ef440f222fb9cbcb66e6",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
       "name": "unicode-general-category",
       "version": "1.1.0",
       "declared_license": "Apache-2.0",
@@ -1596,19 +1439,6 @@
         {
           "path": "LICENSE-MIT",
           "sha256": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "winnow",
-      "version": "1.0.4",
-      "declared_license": "MIT",
-      "repository": "https://github.com/winnow-rs/winnow",
-      "notices": [
-        {
-          "path": "LICENSE-MIT",
-          "sha256": "cb5aedb296c5246d1f22e9099f925a65146f9f0d6b4eebba97fd27a6cdbbab2d",
           "retrieved_from": null
         }
       ]

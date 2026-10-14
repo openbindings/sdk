@@ -1,6 +1,6 @@
 //! Typed authoring of the normative vocabulary. Opaque fields retain exact JSON.
 use crate::{AUTHORING_VERSION, InputError, JsonKind, JsonRef, JsonValue};
-use jsonschema_value::ob_decimal::Decimal;
+use openbindings_internal_json::decimal::Decimal;
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use std::{collections::BTreeMap, fmt};
 
