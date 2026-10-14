@@ -74,10 +74,12 @@ export async function editorPage(browser, url) {
 
     await input.fill('{"id":0}');
     const privateFailure = await readOutput();
-    assert.match(privateFailure, /inclusive lower bound/);
-    assert(!privateFailure.includes("Exact bound:"));
+    assert.match(privateFailure, /Selected input does not satisfy/);
+    assert.match(privateFailure, /diagnostics complete: false/);
+    assert(!privateFailure.includes("Instance "));
     await page.locator("#schema-details").check();
     const detailed = await readOutput();
+    assert.match(detailed, /inclusive lower bound/);
     assert.match(detailed, /Exact bound: 1/);
     await page.locator("#schema-details").uncheck();
     await readOutput();
