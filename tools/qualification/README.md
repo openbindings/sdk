@@ -52,3 +52,18 @@ native and TypeScript APIs and compares complete findings, including coordinates
 The current review changes no existing kit/corpus observation; the migration ledger
 reproduces without changes. The verification receipt records the new regressions
 and the producerless schema-detail variant's removal.
+
+`static_reference_defects.rs` and `static-reference-defects.test.mjs` read the
+same packaged evaluator fixtures (`tests/fixtures/reference-{matrix,completions}.json`).
+Set `REFERENCE_RECEIPT` to separate output paths when running each, then run:
+
+```sh
+python3 tools/qualification/replay/check-reference-completions.py native.json typescript.json
+```
+
+The accepted matrix's 1,086 cases are retained, including the unsupported
+families; 36 static-reference observations change. Additional controls preserve
+siblings and identities while replacing individual defective invocations with
+concrete schemas. Every migrated kit/corpus case has opposite concrete repairs.
+The complete-fragment oracle, completion comparisons, and injected false results
+run without network or an independent resolver implementation.

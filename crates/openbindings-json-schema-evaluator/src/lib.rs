@@ -134,20 +134,20 @@ impl SchemaEvaluator for DefaultEvaluator {
         control.check()?;
         let (space, entry) = planner::space(request);
         let cancellation = || control.is_cancelled();
-        match space
-            .program(entry, &cancellation)
-            .map_err(projection_failure)
-        {
+        match space.program(entry, &cancellation) {
             Ok(program) => Ok(Arc::new(self.compile(program, request, control)?)),
             Err(detail)
-                if detail.reason == NoVerdictReason::ResourceUnavailable
-                    && detail.code == "resource-unavailable" =>
+                if (detail.reason
+                    == openbindings_internal_schema::FailureReason::ResourceUnavailable
+                    && detail.code == "resource-unavailable")
+                    || detail.reference_defect.is_some() =>
             {
+                let detail = projection_failure(detail);
                 let bounds = space
                     .bounds(entry, &cancellation)
                     .map_err(projection_failure)
                     .map_err(|decline| recover_partial_decline(detail, decline))?;
-                let (lower, upper, unavailable) = bounds.into_parts();
+                let (lower, upper, unavailable, semantic_completions) = bounds.into_parts();
                 let unavailable = unavailable.map(projection_failure);
                 let upper = self.compile(upper, request, control)?;
                 control.check()?;
@@ -157,9 +157,10 @@ impl SchemaEvaluator for DefaultEvaluator {
                     upper,
                     lower,
                     unavailable,
+                    semantic_completions,
                 }))
             }
-            Err(detail) => Err(detail),
+            Err(detail) => Err(projection_failure(detail)),
         }
     }
 }
@@ -337,6 +338,7 @@ struct PartialCompiled {
     upper: Compiled,
     lower: Compiled,
     unavailable: Option<NoVerdict>,
+    semantic_completions: bool,
 }
 impl PreparedSchema for PartialCompiled {
     fn validate(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
@@ -358,13 +360,25 @@ impl PreparedSchema for PartialCompiled {
             Ok(Some(false)) => self.upper.diagnostics(value, control, true),
             Ok(Some(true)) => ValueOutcome::Satisfies,
             Ok(None) => ValueOutcome::NoVerdict {
-                detail: self.unavailable.clone().unwrap_or_else(|| {
-                    no_verdict(
-                        NoVerdictReason::EvaluatorFailure,
-                        "inconsistent-exact-bounds",
-                        "the evaluator disagreed on two exact projections",
-                    )
-                }),
+                detail: self
+                    .unavailable
+                    .clone()
+                    .map(|mut detail| {
+                        // In the positive fragment these are actual completions,
+                        // not merely interval endpoints. Both completed evaluations
+                        // finished within the shared budget and disagree here.
+                        if self.semantic_completions {
+                            detail.reason = NoVerdictReason::Undefined;
+                        }
+                        detail
+                    })
+                    .unwrap_or_else(|| {
+                        no_verdict(
+                            NoVerdictReason::EvaluatorFailure,
+                            "inconsistent-exact-bounds",
+                            "the evaluator disagreed on two exact projections",
+                        )
+                    }),
             },
         }
     }

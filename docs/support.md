@@ -31,3 +31,12 @@ mode is an explicit choice for callers that accept library allocation and stack
 limits; it can allocate in proportion to inputs and overflow on deep values.
 An empty problem list never turns an established failure into success.
 See the [evaluator policy](../crates/openbindings-json-schema-evaluator/README.md).
+
+The default evaluator can decide positive contracts containing known static
+reference defects in present resources. Agreement across completions produces
+Satisfies or Fails; disagreeing concrete completions with proven defect provenance
+produce Undefined. Missing resources, unsupported features and exhausted budgets
+keep their distinct refusal reasons. This support excludes malformed `$id`,
+dynamic defects and annotation-dependent cases. An unused malformed `$ref` sibling
+is isolated; an unused malformed `$id` sibling still refuses. See the
+[partial-resource and reference-defect boundaries](partial-resource-bounds.md).

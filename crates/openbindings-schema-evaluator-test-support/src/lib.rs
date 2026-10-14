@@ -436,8 +436,9 @@ pub fn judge(
             NoVerdictReason::Cancelled
                 | NoVerdictReason::EvaluatorFailure
                 | NoVerdictReason::LimitExceeded
-                | NoVerdictReason::Undefined
-        ) {
+        ) || (detail.reason == NoVerdictReason::Undefined
+            && case.refusal_kind.as_deref() != Some("undefined"))
+        {
             failures.push("these finite fixtures do not authorize this refusal reason".into());
         }
     }

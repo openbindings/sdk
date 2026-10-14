@@ -1,4 +1,4 @@
-# Decisions with missing schema resources
+# Decisions with missing resources and defective static references
 
 The default evaluator first prepares a complete closed program. If static reference
 resolution finds an absent resource carrier, it can prepare paired validity bounds
@@ -10,8 +10,8 @@ missing `$ref` prepares ready in this fragment and returns
 An absent optional property can therefore satisfy its contract; a present unknown
 property plus an independently failed `required` can fail; and `anyOf(true, U)`
 can satisfy. If the result could depend on U, validation returns no verdict. A
-missing carrier is the only fallback trigger. Known malformed schemas, invalid
-references/targets, ambiguity, unsupported dialects, invalid patterns, Unicode
+missing carrier or a proven static-reference defect is a fallback trigger. Other
+malformed schemas, identity ambiguity, unsupported dialects, invalid patterns, Unicode
 limitations, shared limits and cancellation retain their refusal classifications. A known
 error after the first hole is still checked. The strict `evaluation_program()`
 helper and core dispatch to custom evaluators retain their contracts.
@@ -25,7 +25,7 @@ not a proof of value decidability, and no completeness promise is inferred for
 custom evaluators. New contexts do not change old prepared owners.
 
 When optional bounds planning declines, the default evaluator restores its original
-strict located ResourceUnavailable detail for exactly these reason/code pairs:
+strict located refusal detail for exactly these reason/code pairs:
 ConservativePreparation with `partial-nonpositive-influence` or
 `partial-annotation-or-dynamic`, and LimitExceeded with `partial-program-byte-limit`,
 `partial-scratch-limit`, `schema-hole-limit`,
@@ -329,17 +329,74 @@ pointer identity, so distinct original names cannot alias one copied target.
 The synthetic missing-reference root is selected deterministically outside all
 normalized inspected resource names and reference carriers.
 
-An unused malformed `$ref: "%"` or `$id: "%"` can still cause full-carrier
-preparation to refuse a valid sibling target with `resource-inspection`. Documented
-borrowed/owned registration, extension of a prepared registry, and registration of
-only the desired query followed by retrieval all retain this failure. No documented
+An unused malformed `$id: "%"` can still cause full-carrier preparation to refuse
+a valid sibling target with `resource-inspection`. Documented borrowed/owned
+registration, extension of a prepared registry, and registration of only the
+desired query followed by retrieval all retain this failure. No documented
 query-scoped preparation route was found. This is a conservative implementation
-limit under §5.2, not an undefinedness verdict. S9's approved static-reference-defect
-fragment will restore it by treating malformed references as holes; no private
-resolver or carrier-pruning fallback is introduced here.
+limit under §5.2, not an undefinedness verdict. An unused malformed `$ref` no
+longer has this effect; see [Static reference defects](#static-reference-defects).
 
 Review round 1 explicitly accepts `#%2F$defs%2Fgood` as another ordinary spelling
 migration: inside `$id` and supplied resources the library treats the encoded
 leading slash as a plain name and refuses it. The gate test remains. The document
 resource still follows §7.3 decoding before classification. Probe IDs and their
 individual dispositions are in the S6d/e migration ledger.
+
+
+## Static reference defects
+
+The additional holes are **invocations**, not replacement resource bodies. They
+have typed provenance from the original inspection path: a pointer reaching no
+schema, an absent or duplicate literal plain name, or a malformed `$ref`
+URI-reference in a resource declaring `$id`. Pointer syntax checks inspect only RFC 6901
+escapes. Documented `Registry`/`Resolver::lookup` errors establish absent targets;
+borrowed result identity and the existing schema-position index establish
+non-schema targets. Declaration counts belong to the existing resource index.
+There is no second pointer/anchor resolver. Percent-encoded anchor spelling
+refusals do not establish semantic absence and keep their former refusal.
+
+The inspection copy removes malformed static `$ref` strings at indexed schema
+positions, allowing the documented library to prepare an otherwise usable
+carrier. This copy never evaluates. The original invocation retains its syntax
+evidence; no `$id`, anchor or ordinary reference target is reconstructed. Unused
+malformed `$ref` siblings therefore cannot disable a valid target in that carrier.
+Malformed `$id` siblings remain pinned conservative refusals. Supplied non-schema
+embeddings use the same identity/position evidence (§7.5).
+
+For a positive plan, replace every defective invocation with false to obtain L,
+and with true to obtain H, preserving all siblings and known schema identities.
+Static aliases of a hole see the same replacement. For every instance and every
+admissible completion C, structural monotonicity gives L ≤ C ≤ H. The existing
+positive applicators preserve this ordering; closed negative predicates are
+unchanged, advancing recursion is over a finite instance, and possible in-place
+cycles refuse. Annotation consumers and dynamic keywords refuse the helper.
+Thus H=false proves Fails and L=true proves Satisfies. With only semantic holes,
+L and H are themselves concrete admissible completions. If both evaluations
+finish and L=false, H=true, they witness the two ways required by §5.2, proving
+Undefined without assuming independence of repeated invocations.
+
+Dependent `oneOf` projections prove inequalities but are not generally concrete
+completions. They can still prove agreement; a split returns conservative
+`partial-unproven-completions`, never Undefined. Hole influence through `not`,
+conditionals or `contains` remains unqualified. Any selected closure containing
+both semantic holes and missing carriers returns ResourceUnavailable; this slice
+does not prove the additional universal quantifier over absent resource contents.
+Compiler failures, unsupported regex, limits and cancellation remain inability.
+Both witness evaluations share the existing work/regex allowance, and neither a
+partial run nor a lower-bound diagnostic is used as semantic evidence.
+
+Semantic holes share all node/edge/hole/depth/scratch admission caps. Provenance is
+fixed-size enum metadata. Refusal locations identify recorded source evidence
+for the closure; the completions establish dependence collectively. The one
+retained evidence location, code and message are counted before copying along with both programs and their source maps.
+
+Durable controls are `static_reference_defects.rs`, the matching TypeScript test,
+and `tools/qualification/replay/check-reference-completions.py`. They replay the
+1,086-case accepted matrix on this SDK, concrete false/true/string/object
+substitutions in A/L/P/D and both branch orders, and 48 semantic multi-hole groups
+with sixteen completions each. The independent complete-fragment oracle checks
+actual truth values; differential guards reject false agreement and require
+opposite completions for reported Undefined. Injected false verdicts, reasons and
+locations prove that these checks fail. Finite controls corroborate the argument;
+they do not replace it. The case-ID migration ledger records all kit/corpus deltas.

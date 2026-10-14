@@ -14,6 +14,7 @@ pub(super) struct Refusal {
     code: &'static str,
     message: &'static str,
     missing: Option<String>,
+    defect: Option<StaticReferenceDefect>,
 }
 impl Refusal {
     fn invalid(code: &'static str, message: &'static str) -> Self {
@@ -22,7 +23,12 @@ impl Refusal {
             code,
             message,
             missing: None,
+            defect: None,
         }
+    }
+    fn semantic(mut self, defect: StaticReferenceDefect) -> Self {
+        self.defect = Some(defect);
+        self
     }
 }
 pub(super) type Targets = HashMap<(usize, String), Result<Target, Refusal>>;
@@ -101,7 +107,11 @@ fn presented_reference(reference: &str) -> Cow<'_, str> {
         Cow::Owned(out)
     }
 }
-fn copy(value: &JsonValue, positions: &HashMap<usize, usize>) -> (Tree, HashMap<usize, usize>) {
+fn copy(
+    value: &JsonValue,
+    positions: &HashMap<usize, usize>,
+    repair_reference: impl Fn(usize) -> bool,
+) -> (Tree, HashMap<usize, usize>) {
     let mut stack = vec![(value.view(), false)];
     let mut values = HashMap::new();
     while let Some((node, visited)) = stack.pop() {
@@ -120,7 +130,7 @@ fn copy(value: &JsonValue, positions: &HashMap<usize, usize>) -> (Tree, HashMap<
                 .remove(&node_id(&v.to_owned()))
                 .expect("postorder child")
         };
-        let copied = match node.kind() {
+        let mut copied = match node.kind() {
             JsonKind::Null => Value::Null,
             JsonKind::Boolean => Value::Bool(node.as_bool().unwrap()),
             JsonKind::Number => Value::from(0), // Inspection never evaluates numeric operands.
@@ -142,6 +152,20 @@ fn copy(value: &JsonValue, positions: &HashMap<usize, usize>) -> (Tree, HashMap<
                     .collect(),
             ),
         };
+        // Only inspection is repaired. The authored invocation and its syntax
+        // evidence remain in SchemaSpace. No identifier, anchor, or target is
+        // reconstructed here; ordinary lookup still belongs to the registry.
+        if positions
+            .get(&node_id(&node.to_owned()))
+            .is_some_and(|&id| repair_reference(id))
+            && let Value::Object(object) = &mut copied
+            && object
+                .get("$ref")
+                .and_then(Value::as_str)
+                .is_some_and(|r| !uri::valid(r))
+        {
+            object.remove("$ref");
+        }
         values.insert(node_id(&node.to_owned()), copied);
     }
     let tree = Tree(Box::new(
@@ -187,7 +211,10 @@ impl SchemaSpace {
                 if let Some(uri) = &refusal.missing {
                     missing(uri);
                 }
-                Err(self.failure(holder, refusal.reason, refusal.code, refusal.message))
+                let mut failure =
+                    self.failure(holder, refusal.reason, refusal.code, refusal.message);
+                failure.reference_defect = refusal.defect;
+                Err(failure)
             }
             None => Err(self.failure(
                 holder,
@@ -223,6 +250,18 @@ impl SchemaSpace {
                     .ok()
                     .and_then(|base| uri_registry.resolve_uri(&base, reference).ok());
                 let Some(absolute) = absolute else {
+                    if !uri::valid(reference) && self.malformed_reference_scope(holder) {
+                        // A malformed invocation has no target to resolve. Use
+                        // the existing carrier preparation path to establish
+                        // that repairing it isolates the supported defect.
+                        groups.entry(node.resource).or_default().push((
+                            holder,
+                            reference.to_owned(),
+                            base.to_owned(),
+                            String::new(),
+                        ));
+                        continue;
+                    }
                     targets.insert(
                         key,
                         Err(Refusal::invalid(
@@ -305,6 +344,7 @@ impl SchemaSpace {
                         code: "resource-unavailable",
                         message: "static preparation requires a resource that was not supplied",
                         missing: Some(name),
+                        defect: None,
                     }
                 } else {
                     Refusal::invalid(
@@ -319,8 +359,11 @@ impl SchemaSpace {
             let resource = &self.resources[resource_id];
             let Some(root) = resource.root else { continue };
             let original = &self.nodes[root].value;
-            let (mut tree, identity) =
-                copy(original, &self.sources[self.nodes[root].source].positions);
+            let (mut tree, identity) = copy(
+                original,
+                &self.sources[self.nodes[root].source].positions,
+                |id| self.malformed_reference_scope(id),
+            );
             let canonical = resource.base.as_ref().unwrap_or(&queries[0].2).clone();
             // Registering a detached nested resource must preserve its already
             // established base. This only changes the root registration identity;
@@ -342,23 +385,60 @@ impl SchemaSpace {
                 .and_then(|b| b.prepare());
             for (holder, reference, _, fragment) in queries {
                 let key = (holder, reference);
-                // §7.4 guard retained until S9. Declaration ambiguity is not
+                if !uri::valid(&key.1) {
+                    let mut refusal = Refusal::invalid(
+                        "invalid-reference",
+                        "reference is not a well-formed URI reference",
+                    );
+                    if registry.is_ok() && resource.eligible {
+                        refusal = refusal.semantic(StaticReferenceDefect::MalformedReference);
+                    }
+                    targets.insert(key, Err(refusal));
+                    continue;
+                }
+                // §7.4 declaration evidence. Ambiguity is not
                 // repaired by accepting the library's choice of one declaration.
                 if !fragment.is_empty()
                     && !fragment.starts_with('/')
                     && resource.anchors.get(&fragment).is_some_and(|a| a.len() > 1)
                 {
-                    targets.insert(
-                        key,
-                        Err(Refusal::invalid(
-                            "ambiguous-anchor",
-                            "resource declares this plain name more than once",
-                        )),
+                    let mut refusal = Refusal::invalid(
+                        "ambiguous-anchor",
+                        "resource declares this plain name more than once",
                     );
+                    // Declaration evidence alone cannot isolate an unsupported
+                    // carrier defect, such as a malformed sibling identifier.
+                    if registry.is_ok() {
+                        refusal = refusal.semantic(StaticReferenceDefect::DuplicatePlainName);
+                    }
+                    targets.insert(key, Err(refusal));
                     continue;
                 }
                 let result = match &registry {
                     Ok(registry) => {
+                        // RFC 6901 syntax only: never interpret pointer tokens
+                        // or select a target independently of the library.
+                        if fragment.starts_with('/')
+                            && uri::decode_fragment(&fragment).is_some_and(|decoded| {
+                                let mut bytes = decoded.bytes();
+                                while let Some(byte) = bytes.next() {
+                                    if byte == b'~' && !matches!(bytes.next(), Some(b'0' | b'1')) {
+                                        return true;
+                                    }
+                                }
+                                false
+                            })
+                        {
+                            targets.insert(
+                                key,
+                                Err(Refusal::invalid(
+                                    "non-schema-target",
+                                    "resource pointer has an invalid escape",
+                                )
+                                .semantic(StaticReferenceDefect::PointerToNoSchema)),
+                            );
+                            continue;
+                        }
                         // A fresh resolver has no dynamic history. This is the
                         // initial static target, never a runtime dynamic winner.
                         let base = self.resources[self.nodes[holder].resource]
@@ -382,28 +462,55 @@ impl SchemaSpace {
                                             == Some(fragment.as_str()))
                                     .then_some(fragment.clone()),
                                 }),
-                                None => Err(Refusal::invalid(
-                                    "non-schema-target",
-                                    "resource pointer does not identify an indexed schema",
-                                )),
+                                None => {
+                                    let refusal = Refusal::invalid(
+                                        "non-schema-target",
+                                        "resource pointer does not identify an indexed schema",
+                                    );
+                                    Err(if fragment.starts_with('/') {
+                                        refusal.semantic(StaticReferenceDefect::PointerToNoSchema)
+                                    } else {
+                                        refusal
+                                    })
+                                }
                             },
-                            Err(_) => Err(if fragment.starts_with('/') {
-                                Refusal::invalid(
+                            Err(error) => Err(if fragment.starts_with('/') {
+                                let refusal = Refusal::invalid(
                                     "non-schema-target",
                                     "resource pointer does not identify an indexed schema",
-                                )
+                                );
+                                match error {
+                                    jsonschema::ReferencingError::PointerToNowhere { .. }
+                                    | jsonschema::ReferencingError::InvalidArrayIndex { .. }
+                                    | jsonschema::ReferencingError::InvalidPercentEncoding {
+                                        ..
+                                    } => refusal.semantic(StaticReferenceDefect::PointerToNoSchema),
+                                    _ => refusal,
+                                }
                             } else {
-                                Refusal::invalid(
+                                let refusal = Refusal::invalid(
                                     "anchor-missing",
                                     "resource declares no such plain name",
-                                )
+                                );
+                                // Encoded spellings follow the library, but its
+                                // refusal is not proof that the decoded name is
+                                // absent. Only literal plain names qualify.
+                                if crate::schema_index::plain_name(&fragment)
+                                    && matches!(
+                                        error,
+                                        jsonschema::ReferencingError::NoSuchAnchor { .. }
+                                    )
+                                {
+                                    refusal.semantic(StaticReferenceDefect::MissingPlainName)
+                                } else {
+                                    refusal
+                                }
                             }),
                         }
                     }
                     // The documented preparation API processes the carrier,
-                    // including unused malformed siblings. Keep this honest
-                    // conservative limit; S9's static-reference-defect fragment
-                    // will handle such defects as holes, without a private resolver.
+                    // including unused malformed $id siblings. These remain
+                    // outside the static-reference fragment.
                     Err(_) => Err(Refusal::invalid(
                         "resource-inspection",
                         "the resource could not be prepared for static inspection",

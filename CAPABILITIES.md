@@ -115,7 +115,19 @@ Dependent values return `ResourceUnavailable` at validation. Even a qualified ba
 missing `$ref` prepares ready; ready does not promise decidability. Hole influence
 through `not`, effective conditionals or `contains` refuses; closed
 subgraphs remain supported. Evaluated `unevaluated*` and dynamic keywords reject
-partial bounds. Known invalid targets, dialects, patterns and cycles remain refusals.
+partial bounds. Unsupported dialects, invalid patterns and cycles remain refusals.
+
+Known defective static `$ref` invocations in present carriers also use bounds:
+pointers reaching no schema (including invalid escapes and non-schema values),
+missing/duplicate literal plain names, and malformed `$ref` URI-references inside
+resources declaring `$id`. Agreement establishes Satisfies or Fails. In the positive
+fragment, the all-false and all-true substitutions are concrete admissible
+completions: only their completed, disagreeing evaluations establish Undefined.
+A split `oneOf` interval alone never establishes Undefined. Mixtures with absent
+carriers remain ResourceUnavailable. Malformed `$id`, dynamic defects, annotation
+consumers and unsupported hole influence retain conservative refusals. An unused
+malformed `$ref` sibling no longer blocks a valid target; an unused malformed
+`$id` sibling still does. Inspection still reports the authored defect.
 
 Hole-dependent `oneOf` uses finite lower/upper polarity definitions. It can decide
 zero possible winners, one certain sole winner, or multiple certain winners without

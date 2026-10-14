@@ -554,7 +554,7 @@ impl SchemaSpace {
             add_bytes(&mut total, self.location_bytes(id)?, cap.text)?;
             add_bytes(
                 &mut total,
-                "/$ref".len() + UNAVAILABLE_CODE.len() + UNAVAILABLE_MESSAGE.len(),
+                "/$ref".len() + plan.split_evidence().1.len() + plan.split_evidence().2.len(),
                 cap.text,
             )?;
         }
@@ -593,12 +593,8 @@ impl SchemaSpace {
         let unavailable = plan.first_hole.map(|id| {
             let mut at = self.location(id);
             at.pointer.push_str("/$ref");
-            NoVerdict::new(
-                NoVerdictReason::ResourceUnavailable,
-                UNAVAILABLE_CODE,
-                UNAVAILABLE_MESSAGE,
-            )
-            .located(at)
+            let (reason, code, message) = plan.split_evidence();
+            NoVerdict::new(reason, code, message).located(at)
         });
         let mut programs = Vec::with_capacity(2);
         for polarity in [Polarity::Lower, Polarity::Upper] {
@@ -663,6 +659,7 @@ impl SchemaSpace {
             lower,
             upper,
             unavailable,
+            semantic_completions: false,
         })
     }
 }

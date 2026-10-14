@@ -349,6 +349,13 @@ impl SchemaSpace {
     pub fn resolve(&self, holder: usize, reference: &str) -> Result<Target, Failure> {
         self.resolve_with_missing(holder, reference, &mut |_| {})
     }
+    fn malformed_reference_scope(&self, holder: usize) -> bool {
+        let resource = &self.resources[self.nodes[holder].resource];
+        resource.base.is_some()
+            && resource
+                .root
+                .is_some_and(|root| self.nodes[root].value.get("$id").is_some())
+    }
     pub fn resolve_with_missing(
         &self,
         holder: usize,
@@ -366,6 +373,11 @@ impl SchemaSpace {
             )
         };
         if !uri::valid(reference) {
+            if self.malformed_reference_scope(holder) {
+                // The repaired inspection carrier must still prepare: an
+                // unsupported sibling identifier cannot become a semantic hole.
+                return self.library_target(holder, reference, missing);
+            }
             return Err(fail(
                 "invalid-reference",
                 "reference is not a well-formed URI reference".into(),

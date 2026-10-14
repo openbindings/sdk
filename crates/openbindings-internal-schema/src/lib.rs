@@ -61,6 +61,16 @@ pub struct Failure {
     pub code: String,
     pub message: String,
     pub location: Option<Location>,
+    /// Established static-reference semantics, independent of evaluator ability.
+    #[serde(skip)]
+    pub reference_defect: Option<StaticReferenceDefect>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StaticReferenceDefect {
+    PointerToNoSchema,
+    MissingPlainName,
+    DuplicatePlainName,
+    MalformedReference,
 }
 impl Failure {
     pub fn new(reason: FailureReason, code: impl Into<String>, message: impl Into<String>) -> Self {
@@ -69,6 +79,7 @@ impl Failure {
             code: code.into(),
             message: message.into(),
             location: None,
+            reference_defect: None,
         }
     }
     pub fn located(mut self, at: Location) -> Self {

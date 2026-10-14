@@ -56,7 +56,7 @@ def judge_value(case,result,sources):
     if tag=='no-verdict':
         if detail.get('reason')!=case.get('refusal_kind'):failures.append('wrong refusal distinction')
         if not detail.get('code','').strip() or not detail.get('message','').strip():failures.append('unexplained refusal')
-        if detail.get('reason') not in ['unsupported-capability','conservative-preparation','resource-unavailable']:failures.append('unjustified refusal reason')
+        if detail.get('reason') not in ['unsupported-capability','conservative-preparation','resource-unavailable'] and not (detail.get('reason') == 'undefined' and case.get('refusal_kind') == 'undefined'):failures.append('unjustified refusal reason')
     if tag=='fails':
         problems=result.get('problems',[])
         if not problems and result.get('problemsComplete') is True:failures.append('complete diagnostics lack problems')

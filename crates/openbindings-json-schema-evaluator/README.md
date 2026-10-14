@@ -86,8 +86,8 @@ multiple certain winners. It does not infer correlations between unknown branche
 Hole-dependent `not`,
 conditionals and `contains` refuse; closed subgraphs using them remain
 intact. Evaluated `unevaluated*` and dynamic keywords reject partial bounds.
-Known malformed schemas, references, dialects and potential in-place cycles keep
-refusing. No I/O occurs. `ParsedDocument::references()` exposes document-wide
+Malformed `$id`, dynamic-reference defects, unsupported dialects and potential
+in-place cycles keep refusing. No I/O occurs. `ParsedDocument::references()` exposes document-wide
 reference spellings and locations; new supplied resources require a new context.
 Existing prepared owners retain their original snapshots.
 
@@ -202,3 +202,15 @@ Migration: document findings keep source locations, lose keyword-specific wordin
 and can now contain several positions. OBI-10 uses the checked node rather than a
 keyword within it. Use rule, code and evidence for logic, not message text or
 finding count.
+
+Static reference defects in present carriers use the same bounds: dangling or
+invalid pointers, pointers to non-schema values, absent/duplicate literal plain
+names, and malformed `$ref` URI-references in resources declaring `$id`. Known siblings
+remain effective. Bounds agreement proves a verdict; Undefined requires semantic
+provenance plus completed all-false/all-true substitutions that disagree. These
+are admissible completions only in the qualified positive fragment. A dependent
+`oneOf` split retains `ConservativePreparation`; missing-carrier mixtures retain
+`ResourceUnavailable`. Budgets, unsupported regex and unproven independence never
+become Undefined. Unused malformed `$ref` siblings are isolated during documented
+library inspection; unused malformed `$id` siblings remain refused. See the
+[completion proof](../../docs/partial-resource-bounds.md#static-reference-defects).

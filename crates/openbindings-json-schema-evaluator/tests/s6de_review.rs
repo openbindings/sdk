@@ -163,7 +163,7 @@ fn inspection_root_never_masks_missing_references_including_suffix_candidates() 
 }
 
 #[test]
-fn unused_malformed_sibling_remains_a_conservative_preparation_limit_until_s9() {
+fn unused_malformed_reference_sibling_is_isolated_but_malformed_id_stays_refused() {
     for supplied in [false, true] {
         for bad in [r#"{"not":{"$ref":"%"}}"#, r#"{"$id":"%"}"#] {
             let schema =
@@ -177,9 +177,16 @@ fn unused_malformed_sibling_remains_a_conservative_preparation_limit_until_s9() 
                 .iter()
                 .find(|r| r.location.pointer == "/operations/op/input/$ref")
                 .unwrap();
-            assert!(
-                matches!(&reference.resolution, ReferenceResolution::Unresolved { detail } if detail.code == "resource-inspection")
-            );
+            if bad.contains("$ref") {
+                assert!(matches!(
+                    &reference.resolution,
+                    ReferenceResolution::Located { .. }
+                ));
+            } else {
+                assert!(
+                    matches!(&reference.resolution, ReferenceResolution::Unresolved { detail } if detail.code == "resource-inspection")
+                );
+            }
             let validation = doc.validate().unwrap();
             let context =
                 validation.validated().unwrap().value_contracts(
@@ -188,9 +195,24 @@ fn unused_malformed_sibling_remains_a_conservative_preparation_limit_until_s9() 
                     )),
                     resources,
                 );
-            assert!(
-                matches!(context.prepare("op", Direction::Input), ValueContractPreparation::NoVerdict { detail } if detail.reason == NoVerdictReason::ConservativePreparation && detail.code == "resource-inspection")
-            );
+            let prepared = context.prepare("op", Direction::Input);
+            if bad.contains("$ref") {
+                let ValueContractPreparation::Ready(contract) = prepared else {
+                    panic!("{prepared:?}")
+                };
+                assert!(matches!(
+                    contract.validate(&JsonValue::parse(r#""s""#).unwrap()),
+                    ValueOutcome::Satisfies
+                ));
+                assert!(matches!(
+                    contract.validate(&JsonValue::parse("1").unwrap()),
+                    ValueOutcome::Fails { .. }
+                ));
+            } else {
+                assert!(
+                    matches!(prepared, ValueContractPreparation::NoVerdict { detail } if detail.reason == NoVerdictReason::ConservativePreparation && detail.code == "resource-inspection")
+                );
+            }
         }
     }
 }

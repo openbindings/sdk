@@ -2,6 +2,14 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- Known static reference defects in present carriers now participate in validity
+  bounds. Positive contracts decide irrelevant defects, and return Undefined only
+  when proven semantic holes have disagreeing concrete completions. Missing
+  carriers and implementation limits retain distinct refusals. Unused malformed
+  `$ref` siblings no longer disable valid targets; malformed `$id` siblings remain
+  refused. Ten evaluator-kit cases and four corpus cases change as §5.2 and §7.4
+  require.
+
 - Default value failures now use `Diagnostics::Coarse`: a fixed value-free
   `message`, no problems, and incomplete diagnostics. Migrate
   `with_schema_details(true)` to `with_diagnostics(Diagnostics::Upstream)` and
