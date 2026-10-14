@@ -1,5 +1,6 @@
 //! A provider with no inspection, synthesis, HTTP, evaluator or executor dependency.
-use openbindings::WorkControl;
+
+use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
     BindingRequest, InvocationError, ProviderIo, binding::BindingInvoker,
 };
@@ -14,7 +15,7 @@ impl BindingInvoker for InvokerOnly {
         &'a self,
         _: BindingRequest<'a>,
         mut io: ProviderIo,
-        _: WorkControl,
+        _: CancellationToken,
     ) -> Self::Invocation<'a> {
         io.close_input();
         ready(Ok(()))

@@ -1,6 +1,7 @@
 //! Independent three-role fixture; invocation does not reuse the authoring oracle.
-use openbindings::{JsonRef, JsonValue, Source, WorkControl};
+use openbindings::{JsonRef, JsonValue, Source};
 use openbindings_interface_synthesis as synthesis;
+use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{BindingRequest, InvocationError, ProviderIo, binding};
 use openbindings_source_inspection as inspection;
 use std::{
@@ -32,7 +33,11 @@ impl inspection::SourceInspector for Catalog {
     fn supports_kind(&self, kind: &str) -> bool {
         kind == KIND
     }
-    fn inspect<'a>(&'a self, source: &'a Source, control: WorkControl) -> Self::Inspection<'a> {
+    fn inspect<'a>(
+        &'a self,
+        source: &'a Source,
+        control: CancellationToken,
+    ) -> Self::Inspection<'a> {
         inspection::SourceInspector::inspect(&self.authoring, source, control)
     }
 }
@@ -46,7 +51,7 @@ impl synthesis::InterfaceSynthesizer for Catalog {
     fn synthesize<'a>(
         &'a self,
         request: &'a synthesis::SynthesisRequest<'a>,
-        control: WorkControl,
+        control: CancellationToken,
     ) -> Self::Synthesis<'a> {
         synthesis::InterfaceSynthesizer::synthesize(&self.authoring, request, control)
     }
@@ -172,7 +177,7 @@ impl binding::BindingInvoker for Catalog {
         &'a self,
         request: BindingRequest<'a>,
         mut io: ProviderIo,
-        _: WorkControl,
+        _: CancellationToken,
     ) -> Self::Invocation<'a> {
         Box::pin(async move {
             self.attempts.fetch_add(1, Ordering::Relaxed);

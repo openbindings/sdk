@@ -51,7 +51,7 @@ fn resources(schema: &str) -> Result<ResourceSet, Box<dyn Error>> {
 fn candidate(
     text: &str,
     resources: ResourceSet,
-    control: &WorkControl,
+    control: &dyn WorkControl,
 ) -> Result<ValueContract, LoadFailure> {
     let document = ParsedDocument::parse(text).map_err(LoadFailure::Parse)?;
     let validation = document.validate().map_err(LoadFailure::Version)?;
@@ -89,7 +89,7 @@ fn mismatch(input: &ValueContract, value: &JsonValue) {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let healthy = WorkControl::new();
+    let healthy = std::sync::atomic::AtomicBool::new(false);
     let old_value = JsonValue::parse("9007199254740993")?;
     let new_value = JsonValue::from_serializable(&9_007_199_254_740_994_u64)?;
     // Fixture-only retention demonstration: reusable candidate loading requires no output.
@@ -170,8 +170,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         other => panic!("expected missing-resource rejection: {other:?}"),
     }
     satisfies(&active, &new_value);
-    let cancelled = WorkControl::new();
-    cancelled.cancel();
+    let cancelled = std::sync::atomic::AtomicBool::new(false);
+    cancelled.store(true, std::sync::atomic::Ordering::Release);
     match candidate(DOCUMENT, resources(r#"{"const":7}"#)?, &cancelled) {
         Err(LoadFailure::Preparation(ValueContractPreparation::NoVerdict { detail })) => {
             assert_eq!(detail.reason, NoVerdictReason::Cancelled);
@@ -191,7 +191,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     active = candidate(
         DOCUMENT,
         resources(r#"{"const":9007199254740993}"#)?,
-        &WorkControl::new(),
+        &std::sync::atomic::AtomicBool::new(false),
     )?;
     satisfies(&active, &old_value);
     drop(active); // old job and every context have already released their owners

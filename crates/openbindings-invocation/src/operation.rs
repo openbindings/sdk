@@ -3,6 +3,7 @@
 //! Selection is caller-owned. Validation uses an explicitly supplied evaluator;
 //! without one, a declared value contract cannot yield a verdict. Neither construction
 //! nor preflight prepares schemas or establishes whole-document conformance.
+use crate::CancellationToken;
 use crate::{
     BindingRequest, BindingValue, ContextChallenge, Invocation, InvocationError, InvocationLimits,
     LimitError, ProviderIo,
@@ -13,7 +14,7 @@ use crate::{
 use openbindings::{
     BindingView, Direction, InterpretationError, JsonKind, JsonValue, NoVerdict, NoVerdictReason,
     OperationSelection, OperationView, ParsedDocument, ResourceSet, SchemaEvaluator, Source,
-    ValueContract, ValueContractPreparation, ValueContracts, ValueOutcome, WorkControl,
+    ValueContract, ValueContractPreparation, ValueContracts, ValueOutcome,
 };
 use std::{
     collections::HashMap,
@@ -193,7 +194,7 @@ impl<P: BindingInvoker> Invoker<P> {
     /// Preparation refusal returns `ERR_SCHEMA_UNRESOLVED` and retains no handle.
     /// Ready means prepared, not that every value will receive a verdict.
     pub fn prepare(&self, operation: &str) -> Result<PreparedOperation<'_, P>, InvocationError> {
-        self.prepare_with_control(operation, &WorkControl::new())
+        self.prepare_with_control(operation, &CancellationToken::new())
     }
     /// Prepare with cooperative caller cancellation. Cancellation returns
     /// `ERR_CANCELLED`; any contracts prepared so far are released on error.
@@ -201,7 +202,7 @@ impl<P: BindingInvoker> Invoker<P> {
     pub fn prepare_with_control(
         &self,
         operation: &str,
-        control: &WorkControl,
+        control: &CancellationToken,
     ) -> Result<PreparedOperation<'_, P>, InvocationError> {
         if control.is_cancelled() {
             return Err(InvocationError::cancelled());
@@ -247,21 +248,21 @@ impl<P: BindingInvoker> Invoker<P> {
         &'a self,
         request: Request<'a>,
     ) -> Invocation<impl Future<Output = Result<(), InvocationError>> + 'a + use<'a, P>> {
-        self.invoke_with_control(request, &WorkControl::new())
+        self.invoke_with_control(request, &CancellationToken::new())
     }
     /// Observe caller cancellation without cancelling that token or sibling work.
     /// Schema evaluation is cooperative, not a preemptive wall-clock deadline.
     pub fn invoke_with_control<'a>(
         &'a self,
         request: Request<'a>,
-        control: &WorkControl,
+        control: &CancellationToken,
     ) -> Invocation<impl Future<Output = Result<(), InvocationError>> + 'a + use<'a, P>> {
         self.invoke_prepared_with_control(request, control, None)
     }
     fn invoke_prepared_with_control<'a>(
         &'a self,
         request: Request<'a>,
-        control: &WorkControl,
+        control: &CancellationToken,
         prepared: Option<&'a PreparedOperation<'_, P>>,
     ) -> Invocation<impl Future<Output = Result<(), InvocationError>> + 'a + use<'a, P>> {
         let shared = Shared::new(self.binding.limits);
@@ -329,14 +330,14 @@ impl<P: BindingInvoker> Invoker<P> {
         &self,
         request: Request<'_>,
     ) -> Result<Option<ContextChallenge>, InvocationError> {
-        self.preflight_with_control(request, &WorkControl::new())
+        self.preflight_with_control(request, &CancellationToken::new())
             .await
     }
     /// Advisory preflight with cancellation, isolated from sibling attempts.
     pub async fn preflight_with_control(
         &self,
         request: Request<'_>,
-        control: &WorkControl,
+        control: &CancellationToken,
     ) -> Result<Option<ContextChallenge>, InvocationError> {
         if control.is_cancelled() {
             return Err(InvocationError::cancelled());
@@ -362,14 +363,14 @@ impl<P: BindingInvoker> Invoker<P> {
     where
         P: BindingPreflight,
     {
-        self.preflight_with_provider_and_control(request, &WorkControl::new())
+        self.preflight_with_provider_and_control(request, &CancellationToken::new())
             .await
     }
     /// Call the optional provider preflight hook with caller cancellation.
     pub async fn preflight_with_provider_and_control(
         &self,
         request: Request<'_>,
-        control: &WorkControl,
+        control: &CancellationToken,
     ) -> Result<Option<ContextChallenge>, InvocationError>
     where
         P: BindingPreflight,
@@ -393,7 +394,7 @@ impl<P: BindingInvoker> Invoker<P> {
         &self,
         operation: &OperationView,
         direction: Direction,
-        external: &WorkControl,
+        external: &CancellationToken,
         prepared: Option<&ValueContract>,
     ) -> Option<Gate> {
         operation.value().get(direction.as_str()).map(|_| Gate {
@@ -578,14 +579,14 @@ impl<P: BindingInvoker> PreparedOperation<'_, P> {
         &'a self,
         attempt: Attempt<'a>,
     ) -> Invocation<impl Future<Output = Result<(), InvocationError>> + 'a + use<'a, P>> {
-        self.invoke_with_control(attempt, &WorkControl::new())
+        self.invoke_with_control(attempt, &CancellationToken::new())
     }
     /// Invoke with caller cancellation isolated from this handle and all sibling
     /// attempts. Cancellation does not discard the retained prepared contracts.
     pub fn invoke_with_control<'a>(
         &'a self,
         attempt: Attempt<'a>,
-        control: &WorkControl,
+        control: &CancellationToken,
     ) -> Invocation<impl Future<Output = Result<(), InvocationError>> + 'a + use<'a, P>> {
         let target = match attempt.selection {
             BindingChoice::Sole => Target::Operation {
@@ -662,13 +663,13 @@ pub(crate) struct Gate {
     operation: String,
     direction: Direction,
     prepared: Option<ValueContractPreparation>,
-    external: WorkControl,
+    external: CancellationToken,
 }
 impl Gate {
     pub(crate) fn check(
         &mut self,
         value: &JsonValue,
-        local: &WorkControl,
+        local: &CancellationToken,
     ) -> Result<(), (InvocationError, Option<Arc<ValidationFailure>>)> {
         if local.is_cancelled() || self.external.is_cancelled() {
             return Err((InvocationError::cancelled(), None));

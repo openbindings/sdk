@@ -1,5 +1,6 @@
 mod support;
-use openbindings::{Document, JsonLimits, ParsedDocument, VersionRefusal, WorkControl};
+use openbindings::{Document, JsonLimits, ParsedDocument, VersionRefusal};
+use openbindings_interface_synthesis::CancellationToken;
 use openbindings_interface_synthesis::*;
 use std::{
     collections::BTreeMap,
@@ -98,7 +99,7 @@ async fn admission_is_lazy_and_precedes_provider_work() {
         f.synthesize(&r).await.unwrap_err().kind(),
         SynthesisErrorKind::InvalidInput
     );
-    let control = WorkControl::new();
+    let control = CancellationToken::new();
     control.cancel();
     assert_eq!(
         f.synthesize_with_control(&SynthesisRequest::default(), &control)
@@ -549,7 +550,7 @@ impl InterfaceSynthesizer for PendingProvider {
     fn supports_kind(&self, _: &str) -> bool {
         true
     }
-    fn synthesize<'a>(&'a self, _: &'a SynthesisRequest<'a>, _: WorkControl) -> PendingWork {
+    fn synthesize<'a>(&'a self, _: &'a SynthesisRequest<'a>, _: CancellationToken) -> PendingWork {
         self.started.fetch_add(1, Ordering::Relaxed);
         PendingWork(self.dropped.clone())
     }
@@ -563,7 +564,7 @@ fn cancellation_wakes_and_drops_both_pending_calls() {
         dropped: dropped.clone(),
     });
     let request = SynthesisRequest::default();
-    let control = WorkControl::new();
+    let control = CancellationToken::new();
     let unpolled = facade.synthesize(&request);
     drop(unpolled);
     assert_eq!(started.load(Ordering::Relaxed), 0);

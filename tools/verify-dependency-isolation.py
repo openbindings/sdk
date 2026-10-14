@@ -42,3 +42,21 @@ manifest = tomllib.loads((root / 'Cargo.toml').read_text())
 bridge = manifest['workspace']['dependencies']['serde_json_compat']
 assert bridge == {'package': 'serde_json', 'version': '1.0.151', 'features': ['raw_value']}
 print('Two mechanical identity forks: upstream Rust file sets and SHA-256 digests match.')
+
+# Cancellation has one delivery identity, with no async dependency entering core.
+cancellation = 'openbindings-internal-cancellation'
+core = tomllib.loads((root / 'crates/openbindings/Cargo.toml').read_text())
+assert cancellation not in core.get('dependencies', {})
+internal = tomllib.loads((root / 'crates' / cancellation / 'Cargo.toml').read_text())
+assert set(internal['dependencies']) == {'openbindings'}
+assert internal['dependencies']['openbindings'] == {
+    'version': '=0.2.0-alpha.1', 'path': '../openbindings',
+}
+for role in ['http-discovery', 'invocation', 'source-inspection', 'interface-synthesis']:
+    package = root / 'crates' / ('openbindings-' + role)
+    manifest = tomllib.loads((package / 'Cargo.toml').read_text())
+    assert manifest['dependencies'][cancellation] == {
+        'version': '=0.2.0-alpha.1', 'path': '../' + cancellation,
+    }
+    assert 'pub use openbindings_internal_cancellation::{Cancellation, CancellationToken};' in (package / 'src/lib.rs').read_text()
+print('Cancellation: one shared identity, std-only implementation above synchronous core.')

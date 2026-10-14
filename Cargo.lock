@@ -911,6 +911,10 @@ dependencies = [
  "flate2",
  "fluent-uri",
  "openbindings",
+ "openbindings-interface-synthesis",
+ "openbindings-internal-cancellation",
+ "openbindings-invocation",
+ "openbindings-source-inspection",
  "reqwest",
  "serde",
  "tokio",
@@ -922,10 +926,18 @@ name = "openbindings-interface-synthesis"
 version = "0.2.0-alpha.1"
 dependencies = [
  "openbindings",
+ "openbindings-internal-cancellation",
  "openbindings-json-schema-evaluator",
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "openbindings-internal-cancellation"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
 ]
 
 [[package]]
@@ -1023,6 +1035,7 @@ version = "0.2.0-alpha.1"
 dependencies = [
  "futures-core",
  "openbindings",
+ "openbindings-internal-cancellation",
  "openbindings-json-schema-evaluator",
  "serde",
  "serde_json",
@@ -1056,6 +1069,7 @@ name = "openbindings-source-inspection"
 version = "0.2.0-alpha.1"
 dependencies = [
  "openbindings",
+ "openbindings-internal-cancellation",
  "openbindings-json-schema-evaluator",
  "serde",
  "serde_json",

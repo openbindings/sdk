@@ -1,6 +1,7 @@
 //! Fixed, local workload evidence, not an end-to-end service benchmark.
 use interface_synthesis_consumer::{Catalog, KIND, derive};
-use openbindings::{JsonValue, ParsedDocument, Source, WorkControl};
+use openbindings::{JsonValue, ParsedDocument, Source};
+use openbindings_interface_synthesis::CancellationToken;
 use openbindings_interface_synthesis::*;
 use std::{
     future::{Ready, ready},
@@ -17,7 +18,7 @@ impl InterfaceSynthesizer for Once {
     fn synthesize<'a>(
         &'a self,
         _: &'a SynthesisRequest<'a>,
-        _: WorkControl,
+        _: CancellationToken,
     ) -> Self::Synthesis<'a> {
         ready(Ok(self.0.lock().unwrap().take().unwrap()))
     }
@@ -56,7 +57,7 @@ async fn main() {
             sources: &inputs,
             ..Default::default()
         };
-        let control = WorkControl::new();
+        let control = CancellationToken::new();
         let seed = derive(&request, &control, false).unwrap();
         let bytes = seed.document.original_bytes().len();
         let mut derive_times = Vec::new();

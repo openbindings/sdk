@@ -1,245 +1,65 @@
-//! Executor-independent cancellation with scoped waiter ownership.
+//! Synchronous cooperative cancellation observation.
 use crate::{NoVerdict, NoVerdictReason};
 use std::{
-    collections::HashMap,
-    future::Future,
-    pin::Pin,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
-    },
-    task::{Context, Poll, Waker},
+    fmt,
+    sync::atomic::{AtomicBool, Ordering},
 };
 
-/// Cooperative cancellation shared by synchronous work and asynchronous I/O.
-/// Clones share one cancellation state. Cancellation is permanent for that state;
-/// use a fresh control for an independent retry. Work checks it at cooperative
-/// boundaries, so this is not a preemptive deadline. Application code owns scheduling.
+/// The caller cancelled this work. The owning API maps this signal to its outcome.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Cancelled;
+impl fmt::Display for Cancelled {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("the caller cancelled this work")
+    }
+}
+impl std::error::Error for Cancelled {}
+impl From<Cancelled> for NoVerdict {
+    fn from(_: Cancelled) -> Self {
+        Self::new(
+            NoVerdictReason::Cancelled,
+            "caller-cancelled",
+            "the caller cancelled this operation",
+        )
+    }
+}
+
+/// Object-safe synchronous observation of cooperative cancellation.
+/// Implementations must remain cancelled for the rest of a work attempt. Resetting
+/// a shared flag during work is unsupported; use a fresh flag for an independent
+/// retry. Applications own scheduling and may compose signals such as deadlines.
 /// Synchronous Wasm cannot observe a same-thread AbortSignal until it yields;
 /// a worker is required for externally interruptible synchronous work.
 ///
 /// ```
-/// use openbindings::{NoVerdictReason, WorkControl};
-/// let attempt = WorkControl::new();
-/// let cancellation = attempt.clone();
-/// cancellation.cancel();
-/// assert_eq!(attempt.check().unwrap_err().reason, NoVerdictReason::Cancelled);
-/// let retry = WorkControl::new();
-/// assert!(retry.check().is_ok());
+/// use openbindings::{Cancelled, WorkControl};
+/// use std::sync::atomic::{AtomicBool, Ordering};
+/// let flag = AtomicBool::new(false);
+/// let control: &dyn WorkControl = &flag;
+/// assert_eq!(control.check(), Ok(()));
+/// flag.store(true, Ordering::Release);
+/// assert_eq!(control.check(), Err(Cancelled));
 /// ```
-#[derive(Clone, Default)]
-pub struct WorkControl {
-    state: Arc<State>,
-}
-#[derive(Default)]
-struct State {
-    cancelled: AtomicBool,
-    next_id: AtomicUsize,
-    waiters: Mutex<HashMap<usize, Waker>>,
-}
-impl WorkControl {
-    /// Create a fresh, uncancelled state.
-    pub fn new() -> Self {
-        Self::default()
-    }
-    /// Permanently cancel this state and its clones, waking registered waiters.
-    pub fn cancel(&self) {
-        let waiters = {
-            let mut waiters = self.state.waiters.lock().unwrap();
-            self.state.cancelled.store(true, Ordering::Release);
-            std::mem::take(&mut *waiters)
-        };
-        // A waker may poll or drop its future immediately. Never call it under the lock.
-        for (_, waker) in waiters {
-            waker.wake();
-        }
-    }
-    /// Read the shared permanent cancellation flag without registering a waiter.
-    pub fn is_cancelled(&self) -> bool {
-        self.state.cancelled.load(Ordering::Acquire)
-    }
-    /// Return a `caller-cancelled` refusal when cancelled; otherwise continue. Call at cooperative work boundaries.
-    pub fn check(&self) -> Result<(), NoVerdict> {
+pub trait WorkControl: Send + Sync {
+    /// Observe whether the caller has permanently cancelled this attempt.
+    fn is_cancelled(&self) -> bool;
+    /// Check cancellation at a cooperative work boundary.
+    fn check(&self) -> Result<(), Cancelled> {
         if self.is_cancelled() {
-            Err(NoVerdict::new(
-                NoVerdictReason::Cancelled,
-                "caller-cancelled",
-                "the caller cancelled this operation",
-            ))
+            Err(Cancelled)
         } else {
             Ok(())
         }
     }
-    /// Resolves when cancelled. Dropping this future unregisters its waker.
-    pub fn cancelled(&self) -> Cancellation {
-        Cancellation {
-            control: self.clone(),
-            id: None,
-        }
+}
+impl WorkControl for AtomicBool {
+    fn is_cancelled(&self) -> bool {
+        self.load(Ordering::Acquire)
     }
 }
-#[must_use = "cancellation futures must be polled or awaited"]
-/// Executor-independent future that resolves on [`WorkControl::cancel`]. Polling registers a scoped waker; dropping the future unregisters it. It owns a clone of the cancellation state, not a task or timer.
-pub struct Cancellation {
-    control: WorkControl,
-    id: Option<usize>,
-}
-impl Future for Cancellation {
-    type Output = ();
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
-        let this = self.get_mut();
-        let id = {
-            let waiters = this.control.state.waiters.lock().unwrap();
-            if this.control.is_cancelled() {
-                return Poll::Ready(());
-            }
-            let id = *this.id.get_or_insert_with(|| {
-                loop {
-                    let candidate = this.control.state.next_id.fetch_add(1, Ordering::Relaxed);
-                    if !waiters.contains_key(&candidate) {
-                        break candidate;
-                    }
-                }
-            });
-            if waiters
-                .get(&id)
-                .is_some_and(|old| old.will_wake(cx.waker()))
-            {
-                return Poll::Pending;
-            }
-            id
-        };
-        // RawWaker clone and last-reference destruction may reenter cancellation.
-        let waker = cx.waker().clone();
-        let old = {
-            let mut waiters = this.control.state.waiters.lock().unwrap();
-            // Cancellation may have run during clone. Register only while live,
-            // under the same lock used by cancel, so no wakeup can be lost.
-            if this.control.is_cancelled() {
-                drop(waiters);
-                drop(waker);
-                return Poll::Ready(());
-            }
-            waiters.insert(id, waker)
-        };
-        drop(old);
-        if this.control.is_cancelled() {
-            Poll::Ready(())
-        } else {
-            Poll::Pending
-        }
-    }
-}
-impl Drop for Cancellation {
-    fn drop(&mut self) {
-        if let Some(id) = self.id {
-            let removed = self.control.state.waiters.lock().unwrap().remove(&id);
-            drop(removed);
-        }
-    }
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::{sync::mpsc, task::Wake, time::Duration};
-    #[derive(Default)]
-    struct Counter(AtomicUsize);
-    impl Wake for Counter {
-        fn wake(self: Arc<Self>) {
-            self.0.fetch_add(1, Ordering::Relaxed);
-        }
-    }
-    #[test]
-    fn waiters_wake_and_are_released_on_cancel_or_drop() {
-        let control = WorkControl::new();
-        let counter = Arc::new(Counter::default());
-        let waker = Waker::from(counter.clone());
-        let mut cx = Context::from_waker(&waker);
-        for _ in 0..1000 {
-            let mut waiter = control.cancelled();
-            assert!(Pin::new(&mut waiter).poll(&mut cx).is_pending());
-        }
-        assert!(control.state.waiters.lock().unwrap().is_empty());
-        let mut a = control.cancelled();
-        let mut b = control.cancelled();
-        assert!(Pin::new(&mut a).poll(&mut cx).is_pending());
-        assert!(Pin::new(&mut b).poll(&mut cx).is_pending());
-        control.cancel();
-        assert_eq!(counter.0.load(Ordering::Relaxed), 2);
-        assert!(Pin::new(&mut a).poll(&mut cx).is_ready());
-        assert!(Pin::new(&mut b).poll(&mut cx).is_ready());
-        assert!(control.state.waiters.lock().unwrap().is_empty());
-    }
-
-    struct CancelOnDrop(WorkControl);
-    // The owned, reentrant destructor is the witness; Waker::noop cannot supply it.
-    #[allow(clippy::manual_noop_waker)]
-    impl Wake for CancelOnDrop {
-        fn wake(self: Arc<Self>) {}
-    }
-    impl Drop for CancelOnDrop {
-        fn drop(&mut self) {
-            self.0.cancel();
-        }
-    }
-
-    #[test]
-    fn last_waker_drop_and_replacement_can_reenter_cancellation() {
-        for replace in [false, true] {
-            let (done, result) = mpsc::channel();
-            let task = std::thread::spawn(move || {
-                let control = WorkControl::new();
-                let mut wait = control.cancelled();
-                let waker = Waker::from(Arc::new(CancelOnDrop(control.clone())));
-                assert!(
-                    Pin::new(&mut wait)
-                        .poll(&mut Context::from_waker(&waker))
-                        .is_pending()
-                );
-                drop(waker); // The registered waiter now owns the last reference.
-                if replace {
-                    let _ = Pin::new(&mut wait).poll(&mut Context::from_waker(Waker::noop()));
-                    assert!(
-                        Pin::new(&mut wait)
-                            .poll(&mut Context::from_waker(Waker::noop()))
-                            .is_ready()
-                    );
-                }
-                drop(wait);
-                assert!(control.is_cancelled());
-                assert!(control.state.waiters.lock().unwrap().is_empty());
-                done.send(()).unwrap();
-            });
-            result
-                .recv_timeout(Duration::from_secs(5))
-                .expect("waker destruction must not deadlock cancellation");
-            task.join().unwrap();
-        }
-    }
-
-    #[test]
-    fn cancellation_racing_registration_never_loses_a_wakeup() {
-        for _ in 0..256 {
-            let control = WorkControl::new();
-            let cancel = control.clone();
-            let barrier = Arc::new(std::sync::Barrier::new(2));
-            let release = barrier.clone();
-            let task = std::thread::spawn(move || {
-                release.wait();
-                cancel.cancel();
-            });
-            let counter = Arc::new(Counter::default());
-            let waker = Waker::from(counter.clone());
-            let mut cx = Context::from_waker(&waker);
-            let mut wait = control.cancelled();
-            barrier.wait();
-            let result = Pin::new(&mut wait).poll(&mut cx);
-            task.join().unwrap();
-            if result.is_pending() {
-                assert_eq!(counter.0.load(Ordering::Relaxed), 1);
-            }
-            assert!(Pin::new(&mut wait).poll(&mut cx).is_ready());
-            assert!(control.state.waiters.lock().unwrap().is_empty());
-        }
+pub(crate) struct NeverCancelled;
+impl WorkControl for NeverCancelled {
+    fn is_cancelled(&self) -> bool {
+        false
     }
 }

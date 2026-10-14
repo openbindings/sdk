@@ -314,14 +314,14 @@ impl SchemaEvaluator for Custom {
     fn prepare(
         &self,
         _: &SchemaRequest,
-        _: &WorkControl,
+        _: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         self.0.fetch_add(1, Ordering::SeqCst);
         Ok(Arc::new(CustomPrepared))
     }
 }
 impl PreparedSchema for CustomPrepared {
-    fn validate(&self, _: &JsonValue, _: &WorkControl) -> ValueOutcome {
+    fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
         ValueOutcome::Fails {
             problems: vec![ValueProblem {
                 details: None,

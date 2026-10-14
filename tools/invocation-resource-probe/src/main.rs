@@ -2,7 +2,8 @@
 //! The only unsafe code forwards allocator contracts unchanged to System.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use openbindings::{JsonValue, ParsedDocument, Source, WorkControl};
+use openbindings::{JsonValue, ParsedDocument, Source};
+use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
     BindingRequest, BindingValue, InvocationError, InvocationLimits, ProviderIo, WriteError,
     binding::{BindingInvoker, Invoker},
@@ -225,7 +226,7 @@ impl BindingInvoker for Fixture {
         &'a self,
         request: BindingRequest<'a>,
         mut io: ProviderIo,
-        _control: WorkControl,
+        _control: CancellationToken,
     ) -> Self::Invocation<'a> {
         Box::pin(async move {
             let _guard = self.activity.enter();

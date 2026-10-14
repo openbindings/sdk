@@ -122,7 +122,7 @@ impl SchemaEvaluator for DefaultEvaluator {
     fn prepare(
         &self,
         request: &SchemaRequest,
-        control: &WorkControl,
+        control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         control.check()?;
         match request.evaluation_program(control) {
@@ -177,7 +177,7 @@ impl DefaultEvaluator {
         &self,
         mut program: EvaluationProgram,
         request: &SchemaRequest,
-        control: &WorkControl,
+        control: &dyn WorkControl,
     ) -> Result<Compiled, NoVerdict> {
         let mut registry = jsonschema::Registry::new().retriever(NoRetrieval);
         let mut literals = literals::Literals::default();
@@ -249,8 +249,9 @@ impl PreparedSchema for Compiled {
     fn resource_completeness(&self) -> ResourceCompleteness<'_> {
         ResourceCompleteness::Complete
     }
-    fn validate(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
+    fn validate(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
         if let Err(detail) = control.check() {
+            let detail = detail.into();
             return ValueOutcome::NoVerdict { detail };
         }
         let valid = verdict_pass(&self.limits, || {
@@ -274,7 +275,7 @@ impl Compiled {
     fn diagnostics(
         &self,
         value: &JsonValue,
-        control: &WorkControl,
+        control: &dyn WorkControl,
         original_only: bool,
     ) -> ValueOutcome {
         let mut problems = Vec::new();
@@ -451,6 +452,7 @@ impl Compiled {
             complete = false;
         }
         if let Err(detail) = control.check() {
+            let detail = detail.into();
             return ValueOutcome::NoVerdict { detail };
         }
         ValueOutcome::Fails {
@@ -471,8 +473,9 @@ impl PreparedSchema for PartialCompiled {
             ResourceCompleteness::incomplete,
         )
     }
-    fn validate(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
+    fn validate(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
         if let Err(detail) = control.check() {
+            let detail = detail.into();
             return ValueOutcome::NoVerdict { detail };
         }
         // One outer work AND regex allowance covers both Boolean evaluations.
@@ -510,7 +513,7 @@ impl PreparedSchema for PartialCompiled {
 fn bounded_decision(
     upper: impl FnOnce() -> bool,
     lower: impl FnOnce() -> bool,
-    control: &WorkControl,
+    control: &dyn WorkControl,
 ) -> Result<Option<bool>, NoVerdict> {
     let upper = upper();
     control.check()?;
@@ -557,7 +560,7 @@ fn check_patterns(
     resource: &SchemaResource,
     program: &EvaluationProgram,
     limits: &Limits,
-    control: &WorkControl,
+    control: &dyn WorkControl,
 ) -> Result<(), NoVerdict> {
     // Only schema pattern positions count; opaque values are not interpreted.
     let Some(definitions) = resource.document.get("$defs").and_then(|v| v.members()) else {
@@ -910,10 +913,10 @@ mod partial_budget_tests {
     }
     #[test]
     fn cancellation_between_passes_never_enters_lower() {
-        let control = WorkControl::new();
+        let control = std::sync::atomic::AtomicBool::new(false);
         let result = bounded_decision(
             || {
-                control.cancel();
+                control.store(true, std::sync::atomic::Ordering::Release);
                 true
             },
             || panic!("lower must not run"),
@@ -938,7 +941,7 @@ mod partial_budget_tests {
                         jsonschema::ob_work::charge(lower_cost);
                         true
                     },
-                    &WorkControl::new(),
+                    &std::sync::atomic::AtomicBool::new(false),
                 )
             });
             assert_eq!(result.unwrap_err().reason, NoVerdictReason::LimitExceeded);
@@ -947,7 +950,7 @@ mod partial_budget_tests {
             verdict_pass(&limits, || bounded_decision(
                 || false,
                 || panic!("failure uses no lower pass"),
-                &WorkControl::new()
+                &std::sync::atomic::AtomicBool::new(false)
             ))
             .unwrap(),
             Some(false)
@@ -972,7 +975,7 @@ mod partial_budget_tests {
             bounded_decision(
                 || regex.is_match(&input).unwrap_or(false),
                 || regex.is_match(&input).unwrap_or(false),
-                &WorkControl::new(),
+                &std::sync::atomic::AtomicBool::new(false),
             )
         });
         assert_eq!(result.unwrap_err().code, "regex-work-limit");
@@ -984,7 +987,7 @@ mod partial_budget_tests {
             verdict_pass(&healthy, || bounded_decision(
                 || regex.is_match(&input).unwrap_or(false),
                 || regex.is_match(&input).unwrap_or(false),
-                &WorkControl::new()
+                &std::sync::atomic::AtomicBool::new(false)
             ))
             .unwrap(),
             Some(true)

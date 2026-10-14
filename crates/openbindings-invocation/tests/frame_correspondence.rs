@@ -2,7 +2,8 @@
 //! portable streaming fixture standard. Envelope and temporal oracles are
 //! independent of the native provider's emitted values and effect counters.
 
-use openbindings::{JsonRef, JsonValue, WorkControl};
+use openbindings::{JsonRef, JsonValue};
+use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
     BindingInvocationInput, BindingRequest, InvocationError, InvocationLimits, ProviderIo,
     WriteError,
@@ -238,7 +239,7 @@ impl BindingInvoker for Fixture {
         &'a self,
         _request: BindingRequest<'a>,
         mut io: ProviderIo,
-        _control: WorkControl,
+        _control: CancellationToken,
     ) -> Self::Invocation<'a> {
         Box::pin(async move {
             self.attempts.fetch_add(1, Ordering::SeqCst);

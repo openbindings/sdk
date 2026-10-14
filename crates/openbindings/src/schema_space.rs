@@ -469,7 +469,7 @@ impl SchemaSpace {
             )),
         }
     }
-    fn references(&self, control: &WorkControl) -> ReferenceReport {
+    fn references(&self, control: &dyn WorkControl) -> ReferenceReport {
         let mut report = ReferenceReport {
             references: Vec::new(),
             complete: true,
@@ -478,7 +478,7 @@ impl SchemaSpace {
         for (id, node) in self.nodes.iter().enumerate().filter(|(_, n)| n.source == 0) {
             if let Err(reason) = control.check() {
                 report.complete = false;
-                report.limitation = Some(reason);
+                report.limitation = Some(reason.into());
                 break;
             }
             if node.depth > 256 {
@@ -532,7 +532,7 @@ impl SchemaSpace {
     pub fn program(
         &self,
         entry: usize,
-        control: &WorkControl,
+        control: &dyn WorkControl,
     ) -> Result<EvaluationProgram, NoVerdict> {
         control.check()?;
         let reach = self.reach(entry, control)?;
@@ -542,7 +542,7 @@ impl SchemaSpace {
         &self,
         entry: usize,
         reach: &Reach,
-        control: &WorkControl,
+        control: &dyn WorkControl,
     ) -> Result<EvaluationProgram, NoVerdict> {
         self.project_with_namespace(
             entry,
@@ -555,7 +555,7 @@ impl SchemaSpace {
         &self,
         entry: usize,
         reach: &Reach,
-        control: &WorkControl,
+        control: &dyn WorkControl,
         namespace: &str,
     ) -> Result<EvaluationProgram, NoVerdict> {
         let resource_uri = |resource: usize| format!("{namespace}r{resource}");
@@ -809,7 +809,7 @@ impl SchemaSpace {
         }
         Ok(())
     }
-    fn reach(&self, entry: usize, control: &WorkControl) -> Result<Reach, NoVerdict> {
+    fn reach(&self, entry: usize, control: &dyn WorkControl) -> Result<Reach, NoVerdict> {
         let mut out = Reach::default();
         let mut queue = VecDeque::from([entry]);
         while let Some(id) = queue.pop_front() {
@@ -928,7 +928,7 @@ impl SchemaSpace {
         self.check_cycles(&out, control)?;
         Ok(out)
     }
-    fn check_cycles(&self, reach: &Reach, control: &WorkControl) -> Result<(), NoVerdict> {
+    fn check_cycles(&self, reach: &Reach, control: &dyn WorkControl) -> Result<(), NoVerdict> {
         // A cycle in potentially reachable in-place applicators is conservative
         // preparation failure. Static reach does not prove semantic undefinedness.
         let mut colors = HashMap::new();
@@ -1013,13 +1013,13 @@ struct Reach {
 impl ParsedDocument {
     /// Inspect references with no caller resources and a fresh uncancelled control. No network or filesystem access; success is not conformance proof.
     pub fn references(&self) -> Result<ReferenceReport, InterpretationError> {
-        self.references_with_resources(ResourceSet::default(), &WorkControl::new())
+        self.references_with_resources(ResourceSet::default(), &crate::work_control::NeverCancelled)
     }
     /// Inspect schema references in this exact snapshot plus supplied resources, with cooperative cancellation. Interpretation errors refuse the document; traversal limits are represented in [`ReferenceReport`].
     pub fn references_with_resources(
         &self,
         resources: ResourceSet,
-        control: &WorkControl,
+        control: &dyn WorkControl,
     ) -> Result<ReferenceReport, InterpretationError> {
         self.interpretable()?;
         Ok(SchemaSpace::new(self.clone(), resources).references(control))
@@ -1102,7 +1102,7 @@ mod projection_tests {
                     .to_owned(),
             )
             .unwrap();
-        let control = WorkControl::new();
+        let control = std::sync::atomic::AtomicBool::new(false);
         let reach = space.reach(entry, &control).unwrap();
         let standard = space.project(entry, &reach, &control).unwrap();
         for namespace in [

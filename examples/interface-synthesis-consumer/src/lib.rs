@@ -1,7 +1,6 @@
 //! Code-defined test kind, with independent source analysis shared by two roles.
-use openbindings::{
-    Binding, Dependency, Document, JsonValue, Operation, Source, WorkControl,
-};
+use openbindings::{Binding, Dependency, Document, JsonValue, Operation, Source};
+use openbindings_interface_synthesis::CancellationToken;
 use openbindings_interface_synthesis::*;
 use openbindings_source_inspection as inspect;
 use std::{
@@ -101,7 +100,7 @@ fn analyze(source: &Source) -> Result<(Vec<Unit>, bool), SynthesisError> {
 /// Lossy framing is a sound restriction to null for input-consuming interactions.
 pub fn derive(
     request: &SynthesisRequest<'_>,
-    control: &WorkControl,
+    control: &dyn openbindings::WorkControl,
     single_source: bool,
 ) -> Result<SynthesisCandidate, SynthesisError> {
     if single_source && request.sources.len() > 1 {
@@ -265,7 +264,7 @@ impl InterfaceSynthesizer for Catalog {
     fn synthesize<'a>(
         &'a self,
         r: &'a SynthesisRequest<'a>,
-        c: WorkControl,
+        c: CancellationToken,
     ) -> Self::Synthesis<'a> {
         Box::pin(async move {
             self.calls.fetch_add(1, Ordering::Relaxed);
@@ -290,7 +289,7 @@ impl inspect::SourceInspector for Catalog {
     fn supports_kind(&self, k: &str) -> bool {
         k == KIND
     }
-    fn inspect<'a>(&'a self, s: &'a Source, c: WorkControl) -> Self::Inspection<'a> {
+    fn inspect<'a>(&'a self, s: &'a Source, c: CancellationToken) -> Self::Inspection<'a> {
         std::future::ready((|| {
             if c.is_cancelled() {
                 return Err(inspect::InspectionError::new(
@@ -349,7 +348,7 @@ impl InterfaceSynthesizer for Skeleton {
     fn synthesize<'a>(
         &'a self,
         r: &'a SynthesisRequest<'a>,
-        c: WorkControl,
+        c: CancellationToken,
     ) -> Self::Synthesis<'a> {
         std::future::ready(derive(r, &c, true))
     }
@@ -369,7 +368,7 @@ mod wasm {
         fn synthesize<'a>(
             &'a self,
             r: &'a SynthesisRequest<'a>,
-            c: WorkControl,
+            c: CancellationToken,
         ) -> Self::Synthesis<'a> {
             Box::pin(async move {
                 let local = self.0.clone();

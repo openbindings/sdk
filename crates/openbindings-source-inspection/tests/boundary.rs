@@ -1,4 +1,5 @@
-use openbindings::{JsonLimits, JsonValue, Operation, Source, WorkControl};
+use openbindings::{JsonLimits, JsonValue, Operation, Source};
+use openbindings_source_inspection::CancellationToken;
 use openbindings_source_inspection::*;
 use std::{
     cell::Cell,
@@ -48,7 +49,7 @@ impl SourceInspector for Echo {
             })
             .collect()
     }
-    fn inspect<'a>(&'a self, source: &'a Source, _: WorkControl) -> Self::Inspection<'a> {
+    fn inspect<'a>(&'a self, source: &'a Source, _: CancellationToken) -> Self::Inspection<'a> {
         self.calls.set(self.calls.get() + 1);
         ready(Ok(self.result.clone().unwrap_or_else(|| {
             let mut item = target();
@@ -372,7 +373,7 @@ impl SourceInspector for Waiting {
     fn supports_kind(&self, kind: &str) -> bool {
         kind == KIND
     }
-    fn inspect<'a>(&'a self, _: &'a Source, _: WorkControl) -> Self::Inspection<'a> {
+    fn inspect<'a>(&'a self, _: &'a Source, _: CancellationToken) -> Self::Inspection<'a> {
         self.started.set(true);
         Wait {
             dropped: self.dropped.clone(),
@@ -383,7 +384,7 @@ impl SourceInspector for Waiting {
 #[tokio::test]
 async fn pre_cancelled_work_never_calls_provider() {
     let (inspector, calls) = inspector(None);
-    let control = WorkControl::new();
+    let control = CancellationToken::new();
     control.cancel();
     assert_eq!(
         inspector
@@ -400,7 +401,7 @@ async fn pre_cancelled_work_never_calls_provider() {
 async fn constructing_or_dropping_unpolled_work_does_not_call_provider() {
     let (inspector, calls) = inspector(None);
     let source = source();
-    let control = WorkControl::new();
+    let control = CancellationToken::new();
     let ordinary = inspector.inspect(&source);
     let controlled = inspector.inspect_with_control(&source, &control);
     assert_eq!(calls.get(), 0);
@@ -423,7 +424,7 @@ fn cancellation_drops_pending_local_provider_future() {
         started: started.clone(),
     });
     let source = source();
-    let control = WorkControl::new();
+    let control = CancellationToken::new();
     let mut future = pin!(inspector.inspect_with_control(&source, &control));
     let wakes = Arc::new(WakeCounter(AtomicUsize::new(0)));
     let waker = Waker::from(wakes.clone());
@@ -579,7 +580,7 @@ async fn ro18_forwarded_inspectors_preserve_exact_encoding_and_byte_limits() {
         fn supports_kind(&self, kind: &str) -> bool {
             kind == KIND
         }
-        fn inspect<'a>(&'a self, _: &'a Source, _: WorkControl) -> Self::Inspection<'a> {
+        fn inspect<'a>(&'a self, _: &'a Source, _: CancellationToken) -> Self::Inspection<'a> {
             ready(Ok(SourceInspection::complete(vec![target()])))
         }
     }

@@ -1,7 +1,7 @@
 //! Native discovery with SDK redirect policy and one Tokio attempt timer.
 //! Application builders retain TLS, credentials, proxy, resolver and decoding choices.
+use crate::CancellationToken;
 use crate::*;
-use openbindings::WorkControl;
 
 #[derive(Clone)]
 /// Reusable reqwest discovery adapter. No global client or response cache is installed.
@@ -62,14 +62,14 @@ impl Client {
     }
     /// Run one discovery attempt with a fresh uncancelled control and the retained HTTP client.
     pub async fn discover(&self, origin: &str) -> Result<DiscoveryResult, ConfigurationError> {
-        self.discover_with_control(origin, &WorkControl::new())
+        self.discover_with_control(origin, &CancellationToken::new())
             .await
     }
     /// Run one cooperatively cancellable discovery attempt. Request/body work can be interrupted; synchronous validation observes cancellation only at its boundaries.
     pub async fn discover_with_control(
         &self,
         origin: &str,
-        control: &WorkControl,
+        control: &CancellationToken,
     ) -> Result<DiscoveryResult, ConfigurationError> {
         validate_options(self.options)?;
         let timer = Timer(tokio::time::Instant::now());

@@ -8,13 +8,13 @@ use std::sync::{
 // value evaluation. New setup-state tests below assert the stage independently.
 trait EvaluateCase {
     fn validate(&self, value: &JsonValue) -> ValueOutcome;
-    fn validate_with_control(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome;
+    fn validate_with_control(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome;
 }
 impl EvaluateCase for ValueContractPreparation {
     fn validate(&self, value: &JsonValue) -> ValueOutcome {
-        self.validate_with_control(value, &WorkControl::new())
+        self.validate_with_control(value, &std::sync::atomic::AtomicBool::new(false))
     }
-    fn validate_with_control(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
+    fn validate_with_control(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
         match self {
             ValueContractPreparation::Ready(contract) => {
                 contract.validate_with_control(value, control)
@@ -131,7 +131,7 @@ fn explicit_preparation_and_retained_validation_have_caller_owned_lifetimes() {
         }
     }
     impl PreparedSchema for Held {
-        fn validate(&self, _: &JsonValue, _: &WorkControl) -> ValueOutcome {
+        fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
             ValueOutcome::Satisfies
         }
     }
@@ -139,7 +139,7 @@ fn explicit_preparation_and_retained_validation_have_caller_owned_lifetimes() {
         fn prepare(
             &self,
             _: &SchemaRequest,
-            _: &WorkControl,
+            _: &dyn WorkControl,
         ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             self.live.fetch_add(1, Ordering::SeqCst);
@@ -244,8 +244,8 @@ fn review_s11_same_uri_resources_are_isolated_and_precancellation_does_not_poiso
     let integer = make(r#"{"type":"integer"}"#);
     let string = make(r#"{"type":"string"}"#);
     for context in [&integer, &string] {
-        let cancelled = WorkControl::new();
-        cancelled.cancel();
+        let cancelled = std::sync::atomic::AtomicBool::new(false);
+        cancelled.store(true, std::sync::atomic::Ordering::Release);
         assert!(matches!(
             context.prepare_with_control("op", Direction::Input, &cancelled),
             ValueContractPreparation::NoVerdict {
@@ -284,15 +284,16 @@ fn review_s11_same_uri_resources_are_isolated_and_precancellation_does_not_poiso
 }
 struct CancelOnce {
     calls: AtomicUsize,
+    cancelled: Arc<std::sync::atomic::AtomicBool>,
 }
 impl SchemaEvaluator for CancelOnce {
     fn prepare(
         &self,
         request: &SchemaRequest,
-        control: &WorkControl,
+        control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
-            control.cancel();
+            self.cancelled.store(true, Ordering::Release);
             control.check()?;
         }
         DefaultEvaluator::new().prepare(request, control)
@@ -300,13 +301,15 @@ impl SchemaEvaluator for CancelOnce {
 }
 #[test]
 fn cancellation_during_preparation_allows_independent_retries() {
+    let control = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let evaluator = Arc::new(CancelOnce {
+        cancelled: control.clone(),
         calls: AtomicUsize::new(0),
     });
     let context = doc("true")
         .value_contracts(evaluator.clone(), ResourceSet::default())
         .unwrap();
-    let cancelled = context.prepare_with_control("op", Direction::Input, &WorkControl::new());
+    let cancelled = context.prepare_with_control("op", Direction::Input, control.as_ref());
     assert!(matches!(
         cancelled,
         ValueContractPreparation::NoVerdict {
@@ -623,8 +626,8 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
     let ValueContractPreparation::Ready(no) = c.prepare("no", Direction::Input) else {
         panic!()
     };
-    let cancel = WorkControl::new();
-    cancel.cancel();
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    cancel.store(true, std::sync::atomic::Ordering::Release);
     assert!(matches!(
         ready.validate_with_control(&value("null"), &cancel),
         ValueOutcome::NoVerdict {

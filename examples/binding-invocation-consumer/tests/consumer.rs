@@ -1,6 +1,7 @@
 use binding_invocation_consumer::{Catalog, KIND, yield_once};
-use openbindings::{JsonValue, Source, WorkControl};
+use openbindings::{JsonValue, Source};
 use openbindings_interface_synthesis::{SynthesisRequest, SynthesisSource, Synthesizer};
+use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
     BindingInvocationInput, BindingRequest, BindingValue, InvocationError, ProviderIo,
     binding::{BindingInvoker, Invoker},
@@ -164,7 +165,7 @@ impl BindingInvoker for Borrowed<'_> {
         &'a self,
         _: BindingRequest<'a>,
         mut io: ProviderIo,
-        _: WorkControl,
+        _: CancellationToken,
     ) -> Self::Invocation<'a> {
         Box::pin(async move {
             yield_once().await;
@@ -184,7 +185,7 @@ impl BindingInvoker for Local {
         &'a self,
         _: BindingRequest<'a>,
         mut io: ProviderIo,
-        _: WorkControl,
+        _: CancellationToken,
     ) -> Self::Invocation<'a> {
         Box::pin(async move {
             let retained = self.0.clone();

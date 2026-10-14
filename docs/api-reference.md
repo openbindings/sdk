@@ -13,6 +13,7 @@ for a complete job; use the definitions for exact result, ownership and limit co
 | Rust source inspection role | [`openbindings-source-inspection`](../crates/openbindings-source-inspection/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-source-inspection` |
 | Rust interface synthesis role | [`openbindings-interface-synthesis`](../crates/openbindings-interface-synthesis/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-interface-synthesis` |
 | Rust binding and operation invocation roles | [`openbindings-invocation`](../crates/openbindings-invocation/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-invocation` |
+| Shared Rust cancellation definitions | [`openbindings-internal-cancellation`](../crates/openbindings-internal-cancellation/src/lib.rs), reexported by all four async companions | `cargo doc --locked --no-deps -p openbindings-internal-cancellation` |
 | TypeScript core and HTTP discovery | [`internal.ts`](../packages/typescript/src/internal.ts), as exported by the two entry points | Build the package, then run `node packages/typescript/scripts/check-api-reference.mjs target/api-reference` |
 | Compiled Wasm asset import | [`wasm-module.d.ts`](../packages/typescript/src/wasm-module.d.ts) | Host import type documented alongside `initialize` |
 
@@ -128,7 +129,7 @@ Rust deadline and outcome items are defined in
 | `AttemptTimeout::duration()` | Returns `Result<Option<Duration>, ConfigurationError>`; `None` denotes unbounded and zero returns `invalid-timeout`. |
 | `ClientOptions::timeout` | Defaults to `AttemptTimeout::Default`; successful reads and redirects never reset it. `max_document_bytes: usize` defaults to 1 MiB; explicit zero and `usize::MAX` are refused. |
 | `DiscoveryTimer::{now, sleep_until}` | Host monotonic time and a wake-capable absolute timer in the same epoch, expressed as `Duration`. Dropping the timer releases it; local futures are supported. |
-| `discover(origin, &options, &control, &timer, transport)` | Races one host timer and caller `WorkControl` while invoking a repeatable one-hop callback. The callback must dispatch the normalized URL, expose redirects, deliver decoded bytes or a typed refusal, and release acquisition on drop. Connection-time DNS, peer and proxy policy belongs to the host. |
+| `discover(origin, &options, &control, &timer, transport)` | Races one host timer and caller `CancellationToken` while invoking a repeatable one-hop callback. The callback must dispatch the normalized URL, expose redirects, deliver decoded bytes or a typed refusal, and release acquisition on drop. Connection-time DNS, peer and proxy policy belongs to the host. |
 | `DEFAULT_TIMEOUT_SECONDS` | Thirty-second SDK default. |
 | `MAX_REDIRECTS` | Ten followed redirects on native and portable checked paths. Browser Fetch owns its hidden redirect limit. |
 | `native::Client::new(ClientBuilder, ClientOptions)` | Installs SDK redirect policy last and builds the client, retaining application TLS, resolver, proxy, credential and decoding choices. Refuses downgrade and credential-replay hops before dispatch. Owns one Tokio attempt timer. |
@@ -344,3 +345,17 @@ prepares lazily once per used direction per attempt.
 `ValidationReport` retains release, revision, conclusion, evidence, findings and
 `findingsTruncated`; it has no application policy identifier. Applications attach
 policy provenance to their own records.
+
+## Cancellation boundary
+
+Core and evaluator APIs accept `&dyn WorkControl`. The trait requires
+`is_cancelled()` and defaults `check()` to `Result<(), Cancelled>`; `AtomicBool`
+implements acquire observation. Core convenience APIs use a private always-live
+control. Cancellation is permanent during an attempt; reset during work is unsupported.
+
+Discovery, invocation, source inspection and interface synthesis reexport one
+`CancellationToken` and `Cancellation` identity. Their controlled APIs borrow the
+token, and providers receive an owned token. Token `check()` returns `Cancelled`,
+not a value verdict. Contract boundaries convert it to `caller-cancelled`; async
+consumers retain their existing cancellation outcomes. Invocation retains its
+synchronous relay and isolated local tokens. See the [offline primitive comparison](../crates/openbindings-internal-cancellation/README.md).

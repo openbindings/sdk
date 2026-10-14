@@ -179,8 +179,9 @@ The vendored adaptation is an implementation detail. Upgrade it with the recorde
 
 Version 0.2.0-alpha.1 is an unpublished candidate requiring Rust 1.99. Package publication and application cutover are separate actions.
 
-`WorkControl` clones share permanent cancellation; a fresh control starts a healthy
-attempt. Cancelled preparation returns no ready owner, while cancelled validation
+`WorkControl` is a synchronous trait accepted as `&dyn WorkControl`. A plain
+`AtomicBool` or an async companion’s `CancellationToken` can supply it. Cancellation
+is permanent within an attempt; use a fresh flag or token for a healthy retry. Cancelled preparation returns no ready owner, while cancelled validation
 leaves an existing contract usable. The application decides whether a candidate is
 ready to replace active work and controls its scheduling. Releasing the final Rust
 owner is distinct from reducing allocator RSS.

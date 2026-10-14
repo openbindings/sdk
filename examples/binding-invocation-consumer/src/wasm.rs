@@ -1,6 +1,7 @@
 //! Qualification-only host task keeps borrowed SDK halves inside their owners.
 //! One pending command per direction; no provider queue or detached invocation.
-use openbindings::{JsonValue, WorkControl};
+use openbindings::JsonValue;
+use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
     BindingInvocationInput, BindingRequest, InvocationError, ProviderIo,
     binding::{BindingInvoker, Invoker},
@@ -133,7 +134,7 @@ impl BindingInvoker for Local {
         &'a self,
         _: BindingRequest<'a>,
         mut io: ProviderIo,
-        _: WorkControl,
+        _: CancellationToken,
     ) -> Self::Invocation<'a> {
         Box::pin(async move {
             let _active = Count::new(&PROVIDERS);

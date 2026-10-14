@@ -24,7 +24,8 @@ separate implementation of the roles. This code-defined
 example kind has one target whose binding content is the source content:
 
 ```rust
-use openbindings::{Source, WorkControl};
+use openbindings_source_inspection::CancellationToken;
+use openbindings::{Source, };
 use openbindings_source_inspection::{
     BindableTarget, BindingFragment, InspectionError, Inspector,
     SourceInspection, SourceInspector,
@@ -37,7 +38,7 @@ impl SourceInspector for EchoInspector {
     fn supports_kind(&self, kind: &str) -> bool {
         kind == "urn:example:echo"
     }
-    fn inspect<'a>(&'a self, source: &'a Source, _: WorkControl)
+    fn inspect<'a>(&'a self, source: &'a Source, _: CancellationToken)
         -> Self::Inspection<'a>
     {
         ready(Ok(SourceInspection::complete(vec![BindableTarget {
@@ -115,7 +116,8 @@ strings and retain exact JSON owners. Dropping or replacing a source cannot inva
 them. Retaining a small subtree can retain its larger backing arena; there is no
 automatic cache or implicit document copy.
 
-`WorkControl` reuses core cancellation. Consumers pass a borrowed control; the
+`CancellationToken` and its `Cancellation` future are reexported from the shared
+internal cancellation package, with the same identity in all four async companions. Consumers pass a borrowed control; the
 provider hook receives an owned clone sharing the same cancellation state. Checked
 calls remain lazy until polled. Cancellation drops pending work; providers
 must check between bounded synchronous units. It cannot preempt a blocking poll or

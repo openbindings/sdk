@@ -177,7 +177,7 @@ mod tests {
             fn prepare(
                 &self,
                 request: &SchemaRequest,
-                control: &WorkControl,
+                control: &dyn WorkControl,
             ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
                 let program: EvaluationProgram = request.evaluation_program(control)?;
                 let _: &String = &program.entry_uri;
@@ -204,7 +204,7 @@ mod tests {
             }
         }
         impl PreparedSchema for Prepared {
-            fn validate(&self, value: &JsonValue, control: &WorkControl) -> ValueOutcome {
+            fn validate(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
                 control.check().unwrap();
                 // This finite signature witness only calls the supported exact constant.
                 assert_eq!(value.semantic_eq(&self.0), Some(true));
@@ -218,7 +218,8 @@ mod tests {
         let context = document
             .value_contracts(Arc::new(ExactConstant), ResourceSet::default())
             .unwrap();
-        let ValueContractPreparation::Ready(contract) = context.prepare("read", Direction::Input) else {
+        let ValueContractPreparation::Ready(contract) = context.prepare("read", Direction::Input)
+        else {
             panic!("custom evaluator must prepare")
         };
         assert!(matches!(

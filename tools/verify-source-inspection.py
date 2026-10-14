@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "examples/source-inspection-consumer"
 LOCAL = [
     "crates/openbindings", "crates/openbindings-internal-json",
+    "crates/openbindings-internal-cancellation",
     "crates/openbindings-source-inspection",
     "vendor/openbindings-internal-jsonschema",
     "vendor/openbindings-internal-jsonschema-value",

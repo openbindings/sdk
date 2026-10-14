@@ -11,7 +11,7 @@ impl SchemaEvaluator for Capture {
     fn prepare(
         &self,
         request: &SchemaRequest,
-        _: &WorkControl,
+        _: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         *self.0.lock().unwrap() = Some(request.clone());
         Err(NoVerdict::new(
@@ -78,7 +78,9 @@ fn frozen_fragment_witnesses_and_escaped_supplied_source_keep_original_locations
                 vec![]
             });
             let request = request(&doc, entries.clone());
-            let direct = request.evaluation_bounds(&WorkControl::new()).unwrap_err();
+            let direct = request
+                .evaluation_bounds(&std::sync::atomic::AtomicBool::new(false))
+                .unwrap_err();
             let context = doc
                 .value_contracts(Arc::new(DefaultEvaluator::new()), entries)
                 .unwrap();
@@ -116,12 +118,16 @@ fn direct_keyword_refusals_and_recovered_strict_holders_are_precise_and_stable()
         let doc = document(&schema);
         let request = request(&doc, ResourceSet::default());
         at(
-            &request.evaluation_bounds(&WorkControl::new()).unwrap_err(),
+            &request
+                .evaluation_bounds(&std::sync::atomic::AtomicBool::new(false))
+                .unwrap_err(),
             "partial-nonpositive-influence",
             None,
             &format!("{INPUT}/properties/a/not"),
         );
-        let strict = request.evaluation_program(&WorkControl::new()).unwrap_err();
+        let strict = request
+            .evaluation_program(&std::sync::atomic::AtomicBool::new(false))
+            .unwrap_err();
         at(
             &strict,
             "resource-unavailable",
@@ -151,7 +157,9 @@ fn direct_keyword_refusals_and_recovered_strict_holders_are_precise_and_stable()
         let doc = document(&format!(r#"{{"$ref":"{R}"}}"#));
         let request = request(&doc, resources(&[(R, &schema)]));
         at(
-            &request.evaluation_bounds(&WorkControl::new()).unwrap_err(),
+            &request
+                .evaluation_bounds(&std::sync::atomic::AtomicBool::new(false))
+                .unwrap_err(),
             "partial-annotation-or-dynamic",
             Some(R),
             &format!("/{keyword}"),
@@ -172,7 +180,9 @@ fn strict_and_partial_multinode_cycle_roots_are_stable() {
         for _ in 0..24 {
             let doc = document(&schema);
             let request = request(&doc, ResourceSet::default());
-            let direct = request.evaluation_bounds(&WorkControl::new()).unwrap_err();
+            let direct = request
+                .evaluation_bounds(&std::sync::atomic::AtomicBool::new(false))
+                .unwrap_err();
             at(&direct, "in-place-cycle", None, &format!("{INPUT}/$defs/a"));
             let context = doc
                 .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
@@ -195,7 +205,9 @@ fn actual_production_node_and_edge_caps_preserve_known_limits_before_and_after_s
         );
         let doc = document(&schema);
         let request = request(&doc, ResourceSet::default());
-        let direct = request.evaluation_bounds(&WorkControl::new()).unwrap_err();
+        let direct = request
+            .evaluation_bounds(&std::sync::atomic::AtomicBool::new(false))
+            .unwrap_err();
         let code = if count == 100_000 {
             "schema-node-limit"
         } else {

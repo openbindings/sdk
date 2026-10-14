@@ -30,7 +30,8 @@ core, and does not add invocation to the published TypeScript SDK.
 ## Implement and call a provider
 
 ```rust
-use openbindings::{JsonValue, Source, WorkControl};
+use openbindings_invocation::CancellationToken;
+use openbindings::{JsonValue, Source, };
 use openbindings_invocation::{
     binding::{BindingInvoker, Invoker},
     BindingRequest, BindingValue, InvocationError, ProviderIo,
@@ -47,7 +48,7 @@ impl BindingInvoker for Echo<'_> {
 
     fn invoke<'a>(
         &'a self, _request: BindingRequest<'a>, mut io: ProviderIo,
-        _control: WorkControl,
+        _control: CancellationToken,
     ) -> Self::Invocation<'a> {
         Box::pin(async move {
             while let Some(value) = io.next().await {
@@ -184,7 +185,7 @@ Input is validated before delivery to the provider; successful output is validat
 before entering the committed output queue. Invalid input **does not become clean
 EOF**: the invocation ends and the pending provider read is abandoned. Providers
 polling split endpoints independently must also observe their supplied
-`WorkControl` and release those tasks on cancellation. A failed output emission
+`CancellationToken` and release those tasks on cancellation. A failed output emission
 returns an error. Already committed outputs precede the single terminal failure;
 earlier effects are not undone. Application errors and context challenges are
 forwarded without applying the successful-output schema.
@@ -234,7 +235,7 @@ remote dispatch acknowledgement.
 A cancellation handle weakly references the driver and does not retain provider
 work after output abandonment. Its **Rust lifetime still follows the borrowed
 invocation**; copy the owned `outcome()` snapshot to retain a result afterward.
-A caller `WorkControl` may cancel several attempts, but cancelling one invocation
+A caller `CancellationToken` may cancel several attempts, but cancelling one invocation
 never cancels siblings sharing that external control. Cancellation cannot roll
 back effects or prove that detached external work stopped. A scoped cancellation
 relay also reaches cooperative synchronous provider/evaluator work during its

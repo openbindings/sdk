@@ -31,7 +31,7 @@ impl Literals {
         &mut self,
         resource: &JsonValue,
         limits: &Limits,
-        control: &WorkControl,
+        control: &dyn WorkControl,
     ) -> Result<Value, NoVerdict> {
         // Partial bounds include a private constant resource with no source map.
         if let Some(value) = resource.view().as_bool() {
