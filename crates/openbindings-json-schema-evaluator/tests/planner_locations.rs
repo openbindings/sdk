@@ -34,8 +34,11 @@ fn resources(entries: &[(&str, &str)]) -> ResourceSet {
 fn request(document: &ParsedDocument, resources: ResourceSet) -> SchemaRequest {
     let capture = Arc::new(Capture(Mutex::new(None)));
     document
-        .value_contracts(capture.clone(), resources)
+        .validate()
         .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(capture.clone(), resources)
         .prepare("op", Direction::Input);
     capture.0.lock().unwrap().take().unwrap()
 }
@@ -82,8 +85,11 @@ fn frozen_fragment_witnesses_and_escaped_supplied_source_keep_original_locations
                 .evaluation_bounds(&std::sync::atomic::AtomicBool::new(false))
                 .unwrap_err();
             let context = doc
-                .value_contracts(Arc::new(DefaultEvaluator::new()), entries)
-                .unwrap();
+                .validate()
+                .unwrap()
+                .validated()
+                .expect("conformant document")
+                .value_contracts(Arc::new(DefaultEvaluator::new()), entries);
             let detail = refused(&context);
             let pointer = format!("{}{suffix}", if external { "" } else { INPUT });
             at(
@@ -135,8 +141,11 @@ fn direct_keyword_refusals_and_recovered_strict_holders_are_precise_and_stable()
             &format!("{INPUT}/properties/a/not"),
         );
         let context = doc
-            .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
-            .unwrap();
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant document")
+            .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
         assert_eq!(
             serde_json::to_value(refused(&context)).unwrap(),
             serde_json::to_value(strict).unwrap()
@@ -185,8 +194,11 @@ fn strict_and_partial_multinode_cycle_roots_are_stable() {
                 .unwrap_err();
             at(&direct, "in-place-cycle", None, &format!("{INPUT}/$defs/a"));
             let context = doc
-                .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
-                .unwrap();
+                .validate()
+                .unwrap()
+                .validated()
+                .expect("conformant document")
+                .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
             at(
                 &refused(&context),
                 "in-place-cycle",
@@ -219,8 +231,11 @@ fn actual_production_node_and_edge_caps_preserve_known_limits_before_and_after_s
         for supplied in [false, true] {
             let entries = resources(&if supplied { vec![(U, "true")] } else { vec![] });
             let context = doc
-                .value_contracts(Arc::new(DefaultEvaluator::new()), entries)
-                .unwrap();
+                .validate()
+                .unwrap()
+                .validated()
+                .expect("conformant document")
+                .value_contracts(Arc::new(DefaultEvaluator::new()), entries);
             let detail = refused(&context);
             at(
                 &detail,

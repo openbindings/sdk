@@ -1,3 +1,4 @@
+import { validatedContracts } from "./validated-contracts.mjs";
 /** Public-API checks shared by repository and freshly installed host consumers. */
 export async function apiQualityCases(sdk, http) {
   let assertions = 0;
@@ -39,7 +40,7 @@ export async function apiQualityCases(sdk, http) {
     '{"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"}}}}',
   );
   warm.value.validate();
-  const warmContext = warm.value.valueContracts();
+  const warmContext = validatedContracts(warm.value);
   const warmPrepared = warmContext.prepare("run", "input");
   if (warmPrepared.status !== "ready")
     throw new Error("Warmup did not prepare.");
@@ -121,7 +122,7 @@ export async function apiQualityCases(sdk, http) {
         e.location?.pointer === "/operations/run/aliases",
       "malformed alias primary lookup",
     );
-    const context = own(document.valueContracts());
+    const context = own(validatedContracts(document));
     check(
       context.prepare("empty", "input").status === "no-value-contract",
       "absent contract setup",
@@ -130,10 +131,9 @@ export async function apiQualityCases(sdk, http) {
       context.prepare("missing", "input").status === "operation-missing",
       "missing operation setup",
     );
-    const ambContext = own(ambiguous.valueContracts());
     check(
-      ambContext.prepare("x", "input").status === "operation-ambiguous",
-      "ambiguous setup",
+      ambiguous.validated().status === "report",
+      "ambiguous documents cannot construct contracts",
     );
     const remote = context.prepare("remote", "input");
     check(
@@ -171,16 +171,10 @@ export async function apiQualityCases(sdk, http) {
     const nullDoc = parsed(
       '{"openbindings":"0.2.0","operations":{"run":{"input":null}}}',
     );
-    let nullContext;
-    try {
-      nullContext = own(nullDoc.valueContracts());
-    } catch (e) {
-      check(e.code === "interpretation", "invalid schema construction refuses");
-    }
-    if (nullContext) {
-      const r = nullContext.prepare("run", "input");
-      check(r.status === "no-verdict", "null schema is not absence");
-    }
+    check(
+      nullDoc.validated().status === "report",
+      "null schema rejects the document; it is not absence",
+    );
     check(input.validate(7).outcome === "satisfies", "ordinary validation");
     check(
       input.validate("7").outcome === "fails",
@@ -338,8 +332,8 @@ export async function apiQualityCases(sdk, http) {
     const others = own(
       new sdk.SchemaResources([["https://schema.test/id", stringSchema]]),
     );
-    const first = own(document.valueContracts({ resources }));
-    const second = own(document.valueContracts({ resources: others }));
+    const first = own(validatedContracts(document, { resources }));
+    const second = own(validatedContracts(document, { resources: others }));
     const a = ready(first, "remote"),
       b = ready(second, "remote");
     check(

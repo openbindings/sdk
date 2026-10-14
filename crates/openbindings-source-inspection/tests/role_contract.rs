@@ -12,8 +12,11 @@ fn inventories_validate_against_pinned_role_output_contract() {
     let document =
         ParsedDocument::parse(include_bytes!("fixtures/source-inspector-0.1.json")).unwrap();
     let context = document
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
-        .unwrap();
+        .validate()
+        .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let ValueContractPreparation::Ready(contract) = context.prepare(
         "openbindings.source-inspector.inspectSource",
         Direction::Output,
@@ -65,8 +68,11 @@ fn duplicate_recovery_is_sdk_policy_not_an_interface_requirement() {
     let document =
         ParsedDocument::parse(include_bytes!("fixtures/source-inspector-0.1.json")).unwrap();
     let context = document
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
-        .unwrap();
+        .validate()
+        .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let ValueContractPreparation::Ready(contract) = context.prepare(
         "openbindings.source-inspector.inspectSource",
         Direction::Output,
@@ -114,8 +120,11 @@ fn ro15_limitation_additional_evidence_matches_the_published_interface() {
             .is_none()
     );
     let context = document
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
-        .unwrap();
+        .validate()
+        .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let ValueContractPreparation::Ready(contract) = context.prepare(
         "openbindings.source-inspector.inspectSource",
         Direction::Output,

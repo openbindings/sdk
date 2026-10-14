@@ -2,6 +2,19 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+- Recheck cached Rust document conformance at every proof-requiring Wasm entry,
+  including raw receiver substitution, retention, transfer and publication. Keep
+  TypeScript top-level text reads field-local so malformed siblings do not hide
+  readable fields or absence.
+
+- Require a validated document for normative value contracts and operation invocation
+  across Rust, Wasm and TypeScript. Add infallible validated views and top-level
+  metadata/schema reads; preserve exact UTF-16 with Rust `JsonStringRef` and JavaScript
+  strings. Add TypeScript operation input/output reads with independent ownership.
+  Parsed editor reads remain fallible. Re-express nine evaluator-kit cases through
+  supplied resources with unchanged refusal outcomes; migrate two unreachable OBI-12
+  instance cases to core rejection tests, with complete case-ID accounting.
+
 - Caller-owned preparation: remove the core preparation cache, Rust
   `ValueContractOptions` / `value_contracts_with_options`, the Wasm cache argument
   and TypeScript `cacheCapacity`. Every explicit preparation compiles anew;

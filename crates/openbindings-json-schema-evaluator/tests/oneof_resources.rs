@@ -20,8 +20,11 @@ fn ready(
     limits: Limits,
 ) -> ValueContract {
     match document
-        .value_contracts(Arc::new(DefaultEvaluator::with_limits(limits)), resources)
+        .validate()
         .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(Arc::new(DefaultEvaluator::with_limits(limits)), resources)
         .prepare(op, direction)
     {
         ValueContractPreparation::Ready(contract) => contract,
@@ -382,9 +385,18 @@ fn unsupported_influence_and_known_closure_defects_remain_refusals() {
             "in-place-cycle",
         ),
     ] {
+        if code == "non-schema-target" {
+            let validation = document(schema).validate().unwrap();
+            assert_eq!(validation.report().evidence["OBI-12"], Evidence::Violated);
+            assert!(validation.validated().is_none());
+            continue;
+        }
         let setup = document(schema)
-            .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
+            .validate()
             .unwrap()
+            .validated()
+            .expect("conformant document")
+            .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
             .prepare("probe", Direction::Input);
         let ValueContractPreparation::NoVerdict { detail } = setup else {
             panic!("{setup:?}")
@@ -516,8 +528,11 @@ fn adapters_receive_unmodified_requests_and_each_bound_compiles_without_the_othe
         bounds: Mutex::new(None),
     });
     let context = document(r#"{"oneOf":[true,{"$ref":"https://oneof.invalid/U"}]}"#)
-        .value_contracts(custom.clone(), ResourceSet::default())
-        .unwrap();
+        .validate()
+        .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(custom.clone(), ResourceSet::default());
     let ValueContractPreparation::NoVerdict { detail } = context.prepare("probe", Direction::Input)
     else {
         panic!()
@@ -607,11 +622,14 @@ fn bounded_nested_runtime_and_original_exact_details_retain_separate_policies() 
     );
     let schema = r#"{"minimum":0.290000000000000000001,"oneOf":[false,{"properties":{"p":{"$ref":"https://oneof.invalid/U"}}}]}"#;
     let contracts = self::document(schema)
+        .validate()
+        .unwrap()
+        .validated()
+        .expect("conformant document")
         .value_contracts(
             Arc::new(DefaultEvaluator::new().with_schema_details(true)),
             ResourceSet::default(),
-        )
-        .unwrap();
+        );
     let ValueContractPreparation::Ready(contract) = contracts.prepare("probe", Direction::Input)
     else {
         panic!()

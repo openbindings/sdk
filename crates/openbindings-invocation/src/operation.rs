@@ -2,7 +2,7 @@
 //!
 //! Selection is caller-owned. Validation uses an explicitly supplied evaluator;
 //! without one, a declared value contract cannot yield a verdict. Neither construction
-//! nor preflight prepares schemas or establishes whole-document conformance.
+//! nor preflight prepares schemas; construction requires document conformance proof.
 use crate::CancellationToken;
 use crate::{
     BindingRequest, BindingValue, ContextChallenge, Invocation, InvocationError, InvocationLimits,
@@ -12,9 +12,9 @@ use crate::{
     value::source_from_json,
 };
 use openbindings::{
-    BindingView, Direction, InterpretationError, JsonKind, JsonValue, NoVerdict, NoVerdictReason,
-    OperationSelection, OperationView, ParsedDocument, ResourceSet, SchemaEvaluator, Source,
-    ValueContract, ValueContractPreparation, ValueContracts, ValueOutcome,
+    Direction, JsonKind, JsonValue, NoVerdict, NoVerdictReason, ResourceSet, SchemaEvaluator,
+    Source, ValidatedBindingView, ValidatedDocument, ValidatedOperationView, ValueContract,
+    ValueContractPreparation, ValueContracts, ValueOutcome,
 };
 use std::{
     collections::HashMap,
@@ -144,23 +144,32 @@ impl fmt::Debug for Attempt<'_> {
 
 /// Reusable document/provider pair. Cloned document storage is retained,
 /// without a preparation cache, registry, implicit evaluator, network access,
-/// retry policy, or whole-document conformance gate.
+/// or retry policy. Construction requires a validated document.
 ///
 /// The caller must supply a provider whose pure exact-kind support represents
 /// its routing policy. Multiple providers can be composed by the application;
 /// registration order never becomes SDK selection policy.
 pub struct Invoker<P> {
-    document: ParsedDocument,
+    document: ValidatedDocument,
     binding: binding::Invoker<P>,
     contracts: Option<ValueContracts>,
     sources: CarrierCache<Source>,
     bindings: CarrierCache<BindingValue>,
 }
 impl<P: BindingInvoker> Invoker<P> {
-    /// Retain a document and an explicit binding provider. Declared schemas
+    /// Retain a document and an explicit binding provider.
+    /// ```compile_fail
+    /// use openbindings::ParsedDocument;
+    /// use openbindings_invocation::{binding::BindingInvoker, operation::Invoker};
+    /// fn draft<P: BindingInvoker>(document: ParsedDocument, provider: P) {
+    ///     let _ = Invoker::new(document, provider);
+    /// }
+    /// ```
+    ///
+    /// Declared schemas
     /// yield `ERR_SCHEMA_UNRESOLVED` on actual values until an evaluator is supplied.
     /// Sides without a schema forward values without claiming validation.
-    pub fn new(document: ParsedDocument, provider: P) -> Self {
+    pub fn new(document: ValidatedDocument, provider: P) -> Self {
         Self {
             document,
             binding: binding::Invoker::new(provider),
@@ -171,14 +180,14 @@ impl<P: BindingInvoker> Invoker<P> {
     }
     /// Set the explicit evaluator and immutable supplied resources.
     /// No schema is prepared and no URI is fetched.
-    /// Malformed operation namespaces produce a core interpretation error here.
+    /// The document proof already establishes typed namespace shapes.
     pub fn with_evaluator(
         mut self,
         evaluator: Arc<dyn SchemaEvaluator>,
         resources: ResourceSet,
-    ) -> Result<Self, InterpretationError> {
-        self.contracts = Some(self.document.value_contracts(evaluator, resources)?);
-        Ok(self)
+    ) -> Self {
+        self.contracts = Some(self.document.value_contracts(evaluator, resources));
+        self
     }
     /// Set the same finite handoff policy used by binding invocation.
     pub fn with_limits(mut self, limits: InvocationLimits) -> Result<Self, LimitError> {
@@ -189,8 +198,8 @@ impl<P: BindingInvoker> Invoker<P> {
     /// Retain the returned handle to reuse compiled state across attempts. This
     /// synchronously prepares schemas, without selecting a binding or calling the
     /// provider. Absent schemas need no evaluator; a declared schema without one
-    /// returns `ERR_SCHEMA_UNRESOLVED`. Missing/ambiguous names return
-    /// `ERR_OPERATION_NOT_FOUND`; other interpretation failures return `ERR_REFUSED`.
+    /// returns `ERR_SCHEMA_UNRESOLVED`. Missing names return
+    /// `ERR_OPERATION_NOT_FOUND`. Unrepresentable role metadata returns `ERR_REFUSED`.
     /// Preparation refusal returns `ERR_SCHEMA_UNRESOLVED` and retains no handle.
     /// Ready means prepared, not that every value will receive a verdict.
     pub fn prepare(&self, operation: &str) -> Result<PreparedOperation<'_, P>, InvocationError> {
@@ -271,11 +280,19 @@ impl<P: BindingInvoker> Invoker<P> {
         let external = control.clone();
         // Pure selection is synchronous; retained carriers allow the provider's
         // borrowed GAT to stay outside any self-referential async state machine.
+        let mut finding = None;
         let selected = if external.is_cancelled() {
             Err(InvocationError::cancelled())
         } else {
-            self.resolve(request, prepared.map(|p| p.operation.as_str()))
+            self.resolve(
+                request,
+                prepared.map(|p| p.operation.as_str()),
+                &mut finding,
+            )
         };
+        if let Some(finding) = finding {
+            state.record_finding(finding);
+        }
         let io_external = external.clone();
         let provider_control = local.clone();
         let future = binding::checked(
@@ -342,7 +359,7 @@ impl<P: BindingInvoker> Invoker<P> {
         if control.is_cancelled() {
             return Err(InvocationError::cancelled());
         }
-        let selected = self.resolve(request, None)?;
+        let selected = self.resolve(request, None, &mut None)?;
         self.binding
             .preflight_with_control(
                 BindingRequest {
@@ -378,7 +395,7 @@ impl<P: BindingInvoker> Invoker<P> {
         if control.is_cancelled() {
             return Err(InvocationError::cancelled());
         }
-        let selected = self.resolve(request, None)?;
+        let selected = self.resolve(request, None, &mut None)?;
         self.binding
             .preflight_with_provider_and_control(
                 BindingRequest {
@@ -392,7 +409,7 @@ impl<P: BindingInvoker> Invoker<P> {
     }
     fn gate(
         &self,
-        operation: &OperationView,
+        operation: &ValidatedOperationView,
         direction: Direction,
         external: &CancellationToken,
         prepared: Option<&ValueContract>,
@@ -405,40 +422,32 @@ impl<P: BindingInvoker> Invoker<P> {
             external: external.clone(),
         })
     }
-    fn operation(&self, name: &str) -> Result<OperationView, InvocationError> {
-        match self
-            .document
+    fn operation(&self, name: &str) -> Result<ValidatedOperationView, InvocationError> {
+        self.document
             .resolve_operation(name)
-            .map_err(|_| InvocationError::refused())?
-        {
-            OperationSelection::Found(view) => Ok(view),
-            OperationSelection::Missing | OperationSelection::Ambiguous { .. } => {
-                Err(error("ERR_OPERATION_NOT_FOUND"))
-            }
-        }
+            .ok_or_else(|| error("ERR_OPERATION_NOT_FOUND"))
     }
-    fn binding(&self, key: &str) -> Result<BindingView, InvocationError> {
+    fn binding(&self, key: &str) -> Result<ValidatedBindingView, InvocationError> {
         self.document
             .binding(key)
-            .map_err(|_| InvocationError::refused())?
             .ok_or_else(|| error("ERR_BINDING_NOT_FOUND"))
     }
-    fn supported(&self, binding: &BindingView) -> Result<bool, InvocationError> {
-        let source = binding.source().map_err(|_| InvocationError::refused())?;
-        let Some(source) = self
+    fn supported(&self, binding: &ValidatedBindingView) -> Result<bool, InvocationError> {
+        let source = self
             .document
-            .source(source)
-            .map_err(|_| InvocationError::refused())?
-        else {
-            return Ok(false);
-        };
-        let kind = source.kind().map_err(|_| InvocationError::refused())?;
-        Ok(!kind.is_empty() && self.binding.provider.supports_kind(kind))
+            .source(binding.source())
+            .expect("OBI-07 proves source existence");
+        // Providers declare scalar kinds. Exact non-scalar kinds cannot match them.
+        Ok(source
+            .kind()
+            .as_str()
+            .is_some_and(|kind| self.binding.provider.supports_kind(kind)))
     }
     fn resolve(
         &self,
         request: Request<'_>,
         prepared_operation: Option<&str>,
+        finding: &mut Option<crate::BoundaryError>,
     ) -> Result<Resolved<'_>, InvocationError> {
         if request
             .context
@@ -449,9 +458,7 @@ impl<P: BindingInvoker> Invoker<P> {
         let (operation, binding) = match request.target {
             Target::Binding(key) => {
                 let binding = self.binding(key)?;
-                let name = binding
-                    .operation()
-                    .map_err(|_| InvocationError::refused())?;
+                let name = binding.operation();
                 if prepared_operation.is_some_and(|operation| operation != name) {
                     return Err(error("ERR_OPERATION_NOT_FOUND"));
                 }
@@ -472,11 +479,7 @@ impl<P: BindingInvoker> Invoker<P> {
                         .iter()
                         .map(|key| {
                             let binding = self.binding(key)?;
-                            if binding
-                                .operation()
-                                .map_err(|_| InvocationError::refused())?
-                                != operation.key()
-                            {
+                            if binding.operation() != operation.key() {
                                 return Err(error("ERR_BINDING_NOT_FOUND"));
                             }
                             Ok(binding)
@@ -492,10 +495,7 @@ impl<P: BindingInvoker> Invoker<P> {
                     selected.ok_or_else(|| error("ERR_BINDING_NOT_FOUND"))?
                 } else {
                     let mut selected = None;
-                    for key in operation
-                        .bindings()
-                        .map_err(|_| InvocationError::refused())?
-                    {
+                    for key in operation.bindings() {
                         let binding = self.binding(&key)?;
                         if self.supported(&binding)? {
                             if selected.is_some() {
@@ -509,21 +509,20 @@ impl<P: BindingInvoker> Invoker<P> {
                 (operation, binding)
             }
         };
-        let source_key = binding.source().map_err(|_| InvocationError::refused())?;
+        let source_key = binding.source();
         let source = self
             .document
             .source(source_key)
-            .map_err(|_| InvocationError::refused())?
             .ok_or_else(|| error("ERR_UNKNOWN_SOURCE"))?;
         if !self.supported(&binding)? {
             return Err(error("ERR_BINDING_NOT_FOUND"));
         }
         Ok(Resolved {
             operation,
-            source: self.carrier(&self.sources, "sources", source.key(), || {
+            source: self.carrier(&self.sources, "sources", source.key(), finding, || {
                 source_from_json(source.value())
             })?,
-            binding: self.carrier(&self.bindings, "bindings", binding.key(), || {
+            binding: self.carrier(&self.bindings, "bindings", binding.key(), finding, || {
                 BindingValue::from_json_ref(binding.value())
             })?,
         })
@@ -533,6 +532,7 @@ impl<P: BindingInvoker> Invoker<P> {
         cache: &'a CarrierCache<T>,
         namespace: &str,
         key: &str,
+        finding: &mut Option<crate::BoundaryError>,
         decode: impl FnOnce() -> Result<T, crate::BoundaryError>,
     ) -> Result<&'a T, InvocationError> {
         // Only declared keys get slots. Unknown requests cannot grow this cache.
@@ -552,9 +552,10 @@ impl<P: BindingInvoker> Invoker<P> {
                 .collect()
         });
         let slot = slots.get(key).ok_or_else(InvocationError::refused)?;
-        slot.get_or_init(decode)
-            .as_ref()
-            .map_err(|_| InvocationError::refused())
+        slot.get_or_init(decode).as_ref().map_err(|error| {
+            *finding = Some(*error);
+            InvocationError::refused()
+        })
     }
 }
 /// Caller-owned prepared input and output contracts for one operation.
@@ -609,7 +610,7 @@ impl<P: BindingInvoker> PreparedOperation<'_, P> {
 }
 type CarrierCache<T> = OnceLock<HashMap<String, OnceLock<Result<T, crate::BoundaryError>>>>;
 struct Resolved<'a> {
-    operation: OperationView,
+    operation: ValidatedOperationView,
     source: &'a Source,
     binding: &'a BindingValue,
 }

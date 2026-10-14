@@ -1,3 +1,4 @@
+import { validatedContracts } from "./validated-contracts.mjs";
 // Shared Node/browser controls at real production caps; no test knobs.
 export function plannerLocationCases(sdk) {
   // Warm instance-lifetime meta-schema/evaluator storage before owner deltas.
@@ -5,7 +6,7 @@ export function plannerLocationCases(sdk) {
     '{"openbindings":"0.2.0","operations":{"op":{"input":true}}}',
   ).value;
   warm.validate();
-  const warmContext = warm.valueContracts();
+  const warmContext = validatedContracts(warm);
   const warmPrepared = warmContext.prepare("op", "input");
   if (warmPrepared.status !== "ready") throw Error("warm preparation");
   warmPrepared.valueContract.validate(null);
@@ -46,7 +47,7 @@ export function plannerLocationCases(sdk) {
           return [uri, parsed.value];
         }),
       );
-      context = document.valueContracts({ resources });
+      context = validatedContracts(document, { resources });
       const cancelled = new AbortController();
       cancelled.abort();
       const stopped = context.prepare("op", "input", {

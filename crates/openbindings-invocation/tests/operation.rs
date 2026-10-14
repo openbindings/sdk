@@ -166,9 +166,15 @@ fn checked<'a, 'b>(
     document: ParsedDocument,
     provider: &'a Provider<'b>,
 ) -> Invoker<&'a Provider<'b>> {
-    Invoker::new(document, provider)
-        .with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
-        .unwrap()
+    Invoker::new(
+        document
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant invocation document"),
+        provider,
+    )
+    .with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -176,10 +182,16 @@ async fn names_ordered_choices_and_explicit_bindings_do_not_invent_policy() {
     let p = Provider::new(Mode::Empty);
     let d = doc(
         r#"{"echo":{"aliases":["say"]},"other":{}}"#,
-        r#"{"a":{"operation":"echo","source":"s","preference":99},"b":{"operation":"echo","source":"s","deprecated":true},"unsupported":{"operation":"echo","source":"u"},"foreign":{"operation":"other","source":"s"},"missing-source":{"operation":"echo","source":"absent"},"alias-ref":{"operation":"say","source":"s"}}"#,
+        r#"{"a":{"operation":"echo","source":"s","preference":99},"b":{"operation":"echo","source":"s","deprecated":true},"unsupported":{"operation":"echo","source":"u"},"foreign":{"operation":"other","source":"s"}}"#,
         r#"{"s":{"kind":"fixture"},"u":{"kind":"other"}}"#,
     );
-    let invoke = Invoker::new(d, &p);
+    let invoke = Invoker::new(
+        d.validate()
+            .unwrap()
+            .validated()
+            .expect("conformant invocation document"),
+        &p,
+    );
     assert_code(
         outcome(&invoke, Request::operation("say")).await,
         "ERR_BINDING_SELECTION_REQUIRED",
@@ -188,12 +200,7 @@ async fn names_ordered_choices_and_explicit_bindings_do_not_invent_policy() {
         outcome(&invoke, Request::operation("absent")).await,
         "ERR_OPERATION_NOT_FOUND",
     );
-    for keys in [
-        &["a", "absent"][..],
-        &["a", "foreign"],
-        &["unsupported"],
-        &["missing-source"],
-    ] {
+    for keys in [&["a", "absent"][..], &["a", "foreign"], &["unsupported"]] {
         assert_code(
             outcome(&invoke, Request::ordered("say", keys)).await,
             "ERR_BINDING_NOT_FOUND",
@@ -220,16 +227,8 @@ async fn names_ordered_choices_and_explicit_bindings_do_not_invent_policy() {
         "ERR_REFUSED",
     );
     assert_code(
-        outcome(&invoke, Request::binding("missing-source")).await,
-        "ERR_UNKNOWN_SOURCE",
-    );
-    assert_code(
         outcome(&invoke, Request::binding("unsupported")).await,
         "ERR_BINDING_NOT_FOUND",
-    );
-    assert_code(
-        outcome(&invoke, Request::binding("alias-ref")).await,
-        "ERR_OPERATION_NOT_FOUND",
     );
     assert_code(
         outcome(&invoke, Request::binding("absent")).await,
@@ -260,30 +259,41 @@ async fn missing_ambiguous_and_sole_candidates() {
         r#"{"echo":{"aliases":["echo"]}}"#,
         r#"{"echo":{},"other":{"aliases":["echo"]}}"#,
     ] {
-        let i = Invoker::new(
-            doc(
-                operation,
-                r#"{"b":{"operation":"echo","source":"s"}}"#,
-                r#"{"s":{"kind":"fixture"}}"#,
-            ),
-            &p,
+        let validation = doc(
+            operation,
+            r#"{"b":{"operation":"echo","source":"s"}}"#,
+            r#"{"s":{"kind":"fixture"}}"#,
+        )
+        .validate()
+        .unwrap();
+        assert_eq!(
+            validation.report().evidence["OBI-05"],
+            openbindings::Evidence::Violated
         );
-        assert_code(
-            outcome(&i, Request::operation("echo")).await,
-            "ERR_OPERATION_NOT_FOUND",
-        );
-        assert_code(
-            outcome(&i, Request::binding("b")).await,
-            "ERR_OPERATION_NOT_FOUND",
-        );
+        assert!(validation.validated().is_none());
+        assert_eq!(p.calls.load(Ordering::SeqCst), 0);
     }
-    let i = Invoker::new(doc(r#"{"echo":{}}"#, "{}", "{}"), &p);
+    let i = Invoker::new(
+        doc(r#"{"echo":{}}"#, "{}", "{}")
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant invocation document"),
+        &p,
+    );
     assert_code(
         outcome(&i, Request::operation("echo")).await,
         "ERR_BINDING_NOT_FOUND",
     );
     outcome(
-        &Invoker::new(one(r#"{"aliases":["say"]}"#), &p),
+        &Invoker::new(
+            one(r#"{"aliases":["say"]}"#)
+                .validate()
+                .unwrap()
+                .validated()
+                .expect("conformant invocation document"),
+            &p,
+        ),
         Request::operation("say"),
     )
     .await
@@ -292,7 +302,14 @@ async fn missing_ambiguous_and_sole_candidates() {
 #[tokio::test(flavor = "current_thread")]
 async fn exact_opaque_values_carriers_and_context_are_preserved() {
     let p = Provider::new(Mode::Echo);
-    let i = Invoker::new(one("{}"), &p);
+    let i = Invoker::new(
+        one("{}")
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant invocation document"),
+        &p,
+    );
     let context = json(r#"{"secret":1e9999,"duplicate":1,"duplicate":2}"#);
     let mut call = i.invoke(Request::binding("b").with_context(&context));
     for value in ["null", "9007199254740993", "1e9999", r#"{"x":1,"x":2}"#] {
@@ -360,7 +377,11 @@ async fn output_failure_withholds_only_failing_value() {
 async fn preparation_is_lazy_absence_is_not_true_and_no_verdict_is_not_failure() {
     let p = Provider::new(Mode::Empty);
     let i = Invoker::new(
-        one(r#"{"input":false,"output":{"$ref":"https://absent.test/schema"}}"#),
+        one(r#"{"input":false,"output":{"$ref":"https://absent.test/schema"}}"#)
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant invocation document"),
         &p,
     );
     outcome(&i, Request::operation("echo")).await.unwrap();
@@ -372,7 +393,14 @@ async fn preparation_is_lazy_absence_is_not_true_and_no_verdict_is_not_failure()
     );
     let p = Provider::new(Mode::Echo);
     for schema in [r#"{"input":true}"#, r#"{"input":false}"#] {
-        let i = Invoker::new(one(schema), &p);
+        let i = Invoker::new(
+            one(schema)
+                .validate()
+                .unwrap()
+                .validated()
+                .expect("conformant invocation document"),
+            &p,
+        );
         let mut call = i.invoke(Request::operation("echo"));
         call.write(json("null")).await.unwrap();
         call.close();
@@ -450,15 +478,21 @@ async fn prepared_contracts_reused_across_values_and_attempts() {
     let p = Provider::new(Mode::Echo);
     let prepares = Arc::new(AtomicUsize::new(0));
     let evaluations = Arc::new(AtomicUsize::new(0));
-    let i = Invoker::new(one(r#"{"input":true,"output":true}"#), &p)
-        .with_evaluator(
-            Arc::new(Counted {
-                prepares: prepares.clone(),
-                evaluations: evaluations.clone(),
-            }),
-            ResourceSet::default(),
-        )
-        .unwrap();
+    let i = Invoker::new(
+        one(r#"{"input":true,"output":true}"#)
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant invocation document"),
+        &p,
+    )
+    .with_evaluator(
+        Arc::new(Counted {
+            prepares: prepares.clone(),
+            evaluations: evaluations.clone(),
+        }),
+        ResourceSet::default(),
+    );
     let prepared = i.prepare("echo").unwrap();
     assert_eq!(prepares.load(Ordering::SeqCst), 2);
     assert_eq!(p.calls.load(Ordering::SeqCst), 0);
@@ -494,7 +528,14 @@ async fn borrowed_send_and_local_rc_and_cancellation_release() {
     let name = String::from("fixture");
     let mut p = Provider::new(Mode::Park);
     p.name = &name;
-    let i = Invoker::new(one("{}"), &p);
+    let i = Invoker::new(
+        one("{}")
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant invocation document"),
+        &p,
+    );
     let mut call = i.invoke(Request::operation("echo"));
     send(&call);
     call.write(json("null")).await.unwrap();
@@ -515,9 +556,19 @@ async fn borrowed_send_and_local_rc_and_cancellation_release() {
     );
     assert_eq!(p.calls.load(Ordering::SeqCst), 1);
     let local = std::rc::Rc::new(Provider::new(Mode::Empty));
-    outcome(&Invoker::new(one("{}"), local), Request::operation("echo"))
-        .await
-        .unwrap();
+    outcome(
+        &Invoker::new(
+            one("{}")
+                .validate()
+                .unwrap()
+                .validated()
+                .expect("conformant invocation document"),
+            local,
+        ),
+        Request::operation("echo"),
+    )
+    .await
+    .unwrap();
 }
 
 #[test]
@@ -573,9 +624,15 @@ fn failed_or_cancelled_prepare_releases_partial_work_and_can_retry() {
             cancel: cancel.then(|| control.clone()),
         });
         let p = Provider::new(Mode::Empty);
-        let i = Invoker::new(one(r#"{"input":true,"output":true}"#), &p)
-            .with_evaluator(probe.clone(), ResourceSet::default())
-            .unwrap();
+        let i = Invoker::new(
+            one(r#"{"input":true,"output":true}"#)
+                .validate()
+                .unwrap()
+                .validated()
+                .expect("conformant invocation document"),
+            &p,
+        )
+        .with_evaluator(probe.clone(), ResourceSet::default());
         let cancelled = CancellationToken::new();
         cancelled.cancel();
         assert_eq!(
@@ -611,13 +668,27 @@ fn failed_or_cancelled_prepare_releases_partial_work_and_can_retry() {
 #[test]
 fn explicit_prepare_handles_absence_missing_names_and_missing_evaluator() {
     let p = Provider::new(Mode::Empty);
-    let i = Invoker::new(one(r#"{"aliases":["say"]}"#), &p);
+    let i = Invoker::new(
+        one(r#"{"aliases":["say"]}"#)
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant invocation document"),
+        &p,
+    );
     assert!(i.prepare("say").is_ok());
     assert_eq!(
         i.prepare("absent").err().unwrap().code(),
         "ERR_OPERATION_NOT_FOUND"
     );
-    let i = Invoker::new(one(r#"{"input":true}"#), &p);
+    let i = Invoker::new(
+        one(r#"{"input":true}"#)
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant invocation document"),
+        &p,
+    );
     assert_eq!(
         i.prepare("echo").err().unwrap().code(),
         "ERR_SCHEMA_UNRESOLVED"
@@ -656,7 +727,7 @@ async fn shared_prepared_attempts_keep_selection_context_and_cancellation_separa
         r#"{"echo":{"aliases":["say"],"input":{"type":"integer"},"output":true},"other":{}}"#,
         r#"{"a":{"operation":"echo","source":"s","content":1},"b":{"operation":"echo","source":"s","content":2},"foreign":{"operation":"other","source":"s","content":3}}"#,
         r#"{"s":{"kind":"fixture"}}"#,
-    ), ContextEcho).with_evaluator(Arc::new(Counted { prepares: prepares.clone(), evaluations: Arc::default() }), ResourceSet::default()).unwrap();
+    ).validate().unwrap().validated().expect("conformant invocation document"), ContextEcho).with_evaluator(Arc::new(Counted { prepares: prepares.clone(), evaluations: Arc::default() }), ResourceSet::default());
     // Preparing does not require a sole supported binding.
     let prepared = i.prepare("say").unwrap();
     let first_context = json(r#"{"attempt":1}"#);
@@ -731,7 +802,11 @@ async fn prepared_foreign_exact_binding_is_refused_before_any_provider_work() {
             r#"{"echo":{"aliases":["say"]},"other":{}}"#,
             r#"{"foreign":{"operation":"other","source":"s"}}"#,
             r#"{"s":{"kind":"fixture"}}"#,
-        ),
+        )
+        .validate()
+        .unwrap()
+        .validated()
+        .expect("conformant invocation document"),
         NoProviderWork,
     );
     let prepared = i.prepare("say").unwrap();
@@ -752,7 +827,7 @@ async fn prepared_attempt_binding_choices_validate_the_entire_selection() {
             r#"{"echo":{},"other":{}}"#,
             r#"{"a":{"operation":"echo","source":"s"},"b":{"operation":"echo","source":"s"},"foreign":{"operation":"other","source":"s"}}"#,
             r#"{"s":{"kind":"fixture"}}"#,
-        ),
+        ).validate().unwrap().validated().expect("conformant invocation document"),
         &p,
     );
     let prepared = i.prepare("echo").unwrap();
@@ -786,5 +861,75 @@ fn attempt_debug_redacts_binding_keys_and_context() {
             format!("{:?}", attempt.with_context(&context)),
             "Attempt { selection: \"<redacted>\", context_present: true }"
         );
+    }
+}
+
+#[test]
+fn invalid_binding_targets_are_rejected_before_invoker_construction() {
+    let p = Provider::new(Mode::Empty);
+    for (binding, rule) in [
+        (r#"{"b":{"operation":"echo","source":"absent"}}"#, "OBI-07"),
+        (r#"{"b":{"operation":"say","source":"s"}}"#, "OBI-06"),
+    ] {
+        let validation = doc(
+            r#"{"echo":{"aliases":["say"]}}"#,
+            binding,
+            r#"{"s":{"kind":"fixture"}}"#,
+        )
+        .validate()
+        .unwrap();
+        assert_eq!(
+            validation.report().evidence[rule],
+            openbindings::Evidence::Violated
+        );
+        assert!(validation.validated().is_none());
+        assert_eq!(p.calls.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[tokio::test]
+async fn exact_metadata_refuses_lossy_role_handoff_before_effects() {
+    let provider = Provider::new(Mode::Empty);
+    let non_scalar_kind = doc(
+        r#"{"echo":{}}"#,
+        r#"{"b":{"operation":"echo","source":"s"}}"#,
+        r#"{"s":{"kind":"\ud800"}}"#,
+    )
+    .validate()
+    .unwrap()
+    .validated()
+    .unwrap();
+    let invoker = Invoker::new(non_scalar_kind, &provider);
+    assert_code(
+        outcome(&invoker, Request::binding("b")).await,
+        "ERR_BINDING_NOT_FOUND",
+    );
+    for (bindings, sources, path) in [
+        (
+            r#"{"b":{"operation":"echo","source":"s"}}"#,
+            r#"{"s":{"kind":"fixture","description":"\ud800"}}"#,
+            "/source/description",
+        ),
+        (
+            r#"{"b":{"operation":"echo","source":"s","description":"\ud800"}}"#,
+            r#"{"s":{"kind":"fixture"}}"#,
+            "/binding/description",
+        ),
+    ] {
+        let proof = doc(r#"{"echo":{}}"#, bindings, sources)
+            .validate()
+            .unwrap()
+            .validated()
+            .unwrap();
+        let invoker = Invoker::new(proof, &provider);
+        let mut call = invoker.invoke(Request::binding("b"));
+        call.close();
+        assert_eq!(
+            call.next().await.unwrap().unwrap_err().code(),
+            "ERR_REFUSED"
+        );
+        assert_eq!(call.boundary_error().unwrap().path(), path);
+        assert_eq!(call.boundary_error().unwrap().code(), "unpaired-string");
+        assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
     }
 }

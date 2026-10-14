@@ -5,8 +5,11 @@ use std::sync::Arc;
 
 fn evaluate(document: &ParsedDocument, resources: ResourceSet) -> ValueOutcome {
     let context = document
-        .value_contracts(Arc::new(DefaultEvaluator::new()), resources)
-        .unwrap();
+        .validate()
+        .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(Arc::new(DefaultEvaluator::new()), resources);
     match context.prepare("op", Direction::Input) {
         ValueContractPreparation::Ready(contract) => contract.validate(&JsonValue::integer(7)),
         ValueContractPreparation::NoVerdict { detail } => ValueOutcome::NoVerdict { detail },
@@ -34,10 +37,26 @@ fn main() {
     assert_eq!(mode, "sdk");
     let mut observations = Vec::new();
     for key in ["$ref", "$schema"] {
+        // A foreign dialect belongs in an explicitly supplied resource (§5.2),
+        // while the OpenBindings document itself must pass proof admission.
+        let schema = json!({"$id":"urn:no-io:boundary",key:uri});
+        let (input, resources) = if key == "$schema" {
+            (
+                json!({"$ref":"urn:no-io:boundary"}),
+                ResourceSet::new([SchemaResource {
+                    uri: "urn:no-io:boundary".into(),
+                    document: JsonValue::parse(schema.to_string()).unwrap(),
+                }])
+                .unwrap(),
+            )
+        } else {
+            (schema, ResourceSet::default())
+        };
         let document = ParsedDocument::parse(
-            json!({"openbindings":"0.2.0","operations":{"op":{"input":{"$id":"urn:no-io:boundary",key:uri}}}}).to_string(),
-        ).unwrap();
-        let result = evaluate(&document, ResourceSet::default());
+            json!({"openbindings":"0.2.0","operations":{"op":{"input":input}}}).to_string(),
+        )
+        .unwrap();
+        let result = evaluate(&document, resources);
         assert!(matches!(result, ValueOutcome::NoVerdict { .. }));
         observations.push(json!({"name":key,"outcome":result}));
     }

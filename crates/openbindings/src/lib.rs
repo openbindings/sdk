@@ -16,8 +16,8 @@
 mod uri;
 mod version;
 pub use openbindings_internal_json::{
-    InputError, InputErrorKind, JsonKind, JsonLimits, JsonMember, JsonRef, JsonValue,
-    SourceLocation, ValueConversionError, ValueConversionErrorKind,
+    InputError, InputErrorKind, JsonKind, JsonLimits, JsonMember, JsonRef, JsonStringRef,
+    JsonValue, SourceLocation, ValueConversionError, ValueConversionErrorKind,
 };
 pub use version::*;
 

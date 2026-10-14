@@ -9,8 +9,11 @@ fn prepare(schema: Value, resources: ResourceSet) -> ValueContractPreparation {
     )
     .unwrap();
     document
-        .value_contracts(Arc::new(DefaultEvaluator::new()), resources)
+        .validate()
         .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(Arc::new(DefaultEvaluator::new()), resources)
         .prepare("op", Direction::Input)
 }
 

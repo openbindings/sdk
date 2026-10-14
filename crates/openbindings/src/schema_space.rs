@@ -107,7 +107,7 @@ impl SchemaSpace {
         out.add_source(
             None,
             document.value().clone(),
-            document.schemas(),
+            document.schema_index(),
             ResourceOrigin::Contained,
         );
         for resource in supplied.iter() {
@@ -334,7 +334,7 @@ impl SchemaSpace {
             }
             return match self
                 .document
-                .schemas()
+                .schema_index()
                 .same_document(self.document.value(), reference)
             {
                 crate::schema_index::SameDocument::Found(value) => {

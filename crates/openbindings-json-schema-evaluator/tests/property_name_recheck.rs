@@ -53,6 +53,10 @@ fn property_name_scratch_is_not_admitted_inside_applicator_validity_recheck() {
         )
         .unwrap();
         let context = document
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant document")
             .value_contracts(
                 std::sync::Arc::new(
                     openbindings_json_schema_evaluator::DefaultEvaluator::with_limits(
@@ -63,8 +67,7 @@ fn property_name_scratch_is_not_admitted_inside_applicator_validity_recheck() {
                     ),
                 ),
                 ResourceSet::default(),
-            )
-            .unwrap();
+            );
         let ValueContractPreparation::Ready(contract) = context.prepare("op", Direction::Input)
         else {
             panic!()

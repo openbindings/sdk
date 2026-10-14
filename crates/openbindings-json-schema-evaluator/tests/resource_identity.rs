@@ -33,8 +33,11 @@ fn resources(rows: &[(&str, Value)]) -> ResourceSet {
     .unwrap()
 }
 fn context(doc: &ParsedDocument, supplied: &ResourceSet) -> ValueContracts {
-    doc.value_contracts(Arc::new(DefaultEvaluator::new()), supplied.clone())
+    doc.validate()
         .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(Arc::new(DefaultEvaluator::new()), supplied.clone())
 }
 fn ready(ctx: &ValueContracts, operation: &str) -> ValueContract {
     match ctx.prepare(operation, Direction::Input) {
@@ -80,8 +83,11 @@ impl SchemaEvaluator for Project {
 fn helpers_ready(doc: &ParsedDocument, supplied: &ResourceSet, operation: &str) {
     for bounds in [false, true] {
         let ctx = doc
-            .value_contracts(Arc::new(Project(bounds)), supplied.clone())
-            .unwrap();
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant document")
+            .value_contracts(Arc::new(Project(bounds)), supplied.clone());
         ready(&ctx, operation);
     }
 }
@@ -99,8 +105,11 @@ fn identity_refusal(doc: &ParsedDocument, supplied: &ResourceSet, operation: &st
     ];
     for evaluator in engines.drain(..) {
         let detail = refusal(
-            doc.value_contracts(evaluator, supplied.clone())
+            doc.validate()
                 .unwrap()
+                .validated()
+                .expect("conformant document")
+                .value_contracts(evaluator, supplied.clone())
                 .prepare(operation, Direction::Input),
         );
         assert_eq!(
@@ -278,8 +287,11 @@ fn ri04_05_contained_authority_ignores_supplied_body_and_keeps_raw_catalog() {
         }])
         .unwrap();
         let ctx = doc
-            .value_contracts(Arc::new(Catalog(observed.clone())), supplied.clone())
-            .unwrap();
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant document")
+            .value_contracts(Arc::new(Catalog(observed.clone())), supplied.clone());
         let contract = ready(&ctx, "op");
         verdicts(
             &contract,
@@ -315,10 +327,8 @@ fn ri06_duplicate_contained_owners_refuse_lookup_and_direct_entry() {
         doc.validate().unwrap().report().evidence["OBI-13"],
         Evidence::Violated
     );
-    identity_refusal(&doc, &supplied, "direct");
-    identity_refusal(&doc, &supplied, "lookup");
+    assert!(doc.validate().unwrap().validated().is_none());
     unresolved_identity(&doc, &supplied, "/operations/lookup/input/$ref");
-    identity_refusal(&doc, &supplied, "pointer");
     unresolved_identity(&doc, &supplied, "/operations/pointer/input/$ref");
 }
 #[test]
@@ -635,8 +645,11 @@ fn ri20_34_missing_winner_fragments_never_fall_back_to_loser() {
         ));
         if keyword == "$ref" {
             let ctx = doc
-                .value_contracts(Arc::new(Project(true)), supplied.clone())
-                .unwrap();
+                .validate()
+                .unwrap()
+                .validated()
+                .expect("conformant document")
+                .value_contracts(Arc::new(Project(true)), supplied.clone());
             assert_eq!(
                 refusal(ctx.prepare("op", Direction::Input)).code,
                 detail.code
@@ -703,7 +716,12 @@ fn ri22_23_original_dialect_follows_selected_resource() {
         Arc::new(Project(false)),
         Arc::new(Project(true)),
     ] {
-        let ctx = doc.value_contracts(engine, supplied.clone()).unwrap();
+        let ctx = doc
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant document")
+            .value_contracts(engine, supplied.clone());
         let detail = refusal(ctx.prepare("nested", Direction::Input));
         assert_eq!(detail.reason, NoVerdictReason::UnsupportedCapability);
         assert_eq!(detail.code, "schema-dialect");
@@ -752,11 +770,18 @@ fn ri24_user_standard_names_do_not_replace_trusted_assessment() {
             json!({"$ref":uri}),
         );
         let supplied = resources(&[(uri, json!(true))]);
+        let validation = doc.validate().unwrap();
+        assert_eq!(validation.report().evidence["OBI-10"], Evidence::Violated);
+        assert!(validation.validated().is_none());
+        let valid = one(
+            json!({"E":{"$id":uri,"type":"integer"}}),
+            json!({"$ref":uri}),
+        );
         verdicts(
-            &ready(&context(&doc, &supplied), "op"),
+            &ready(&context(&valid, &supplied), "op"),
             &[("2", "satisfies"), (r#""x""#, "fails")],
         );
-        helpers_ready(&doc, &supplied, "op");
+        helpers_ready(&valid, &supplied, "op");
         assert_eq!(
             doc.validate().unwrap().report().evidence["OBI-10"],
             Evidence::Violated
@@ -832,11 +857,14 @@ fn ri25_27_contexts_and_retained_owners_are_independent() {
     let mut retained = Vec::new();
     for kind in ["integer", "string"] {
         let ctx = doc
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant document")
             .value_contracts(
                 Arc::new(DefaultEvaluator::new()),
                 resources(&[(V, json!({"type":kind}))]),
-            )
-            .unwrap();
+            );
         retained.push(ready(&ctx, "op"));
         ready(&ctx, "other");
         ready(&ctx, "op");
@@ -872,7 +900,12 @@ fn ri28_29_conflicts_do_not_poison_healthy_preparation_or_become_holes() {
         Arc::new(DefaultEvaluator::new()) as Arc<dyn SchemaEvaluator>,
         Arc::new(Project(true)),
     ] {
-        let ctx = doc.value_contracts(engine, supplied.clone()).unwrap();
+        let ctx = doc
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant document")
+            .value_contracts(engine, supplied.clone());
         let detail = refusal(ctx.prepare("mixed", Direction::Input));
         assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
         assert_eq!(detail.code, "resource-identity-conflict");
@@ -919,7 +952,12 @@ fn ri30_oversized_supplied_closure_keeps_limits_and_healthy_catalog_entries() {
         Arc::new(Project(false)),
         Arc::new(Project(true)),
     ] {
-        let ctx = doc.value_contracts(evaluator, supplied.clone()).unwrap();
+        let ctx = doc
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant document")
+            .value_contracts(evaluator, supplied.clone());
         ready(&ctx, "healthy");
         assert_eq!(
             refusal(ctx.prepare("deep", Direction::Input)).reason,
@@ -940,8 +978,11 @@ fn identity_refusal_location_is_optional_and_measured_before_copy() {
             Arc::new(Project(true)),
         ] {
             let detail = refusal(
-                doc.value_contracts(engine, supplied.clone())
+                doc.validate()
                     .unwrap()
+                    .validated()
+                    .expect("conformant document")
+                    .value_contracts(engine, supplied.clone())
                     .prepare("op", Direction::Input),
             );
             assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
@@ -953,33 +994,18 @@ fn identity_refusal_location_is_optional_and_measured_before_copy() {
 }
 #[test]
 fn ri32_selected_unsupported_or_invalid_owner_never_falls_back() {
-    for (schema, reason) in [
+    for (schema, rule) in [
         (
             json!({"$id":U,"$schema":"https://identity.example.invalid/custom","type":"integer"}),
-            NoVerdictReason::UnsupportedCapability,
+            "OBI-09",
         ),
-        (
-            json!({"$id":U,"type":17}),
-            NoVerdictReason::ConservativePreparation,
-        ),
+        (json!({"$id":U,"type":17}), "OBI-10"),
     ] {
         let doc = one(json!({"E":schema}), json!({"$ref":U}));
         let supplied = resources(&[(U, json!(true))]);
-        for engine in [
-            Arc::new(DefaultEvaluator::new()) as Arc<dyn SchemaEvaluator>,
-            Arc::new(Project(false)),
-            Arc::new(Project(true)),
-        ] {
-            assert_eq!(
-                refusal(
-                    doc.value_contracts(engine, supplied.clone())
-                        .unwrap()
-                        .prepare("op", Direction::Input)
-                )
-                .reason,
-                reason
-            );
-        }
+        let validation = doc.validate().unwrap();
+        assert_eq!(validation.report().evidence[rule], Evidence::Violated);
+        assert!(validation.validated().is_none());
         located(
             &doc,
             &supplied,
@@ -1000,8 +1026,11 @@ fn ri33_anonymous_document_has_no_acquisition_or_generated_identity() {
         let doc = one(json!({"E":{"type":"integer"}}), json!({"$ref":uri}));
         let supplied = ResourceSet::default();
         let strict = doc
-            .value_contracts(Arc::new(Project(false)), supplied.clone())
-            .unwrap();
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant document")
+            .value_contracts(Arc::new(Project(false)), supplied.clone());
         assert_eq!(
             refusal(strict.prepare("op", Direction::Input)).reason,
             NoVerdictReason::ResourceUnavailable
@@ -1030,10 +1059,18 @@ fn ri28_unused_contained_and_supplied_peer_conflicts_are_local() {
             resources(&[(A, json!({"$id":U})), (B, json!({"$id":U}))]),
         ),
     ] {
+        let contained_conflict = schemas.get("Duplicate").is_some();
         let doc = document(
             schemas,
             json!({"healthy":{"input":{"type":"boolean"}},"conflict":{"input":{"$ref":U}}}),
         );
+        if contained_conflict {
+            let validation = doc.validate().unwrap();
+            assert_eq!(validation.report().evidence["OBI-13"], Evidence::Violated);
+            assert!(validation.validated().is_none());
+            unresolved_identity(&doc, &supplied, "/operations/conflict/input/$ref");
+            continue;
+        }
         let ctx = context(&doc, &supplied);
         for _ in 0..3 {
             verdicts(
@@ -1124,6 +1161,13 @@ fn s3_collision_policy_matrix_used_and_unused() {
                     "unused":{"input":{"type":"boolean"}}
                 }),
             );
+            if origins == [Contained, Contained] {
+                let validation = doc.validate().unwrap();
+                assert_eq!(validation.report().evidence["OBI-13"], Evidence::Violated);
+                assert!(validation.validated().is_none());
+                unresolved_identity(&doc, &supplied, "/operations/used/input/$ref");
+                continue;
+            }
             let ctx = context(&doc, &supplied);
             verdicts(
                 &ready(&ctx, "unused"),
@@ -1147,8 +1191,11 @@ fn s3_collision_policy_matrix_used_and_unused() {
                     Arc::new(Project(true)),
                 ] {
                     let detail = refusal(
-                        doc.value_contracts(engine, supplied.clone())
+                        doc.validate()
                             .unwrap()
+                            .validated()
+                            .expect("conformant document")
+                            .value_contracts(engine, supplied.clone())
                             .prepare("used", Direction::Input),
                     );
                     assert_eq!(detail.code, "ambiguous-resource", "{left:?}/{right:?}");

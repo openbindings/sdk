@@ -22,8 +22,11 @@ fn prepare(
     evaluator: Arc<dyn SchemaEvaluator>,
 ) -> ValueContract {
     match document(schema)
-        .value_contracts(evaluator, entries)
+        .validate()
         .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(evaluator, entries)
         .prepare("op", Direction::Input)
     {
         ValueContractPreparation::Ready(contract) => contract,
@@ -171,8 +174,11 @@ fn direct_bounds_keeps_planner_diagnostics_while_default_restores_strict_refusal
     let doc = document(&schema);
     let capture = Arc::new(Capture(Mutex::new(None)));
     let _ = doc
-        .value_contracts(capture.clone(), ResourceSet::default())
+        .validate()
         .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(capture.clone(), ResourceSet::default())
         .prepare("op", Direction::Input);
     let request = capture.0.lock().unwrap().take().unwrap();
     let strict = request
@@ -184,8 +190,11 @@ fn direct_bounds_keeps_planner_diagnostics_while_default_restores_strict_refusal
     assert_eq!(direct.code, "partial-nonpositive-influence");
     assert_eq!(direct.reason, NoVerdictReason::ConservativePreparation);
     let ValueContractPreparation::NoVerdict { detail } = doc
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
+        .validate()
         .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
         .prepare("op", Direction::Input)
     else {
         panic!()

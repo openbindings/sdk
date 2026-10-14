@@ -46,7 +46,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let document = ParsedDocument::parse(
         r#"{"openbindings":"0.2.0","operations":{"op":{"input":true,"output":false}}}"#,
     )?;
-    let context = document.value_contracts(Arc::new(BooleanEvaluator), ResourceSet::default())?;
+    let context = document
+        .validate()?
+        .validated()
+        .ok_or("document is not conformant")?
+        .value_contracts(Arc::new(BooleanEvaluator), ResourceSet::default());
     let value = JsonValue::null();
     let ValueContractPreparation::Ready(input) = context.prepare("op", Direction::Input) else {
         panic!("boolean input should prepare")

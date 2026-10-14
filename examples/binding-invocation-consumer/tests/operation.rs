@@ -34,8 +34,8 @@ fn source(content: &str) -> Source {
         ..Default::default()
     }
 }
-fn document(operation: &str, content: &str) -> ParsedDocument {
-    ParsedDocument::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"run":{operation}}},"sources":{{"catalog":{{"kind":"{KIND}","content":{content}}}}},"bindings":{{"chosen":{{"operation":"run","source":"catalog","content":"manual"}}}}}}"#)).unwrap()
+fn document(operation: &str, content: &str) -> openbindings::ValidatedDocument {
+    ParsedDocument::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"run":{operation}}},"sources":{{"catalog":{{"kind":"{KIND}","content":{content}}}}},"bindings":{{"chosen":{{"operation":"run","source":"catalog","content":"manual"}}}}}}"#)).unwrap().validate().unwrap().validated().unwrap()
 }
 
 // Deliberately independent of the default evaluator. Unsupported schemas must
@@ -52,6 +52,8 @@ impl SchemaEvaluator for Booleans {
         control: &dyn openbindings::WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         control.check()?;
+        let proof: &openbindings::ValidatedDocument = request.document();
+        assert_eq!(proof.openbindings(), "0.2.0");
         self.preparations.fetch_add(1, Ordering::Relaxed);
         request
             .entry()
@@ -118,9 +120,8 @@ async fn inspect_synthesize_and_invoke_operation_preserves_exact_values() {
         .await
         .unwrap();
     let evaluator = Arc::new(Booleans::default());
-    let invoker = Invoker::new(synthesized.parsed().clone(), &provider)
-        .with_evaluator(evaluator.clone(), ResourceSet::default())
-        .unwrap();
+    let invoker = Invoker::new(synthesized.clone(), &provider)
+        .with_evaluator(evaluator.clone(), ResourceSet::default());
     assert!(
         invoker
             .preflight(Request::operation("s0.u0"))
@@ -178,7 +179,7 @@ async fn manual_alias_ordered_selection_and_invalid_suffix_are_explicit() {
         "sources":{{"catalog":{{"kind":"{KIND}","content":{{"units":[{{"id":"first"}},{{"id":"second"}}]}}}},"unsupported":{{"kind":"urn:unsupported"}}}},
         "bindings":{{"first":{{"operation":"run","source":"catalog","content":"first"}},"second":{{"operation":"run","source":"catalog","content":"second"}},"skip":{{"operation":"run","source":"unsupported"}},"foreign":{{"operation":"other","source":"catalog","content":"first"}}}}}}"#)).unwrap();
     let provider = Catalog::default();
-    let invoker = Invoker::new(doc, &provider);
+    let invoker = Invoker::new(doc.validate().unwrap().validated().unwrap(), &provider);
     assert_eq!(
         invoker
             .preflight(Request::operation("go"))
@@ -260,8 +261,7 @@ async fn schema_rejection_withholds_values_and_retains_only_local_evidence() {
             document(operation, r#"{"units":[{"id":"manual"}]}"#),
             &provider,
         )
-        .with_evaluator(Arc::new(Booleans::default()), ResourceSet::default())
-        .unwrap();
+        .with_evaluator(Arc::new(Booleans::default()), ResourceSet::default());
         let mut call = invoker.invoke(Request::operation("run"));
         let control = call.control();
         assert!(call.validation_failure().is_none());
@@ -365,9 +365,8 @@ async fn invalid_synthesized_units_and_malformed_manual_catalog_never_effect() {
         synthesized.coverage().entries()[0].status,
         CoverageStatus::Invalid
     );
-    let invoker = Invoker::new(synthesized.document().parsed().clone(), &provider)
-        .with_evaluator(Arc::new(Booleans::default()), ResourceSet::default())
-        .unwrap();
+    let invoker = Invoker::new(synthesized.document().clone(), &provider)
+        .with_evaluator(Arc::new(Booleans::default()), ResourceSet::default());
     for request in [Request::operation("s0.u0"), Request::binding("s0.u0")] {
         let mut call = invoker.invoke(request);
         assert!(call.write(JsonValue::null()).await.is_err());

@@ -512,9 +512,16 @@ fn nonempty_array(value: JsonRef<'_>, path: &'static str) -> Result<(), Boundary
 }
 
 pub(crate) fn string<'a>(value: JsonRef<'a>, path: &'static str) -> Result<&'a str, BoundaryError> {
-    value
-        .as_str()
-        .ok_or_else(|| BoundaryError::new("expected-string", path))
+    value.as_str().ok_or_else(|| {
+        BoundaryError::new(
+            if value.kind() == JsonKind::String {
+                "unpaired-string"
+            } else {
+                "expected-string"
+            },
+            path,
+        )
+    })
 }
 
 fn boolean(value: JsonRef<'_>, path: &'static str) -> Result<bool, BoundaryError> {

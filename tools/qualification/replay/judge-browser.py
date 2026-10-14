@@ -20,6 +20,20 @@ def current_fixture(fixture):
         assert case['refusal_kind']==change['from_refusal_kind']
         assert change['to_expected']=='satisfies'
         case.update(expected=change['to_expected'],refusal_kind=None,refusal_reason='')
+    migrations=json.loads((provenance.parent/'document-migrations.json').read_text())
+    for change in migrations['reexpressions']:
+        group=next(g for g in translated['groups'] if g['id']==change['group'])
+        assert group['document']==change['original_document']
+        assert [c['id'] for c in group['cases']]==change['case_ids']
+        group['document']=change['document']
+        assert change['resource_key'] not in translated['resources']
+        translated['resources'][change['resource_key']]=change['resource']
+        group['resources'].append(change['resource_key'])
+    for change in migrations['core_rejections']:
+        group=next(g for g in translated['groups'] if g['id']==change['group'])
+        assert group['document']==change['original_document']
+        assert [c['id'] for c in group['cases']]==change['case_ids']
+        translated['groups'].remove(group)
     return translated
 
 

@@ -1,7 +1,7 @@
 //! Run with: cargo run -p openbindings-json-schema-evaluator --example first_use
 use openbindings::{
-    Direction, JsonValue, OperationSelection, ParsedDocument, ResourceSet, ValidationReport,
-    ValueContractPreparation, ValueOutcome,
+    Direction, JsonValue, ParsedDocument, ResourceSet, ValidationReport, ValueContractPreparation,
+    ValueOutcome,
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde::Serialize;
@@ -59,26 +59,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
     println!("corrected document is conformant");
     // Primary names and aliases use the same selection API.
-    let operation = match proof.parsed().resolve_operation("find")? {
-        OperationSelection::Found(operation) => operation,
-        OperationSelection::Missing => return Err("operation is missing".into()),
-        OperationSelection::Ambiguous { candidates } => {
-            return Err(format!("operation is ambiguous: {candidates:?}").into());
-        }
-    };
+    let operation = proof
+        .resolve_operation("find")
+        .ok_or("operation is missing")?;
     println!(
         "{:?}: {:?}",
         operation.key(),
-        operation.description()?.unwrap_or("")
+        operation.description().map(|s| s.json().text())
     );
     if let Some(schema) = operation.input() {
-        // Exact schema access returns Option; interpreting metadata can also fail.
+        // Validated reads preserve presence; schema preparation remains separate.
         println!("input schema at {:?}", schema.location().pointer);
     }
     // The evaluator is an explicit optional companion. No resources are fetched.
-    let context = proof
-        .parsed()
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())?;
+    let context = proof.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let input = match context.prepare("lookup", Direction::Input) {
         ValueContractPreparation::Ready(input) => input,
         ValueContractPreparation::NoValueContract => {

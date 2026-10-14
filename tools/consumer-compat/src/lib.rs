@@ -216,8 +216,11 @@ mod tests {
         )
         .unwrap();
         let context = document
-            .value_contracts(Arc::new(ExactConstant), ResourceSet::default())
-            .unwrap();
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant document")
+            .value_contracts(Arc::new(ExactConstant), ResourceSet::default());
         let ValueContractPreparation::Ready(contract) = context.prepare("read", Direction::Input)
         else {
             panic!("custom evaluator must prepare")

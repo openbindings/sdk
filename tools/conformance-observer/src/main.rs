@@ -14,18 +14,33 @@ fn observe(request: &Value) -> Value {
                 let report = result.report();
                 out["outcome"] = json!(report.conclusion);
                 // Translate SDK vocabulary to the frozen conformance-observation protocol.
-                out["rules"] = json!(report.evidence.iter().map(|(rule, evidence)| {
-                    (*rule, if *evidence == Evidence::Met { json!("satisfied") } else { json!(evidence) })
-                }).collect::<std::collections::BTreeMap<_, _>>());
+                out["rules"] = json!(
+                    report
+                        .evidence
+                        .iter()
+                        .map(|(rule, evidence)| {
+                            (
+                                *rule,
+                                if *evidence == Evidence::Met {
+                                    json!("satisfied")
+                                } else {
+                                    json!(evidence)
+                                },
+                            )
+                        })
+                        .collect::<std::collections::BTreeMap<_, _>>()
+                );
                 out["findings"] = json!(report.findings);
                 if let Some(findings) = out["findings"].as_array_mut() {
                     for finding in findings {
                         if finding["status"] == "met" {
                             finding["status"] = json!("satisfied");
                         }
-                        if matches!((finding["rule"].as_str(), finding["code"].as_str()),
-                            (Some("OBI-06" | "OBI-08"), Some("unknown-operation")) |
-                            (Some("OBI-07"), Some("unknown-source"))) {
+                        if matches!(
+                            (finding["rule"].as_str(), finding["code"].as_str()),
+                            (Some("OBI-06" | "OBI-08"), Some("unknown-operation"))
+                                | (Some("OBI-07"), Some("unknown-source"))
+                        ) {
                             finding["code"] = json!("missing-target");
                         }
                     }
@@ -98,7 +113,17 @@ fn observe(request: &Value) -> Value {
                     }),
             )
             .unwrap();
-            let contracts=doc.value_contracts(std::sync::Arc::new(openbindings_json_schema_evaluator::DefaultEvaluator::new()),resources).unwrap();
+            let contracts =
+                doc.validate()
+                    .unwrap()
+                    .validated()
+                    .expect("conformant document")
+                    .value_contracts(
+                        std::sync::Arc::new(
+                            openbindings_json_schema_evaluator::DefaultEvaluator::new(),
+                        ),
+                        resources,
+                    );
             let operation = given["operation"].as_str().unwrap();
             if request["action"] == "validate-operation-values" {
                 let direction = if given["side"] == "input" {
@@ -165,7 +190,9 @@ fn observe_value(preparation: &ValueContractPreparation, value: &JsonValue) -> V
         }
         ValueContractPreparation::NoValueContract => json!({"outcome":"no-contract"}),
         ValueContractPreparation::OperationMissing => json!({"outcome":"operation-missing"}),
-        ValueContractPreparation::OperationAmbiguous { .. } => json!({"outcome":"operation-missing"}),
+        ValueContractPreparation::OperationAmbiguous { .. } => {
+            json!({"outcome":"operation-missing"})
+        }
         ValueContractPreparation::NoVerdict { detail } => {
             json!({"outcome":"no-verdict","detail":detail})
         }

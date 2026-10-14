@@ -7,6 +7,7 @@ use crate::{
 use openbindings_internal_json::backend;
 use serde::Serialize;
 mod read_views;
+mod validated_views;
 use read_views::NamespaceCache;
 pub use read_views::{BindingView, DependencyView, ExampleView, SourceView};
 use std::{
@@ -14,6 +15,7 @@ use std::{
     fmt,
     sync::{Arc, OnceLock},
 };
+pub use validated_views::*;
 
 /// Stable rule identifiers OBI-01 through OBI-13, in specification order.
 pub const DOCUMENT_RULES: [&str; 13] = [
@@ -121,7 +123,13 @@ pub struct DocumentValidation {
     report: Arc<ValidationReport>,
 }
 #[derive(Clone, Debug)]
-/// Retained proof that this immutable snapshot satisfied every applicable normative document rule. Obtain it through [`DocumentValidation::validated`]; value contract preparation is still a separate evaluator-dependent step.
+/// Retained proof that this immutable snapshot satisfied every applicable normative document rule.
+/// Proof has no public unchecked constructor or deserializer:
+/// ```compile_fail
+/// use openbindings::*;
+/// fn forge(document: ParsedDocument) { let _ = ValidatedDocument { document }; }
+/// ```
+/// Obtain it through [`DocumentValidation::validated`]; value contract preparation is still a separate evaluator-dependent step.
 pub struct ValidatedDocument {
     document: ParsedDocument,
 }
@@ -229,7 +237,7 @@ impl ParsedDocument {
             report,
         })
     }
-    pub(crate) fn schemas(&self) -> &SchemaIndex {
+    pub(crate) fn schema_index(&self) -> &SchemaIndex {
         self.inner
             .schemas
             .get_or_init(|| SchemaIndex::build(self.value()))
@@ -467,11 +475,11 @@ impl OperationView {
     }
     /// Interpret an optional string description. Unlike exact [`Self::input`]
     /// access, this can refuse a malformed field with its original location.
-    pub fn description(&self) -> Result<Option<&str>, InterpretationError> {
+    pub fn description(&self) -> Result<Option<JsonStringRef<'_>>, InterpretationError> {
         self.value
             .get("description")
             .map(|v| {
-                v.as_str()
+                v.as_string()
                     .ok_or_else(|| InterpretationError::invalid("invalid-operation-description", v))
             })
             .transpose()
@@ -965,7 +973,7 @@ fn assess_value(document: &ParsedDocument) -> Result<ValidationReport, VersionRe
             }
         }
     }
-    let schemas = document.schemas();
+    let schemas = document.schema_index();
     // The index visits each contained schema occurrence once. Equal text at
     // different positions must still be checked at each original location.
     for node in &schemas.nodes {

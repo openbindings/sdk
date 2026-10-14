@@ -14,7 +14,6 @@ enum LoadFailure {
     Parse(InputError),
     Version(VersionRefusal),
     Conformance(ValidationReport),
-    Interpretation(InterpretationError),
     Preparation(ValueContractPreparation),
     MissingResources(NoVerdict),
     UndeclaredResources,
@@ -29,7 +28,6 @@ impl fmt::Display for LoadFailure {
                 "document conformance: {:?}; findings: {:?}",
                 report.conclusion, report.findings
             ),
-            Self::Interpretation(error) => write!(f, "document interpretation: {error}"),
             Self::Preparation(state) => write!(f, "input contract setup: {state:?}"),
             Self::MissingResources(detail) => write!(f, "input contract resources: {detail:?}"),
             Self::UndeclaredResources => {
@@ -58,10 +56,7 @@ fn candidate(
     let Some(proof) = validation.validated() else {
         return Err(LoadFailure::Conformance(validation.report().clone()));
     };
-    let context = proof
-        .parsed()
-        .value_contracts(Arc::new(DefaultEvaluator::new()), resources)
-        .map_err(LoadFailure::Interpretation)?;
+    let context = proof.value_contracts(Arc::new(DefaultEvaluator::new()), resources);
     let input = match context.prepare_with_control("find", Direction::Input, control) {
         ValueContractPreparation::Ready(input) => input,
         ValueContractPreparation::NoVerdict { detail }
@@ -97,10 +92,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         let document = ParsedDocument::parse(DOCUMENT)?;
         let validation = document.validate()?;
         let proof = validation.validated().ok_or("fixture must be conformant")?;
-        let context = proof.parsed().value_contracts(
-            Arc::new(DefaultEvaluator::new()),
-            resources(r#"{"const":9007199254740993}"#)?,
-        )?;
+        let context = proof
+            .parsed()
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant document")
+            .value_contracts(
+                Arc::new(DefaultEvaluator::new()),
+                resources(r#"{"const":9007199254740993}"#)?,
+            );
         let ValueContractPreparation::Ready(retained) = context.prepare("find", Direction::Input)
         else {
             panic!("fixture must have a ready input");

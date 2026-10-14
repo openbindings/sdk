@@ -249,7 +249,7 @@ export type OperationSelection =
       /** Distinct primary keys in lexical order; repeated occurrences can yield one key. */
       candidates: readonly string[];
     };
-/** Setup partition: ready transfers a disposable ValueContract; no-value-contract means the selected direction is absent; operation-missing/operation-ambiguous are selection outcomes; no-verdict is preparation refusal. Present false is a value contract. Ready can include qualified missing-resource value contracts whose values may return no-verdict during validation. None of these setup refusals judges an instance. */
+/** Setup partition: ready transfers a disposable ValueContract; no-value-contract means the selected direction is absent; operation-missing is a selection outcome; the retained operation-ambiguous branch is unreachable from validated documents; no-verdict is preparation refusal. Present false is a value contract. Ready can include qualified missing-resource value contracts whose values may return no-verdict during validation. None of these setup refusals judges an instance. */
 export type ValueContractPreparation =
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
@@ -609,7 +609,17 @@ function isExact(value: unknown): value is ExactJson {
   return typeof value === "object" && value !== null && exactOwners.has(value);
 }
 const jsonRaw = (owner: ExactJson) => handle<wasm.WasmJson>(owner);
-const documentRaw = (owner: ParsedDocument) => handle<wasm.WasmDocument>(owner);
+const documentRaw = (owner: ParsedDocument) =>
+  handle<wasm.WasmDocument | wasm.WasmValidatedDocument>(owner);
+function validatedRaw(
+  owner: ValidatedDocument,
+  code = "document-conformance",
+): wasm.WasmValidatedDocument {
+  const raw = handle<wasm.WasmValidatedDocument>(owner);
+  if (!(raw instanceof wasm.WasmValidatedDocument))
+    throw new SdkError(code, "A validated document is required.");
+  return raw;
+}
 const resourceRaw = (owner: SchemaResources) =>
   handle<wasm.WasmResources>(owner);
 /** Ordinary JSON scalar types; runtime admission additionally requires finite numbers. JavaScript number precision already lost before admission cannot be reconstructed. */
@@ -909,7 +919,9 @@ export class ParsedDocument extends Managed {
   #bindings?: readonly BindingMetadata[] | null;
   #sources?: readonly SourceMetadata[] | null;
   #dependencies?: readonly DependencyMetadata[] | null;
-  /** @internal */ constructor(raw: wasm.WasmDocument) {
+  /** @internal */ constructor(
+    raw: wasm.WasmDocument | wasm.WasmValidatedDocument,
+  ) {
     super(raw);
   }
   /** Create an independently disposable owner sharing this immutable snapshot and Rust caches. */
@@ -926,11 +938,61 @@ export class ParsedDocument extends Managed {
   }
   /** Return plain normative evidence or version refusal; no proof owner is created and no result needs disposal. */
   validate(): DocumentValidation {
-    return decode(handle<wasm.WasmDocument>(this).validate());
+    const validation = documentRaw(this).validate();
+    try {
+      return decode(validation.report());
+    } finally {
+      validation.free();
+    }
   }
   /** Establish normative conformance and, only on validated, return a NEW independent proof owner. The original document remains caller-owned. Other branches preserve plain evidence/refusal. */
   validated(): ValidationResult {
     return validateParsed(this);
+  }
+  /** Read the declaration as exact JavaScript UTF-16 text. Invalid typed fields throw. */
+  get openbindings(): string | undefined {
+    return (
+      decode<string | null>(sdkCall(() => documentRaw(this).openbindings())) ??
+      undefined
+    );
+  }
+  /** Read optional exact interface name; undefined means absent. */
+  get name(): string | undefined {
+    return (
+      decode<string | null>(sdkCall(() => documentRaw(this).name())) ??
+      undefined
+    );
+  }
+  /** Read the optional opaque interface version label. */
+  get version(): string | undefined {
+    return (
+      decode<string | null>(sdkCall(() => documentRaw(this).version())) ??
+      undefined
+    );
+  }
+  /** Read optional exact description, including lone UTF-16 units. */
+  get description(): string | undefined {
+    return (
+      decode<string | null>(sdkCall(() => documentRaw(this).description())) ??
+      undefined
+    );
+  }
+  /** Acquire a NEW independent ExactJson owner for each declared schema on every read. Dispose each value. Undefined means absent; an empty map means present-empty. */
+  get schemas(): ReadonlyMap<string, ExactJson> | undefined {
+    const raw = documentRaw(this);
+    const names = decode<string[] | null>(sdkCall(() => raw.schemaNames()));
+    if (names === null) return undefined;
+    const values = new Map<string, ExactJson>();
+    try {
+      for (const name of names) {
+        const value = sdkCall(() => raw.schema(name));
+        if (value) values.set(name, new ExactJson(value));
+      }
+      return values;
+    } catch (error) {
+      for (const value of values.values()) value.dispose();
+      throw error;
+    }
   }
   /** Return cached frozen plain metadata in lexical primary-key order. No handles are created. Throws a located interpretation error for malformed typed namespace/metadata; does not validate all OBI rules. */
   get operations(): readonly OperationMetadata[] {
@@ -1042,9 +1104,11 @@ export class ParsedDocument extends Managed {
   /** Return undefined for absent dependency; otherwise test its kind filter. Absent kinds accepts all; an empty list matches none but is nonconformant. This helper does not establish normative conformance. */
   dependencyAcceptsKind(dependency: string, kind: string): boolean | undefined {
     scalar(dependency);
-    scalar(kind);
     return sdkCall(() =>
-      handle<wasm.WasmDocument>(this).dependencyAcceptsKind(dependency, kind),
+      handle<wasm.WasmDocument>(this).dependencyAcceptsKind(
+        dependency,
+        JSON.stringify(kind),
+      ),
     );
   }
   /** Inspect schema references with explicit resources and cooperative cancellation. Returns plain data, including incomplete traversal and per-reference refusal; no acquisition or normative proof. */
@@ -1057,33 +1121,6 @@ export class ParsedDocument extends Managed {
           handle<wasm.WasmDocument>(this).references(
             resourceRaw(resources ?? empty!),
             options.signal?.aborted ?? false,
-          ),
-        ),
-      );
-    } finally {
-      empty?.dispose();
-    }
-  }
-  /** Create a NEW disposable immutable evaluator/resource context. Eagerly validates the whole operation namespace, including unrelated aliases, throwing a specific interpretation error for malformed entries. Unrelated metadata may remain a draft. A later value verdict concerns only the selected schema; use validated() first when accepting a normative document. */
-  valueContracts(options: ValueContractOptions = {}): ValueContracts {
-    if (
-      options.includeSchemaDetails !== undefined &&
-      typeof options.includeSchemaDetails !== "boolean"
-    )
-      throw new SdkError(
-        "invalid-schema-details",
-        "includeSchemaDetails must be a boolean.",
-      );
-    const resources = options.resources,
-      limits = encodedLimits(options.limits),
-      empty = resources ? undefined : new SchemaResources();
-    try {
-      return new ValueContracts(
-        sdkCall(() =>
-          handle<wasm.WasmDocument>(this).valueContracts(
-            resourceRaw(resources ?? empty!),
-            limits,
-            options.includeSchemaDetails ?? false,
           ),
         ),
       );
@@ -1108,7 +1145,7 @@ let validateParsed: (document: ParsedDocument) => ValidationResult;
 /** Retained proof for one immutable snapshot whose normative OBI rules were established. Obtain via ParsedDocument.validated(); preparation remains evaluator-dependent. It inherits exact inspection methods and deterministic disposal from ParsedDocument. */
 export class ValidatedDocument extends ParsedDocument {
   declare private readonly validatedDocumentBrand: void;
-  private constructor(raw: wasm.WasmDocument, token: symbol) {
+  private constructor(raw: wasm.WasmValidatedDocument, token: symbol) {
     if (token !== conformanceToken)
       throw new TypeError(
         "Use ParsedDocument.validated() to establish conformance.",
@@ -1117,26 +1154,66 @@ export class ValidatedDocument extends ParsedDocument {
   }
   static {
     validateParsed = (document: ParsedDocument): ValidationResult => {
-      const result = document.validate();
-      return result.status === "report" &&
-        result.report.conclusion === "conformant"
-        ? {
-            status: "validated",
-            document: new ValidatedDocument(
-              documentRaw(document).retain(),
-              conformanceToken,
-            ),
-            report: result.report,
-          }
-        : result;
+      const transfer = documentRaw(document).validate();
+      try {
+        const result = decode<DocumentValidation>(transfer.report());
+        const proof = transfer.takeValidated();
+        if (!proof) return result;
+        if (result.status !== "report") {
+          proof.free();
+          throw new Error("Validation transfer invariant.");
+        }
+        return {
+          status: "validated",
+          document: new ValidatedDocument(proof, conformanceToken),
+          report: result.report,
+        };
+      } finally {
+        transfer.free();
+      }
     };
   }
-  /** Create an independently disposable owner preserving the same established normative proof. */
+  /** Retain an independent Rust proof for this same immutable snapshot. */
   override retain(): ValidatedDocument {
     return new ValidatedDocument(
-      handle<wasm.WasmDocument>(this).retain(),
+      sdkCall(() => validatedRaw(this).retain()),
       conformanceToken,
     );
+  }
+  /** Acquire an independent parsed owner for editor reads. */
+  parsed(): ParsedDocument {
+    return new ParsedDocument(validatedRaw(this).parsed());
+  }
+  /** The supported scalar specification declaration established by OBI-03. */
+  override get openbindings(): string {
+    return super.openbindings!;
+  }
+  /** Create a NEW disposable evaluator/resource context from this Rust-owned conformance proof. Preparation is separate and may refuse. */
+  valueContracts(options: ValueContractOptions = {}): ValueContracts {
+    if (
+      options.includeSchemaDetails !== undefined &&
+      typeof options.includeSchemaDetails !== "boolean"
+    )
+      throw new SdkError(
+        "invalid-schema-details",
+        "includeSchemaDetails must be a boolean.",
+      );
+    const resources = options.resources,
+      limits = encodedLimits(options.limits),
+      empty = resources ? undefined : new SchemaResources();
+    try {
+      return new ValueContracts(
+        sdkCall(() =>
+          validatedRaw(this).valueContracts(
+            resourceRaw(resources ?? empty!),
+            limits,
+            options.includeSchemaDetails ?? false,
+          ),
+        ),
+      );
+    } finally {
+      empty?.dispose();
+    }
   }
 }
 /** Retained operation selected by primary key or alias. It survives parent disposal; dispose it independently. Exact value inspection is not normative proof or a prepared schema. */
@@ -1153,6 +1230,16 @@ export class OperationView extends Managed {
   /** Return a NEW independently disposable ExactJson owner on every access. It survives operation/document disposal and can retain the original arena. */
   get value(): ExactJson {
     return new ExactJson(handle<wasm.WasmOperation>(this).value());
+  }
+  /** Acquire a NEW independently disposable input value; undefined means absent, including on parsed documents. JSON null, true, false and objects remain present values. */
+  get input(): ExactJson | undefined {
+    const raw = handle<wasm.WasmOperation>(this).input();
+    return raw ? new ExactJson(raw) : undefined;
+  }
+  /** Acquire a NEW independently disposable output value; undefined means absent. */
+  get output(): ExactJson | undefined {
+    const raw = handle<wasm.WasmOperation>(this).output();
+    return raw ? new ExactJson(raw) : undefined;
   }
   /** Cached frozen metadata for this selected operation only; no disposable owner is created. */
   get metadata(): OperationMetadata {
@@ -1994,7 +2081,13 @@ export class DiscoveryPublication extends Managed {
         "Expected a typed allow-origin choice.",
       );
     super(
-      sdkCall(() => new wasm.WasmPublication(documentRaw(document), allow)),
+      sdkCall(
+        () =>
+          new wasm.WasmPublication(
+            validatedRaw(document, "publication-conformance"),
+            allow,
+          ),
+      ),
     );
   }
   /** Create a detached Response for the exact route and method, preserving reserved percent escapes. GET returns exact bytes; HEAD returns no body with the original Content-Length; unsupported route is 404 and unsupported method 405. Creates no server and does not perform authentication or preflight handling. */

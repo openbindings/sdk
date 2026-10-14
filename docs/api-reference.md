@@ -49,9 +49,9 @@ and its associated future is Send; local futures and Rc providers remain support
 
 - Parsing and authoring create exact snapshots. Normative assessment evaluates OBI
   document rules; only its conformant branch creates a `ValidatedDocument` proof.
-  Preparing and validating a selected draft schema does not establish whole-document
-  conformance. Context construction checks the operation namespace, including unrelated
-  malformed aliases; unrelated metadata may remain draft data.
+  Only that proof constructs normative value contracts and an operation invoker.
+  Parsed snapshots retain fallible editor reads. Wasm owns the Rust proof; plain
+  TypeScript reports and forged wrappers cannot create it.
 - The semantic partitions `Evidence`, `Conformance`, `ValueOutcome`,
   `ValueContractPreparation` and `Direction` are closed, supporting exhaustive handling.
   Interpretation and no-verdict cause families are extensible. Rust matchers need a
@@ -245,6 +245,47 @@ a separate value-contract preparation code with its existing meaning.
 Raw parser admission codes `byte-limit`, `node-limit` and `depth-limit` remain
 `InputError` codes; whole-document findings translate them to `input-limit`.
 
+## Validated document reads
+
+`ValidatedDocument::value_contracts` returns `ValueContracts` directly;
+`operation::Invoker::new` takes `ValidatedDocument` and `with_evaluator` returns
+`Self`. Preparation still may refuse, and Ready means prepared, not decidable.
+`SchemaRequest::document()` exposes the validated snapshot to custom evaluators.
+
+| Rust read | Result and presence |
+| --- | --- |
+| `openbindings()` | `&str`, proved supported SemVer |
+| `name()`, `version()`, `description()` | `Option<JsonStringRef>`, absence separate from non-scalar text |
+| `schemas()`, `schema(key)` | Optional exact object/boolean schema views; no preparation |
+| `operations()`, `resolve_operation(name)` | Retained `ValidatedOperationView` vector or optional selection |
+| `bindings()`, `sources()`, `dependencies()` and keyed reads | Optional retained `ValidatedBindingView`, `ValidatedSourceView`, `ValidatedDependencyView`; absent differs from present-empty |
+| Validated operation `examples()` and `example(key)` | Retained `ValidatedExampleView`; example truth is not implied |
+
+Validated views expose the same normative fields as parsed views, with infallible
+reads. Required names are scalar; descriptive text, tags and kinds use
+`JsonStringRef`. Its `as_str()` returns None only for non-scalar text;
+`utf16_units()` iterates without allocating, `json()` retains token/location access,
+and equality compares decoded UTF-16. `JsonRef::as_string()` returns None only for
+non-strings. The existing fallible view names remain unchanged; the `Validated`
+prefix identifies the additional proof, following `ValidatedDocument`.
+
+TypeScript keeps its existing metadata and selection shapes. Validated documents
+inherit exact editor reads and add `valueContracts()` and `parsed()`. Top-level
+text is exact JavaScript UTF-16; optional text uses undefined for absence.
+Each top-level text getter checks only its own field, preserving valid siblings
+and absence when another metadata field is malformed.
+`schemas` creates a new ExactJson owner for each map value on every access.
+`OperationView.input` and `.output` each create a new independent ExactJson owner,
+preserving undefined separately from null, false, true and objects. Dispose each
+acquisition; these getters keep the established ownership convention.
+
+The raw bridge transfers proof with `WasmDocument.validate()` returning
+`WasmDocumentValidation`; `report()` returns evidence and `takeValidated()` takes
+at most one `WasmValidatedDocument`. Bridge wrapper classes are not proof authority:
+contract construction, validated retention, proof transfer and publication derive
+proof from the actual snapshot's cached Rust validation at each call, including
+when a raw caller substitutes a document-family method receiver.
+
 ## Inspection and exact editing additions
 
 Rust `ParsedDocument` enumerates and looks up retained binding, source and
@@ -270,8 +311,7 @@ This alpha API update adds required `tags` and `deprecated` fields to TypeScript
 using null for absence. The closed `AuthoringErrorCode` union adds `invalid-field`
 and `duplicate-members` for source conversion; exhaustive switches must handle
 those cases. `AuthoringFailure.sourceLocation`, when present, addresses original
-source bytes and never substitutes for a handwritten draft pointer. Existing Rust
-method signatures stay unchanged; downstream extension traits with newly occupied
+source bytes and never substitutes for a handwritten draft pointer. Parsed descriptions, tags and kind strings now return exact `JsonStringRef` values; downstream extension traits with newly occupied
 method names may need explicit qualification.
 
 Document findings now deduplicate explanations for the same source occurrence

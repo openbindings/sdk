@@ -114,3 +114,14 @@ Exact bounds and enum choices remain JSON token strings. Existing Rust evaluator
 implementations constructing `ValueProblem` must add `details: None` to preserve
 their previous output. The enum is non-exhaustive; match future variants safely.
 See the [evaluator resource contract](../crates/openbindings-json-schema-evaluator/README.md).
+
+## Validated contract access (S6c)
+
+Move `parsed.value_contracts(evaluator, resources)?` to
+`proof.value_contracts(evaluator, resources)`, where `proof` comes from
+`parsed.validate()?.validated()`. TypeScript likewise moves `valueContracts()`
+to the document returned by `parsed.validated()`. `operation::Invoker::new`
+requires that proof, and `with_evaluator` no longer returns an interpretation error.
+Retain parsed views for editing invalid documents; acquire validated views for
+infallible field reads. Rust exact text now uses `JsonStringRef` for descriptions,
+tags and kinds; callers choose scalar conversion or exact UTF-16 explicitly.

@@ -1,3 +1,4 @@
+import { validatedContracts } from "./validated-contracts.mjs";
 // Internal fault injection complements the installed public-consumer checks.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -14,7 +15,7 @@ test("owned selection and preparation wrappers release untaken children on decod
   const document = sdk.parseDocument(
     '{"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"}}}}',
   ).value;
-  const context = document.valueContracts();
+  const context = validatedContracts(document);
   try {
     for (const [prototype, invoke, take] of [
       [
@@ -89,7 +90,7 @@ test("ordinary admission maps only known engine limits and preserves unexpected 
   const document = sdk.parseDocument(
     '{"openbindings":"0.2.0","operations":{"run":{"input":true}}}',
   ).value;
-  const context = document.valueContracts();
+  const context = validatedContracts(document);
   const setup = context.prepare("run", "input");
   assert.equal(setup.status, "ready");
   const prepared = setup.valueContract;

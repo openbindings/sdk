@@ -529,8 +529,23 @@ fn main() {
         cancelled(&parked_invoker, request, &subtree)
     }));
     let document = ParsedDocument::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"echo":{{"aliases":["say"]}}}},"bindings":{{"b":{{"operation":"echo","source":"s"}}}},"sources":{{"s":{{"kind":"resource.fixture","content":{}}}}}}}"#, parent.text())).unwrap();
-    let operation = openbindings_invocation::operation::Invoker::new(document.clone(), &fixture);
-    let operation_park = openbindings_invocation::operation::Invoker::new(document, &parked);
+    let operation = openbindings_invocation::operation::Invoker::new(
+        document
+            .clone()
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant invocation document"),
+        &fixture,
+    );
+    let operation_park = openbindings_invocation::operation::Invoker::new(
+        document
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant invocation document"),
+        &parked,
+    );
     use openbindings_invocation::operation::Request as OperationRequest;
     measurements.push(measure("operation_unary_1_byte", iterations, 1, || {
         echo_call(
@@ -567,7 +582,14 @@ fn main() {
     // The missing-evaluator case exercises diagnostic release, without making
     // the invocation companion depend on a particular evaluator implementation.
     let declared = ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{"input":true}},"bindings":{"b":{"operation":"echo","source":"s"}},"sources":{"s":{"kind":"resource.fixture","content":null}}}"#).unwrap();
-    let unresolved = openbindings_invocation::operation::Invoker::new(declared, &fixture);
+    let unresolved = openbindings_invocation::operation::Invoker::new(
+        declared
+            .validate()
+            .unwrap()
+            .validated()
+            .expect("conformant invocation document"),
+        &fixture,
+    );
     measurements.push(measure(
         "operation_validation_failure_release",
         iterations,
@@ -589,7 +611,14 @@ fn main() {
     let owners_before = Snapshot::now();
     {
         let document = ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{}},"bindings":{"b":{"operation":"echo","source":"s"}},"sources":{"s":{"kind":"resource.fixture","content":null}}}"#).unwrap();
-        let invoker = openbindings_invocation::operation::Invoker::new(document, &fixture);
+        let invoker = openbindings_invocation::operation::Invoker::new(
+            document
+                .validate()
+                .unwrap()
+                .validated()
+                .expect("conformant invocation document"),
+            &fixture,
+        );
         echo_call(
             invoker.invoke(OperationRequest::operation("echo")),
             &small,

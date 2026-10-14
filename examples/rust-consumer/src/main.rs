@@ -90,9 +90,17 @@ fn value_contracts(document: &ParsedDocument) -> Result<(), Box<dyn std::error::
         uri: "https://example.invalid/integer".into(),
         document: exact(r#"{"type":"integer","minimum":0}"#),
     }])?;
-    let context = document.value_contracts(Arc::new(DefaultEvaluator::new()), resources)?;
-    let ValueContractPreparation::Ready(input) = context.prepare("run", Direction::Input) else { return Err("input contract did not prepare".into()); };
-    let ValueContractPreparation::Ready(output) = context.prepare("run", Direction::Output) else { return Err("output contract did not prepare".into()); };
+    let context = document
+        .validate()?
+        .validated()
+        .ok_or("document is not conformant")?
+        .value_contracts(Arc::new(DefaultEvaluator::new()), resources);
+    let ValueContractPreparation::Ready(input) = context.prepare("run", Direction::Input) else {
+        return Err("input contract did not prepare".into());
+    };
+    let ValueContractPreparation::Ready(output) = context.prepare("run", Direction::Output) else {
+        return Err("output contract did not prepare".into());
+    };
     for text in ["7", "9007199254740993"] {
         assert!(matches!(
             input.validate(&exact(text)),
@@ -108,15 +116,16 @@ fn value_contracts(document: &ParsedDocument) -> Result<(), Box<dyn std::error::
         ValueOutcome::Fails { .. }
     ));
     assert!(matches!(
-        context
-            .prepare("no_contract", Direction::Input),
+        context.prepare("no_contract", Direction::Input),
         ValueContractPreparation::NoValueContract
     ));
-    let unavailable =
-        document.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())?;
+    let unavailable = document
+        .validate()?
+        .validated()
+        .ok_or("document is not conformant")?
+        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     assert!(matches!(
-        unavailable
-            .prepare("run", Direction::Input),
+        unavailable.prepare("run", Direction::Input),
         ValueContractPreparation::NoVerdict {
             detail: NoVerdict {
                 reason: NoVerdictReason::ResourceUnavailable,
@@ -135,7 +144,9 @@ fn value_contracts(document: &ParsedDocument) -> Result<(), Box<dyn std::error::
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (mut draft, document) = author()?;
     inspect()?;
-    let OperationSelection::Found(operation) = document.resolve_operation("execute")? else { return Err("execute did not resolve".into()); };
+    let OperationSelection::Found(operation) = document.resolve_operation("execute")? else {
+        return Err("execute did not resolve".into());
+    };
     assert_eq!(operation.key(), "run");
     assert_eq!(document.operation_bindings("run")?, vec!["binding"]);
     assert_eq!(

@@ -1,3 +1,4 @@
+import { validatedContracts } from "./validated-contracts.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -133,7 +134,7 @@ test("ordinary conversion rejects lossy/side-effecting values and exact handles 
 });
 test("retained contracts and metadata support repeated native-feeling caller use", () => {
   const warmDocument = parsed(text),
-    warmContext = warmDocument.valueContracts(),
+    warmContext = validatedContracts(warmDocument),
     warmContract = ready(warmContext, "run", "input");
   warmContract.dispose();
   warmContext.dispose();
@@ -149,7 +150,7 @@ test("retained contracts and metadata support repeated native-feeling caller use
     assert.equal(op.key, "run");
     assert.deepEqual(op.bindings, []);
     op.dispose();
-    const context = document.valueContracts();
+    const context = validatedContracts(document);
     const input = ready(context, "run", "input");
     const output = context.prepare("run", "output");
     context.dispose();
@@ -356,7 +357,7 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   assert.equal(references.references[0].resolution.outcome, "located");
   const control = new AbortController();
   control.abort();
-  const contracts = document.valueContracts({ resources });
+  const contracts = validatedContracts(document, { resources });
   const cancelled = contracts.prepare("run", "input", {
     signal: control.signal,
   });
@@ -370,7 +371,7 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
     "cancelled",
   );
   assert.equal(healthy.validate(value).outcome, "satisfies");
-  const limited = document.valueContracts({
+  const limited = validatedContracts(document, {
       resources,
       limits: { evaluationSteps: 0 },
     }),
@@ -382,11 +383,11 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   assert.equal(partial.complete, false);
   assert.equal(partial.limitation.reason, "cancelled");
   assert.throws(
-    () => document.valueContracts({ limits: { evaluationSteps: -1 } }),
+    () => validatedContracts(document, { limits: { evaluationSteps: -1 } }),
     (e) => e.code === "invalid-evaluator-limits",
   );
   assert.throws(
-    () => document.valueContracts({ limits: { unknown: 1 } }),
+    () => validatedContracts(document, { limits: { unknown: 1 } }),
     (e) => e.code === "invalid-evaluator-limits",
   );
   assert.equal("raw" in document, false);

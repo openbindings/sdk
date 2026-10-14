@@ -10,6 +10,14 @@ import {
 export async function usingExampleFiles(packageRoot, files) {
   const readme = await fs.readFile(path.join(packageRoot, "README.md"), "utf8");
   files.set(
+    "/validated-contracts.mjs",
+    await fs.readFile(path.join(packageRoot, "test/validated-contracts.mjs")),
+  );
+  files.set(
+    "/using/validated-contracts.mjs",
+    await fs.readFile(path.join(packageRoot, "test/validated-contracts.mjs")),
+  );
+  files.set(
     "/using/bootstrap.mjs",
     Buffer.from(browserBootstrapSnippet(readme)),
   );

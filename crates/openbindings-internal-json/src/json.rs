@@ -91,6 +91,55 @@ pub struct JsonRef<'a> {
     pub(crate) owner: &'a Arc<Arena>,
     pub(crate) id: Id,
 }
+/// An exact borrowed JSON string. Equality compares decoded UTF-16 units;
+/// scalar conversion is optional and never replaces unpaired units.
+#[derive(Clone, Copy)]
+pub struct JsonStringRef<'a> {
+    json: JsonRef<'a>,
+}
+impl fmt::Debug for JsonStringRef<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("JsonStringRef")
+            .field(&self.json.text())
+            .finish()
+    }
+}
+impl<'a> JsonStringRef<'a> {
+    /// Borrow Unicode scalar text, or None when the string contains an unpaired unit.
+    pub fn as_str(self) -> Option<&'a str> {
+        self.json.as_str()
+    }
+    /// Iterate decoded UTF-16 units without allocating, preserving unpaired units.
+    pub fn utf16_units(self) -> impl Iterator<Item = u16> + 'a {
+        let unpaired = match &self.json.owner.nodes[self.json.id].kind {
+            Kind::String { unpaired, .. } => unpaired.as_deref(),
+            _ => unreachable!("known string"),
+        };
+        self.as_str()
+            .into_iter()
+            .flat_map(str::encode_utf16)
+            .chain(unpaired.into_iter().flatten().copied())
+    }
+    /// Borrow the exact authored token and its original source location.
+    pub fn json(self) -> JsonRef<'a> {
+        self.json
+    }
+    /// Compare decoded units with Unicode scalar text, independent of escape spelling.
+    pub fn eq_str(self, scalar: &str) -> bool {
+        self.utf16_units().eq(scalar.encode_utf16())
+    }
+}
+impl PartialEq for JsonStringRef<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.utf16_units().eq(other.utf16_units())
+    }
+}
+impl Eq for JsonStringRef<'_> {}
+impl PartialEq<&str> for JsonStringRef<'_> {
+    fn eq(&self, other: &&str) -> bool {
+        self.eq_str(other)
+    }
+}
 /// An object member; names are exact JSON strings and can preserve lone UTF-16 units.
 #[derive(Clone, Copy)]
 pub struct JsonMember<'a> {
@@ -235,6 +284,10 @@ impl<'a> JsonRef<'a> {
     /// Borrow decoded Unicode scalar text for a string; returns `None` for non-strings or unpaired UTF-16 units. Use [`Self::utf16_units`] for the latter.
     pub fn as_str(self) -> Option<&'a str> {
         self.owner.string(self.id)
+    }
+    /// Borrow an exact string, including unpaired UTF-16; None means a non-string.
+    pub fn as_string(self) -> Option<JsonStringRef<'a>> {
+        (self.kind() == JsonKind::String).then_some(JsonStringRef { json: self })
     }
     /// Allocate decoded UTF-16 units for a string, preserving unpaired units; returns `None` for non-strings.
     pub fn utf16_units(self) -> Option<Vec<u16>> {

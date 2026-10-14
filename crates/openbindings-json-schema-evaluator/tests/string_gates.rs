@@ -8,8 +8,11 @@ fn prepare(schema: &str, extra: &str) -> ValueContract {
     );
     let document = ParsedDocument::parse(&text).unwrap();
     let contracts = document
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
-        .unwrap();
+        .validate()
+        .unwrap()
+        .validated()
+        .expect("conformant document")
+        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let ValueContractPreparation::Ready(contract) = contracts.prepare("op", Direction::Input)
     else {
         panic!("{text}")
