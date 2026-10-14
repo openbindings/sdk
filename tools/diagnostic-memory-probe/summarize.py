@@ -6,8 +6,8 @@ import statistics
 
 root = Path(__file__).resolve().parents[2]
 out = root / 'target/document-diagnostics'
-rows = [json.loads(line) for line in (out / 'memory.jsonl').read_text().splitlines()]
-fixtures = json.loads((out / 'fixtures/inputs.json').read_text())
+rows = [json.loads(line) for line in (out / 'memory.jsonl').read_text(encoding='utf-8').splitlines()]
+fixtures = json.loads((out / 'fixtures/inputs.json').read_text(encoding='utf-8'))
 raw = []
 for row in rows:
     row = dict(row)
@@ -50,5 +50,5 @@ receipt = {
     'inputs': [{k: v for k, v in r.items() if k != 'path'} for r in fixtures],
     'samples': raw,
 }
-(out / 'allocation-samples.json').write_text(json.dumps(receipt, indent=2) + '\n')
+(out / 'allocation-samples.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8', newline='\n')
 print(json.dumps(summary, indent=2))

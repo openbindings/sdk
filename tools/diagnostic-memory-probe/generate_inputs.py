@@ -11,7 +11,7 @@ def emit(id,doc,lane,elements,unit='array element',pinned=None):
     # Whitespace adds no extra JSON value or hidden error payload.
     assert len(doc.encode())<=MIB,(id,len(doc.encode()))
     doc += ' '*(MIB-len(doc.encode()))
-    path=OUT/'inputs'/f'{id}.json';path.write_text(doc)
+    path=OUT/'inputs'/f'{id}.json';path.write_bytes(doc.encode('utf-8'))
     rows.append(dict(id=id,path=str(path),lane=lane,elements=elements,element_unit=unit,pinned=pinned,sha256=hashlib.sha256(doc.encode()).hexdigest()))
 def wrap(s): return '{"openbindings":"0.2.0","operations":{"op":{"input":'+s+'}}}'
 def array_case(id,make,lane='meta',element='0',pinned=None):
@@ -124,5 +124,5 @@ for i,case in enumerate(corpus.load()):
     except (ValueError,UnicodeDecodeError):continue
     path=OUT/'inputs'/f'corpus-{i:03}.json';path.write_bytes(raw)
     rows.append(dict(id=case['id'],path=str(path),lane='both',elements=None,element_unit=None,group='corpus',sha256=hashlib.sha256(raw).hexdigest()))
-(OUT/'inputs.json').write_text(json.dumps(rows,indent=2)+'\n')
+(OUT/'inputs.json').write_text(json.dumps(rows,indent=2)+'\n', encoding='utf-8', newline='\n')
 print(len(rows),'cases;',sum(r.get('group')=='corpus' for r in rows),'corpus')

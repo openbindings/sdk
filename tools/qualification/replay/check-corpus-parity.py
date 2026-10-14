@@ -10,7 +10,7 @@ parser.add_argument('--typescript', type=Path, required=True)
 args = parser.parse_args()
 
 def load(path):
-    rows = [json.loads(line) for line in path.read_text().splitlines()]
+    rows = [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines()]
     assert not corpus.reconcile(corpus.load(), rows)
     return {row['id']: row for row in rows}
 

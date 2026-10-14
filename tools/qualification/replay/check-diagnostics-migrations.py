@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[3]
 LEDGER = ROOT / 'tools/qualification/inputs/diagnostics-migration-ledger.json'
 
 def load(path):
-    return json.loads(Path(path).read_text())
+    return json.loads(Path(path).read_text(encoding='utf-8'))
 
 def indexed(rows):
     result = {r['id']: r for r in rows}
@@ -50,7 +50,7 @@ def main():
     for receipt in [coarse, upstream]:
         assert not receipt['report']['configuration_failures']
         assert all(not r['failures'] for r in receipt['report']['observations'])
-    corpus = lambda path: [json.loads(line) for line in Path(path).read_text().splitlines()]
+    corpus = lambda path: [json.loads(line) for line in Path(path).read_text(encoding='utf-8').splitlines()]
     old_corpus, new_corpus = map(corpus, [args.before_corpus, args.after_corpus])
     locations = load(ROOT / 'tools/qualification/inputs/document-location-expectations.json')
     by_id = indexed(new_corpus)
@@ -69,7 +69,7 @@ def main():
     }
     assert coarse['admission'] == upstream['admission']
     if args.write:
-        LEDGER.write_text(json.dumps(ledger, indent=2, ensure_ascii=True) + '\n')
+        LEDGER.write_text(json.dumps(ledger, indent=2, ensure_ascii=True) + '\n', encoding='utf-8', newline='\n')
     else:
         assert ledger == load(LEDGER), 'diagnostic migration ledger differs'
     print(json.dumps({key: len(ledger[key]) for key in ['kit_coarse','kit_upstream','kit_document_findings','corpus']}))
