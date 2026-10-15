@@ -25,7 +25,7 @@ def prose(text):
 
 
 def anchors(path):
-    text = prose(path.read_text())
+    text = prose(path.read_text(encoding='utf-8'))
     found = set(re.findall(r'(?:id|name)=["\']([^"\']+)', text))
     counts = {}
     for line in text.splitlines():
@@ -49,7 +49,7 @@ def main():
     ]))
     errors, checked, remote = [], 0, set()
     for path in paths:
-        text = prose(path.read_text())
+        text = prose(path.read_text(encoding='utf-8'))
         # Inline links, reference definitions and HTML links. Code spans alone
         # are not links; no HTTP requests are made for external destinations.
         pattern = r'\]\(([^\s)]+)(?:\s+["\'][^\n]*?["\'])?\)|^ {0,3}\[[^\]]+\]:\s*(\S+)|(?:href|src)=["\']([^"\']+)'
