@@ -52,6 +52,7 @@ jobs:
           shutil.copytree('tools/evaluator-bench', target, dirs_exist_ok=True)
           PY
       - name: Build both release instruments before measuring
+        id: build
         # The runner context is available to step environments, not job ones.
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/evaluator-build
@@ -60,7 +61,18 @@ jobs:
           for variant in baseline candidate; do
             source="$GITHUB_WORKSPACE"
             if [ "$variant" = baseline ]; then source="$RUNNER_TEMP/evaluator-baseline"; fi
-            cargo build --locked --release --manifest-path "$source/tools/evaluator-bench/Cargo.toml" 2>&1 | tee "$RUNNER_TEMP/evaluator-results/build-$variant.log"
+            if ! cargo build --locked --release --manifest-path "$source/tools/evaluator-bench/Cargo.toml" 2>&1 | tee "$RUNNER_TEMP/evaluator-results/build-$variant.log"; then
+              # A change to the public API the instrument calls leaves no identical
+              # instrument for the merge base. Report that instead of a failure.
+              if [ "$variant" = baseline ]; then
+                printf '%s\n\n%s\n' '# Evaluator performance' \
+                  'Not comparable: the candidate instrument does not build against the merge base, usually because the public API it calls changed. No timing comparison was made; see build-baseline.log.' \
+                  > "$RUNNER_TEMP/evaluator-results/summary.md"
+                echo 'comparable=false' >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              exit 1
+            fi
             cp "$CARGO_TARGET_DIR/release/openbindings-evaluator-bench" "$RUNNER_TEMP/evaluator-bin/$variant"
             cargo build --locked --release --features allocations --manifest-path "$source/tools/evaluator-bench/Cargo.toml" 2>&1 | tee "$RUNNER_TEMP/evaluator-results/build-$variant-alloc.log"
             cp "$CARGO_TARGET_DIR/release/openbindings-evaluator-bench" "$RUNNER_TEMP/evaluator-bin/$variant-alloc"
@@ -69,6 +81,7 @@ jobs:
           uname -a > "$RUNNER_TEMP/evaluator-results/host.txt"
           lscpu >> "$RUNNER_TEMP/evaluator-results/host.txt"
       - name: Check policy and run serial advisory pairs
+        if: steps.build.outputs.comparable != 'false'
         run: |
           python tools/evaluator-bench/test_policy.py
           python tools/evaluator-bench/compare.py \
