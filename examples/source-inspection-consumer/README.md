@@ -19,7 +19,7 @@ Rust provider across a JavaScript Promise through Wasm in Node. It qualifies hos
 viability, not a released TypeScript capability API.
 
 [`examples/recovery.rs`](examples/recovery.rs) is a runnable application recovery path. `Partial` retains
-the inventory and its limitation; `NeedsRepair` retains the editable draft and
+the inventory and its limitation; `NeedsRepair` retains the editable document and
 full document assessment. The caller retains its source throughout. Selecting a
 known target from a partial result is an explicit application decision, not a claim
 that the inventory is complete. Typed cancellation, unsupported-kind and unreadable

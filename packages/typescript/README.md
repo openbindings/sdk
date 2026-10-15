@@ -116,11 +116,11 @@ Use `Document.create()` and typed setters such as `setOperation(key, operation)`
 `setSource`, `setBinding`, `setDependency` and `setExample` for construction.
 `setOperations(operations)` commits a complete operations map once for synthesis.
 The other namespaces have corresponding map setters. Typed parts keep the existing
-`OperationDraft`, `SourceDraft`, `BindingDraft`, `DependencyDraft` and `ExampleDraft`
+`Operation`, `Source`, `Binding`, `Dependency` and `Example`
 input types. Their opaque fields accept borrowed exact owners; callers retain and
-dispose those owners. `EditError.draftPointer` locates a refused typed part field.
+dispose those owners. `EditError.partPointer` locates a refused typed part field.
 The [inspection/editing example](examples/inspect-edit.ts) demonstrates both pointer
-edits and typed reads without an intermediate document draft.
+edits and typed reads without an intermediate object projection.
 
 `ConformantDocument` is a separate class with infallible reads and no setters.
 `asDocument()` creates an independent editable owner. `intoDocument()` consumes the

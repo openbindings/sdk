@@ -174,11 +174,11 @@ export async function editorPage(browser, url) {
     await page.close();
   }
 }
-async function removedListeners(page, draft) {
-  const result = await page.evaluate((draft) => {
+async function removedListeners(page, input) {
+  const result = await page.evaluate((input) => {
     const source = document.querySelector("#source"),
       output = document.querySelector("output");
-    source.value = draft;
+    source.value = input;
     output.textContent = "after editor teardown";
     const submitUnclaimed = document
       .querySelector("form")
@@ -187,10 +187,10 @@ async function removedListeners(page, draft) {
     document.querySelector('[data-action="correct"]').click();
     return {
       submitUnclaimed,
-      sourceUnchanged: source.value === draft,
+      sourceUnchanged: source.value === input,
       outputUnchanged: output.textContent === "after editor teardown",
     };
-  }, draft);
+  }, input);
   assert.deepEqual(result, {
     submitUnclaimed: true,
     sourceUnchanged: true,

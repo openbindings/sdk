@@ -40,7 +40,7 @@ under `# Errors`; validation outcomes (including `DocumentValidation`) and confi
 
 | Public item | Contract |
 | --- | --- |
-| `Document::parse`, `Document::from_json` | Admit exact JSON without a conformance claim, including broken drafts. |
+| `Document::parse`, `Document::from_json` | Admit exact JSON without a conformance claim, including malformed documents. |
 | `Document::new` | Create an empty OBI declaring the authoring version. |
 | `Document::set`, `remove`, `edit(&[Edit])` | Require a mutable borrow. One atomic splice and parse per batch, exact untouched bytes, compact insertions, default JSON limits. |
 | Typed field and part setters | Edit descriptions, names, versions, operation schemas and typed operations, bindings, sources, dependencies and examples. Map setters support bulk construction. |
@@ -69,7 +69,7 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 A `parseJson` value used in an edit preserves decimal spelling. Views retain their
 revision independently, so editing an owner does not change an acquired view or
 proof. `EditError.code` reports stable editing refusals; typed-part input errors
-also expose `draftPointer` without inventing source coordinates.
+also expose `partPointer` without inventing source coordinates.
 
 ## Rust value-contract conveniences
 
@@ -340,8 +340,8 @@ Rust editors use the atomic `Document` methods described above. `EditError::code
 returns stable identifiers: `invalid-pointer`, `missing-parent`, `missing-value`,
 `not-container`, `duplicate-members`, `overlapping-edits`, `field-collision`,
 `serialization`, or parser/admission codes such as `byte-limit`, `node-limit` and
-`depth-limit`. `EditError::Authoring` retains the typed part's logical
-`draft_pointer`; `InterpretationError::source_location` addresses current exact
+`depth-limit`. `EditError::Authoring` retains a logical pointer into the typed
+part input; `InterpretationError::source_location` addresses current exact
 source bytes. These coordinates serve different purposes.
 
 Document findings deduplicate explanations for the same source occurrence

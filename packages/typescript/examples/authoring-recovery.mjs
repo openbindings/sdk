@@ -1,6 +1,6 @@
 // Initialize @openbindings/sdk for your host before calling this editor example.
 import { Document, EditError } from "@openbindings/sdk";
-export function recoverAuthoringDraft() {
+export function recoverPartSerialization() {
   const operation = { additionalFields: { input: {} } };
   const document = Document.create();
   try {
@@ -13,7 +13,7 @@ export function recoverAuthoringDraft() {
     }
     if (
       first?.code !== "field-collision" ||
-      first.draftPointer !== "/operations/run/additionalFields/input"
+      first.partPointer !== "/operations/run/additionalFields/input"
     )
       throw new Error("Expected the example's field collision.");
     // Focus the caller's typed part field; no message parsing or byte offset.
@@ -22,7 +22,7 @@ export function recoverAuthoringDraft() {
     const checked = document.validate();
     if (checked.status !== "conformant")
       throw new Error("Conformance was not established.");
-    return { focus: first.draftPointer, document: checked.document };
+    return { focus: first.partPointer, document: checked.document };
   } finally {
     document.dispose();
   }

@@ -31,19 +31,19 @@ test("Rust proof transfer is single-use and unavailable to parsed or forged hand
     '{"openbindings":"0.2.0"}',
     '{"openbindings":"0.3.0","operations":{}}',
   ]) {
-    const draft = bridge.WasmDocument.parseBytes(
+    const unproven = bridge.WasmDocument.parseBytes(
       new TextEncoder().encode(source),
     );
-    const result = draft.validate();
+    const result = unproven.validate();
     assert.equal(result.takeConformant(), undefined);
     assert.equal(result.takeConformant(), undefined);
     result.free();
-    draft.free();
+    unproven.free();
   }
-  const draft = sdk.Document.parse(text).value;
-  assert.equal(typeof draft.valueContracts, "undefined");
+  const unproven = sdk.Document.parse(text).value;
+  assert.equal(typeof unproven.valueContracts, "undefined");
   assert.throws(() =>
-    sdk.ConformantDocument.prototype.valueContracts.call(draft),
+    sdk.ConformantDocument.prototype.valueContracts.call(unproven),
   );
   assert.throws(() =>
     sdk.ConformantDocument.prototype.valueContracts.call(
@@ -58,7 +58,7 @@ test("Rust proof transfer is single-use and unavailable to parsed or forged hand
   });
   assert.equal(sdk.Document.prototype.validate.call(invalid).status, "report");
   invalid.dispose();
-  draft.dispose();
+  unproven.dispose();
 });
 
 test("raw document receiver substitution rechecks proof at every authority entry", () => {
@@ -229,8 +229,8 @@ test("top-level editor reads preserve field-local errors, exact text and absence
 });
 
 test("validated text and retained reads preserve exact UTF-16 and presence", () => {
-  const draft = sdk.Document.parse(text).value;
-  const result = draft.validate();
+  const unproven = sdk.Document.parse(text).value;
+  const result = unproven.validate();
   assert.equal(result.status, "conformant");
   const proof = result.document;
   assert.equal(proof.openbindings, "0.2.0");
@@ -258,7 +258,7 @@ test("validated text and retained reads preserve exact UTF-16 and presence", () 
   example.dispose();
   operation.dispose();
   proof.dispose();
-  draft.dispose();
+  unproven.dispose();
   assert.equal(input.text, "true");
   assert.equal(output.text, "false");
   assert.equal(exampleInput.text, "null");

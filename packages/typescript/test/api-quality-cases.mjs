@@ -321,7 +321,7 @@ export async function apiQualityCases(sdk, http) {
     check(
       editFailure instanceof sdk.EditError &&
         editFailure.code === "depth-limit" &&
-        editFailure.draftPointer === null,
+        editFailure.partPointer === null,
       "real encoded edit limit",
     );
     check(

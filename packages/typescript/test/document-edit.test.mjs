@@ -177,13 +177,14 @@ test("coalesced insertions, escaped keys and all typed part setters construct on
     () => document.setOperation("bad/~", { additionalFields: { input: true } }),
     (e) =>
       e.code === "field-collision" &&
-      e.draftPointer === "/operations/bad~1~0/additionalFields/input",
+      e.partPointer === "/operations/bad~1~0/additionalFields/input" &&
+      !Object.hasOwn(e, "draftPointer"),
   );
   assert.deepEqual(document.toBytes(), before);
   document.dispose();
 });
 
-test("duplicate drafts remain inspectable and immutable until replaced by a distinct document", () => {
+test("duplicate documents remain inspectable and immutable until replaced by a distinct document", () => {
   const text = '{"openbindings":"0.2.0","operations":{},"x":1,"x":2}',
     document = open(text);
   assert.equal(document.validate().status, "report");
@@ -218,7 +219,7 @@ test("typed text setters preserve lone UTF-16 and source positions follow the cu
   document.dispose();
 });
 
-test("released edited owners and consumed proofs release arenas with no aggregate draft registry", () => {
+test("released edited owners and consumed proofs release their arenas", () => {
   const warm = open(text);
   warm.validate().document.dispose();
   warm.dispose();

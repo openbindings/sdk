@@ -130,19 +130,21 @@ async fn authoring_preserves_partial_inventory_and_document_repair_evidence() {
         AuthoringOutcome::Ready(_)
     ));
     // A caller can edit framing after inspection. Retain the resulting validation
-    // and editable draft if that edit makes the final OBI invalid.
+    // and editable document if that edit makes the final OBI invalid.
     let mut edited = selected;
     edited.operation = Some(openbindings::Operation {
         input: Some(JsonValue::parse("42").unwrap()),
         ..Default::default()
     });
-    let AuthoringOutcome::NeedsRepair { draft, validation } =
-        author_target(&source, edited).unwrap()
+    let AuthoringOutcome::NeedsRepair {
+        document,
+        validation,
+    } = author_target(&source, edited).unwrap()
     else {
         panic!("expected repair evidence")
     };
     assert_eq!(
-        draft
+        document
             .value()
             .at("/operations/chosen.operation/input")
             .unwrap()

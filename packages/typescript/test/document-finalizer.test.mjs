@@ -55,7 +55,7 @@ function deliver(record) {
   return true;
 }
 test("finalizing an editable document preserves separately acquired exact owners", () => {
-  // DOC-1: retiring draft owner graphs retains independent leaf finalizers.
+  // DOC-1: independently acquired leaves keep their own finalizers.
   const baseline = testing.liveStorageOwners();
   const document = sdk.Document.parse(
     '{"openbindings":"0.2.0","operations":{"run":{"input":9007199254740993}},"schemas":{"removed":false}}',

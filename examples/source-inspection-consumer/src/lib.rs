@@ -154,7 +154,7 @@ pub enum AuthoringOutcome {
     Partial(SourceInspection),
     Empty,
     NeedsRepair {
-        draft: Box<Document>,
+        document: Box<Document>,
         validation: openbindings::DocumentValidation,
     },
 }
@@ -163,14 +163,14 @@ pub enum AuthoringOutcome {
 #[derive(Debug)]
 pub enum AuthoringFailure {
     Inspection(InspectionError),
-    Draft(openbindings::EditError),
+    Edit(openbindings::EditError),
     Version(openbindings::VersionRefusal),
 }
 impl std::fmt::Display for AuthoringFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Inspection(error) => error.fmt(f),
-            Self::Draft(error) => error.fmt(f),
+            Self::Edit(error) => error.fmt(f),
             Self::Version(error) => error.fmt(f),
         }
     }
@@ -179,7 +179,7 @@ impl std::error::Error for AuthoringFailure {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(match self {
             Self::Inspection(error) => error,
-            Self::Draft(error) => error,
+            Self::Edit(error) => error,
             Self::Version(error) => error,
         })
     }
@@ -208,14 +208,14 @@ pub fn author_target(
     source: &Source,
     target: BindableTarget,
 ) -> Result<AuthoringOutcome, AuthoringFailure> {
-    let mut draft = Document::new();
-    draft
+    let mut document = Document::new();
+    document
         .set_operation("chosen.operation", &target.operation.unwrap_or_default())
-        .map_err(AuthoringFailure::Draft)?;
-    draft
+        .map_err(AuthoringFailure::Edit)?;
+    document
         .set_source("chosen.source", source)
-        .map_err(AuthoringFailure::Draft)?;
-    draft
+        .map_err(AuthoringFailure::Edit)?;
+    document
         .set_binding(
             "chosen.binding",
             &target
@@ -223,15 +223,15 @@ pub fn author_target(
                 .bind("chosen.operation", "chosen.source")
                 .map_err(AuthoringFailure::Inspection)?,
         )
-        .map_err(AuthoringFailure::Draft)?;
-    let validation = draft.validate().map_err(AuthoringFailure::Version)?;
+        .map_err(AuthoringFailure::Edit)?;
+    let validation = document.validate().map_err(AuthoringFailure::Version)?;
     if validation.conformant().is_none() {
         return Ok(AuthoringOutcome::NeedsRepair {
-            draft: Box::new(draft),
+            document: Box::new(document),
             validation,
         });
     }
-    Ok(AuthoringOutcome::Ready(draft.value().clone()))
+    Ok(AuthoringOutcome::Ready(document.value().clone()))
 }
 
 #[cfg(all(target_arch = "wasm32", feature = "wasm-probe"))]

@@ -1,4 +1,4 @@
-// Fixture construction through the public part setters. The SDK has no whole-document draft.
+// Fixture construction through the public field and part setters.
 export function constructDocument(sdk, fields) {
   const document = sdk.Document.create();
   try {

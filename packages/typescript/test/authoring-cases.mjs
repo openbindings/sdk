@@ -9,10 +9,10 @@ export async function runCases(sdk, ids, http) {
       if (JSON.stringify(actual) !== JSON.stringify(expected))
         throw Error(label);
     };
-    const bad = (label, draft, code, draftPointer) => {
+    const bad = (label, input, code, partPointer) => {
       let failure;
       try {
-        constructDocument(sdk, draft).dispose();
+        constructDocument(sdk, input).dispose();
       } catch (error) {
         failure = error;
       }
@@ -22,7 +22,7 @@ export async function runCases(sdk, ids, http) {
         true,
       );
       equal(label + ": code", failure.code, code);
-      equal(label + ": draft pointer", failure.draftPointer, draftPointer);
+      equal(label + ": input pointer", failure.partPointer, partPointer);
       equal(label + ": no byte location", "byteOffset" in failure, false);
       equal(label + ": explained", failure.message.length > 0, true);
       return failure;
@@ -298,7 +298,7 @@ export async function runCases(sdk, ids, http) {
         }
         case "A12": {
           const secret = "opaque-secret-never-in-diagnostic";
-          const draft = {
+          const input = {
             operations: { run: {} },
             sources: {
               s: {
@@ -310,7 +310,7 @@ export async function runCases(sdk, ids, http) {
           };
           const diagnostic = bad(
             "editor",
-            draft,
+            input,
             "field-collision",
             "/sources/s/additionalFields/kind",
           );
@@ -319,14 +319,14 @@ export async function runCases(sdk, ids, http) {
             JSON.stringify(diagnostic).includes(secret),
             false,
           );
-          const segments = diagnostic.draftPointer
+          const segments = diagnostic.partPointer
             .slice(1)
             .split("/")
             .map((x) => x.replace(/~1/g, "/").replace(/~0/g, "~"));
-          let parent = draft;
+          let parent = input;
           for (const key of segments.slice(0, -1)) parent = parent[key];
           delete parent[segments.at(-1)];
-          const d = good(draft);
+          const d = good(input);
           const v = d.validate();
           equal("editor retry", v.status, "conformant");
           v.document.dispose();
@@ -334,8 +334,8 @@ export async function runCases(sdk, ids, http) {
           break;
         }
         case "P01": {
-          const draft = { operations: { run: {} } };
-          const d = good(draft);
+          const input = { operations: { run: {} } };
+          const d = good(input);
           const v = d.validate();
           equal("narrow", v.status, "conformant");
           const retained = v.document.retain();
@@ -344,7 +344,7 @@ export async function runCases(sdk, ids, http) {
           const publication = new http.DiscoveryPublication(retained);
           const changed = retained.toBytes();
           changed.fill(0);
-          draft.operations = {};
+          input.operations = {};
           retained.dispose();
           d.dispose();
           const response = publication.respond(
@@ -462,8 +462,8 @@ export async function runCases(sdk, ids, http) {
           }
           equal("depth limit code", limited.code, "authoring-limit");
           equal(
-            "depth limit draft path",
-            limited.draftPointer.startsWith("/sources/s/content/0"),
+            "depth limit input path",
+            limited.partPointer.startsWith("/sources/s/content/0"),
             true,
           );
           break;

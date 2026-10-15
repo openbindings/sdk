@@ -231,7 +231,7 @@ export interface ValueProblem {
   /** Optional schema facts. Absent means disabled or unavailable. */
   details?: ValueProblemDetails;
 }
-/** Closed selected-schema result partition: satisfies, fails, undefined, or no-verdict. An established failure may have incomplete diagnostics; problemsComplete does not weaken its verdict. Neither satisfies nor fails proves normative OBI conformance of the surrounding draft. */
+/** Closed selected-schema result partition: satisfies, fails, undefined, or no-verdict. An established failure may have incomplete diagnostics; problemsComplete does not weaken its verdict. Neither satisfies nor fails proves normative OBI conformance of the surrounding document. */
 export type ValueOutcome =
   | {
       /** Semantic result discriminant; narrow before reading branch-specific data. */
@@ -1252,17 +1252,17 @@ export class Document extends DocumentReads {
   /** Set a description on an existing operation, escaping its key. */
   setOperationDescription(key: string, value: string): void {
     this.set(
-      draftPath("/operations", key) + "/description",
+      pointerChild("/operations", key) + "/description",
       checkedText(value),
     );
   }
   /** Set an existing operation's input schema. Absence and explicit null remain distinct. */
   setOperationInput(key: string, value: JsonInput): void {
-    this.set(draftPath("/operations", key) + "/input", value);
+    this.set(pointerChild("/operations", key) + "/input", value);
   }
   /** Set an existing operation's output schema. */
   setOperationOutput(key: string, value: JsonInput): void {
-    this.set(draftPath("/operations", key) + "/output", value);
+    this.set(pointerChild("/operations", key) + "/output", value);
   }
   private part(
     namespace: string,
@@ -1276,7 +1276,7 @@ export class Document extends DocumentReads {
     const object = authorObject(
       value,
       kind,
-      draftPath("/" + namespace, key),
+      pointerChild("/" + namespace, key),
       context,
     );
     this.encoded(object, context, { namespace: "/" + namespace, key });
@@ -1287,7 +1287,7 @@ export class Document extends DocumentReads {
     const object = Object.fromEntries(
       ownEntries(values, "/" + namespace).map(([key, value]) => [
         key,
-        authorObject(value, kind, draftPath("/" + namespace, key), context),
+        authorObject(value, kind, pointerChild("/" + namespace, key), context),
       ]),
     );
     this.encoded(
@@ -1298,40 +1298,40 @@ export class Document extends DocumentReads {
       "}]",
     );
   }
-  /** Set a whole typed operation, creating its namespace if absent. Collisions and invalid typed input throw EditError with a logical draftPointer. */
-  setOperation(key: string, value: OperationDraft): void {
+  /** Set a whole typed operation, creating its namespace if absent. Collisions and invalid typed input throw EditError with a logical partPointer. */
+  setOperation(key: string, value: Operation): void {
     this.part("operations", key, "operation", value);
   }
   /** Commit a whole operations map once, for bulk synthesis. */
-  setOperations(value: Readonly<Record<string, OperationDraft>>): void {
+  setOperations(value: Readonly<Record<string, Operation>>): void {
     this.parts("operations", "operation", value);
   }
   /** Set a whole typed binding, creating its namespace if absent. */
-  setBinding(key: string, value: BindingDraft): void {
+  setBinding(key: string, value: Binding): void {
     this.part("bindings", key, "binding", value);
   }
   /** Commit a whole bindings map once. */
-  setBindings(value: Readonly<Record<string, BindingDraft>>): void {
+  setBindings(value: Readonly<Record<string, Binding>>): void {
     this.parts("bindings", "binding", value);
   }
   /** Set a whole typed source, creating its namespace if absent. */
-  setSource(key: string, value: SourceDraft): void {
+  setSource(key: string, value: Source): void {
     this.part("sources", key, "source", value);
   }
   /** Commit a whole sources map once. */
-  setSources(value: Readonly<Record<string, SourceDraft>>): void {
+  setSources(value: Readonly<Record<string, Source>>): void {
     this.parts("sources", "source", value);
   }
   /** Set a whole typed dependency, creating its namespace if absent. */
-  setDependency(key: string, value: DependencyDraft): void {
+  setDependency(key: string, value: Dependency): void {
     this.part("dependencies", key, "dependency", value);
   }
   /** Commit a whole dependencies map once. */
-  setDependencies(value: Readonly<Record<string, DependencyDraft>>): void {
+  setDependencies(value: Readonly<Record<string, Dependency>>): void {
     this.parts("dependencies", "dependency", value);
   }
   /** Set a typed example on an existing operation, creating its examples map if absent. */
-  setExample(operation: string, key: string, value: ExampleDraft): void {
+  setExample(operation: string, key: string, value: Example): void {
     scalar(operation);
     scalar(key);
     handle(this);
@@ -1339,11 +1339,11 @@ export class Document extends DocumentReads {
     const object = authorObject(
       value,
       "example",
-      draftPath(draftPath("/operations", operation) + "/examples", key),
+      pointerChild(pointerChild("/operations", operation) + "/examples", key),
       context,
     );
     this.encoded(object, context, {
-      namespace: draftPath("/operations", operation) + "/examples",
+      namespace: pointerChild("/operations", operation) + "/examples",
       key,
     });
   }
@@ -1375,16 +1375,16 @@ function checkPartField(
       )) {
         if (name === "length") continue;
         if (!("value" in d))
-          throw new DraftFailure(
+          throw new PartSerializationError(
             "accessor-property",
-            draftPath(path, name),
+            pointerChild(path, name),
             "Typed lists cannot contain accessors.",
           );
         if (typeof d.value !== "string") valid = false;
       }
   }
   if (!valid)
-    throw new DraftFailure(
+    throw new PartSerializationError(
       "invalid-authoring-object",
       path,
       "Field does not have its typed representation.",
@@ -1831,14 +1831,14 @@ export class ValueContract extends Managed {
       try {
         text = encodeOrdinary(value, { origins: new WeakMap() });
       } catch (error) {
-        if (!(error instanceof DraftFailure)) throw error;
+        if (!(error instanceof PartSerializationError)) throw error;
         return {
           outcome: "input-error",
           error: {
             code: (error.code === "authoring-limit"
               ? "input-limit"
               : error.code) as ValueAdmissionFailure["code"],
-            instancePointer: error.draftPointer,
+            instancePointer: error.partPointer,
             message: error.message,
           },
         };
@@ -2361,7 +2361,7 @@ function encodeOrdinary(
 ): string {
   const childPath = (owner: object, name: string, parent: string) =>
     authoring
-      ? (authoring.origins.get(owner)?.get(name) ?? draftPath(parent, name))
+      ? (authoring.origins.get(owner)?.get(name) ?? pointerChild(parent, name))
       : "";
   function reject(
     code: AuthoringErrorCode,
@@ -2369,7 +2369,7 @@ function encodeOrdinary(
     message: string,
     limit = false,
   ): never {
-    if (authoring) throw new DraftFailure(code, pointer, message);
+    if (authoring) throw new PartSerializationError(code, pointer, message);
     if (limit) throw new RangeError(message);
     throw new TypeError(message);
   }
@@ -2523,7 +2523,7 @@ function encodeOrdinary(
 }
 
 /** Editable normative operation fields. Typed optional undefined means absence; opaque JSON fields preserve explicit null and reject undefined. The edited document still requires normative assessment and separate schema preparation. */
-export interface OperationDraft {
+export interface Operation {
   /** Optional operation description. */
   description?: string;
   /** Optional deprecation annotation. */
@@ -2537,34 +2537,34 @@ export interface OperationDraft {
   /** Optional exact output schema; absence differs from present false or null. */
   output?: JsonInput;
   /** Named exact example instances. */
-  examples?: Readonly<Record<string, ExampleDraft>>;
-  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
+  examples?: Readonly<Record<string, Example>>;
+  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a part serialization error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
 /** Exact input/output example instances, not schemas or proof that an operation accepts them. */
-export interface ExampleDraft {
+export interface Example {
   /** Optional example explanation. */
   description?: string;
   /** Optional exact input instance, including explicit null. */
   input?: JsonInput;
   /** Optional exact output instance, including explicit null. */
   output?: JsonInput;
-  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
+  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a part serialization error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
 /** Binding source vocabulary; kind-specific content is exact opaque JSON and is never executed or acquired by core. */
-export interface SourceDraft {
+export interface Source {
   /** Source-kind identifier selecting external interpretation. */
   kind: string;
   /** Optional exact kind-specific content; not interpreted by core. */
   content?: JsonInput;
   /** Optional source explanation. */
   description?: string;
-  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
+  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a part serialization error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
 /** Link from an operation to a source with opaque kind-specific content and annotations. Core does not rank or invoke bindings. */
-export interface BindingDraft {
+export interface Binding {
   /** Referenced primary operation name. */
   operation: string;
   /** Referenced source key. */
@@ -2579,24 +2579,24 @@ export interface BindingDraft {
   deprecated?: boolean;
   /** Optional binding explanation. */
   description?: string;
-  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
+  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a part serialization error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
 /** Dependency declaration with an optional exact source-kind filter. Absence accepts all; a conformant present filter must be nonempty. */
-export interface DependencyDraft {
+export interface Dependency {
   /** Referenced operation name. */
   operation: string;
-  /** Exact permitted source kinds; absence accepts all. An empty array is representable for draft inspection but fails normative assessment. */
+  /** Exact permitted source kinds; absence accepts all. An empty array is representable for inspection but fails normative assessment. */
   kinds?: readonly string[];
   /** Optional dependency explanation. */
   description?: string;
-  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
+  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a part serialization error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
 /**
- * Expected-invalid-draft codes for this package. This is a closed TypeScript union; later releases may add codes. Messages explain; codes identify.
+ * Typed part serialization refusal codes for this package. This is a closed TypeScript union; later releases may add codes. Messages explain; codes identify.
  * - field-collision: additionalFields shadows a typed member.
- * - duplicate-field: a draft represents the same emitted field more than once.
+ * - duplicate-field: an input represents the same emitted field more than once.
  * - non-finite-number: NaN or infinity cannot enter JSON.
  * - unsupported-value: undefined, bigint, function or symbol appears in opaque JSON.
  * - sparse-array / array-property: an array has holes or extra named properties.
@@ -2604,9 +2604,9 @@ export interface DependencyDraft {
  * - non-plain-object: an object has a custom prototype.
  * - accessor-property / non-enumerable-property / symbol-key: admission would require
  *   executing or silently dropping a property, so the value is refused.
- * - invalid-authoring-object: a typed draft container or known field is not representable.
+ * - invalid-authoring-object: a typed part container or known field is not representable.
  * - authoring-limit: encoded output exceeds a finite character/byte/node/depth limit.
- * A draftPointer addresses the caller's draft, including additionalFields, rather
+ * A partPointer addresses the caller's input, including additionalFields, rather
  * than the emitted JSON. Initialization/owner misuse and unexpected exceptions throw.
  */
 type AuthoringErrorCode =
@@ -2623,22 +2623,22 @@ type AuthoringErrorCode =
   | "symbol-key"
   | "invalid-authoring-object"
   | "authoring-limit";
-/** An atomic edit was refused. code is stable; draftPointer locates a typed part input when available. The document remains unchanged. */
+/** An atomic edit was refused. code is stable; partPointer locates a typed part input when available. The document remains unchanged. */
 export class EditError extends SdkError {
   /** Logical pointer into a typed part input; null when unavailable. */
-  readonly draftPointer: string | null;
+  readonly partPointer: string | null;
   /** Construct an edit refusal without inventing source byte coordinates. */
   constructor(
     code: string,
     message: string,
-    draftPointer: string | null = null,
+    partPointer: string | null = null,
   ) {
     super(code, message);
     this.name = "EditError";
-    this.draftPointer = draftPointer;
+    this.partPointer = partPointer;
   }
 }
-class DraftFailure extends EditError {
+class PartSerializationError extends EditError {
   constructor(
     code: AuthoringErrorCode,
     pointer: string | null,
@@ -2650,7 +2650,7 @@ class DraftFailure extends EditError {
 interface AuthorContext {
   origins: WeakMap<object, Map<string, string>>;
 }
-function draftPath(parent: string, name: string): string {
+function pointerChild(parent: string, name: string): string {
   return parent + "/" + name.replace(/~/g, "~0").replace(/\//g, "~1");
 }
 type AuthorKind = "operation" | "example" | "source" | "binding" | "dependency";
@@ -2691,7 +2691,7 @@ function ownEntries(object: unknown, pointer?: string): [string, unknown][] {
     message: string,
   ): never {
     if (pointer === undefined) throw new TypeError(message);
-    throw new DraftFailure(code, at, message);
+    throw new PartSerializationError(code, at, message);
   }
   if (
     !object ||
@@ -2715,7 +2715,7 @@ function ownEntries(object: unknown, pointer?: string): [string, unknown][] {
       if (!d.enumerable || !("value" in d))
         invalid(
           "value" in d ? "non-enumerable-property" : "accessor-property",
-          draftPath(pointer ?? "", key),
+          pointerChild(pointer ?? "", key),
           "Authoring requires enumerable data properties.",
         );
       return [key, d.value];
@@ -2732,22 +2732,22 @@ function authorObject(
   const origins = new Map<string, string>();
   context.origins.set(out, origins);
   for (const [key, value] of ownEntries(object, pointer)) {
-    const fieldPath = draftPath(pointer, key);
+    const fieldPath = pointerChild(pointer, key);
     if (key === "additionalFields") {
       if (value === undefined) continue;
       for (const [name, content] of ownEntries(value, fieldPath)) {
-        const contentPath = draftPath(fieldPath, name);
+        const contentPath = pointerChild(fieldPath, name);
         if (typedFields[kind].includes(name))
-          throw new DraftFailure(
+          throw new PartSerializationError(
             "field-collision",
             contentPath,
             "Additional field shadows a typed member.",
           );
         if (Object.hasOwn(out, name))
-          throw new DraftFailure(
+          throw new PartSerializationError(
             "duplicate-field",
             contentPath,
-            "The draft supplies the same document member twice.",
+            "The input supplies the same member twice.",
           );
         out[name] = content as JsonInput;
         origins.set(name, contentPath);
@@ -2764,26 +2764,26 @@ function authorObject(
       kind === "operation" && key === "examples" ? "example" : undefined;
     checkPartField(kind, key, value, fieldPath);
     if (Object.hasOwn(out, key))
-      throw new DraftFailure(
+      throw new PartSerializationError(
         "duplicate-field",
         fieldPath,
-        "The draft supplies the same document member twice.",
+        "The input supplies the same member twice.",
       );
     origins.set(key, fieldPath);
     out[key] = child
       ? Object.fromEntries(
           ownEntries(value, fieldPath).map(([name, v]) => [
             name,
-            authorObject(v, child, draftPath(fieldPath, name), context),
+            authorObject(v, child, pointerChild(fieldPath, name), context),
           ]),
         )
       : (value as JsonInput);
   }
   for (const key of requiredFields[kind]) {
     if (!Object.hasOwn(out, key))
-      throw new DraftFailure(
+      throw new PartSerializationError(
         "invalid-authoring-object",
-        draftPath(pointer, key),
+        pointerChild(pointer, key),
         "Required typed field is absent.",
       );
   }

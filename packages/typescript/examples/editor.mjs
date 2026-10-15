@@ -1,7 +1,7 @@
 import { Document } from "../dist/index.js";
 import { createWorkerView } from "./worker-view.mjs";
 
-export const exampleDraft = `{
+export const editorDocument = `{
   "openbindings": "0.2.0",
   "operations": {
     "lookup": {
@@ -164,7 +164,7 @@ export async function mountEditor(root) {
     correction = root.querySelector('[data-action="correct"]'),
     locate = root.querySelector('[data-action="locate"]'),
     output = root.querySelector("output");
-  source.value = exampleDraft;
+  source.value = editorDocument;
   let closed = false,
     lastSource,
     lastLocation;

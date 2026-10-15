@@ -13,8 +13,8 @@ fn exact(text: &str) -> JsonValue {
     JsonValue::parse(text).expect("example fixture")
 }
 fn author() -> Result<(Document, Document), Box<dyn std::error::Error>> {
-    let mut draft = Document::new();
-    draft.set_operation(
+    let mut editable = Document::new();
+    editable.set_operation(
         "run",
         &Operation {
             aliases: Some(vec!["execute".into()]),
@@ -31,8 +31,8 @@ fn author() -> Result<(Document, Document), Box<dyn std::error::Error>> {
             ..Default::default()
         },
     )?;
-    draft.set_operation("no_contract", &Operation::default())?;
-    draft.set_sources(&BTreeMap::from([(
+    editable.set_operation("no_contract", &Operation::default())?;
+    editable.set_sources(&BTreeMap::from([(
         "local".into(),
         Source {
             kind: "https://example.invalid/raw".into(),
@@ -40,7 +40,7 @@ fn author() -> Result<(Document, Document), Box<dyn std::error::Error>> {
             ..Default::default()
         },
     )]))?;
-    draft.set_bindings(&BTreeMap::from([(
+    editable.set_bindings(&BTreeMap::from([(
         "binding".into(),
         Binding {
             operation: "run".into(),
@@ -50,7 +50,7 @@ fn author() -> Result<(Document, Document), Box<dyn std::error::Error>> {
             ..Default::default()
         },
     )]))?;
-    draft.set_dependencies(&BTreeMap::from([(
+    editable.set_dependencies(&BTreeMap::from([(
         "dep".into(),
         Dependency {
             operation: "run".into(),
@@ -58,14 +58,14 @@ fn author() -> Result<(Document, Document), Box<dyn std::error::Error>> {
             ..Default::default()
         },
     )]))?;
-    draft.set("/schemas", &exact(r#"{"boolean":true}"#))?;
-    draft.set("/x-application", &exact(r#"{"data":9007199254740993}"#))?;
-    let document = draft.clone();
+    editable.set("/schemas", &exact(r#"{"boolean":true}"#))?;
+    editable.set("/x-application", &exact(r#"{"data":9007199254740993}"#))?;
+    let document = editable.clone();
     assert!(document.validate()?.conformant().is_some());
-    let serialized = draft.to_bytes();
+    let serialized = editable.to_bytes();
     let round = Document::parse(serialized)?;
     assert_eq!(document.value().semantic_eq(round.value()), Some(true));
-    Ok((draft, document))
+    Ok((editable, document))
 }
 fn inspect() -> Result<(), Box<dyn std::error::Error>> {
     let broken = validate_document("{broken")?;
@@ -144,7 +144,7 @@ fn value_contracts(document: &Document) -> Result<(), Box<dyn std::error::Error>
 }
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut draft, document) = author()?;
+    let (mut editable, document) = author()?;
     inspect()?;
     let OperationSelection::Found(operation) = document.resolve_operation("execute")? else {
         return Err("execute did not resolve".into());
@@ -164,7 +164,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("conformance established");
     let original = valid.to_bytes().to_vec();
     let publication = Publication::new(&valid, PublicationOptions::default())?;
-    draft.set_operations(&BTreeMap::new())?;
+    editable.set_operations(&BTreeMap::new())?;
     assert_eq!(
         publication.respond("GET", WELL_KNOWN_PATH).body.as_ref(),
         original

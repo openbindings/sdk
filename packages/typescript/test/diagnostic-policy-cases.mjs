@@ -104,7 +104,7 @@ export function diagnosticPolicyCases(sdk) {
       duplicateError.location === undefined,
       "unlocated broad refusal remains unlocated",
     );
-    const draft = document({
+    const input = document({
       openbindings: "0.2.0",
       description: 42,
       operations: {
@@ -115,15 +115,15 @@ export function diagnosticPolicyCases(sdk) {
       },
     });
     check(
-      draft.validate().report.conclusion === "non-conformant",
-      "draft metadata remains nonconformant",
+      input.validate().report.conclusion === "non-conformant",
+      "document metadata remains nonconformant",
     );
     check(
-      draft.validate().status === "report",
+      input.validate().status === "report",
       "nonconformant metadata cannot construct contracts",
     );
     check(
-      draft.resolveOperation("shared").status === "ambiguous",
+      input.resolveOperation("shared").status === "ambiguous",
       "parsed ambiguity remains visible",
     );
     const ctx = own(

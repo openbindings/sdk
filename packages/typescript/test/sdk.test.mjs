@@ -82,7 +82,7 @@ test("author every normative object; absence/null and exact opaque values surviv
     () => edited.setOperation("run", { additionalFields: { input: {} } }),
     (e) =>
       e.code === "field-collision" &&
-      e.draftPointer === "/operations/run/additionalFields/input",
+      e.partPointer === "/operations/run/additionalFields/input",
   );
   assert.throws(
     () =>
@@ -91,7 +91,7 @@ test("author every normative object; absence/null and exact opaque values surviv
       }),
     (e) =>
       e.code === "unsupported-value" &&
-      e.draftPointer === "/operations/run/additionalFields/x-missing",
+      e.partPointer === "/operations/run/additionalFields/x-missing",
   );
   assert.throws(
     () => edited.setOperation("run", { description: null }),

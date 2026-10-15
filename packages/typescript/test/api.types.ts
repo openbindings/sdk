@@ -184,7 +184,7 @@ function roundOneTypes(document: Document) {
   for (const metadata of document.operations) {
     metadata.tags satisfies readonly string[] | null;
     metadata.deprecated satisfies boolean | null;
-    // @ts-expect-error Immutable metadata is not editable draft data.
+    // @ts-expect-error Immutable metadata is not editable input data.
     metadata.tags?.push("x");
   }
   using source = document.source("a");
@@ -340,3 +340,39 @@ function exhaustiveValueOutcome(value: ValueOutcome): string {
     }
   }
 }
+
+// DOC-1: part names match the specification vocabulary, with no retired aliases.
+import type {
+  Operation,
+  Binding,
+  Source,
+  Dependency,
+  Example,
+} from "../dist/index.js";
+function namedParts(document: Document) {
+  const example: Example = { input: null };
+  const operation: Operation = { input: true, examples: { sample: example } };
+  const source: Source = { kind: "custom", content: null };
+  const binding: Binding = { operation: "run", source: "local" };
+  const dependency: Dependency = { operation: "run" };
+  document.setOperation("run", operation);
+  document.setBinding("binding", binding);
+  document.setSource("local", source);
+  document.setDependency("dependency", dependency);
+  document.setExample("run", "sample", example);
+}
+void namedParts;
+// @ts-expect-error retired part name has no alias
+import type { OperationDraft } from "../dist/index.js";
+// @ts-expect-error retired part name has no alias
+import type { BindingDraft } from "../dist/index.js";
+// @ts-expect-error retired part name has no alias
+import type { SourceDraft } from "../dist/index.js";
+// @ts-expect-error retired part name has no alias
+import type { DependencyDraft } from "../dist/index.js";
+// @ts-expect-error retired part name has no alias
+import type { ExampleDraft } from "../dist/index.js";
+declare const partError: import("../dist/index.js").EditError;
+partError.partPointer satisfies string | null;
+// @ts-expect-error retired pointer name has no alias
+partError.draftPointer;
