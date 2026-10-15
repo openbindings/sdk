@@ -4,14 +4,14 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 fn prepare(schema: Value, resources: ResourceSet) -> ValueContractPreparation {
-    let document = ParsedDocument::parse(
+    let document = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
     .unwrap();
     document
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(DefaultEvaluator::new()), resources)
         .prepare("op", Direction::Input)

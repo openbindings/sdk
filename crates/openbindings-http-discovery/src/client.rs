@@ -1,7 +1,7 @@
 use crate::CancellationToken;
 use crate::*;
 use openbindings::{
-    Conformance, DocumentValidation, ValidatedDocument, VersionRefusal, validate_document,
+    Conformance, Conformant, Document, DocumentValidation, VersionRefusal, validate_document,
 };
 use serde::Serialize;
 use std::{
@@ -492,7 +492,7 @@ pub enum DiscoveryOutcome {
     /// A complete bounded 200 body established normative document conformance.
     Found {
         #[doc = "Retained immutable proof for the exact acquired body."]
-        document: ValidatedDocument,
+        document: Conformant<Document>,
     },
     /// A complete 200 body established at least one normative violation, including invalid JSON.
     NonConformant {
@@ -561,7 +561,7 @@ pub fn validate_body(body: &[u8]) -> DiscoveryOutcome {
         Ok(validation) => match validation.report().conclusion {
             Conformance::Conformant => DiscoveryOutcome::Found {
                 document: validation
-                    .validated()
+                    .conformant()
                     .expect("conformant validation has a document"),
             },
             Conformance::NonConformant => DiscoveryOutcome::NonConformant { validation },

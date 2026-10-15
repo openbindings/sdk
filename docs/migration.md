@@ -15,25 +15,26 @@ the legacy implementation; a registry install alone does not select this API.
 
 | Legacy job | Rust-backed SDK |
 | --- | --- |
-| Go `ParseDocument(data)`, `ValidateDocument(data)` and `doc.Validate()` | `ParsedDocument::parse` preserves input; `validate()` returns document validation; `validated()` yields an owner only when conformance is established. `validate_document` is the bytes-to-validation convenience function. |
+| Go `ParseDocument(data)`, `ValidateDocument(data)` and `doc.Validate()` | `Document::parse` preserves input; `validate()` returns document validation; `conformant()` yields an owner only when conformance is established. `validate_document` is the bytes-to-validation convenience function. |
 | TypeScript `parseDocument(input)` returning `OBInterface`, and `validateDocument` / `validateInterface` throwing on invalid data | Await `initialize()`, narrow `parseDocument(input)` to `status === "parsed"`, then call `document.validated()` and narrow to `status === "validated"`. `validateDocument` returns a report outcome instead of an interface object. |
 
 Parsing here is not a conformance gate. Keep parsed snapshots for editors; require
-a validated owner before creating value contracts or publishing a document.
+a `Conformant<Document>` before creating value contracts or publishing a document.
 Handle unsupported-version refusal separately from non-conformant and undetermined
 reports. Use rule evidence and codes instead of matching diagnostic prose.
 
 Go's `json.RawMessage`-style opaque data maps to exact `JsonValue` or `JsonRef`.
 Legacy TypeScript object graphs map to disposable snapshots and exact values.
 Use JSON bytes/text for wide numbers; passing a previously rounded JavaScript
-number cannot restore its digits. Use `to_authoring()` in Rust or `toDraft()` in
-TypeScript for editing. The first-use guides show how to compose an opaque edit.
+number cannot restore its digits. In Rust, edit `Document` directly using `set`, `remove`, `edit(&[Edit])` and typed
+part setters. Consume a proof with `into_inner()` before editing it. The Rust
+first-use guide shows an exact batched edit. See the TypeScript package guide for its editing API.
 
 ## Read operations and bindings
 
 | Legacy API | Replacement |
 | --- | --- |
-| Go `doc.Operations`, `doc.ResolveOperation(name)`, `doc.OperationBindings(key)` | Validated document operation reads and `resolve_operation(name)`; use the returned operation's `key()` and `bindings()`. Parsed lookup returns explicit found, missing or ambiguous selection. |
+| Go `doc.Operations`, `doc.ResolveOperation(name)`, `doc.OperationBindings(key)` | `Conformant<Document>` operation reads and `resolve_operation(name)`; use the returned operation's `key()` and `bindings()`. Parsed lookup returns explicit found, missing or ambiguous selection. |
 | TypeScript `iface.operations`, `resolveOperation(iface, name)`, `PreparedInterface.operation(name)` | `document.operations` metadata and `resolveOperation(name)`; narrow the selection before using its operation owner. Read schema owners with `input()` and `output()`. |
 
 Primary names and aliases resolve operations; dependency operation references are

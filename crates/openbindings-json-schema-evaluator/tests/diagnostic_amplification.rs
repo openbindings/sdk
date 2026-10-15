@@ -8,11 +8,11 @@ use std::sync::Arc;
 #[test]
 fn default_diagnostics_omit_problems_with_long_source_locations() {
     let key = "k".repeat(32768);
-    let document = ParsedDocument::parse(json!({"openbindings":"0.2.0","operations":{"check":{"input":{"type":"object","properties":{&key:{"type":"object","additionalProperties":false}}}}}}).to_string()).unwrap();
+    let document = Document::parse(json!({"openbindings":"0.2.0","operations":{"check":{"input":{"type":"object","properties":{&key:{"type":"object","additionalProperties":false}}}}}}).to_string()).unwrap();
     let context = document
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let fields: serde_json::Map<_, _> = (0..257).map(|i| (format!("f{i}"), json!(0))).collect();

@@ -109,7 +109,7 @@ fn main() {
         }
         for repetition in 0..3 {
             // Validation is cached on an owner; use a fresh parsed owner for every sample.
-            let parsed = openbindings::ParsedDocument::parse(&text).unwrap();
+            let parsed = openbindings::Document::parse(&text).unwrap();
             let (decisions, validity_peak, validity_ns) = measured(|| {
                 checks
                     .iter()

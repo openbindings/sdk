@@ -36,7 +36,7 @@ pub enum NoVerdictReason {
     /// validation when those bounds do not decide the instance. Other partial
     /// schemas can refuse at preparation. This does not prove that missing content
     /// is necessary to the instance's semantic verdict.
-    /// Use [`ParsedDocument::references`] to inspect document-wide reference spellings
+    /// Use [`Document::references`] to inspect document-wide reference spellings
     /// and original keyword locations, then create a new context with supplied resources.
     /// That inventory is not an exact per-value-contract missing-resource list.
     /// Apply your disclosure policy before logging it.
@@ -375,7 +375,7 @@ impl ResourceSet {
 pub struct SchemaRequest {
     pub(crate) space: Arc<SchemaSpace>,
     pub(crate) entry: usize,
-    document: ValidatedDocument,
+    document: Conformant<Document>,
 }
 impl std::fmt::Debug for SchemaRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -385,7 +385,7 @@ impl std::fmt::Debug for SchemaRequest {
 
 impl SchemaRequest {
     /// Borrow the validated immutable snapshot owning this normative value contract.
-    pub fn document(&self) -> &ValidatedDocument {
+    pub fn document(&self) -> &Conformant<Document> {
         &self.document
     }
     /// Borrow the immutable explicit resources for this context; evaluators must not substitute global URI caches.
@@ -507,9 +507,9 @@ pub(crate) fn projection_failure(f: openbindings_internal_schema::Failure) -> No
 ///         }
 ///     }
 /// }
-/// let document = ParsedDocument::parse(
+/// let document = Document::parse(
 ///     r#"{"openbindings":"0.2.0","operations":{"run":{"input":true}}}"#)?;
-/// let context = document.validate().unwrap().validated().expect("conformant document").value_contracts(Arc::new(TrueOnly), ResourceSet::default());
+/// let context = document.validate().unwrap().conformant().expect("conformant document").value_contracts(Arc::new(TrueOnly), ResourceSet::default());
 /// let ValueContractPreparation::Ready(contract) = context.prepare("run", Direction::Input) else {
 ///     panic!("the true schema must be supported");
 /// };
@@ -548,7 +548,7 @@ impl std::fmt::Debug for ValueContracts {
 }
 
 struct ContractsInner {
-    document: ValidatedDocument,
+    document: Conformant<Document>,
     space: Arc<SchemaSpace>,
     evaluator: Arc<dyn SchemaEvaluator>,
 }
@@ -563,7 +563,7 @@ pub enum ValueContractPreparation {
     NoValueContract,
     /// No primary key or alias matches the request.
     OperationMissing,
-    /// Retained selection branch; validated documents cannot produce it because OBI-05 proves unique names. Parsed editor selection reports ambiguity through OperationSelection.
+    /// Retained selection branch; conformant documents cannot produce it because OBI-05 proves unique names. Parsed editor selection reports ambiguity through OperationSelection.
     OperationAmbiguous {
         #[doc = "Distinct matching primary keys in lexical order; repeated aliases can yield one candidate key."]
         candidates: Vec<String>,
@@ -606,7 +606,7 @@ pub enum ValueContractPreparationError {
     NoValueContract,
     /// No primary key or alias matches the request.
     OperationMissing,
-    /// Retained selection branch, unreachable through a validated document.
+    /// Retained selection branch, unreachable through a conformant document.
     OperationAmbiguous {
         /// Distinct matching primary keys in lexical order, retained unchanged.
         candidates: Vec<String>,
@@ -730,12 +730,12 @@ impl ValueContract {
         self.schema.validate(value, control)
     }
 }
-impl ValidatedDocument {
+impl Conformant<Document> {
     /// Select an evaluator and immutable supplied resources for normative value contracts.
     /// Parsed snapshots cannot construct normative contracts:
     /// ```compile_fail
     /// use openbindings::*;
-    /// fn draft(doc: ParsedDocument, evaluator: std::sync::Arc<dyn SchemaEvaluator>) {
+    /// fn draft(doc: Document, evaluator: std::sync::Arc<dyn SchemaEvaluator>) {
     ///     doc.value_contracts(evaluator, ResourceSet::default());
     /// }
     /// ```
@@ -754,7 +754,7 @@ impl ValidatedDocument {
         ValueContracts {
             inner: Arc::new(ContractsInner {
                 document: self.clone(),
-                space: Arc::new(SchemaSpace::new(self.parsed().clone(), resources)),
+                space: Arc::new(SchemaSpace::new(self.as_document().clone(), resources)),
                 evaluator,
             }),
         }
@@ -765,7 +765,7 @@ impl ValueContracts {
     /// Match [`ValueContractPreparation`] or use [`ValueContractPreparation::into_result`]
     /// to propagate a non-ready result with `?`. Missing operation,
     /// absent value contract and preparation refusal are setup states, not instance failures.
-    /// The retained ambiguous branch is unreachable through validated documents.
+    /// The retained ambiguous branch is unreachable through conformant documents.
     /// Ready value contracts can be retained beyond this context and validated repeatedly.
     /// Every call prepares independently, including aliases of the same operation.
     /// Retain and clone a ready [`ValueContract`] to validate without recompiling.

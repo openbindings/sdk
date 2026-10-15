@@ -116,13 +116,21 @@ pub fn derive(
         .map(|s| analyze(s.source))
         .collect::<Result<_, _>>()?;
     let mut doc = Document::new();
-    doc.openbindings = request
-        .openbindings_version
-        .unwrap_or(openbindings::AUTHORING_VERSION)
-        .into();
-    doc.name = request.name.map(str::to_owned);
-    doc.version = request.version.map(str::to_owned);
-    doc.description = request.description.map(str::to_owned);
+    doc.set_openbindings(
+        request
+            .openbindings_version
+            .unwrap_or(openbindings::AUTHORING_VERSION),
+    )?;
+    if let Some(value) = request.name {
+        doc.set_name(value)?;
+    }
+    if let Some(value) = request.version {
+        doc.set_version(value)?;
+    }
+    if let Some(value) = request.description {
+        doc.set_description(value)?;
+    }
+    let mut operations = BTreeMap::new();
     let mut sources = BTreeMap::new();
     let mut bindings = BTreeMap::new();
     let mut dependencies = BTreeMap::new();
@@ -167,7 +175,7 @@ pub fn derive(
                 CoverageStatus::Represented | CoverageStatus::Lossy
             ) {
                 let key = format!("s{index}.u{ordinal}");
-                doc.operations.insert(
+                operations.insert(
                     key.clone(),
                     Operation {
                         input: Some(
@@ -225,17 +233,18 @@ pub fn derive(
             entries.push(e);
         }
     }
+    doc.set_operations(&operations)?;
     if !sources.is_empty() {
-        doc.sources = Some(sources)
+        doc.set_sources(&sources)?;
     }
     if !bindings.is_empty() {
-        doc.bindings = Some(bindings)
+        doc.set_bindings(&bindings)?;
     }
     if !dependencies.is_empty() {
-        doc.dependencies = Some(dependencies)
+        doc.set_dependencies(&dependencies)?;
     }
     Ok(SynthesisCandidate {
-        document: doc.build()?,
+        document: doc,
         coverage: CoverageDraft {
             entries,
             exhaustive,
@@ -386,11 +395,30 @@ mod wasm {
     #[wasm_bindgen(js_name=synthesizeDocumentSource)]
     pub async fn synthesize_document_source(text: String) -> Result<String, JsValue> {
         async fn run(text: String) -> Result<String, Box<dyn std::error::Error>> {
-            let draft = Document::from_json(&JsonValue::parse(text)?)?;
-            let source = draft
-                .sources
-                .and_then(|mut s| s.remove("catalog"))
-                .ok_or("missing catalog")?;
+            let doc = Document::parse(text)?;
+            let view = doc.source("catalog")?.ok_or("missing catalog")?;
+            let source = Source {
+                kind: view.kind()?.as_str().ok_or("non-scalar kind")?.into(),
+                description: view
+                    .description()?
+                    .map(|v| {
+                        v.as_str()
+                            .ok_or("non-scalar description")
+                            .map(str::to_owned)
+                    })
+                    .transpose()?,
+                content: view.content().map(|v| v.to_owned()),
+                additional_fields: view
+                    .value()
+                    .members()
+                    .unwrap()
+                    .filter_map(|m| {
+                        let key = m.name.as_str()?;
+                        (!matches!(key, "kind" | "description" | "content"))
+                            .then(|| (key.into(), m.value.to_owned()))
+                    })
+                    .collect(),
+            };
             let provider = Rc::new(Local(Rc::new("local".into())));
             let facade = Synthesizer::new(provider.clone());
             let inputs = [SynthesisSource {

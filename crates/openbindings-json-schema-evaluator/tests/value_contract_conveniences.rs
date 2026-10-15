@@ -2,14 +2,14 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, value_contracts};
 use std::{error::Error, sync::Arc};
 
-fn document(schema: &str) -> ValidatedDocument {
-    ParsedDocument::parse(format!(
+fn document(schema: &str) -> Conformant<Document> {
+    Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"lookup":{{"aliases":["find"],"input":{schema}}}}}}}"#
     ))
     .unwrap()
     .validate()
     .unwrap()
-    .validated()
+    .conformant()
     .expect("conformant fixture")
 }
 

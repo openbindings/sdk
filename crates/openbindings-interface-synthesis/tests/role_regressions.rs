@@ -144,16 +144,18 @@ async fn absent_null_and_duplicate_member_policy_remain_distinct() {
 async fn dependency_attribution_is_optional_and_many_to_one() {
     let input = source(None);
     let mut output = candidate(&input);
-    let mut draft = output.document.to_authoring().unwrap();
-    draft.operations.insert("event".into(), Default::default());
-    draft.dependencies = Some(std::collections::BTreeMap::from([(
-        "consume".into(),
-        openbindings::Dependency {
-            operation: "event".into(),
-            ..Default::default()
-        },
-    )]));
-    output.document = draft.build().unwrap();
+    let mut draft = output.document.clone();
+    draft.set_operation("event", &Default::default()).unwrap();
+    draft
+        .set_dependency(
+            "consume",
+            &openbindings::Dependency {
+                operation: "event".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    output.document = draft.clone();
     let inputs = [SynthesisSource {
         name: Some("api"),
         source: &input,

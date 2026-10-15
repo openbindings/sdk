@@ -3,7 +3,7 @@ use serde::Serialize;
 
 /// Supported stable specification line, `0.2.x`; independent of the crate version.
 pub const SUPPORTED_VERSIONS: &str = "0.2.x";
-/// Default declaration written by new authoring drafts, `0.2.0`.
+/// Default declaration written by new documents, `0.2.0`.
 pub const AUTHORING_VERSION: &str = "0.2.0";
 /// Specification release whose document rules this build applies.
 pub const APPLIED_SPEC_RELEASE: &str = "0.2.0";

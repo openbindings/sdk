@@ -52,7 +52,7 @@ fn observe(request: &Value) -> Value {
             }
         },
         "resolve-operation" => {
-            let doc = ParsedDocument::parse(&data).unwrap();
+            let doc = Document::parse(&data).unwrap();
             match doc
                 .resolve_operation(given["name"].as_str().unwrap())
                 .unwrap()
@@ -68,7 +68,7 @@ fn observe(request: &Value) -> Value {
             }
         }
         "check-dependency-kind" => {
-            let doc = ParsedDocument::parse(&data).unwrap();
+            let doc = Document::parse(&data).unwrap();
             let binding = given["binding"].as_str().unwrap();
             let source = doc
                 .value()
@@ -101,7 +101,7 @@ fn observe(request: &Value) -> Value {
             });
         }
         "validate-operation-values" | "check-examples" => {
-            let doc = ParsedDocument::parse(&data).unwrap();
+            let doc = Document::parse(&data).unwrap();
             let resources = ResourceSet::new(
                 given["resources"]
                     .as_array()
@@ -116,7 +116,7 @@ fn observe(request: &Value) -> Value {
             let contracts =
                 doc.validate()
                     .unwrap()
-                    .validated()
+                    .conformant()
                     .expect("conformant document")
                     .value_contracts(
                         std::sync::Arc::new(

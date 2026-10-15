@@ -121,18 +121,26 @@ mod tests {
             assert_eq!(decoded.text(), token);
             let raw: Box<serde_json::value::RawValue> = serde_json::from_str(token).unwrap();
             assert_eq!(serde_json::to_string(&raw).unwrap(), token);
-            assert_eq!(JsonValue::from_serializable(&raw).unwrap_err().kind(),
-                openbindings::ValueConversionErrorKind::UnsupportedRepresentation);
+            assert_eq!(
+                JsonValue::from_serializable(&raw).unwrap_err().kind(),
+                openbindings::ValueConversionErrorKind::UnsupportedRepresentation
+            );
             // Consumer-enabled AP uses the same identity. Preserve its emitted
             // Number protocol; spelling already normalized by serde is not recovered.
             #[cfg(feature = "ap")]
             {
                 let number: Number = serde_json::from_str(token).unwrap();
                 let expected = number.to_string();
-                assert_eq!(JsonValue::from_serializable(&number).unwrap().text(), expected);
+                assert_eq!(
+                    JsonValue::from_serializable(&number).unwrap().text(),
+                    expected
+                );
                 let ordinary = serde_json::json!({"n": number});
                 let admitted = JsonValue::from_serializable(&ordinary).unwrap();
-                assert_eq!(admitted.get("n").unwrap().number_text(), Some(expected.as_str()));
+                assert_eq!(
+                    admitted.get("n").unwrap().number_text(),
+                    Some(expected.as_str())
+                );
             }
         }
         let ordinary: Value = serde_json::from_str(r#"{"n":1.25,"i":9007199254740993}"#).unwrap();
@@ -189,14 +197,14 @@ mod tests {
                 ValueOutcome::Satisfies
             }
         }
-        let document = ParsedDocument::parse(
+        let document = Document::parse(
             r#"{"openbindings":"0.2.0","operations":{"read":{"input":{"const":1e400}}}}"#,
         )
         .unwrap();
         let context = document
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant document")
             .value_contracts(Arc::new(ExactConstant), ResourceSet::default());
         let ValueContractPreparation::Ready(contract) = context.prepare("read", Direction::Input)

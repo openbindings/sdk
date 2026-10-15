@@ -1,5 +1,5 @@
 use openbindings::{
-    Direction, JsonValue, NoVerdict, ParsedDocument, PreparedSchema, ResourceSet, SchemaEvaluator,
+    Direction, Document, JsonValue, NoVerdict, PreparedSchema, ResourceSet, SchemaEvaluator,
     SchemaRequest, ValueOutcome,
 };
 use openbindings_invocation::CancellationToken;
@@ -21,10 +21,10 @@ use std::{
 fn json(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
 }
-fn doc(operations: &str, bindings: &str, sources: &str) -> ParsedDocument {
-    ParsedDocument::parse(format!(r#"{{"openbindings":"0.2.0","operations":{operations},"bindings":{bindings},"sources":{sources}}}"#)).unwrap()
+fn doc(operations: &str, bindings: &str, sources: &str) -> Document {
+    Document::parse(format!(r#"{{"openbindings":"0.2.0","operations":{operations},"bindings":{bindings},"sources":{sources}}}"#)).unwrap()
 }
-fn one(operation: &str) -> ParsedDocument {
+fn one(operation: &str) -> Document {
     doc(
         &format!(r#"{{"echo":{operation}}}"#),
         r#"{"b":{"operation":"echo","source":"s","content":null,"x-opaque":1e9999}}"#,
@@ -162,15 +162,12 @@ fn assert_code(result: Result<(), InvocationError>, code: &str) {
     assert_eq!(e.code(), code);
     assert!(e.data().is_none());
 }
-fn checked<'a, 'b>(
-    document: ParsedDocument,
-    provider: &'a Provider<'b>,
-) -> Invoker<&'a Provider<'b>> {
+fn checked<'a, 'b>(document: Document, provider: &'a Provider<'b>) -> Invoker<&'a Provider<'b>> {
     Invoker::new(
         document
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant invocation document"),
         provider,
     )
@@ -188,7 +185,7 @@ async fn names_ordered_choices_and_explicit_bindings_do_not_invent_policy() {
     let invoke = Invoker::new(
         d.validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant invocation document"),
         &p,
     );
@@ -270,14 +267,14 @@ async fn missing_ambiguous_and_sole_candidates() {
             validation.report().evidence["OBI-05"],
             openbindings::Evidence::Violated
         );
-        assert!(validation.validated().is_none());
+        assert!(validation.conformant().is_none());
         assert_eq!(p.calls.load(Ordering::SeqCst), 0);
     }
     let i = Invoker::new(
         doc(r#"{"echo":{}}"#, "{}", "{}")
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant invocation document"),
         &p,
     );
@@ -290,7 +287,7 @@ async fn missing_ambiguous_and_sole_candidates() {
             one(r#"{"aliases":["say"]}"#)
                 .validate()
                 .unwrap()
-                .validated()
+                .conformant()
                 .expect("conformant invocation document"),
             &p,
         ),
@@ -306,7 +303,7 @@ async fn exact_opaque_values_carriers_and_context_are_preserved() {
         one("{}")
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant invocation document"),
         &p,
     );
@@ -380,7 +377,7 @@ async fn preparation_is_lazy_absence_is_not_true_and_no_verdict_is_not_failure()
         one(r#"{"input":false,"output":{"$ref":"https://absent.test/schema"}}"#)
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant invocation document"),
         &p,
     );
@@ -397,7 +394,7 @@ async fn preparation_is_lazy_absence_is_not_true_and_no_verdict_is_not_failure()
             one(schema)
                 .validate()
                 .unwrap()
-                .validated()
+                .conformant()
                 .expect("conformant invocation document"),
             &p,
         );
@@ -482,7 +479,7 @@ async fn prepared_contracts_reused_across_values_and_attempts() {
         one(r#"{"input":true,"output":true}"#)
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant invocation document"),
         &p,
     )
@@ -532,7 +529,7 @@ async fn borrowed_send_and_local_rc_and_cancellation_release() {
         one("{}")
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant invocation document"),
         &p,
     );
@@ -561,7 +558,7 @@ async fn borrowed_send_and_local_rc_and_cancellation_release() {
             one("{}")
                 .validate()
                 .unwrap()
-                .validated()
+                .conformant()
                 .expect("conformant invocation document"),
             local,
         ),
@@ -628,7 +625,7 @@ fn failed_or_cancelled_prepare_releases_partial_work_and_can_retry() {
             one(r#"{"input":true,"output":true}"#)
                 .validate()
                 .unwrap()
-                .validated()
+                .conformant()
                 .expect("conformant invocation document"),
             &p,
         )
@@ -672,7 +669,7 @@ fn explicit_prepare_handles_absence_missing_names_and_missing_evaluator() {
         one(r#"{"aliases":["say"]}"#)
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant invocation document"),
         &p,
     );
@@ -685,7 +682,7 @@ fn explicit_prepare_handles_absence_missing_names_and_missing_evaluator() {
         one(r#"{"input":true}"#)
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant invocation document"),
         &p,
     );
@@ -727,7 +724,7 @@ async fn shared_prepared_attempts_keep_selection_context_and_cancellation_separa
         r#"{"echo":{"aliases":["say"],"input":{"type":"integer"},"output":true},"other":{}}"#,
         r#"{"a":{"operation":"echo","source":"s","content":1},"b":{"operation":"echo","source":"s","content":2},"foreign":{"operation":"other","source":"s","content":3}}"#,
         r#"{"s":{"kind":"fixture"}}"#,
-    ).validate().unwrap().validated().expect("conformant invocation document"), ContextEcho).with_evaluator(Arc::new(Counted { prepares: prepares.clone(), evaluations: Arc::default() }), ResourceSet::default());
+    ).validate().unwrap().conformant().expect("conformant invocation document"), ContextEcho).with_evaluator(Arc::new(Counted { prepares: prepares.clone(), evaluations: Arc::default() }), ResourceSet::default());
     // Preparing does not require a sole supported binding.
     let prepared = i.prepare("say").unwrap();
     let first_context = json(r#"{"attempt":1}"#);
@@ -805,7 +802,7 @@ async fn prepared_foreign_exact_binding_is_refused_before_any_provider_work() {
         )
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant invocation document"),
         NoProviderWork,
     );
@@ -827,7 +824,7 @@ async fn prepared_attempt_binding_choices_validate_the_entire_selection() {
             r#"{"echo":{},"other":{}}"#,
             r#"{"a":{"operation":"echo","source":"s"},"b":{"operation":"echo","source":"s"},"foreign":{"operation":"other","source":"s"}}"#,
             r#"{"s":{"kind":"fixture"}}"#,
-        ).validate().unwrap().validated().expect("conformant invocation document"),
+        ).validate().unwrap().conformant().expect("conformant invocation document"),
         &p,
     );
     let prepared = i.prepare("echo").unwrap();
@@ -882,7 +879,7 @@ fn invalid_binding_targets_are_rejected_before_invoker_construction() {
             validation.report().evidence[rule],
             openbindings::Evidence::Violated
         );
-        assert!(validation.validated().is_none());
+        assert!(validation.conformant().is_none());
         assert_eq!(p.calls.load(Ordering::SeqCst), 0);
     }
 }
@@ -897,7 +894,7 @@ async fn exact_metadata_refuses_lossy_role_handoff_before_effects() {
     )
     .validate()
     .unwrap()
-    .validated()
+    .conformant()
     .unwrap();
     let invoker = Invoker::new(non_scalar_kind, &provider);
     assert_code(
@@ -919,7 +916,7 @@ async fn exact_metadata_refuses_lossy_role_handoff_before_effects() {
         let proof = doc(r#"{"echo":{}}"#, bindings, sources)
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .unwrap();
         let invoker = Invoker::new(proof, &provider);
         let mut call = invoker.invoke(Request::binding("b"));

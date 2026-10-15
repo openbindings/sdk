@@ -5,8 +5,7 @@ use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use serde_json::json;
 use std::{cell::Cell, sync::Arc};
 use wasm_bindgen::prelude::*;
-mod draft;
-use draft::WasmDraft;
+
 /// Seed the engine's shared randomized tables while host entropy is available.
 /// The supported facade verifies host capability before entering this function.
 #[wasm_bindgen(js_name=initializeRuntime)]
@@ -107,18 +106,8 @@ impl WasmJson {
     }
     pub fn document(&self) -> WasmDocument {
         WasmDocument {
-            handle: DocumentHandle::new(ParsedDocument::from_json(self.value.clone())),
+            handle: DocumentHandle::new(Document::from_json(self.value.clone())),
         }
-    }
-    /// Typed authoring checks known members while retaining exact/unknown fields.
-    #[wasm_bindgen(js_name=authorDocument)]
-    pub fn author_document(&self) -> Result<WasmDocument, JsValue> {
-        Document::from_json(&self.value)
-            .and_then(|b| b.build())
-            .map(|document| WasmDocument {
-                handle: DocumentHandle::new(document),
-            })
-            .map_err(|e| error("authoring", e))
     }
 }
 /// A retained source plus position, not a self-referential borrowed iterator.
@@ -208,22 +197,22 @@ impl WasmMember {
 // Keep only the parsed snapshot here; every proof-producing/consuming entry derives
 // a fresh core proof from that snapshot's cached validation at call time.
 struct DocumentHandle {
-    document: ParsedDocument,
+    document: Document,
     taken: Cell<bool>,
 }
 impl DocumentHandle {
-    fn new(document: ParsedDocument) -> Self {
+    fn new(document: Document) -> Self {
         Self {
             document,
             taken: Cell::new(false),
         }
     }
-    fn proof(&self, code: &str) -> Result<ValidatedDocument, JsValue> {
+    fn proof(&self, code: &str) -> Result<Conformant<Document>, JsValue> {
         self.document
             .validate()
             .ok()
-            .and_then(|v| v.validated())
-            .ok_or_else(|| error(code, "A validated document is required."))
+            .and_then(|v| v.conformant())
+            .ok_or_else(|| error(code, "A conformant document is required."))
     }
 }
 #[wasm_bindgen]
@@ -241,11 +230,95 @@ impl std::fmt::Debug for WasmDocument {
 impl WasmDocument {
     #[wasm_bindgen(js_name=parseBytes)]
     pub fn parse_bytes(bytes: &[u8]) -> Result<WasmDocument, JsValue> {
-        ParsedDocument::parse(bytes)
+        Document::parse(bytes)
             .map(|document| Self {
                 handle: DocumentHandle::new(document),
             })
             .map_err(input_error)
+    }
+    /// Apply an atomic array of {op, pointer, value?} edits. Values stay exact JSON.
+    pub fn edit(&mut self, edits: &str) -> Result<(), JsValue> {
+        let input = JsonValue::parse(edits).map_err(input_error)?;
+        if input.has_duplicate_names() {
+            return Err(edit_error(EditError::DuplicateMembers));
+        }
+        let rows = input
+            .view()
+            .elements()
+            .ok_or_else(|| error("invalid-edits", "expected an edit array"))?;
+        let mut values = Vec::new();
+        let mut paths = Vec::new();
+        for row in rows {
+            let pointer = row
+                .get("pointer")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| error("invalid-pointer", "expected a pointer string"))?;
+            let value = match row.get("op").and_then(|v| v.as_str()) {
+                Some("set") => Some(
+                    row.get("value")
+                        .ok_or_else(|| error("missing-value", "set requires a value"))?
+                        .to_owned(),
+                ),
+                Some("remove") => None,
+                _ => return Err(error("invalid-edits", "expected set or remove")),
+            };
+            paths.push(pointer);
+            values.push(value);
+        }
+        let edits: Vec<_> = paths
+            .iter()
+            .zip(&values)
+            .map(|(pointer, value)| match value {
+                Some(value) => Edit::Set { pointer, value },
+                None => Edit::Remove { pointer },
+            })
+            .collect();
+        self.handle.document.edit(&edits).map_err(edit_error)
+    }
+    pub fn set(&mut self, pointer: &str, value: &WasmJson) -> Result<(), JsValue> {
+        self.handle
+            .document
+            .set(pointer, &value.value)
+            .map_err(edit_error)
+    }
+    pub fn remove(&mut self, pointer: &str) -> Result<(), JsValue> {
+        self.handle.document.remove(pointer).map_err(edit_error)
+    }
+    #[wasm_bindgen(js_name=setDescription)]
+    pub fn set_description(&mut self, value: &str) -> Result<(), JsValue> {
+        self.handle
+            .document
+            .set_description(value)
+            .map_err(edit_error)
+    }
+    #[wasm_bindgen(js_name=setName)]
+    pub fn set_name(&mut self, value: &str) -> Result<(), JsValue> {
+        self.handle.document.set_name(value).map_err(edit_error)
+    }
+    #[wasm_bindgen(js_name=setVersion)]
+    pub fn set_version(&mut self, value: &str) -> Result<(), JsValue> {
+        self.handle.document.set_version(value).map_err(edit_error)
+    }
+    #[wasm_bindgen(js_name=setOperationDescription)]
+    pub fn set_operation_description(&mut self, key: &str, value: &str) -> Result<(), JsValue> {
+        self.handle
+            .document
+            .set_operation_description(key, value)
+            .map_err(edit_error)
+    }
+    #[wasm_bindgen(js_name=setOperationInput)]
+    pub fn set_operation_input(&mut self, key: &str, value: &WasmJson) -> Result<(), JsValue> {
+        self.handle
+            .document
+            .set_operation_input(key, &value.value)
+            .map_err(edit_error)
+    }
+    #[wasm_bindgen(js_name=setOperationOutput)]
+    pub fn set_operation_output(&mut self, key: &str, value: &WasmJson) -> Result<(), JsValue> {
+        self.handle
+            .document
+            .set_operation_output(key, &value.value)
+            .map_err(edit_error)
     }
     pub fn retain(&self) -> WasmDocument {
         Self {
@@ -257,9 +330,9 @@ impl WasmDocument {
             value: self.handle.document.value().clone(),
         }
     }
-    #[wasm_bindgen(js_name=originalBytes)]
-    pub fn original_bytes(&self) -> Vec<u8> {
-        self.handle.document.original_bytes().into()
+    #[wasm_bindgen(js_name=toBytes)]
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.handle.document.to_bytes().into()
     }
     pub fn validate(&self) -> WasmDocumentValidation {
         let _ = self.handle.document.validate();
@@ -328,10 +401,6 @@ impl WasmDocument {
             result.push(operation_metadata(&operation)?);
         }
         Ok(format!("[{}]", result.join(",")))
-    }
-    #[wasm_bindgen(js_name=toDraft)]
-    pub fn to_draft(&self) -> Result<WasmDraft, JsValue> {
-        draft::convert(self.handle.document.value())
     }
     pub fn bindings(&self) -> Result<String, JsValue> {
         let rows = self
@@ -465,8 +534,8 @@ impl WasmDocumentValidation {
             Err(e) => encoded(json!({"status":"version-refused", "refusal":e})),
         }
     }
-    #[wasm_bindgen(js_name=takeValidated)]
-    pub fn take_validated(&self) -> Option<WasmValidatedDocument> {
+    #[wasm_bindgen(js_name=takeConformant)]
+    pub fn take_conformant(&self) -> Option<WasmConformantDocument> {
         if self.handle.taken.replace(true) {
             return None;
         }
@@ -474,38 +543,45 @@ impl WasmDocumentValidation {
             .document
             .validate()
             .ok()?
-            .validated()
-            .map(WasmValidatedDocument::from_proof)
+            .conformant()
+            .map(WasmConformantDocument::from_proof)
     }
 }
 /// Retained snapshot whose proof is re-derived at each proof-requiring entry.
 #[wasm_bindgen]
 #[repr(transparent)]
-pub struct WasmValidatedDocument {
+pub struct WasmConformantDocument {
     handle: DocumentHandle,
 }
-impl std::fmt::Debug for WasmValidatedDocument {
+impl std::fmt::Debug for WasmConformantDocument {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WasmValidatedDocument")
+        f.debug_struct("WasmConformantDocument")
             .finish_non_exhaustive()
     }
 }
 
-impl WasmValidatedDocument {
-    fn from_proof(document: ValidatedDocument) -> Self {
+impl WasmConformantDocument {
+    fn from_proof(document: Conformant<Document>) -> Self {
         Self {
-            handle: DocumentHandle::new(document.parsed().clone()),
+            handle: DocumentHandle::new(document.as_document().clone()),
         }
     }
 }
 #[wasm_bindgen]
-impl WasmValidatedDocument {
-    pub fn retain(&self) -> Result<WasmValidatedDocument, JsValue> {
+impl WasmConformantDocument {
+    pub fn retain(&self) -> Result<WasmConformantDocument, JsValue> {
         self.handle
             .proof("document-conformance")
             .map(Self::from_proof)
     }
-    pub fn parsed(&self) -> WasmDocument {
+    #[wasm_bindgen(js_name=intoInner)]
+    pub fn into_inner(self) -> WasmDocument {
+        WasmDocument {
+            handle: self.handle,
+        }
+    }
+    #[wasm_bindgen(js_name=asDocument)]
+    pub fn as_document(&self) -> WasmDocument {
         WasmDocument {
             handle: DocumentHandle::new(self.handle.document.clone()),
         }
@@ -538,62 +614,58 @@ impl WasmValidatedDocument {
         Ok(WasmValueContracts { contracts })
     }
     pub fn value(&self) -> WasmJson {
-        self.parsed().value()
+        self.as_document().value()
     }
-    #[wasm_bindgen(js_name=originalBytes)]
-    pub fn original_bytes(&self) -> Vec<u8> {
-        self.parsed().original_bytes()
+    #[wasm_bindgen(js_name=toBytes)]
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.as_document().to_bytes()
     }
     pub fn validate(&self) -> WasmDocumentValidation {
-        self.parsed().validate()
+        self.as_document().validate()
     }
     pub fn openbindings(&self) -> Result<String, JsValue> {
-        self.parsed().openbindings()
+        self.as_document().openbindings()
     }
     pub fn name(&self) -> Result<String, JsValue> {
-        self.parsed().name()
+        self.as_document().name()
     }
     pub fn version(&self) -> Result<String, JsValue> {
-        self.parsed().version()
+        self.as_document().version()
     }
     pub fn description(&self) -> Result<String, JsValue> {
-        self.parsed().description()
+        self.as_document().description()
     }
     #[wasm_bindgen(js_name=schemaNames)]
     pub fn schema_names(&self) -> Result<String, JsValue> {
-        self.parsed().schema_names()
+        self.as_document().schema_names()
     }
     pub fn schema(&self, key: &str) -> Result<Option<WasmJson>, JsValue> {
-        self.parsed().schema(key)
+        self.as_document().schema(key)
     }
     pub fn operations(&self) -> Result<String, JsValue> {
-        self.parsed().operations()
-    }
-    #[wasm_bindgen(js_name=toDraft)]
-    pub fn to_draft(&self) -> Result<WasmDraft, JsValue> {
-        self.parsed().to_draft()
+        self.as_document().operations()
     }
     pub fn bindings(&self) -> Result<String, JsValue> {
-        self.parsed().bindings()
+        self.as_document().bindings()
     }
     pub fn binding(&self, key: &str) -> Result<Option<WasmBinding>, JsValue> {
-        self.parsed().binding(key)
+        self.as_document().binding(key)
     }
     pub fn sources(&self) -> Result<String, JsValue> {
-        self.parsed().sources()
+        self.as_document().sources()
     }
     pub fn source(&self, key: &str) -> Result<Option<WasmSource>, JsValue> {
-        self.parsed().source(key)
+        self.as_document().source(key)
     }
     pub fn dependencies(&self) -> Result<String, JsValue> {
-        self.parsed().dependencies()
+        self.as_document().dependencies()
     }
     pub fn dependency(&self, key: &str) -> Result<Option<WasmDependency>, JsValue> {
-        self.parsed().dependency(key)
+        self.as_document().dependency(key)
     }
     #[wasm_bindgen(js_name=resolveOperation)]
     pub fn resolve_operation(&self, name: &str) -> Result<WasmOperationSelection, JsValue> {
-        self.parsed().resolve_operation(name)
+        self.as_document().resolve_operation(name)
     }
     #[wasm_bindgen(js_name=dependencyAcceptsKind)]
     pub fn dependency_accepts_kind(
@@ -601,14 +673,14 @@ impl WasmValidatedDocument {
         dependency: &str,
         kind: &str,
     ) -> Result<Option<bool>, JsValue> {
-        self.parsed().dependency_accepts_kind(dependency, kind)
+        self.as_document().dependency_accepts_kind(dependency, kind)
     }
     pub fn references(
         &self,
         resources: &WasmResources,
         cancelled: bool,
     ) -> Result<String, JsValue> {
-        self.parsed().references(resources, cancelled)
+        self.as_document().references(resources, cancelled)
     }
 }
 /// A private transfer wrapper. Dropping it drops an untaken operation owner.
@@ -1051,7 +1123,7 @@ impl WasmPrepared {
 pub fn validate_bytes(bytes: &[u8]) -> String {
     match validate_document(bytes) {
         Ok(a) => {
-            encoded(json!({"status":"report","report":a.report(),"parsed":a.parsed().is_some()}))
+            encoded(json!({"status":"report","report":a.report(),"parsed":a.document().is_some()}))
         }
         Err(e) => encoded(json!({"status":"version-refused","refusal":e})),
     }
@@ -1108,7 +1180,7 @@ impl WasmDiscovery {
         use openbindings_http_discovery::DiscoveryOutcome::*;
         match &self.outcome {
             Found { document } => encoded(
-                json!({"status":"found","report":document.parsed().validate().unwrap().report()}),
+                json!({"status":"found","report":document.as_document().validate().unwrap().report()}),
             ),
             NonConformant { validation } => {
                 encoded(json!({"status":"non-conformant","report":validation.report()}))
@@ -1125,8 +1197,8 @@ impl WasmDiscovery {
     pub fn document(&self) -> Option<WasmDocument> {
         use openbindings_http_discovery::DiscoveryOutcome::*;
         let document = match &self.outcome {
-            Found { document } => Some(document.parsed()),
-            NonConformant { validation } | Undetermined { validation } => validation.parsed(),
+            Found { document } => Some(document.as_document()),
+            NonConformant { validation } | Undetermined { validation } => validation.document(),
             _ => None,
         };
         document.map(|d| WasmDocument {
@@ -1148,7 +1220,7 @@ impl std::fmt::Debug for WasmPublication {
 impl WasmPublication {
     #[wasm_bindgen(constructor)]
     pub fn new(
-        document: &WasmValidatedDocument,
+        document: &WasmConformantDocument,
         allow_origin: &str,
     ) -> Result<WasmPublication, JsValue> {
         openbindings_http_discovery::Publication::new(
@@ -1172,4 +1244,10 @@ impl WasmPublication {
     pub fn body(&self, method: &str, path: &str) -> Vec<u8> {
         self.publication.respond(method, path).body.to_vec()
     }
+}
+
+fn edit_error(error: EditError) -> JsValue {
+    JsValue::from_str(&encoded(
+        json!({"status":"edit-error", "code":error.code(), "message":error.to_string()}),
+    ))
 }

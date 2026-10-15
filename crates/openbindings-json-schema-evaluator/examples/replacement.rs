@@ -52,9 +52,9 @@ fn candidate(
     resources: ResourceSet,
     control: &dyn WorkControl,
 ) -> Result<ValueContract, LoadFailure> {
-    let document = ParsedDocument::parse(text).map_err(LoadFailure::Parse)?;
+    let document = Document::parse(text).map_err(LoadFailure::Parse)?;
     let validation = document.validate().map_err(LoadFailure::Version)?;
-    let Some(proof) = validation.validated() else {
+    let Some(proof) = validation.conformant() else {
         return Err(LoadFailure::Conformance(validation.report().clone()));
     };
     let report = proof.references_with_resources(resources.clone(), control);
@@ -93,14 +93,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     let new_value = JsonValue::from_serializable(&9_007_199_254_740_994_u64)?;
     // Fixture-only retention demonstration: reusable candidate loading requires no output.
     {
-        let document = ParsedDocument::parse(DOCUMENT)?;
+        let document = Document::parse(DOCUMENT)?;
         let validation = document.validate()?;
-        let proof = validation.validated().ok_or("fixture must be conformant")?;
+        let proof = validation
+            .conformant()
+            .ok_or("fixture must be conformant")?;
         let context = proof
-            .parsed()
+            .as_document()
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant document")
             .value_contracts(
                 Arc::new(DefaultEvaluator::new()),

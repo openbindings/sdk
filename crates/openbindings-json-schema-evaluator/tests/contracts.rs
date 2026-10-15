@@ -26,8 +26,8 @@ impl EvaluateCase for ValueContractPreparation {
         }
     }
 }
-fn doc(schema: &str) -> ParsedDocument {
-    ParsedDocument::parse(format!(
+fn doc(schema: &str) -> Document {
+    Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
     ))
     .unwrap()
@@ -36,7 +36,7 @@ fn contracts(schema: &str) -> ValueContracts {
     doc(schema)
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(
             Arc::new(
@@ -156,7 +156,7 @@ fn explicit_preparation_and_retained_validation_have_caller_owned_lifetimes() {
             Ok(Arc::new(Held(self.live.clone())))
         }
     }
-    let document=ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"a":{"aliases":["alias"],"input":true},"b":{"input":true},"c":{"input":true}}}"#).unwrap();
+    let document=Document::parse(r#"{"openbindings":"0.2.0","operations":{"a":{"aliases":["alias"],"input":true},"b":{"input":true},"c":{"input":true}}}"#).unwrap();
     let calls = Arc::new(AtomicUsize::new(0));
     let live = Arc::new(AtomicUsize::new(0));
     let evaluator = Arc::new(Probe {
@@ -166,7 +166,7 @@ fn explicit_preparation_and_retained_validation_have_caller_owned_lifetimes() {
     let context = document
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(evaluator, ResourceSet::default());
     let retained = context.prepare("a", Direction::Input);
@@ -219,11 +219,11 @@ fn retained_contracts_outlive_documents_and_distinguish_absent_sides() {
 }
 #[test]
 fn anonymous_scope_selects_outer_dynamic_anchor() {
-    let document=ParsedDocument::parse(r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://review.invalid/list"}}},"schemas":{"List":{"$id":"https://review.invalid/list","type":"array","items":{"$dynamicRef":"#element"},"$defs":{"element":{"$dynamicAnchor":"element","type":"string"}}},"Override":{"$dynamicAnchor":"element","type":"integer"}}}"##).unwrap();
+    let document=Document::parse(r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://review.invalid/list"}}},"schemas":{"List":{"$id":"https://review.invalid/list","type":"array","items":{"$dynamicRef":"#element"},"$defs":{"element":{"$dynamicAnchor":"element","type":"string"}}},"Override":{"$dynamicAnchor":"element","type":"integer"}}}"##).unwrap();
     let context = document
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(
             Arc::new(
@@ -258,7 +258,7 @@ fn same_uri_resources_are_isolated_and_precancellation_does_not_poison() {
         document
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant document")
             .value_contracts(
                 evaluator.clone(),
@@ -337,7 +337,7 @@ fn cancellation_during_preparation_allows_independent_retries() {
     let context = doc("true")
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(evaluator.clone(), ResourceSet::default());
     let cancelled = context.prepare_with_control("op", Direction::Input, control.as_ref());
@@ -416,7 +416,7 @@ fn diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
     let context = doc(&expensive)
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(evaluator), ResourceSet::default());
     let prepared = context.prepare("op", Direction::Input);
@@ -442,7 +442,7 @@ fn diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
     let limited = doc(r#"{"allOf":[true,true,true]}"#)
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(
             Arc::new(DefaultEvaluator::with_limits(Limits {
@@ -517,7 +517,7 @@ fn diagnostic_allocation_admission_bounds_many_missing_names() {
     let context = doc(&schema)
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(
             Arc::new(DefaultEvaluator::with_limits(Limits::default())),
@@ -634,19 +634,19 @@ fn upstream_test_dispositions_use_the_supported_exact_ecma_u_path() {
 
 #[test]
 fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
-    let d=ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"absent":{},"yes":{"input":true,"aliases":["shared"]},"no":{"input":false,"aliases":["shared"]},"null":{"input":null}}}"#).unwrap();
+    let d=Document::parse(r#"{"openbindings":"0.2.0","operations":{"absent":{},"yes":{"input":true,"aliases":["shared"]},"no":{"input":false,"aliases":["shared"]},"null":{"input":null}}}"#).unwrap();
     let validation = d.validate().unwrap();
-    assert!(validation.validated().is_none());
+    assert!(validation.conformant().is_none());
     assert_eq!(validation.report().evidence["OBI-05"], Evidence::Violated);
     assert!(matches!(
         d.resolve_operation("shared").unwrap(),
         OperationSelection::Ambiguous { .. }
     ));
-    let d = ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"absent":{},"yes":{"input":true},"no":{"input":false}}}"#).unwrap();
+    let d = Document::parse(r#"{"openbindings":"0.2.0","operations":{"absent":{},"yes":{"input":true},"no":{"input":false}}}"#).unwrap();
     let c = d
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(
             Arc::new(
@@ -705,9 +705,9 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
             "/operations/op/aliases",
         ),
     ] {
-        let d = ParsedDocument::parse(text).unwrap();
+        let d = Document::parse(text).unwrap();
         let validation = d.validate().unwrap();
-        assert!(validation.validated().is_none());
+        assert!(validation.conformant().is_none());
         let error = d.operations().unwrap_err();
         assert_eq!(
             error.source_location().unwrap().pointer.as_deref(),

@@ -6,11 +6,11 @@ fn prepare(schema: &str, extra: &str) -> ValueContract {
     let text = format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema},"examples":{{"e":{{"input":"\ud800"}}}}}}}}{extra}}}"#
     );
-    let document = ParsedDocument::parse(&text).unwrap();
+    let document = Document::parse(&text).unwrap();
     let contracts = document
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let ValueContractPreparation::Ready(contract) = contracts.prepare("op", Direction::Input)

@@ -21,7 +21,7 @@ macro_rules! validated_view {
         #[doc = concat!("Retained ", stringify!($parsed), " with document conformance proof. Field reads are infallible; exact strings preserve unpaired UTF-16. Clones and views survive parent drop.")]
         #[derive(Clone, Debug)]
         pub struct $name {
-            _document: ValidatedDocument,
+            _document: Conformant<Document>,
             view: $parsed,
         }
         impl $name {
@@ -40,7 +40,7 @@ validated_view!(ValidatedSourceView, SourceView);
 validated_view!(ValidatedDependencyView, DependencyView);
 validated_view!(ValidatedExampleView, ExampleView);
 
-impl ValidatedDocument {
+impl Conformant<Document> {
     /// Borrow the exact snapshot certified by this proof.
     pub fn value(&self) -> JsonRef<'_> {
         self.document.value().view()
@@ -116,7 +116,7 @@ impl ValidatedDocument {
 }
 macro_rules! namespace {
     ($many:ident, $one:ident, $view:ident) => {
-        impl ValidatedDocument {
+        impl Conformant<Document> {
             #[doc = concat!("Retain ", stringify!($many), " in lexical key order. None means absent; Some(empty) means present-empty.")]
             pub fn $many(&self) -> Option<Vec<$view>> {
                 self.document.$many().expect("validated namespace").map(|rows| rows.into_iter().map(|view| $view { _document: self.clone(), view }).collect())

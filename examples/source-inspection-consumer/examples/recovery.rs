@@ -43,10 +43,13 @@ fn present(outcome: AuthoringOutcome) {
                     finding.code, finding.location, finding.message
                 );
             }
-            println!(
-                "Retained {} draft operations for editing.",
-                draft.operations.len()
-            );
+            match draft.operations() {
+                Ok(operations) => println!(
+                    "Retained {} draft operations for editing.",
+                    operations.len()
+                ),
+                Err(error) => println!("Retained the exact document for repair: {error}"),
+            }
         }
     }
 }

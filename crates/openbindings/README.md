@@ -5,14 +5,14 @@ Exact JSON values preserve numeric tokens, source locations and the distinction
 between an absent field and JSON null.
 
 ```rust
-use openbindings::{Conformance, ParsedDocument};
+use openbindings::{Conformance, Document};
 
-let document = ParsedDocument::parse(
+let document = Document::parse(
     br#"{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"]}}}"#,
 )?;
 let validation = document.validate()?;
 assert_eq!(validation.report().conclusion, Conformance::Conformant);
-let validated = validation.validated().ok_or("document is not conformant")?;
+let validated = validation.conformant().ok_or("document is not conformant")?;
 let operation = validated.resolve_operation("find").ok_or("operation is missing")?;
 assert_eq!(operation.key(), "lookup");
 # Ok::<(), Box<dyn std::error::Error>>(())
@@ -21,14 +21,26 @@ assert_eq!(operation.key(), "lookup");
 Parsing retains a snapshot for inspection, including invalid editor drafts.
 Validation checks all document rules and returns evidence as met, violated or
 inconclusive where applicable. Only established conformance produces a
-`ValidatedDocument`, with infallible typed field reads and access to value contracts.
+`Conformant<Document>`, with infallible typed field reads and access to value contracts.
 An unsupported specification version is a separate refusal.
 
-To author a document, create `Document::new()`, populate its typed fields and call
-`build()`. To edit a parsed document, call `to_authoring()`, change the draft, then
-build and validate a new snapshot. The
-[Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
-shows value validation and an exact opaque-object edit.
+Create an OBI with `Document::new()` or parse exact JSON with `Document::parse`.
+Edit that same type through `&mut self`: use `set_description`, whole-part setters
+such as `set_operation(key, &operation)`, or RFC 6901 `set` and `remove`.
+`edit(&[Edit])` commits one atomic batch with one splice and one parse. Sibling
+insertions coalesce in batch order; untouched bytes remain exact. The byte budget
+is checked before allocating replacement bytes. Final parsing enforces the default
+JSON limits. A failed batch leaves the document unchanged.
+
+A `Conformant<Document>` has infallible reads and no mutable access. Use
+`as_document()` for plain fallible reads, or consume it with `into_inner()` to edit
+again. Clones, views, validation reports and proofs retain their own revision;
+editing another owner cannot change them. Positions refer to each revision's
+current bytes, available from `to_bytes()`. Duplicate-member input remains
+inspectable but is refused by typed reads, editing and conformance proof.
+
+The [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
+shows value validation and an exact opaque-member edit.
 
 ## Value contracts and limits
 
@@ -39,7 +51,7 @@ Select the optional `openbindings-json-schema-evaluator` or implement the trait.
 The companion's `value_contracts(&validated)` function supplies its default
 budgets, coarse diagnostics and no extra resources. For shared or configured
 evaluators and supplied resources, pass an `Arc<dyn SchemaEvaluator>` and an
-immutable `ResourceSet` to `ValidatedDocument::value_contracts`. Core does not
+immutable `ResourceSet` to `Conformant<Document>::value_contracts`. Core does not
 depend on the companion.
 The [evaluator integration guide](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md)
 explains the no-evaluator behavior and custom implementations.
@@ -64,7 +76,7 @@ Default JSON admission allows 64 MiB, 10,000 container levels and 1,000,000 node
 Checked ordinary Serde conversion has a 128-container ceiling. Exact parsing is
 the route for existing JSON tokens. Findings retain at most 4,096 entries and
 8 MiB of pointers; truncation leaves rule evidence intact. Use codes and evidence
-for program logic. Messages are advisory; locations refer to original UTF-8 bytes.
+for program logic. Messages are advisory; locations refer to the assessed revision's UTF-8 bytes.
 
 This unpublished package requires Rust 1.88. The 256 KiB document stack regression
 is qualified on the development toolchain, not on every supported compiler.

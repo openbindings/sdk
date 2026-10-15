@@ -7,15 +7,15 @@ resolves names and pure support at call construction, then returns the **same
 `Invocation`** as the binding entry point. Provider execution remains lazy.
 
 ```rust
-use openbindings::{JsonValue, ParsedDocument, ResourceSet};
+use openbindings::{JsonValue, Document, ResourceSet};
 use openbindings_invocation::{binding::BindingInvoker, operation::{Attempt, Invoker}};
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::sync::Arc;
 
-async fn call<P: BindingInvoker>(document: ParsedDocument, provider: P)
+async fn call<P: BindingInvoker>(document: Document, provider: P)
     -> Result<(), Box<dyn std::error::Error>>
 {
-    let proof = document.validate()?.validated().ok_or("document is not conformant")?;
+    let proof = document.validate()?.conformant().ok_or("document is not conformant")?;
     let invoker = Invoker::new(proof, provider)
         .with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let prepared = invoker.prepare("echo")?; // Keep for further attempts.
@@ -70,7 +70,7 @@ Unsupported automatic/ordered candidates are skipped; an unsupported explicit
 binding yields `ERR_BINDING_NOT_FOUND` in invocation and preflight. Metadata and provider registration order never choose a binding.
 Use `.with_context(&context)` to forward one opaque object unchanged.
 
-`operation::Invoker::new` requires a `ValidatedDocument`, including when no evaluator
+`operation::Invoker::new` requires a `Conformant<Document>`, including when no evaluator
 is configured. Invalid documents are rejected before invocation construction;
 parsed editor reads still report malformed fields and ambiguous names.
 `with_evaluator` is infallible and performs no preparation. A non-scalar source kind

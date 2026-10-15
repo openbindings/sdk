@@ -271,7 +271,7 @@ async fn real_http_media_types_statuses_compression_and_location_independence() 
             r.metadata.unwrap().final_url,
             Some(format!("{}{WELL_KNOWN_PATH}", server.origin))
         );
-        let refs = document.parsed().references().unwrap();
+        let refs = document.as_document().references().unwrap();
         assert!(refs.complete);
         assert!(matches!(
             refs.references[0].resolution,

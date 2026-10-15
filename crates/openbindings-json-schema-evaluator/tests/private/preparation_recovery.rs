@@ -7,8 +7,8 @@ const V: &str = "https://recovery.invalid/V";
 fn json(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
 }
-fn document(schema: &str) -> ParsedDocument {
-    ParsedDocument::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}},"unselected":{{"input":{{"$ref":"https://unselected.invalid/U"}}}}}}}}"#)).unwrap()
+fn document(schema: &str) -> Document {
+    Document::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}},"unselected":{{"input":{{"$ref":"https://unselected.invalid/U"}}}}}}}}"#)).unwrap()
 }
 fn resources(entries: &[(&str, &str)]) -> ResourceSet {
     ResourceSet::new(entries.iter().map(|(uri, text)| SchemaResource {
@@ -25,7 +25,7 @@ fn prepare(
     match document(schema)
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(evaluator, entries)
         .prepare("op", Direction::Input)
@@ -58,7 +58,7 @@ fn bare_and_aliased_holes_are_ready_but_not_is_a_preparation_refusal() {
         let doc = document(&schema);
         let validation = doc.validate().unwrap();
         let context = validation
-            .validated()
+            .conformant()
             .unwrap()
             .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
         match context.prepare("op", Direction::Input) {
@@ -203,7 +203,7 @@ fn direct_bounds_keeps_planner_diagnostics_while_default_restores_strict_refusal
     let _ = doc
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(capture.clone(), ResourceSet::default())
         .prepare("op", Direction::Input);
@@ -219,7 +219,7 @@ fn direct_bounds_keeps_planner_diagnostics_while_default_restores_strict_refusal
     let ValueContractPreparation::NoVerdict { detail } = doc
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
         .prepare("op", Direction::Input)

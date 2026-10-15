@@ -307,14 +307,14 @@ mod tests {
             }
         }
         let capture = Arc::new(Capture::default());
-        let document = ParsedDocument::parse(
+        let document = Document::parse(
             r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"enum":[0,1,2]}}}}"#,
         )
         .unwrap();
         let context = document
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .unwrap()
             .value_contracts(capture.clone(), ResourceSet::default());
         assert!(matches!(
@@ -422,14 +422,14 @@ mod tests {
     #[test]
     fn coarse_mode_never_copies_source_facts() {
         let choices = serde_json::json!(["x".repeat(20000), "y".repeat(20000)]);
-        let doc = ParsedDocument::parse(format!(
+        let doc = Document::parse(format!(
             r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{{"enum":{choices}}}}}}}}}"#
         ))
         .unwrap();
         let context = doc
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant document")
             .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
         let ValueContractPreparation::Ready(contract) = context.prepare("op", Direction::Input)

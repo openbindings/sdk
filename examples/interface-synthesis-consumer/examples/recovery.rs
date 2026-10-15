@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match facade.synthesize(&request).await {
         Ok(document) => println!(
             "Complete document: {} bytes",
-            document.parsed().value().text().len()
+            document.as_document().value().text().len()
         ),
         Err(e) if e.kind() == SynthesisErrorKind::Incomplete => {
             let partial = e

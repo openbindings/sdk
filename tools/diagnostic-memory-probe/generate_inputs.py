@@ -1,8 +1,8 @@
 """Generate exact 1 MiB documents and preserve ordinary corpus case identities."""
 from pathlib import Path
-import json, sys, hashlib
+import json, sys, hashlib, os
 SDK=Path(__file__).resolve().parents[2]
-OUT=SDK/'target/document-diagnostics/fixtures'
+OUT=Path(os.environ.get('CARGO_TARGET_DIR', SDK/'target'))/'document-diagnostics/fixtures'
 OUT.mkdir(parents=True,exist_ok=True)
 MIB=1<<20
 (OUT/'inputs').mkdir(exist_ok=True)

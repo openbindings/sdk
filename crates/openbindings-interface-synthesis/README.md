@@ -17,14 +17,14 @@ impl InterfaceSynthesizer for Skeleton {
     fn synthesize<'a>(&'a self, request: &'a SynthesisRequest<'a>, _: CancellationToken)
         -> Self::Synthesis<'a>
     {
-        let mut draft = Document::new();
-        draft.openbindings = request.openbindings_version.unwrap_or(openbindings::AUTHORING_VERSION).into();
-        draft.name = request.name.map(str::to_owned);
-        draft.version = request.version.map(str::to_owned);
-        draft.description = request.description.map(str::to_owned);
-        ready(draft.build().map(|document| SynthesisCandidate {
-            document, coverage: CoverageDraft { exhaustive: true, ..Default::default() },
-        }).map_err(Into::into))
+        ready((|| {
+            let mut document = Document::new();
+            document.set_openbindings(request.openbindings_version.unwrap_or(openbindings::AUTHORING_VERSION))?;
+            if let Some(value) = request.name { document.set_name(value)?; }
+            if let Some(value) = request.version { document.set_version(value)?; }
+            if let Some(value) = request.description { document.set_description(value)?; }
+            Ok(SynthesisCandidate { document, coverage: CoverageDraft { exhaustive: true, ..Default::default() } })
+        })())
     }
 }
 async fn example() -> Result<(), SynthesisError> {

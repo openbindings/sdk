@@ -835,6 +835,11 @@ pub fn live_arenas() -> usize {
     crate::raw::live_arenas()
 }
 
+/// Borrow a token's byte range without constructing its pointer or line coordinates.
+pub fn byte_range(value: crate::JsonRef<'_>) -> std::ops::Range<usize> {
+    value.owner.nodes[value.id].span.clone()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

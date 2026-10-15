@@ -1,5 +1,5 @@
 //! Run with: cargo run -p openbindings-json-schema-evaluator --example first_use
-use openbindings::{Direction, JsonValue, ParsedDocument, ValidationReport, ValueOutcome};
+use openbindings::{Direction, Document, JsonValue, ValidationReport, ValueOutcome};
 use openbindings_json_schema_evaluator::value_contracts;
 use serde::Serialize;
 use std::error::Error;
@@ -42,15 +42,15 @@ fn main() -> Result<(), Box<dyn Error>> {
           }
         }"#;
     // Valid JSON can still contain an unrecognized normative member.
-    let draft = ParsedDocument::parse(draft_text)?;
+    let draft = Document::parse(draft_text)?;
     print_findings(draft.validate()?.report());
     // The application corrects this known fixture's original text, not a normalized value
     // or a parsed diagnostic message. Existing snapshots remain immutable.
     let corrected_text = draft_text.replace("\"inputSchema\":", "\"input\":");
     println!("corrected source:\n{corrected_text}");
-    let document = ParsedDocument::parse(corrected_text)?;
+    let document = Document::parse(corrected_text)?;
     let validation = document.validate()?;
-    let Some(proof) = validation.validated() else {
+    let Some(proof) = validation.conformant() else {
         print_findings(validation.report());
         return Err(format!("document conformance: {:?}", validation.report().conclusion).into());
     };

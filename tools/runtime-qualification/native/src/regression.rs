@@ -1,17 +1,17 @@
 use openbindings::{
-    Conformance, Direction, Evidence, JsonValue, ParsedDocument, ResourceSet,
-    ValueContractPreparation, ValueOutcome,
+    Conformance, Direction, Document, Evidence, JsonValue, ResourceSet, ValueContractPreparation,
+    ValueOutcome,
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::json;
 use std::{hint::black_box, sync::Arc, time::Instant};
 
 fn prepare(source: &str) -> openbindings::ValueContract {
-    let document = ParsedDocument::parse(source).unwrap();
+    let document = Document::parse(source).unwrap();
     let context = document
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let ValueContractPreparation::Ready(contract) = context.prepare("run", Direction::Input) else {
@@ -39,7 +39,7 @@ fn main() {
         assert!(matches!(outcome, ValueOutcome::Satisfies));
         json!({"outcome":"satisfies"})
     } else {
-        let document = ParsedDocument::parse(&source).unwrap();
+        let document = Document::parse(&source).unwrap();
         let validation = document.validate().unwrap();
         let report = validation.report();
         if name == "healthy" {
@@ -113,7 +113,7 @@ fn main() {
             drop((outcome, value, contract));
             elapsed
         } else if lane == "assess" {
-            let document = ParsedDocument::parse(black_box(&source)).unwrap();
+            let document = Document::parse(black_box(&source)).unwrap();
             let start = Instant::now();
             let validation = black_box(document.validate().unwrap());
             let elapsed = start.elapsed().as_nanos();
@@ -122,7 +122,7 @@ fn main() {
         } else {
             assert_eq!(lane, "parse-assess");
             let start = Instant::now();
-            let document = ParsedDocument::parse(black_box(&source)).unwrap();
+            let document = Document::parse(black_box(&source)).unwrap();
             let validation = black_box(document.validate().unwrap());
             let elapsed = start.elapsed().as_nanos();
             drop((validation, document));

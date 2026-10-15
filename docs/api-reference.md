@@ -32,20 +32,37 @@ text is omitted, including reference spellings, URLs, origins, JSON Pointers,
 evidence-map keys and values, diagnostic messages, schema operands, bodies,
 credentials, provider state and invocation context. `Display`, accessors and
 serialization retain their existing output; use them when disclosure is intended.
-Debug formatting is not a stable serialization format. Public authoring and evaluator records retain
-struct-literal construction. Result-returning APIs document caller-visible failures
+Debug formatting is not a stable serialization format. Typed authoring parts and evaluator records retain struct-literal construction.
+`Document` owns private exact storage; construct and edit it through its methods. Result-returning APIs document caller-visible failures
 under `# Errors`; validation outcomes (including `DocumentValidation`) and configuration methods warn when ignored.
+
+## Rust document lifecycle
+
+| Public item | Contract |
+| --- | --- |
+| `Document::parse`, `Document::from_json` | Admit exact JSON without a conformance claim, including broken drafts. |
+| `Document::new` | Create an empty OBI declaring the authoring version. |
+| `Document::set`, `remove`, `edit(&[Edit])` | Require a mutable borrow. One atomic splice and parse per batch, exact untouched bytes, compact insertions, default JSON limits. |
+| Typed field and part setters | Edit descriptions, names, versions, operation schemas and typed operations, bindings, sources, dependencies and examples. Map setters support bulk construction. |
+| `DocumentValidation::document`, `conformant` | Borrow an admitted document or obtain proof only when every applicable rule is established. |
+| `Conformant<Document>` | Private proof, infallible reads, sole route to value contracts. No unchecked constructor, deserialization, dereference or mutable borrow. |
+| `as_document`, `into_inner` | Explicit plain reads, or consume proof to edit again. |
+| `Document::to_bytes`, `EditError::code` | Exact current bytes and stable kebab-case editing failure codes. |
+
+Source positions describe current bytes. Retained views, reports and proofs keep
+their revision when another owner is edited. Duplicate members remain inspectable
+for diagnostics and are refused by typed interpretation, editing and proof.
 
 ## Rust value-contract conveniences
 
 | Public item | Contract |
 | --- | --- |
-| `openbindings_json_schema_evaluator::value_contracts(&ValidatedDocument) -> ValueContracts` | Uses `Limits::default()`, `Diagnostics::Coarse` and an empty `ResourceSet`. Performs no preparation or acquisition. The validated-document gate remains required. |
+| `openbindings_json_schema_evaluator::value_contracts(&Conformant<Document>) -> ValueContracts` | Uses `Limits::default()`, `Diagnostics::Coarse` and an empty `ResourceSet`. Performs no preparation or acquisition. The document conformance gate remains required. |
 | `ValueContract::validate_json(input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError>` | Admits through `JsonValue::parse` with default limits, then validates. `Err` is admission failure only; all four value outcomes are `Ok`. Duplicate members yield no-verdict and numbers retain exact semantics. |
 | `ValueContractPreparation::into_result(self) -> Result<ValueContract, ValueContractPreparationError>` | Consumes preparation without retrying. Ready becomes `Ok`; every other reason and payload becomes `Err`. |
 | `ValueContractPreparationError` | Non-exhaustive error with `NoValueContract`, `OperationMissing`, `OperationAmbiguous { candidates }` and `NoVerdict { detail }`. Implements `Display` and `Error`; no-verdict exposes its original detail through `source()`. |
 
-The existing `ValidatedDocument::value_contracts` method remains the explicit path
+The existing `Conformant<Document>::value_contracts` method remains the explicit path
 for shared or configured evaluators and supplied resources. Core has no default
 evaluator dependency. Use `JsonValue::parse_with_limits` and `ValueContract::validate`
 for custom admission limits or retained exact values; `validate_with_control`
@@ -78,7 +95,7 @@ futures and `Rc` providers are also supported.
 ## Boundaries to preserve
 
 - Parsing and authoring create exact snapshots. Normative validation evaluates OBI
-  document rules; only its conformant branch creates a `ValidatedDocument` proof.
+  document rules; only its conformant branch creates a `Conformant<Document>` proof.
   Only that proof constructs normative value contracts and an operation invoker.
   Parsed snapshots retain fallible editor reads. Wasm owns the Rust proof; plain
   TypeScript reports and forged wrappers cannot create it.
@@ -90,21 +107,16 @@ futures and `Rc` providers are also supported.
   arbitrary-string or unknown-outcome branch. Public report/problem records remain
   constructible by custom evaluator authors.
 - Rust borrowed views do not create new owners. Rust clones and TypeScript `retain()`
-  share immutable state. TypeScript `ParsedDocument.value()`, `OperationView.value()`,
+  share immutable state. TypeScript `Document.value()`, `OperationView.value()`,
   `ExactJson.get()` and `ExactJson.at()` create **new disposable owners** on each call.
   New binding/source/dependency/example views follow this same owner-acquisition method rule;
   their frozen metadata is plain data. A traversal cursor and each yielded owner
-  have independent lifetimes. Scoped editable drafts own their converted exact
-  leaves; caller-inserted exact handles stay caller-owned. Explicit draft disposal
-  releases converted leaves; abandoning an undisposed draft does not revoke leaves
-  that are still reachable. Individual leaf finalizers provide best-effort cleanup.
-  Byte/text copies are ordinary host values. Dispose owners deterministically; release
-  does not promise lower process RSS or reduced Wasm capacity.
+  have independent lifetimes. See the TypeScript guide for editing ownership.
 - Every preparation compiles independently. Retain a ready `ValueContract` for
   repeated validation without recompilation; it survives context drop. Resource sets are immutable, explicit and scoped to each context; URI
   identity never authorizes I/O. Core and default schema evaluation do no acquisition.
-  For a missing resource, Rust `ParsedDocument::references()` and TypeScript
-  `ParsedDocument.references()` expose explicit reference spellings and keyword
+  For a missing resource, Rust `Document::references()` and TypeScript
+  `Document.references()` expose explicit reference spellings and keyword
   locations; apply an application disclosure policy before logging these source facts.
 - `ValueOutcome::Undefined { detail }` establishes an undefined result under the
   value-contract rules. TypeScript uses `{ outcome: "undefined", detail }`.
@@ -118,7 +130,7 @@ futures and `Rc` providers are also supported.
   own replacement policy and handle refusal at preparation and validation.
 - Static inspection uses `ReferenceRefusal` and `ReferenceRefusalReason`, including
   cancellation, instead of value-outcome `NoVerdict`. Original keyword and target
-  locations are preserved. Both parsed and validated documents support inspection;
+  locations are preserved. Both unproven and conformant documents support inspection;
   it performs no acquisition and makes no value-decidability claim.
 - Limits state their units and defaults in definitions. Cancellation is cooperative,
   not a deadline or preemptive interrupt. A same-thread `AbortSignal` cannot run while
@@ -209,7 +221,7 @@ limits of 64 MiB and 1,000,000 nodes, with no nesting cap.
 `validate_document_with_limits(input, JsonLimits)` accepts caller-selected byte, node
 and nesting limits, matching the explicit-limits shape of `JsonValue::parse_with_limits`.
 Both return `Result<DocumentValidation, VersionRefusal>`; only a conformant
-validation provides a `ValidatedDocument` proof.
+validation provides a `Conformant<Document>` proof.
 
 Admission precedes version selection. Until the complete JSON text is admitted,
 no version declaration has been established. An admission refusal leaves every
@@ -266,12 +278,12 @@ code-based Display representation.
 Raw parser admission codes `byte-limit`, `node-limit` and `depth-limit` remain
 `InputError` codes; whole-document findings translate them to `input-limit`.
 
-## Validated document reads
+## Conformant document reads
 
-`ValidatedDocument::value_contracts` returns `ValueContracts` directly;
-`operation::Invoker::new` takes `ValidatedDocument` and `with_evaluator` returns
+`Conformant<Document>::value_contracts` returns `ValueContracts` directly;
+`operation::Invoker::new` takes `Conformant<Document>` and `with_evaluator` returns
 `Self`. Preparation still may refuse, and Ready means prepared, not decidable.
-`SchemaRequest::document()` exposes the validated snapshot to custom evaluators.
+`SchemaRequest::document()` exposes the conformant document revision to custom evaluators.
 
 | Rust read | Result and presence |
 | --- | --- |
@@ -288,26 +300,15 @@ reads. Required names are scalar; descriptive text, tags and kinds use
 `utf16_units()` iterates without allocating, `json()` retains token/location access,
 and equality compares decoded UTF-16. `JsonRef::as_string()` returns None only for
 non-strings. The existing fallible view names remain unchanged; the `Validated`
-prefix identifies the additional proof, following `ValidatedDocument`.
+prefix identifies proof on the individual view. The owning document state is `Conformant<Document>`.
 
-TypeScript keeps its existing metadata and selection shapes. Validated documents
-inherit exact editor reads and add `valueContracts()` and `parsed()`. Top-level
-text is exact JavaScript UTF-16; optional text uses undefined for absence.
-Each top-level text getter checks only its own field, preserving valid siblings
-and absence when another metadata field is malformed.
-`schemas()` creates a new ExactJson owner for each map value on every call.
-`OperationView.input()` and `.output()` each create a new independent ExactJson owner,
-preserving undefined separately from null, false, true and objects. Dispose each
-acquisition; these methods make acquisition explicit. Plain text, metadata and editable draft
-`value` properties remain getters. `initialize()` reads the installed Wasm asset
-on Node without fetch; browsers retain module-relative loading. Explicit bytes
-or a compiled module bypass default loading in either host. Cleanup assertions
-import `liveStorageOwners` from `@openbindings/sdk/testing`; production entries
-export no test bookkeeping.
+The [TypeScript guide](../packages/typescript/README.md) describes facade ownership,
+metadata, initialization and disposal. Exact member and element traversal uses
+lazy disposable iterators; retain or dispose each acquired exact-value owner.
 
 ## Inspection and exact editing
 
-Rust `ParsedDocument` enumerates and looks up retained binding, source and
+Rust `Document` enumerates and looks up retained binding, source and
 dependency views. `OperationView` retains its existing binding-key association,
 adds tags/deprecation, and exposes named example views. Borrowed fields are tied
 to their view; clone a view or retain its `JsonRef` with `to_owned()` when needed.
@@ -317,17 +318,13 @@ resolve source availability. TypeScript projects whole namespace metadata eagerl
 and checks every row; a keyed view checks only its selected metadata when read.
 Existing global interpretation prerequisites still apply.
 
-TypeScript exact member/element traversal uses one lazy disposable iterator
-convention. `ParsedDocument.toDraft()` creates an `OwnedDocumentDraft` whose
-`EditableDocumentDraft` value provides writable normative maps/lists and exact
-opaque leaves. The existing readonly-friendly `DocumentDraft` input and
-`authorDocument` function remain. Conversion, editing, building and normative
-validation are separate; no operation-reference rewriting or implicit acquisition
-is introduced. See the shipped [inspection/edit caller](../packages/typescript/examples/inspect-edit.ts).
-
-`AuthoringFailure.sourceLocation`, when present, addresses original source bytes;
-`draftPointer` addresses the caller's draft. The two locations serve different
-purposes. Parsed descriptions, tags and kinds use exact `JsonStringRef` in Rust.
+Rust editors use the atomic `Document` methods described above. `EditError::code()`
+returns stable identifiers: `invalid-pointer`, `missing-parent`, `missing-value`,
+`not-container`, `duplicate-members`, `overlapping-edits`, `field-collision`,
+`serialization`, or parser/admission codes such as `byte-limit`, `node-limit` and
+`depth-limit`. `EditError::Authoring` retains the typed part's logical
+`draft_pointer`; `InterpretationError::source_location` addresses current exact
+source bytes. These coordinates serve different purposes.
 
 Document findings deduplicate explanations for the same source occurrence
 before presentation caps. Eliminating a repeat does not mark truncation; omitting

@@ -1,5 +1,5 @@
 //! Compose an opaque-object edit using only the public SDK and serde_json.
-use openbindings::{Conformance, JsonValue, ParsedDocument};
+use openbindings::{Conformance, Document, JsonValue};
 use std::collections::BTreeMap;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -36,21 +36,20 @@ pub fn replace_exact_object_member(
     Ok(JsonValue::parse(serde_json::to_vec(&composed)?)?)
 }
 
-/// Use the ordinary typed authoring path around the changed opaque leaf.
+/// Edit an opaque leaf while preserving every untouched source byte.
 pub fn edit_extension_member(
-    document: &ParsedDocument,
+    document: &Document,
     extension: &str,
     member: &str,
     replacement: &JsonValue,
-) -> Result<ParsedDocument> {
-    let mut draft = document.to_authoring()?;
-    let leaf = draft
-        .additional_fields
-        .get(extension)
-        .ok_or("extension is absent")?;
-    let changed = replace_exact_object_member(leaf, member, replacement)?;
-    draft.additional_fields.insert(extension.into(), changed);
-    Ok(draft.build()?)
+) -> Result<Document> {
+    let mut edited = document.clone();
+    let escape = |text: &str| text.replace('~', "~0").replace('/', "~1");
+    edited.set(
+        &format!("/{}/{}", escape(extension), escape(member)),
+        replacement,
+    )?;
+    Ok(edited)
 }
 
 const DOCUMENT: &str = r#"{"openbindings":"0.2.0","operations":{},"x-editor":{
@@ -60,7 +59,7 @@ const DOCUMENT: &str = r#"{"openbindings":"0.2.0","operations":{},"x-editor":{
 
 fn main() -> Result<()> {
     let revised = {
-        let original = ParsedDocument::parse(DOCUMENT)?;
+        let original = Document::parse(DOCUMENT)?;
         let replacement = JsonValue::string("Reviewed")?;
         edit_extension_member(&original, "x-editor", "annotation", &replacement)?
     }; // Original, draft and replacement can all be dropped before using this.

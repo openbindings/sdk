@@ -277,7 +277,12 @@ async fn complete_bad_body_and_version_priority_survive_with_metadata() {
         panic!("expected found")
     };
     assert_eq!(
-        document.parsed().validate().unwrap().report().conclusion,
+        document
+            .as_document()
+            .validate()
+            .unwrap()
+            .report()
+            .conclusion,
         Conformance::Conformant
     );
     let (r, _) = get(

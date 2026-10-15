@@ -1,19 +1,16 @@
 mod support;
-use openbindings::{
-    Direction, ParsedDocument, ResourceSet, ValueContractPreparation, ValueOutcome,
-};
+use openbindings::{Direction, Document, ResourceSet, ValueContractPreparation, ValueOutcome};
 use openbindings_interface_synthesis::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::sync::Arc;
 use support::*;
 #[tokio::test]
 async fn sdk_policy_cases_and_interface_output_shapes_are_distinct() {
-    let role =
-        ParsedDocument::parse(include_bytes!("fixtures/interface-synthesizer-0.2.json")).unwrap();
+    let role = Document::parse(include_bytes!("fixtures/interface-synthesizer-0.2.json")).unwrap();
     let context = role
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let ValueContractPreparation::Ready(contract) = context.prepare(
@@ -34,17 +31,7 @@ async fn sdk_policy_cases_and_interface_output_shapes_are_distinct() {
             .elements()
             .unwrap()
             .map(|s| {
-                let carrier = ParsedDocument::parse(format!(
-                    r#"{{"openbindings":"0.2.0","operations":{{}},"sources":{{"api":{}}}}}"#,
-                    s.get("source").unwrap().text()
-                ))
-                .unwrap()
-                .to_authoring()
-                .unwrap()
-                .sources
-                .unwrap()
-                .remove("api")
-                .unwrap();
+                let carrier = read_source(s.get("source").unwrap());
                 (optional(s, "name"), carrier)
             })
             .collect();
@@ -99,18 +86,20 @@ async fn sdk_policy_cases_and_interface_output_shapes_are_distinct() {
 #[test]
 fn sdk_policy_fixture_file_satisfies_its_local_schema() {
     let mut draft = openbindings::Document::new();
-    draft.operations.insert(
-        "check".into(),
-        openbindings::Operation {
-            input: Some(json(include_str!("fixtures/coverage-fixture.schema.json"))),
-            ..Default::default()
-        },
-    );
-    let doc = draft.build().unwrap();
+    draft
+        .set_operation(
+            "check",
+            &openbindings::Operation {
+                input: Some(json(include_str!("fixtures/coverage-fixture.schema.json"))),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let doc = draft.clone();
     let context = doc
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let ValueContractPreparation::Ready(contract) = context.prepare("check", Direction::Input)
@@ -125,12 +114,11 @@ fn sdk_policy_fixture_file_satisfies_its_local_schema() {
 
 #[test]
 fn independent_interface_examples_allow_variation_beyond_sdk_policy() {
-    let role =
-        ParsedDocument::parse(include_bytes!("fixtures/interface-synthesizer-0.2.json")).unwrap();
+    let role = Document::parse(include_bytes!("fixtures/interface-synthesizer-0.2.json")).unwrap();
     let context = role
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let ValueContractPreparation::Ready(contract) = context.prepare(

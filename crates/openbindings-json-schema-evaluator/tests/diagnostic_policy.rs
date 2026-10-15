@@ -6,18 +6,18 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-fn document(schema: serde_json::Value) -> ParsedDocument {
-    ParsedDocument::parse(
+fn document(schema: serde_json::Value) -> Document {
+    Document::parse(
         serde_json::json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}})
             .to_string(),
     )
     .unwrap()
 }
-fn context(document: &ParsedDocument) -> ValueContracts {
+fn context(document: &Document) -> ValueContracts {
     document
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(
             Arc::new(
@@ -27,7 +27,7 @@ fn context(document: &ParsedDocument) -> ValueContracts {
             ResourceSet::default(),
         )
 }
-fn ready(document: &ParsedDocument) -> ValueContract {
+fn ready(document: &Document) -> ValueContract {
     match context(document).prepare("op", Direction::Input) {
         ValueContractPreparation::Ready(contract) => contract,
         state => panic!("expected ready: {state:?}"),
@@ -66,10 +66,10 @@ fn namespace_is_checked_before_context_creation_or_any_selection() {
             "/operations/other/aliases/0",
         ),
     ] {
-        let doc = ParsedDocument::parse(text).unwrap();
+        let doc = Document::parse(text).unwrap();
         let calls = Arc::new(AtomicUsize::new(0));
         let validation = doc.validate().unwrap();
-        assert!(validation.validated().is_none());
+        assert!(validation.conformant().is_none());
         let error = doc.resolve_operation("op").unwrap_err();
         assert_eq!(error.code(), code);
         let at = error.source_location().unwrap();
@@ -84,17 +84,17 @@ fn namespace_is_checked_before_context_creation_or_any_selection() {
 }
 #[test]
 fn draft_metadata_and_semantic_setup_partitions_remain_distinct() {
-    let doc = ParsedDocument::parse(r#"{"openbindings":"0.2.0","description":42,"operations":{"op":{"input":false,"aliases":["shared"]},"other":{"aliases":["shared"]}}}"#).unwrap();
+    let doc = Document::parse(r#"{"openbindings":"0.2.0","description":42,"operations":{"op":{"input":false,"aliases":["shared"]},"other":{"aliases":["shared"]}}}"#).unwrap();
     assert_eq!(
         doc.validate().unwrap().report().conclusion,
         Conformance::NonConformant
     );
-    assert!(doc.validate().unwrap().validated().is_none());
+    assert!(doc.validate().unwrap().conformant().is_none());
     assert!(matches!(
         doc.resolve_operation("shared").unwrap(),
         OperationSelection::Ambiguous { .. }
     ));
-    let doc = ParsedDocument::parse(
+    let doc = Document::parse(
         r#"{"openbindings":"0.2.0","operations":{"op":{"input":false},"other":{}}}"#,
     )
     .unwrap();
@@ -174,7 +174,7 @@ fn pattern_preparation_failures_use_original_locations_and_safe_messages() {
                 let context = document(entry)
                     .validate()
                     .unwrap()
-                    .validated()
+                    .conformant()
                     .expect("conformant document")
                     .value_contracts(
                         Arc::new(DefaultEvaluator::new().with_diagnostics(
@@ -235,7 +235,7 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
         if reference.contains('\n') {
             let validation = doc.validate().unwrap();
             assert_eq!(validation.report().evidence["OBI-11"], Evidence::Violated);
-            assert!(validation.validated().is_none());
+            assert!(validation.conformant().is_none());
             continue;
         }
         // Valid absent carriers now defer refusal to validation; malformed URI
@@ -388,7 +388,7 @@ fn external_evaluator_construction_and_matching_stay_supported() {
     let context = document(serde_json::json!(true))
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(Custom(calls.clone())), ResourceSet::default());
     let state = context.prepare("op", Direction::Input);

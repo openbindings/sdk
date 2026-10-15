@@ -1,5 +1,5 @@
 use openbindings::{
-    Conformance, Direction, JsonValue, ParsedDocument, ResourceSet, ValueContractPreparation,
+    Conformance, Direction, Document, JsonValue, ResourceSet, ValueContractPreparation,
     ValueOutcome,
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
@@ -21,12 +21,12 @@ fn once(
     timed: bool,
 ) -> (BTreeMap<&'static str, f64>, Value) {
     let mut row = BTreeMap::new();
-    let (document, ms) = measured(timed, || ParsedDocument::parse(document).unwrap());
+    let (document, ms) = measured(timed, || Document::parse(document).unwrap());
     row.insert("parseDocument", ms);
     let (validation, ms) = measured(timed, || document.validate().unwrap());
     row.insert("assess", ms);
     assert_eq!(validation.report().conclusion, Conformance::Conformant);
-    let proof = validation.validated().expect("conformant document");
+    let proof = validation.conformant().expect("conformant document");
     let ((context, contract), ms) = measured(timed, || {
         let context =
             proof.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
@@ -150,11 +150,11 @@ fn main() {
         std::fs::read_to_string(root.join(manifest["adversarial"][kind]["name"].as_str().unwrap()))
             .unwrap()
     };
-    let document = ParsedDocument::parse(&source("document")).unwrap();
+    let document = Document::parse(&source("document")).unwrap();
     let context = document
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let ValueContractPreparation::Ready(contract) = context.prepare("check", Direction::Input)
@@ -169,7 +169,8 @@ fn main() {
         let (wire, serialize_ms) = measured(timed, || serde_json::to_string(&result).unwrap());
         let ValueOutcome::Fails {
             problems,
-            problems_complete, ..
+            problems_complete,
+            ..
         } = result
         else {
             panic!("witness fails")

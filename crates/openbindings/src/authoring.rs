@@ -1,5 +1,5 @@
 //! Typed authoring of the normative vocabulary. Opaque fields retain exact JSON.
-use crate::{AUTHORING_VERSION, InputError, JsonKind, JsonRef, JsonValue};
+use crate::{JsonRef, JsonValue};
 use openbindings_internal_json::decimal::Decimal;
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use std::{collections::BTreeMap, fmt};
@@ -59,7 +59,7 @@ impl AuthoringError {
     pub fn path_omitted_for_limit(&self) -> bool {
         self.path_omitted_for_limit
     }
-    fn plain(kind: AuthoringErrorKind, message: &str) -> Self {
+    pub(crate) fn plain(kind: AuthoringErrorKind, message: &str) -> Self {
         Self {
             kind,
             draft_pointer: None,
@@ -129,42 +129,6 @@ fn check_fields(
     }
     Ok(())
 }
-trait Read: Sized {
-    fn read(value: JsonRef<'_>) -> Result<Self, AuthoringError>;
-}
-impl Read for String {
-    fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
-        v.as_str()
-            .map(str::to_owned)
-            .ok_or_else(|| error(v, "expected a Unicode scalar string"))
-    }
-}
-impl Read for bool {
-    fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
-        v.as_bool().ok_or_else(|| error(v, "expected a boolean"))
-    }
-}
-impl Read for JsonValue {
-    fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
-        Ok(v.to_owned())
-    }
-}
-impl<T: Read> Read for Vec<T> {
-    fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
-        v.elements()
-            .ok_or_else(|| error(v, "expected an array"))?
-            .map(T::read)
-            .collect()
-    }
-}
-impl<T: Read> Read for BTreeMap<String, T> {
-    fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
-        v.members()
-            .ok_or_else(|| error(v, "expected an object"))?
-            .map(|m| Ok((String::read(m.name)?, T::read(m.value)?)))
-            .collect()
-    }
-}
 
 /// An interoperable preference integer (inclusive ±9,007,199,254,740,991).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
@@ -203,142 +167,6 @@ impl Preference {
             .parse::<f64>()
             .map_err(|_| error(v, "preference conversion failed"))? as i64;
         Ok(Self(n))
-    }
-}
-
-impl Read for Preference {
-    fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
-        Self::from_json_value(v)
-    }
-}
-
-#[derive(Clone)]
-/// Owned, editable normative vocabulary. `None` omits an optional member; opaque `JsonValue::null()` remains present JSON null. Building checks representability and collisions, not conformance. Validate the new immutable snapshot before publication.
-pub struct Document {
-    /// Declared specification version; defaults to [`AUTHORING_VERSION`].
-    pub openbindings: String,
-    /// Primary operation keys and draft operations; aliases share their namespace during interpretation.
-    pub operations: BTreeMap<String, Operation>,
-    /// Optional human-facing interface name.
-    pub name: Option<String>,
-    /// Optional interface-defined version, independent of the `openbindings` declaration.
-    pub version: Option<String>,
-    /// Optional human-facing interface description.
-    pub description: Option<String>,
-    /// Optional named JSON Schema values; exact opaque contents remain unmodified.
-    pub schemas: Option<BTreeMap<String, JsonValue>>,
-    /// Optional named dependencies on operation contracts.
-    pub dependencies: Option<BTreeMap<String, Dependency>>,
-    /// Optional named binding sources, interpreted by their source kind outside core.
-    pub sources: Option<BTreeMap<String, Source>>,
-    /// Optional named operation-to-source bindings; core does not invoke or rank them.
-    pub bindings: Option<BTreeMap<String, Binding>>,
-    /// Extension and unknown members, retained verbatim; conformance determines whether each is allowed.
-    pub additional_fields: BTreeMap<String, JsonValue>,
-}
-impl Serialize for Document {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        const RESERVED: &[&str] = &[
-            "openbindings",
-            "operations",
-            "name",
-            "version",
-            "description",
-            "schemas",
-            "dependencies",
-            "sources",
-            "bindings",
-        ];
-        for key in self.additional_fields.keys() {
-            if RESERVED.contains(&key.as_str()) {
-                return Err(serde::ser::Error::custom(
-                    "additional field shadows a typed member",
-                ));
-            }
-        }
-        let mut map = serializer.serialize_map(None)?;
-        map.serialize_entry("openbindings", &self.openbindings)?;
-        map.serialize_entry("operations", &self.operations)?;
-        if let Some(value) = &self.name {
-            map.serialize_entry("name", value)?;
-        }
-        if let Some(value) = &self.version {
-            map.serialize_entry("version", value)?;
-        }
-        if let Some(value) = &self.description {
-            map.serialize_entry("description", value)?;
-        }
-        if let Some(value) = &self.schemas {
-            map.serialize_entry("schemas", value)?;
-        }
-        if let Some(value) = &self.dependencies {
-            map.serialize_entry("dependencies", value)?;
-        }
-        if let Some(value) = &self.sources {
-            map.serialize_entry("sources", value)?;
-        }
-        if let Some(value) = &self.bindings {
-            map.serialize_entry("bindings", value)?;
-        }
-        for (k, v) in &self.additional_fields {
-            map.serialize_entry(k, v)?;
-        }
-        map.end()
-    }
-}
-impl Read for Document {
-    fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
-        if v.kind() != JsonKind::Object {
-            return Err(error(v, "expected an object"));
-        }
-        Ok(Self {
-            openbindings: <String>::read(
-                v.get("openbindings")
-                    .ok_or_else(|| error(v, "missing openbindings"))?,
-            )?,
-            operations: <BTreeMap<String, Operation>>::read(
-                v.get("operations")
-                    .ok_or_else(|| error(v, "missing operations"))?,
-            )?,
-            name: v.get("name").map(<String>::read).transpose()?,
-            version: v.get("version").map(<String>::read).transpose()?,
-            description: v.get("description").map(<String>::read).transpose()?,
-            schemas: v
-                .get("schemas")
-                .map(<BTreeMap<String, JsonValue>>::read)
-                .transpose()?,
-            dependencies: v
-                .get("dependencies")
-                .map(<BTreeMap<String, Dependency>>::read)
-                .transpose()?,
-            sources: v
-                .get("sources")
-                .map(<BTreeMap<String, Source>>::read)
-                .transpose()?,
-            bindings: v
-                .get("bindings")
-                .map(<BTreeMap<String, Binding>>::read)
-                .transpose()?,
-            additional_fields: v
-                .members()
-                .unwrap()
-                .filter(|m| {
-                    !([
-                        "openbindings",
-                        "operations",
-                        "name",
-                        "version",
-                        "description",
-                        "schemas",
-                        "dependencies",
-                        "sources",
-                        "bindings",
-                    ])
-                    .contains(&m.name.as_str().unwrap_or(""))
-                })
-                .map(|m| Ok((String::read(m.name)?, m.value.to_owned())))
-                .collect::<Result<_, AuthoringError>>()?,
-        })
     }
 }
 
@@ -409,42 +237,6 @@ impl Serialize for Operation {
         map.end()
     }
 }
-impl Read for Operation {
-    fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
-        if v.kind() != JsonKind::Object {
-            return Err(error(v, "expected an object"));
-        }
-        Ok(Self {
-            description: v.get("description").map(<String>::read).transpose()?,
-            deprecated: v.get("deprecated").map(<bool>::read).transpose()?,
-            tags: v.get("tags").map(<Vec<String>>::read).transpose()?,
-            aliases: v.get("aliases").map(<Vec<String>>::read).transpose()?,
-            input: v.get("input").map(<JsonValue>::read).transpose()?,
-            output: v.get("output").map(<JsonValue>::read).transpose()?,
-            examples: v
-                .get("examples")
-                .map(<BTreeMap<String, Example>>::read)
-                .transpose()?,
-            additional_fields: v
-                .members()
-                .unwrap()
-                .filter(|m| {
-                    !([
-                        "description",
-                        "deprecated",
-                        "tags",
-                        "aliases",
-                        "input",
-                        "output",
-                        "examples",
-                    ])
-                    .contains(&m.name.as_str().unwrap_or(""))
-                })
-                .map(|m| Ok((String::read(m.name)?, m.value.to_owned())))
-                .collect::<Result<_, AuthoringError>>()?,
-        })
-    }
-}
 
 #[derive(Clone, Default)]
 /// Editable example values; these are instances, not schemas or proof that an operation accepts them.
@@ -482,26 +274,6 @@ impl Serialize for Example {
             map.serialize_entry(k, v)?;
         }
         map.end()
-    }
-}
-impl Read for Example {
-    fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
-        if v.kind() != JsonKind::Object {
-            return Err(error(v, "expected an object"));
-        }
-        Ok(Self {
-            description: v.get("description").map(<String>::read).transpose()?,
-            input: v.get("input").map(<JsonValue>::read).transpose()?,
-            output: v.get("output").map(<JsonValue>::read).transpose()?,
-            additional_fields: v
-                .members()
-                .unwrap()
-                .filter(|m| {
-                    !(["description", "input", "output"]).contains(&m.name.as_str().unwrap_or(""))
-                })
-                .map(|m| Ok((String::read(m.name)?, m.value.to_owned())))
-                .collect::<Result<_, AuthoringError>>()?,
-        })
     }
 }
 
@@ -543,30 +315,6 @@ impl Serialize for Dependency {
         map.end()
     }
 }
-impl Read for Dependency {
-    fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
-        if v.kind() != JsonKind::Object {
-            return Err(error(v, "expected an object"));
-        }
-        Ok(Self {
-            operation: <String>::read(
-                v.get("operation")
-                    .ok_or_else(|| error(v, "missing operation"))?,
-            )?,
-            kinds: v.get("kinds").map(<Vec<String>>::read).transpose()?,
-            description: v.get("description").map(<String>::read).transpose()?,
-            additional_fields: v
-                .members()
-                .unwrap()
-                .filter(|m| {
-                    !(["operation", "kinds", "description"])
-                        .contains(&m.name.as_str().unwrap_or(""))
-                })
-                .map(|m| Ok((String::read(m.name)?, m.value.to_owned())))
-                .collect::<Result<_, AuthoringError>>()?,
-        })
-    }
-}
 
 #[derive(Clone, Default)]
 /// Editable source metadata and opaque kind-specific content. Core preserves content without acquiring resources or executing it.
@@ -602,26 +350,6 @@ impl Serialize for Source {
             map.serialize_entry(k, v)?;
         }
         map.end()
-    }
-}
-impl Read for Source {
-    fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
-        if v.kind() != JsonKind::Object {
-            return Err(error(v, "expected an object"));
-        }
-        Ok(Self {
-            kind: <String>::read(v.get("kind").ok_or_else(|| error(v, "missing kind"))?)?,
-            content: v.get("content").map(<JsonValue>::read).transpose()?,
-            description: v.get("description").map(<String>::read).transpose()?,
-            additional_fields: v
-                .members()
-                .unwrap()
-                .filter(|m| {
-                    !(["kind", "content", "description"]).contains(&m.name.as_str().unwrap_or(""))
-                })
-                .map(|m| Ok((String::read(m.name)?, m.value.to_owned())))
-                .collect::<Result<_, AuthoringError>>()?,
-        })
     }
 }
 
@@ -687,130 +415,7 @@ impl Serialize for Binding {
         map.end()
     }
 }
-impl Read for Binding {
-    fn read(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
-        if v.kind() != JsonKind::Object {
-            return Err(error(v, "expected an object"));
-        }
-        Ok(Self {
-            operation: <String>::read(
-                v.get("operation")
-                    .ok_or_else(|| error(v, "missing operation"))?,
-            )?,
-            source: <String>::read(v.get("source").ok_or_else(|| error(v, "missing source"))?)?,
-            content: v.get("content").map(<JsonValue>::read).transpose()?,
-            idempotent: v.get("idempotent").map(<bool>::read).transpose()?,
-            preference: v.get("preference").map(<Preference>::read).transpose()?,
-            description: v.get("description").map(<String>::read).transpose()?,
-            deprecated: v.get("deprecated").map(<bool>::read).transpose()?,
-            additional_fields: v
-                .members()
-                .unwrap()
-                .filter(|m| {
-                    !([
-                        "operation",
-                        "source",
-                        "content",
-                        "idempotent",
-                        "preference",
-                        "description",
-                        "deprecated",
-                    ])
-                    .contains(&m.name.as_str().unwrap_or(""))
-                })
-                .map(|m| Ok((String::read(m.name)?, m.value.to_owned())))
-                .collect::<Result<_, AuthoringError>>()?,
-        })
-    }
-}
 
-impl Default for Document {
-    fn default() -> Self {
-        Self {
-            openbindings: AUTHORING_VERSION.into(),
-            operations: BTreeMap::new(),
-            name: None,
-            version: None,
-            description: None,
-            schemas: None,
-            dependencies: None,
-            sources: None,
-            bindings: None,
-            additional_fields: BTreeMap::new(),
-        }
-    }
-}
-impl Document {
-    /// Create an empty draft declaring [`AUTHORING_VERSION`], with all optional fields absent.
-    pub fn new() -> Self {
-        Self::default()
-    }
-    /// Reads only representable normative fields; validation remains available for every parsed input.
-    ///
-    /// # Errors
-    /// Returns an authoring error for duplicate members, malformed known fields, or strings/numbers that the typed authoring model cannot represent.
-    pub fn from_json(value: &JsonValue) -> Result<Self, AuthoringError> {
-        if value.has_duplicate_names() {
-            let mut error = error(
-                value.view(),
-                "duplicate member names prevent typed authoring",
-            );
-            error.kind = AuthoringErrorKind::DuplicateMembers;
-            return Err(error);
-        }
-        Self::read(value.view())
-    }
-    /// Creates a new independent snapshot. This does not claim conformance.
-    ///
-    /// # Errors
-    /// Returns an authoring error for extension names colliding with known fields, serialization failure, or exhausted encoding/admission limits. This does not establish normative conformance.
-    pub fn to_json(&self) -> Result<JsonValue, AuthoringError> {
-        self.check_collisions()?;
-        struct BoundedOutput {
-            bytes: Vec<u8>,
-            max: usize,
-            exceeded: bool,
-        }
-        impl std::io::Write for BoundedOutput {
-            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-                if bytes.len() > self.max.saturating_sub(self.bytes.len()) {
-                    self.exceeded = true;
-                    return Err(std::io::Error::other("authoring byte limit exceeded"));
-                }
-                self.bytes.extend_from_slice(bytes);
-                Ok(bytes.len())
-            }
-            fn flush(&mut self) -> std::io::Result<()> {
-                Ok(())
-            }
-        }
-        let mut output = BoundedOutput {
-            bytes: Vec::new(),
-            max: crate::JsonLimits::default().max_bytes,
-            exceeded: false,
-        };
-        serde_json::to_writer(&mut output, self).map_err(|_| {
-            AuthoringError::plain(
-                if output.exceeded {
-                    AuthoringErrorKind::Limit
-                } else {
-                    AuthoringErrorKind::Serialization
-                },
-                "draft could not be serialized within the supported JSON profile",
-            )
-        })?;
-        JsonValue::parse(output.bytes).map_err(|e: InputError| {
-            AuthoringError::plain(
-                if e.kind == crate::InputErrorKind::Limit {
-                    AuthoringErrorKind::Limit
-                } else {
-                    AuthoringErrorKind::Serialization
-                },
-                e.code,
-            )
-        })
-    }
-}
 impl Dependency {
     /// Test the declared kind filter with exact string equality; absence accepts all.
     /// An empty list matches none but is nonconformant. This does not establish
@@ -821,92 +426,6 @@ impl Dependency {
             .is_none_or(|kinds| kinds.iter().any(|k| k == kind))
     }
 }
-impl Document {
-    fn check_collisions(&self) -> Result<(), AuthoringError> {
-        check_fields(
-            &self.additional_fields,
-            &[
-                "openbindings",
-                "operations",
-                "name",
-                "version",
-                "description",
-                "schemas",
-                "dependencies",
-                "sources",
-                "bindings",
-            ],
-            &[],
-        )?;
-        for (key, operation) in &self.operations {
-            check_fields(
-                &operation.additional_fields,
-                &[
-                    "description",
-                    "deprecated",
-                    "tags",
-                    "aliases",
-                    "input",
-                    "output",
-                    "examples",
-                ],
-                &["operations", key],
-            )?;
-            if let Some(examples) = &operation.examples {
-                for (name, example) in examples {
-                    check_fields(
-                        &example.additional_fields,
-                        &["description", "input", "output"],
-                        &["operations", key, "examples", name],
-                    )?;
-                }
-            }
-        }
-        if let Some(entries) = &self.dependencies {
-            for (key, entry) in entries {
-                check_fields(
-                    &entry.additional_fields,
-                    &["operation", "kinds", "description"],
-                    &["dependencies", key],
-                )?;
-            }
-        }
-        if let Some(entries) = &self.sources {
-            for (key, entry) in entries {
-                check_fields(
-                    &entry.additional_fields,
-                    &["kind", "content", "description"],
-                    &["sources", key],
-                )?;
-            }
-        }
-        if let Some(entries) = &self.bindings {
-            for (key, entry) in entries {
-                check_fields(
-                    &entry.additional_fields,
-                    &[
-                        "operation",
-                        "source",
-                        "content",
-                        "idempotent",
-                        "preference",
-                        "description",
-                        "deprecated",
-                    ],
-                    &["bindings", key],
-                )?;
-            }
-        }
-        Ok(())
-    }
-}
-
-impl std::fmt::Debug for Document {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Document").finish_non_exhaustive()
-    }
-}
-
 impl std::fmt::Debug for Operation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Operation").finish_non_exhaustive()
@@ -937,29 +456,128 @@ impl std::fmt::Debug for Dependency {
     }
 }
 
+// Parts are checked before serialization so native paths remain precise.
+pub(crate) trait Part: Serialize {
+    fn check(&self, path: &[&str]) -> Result<(), AuthoringError>;
+}
+impl<T: Part> Part for BTreeMap<String, T> {
+    fn check(&self, path: &[&str]) -> Result<(), AuthoringError> {
+        for (key, value) in self {
+            let mut child = path.to_vec();
+            child.push(key);
+            value.check(&child)?;
+        }
+        Ok(())
+    }
+}
+impl Part for Operation {
+    fn check(&self, path: &[&str]) -> Result<(), AuthoringError> {
+        check_fields(
+            &self.additional_fields,
+            &[
+                "description",
+                "deprecated",
+                "tags",
+                "aliases",
+                "input",
+                "output",
+                "examples",
+            ],
+            path,
+        )?;
+        if let Some(examples) = &self.examples {
+            let mut path = path.to_vec();
+            path.push("examples");
+            examples.check(&path)?;
+        }
+        Ok(())
+    }
+}
+impl Part for Example {
+    fn check(&self, path: &[&str]) -> Result<(), AuthoringError> {
+        check_fields(
+            &self.additional_fields,
+            &["description", "input", "output"],
+            path,
+        )
+    }
+}
+impl Part for Binding {
+    fn check(&self, path: &[&str]) -> Result<(), AuthoringError> {
+        check_fields(
+            &self.additional_fields,
+            &[
+                "operation",
+                "source",
+                "content",
+                "idempotent",
+                "preference",
+                "description",
+                "deprecated",
+            ],
+            path,
+        )
+    }
+}
+impl Part for Source {
+    fn check(&self, path: &[&str]) -> Result<(), AuthoringError> {
+        check_fields(
+            &self.additional_fields,
+            &["kind", "content", "description"],
+            path,
+        )
+    }
+}
+impl Part for Dependency {
+    fn check(&self, path: &[&str]) -> Result<(), AuthoringError> {
+        check_fields(
+            &self.additional_fields,
+            &["operation", "kinds", "description"],
+            path,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Document, EditError};
+
     #[test]
     fn absence_null_and_unknown_survive() {
-        let value=JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{"go":{"input":true,"examples":{"one":{"input":null}}}},"sources":{"x":{"kind":"custom","content":null}},"x-empty":[],"unknown":9007199254740993}"#).unwrap();
-        let model = Document::from_json(&value).unwrap();
-        let output = model.to_json().unwrap();
-        assert_eq!(value.semantic_eq(&output), Some(true));
+        let value = JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{"go":{"input":true,"examples":{"one":{"input":null}}}},"sources":{"x":{"kind":"custom","content":null}},"x-empty":[],"unknown":9007199254740993}"#).unwrap();
+        let model = Document::from_json(value.clone());
+        assert_eq!(value.semantic_eq(model.value()), Some(true));
+        assert!(model.name().unwrap().is_none());
+        assert_eq!(
+            model
+                .source("x")
+                .unwrap()
+                .unwrap()
+                .content()
+                .unwrap()
+                .kind(),
+            crate::JsonKind::Null
+        );
     }
     #[test]
     fn optional_typed_null_is_an_error() {
-        let value =
-            JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{},"name":null}"#).unwrap();
-        assert!(Document::from_json(&value).is_err());
+        let model =
+            Document::parse(r#"{"openbindings":"0.2.0","operations":{},"name":null}"#).unwrap();
+        assert!(model.name().is_err());
     }
     #[test]
     fn reserved_member_collision_is_not_serialized() {
-        let mut b = Document::new();
-        b.additional_fields
-            .insert("operations".into(), JsonValue::null());
-        assert!(b.to_json().is_err());
-        assert!(serde_json::to_string(&b).is_err());
+        let mut operation = Operation::default();
+        operation
+            .additional_fields
+            .insert("input".into(), JsonValue::null());
+        let mut model = Document::new();
+        assert!(matches!(
+            model.set_operation("go", &operation),
+            Err(EditError::Authoring(_))
+        ));
+        assert!(serde_json::to_string(&operation).is_err());
     }
     #[test]
     fn preference_mathematical_forms() {
@@ -969,8 +587,10 @@ mod tests {
             "9007199254740991.0",
             "-9.007199254740991e15",
         ] {
-            let value=JsonValue::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{}},"bindings":{{"b":{{"operation":"x","source":"s","preference":{n}}}}}}}"#)).unwrap();
-            assert!(Document::from_json(&value).is_ok(), "{n}");
+            assert!(
+                Preference::from_json_value(JsonValue::parse(n).unwrap().view()).is_ok(),
+                "{n}"
+            );
         }
     }
 }

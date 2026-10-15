@@ -1,6 +1,6 @@
 # Choose a schema evaluator
 
-Validate a document with `ParsedDocument::validate()` using only `openbindings`.
+Validate a document with `Document::validate()` using only `openbindings`.
 To validate an operation's values, select `DefaultEvaluator` from
 `openbindings-json-schema-evaluator`, or supply your own `SchemaEvaluator`.
 The [Rust first-use example](rust-first-use.md) shows the complete path.
@@ -32,7 +32,7 @@ the default evaluator; it does not expose custom evaluator callbacks.
 
 Implement `SchemaEvaluator::prepare` and return an owned `PreparedSchema`.
 Pass the implementation in an `Arc` and an immutable `ResourceSet` to
-`ValidatedDocument::value_contracts`. Implement `PreparedSchema::validate` to
+`Conformant<Document>::value_contracts`. Implement `PreparedSchema::validate` to
 return satisfies, fails, undefined or no-verdict. Observe `WorkControl` during both stages
 and retain everything needed after the document and context owners are dropped.
 

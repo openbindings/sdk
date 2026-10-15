@@ -1,7 +1,7 @@
 //! Independent wire-shape oracle: the pinned published role document, not a
 //! schema recreated from this implementation's native types.
 use openbindings::{
-    Direction, JsonValue, ParsedDocument, ResourceSet, ValueContractPreparation, ValueOutcome,
+    Direction, Document, JsonValue, ResourceSet, ValueContractPreparation, ValueOutcome,
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use openbindings_source_inspection::*;
@@ -9,12 +9,11 @@ use std::sync::Arc;
 
 #[test]
 fn inventories_validate_against_pinned_role_output_contract() {
-    let document =
-        ParsedDocument::parse(include_bytes!("fixtures/source-inspector-0.1.json")).unwrap();
+    let document = Document::parse(include_bytes!("fixtures/source-inspector-0.1.json")).unwrap();
     let context = document
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let ValueContractPreparation::Ready(contract) = context.prepare(
@@ -65,12 +64,11 @@ fn inventories_validate_against_pinned_role_output_contract() {
 
 #[test]
 fn duplicate_recovery_is_sdk_policy_not_an_interface_requirement() {
-    let document =
-        ParsedDocument::parse(include_bytes!("fixtures/source-inspector-0.1.json")).unwrap();
+    let document = Document::parse(include_bytes!("fixtures/source-inspector-0.1.json")).unwrap();
     let context = document
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let ValueContractPreparation::Ready(contract) = context.prepare(
@@ -108,8 +106,7 @@ fn duplicate_recovery_is_sdk_policy_not_an_interface_requirement() {
 // which permits additional evidence. Both serializers must preserve it exactly.
 #[test]
 fn limitation_additional_evidence_matches_the_published_interface() {
-    let document =
-        ParsedDocument::parse(include_bytes!("fixtures/source-inspector-0.1.json")).unwrap();
+    let document = Document::parse(include_bytes!("fixtures/source-inspector-0.1.json")).unwrap();
     assert!(
         document
             .value()
@@ -122,7 +119,7 @@ fn limitation_additional_evidence_matches_the_published_interface() {
     let context = document
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let ValueContractPreparation::Ready(contract) = context.prepare(

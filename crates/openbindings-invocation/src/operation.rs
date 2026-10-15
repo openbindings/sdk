@@ -12,8 +12,8 @@ use crate::{
     value::source_from_json,
 };
 use openbindings::{
-    Direction, JsonKind, JsonValue, NoVerdict, NoVerdictReason, ResourceSet, SchemaEvaluator,
-    Source, ValidatedBindingView, ValidatedDocument, ValidatedOperationView, ValueContract,
+    Conformant, Direction, Document, JsonKind, JsonValue, NoVerdict, NoVerdictReason, ResourceSet,
+    SchemaEvaluator, Source, ValidatedBindingView, ValidatedOperationView, ValueContract,
     ValueContractPreparation, ValueContracts, ValueOutcome,
 };
 use std::{
@@ -146,13 +146,13 @@ impl fmt::Debug for Attempt<'_> {
 
 /// Reusable document/provider pair. Cloned document storage is retained,
 /// without a preparation cache, registry, implicit evaluator, network access,
-/// or retry policy. Construction requires a validated document.
+/// or retry policy. Construction requires a conformant document.
 ///
 /// The caller must supply a provider whose pure exact-kind support represents
 /// its routing policy. Multiple providers can be composed by the application;
 /// registration order never becomes SDK selection policy.
 pub struct Invoker<P> {
-    document: ValidatedDocument,
+    document: Conformant<Document>,
     binding: binding::Invoker<P>,
     contracts: Option<ValueContracts>,
     sources: CarrierCache<Source>,
@@ -167,9 +167,9 @@ impl<P> std::fmt::Debug for Invoker<P> {
 impl<P: BindingInvoker> Invoker<P> {
     /// Retain a document and an explicit binding provider.
     /// ```compile_fail
-    /// use openbindings::ParsedDocument;
+    /// use openbindings::Document;
     /// use openbindings_invocation::{binding::BindingInvoker, operation::Invoker};
-    /// fn draft<P: BindingInvoker>(document: ParsedDocument, provider: P) {
+    /// fn draft<P: BindingInvoker>(document: Document, provider: P) {
     ///     let _ = Invoker::new(document, provider);
     /// }
     /// ```
@@ -177,7 +177,7 @@ impl<P: BindingInvoker> Invoker<P> {
     /// Declared schemas
     /// yield `ERR_SCHEMA_UNRESOLVED` on actual values until an evaluator is supplied.
     /// Sides without a schema forward values without claiming validation.
-    pub fn new(document: ValidatedDocument, provider: P) -> Self {
+    pub fn new(document: Conformant<Document>, provider: P) -> Self {
         Self {
             document,
             binding: binding::Invoker::new(provider),

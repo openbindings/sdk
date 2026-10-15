@@ -49,8 +49,8 @@ async function main() {
   await rejects(carrier('null'), 'example.catalog.unreadable');
   await rejects(document(`{"kind":"${kind}"}`), 'example.catalog.unreadable');
   await rejects(document(`{"kind":"${kind}","content":[],"selector":"legacy"}`), 'invalid-input');
-  await rejects(document(`{"kind":"${kind}","content":[],"description":7}`), 'string');
-  await rejects(document('{"kind":7,"content":[]}'), 'string');
+  await rejects(document(`{"kind":"${kind}","content":[],"description":7}`), 'invalid-source-description');
+  await rejects(document('{"kind":7,"content":[]}'), 'invalid-source-kind');
   await rejects(document(`{"kind":"${kind}/future","content":[]}`), 'unsupported-kind');
   console.log('source inspection: TypeScript types and real local async Wasm probe passed');
 }

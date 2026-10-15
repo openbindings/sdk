@@ -1,6 +1,6 @@
 //! Fixed, local workload evidence, not an end-to-end service benchmark.
 use interface_synthesis_consumer::{Catalog, KIND, derive};
-use openbindings::{JsonValue, ParsedDocument, Source};
+use openbindings::{Document, JsonValue, Source};
 use openbindings_interface_synthesis::CancellationToken;
 use openbindings_interface_synthesis::*;
 use std::{
@@ -59,7 +59,7 @@ async fn main() {
         };
         let control = CancellationToken::new();
         let seed = derive(&request, &control, false).unwrap();
-        let bytes = seed.document.original_bytes().len();
+        let bytes = seed.document.to_bytes().len();
         let mut derive_times = Vec::new();
         let mut checked = Vec::new();
         let mut warm_validation = Vec::new();
@@ -77,9 +77,9 @@ async fn main() {
             let result = facade.synthesize_with_coverage(&request).await.unwrap();
             checked.push(t.elapsed().as_nanos());
             assert_eq!(result.coverage().entries().len(), size);
-            let fresh = ParsedDocument::parse(seed.document.original_bytes()).unwrap();
+            let fresh = Document::parse(seed.document.to_bytes()).unwrap();
             let t = Instant::now();
-            black_box(fresh.validate().unwrap().validated().unwrap());
+            black_box(fresh.validate().unwrap().conformant().unwrap());
             cold_assessment.push(t.elapsed().as_nanos());
             let t = Instant::now();
             // The cold assessment above already checked this immutable snapshot.

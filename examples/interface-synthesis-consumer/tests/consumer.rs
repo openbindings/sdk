@@ -99,7 +99,7 @@ async fn strict_recovery_is_one_call_and_preserves_evidence() {
         assert!(e.rejected().is_none());
         let partial = e.into_partial().unwrap();
         assert!(!partial.coverage().fully_represented());
-        assert!(!partial.document().parsed().original_bytes().is_empty());
+        assert!(!partial.document().as_document().to_bytes().is_empty());
         assert_eq!(provider.calls.load(Ordering::Relaxed), 1);
         let encoded = partial.to_json().unwrap();
         assert!(encoded.get("coverage").is_some());
@@ -157,7 +157,10 @@ async fn dispositions_and_composition_are_distinct() {
         ..Default::default()
     };
     let doc = Synthesizer::new(&p).synthesize(&r).await.unwrap();
-    assert_eq!(doc.parsed().value().get("sources").unwrap().len(), Some(2));
+    assert_eq!(
+        doc.as_document().value().get("sources").unwrap().len(),
+        Some(2)
+    );
     let one = Catalog {
         single_source: true,
         ..Default::default()
@@ -263,20 +266,21 @@ async fn fixture_semantics_independently_check_emitted_paths_and_shared_analysis
             .collect::<Vec<_>>(),
         ["echo", "limited", "gap"]
     );
-    let doc = result.document().parsed().to_authoring().unwrap();
-    let bindings = doc.bindings.unwrap();
+    let doc = result.document().clone();
+    let bindings = doc.bindings().unwrap();
     assert_eq!(bindings.len(), 2);
-    for binding in bindings.values() {
-        let id = binding.content.as_ref().unwrap().view().as_str().unwrap();
+    for binding in &bindings {
+        let id = binding.content().unwrap().as_str().unwrap();
         assert!(["echo", "limited"].contains(&id));
-        let input = doc.operations[&binding.operation].input.as_ref().unwrap();
+        let operation = doc.resolve_operation(binding.operation()).unwrap();
+        let input = operation.input().unwrap();
         // These are the only schema forms this bounded fixture promises to emit.
         // Both upstream echo targets accept every JSON value; any advertised
         // admitted value must be in that set, and the lossy target narrows to null.
         if id == "echo" {
-            assert_eq!(input.view().as_bool(), Some(true));
+            assert_eq!(input.as_bool(), Some(true));
         } else {
-            assert_eq!(input.view().get("type").unwrap().as_str(), Some("null"));
+            assert_eq!(input.get("type").unwrap().as_str(), Some("null"));
         }
     }
     let unknown = source(r#"{"units":[],"unknownRemainder":true}"#);
@@ -332,16 +336,18 @@ async fn binding_content_preserves_scope_when_literal_ids_collide() {
         })
         .await
         .unwrap();
-    let authored = document.parsed().to_authoring().unwrap();
-    let bindings = authored.bindings.unwrap();
+    let authored = document.clone();
+    let bindings: std::collections::BTreeMap<_, _> = authored
+        .bindings()
+        .unwrap()
+        .into_iter()
+        .map(|v| (v.key().to_owned(), v))
+        .collect();
     assert_eq!(bindings.len(), 3);
     assert!(!bindings.contains_key("s0.u0"));
-    assert_eq!(
-        bindings["s0.u1"].content.as_ref().unwrap().view().as_str(),
-        Some("same")
-    );
+    assert_eq!(bindings["s0.u1"].content().unwrap().as_str(), Some("same"));
     for (key, scope) in [("s0.u2", "alternative"), ("s0.u3", "projection")] {
-        let content = bindings[key].content.as_ref().unwrap();
+        let content = bindings[key].content().unwrap();
         assert_eq!(content.get("id").unwrap().as_str(), Some("same"));
         assert_eq!(content.get("scope").unwrap().as_str(), Some(scope));
     }
@@ -390,7 +396,7 @@ async fn persisted_coverage_identifies_sources_after_request_and_provider_drop()
             let key = &coverage.source_keys()[entry.source_index];
             assert!(
                 document
-                    .parsed()
+                    .as_document()
                     .value()
                     .get("sources")
                     .unwrap()

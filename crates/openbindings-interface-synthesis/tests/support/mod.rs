@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use openbindings::{Document, JsonRef, JsonValue, ParsedDocument, Source};
+use openbindings::{Document, JsonRef, JsonValue, Source};
 use openbindings_interface_synthesis::CancellationToken;
 use openbindings_interface_synthesis::*;
 use std::{
@@ -19,10 +19,15 @@ pub fn source(s: Option<&str>) -> Source {
     }
 }
 pub fn candidate(s: &Source) -> SynthesisCandidate {
-    let mut b = Document::new();
-    b.sources = Some(BTreeMap::from([("api".into(), s.clone())]));
+    // Boundary fixtures deliberately include duplicates; parse retains their evidence.
+    // Editing a document with the same ambiguous source is correctly refused.
+    let b = Document::parse(format!(
+        r#"{{"openbindings":"0.2.0","operations":{{}},"sources":{{"api":{}}}}}"#,
+        serde_json::to_string(s).unwrap()
+    ))
+    .unwrap();
     SynthesisCandidate {
-        document: b.build().unwrap(),
+        document: b.clone(),
         coverage: CoverageDraft {
             exhaustive: true,
             ..Default::default()
@@ -125,7 +130,7 @@ pub fn entry(v: JsonRef<'_>) -> CoverageEntry {
 }
 pub fn from_case(v: JsonRef<'_>) -> SynthesisCandidate {
     SynthesisCandidate {
-        document: ParsedDocument::parse(v.get("interface").unwrap().text()).unwrap(),
+        document: Document::parse(v.get("interface").unwrap().text()).unwrap(),
         coverage: CoverageDraft {
             entries: v
                 .get("entries")
@@ -152,13 +157,23 @@ pub fn complete() -> (Source, SynthesisCandidate) {
     let c = corpus();
     let first = c.get("tests").unwrap().elements().unwrap().next().unwrap();
     let candidate = from_case(first);
-    let source = candidate
-        .document
-        .to_authoring()
-        .unwrap()
-        .sources
-        .unwrap()
-        .remove("api")
-        .unwrap();
+    let source = read_source(candidate.document.value().at("/sources/api").unwrap());
     (source, candidate)
+}
+
+pub fn read_source(value: JsonRef<'_>) -> Source {
+    Source {
+        kind: value.get("kind").unwrap().as_str().unwrap().into(),
+        description: optional(value, "description"),
+        content: value.get("content").map(|v| v.to_owned()),
+        additional_fields: value
+            .members()
+            .unwrap()
+            .filter_map(|m| {
+                let key = m.name.as_str().unwrap();
+                (!matches!(key, "kind" | "description" | "content"))
+                    .then(|| (key.into(), m.value.to_owned()))
+            })
+            .collect(),
+    }
 }

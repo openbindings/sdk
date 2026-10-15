@@ -13,7 +13,7 @@ impl Deref for SchemaSpace {
     }
 }
 impl SchemaSpace {
-    pub fn new(document: ParsedDocument, supplied: ResourceSet) -> Self {
+    pub fn new(document: Document, supplied: ResourceSet) -> Self {
         let resources = supplied.input_policy.clone();
         Self {
             supplied,
@@ -194,7 +194,7 @@ pub struct ReferenceReport {
 }
 use serde::Serialize;
 
-impl ParsedDocument {
+impl Document {
     /// Inspect references with no caller resources and a fresh uncancelled control. No network or filesystem access; success is not conformance proof.
     ///
     /// # Errors
@@ -216,7 +216,7 @@ impl ParsedDocument {
     }
 }
 
-impl ValidatedDocument {
+impl Conformant<Document> {
     /// Inspect references in the validated snapshot without acquiring resources.
     pub fn references(&self) -> ReferenceReport {
         self.references_with_resources(ResourceSet::default(), &crate::work_control::NeverCancelled)
@@ -227,6 +227,6 @@ impl ValidatedDocument {
         resources: ResourceSet,
         control: &dyn WorkControl,
     ) -> ReferenceReport {
-        SchemaSpace::new(self.parsed().clone(), resources).references(control)
+        SchemaSpace::new(self.as_document().clone(), resources).references(control)
     }
 }

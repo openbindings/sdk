@@ -6,7 +6,7 @@ import sys
 root = Path(__file__).resolve().parents[1]
 env = os.environ.copy()
 env.setdefault("CARGO_TARGET_DIR", str(root / "target"))
-out = root / "target/document-diagnostics"
+out = Path(env["CARGO_TARGET_DIR"]) / "document-diagnostics"
 out.mkdir(parents=True, exist_ok=True)
 # Compilation can return schema errors; the instance path must never request
 # library diagnostics or activate the fork's eager diagnostic admission scopes.
@@ -21,9 +21,9 @@ for file in (root / "vendor/openbindings-internal-jsonschema/src").rglob("*.rs")
                       "diagnostic_metadata", "diagnostic_payload", "diagnostic_schema_details",
                       "diagnostic_collection_item", "metadata_only", "push_diagnostic_name"]:
         assert forbidden not in source, (file, forbidden)
-subprocess.run([sys.executable, str(root / "tools/diagnostic-memory-probe/generate_inputs.py")], cwd=root, check=True)
+subprocess.run([sys.executable, str(root / "tools/diagnostic-memory-probe/generate_inputs.py")], cwd=root, env=env, check=True)
 with (out / "memory.jsonl").open("w") as log:
     subprocess.run(["cargo", "run", "--release", "--locked", "--manifest-path", str(root / "tools/diagnostic-memory-probe/Cargo.toml"), "--", str(out / "fixtures/inputs.json")], cwd=root, env=env, stdout=log, check=True)
 print(out / "memory.jsonl")
 
-subprocess.run([sys.executable, str(root / "tools/diagnostic-memory-probe/summarize.py")], cwd=root, check=True)
+subprocess.run([sys.executable, str(root / "tools/diagnostic-memory-probe/summarize.py")], cwd=root, env=env, check=True)

@@ -2,10 +2,11 @@
 from pathlib import Path
 import hashlib
 import json
+import os
 import statistics
 
 root = Path(__file__).resolve().parents[2]
-out = root / 'target/document-diagnostics'
+out = Path(os.environ.get('CARGO_TARGET_DIR', root / 'target')) / 'document-diagnostics'
 rows = [json.loads(line) for line in (out / 'memory.jsonl').read_text(encoding='utf-8').splitlines()]
 fixtures = json.loads((out / 'fixtures/inputs.json').read_text(encoding='utf-8'))
 raw = []

@@ -1,5 +1,5 @@
 use crate::{Synthesis, SynthesisCandidate};
-use openbindings::{AuthoringError, DocumentValidation, VersionRefusal};
+use openbindings::{AuthoringError, DocumentValidation, EditError, VersionRefusal};
 use std::fmt;
 /// Stable control-flow classifications; codes provide specific reasons.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,6 +54,7 @@ pub struct RejectedSynthesis {
 #[derive(Clone, Debug)]
 enum Cause {
     Authoring(AuthoringError),
+    Editing(EditError),
     Version(VersionRefusal),
     Provider(Box<SynthesisError>),
 }
@@ -199,6 +200,20 @@ impl From<AuthoringError> for SynthesisError {
         e
     }
 }
+impl From<EditError> for SynthesisError {
+    fn from(cause: EditError) -> Self {
+        if let EditError::Authoring(cause) = cause {
+            return Self::from(cause);
+        }
+        let mut error = Self::simple(
+            SynthesisErrorKind::ProviderFailure,
+            cause.code(),
+            cause.to_string(),
+        );
+        error.cause = Some(Box::new(Cause::Editing(cause)));
+        error
+    }
+}
 impl fmt::Display for SynthesisError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}: {}", self.code, self.message)
@@ -208,6 +223,7 @@ impl std::error::Error for SynthesisError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self.cause.as_deref() {
             Some(Cause::Authoring(e)) => Some(e),
+            Some(Cause::Editing(e)) => Some(e),
             Some(Cause::Version(e)) => Some(e),
             Some(Cause::Provider(e)) => Some(e.as_ref()),
             None => None,
