@@ -574,6 +574,82 @@ pub enum ValueContractPreparation {
         detail: NoVerdict,
     },
 }
+impl ValueContractPreparation {
+    /// Consume preparation into a ready value contract or its non-ready reason.
+    /// A ready contract can still return any of the four [`ValueOutcome`] variants.
+    /// This conversion does not retry preparation or change its evidence.
+    ///
+    /// # Errors
+    /// Returns the missing-operation, absent-contract, ambiguous-operation or
+    /// no-verdict reason with its original payload.
+    pub fn into_result(self) -> Result<ValueContract, ValueContractPreparationError> {
+        match self {
+            Self::Ready(contract) => Ok(contract),
+            Self::NoValueContract => Err(ValueContractPreparationError::NoValueContract),
+            Self::OperationMissing => Err(ValueContractPreparationError::OperationMissing),
+            Self::OperationAmbiguous { candidates } => {
+                Err(ValueContractPreparationError::OperationAmbiguous { candidates })
+            }
+            Self::NoVerdict { detail } => Err(ValueContractPreparationError::NoVerdict { detail }),
+        }
+    }
+}
+
+/// A non-ready value-contract preparation result for callers using `?`.
+/// No instance was judged. Payloads retain the original selection or preparation
+/// evidence. `Display` and [`std::error::Error::source`] can expose evaluator text;
+/// `Debug` follows [`NoVerdict`]'s redaction and shows no caller or document text.
+#[derive(Clone)]
+#[non_exhaustive]
+pub enum ValueContractPreparationError {
+    /// The selected operation has no schema for the requested direction.
+    NoValueContract,
+    /// No primary key or alias matches the request.
+    OperationMissing,
+    /// Retained selection branch, unreachable through a validated document.
+    OperationAmbiguous {
+        /// Distinct matching primary keys in lexical order, retained unchanged.
+        candidates: Vec<String>,
+    },
+    /// Preparation did not establish readiness. This does not prove undefinedness.
+    NoVerdict {
+        /// Original reason, code, message and optional schema location.
+        detail: NoVerdict,
+    },
+}
+impl fmt::Debug for ValueContractPreparationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NoValueContract => f.write_str("NoValueContract"),
+            Self::OperationMissing => f.write_str("OperationMissing"),
+            Self::OperationAmbiguous { .. } => {
+                f.debug_struct("OperationAmbiguous").finish_non_exhaustive()
+            }
+            // NoVerdict's own Debug already applies the redaction rule.
+            Self::NoVerdict { detail } => {
+                f.debug_struct("NoVerdict").field("detail", detail).finish()
+            }
+        }
+    }
+}
+impl fmt::Display for ValueContractPreparationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NoValueContract => f.write_str("operation has no value contract"),
+            Self::OperationMissing => f.write_str("operation is missing"),
+            Self::OperationAmbiguous { .. } => f.write_str("operation is ambiguous"),
+            Self::NoVerdict { detail } => write!(f, "value contract preparation refused: {detail}"),
+        }
+    }
+}
+impl std::error::Error for ValueContractPreparationError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::NoVerdict { detail } => Some(detail),
+            _ => None,
+        }
+    }
+}
 impl std::fmt::Debug for ValueContractPreparation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -603,6 +679,23 @@ impl fmt::Debug for ValueContract {
     }
 }
 impl ValueContract {
+    /// Admit exact JSON text or bytes under [`JsonLimits::default`], then validate.
+    /// Every [`ValueOutcome`] is returned as `Ok`, including undefined and
+    /// no-verdict. Duplicate members are retained by admission and yield
+    /// no-verdict during validation. Number tokens are never rounded.
+    ///
+    /// Use [`JsonValue::parse_with_limits`] and [`Self::validate`] for custom
+    /// admission limits or to retain exact values for repeated checks. Use
+    /// [`Self::validate_with_control`] for cooperative validation cancellation.
+    ///
+    /// # Errors
+    /// Returns [`InputError`] only when JSON admission fails, including invalid
+    /// UTF-8, a byte order mark, malformed JSON or an exceeded input limit.
+    pub fn validate_json(&self, input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError> {
+        let value = JsonValue::parse(input)?;
+        Ok(self.validate(&value))
+    }
+
     /// Validate an admitted exact value, distinguishing satisfies, fails, undefined
     /// (the specification gives the value no defined validity) and no-verdict (the
     /// evaluator could not answer). For ordinary Rust data first use [`JsonValue::from_serializable`];
@@ -669,7 +762,8 @@ impl ValidatedDocument {
 }
 impl ValueContracts {
     /// Select a primary operation name or alias and prepare one direction's value contract.
-    /// Match every [`ValueContractPreparation`] branch: missing operation,
+    /// Match [`ValueContractPreparation`] or use [`ValueContractPreparation::into_result`]
+    /// to propagate a non-ready result with `?`. Missing operation,
     /// absent value contract and preparation refusal are setup states, not instance failures.
     /// The retained ambiguous branch is unreachable through validated documents.
     /// Ready value contracts can be retained beyond this context and validated repeatedly.

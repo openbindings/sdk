@@ -36,12 +36,20 @@ Document validation works without a caller-supplied schema evaluator. Its fixed
 normative schema checks are part of core. Operation value validation requires an
 explicit `SchemaEvaluator`, including for `true`, `false` and empty schemas.
 Select the optional `openbindings-json-schema-evaluator` or implement the trait.
-Pass it and an immutable `ResourceSet` to `ValidatedDocument::value_contracts`.
+The companion's `value_contracts(&validated)` function supplies its default
+budgets, coarse diagnostics and no extra resources. For shared or configured
+evaluators and supplied resources, pass an `Arc<dyn SchemaEvaluator>` and an
+immutable `ResourceSet` to `ValidatedDocument::value_contracts`. Core does not
+depend on the companion.
 The [evaluator integration guide](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md)
 explains the no-evaluator behavior and custom implementations.
 
 Prepare a direction, retain a ready `ValueContract`, and handle satisfies, fails, undefined
-and no-verdict for each value. Preparation can also report a missing operation,
+and no-verdict for each value. Use `ValueContractPreparation::into_result()` to
+propagate a non-ready reason with `?`, preserving its payload. Use
+`ValueContract::validate_json` for exact JSON text or bytes; only admission failure
+returns `Err`. Retain a `JsonValue` and use `validate` for repeated checks or custom
+admission limits. Preparation can also report a missing operation,
 an absent value contract or no-verdict. Undefined means the value-contract rules
 leave whether the value satisfies its contract undefined; no-verdict means the
 evaluator could not answer. Each preparation compiles independently;

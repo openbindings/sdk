@@ -36,6 +36,26 @@ Debug formatting is not a stable serialization format. Public authoring and eval
 struct-literal construction. Result-returning APIs document caller-visible failures
 under `# Errors`; validation outcomes (including `DocumentValidation`) and configuration methods warn when ignored.
 
+## Rust value-contract conveniences
+
+| Public item | Contract |
+| --- | --- |
+| `openbindings_json_schema_evaluator::value_contracts(&ValidatedDocument) -> ValueContracts` | Uses `Limits::default()`, `Diagnostics::Coarse` and an empty `ResourceSet`. Performs no preparation or acquisition. The validated-document gate remains required. |
+| `ValueContract::validate_json(input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError>` | Admits through `JsonValue::parse` with default limits, then validates. `Err` is admission failure only; all four value outcomes are `Ok`. Duplicate members yield no-verdict and numbers retain exact semantics. |
+| `ValueContractPreparation::into_result(self) -> Result<ValueContract, ValueContractPreparationError>` | Consumes preparation without retrying. Ready becomes `Ok`; every other reason and payload becomes `Err`. |
+| `ValueContractPreparationError` | Non-exhaustive error with `NoValueContract`, `OperationMissing`, `OperationAmbiguous { candidates }` and `NoVerdict { detail }`. Implements `Display` and `Error`; no-verdict exposes its original detail through `source()`. |
+
+The existing `ValidatedDocument::value_contracts` method remains the explicit path
+for shared or configured evaluators and supplied resources. Core has no default
+evaluator dependency. Use `JsonValue::parse_with_limits` and `ValueContract::validate`
+for custom admission limits or retained exact values; `validate_with_control`
+accepts cooperative cancellation. Each preparation still compiles independently.
+
+Preparation-error Debug shows variants, broad refusal reasons and recognized
+fixed preparation codes. It redacts candidate keys, custom codes, messages and
+original schema text and locations. Display and the error source can expose
+custom evaluator messages; callers choose their disclosure policy.
+
 ## Optional Rust role APIs
 
 Source inspection uses `SourceInspector` and `Inspector`; interface synthesis uses

@@ -17,9 +17,8 @@ keeps old work usable while a new document and resource context are installed.
 This caller diagnoses an unexpected document field, corrects it and prepares input:
 
 ```rust
-use openbindings::{ValueContractPreparation, ParsedDocument, ResourceSet, Direction};
-use openbindings_json_schema_evaluator::DefaultEvaluator;
-use std::sync::Arc;
+use openbindings::{Direction, ParsedDocument};
+use openbindings_json_schema_evaluator::value_contracts;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let text = r#"{"openbindings":"0.2.0","operations":{"lookup":{"inputSchema":{"type":"integer"}}}}"#;
@@ -41,12 +40,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let Some(proof) = validation.validated() else {
         return Err(format!("document conformance: {:?}", validation.report().conclusion).into());
     };
-    let context = proof.value_contracts(
-        Arc::new(DefaultEvaluator::new()), ResourceSet::default());
-    match context.prepare("lookup", Direction::Input) {
-        ValueContractPreparation::Ready(_input) => { /* retain input for value validation */ }
-        other => return Err(format!("input setup was refused: {other:?}").into()),
-    }
+    let context = value_contracts(&proof);
+    let input = context.prepare("lookup", Direction::Input).into_result()?;
+    println!("value outcome: {:?}", input.validate_json("7")?);
     Ok(())
 }
 ```
@@ -60,19 +56,32 @@ lookup distinguishes found, missing and ambiguous.
 
 ## Validate values
 
-Create a context with `validated.value_contracts(evaluator, resources)`, then
-`prepare(name, Direction::Input)` or `Direction::Output`. Match ready,
-no-value-contract, operation-missing or no-verdict before validating a value.
-The retained ambiguity branch is unreachable from conformant documents.
-Document validation itself needs no caller-supplied evaluator; operation value
-validation always does. See [evaluator integration](schema-evaluators.md).
+Create a context with `openbindings_json_schema_evaluator::value_contracts(&validated)`,
+then `prepare(name, Direction::Input)` or `Direction::Output`. The function uses the
+default evaluator budgets, coarse diagnostics and no extra resources. Creating the context performs no preparation. The SDK never acquires resources. Use the explicit
+`validated.value_contracts(evaluator, resources)` method for shared evaluators,
+custom budgets or diagnostics, supplied resources or custom evaluators.
 
-Use `JsonValue::from_serializable` for ordinary Rust data and `JsonValue::parse`
-for exact JSON text. The ordinary converter preserves integer digits but cannot
-recover a value already rounded by application code. It refuses exact wrappers;
-keep those on the parse/retain route.
+Call `into_result()?` to retain a ready contract or propagate the full
+`ValueContractPreparationError`. It preserves missing operation, absent value
+contract, ambiguous operation and no-verdict reasons with their payloads. The
+ambiguity branch is unreachable from conformant documents. Match the original
+`ValueContractPreparation` directly when setup states need separate handling.
+Document validation itself needs no caller-supplied evaluator. See
+[evaluator integration](schema-evaluators.md).
 
-A ready contract's `validate` returns `Satisfies`, `Fails` or `NoVerdict`.
+A ready contract's `validate_json(text_or_bytes)` admits exact JSON under the
+default limits: 64 MiB, 10,000 container levels and 1,000,000 nodes. `Err` means
+admission failed. `Ok` contains `Satisfies`, `Fails`, `Undefined` or `NoVerdict`.
+Duplicate members are preserved during admission and yield `NoVerdict` during
+validation. Number tokens retain their exact meaning.
+
+Use `JsonValue::parse_with_limits` for custom admission limits and
+`ValueContract::validate` for retained exact values without reparsing. Use
+`JsonValue::from_serializable` for ordinary Rust data. The converter preserves
+integer digits but cannot recover a value already rounded by application code.
+It refuses exact wrappers; keep those on the parse/retain route.
+
 Preparation and validation refusals remain separate from an established failure.
 Retain and clone a ready contract to reuse compiled state. Every `prepare` call
 compiles independently. Ready does not imply that every value is decidable.
@@ -141,7 +150,9 @@ includes additional numeric and error cases.
 
 ## Resources, diagnostics and lifetime
 
-Schema resources are explicit and immutable. The SDK never fetches missing
+The explicit context method accepts `Arc<dyn SchemaEvaluator>` and `ResourceSet`;
+the [replacement example](../crates/openbindings-json-schema-evaluator/examples/replacement.rs)
+shows supplied resources and retained work. Schema resources are explicit and immutable. The SDK never fetches missing
 references. Construct a new context to change resources; retained contracts keep
 their original snapshots. An application can prepare a candidate before replacing
 its active contract and keep serving old work if preparation fails.

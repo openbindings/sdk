@@ -213,7 +213,7 @@ impl Read for Preference {
 }
 
 #[derive(Clone)]
-/// Owned, editable normative vocabulary. `None` omits an optional member; opaque `JsonValue::null()` remains present JSON null. Building checks representability and collisions, not conformance. Assess the new immutable snapshot before publication.
+/// Owned, editable normative vocabulary. `None` omits an optional member; opaque `JsonValue::null()` remains present JSON null. Building checks representability and collisions, not conformance. Validate the new immutable snapshot before publication.
 pub struct Document {
     /// Declared specification version; defaults to [`AUTHORING_VERSION`].
     pub openbindings: String,

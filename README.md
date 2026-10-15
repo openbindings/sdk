@@ -28,7 +28,11 @@ assert_eq!(operation.key(), "lookup");
 
 Continue with [Rust first use](docs/rust-first-use.md) to prepare a value contract,
 validate input, edit opaque values and retain prepared work. Rust needs no runtime
-initialization. The [TypeScript guide](packages/typescript/README.md) starts with a
+initialization. The evaluator companion's `value_contracts(&validated)` function
+supplies default budgets, coarse diagnostics and no extra resources. Prepare with
+`context.prepare(name, Direction::Input).into_result()?`, then check JSON text or
+bytes with `contract.validate_json(input)?`. The explicit context method remains
+available for shared evaluators and supplied resources. The [TypeScript guide](packages/typescript/README.md) starts with a
 complete document-to-verdict example and covers initialization and disposal.
 
 ## Choose the work you need
