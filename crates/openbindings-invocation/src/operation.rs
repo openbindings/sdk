@@ -752,7 +752,9 @@ impl Gate {
         let code = match &outcome {
             ValueOutcome::Satisfies => return Ok(()),
             ValueOutcome::Fails { .. } => "ERR_OPERATION_VALIDATION_FAILED",
-            ValueOutcome::NoVerdict { .. } => "ERR_SCHEMA_UNRESOLVED",
+            ValueOutcome::Undefined { .. } | ValueOutcome::NoVerdict { .. } => {
+                "ERR_SCHEMA_UNRESOLVED"
+            }
         };
         Err((
             error(code),

@@ -56,6 +56,7 @@ fn label(result: ValueOutcome) -> &'static str {
     match result {
         ValueOutcome::Satisfies => "satisfies",
         ValueOutcome::Fails { .. } => "fails",
+        ValueOutcome::Undefined { .. } => "undefined",
         ValueOutcome::NoVerdict { .. } => "no-verdict",
     }
 }
@@ -691,19 +692,18 @@ fn ri20_34_missing_winner_fragments_never_fall_back_to_loser() {
         ("$ref", "/$defs/target"),
     ] {
         let doc = one(owner(), json!({keyword:format!("{U}#{fragment}")}));
-        let detail = if keyword == "$ref" {
+        let code = if keyword == "$ref" {
             let contract = ready(&context(&doc, &supplied), "op");
-            let ValueOutcome::NoVerdict { detail } =
+            let ValueOutcome::Undefined { detail } =
                 contract.validate(&JsonValue::parse("null").unwrap())
             else {
                 panic!("semantic hole")
             };
-            assert_eq!(detail.reason, NoVerdictReason::Undefined);
-            detail
+            detail.code
         } else {
             let detail = refusal(context(&doc, &supplied).prepare("op", Direction::Input));
             assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
-            detail
+            detail.code
         };
         assert!(matches!(
             reference(&doc, &supplied, &format!("/operations/op/input/{keyword}")),
@@ -717,7 +717,7 @@ fn ri20_34_missing_winner_fragments_never_fall_back_to_loser() {
                 .expect("conformant document")
                 .value_contracts(Arc::new(Project(true)), supplied.clone());
             ready(&ctx, "op");
-            assert_eq!(detail.code, "static-reference-defect");
+            assert_eq!(code, "static-reference-defect");
         }
     }
 }

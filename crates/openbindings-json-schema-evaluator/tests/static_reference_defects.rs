@@ -36,6 +36,10 @@ fn observe(case: &Value) -> Value {
     match result {
         ValueOutcome::Satisfies => json!({"stage":stage,"outcome":"S"}),
         ValueOutcome::Fails { .. } => json!({"stage":stage,"outcome":"F"}),
+        ValueOutcome::Undefined { detail } => {
+            json!({"stage":stage,"outcome":"undefined", "detail":{
+            "code":detail.code,"location":detail.location}})
+        }
         ValueOutcome::NoVerdict { detail } => json!({"stage":stage,"outcome":"N", "detail":{
             "reason":detail.reason,"code":detail.code,"location":detail.location}}),
     }
@@ -59,7 +63,12 @@ fn matrix_and_concrete_reference_completions() {
         let cases: Vec<Value> = serde_json::from_str(text).unwrap();
         for case in cases {
             let actual = observe(&case);
-            assert_subset(&case["expected"], &actual, case["id"].as_str().unwrap());
+            let mut expected = case["expected"].clone();
+            if expected["outcome"] == "N" && expected["detail"]["reason"] == "undefined" {
+                expected["outcome"] = json!("undefined");
+                expected["detail"].as_object_mut().unwrap().remove("reason");
+            }
+            assert_subset(&expected, &actual, case["id"].as_str().unwrap());
             receipt.push(json!({"id":case["id"],"actual":actual}));
         }
     }

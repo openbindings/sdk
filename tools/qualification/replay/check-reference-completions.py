@@ -15,6 +15,13 @@ INPUTS = ROOT / "crates/openbindings-json-schema-evaluator/tests/fixtures"
 CASES = sum((json.loads((INPUTS / name).read_text()) for name in
              ["reference-matrix.json", "reference-completions.json"]), [])
 
+# Translate the historical representation without changing the frozen controls.
+for case in CASES:
+    expected = case["expected"]
+    if expected["outcome"] == "N" and expected.get("detail", {}).get("reason") == "undefined":
+        expected["outcome"] = "undefined"
+        del expected["detail"]["reason"]
+
 
 def subset(expected, actual):
     if isinstance(expected, dict):
@@ -79,7 +86,7 @@ def check(rows):
         partial = actual[key]
         if partial["outcome"] in ["S", "F"]:
             assert all(v == partial["outcome"] for v in outcomes), key
-        elif partial["detail"]["reason"] == "undefined":
+        elif partial["outcome"] == "undefined":
             assert set(outcomes) == {"S", "F"}, key
     return {"cases": len(rows), "independent_complete_checks": checked,
             "completion_groups": len(completions)}
@@ -101,9 +108,9 @@ def main():
     mutations = [
         ("pointer-missing/any-true", {"stage": "ready", "outcome": "F"}),
         ("pointer-scalar/deciding", {"stage": "ready", "outcome": "S"}),
-        ("influence/budget", {"stage": "ready", "outcome": "N", "detail": {"reason": "undefined"}}),
-        ("influence/oneof/correlated", {"stage": "ready", "outcome": "N", "detail": {"reason": "undefined"}}),
-        ("influence/mixture/anyOfFalseFalse", {"stage": "ready", "outcome": "N", "detail": {"reason": "undefined"}}),
+        ("influence/budget", {"stage": "ready", "outcome": "undefined", "detail": {}}),
+        ("influence/oneof/correlated", {"stage": "ready", "outcome": "undefined", "detail": {}}),
+        ("influence/mixture/anyOfFalseFalse", {"stage": "ready", "outcome": "undefined", "detail": {}}),
     ]
     for key, bad in mutations:
         rows = copy.deepcopy(reference)

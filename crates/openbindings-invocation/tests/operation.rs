@@ -933,3 +933,39 @@ async fn exact_metadata_refuses_lossy_role_handoff_before_effects() {
         assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
     }
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn undefined_withholds_values_and_retains_the_semantic_result() {
+    for (direction, mode) in [
+        (Direction::Input, Mode::Echo),
+        (Direction::Output, Mode::Outputs),
+    ] {
+        let provider = Provider::new(mode);
+        let operation = serde_json::json!({direction.as_str(): {"$id":"https://fixture.test/root", "$ref":"#missing"}}).to_string();
+        let invoker = checked(one(&operation), &provider);
+        let mut call = invoker.invoke(Request::operation("echo"));
+        if direction == Direction::Input {
+            call.write(json("1")).await.unwrap();
+        }
+        call.close();
+        assert_eq!(
+            call.next().await.unwrap().unwrap_err().code(),
+            "ERR_SCHEMA_UNRESOLVED"
+        );
+        assert!(call.next().await.is_none());
+        let evidence = call.validation_failure().unwrap();
+        assert_eq!(evidence.direction(), direction);
+        assert_eq!(evidence.stage(), ValidationStage::Evaluation);
+        let ValueOutcome::Undefined { detail } = evidence.outcome() else {
+            panic!("undefined evidence lost")
+        };
+        assert_eq!(detail.code, "static-reference-defect");
+        assert_eq!(
+            detail.location.as_ref().unwrap().pointer,
+            format!("/operations/echo/{}/$ref", direction.as_str())
+        );
+        assert_eq!(provider.received.load(Ordering::SeqCst), 0);
+        assert_eq!(provider.live.load(Ordering::SeqCst), 0);
+        assert!(call.outcome().unwrap().unwrap_err().data().is_none());
+    }
+}

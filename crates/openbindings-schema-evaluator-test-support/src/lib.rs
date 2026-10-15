@@ -220,6 +220,13 @@ pub fn suite() -> &'static Suite {
         // provenance shared with the independent browser qualification judge.
         translate_policy(&mut suite);
         translate_documents(&mut suite);
+        // Historical semantic undefinedness was carried as a refusal reason.
+        for case in suite.groups.iter_mut().flat_map(|group| &mut group.cases) {
+            if case.expected == "no-verdict" && case.refusal_kind.as_deref() == Some("undefined") {
+                case.expected = "undefined".into();
+                case.refusal_kind = None;
+            }
+        }
         suite
     })
 }
@@ -402,39 +409,41 @@ pub fn run(evaluator: Arc<dyn SchemaEvaluator>, options: &Options) -> Report {
             if value.text() != original {
                 failures.push("evaluator changed an immutable input".into());
             }
-            for problem in match &outcome {
-                ValueOutcome::Fails { problems, .. } => problems.as_slice(),
-                _ => &[],
-            } {
-                if let Some(location) = &problem.schema_location {
-                    let source = match &location.resource {
-                        None => Some(document.value().clone()),
-                        Some(uri) => group
-                            .resources
-                            .iter()
-                            .map(|id| &suite.resources[id])
-                            .find(|r| &r.uri == uri)
-                            .and_then(|r| JsonValue::parse(&r.document).ok())
-                            .or_else(|| {
-                                suite
-                                    .builtin_resources
-                                    .get(uri)
-                                    .and_then(|text| JsonValue::parse(text).ok())
-                            }),
-                    };
-                    if source.is_none_or(|s| s.at(&location.pointer).is_none()) {
-                        failures.push(
-                            "reported schema location does not exist in the original source".into(),
-                        );
-                    }
-                    if location
-                        .resource
-                        .as_deref()
-                        .is_some_and(|s| s.starts_with("https://sdk-program.openbindings.invalid/"))
-                    {
-                        failures
-                            .push("generated resource identity leaked through diagnostics".into());
-                    }
+            let locations: Vec<_> = match &outcome {
+                ValueOutcome::Fails { problems, .. } => problems
+                    .iter()
+                    .filter_map(|p| p.schema_location.as_ref())
+                    .collect(),
+                ValueOutcome::Undefined { detail } => detail.location.iter().collect(),
+                _ => Vec::new(),
+            };
+            for location in locations {
+                let source = match &location.resource {
+                    None => Some(document.value().clone()),
+                    Some(uri) => group
+                        .resources
+                        .iter()
+                        .map(|id| &suite.resources[id])
+                        .find(|r| &r.uri == uri)
+                        .and_then(|r| JsonValue::parse(&r.document).ok())
+                        .or_else(|| {
+                            suite
+                                .builtin_resources
+                                .get(uri)
+                                .and_then(|text| JsonValue::parse(text).ok())
+                        }),
+                };
+                if source.is_none_or(|s| s.at(&location.pointer).is_none()) {
+                    failures.push(
+                        "reported schema location does not exist in the original source".into(),
+                    );
+                }
+                if location
+                    .resource
+                    .as_deref()
+                    .is_some_and(|s| s.starts_with("https://sdk-program.openbindings.invalid/"))
+                {
+                    failures.push("generated resource identity leaked through diagnostics".into());
                 }
             }
             report.observations.push(Observation {
@@ -466,6 +475,7 @@ pub fn judge(
     let tag = match outcome {
         ValueOutcome::Satisfies => "satisfies",
         ValueOutcome::Fails { .. } => "fails",
+        ValueOutcome::Undefined { .. } => "undefined",
         ValueOutcome::NoVerdict { .. } => "no-verdict",
     };
     let permitted_refusal = permitted_refusal
@@ -488,11 +498,14 @@ pub fn judge(
             NoVerdictReason::Cancelled
                 | NoVerdictReason::EvaluatorFailure
                 | NoVerdictReason::LimitExceeded
-        ) || (detail.reason == NoVerdictReason::Undefined
-            && case.refusal_kind.as_deref() != Some("undefined"))
-        {
+        ) {
             failures.push("these finite fixtures do not authorize this refusal reason".into());
         }
+    }
+    if let ValueOutcome::Undefined { detail } = outcome
+        && (detail.code.trim().is_empty() || detail.message.trim().is_empty())
+    {
+        failures.push("undefined result lacks a stable code or useful explanation".into());
     }
     if let ValueOutcome::Fails {
         problems,

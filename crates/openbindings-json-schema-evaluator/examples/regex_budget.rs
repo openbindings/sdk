@@ -47,6 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     elapsed[2].as_secs_f64() * 1000.0
                 );
             }
+            ValueOutcome::Undefined { .. } => return Err("fixture has no undefined result".into()),
             ValueOutcome::Satisfies => return Err("lowercase fixture cannot match".into()),
         }
         if bytes == 1_048_576 {

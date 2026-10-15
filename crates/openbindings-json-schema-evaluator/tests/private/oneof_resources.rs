@@ -8,6 +8,7 @@ fn label(outcome: &ValueOutcome) -> &'static str {
     match outcome {
         ValueOutcome::Satisfies => "satisfies",
         ValueOutcome::Fails { .. } => "fails",
+        ValueOutcome::Undefined { .. } => "undefined",
         ValueOutcome::NoVerdict { detail } => {
             assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
             "no-verdict"

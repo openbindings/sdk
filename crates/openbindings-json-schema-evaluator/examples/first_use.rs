@@ -112,6 +112,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
                 println!("selected diagnostics complete: {problems_complete}");
             }
+            ValueOutcome::Undefined { detail } => {
+                println!("undefined result: {}", detail.message);
+            }
             ValueOutcome::NoVerdict { detail } => {
                 println!(
                     "no verdict ({:?}, {}): {}",

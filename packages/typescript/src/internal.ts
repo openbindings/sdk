@@ -158,15 +158,14 @@ export interface SchemaLocation {
   /** RFC 6901 pointer within that original source; empty string denotes root. */
   pointer: string;
 }
-/** Known refusal causes for this facade and its bundled engine. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. Undefined is reserved for proved semantic undefinedness; a potential cycle alone is conservative-preparation. Later package versions may add causes. Qualified partial value contracts can prepare ready; values whose result depends on missing content return resource-unavailable during validation. For unavailable resources, ParsedDocument.references() exposes document-wide reference spellings and original keyword locations, not an exact per-value-contract missing-resource list; apply an application disclosure policy before logging them. */
+/** Known refusal causes for this facade and its bundled engine. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. A potential cycle alone is conservative-preparation. Later package versions may add causes. Qualified partial value contracts can prepare ready; values whose result depends on missing content return resource-unavailable during validation. For unavailable resources, ParsedDocument.references() exposes document-wide reference spellings and original keyword locations, not an exact per-value-contract missing-resource list; apply an application disclosure policy before logging them. */
 export type NoVerdictReason =
   | "unsupported-capability"
   | "conservative-preparation"
   | "resource-unavailable"
   | "limit-exceeded"
   | "cancelled"
-  | "evaluator-failure"
-  | "undefined";
+  | "evaluator-failure";
 /** Structured reason no schema verdict was established. code is the stable detail identifier; message is explanatory and location is an original schema coordinate when known. */
 export interface NoVerdict {
   /** Extensible broad refusal category. */
@@ -174,6 +173,15 @@ export interface NoVerdict {
   /** Stable evaluator-defined refusal detail code. */
   code: string;
   /** Human-readable explanation; use reason/code for logic. */
+  message: string;
+  /** Original schema location when known, otherwise null. */
+  location: SchemaLocation | null;
+}
+/** Established undefined result under the value-contract rules, separate from an evaluator's inability to answer. */
+export interface UndefinedResult {
+  /** Stable evaluator-defined detail code. */
+  code: string;
+  /** Explanatory text; custom evaluators should avoid echoing source or instance data. */
   message: string;
   /** Original schema location when known, otherwise null. */
   location: SchemaLocation | null;
@@ -223,7 +231,7 @@ export interface ValueProblem {
   /** Optional schema facts. Absent means disabled or unavailable. */
   details?: ValueProblemDetails;
 }
-/** Closed selected-schema result partition: satisfies, fails, or no-verdict. An established failure may have incomplete diagnostics; problemsComplete does not weaken its verdict. Neither satisfies nor fails proves normative OBI conformance of the surrounding draft. */
+/** Closed selected-schema result partition: satisfies, fails, undefined, or no-verdict. An established failure may have incomplete diagnostics; problemsComplete does not weaken its verdict. Neither satisfies nor fails proves normative OBI conformance of the surrounding draft. */
 export type ValueOutcome =
   | {
       /** Semantic result discriminant; narrow before reading branch-specific data. */
@@ -238,6 +246,12 @@ export type ValueOutcome =
       problems: readonly ValueProblem[];
       /** Whether selected failure diagnostics, including requested details, completed; false does not weaken the established failure. */
       problemsComplete: boolean;
+    }
+  | {
+      /** Semantic result discriminant; narrow before reading branch-specific data. */
+      outcome: "undefined";
+      /** Established undefined result, with an original schema coordinate when known. */
+      detail: UndefinedResult;
     }
   | {
       /** Semantic result discriminant; narrow before reading branch-specific data. */

@@ -47,8 +47,6 @@ pub enum NoVerdictReason {
     Cancelled,
     /// The evaluator encountered an internal or operational failure; retry policy belongs to the caller.
     EvaluatorFailure,
-    /// Semantic undefinedness was established. Potential cycles or incomplete analysis alone must use a conservative refusal instead.
-    Undefined,
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize)]
@@ -104,6 +102,44 @@ impl fmt::Display for NoVerdict {
     }
 }
 impl std::error::Error for NoVerdict {}
+
+#[derive(Clone, Serialize)]
+/// An established undefined result under the value-contract rules. Custom evaluators can construct this public record when semantic provenance and disagreeing completions are proved.
+pub struct UndefinedResult {
+    /// Stable evaluator-defined detail code.
+    pub code: String,
+    /// Explanatory text; custom evaluators should avoid echoing source or instance data.
+    pub message: String,
+    /// Original schema location when known; no generated or guessed location is substituted.
+    pub location: Option<SchemaLocation>,
+}
+impl UndefinedResult {
+    /// Construct an undefined result without an original schema location.
+    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
+            location: None,
+        }
+    }
+    /// Attach an established original schema location.
+    pub fn with_location(mut self, location: SchemaLocation) -> Self {
+        self.location = Some(location);
+        self
+    }
+}
+impl fmt::Debug for UndefinedResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let code = match self.code.as_str() {
+            "static-reference-defect" => self.code.as_str(),
+            _ => "<redacted>",
+        };
+        f.debug_struct("UndefinedResult")
+            .field("code", &code)
+            .field("location", &self.location)
+            .finish_non_exhaustive()
+    }
+}
 #[derive(Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 #[non_exhaustive]
@@ -200,7 +236,7 @@ impl std::fmt::Debug for ValueProblem {
 }
 #[derive(Clone, Serialize)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
-/// Closed semantic partition for the selected schema and instance: satisfies, fails, or no verdict. Neither established verdict proves that the surrounding OpenBindings document conforms.
+/// Closed result partition for the selected schema and instance: satisfies, fails, undefined, or no verdict. No value outcome proves that the surrounding OpenBindings document conforms.
 #[must_use = "inspect the outcome before continuing"]
 pub enum ValueOutcome {
     /// The instance was established to satisfy the selected schema.
@@ -214,7 +250,12 @@ pub enum ValueOutcome {
         /// Whether selected diagnostics, including requested details, completed. False does not weaken the established failure verdict.
         problems_complete: bool,
     },
-    /// No satisfaction/failure verdict was established.
+    /// Whether the value satisfies its value contract is established to be undefined.
+    Undefined {
+        /// Explanation of the undefined result, including an original schema location when known.
+        detail: UndefinedResult,
+    },
+    /// The evaluator could not establish a result.
     NoVerdict {
         /// Structured cause of refusal, including an original schema location when known.
         detail: NoVerdict,
@@ -235,6 +276,9 @@ impl std::fmt::Debug for ValueOutcome {
                 .finish_non_exhaustive(),
             Self::NoVerdict { detail } => {
                 f.debug_struct("NoVerdict").field("detail", detail).finish()
+            }
+            Self::Undefined { detail } => {
+                f.debug_struct("Undefined").field("detail", detail).finish()
             }
         }
     }

@@ -86,6 +86,13 @@ futures and `Rc` providers are also supported.
   For a missing resource, Rust `ParsedDocument::references()` and TypeScript
   `ParsedDocument.references()` expose explicit reference spellings and keyword
   locations; apply an application disclosure policy before logging these source facts.
+- `ValueOutcome::Undefined { detail }` establishes an undefined result under the
+  value-contract rules. TypeScript uses `{ outcome: "undefined", detail }`.
+  The public `UndefinedResult` record has `code`, `message` and `location` fields;
+  Rust provides `new(code, message)` and `with_location(location)`. A missing
+  location is `None` in Rust and `null` in TypeScript. Debug shows the recognized
+  fixed code and redacts arbitrary codes, text and pointers. Explicit fields and
+  serialization retain them. `NoVerdictReason` contains only inability causes.
 - Ready means prepared, not decidable. Every value may still return
   `NoVerdict`. Contracts expose no resource-completeness classification. Applications
   own replacement policy and handle refusal at preparation and validation.

@@ -46,14 +46,19 @@ plain data, while `schemas()` and schema access methods acquire new owners.
 | Legacy API | Replacement |
 | --- | --- |
 | Go `NewValueContractCompiler(evaluator, resources...)`, `Resolve(ctx, doc)`, `CompileInput` / `CompileOutput` | Select a `SchemaEvaluator`, create an immutable `ResourceSet`, call `validated.value_contracts`, then `prepare(name, Direction::Input)` or `Direction::Output`. |
-| Go `ValueContract.Validate(ctx, value)` / `ValidateJSON(ctx, bytes)` and error classification | Admit ordinary data with `JsonValue::from_serializable` or exact bytes with `JsonValue::parse`; match `ValueOutcome::Satisfies`, `Fails` or `NoVerdict`. |
-| TypeScript `compileOperationSchema(iface, name, position)` and `CompiledSchema.validate(value)` returning `valid` and failures | Create `validated.valueContracts()`, call `prepare(name, "input" / "output")`, narrow to ready, then call `valueContract.validate(value)`. Handle `satisfies`, `fails`, `no-verdict` and ordinary-input admission errors. |
+| Go `ValueContract.Validate(ctx, value)` / `ValidateJSON(ctx, bytes)` and error classification | Admit ordinary data with `JsonValue::from_serializable` or exact bytes with `JsonValue::parse`; match `ValueOutcome::Satisfies`, `Fails`, `Undefined` or `NoVerdict`. |
+| TypeScript `compileOperationSchema(iface, name, position)` and `CompiledSchema.validate(value)` returning `valid` and failures | Create `validated.valueContracts()`, call `prepare(name, "input" / "output")`, narrow to ready, then call `valueContract.validate(value)`. Handle `satisfies`, `fails`, `undefined`, `no-verdict` and ordinary-input admission errors. |
 
 Preparation has its own outcomes. An absent value contract is not success against
 an implicit schema. Retain a ready contract for reuse; preparation compiles anew.
 Resources are caller-supplied and immutable, with no automatic reference fetching.
 Changing resources creates a new context; old contracts keep their snapshots.
-A ready contract may still return no-verdict for individual values. Legacy
+A ready contract may still return no-verdict for individual values. An undefined
+result is its own outcome: match `ValueOutcome::Undefined { detail }` in Rust or
+`{ outcome: "undefined", detail }` in TypeScript. `UndefinedResult` carries a code,
+message and optional original schema location. Move handling of the former
+`NoVerdictReason::Undefined` or `"undefined"` refusal reason to this branch;
+no-verdict now carries only inability to answer. Legacy
 `PreparedBoundaryContract.complete` and boundary-comparison helpers have no direct
 replacement or decidability equivalent here.
 

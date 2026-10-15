@@ -13,6 +13,7 @@ const checker = path.join(root, "scripts/check-api-reference.mjs");
 // and inherited contracts are all protected by the actual exported-graph gate.
 for (const [owner, member, expected, insertion] of [
   ["NoVerdict", undefined, "NoVerdict"],
+  ["UndefinedResult", "location", "UndefinedResult.location"],
   ["SourceLocation", "byteColumn", "SourceLocation.byteColumn"],
   ["Managed", "dispose", "ExactJson.dispose"],
   [

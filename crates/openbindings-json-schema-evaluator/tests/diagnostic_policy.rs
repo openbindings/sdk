@@ -366,12 +366,13 @@ fn outcome_name(value: ValueOutcome) -> &'static str {
     match value {
         ValueOutcome::Satisfies => "satisfies",
         ValueOutcome::Fails { .. } => "fails",
+        ValueOutcome::Undefined { .. } => "undefined",
         ValueOutcome::NoVerdict { .. } => "no-verdict",
     }
 }
 fn reason_name(reason: NoVerdictReason) -> &'static str {
     match reason {
-        NoVerdictReason::Undefined => "undefined",
+        NoVerdictReason::UnsupportedCapability => "unsupported-capability",
         _ => "other-or-future",
     }
 }
@@ -401,13 +402,26 @@ fn external_evaluator_construction_and_matching_stay_supported() {
         | ValueContractPreparation::OperationAmbiguous { .. }
         | ValueContractPreparation::NoVerdict { .. } => panic!(),
     }
-    let detail = NoVerdict {
-        reason: NoVerdictReason::Undefined,
+    let detail = UndefinedResult {
         code: "proof".into(),
         message: "established by a custom evaluator".into(),
         location: None,
     };
-    assert_eq!(reason_name(detail.reason), "undefined");
+    assert_eq!(
+        outcome_name(ValueOutcome::Undefined { detail }),
+        "undefined"
+    );
+    let detail = UndefinedResult::new("custom", "established by a custom evaluator").with_location(
+        SchemaLocation {
+            resource: None,
+            pointer: "/operations/op/input".into(),
+        },
+    );
+    assert_eq!(detail.location.unwrap().pointer, "/operations/op/input");
+    assert_eq!(
+        reason_name(NoVerdictReason::UnsupportedCapability),
+        "unsupported-capability"
+    );
     assert_eq!(
         interpretation_name(InterpretationError::DuplicateMembers),
         "duplicates"
