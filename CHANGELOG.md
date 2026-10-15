@@ -10,8 +10,8 @@
   `ValueContractPreparationError` for error propagation.
 
 - One exact OpenBindings 0.2 `Document` for parsing, inspection and in-place
-  editing: atomic JSON Pointer batches and typed field and part setters that keep
-  untouched bytes exact. Validation with original source locations, bounded
+  editing: atomic batches of JSON Pointer edits and typed part maps, and typed
+  field and part setters, all keeping untouched bytes exact. Validation with original source locations, bounded
   findings and per-rule evidence.
 - `Conformant<Document>` (TypeScript `ConformantDocument`), the proven state, with
   infallible views, operation and alias lookup, exact schema access, reference
