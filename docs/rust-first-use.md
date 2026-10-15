@@ -27,8 +27,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let validation = document.validate()?;
     for finding in &validation.report().findings {
         // Debug quotes and escapes the pointer, including any control characters.
+        let pointer = finding.location.as_ref().and_then(|at| at.pointer.as_deref());
         println!("{}/{} ({:?}) at {:?}: {}",
-            finding.rule, finding.code, finding.status, finding.location, finding.message);
+            finding.rule, finding.code, finding.status, pointer, finding.message);
     }
     if validation.report().findings_truncated {
         println!("More findings were omitted; rule evidence remains available.");

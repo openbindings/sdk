@@ -102,7 +102,8 @@ Read [HTTP policy](http-discovery.md) before porting a custom transport.
 ## Inspect sources and synthesize interfaces
 
 Legacy TypeScript exposes `SourceInspector.inspectSource`,
-`InterfaceSynthesizer.synthesizeInterface` / `synthesizeInterfaceWithCoverage`,
+`InterfaceSynthesizer.synthesizeInterface`, the optional
+`CoverageSynthesizer.synthesizeInterfaceWithCoverage`,
 and corresponding `OpenBindingsRuntime` methods. They have no public TypeScript
 replacement here. Rust uses `SourceInspector` with the checked `Inspector`, and
 `InterfaceSynthesizer` with `Synthesizer`. Callers assign source and operation

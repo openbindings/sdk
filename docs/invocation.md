@@ -50,8 +50,10 @@ ordered key must belong to the operation; an exact binding belonging to another
 operation returns `ERR_OPERATION_NOT_FOUND` before provider work. Attempt Debug
 output redacts binding choices and context contents. Absent directions need no
 evaluator.
-Failed preparation returns `ERR_SCHEMA_UNRESOLVED` and releases partial work;
-`prepare_with_control` returns `ERR_CANCELLED` when cancelled, leaving no handle.
+Preparation returns `ERR_OPERATION_NOT_FOUND` for an unknown operation, `ERR_REFUSED`
+for role metadata it cannot represent, and `ERR_SCHEMA_UNRESOLVED` when a declared
+value contract cannot be prepared; each releases partial work. `prepare_with_control`
+returns `ERR_CANCELLED` when cancelled, leaving no handle.
 A ready contract can still return no verdict for a particular value.
 `PreparedOperation::invoke_with_control` isolates each attempt's cancellation,
 queues and validation evidence, so concurrent attempts can share one handle.
