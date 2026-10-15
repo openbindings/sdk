@@ -180,7 +180,7 @@ view!(
 );
 view!(
     DependencyView,
-    "Immutable retained dependency declaration. Inspection preserves the declared filter without selecting a provider.",
+    "Immutable retained dependency: a consumption point for one of this document's operations. Reading it preserves the listed kinds; a dependency names no realization to serve it.",
     "invalid-dependency-object",
     "invalid-dependency-description"
 );

@@ -349,7 +349,8 @@ pub struct Operation {
     pub description: Option<String>,
     /// Optional deprecation annotation; omission is distinct from explicit false.
     pub deprecated: Option<bool>,
-    /// Optional application-facing classification tags, preserving order.
+    /// Optional documentation labels for grouping and filtering. Their order carries no
+    /// meaning; the draft keeps them as authored.
     pub tags: Option<Vec<String>>,
     /// Optional alternative operation names in the shared primary-key/alias namespace.
     pub aliases: Option<Vec<String>>,
@@ -505,7 +506,8 @@ impl Read for Example {
 }
 
 #[derive(Clone, Default)]
-/// Editable dependency on another operation, with an optional source-kind restriction.
+/// Editable dependency: a consumption point where the described component consumes a
+/// realization of one of this document's operations, optionally limited to listed kinds.
 pub struct Dependency {
     /// Referenced operation name; document validation checks the applicable normative constraints.
     pub operation: String,
@@ -569,7 +571,7 @@ impl Read for Dependency {
 #[derive(Clone, Default)]
 /// Editable source metadata and opaque kind-specific content. Core preserves content without acquiring resources or executing it.
 pub struct Source {
-    /// Source-kind identifier selecting the external binding vocabulary.
+    /// Kind: the exact, opaque string that selects how this source and its bindings are read.
     pub kind: String,
     /// Optional exact kind-specific content; explicit JSON null remains present.
     pub content: Option<JsonValue>,
@@ -624,11 +626,11 @@ impl Read for Source {
 }
 
 #[derive(Clone, Default)]
-/// Editable link from an operation to a source. Core retains binding content and annotations; invocation and selection policy belong to the consumer.
+/// Editable binding: an author-declared realization of an operation through a source. Core retains binding content and annotations; invocation and selection policy belong to the consumer.
 pub struct Binding {
     /// Primary operation name referenced by this binding.
     pub operation: String,
-    /// Key of the source containing this binding's interpretation context.
+    /// Key of the source through which this binding realizes its operation.
     pub source: String,
     /// Optional exact source-kind-specific binding content.
     pub content: Option<JsonValue>,
