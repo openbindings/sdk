@@ -65,7 +65,7 @@ pub struct SchemaSpace {
     pub resources: Vec<Resource>,
     pub sources: Vec<Source>,
     names: BTreeMap<String, NameSelection>,
-    library: std::sync::OnceLock<library::Targets>,
+    inspection: std::sync::OnceLock<library::Inspection>,
 }
 impl std::fmt::Debug for SchemaSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -145,7 +145,7 @@ impl SchemaSpace {
             resources: Vec::new(),
             sources: Vec::new(),
             names: BTreeMap::new(),
-            library: std::sync::OnceLock::new(),
+            inspection: std::sync::OnceLock::new(),
         };
         out.add_source(
             None,
@@ -172,12 +172,21 @@ impl SchemaSpace {
                 }
             }
         }
-        for resource in embedded_resources() {
-            let index = SchemaIndex::supplied(&resource.document, &resource.uri);
+        // These documents and their URIs are pinned, immutable process-wide
+        // inputs. Cache only their SDK indexes, never a caller's URI or result.
+        // add_source and eligibility checks still run in each new space.
+        static INDEXES: std::sync::OnceLock<Vec<SchemaIndex>> = std::sync::OnceLock::new();
+        let indexes = INDEXES.get_or_init(|| {
+            embedded_resources()
+                .iter()
+                .map(|resource| SchemaIndex::supplied(&resource.document, &resource.uri))
+                .collect()
+        });
+        for (resource, index) in embedded_resources().iter().zip(indexes) {
             out.add_source(
                 Some(resource.uri.clone()),
                 resource.document.clone(),
-                &index,
+                index,
                 ResourceOrigin::Standard,
             );
         }

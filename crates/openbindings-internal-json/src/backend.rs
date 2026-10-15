@@ -171,6 +171,11 @@ impl JsonNumber for Number<'_> {
         Cow::Owned(0.into())
     }
     fn is_integer(&self) -> bool {
+        // The arena has already admitted JSON number syntax. Without a decimal
+        // point or exponent, even -0 and tokens longer than i64 are integers.
+        if !self.0.bytes().any(|b| matches!(b, b'.' | b'e' | b'E')) {
+            return true;
+        }
         Decimal::parse(self.0).is_integer()
     }
 }
@@ -426,10 +431,7 @@ impl<'a> Array<'a, FlatJson> for ArrayView<'a> {
         Elements(self.0, self.1.iter())
     }
     fn is_unique(&self) -> bool {
-        use std::{
-            collections::{HashMap, hash_map::RandomState},
-            hash::BuildHasher,
-        };
+        use std::{collections::hash_map::RandomState, hash::BuildHasher};
         let Some(&first) = self.1.first() else {
             return true;
         };
@@ -468,10 +470,42 @@ impl<'a> Array<'a, FlatJson> for ArrayView<'a> {
             };
             hashes[id - first] = hash;
         }
-        let mut seen: HashMap<u64, Vec<Id>> = HashMap::new();
+        self.unique_by_hash(first, &hashes)
+    }
+}
+impl ArrayView<'_> {
+    // Hashes only select candidates. Keep the first ID inline, then retain every
+    // unequal collision and charge/verify exact equality exactly as before.
+    fn unique_by_hash(&self, first: Id, hashes: &[u64]) -> bool {
+        use std::collections::{HashMap, hash_map::Entry};
+        enum Bucket {
+            One(Id),
+            Many(Vec<Id>),
+        }
+        impl Bucket {
+            fn ids(&self) -> &[Id] {
+                match self {
+                    Self::One(id) => std::slice::from_ref(id),
+                    Self::Many(ids) => ids,
+                }
+            }
+            fn push(&mut self, id: Id) {
+                match self {
+                    Self::One(prior) => *self = Self::Many(vec![*prior, id]),
+                    Self::Many(ids) => ids.push(id),
+                }
+            }
+        }
+        let mut seen: HashMap<u64, Bucket> = HashMap::new();
         for &id in self.1 {
-            let bucket = seen.entry(hashes[id - first]).or_default();
-            for &prior in bucket.iter() {
+            let bucket = match seen.entry(hashes[id - first]) {
+                Entry::Vacant(entry) => {
+                    entry.insert(Bucket::One(id));
+                    continue;
+                }
+                Entry::Occupied(entry) => entry.into_mut(),
+            };
+            for &prior in bucket.ids() {
                 if !jsonschema::ob_work::charge(1) {
                     return false;
                 }
@@ -682,7 +716,14 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
                 stack.push((View::Stored(items.0, member.value), other));
             }
         } else if let Some(n) = left.as_number() {
-            if Decimal::parse(n.0) != Decimal::parse(right.as_number().unwrap().0) {
+            let other = right.as_number().unwrap().0;
+            // Parsing both tokens as i64 proves exact representability, including
+            // -0 == 0. Mixed, fractional, exponent and wider pairs use Decimal.
+            let same = match (n.0.parse::<i64>(), other.parse::<i64>()) {
+                (Ok(left), Ok(right)) => left == right,
+                _ => Decimal::parse(n.0) == Decimal::parse(other),
+            };
+            if !same {
                 return false;
             }
         } else if left.json_type() == JsonType::String {
@@ -948,6 +989,30 @@ mod tests {
             if size > 0 {
                 assert_eq!(pointer_size(value, size - 1), None);
             }
+        }
+    }
+
+    #[test]
+    fn uniqueness_verifies_every_forced_hash_collision() {
+        for (text, expected) in [
+            ("[]", true),
+            ("[1,2,3,4]", true),
+            ("[1,2,3,1.0]", false),
+            ("[1,2,3,2e0]", false),
+            ("[1,2,3,3]", false),
+            (r#"[{"a":1},{"a":2},{"b":1}]"#, true),
+            (r#"[{"a":1},{"a":2},{"a":2.0}]"#, false),
+            ("[-0,1,2,0e999999]", false),
+        ] {
+            let value = crate::JsonValue::parse(text).unwrap();
+            let array = view(&value).as_array().unwrap();
+            // A constant hash forces One -> Many and hits both early and later
+            // candidates. Hash equality alone must never decide uniqueness.
+            assert_eq!(
+                array.unique_by_hash(0, &vec![0; value.owner.nodes.len()]),
+                expected,
+                "{text}"
+            );
         }
     }
 

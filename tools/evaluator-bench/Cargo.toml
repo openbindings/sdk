@@ -1,0 +1,23 @@
+[package]
+name = "openbindings-evaluator-bench"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+# The allocator instrument and the unmodified peer stay outside the SDK graph.
+[workspace]
+
+[features]
+allocations = []
+
+[dependencies]
+openbindings = { path = "../../crates/openbindings" }
+openbindings-json-schema-evaluator = { path = "../../crates/openbindings-json-schema-evaluator" }
+jsonschema = { version = "=0.58.6", default-features = false }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151", features = ["raw_value", "unbounded_depth"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

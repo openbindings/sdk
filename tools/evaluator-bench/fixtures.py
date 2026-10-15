@@ -1,0 +1,73 @@
+"""Deterministic exact-token workloads; expectations are independent of timings."""
+import json
+
+def compact(value):
+    return json.dumps(value, separators=(',', ':'))
+
+def fixtures():
+    rows = {}
+    def add(name, schema, value, status='satisfies', modes=('eval',), **options):
+        rows[name] = dict(schema=schema if isinstance(schema, str) else compact(schema),
+                          value=value, expected=dict(status=status), modes=list(modes), **options)
+        return rows[name]
+    ordinary = ('cold', 'compile', 'context', 'eval', 'parse', 'full', 'baseline')
+    obj = dict(type='object', properties=dict(name=dict(type='string', minLength=3, pattern='^[A-Za-z]+$'),
+               age=dict(type='integer', minimum=0), tags=dict(type='array', items=dict(type='string'))),
+               required=['name', 'age'], additionalProperties=False)
+    value = dict(name='Matthew', age=35, tags=['review', 'schema', 'sdk'] * 10)
+    array = compact(list(range(20000)))
+    add('scalar', dict(type='integer', minimum=0, maximum=100), '42', modes=ordinary)
+    add('object', obj, compact(value), modes=ordinary)
+    add('array', dict(type='array', items=dict(type='integer', minimum=0)), array, modes=ordinary)
+    add('refs', {'$defs': {'leaf': obj}, 'type': 'array', 'items': {'$ref': '#/$defs/leaf'}}, compact([value] * 20), modes=ordinary)
+    add('large-object', dict(type='object', additionalProperties=dict(type='integer')), compact({f'key{i}': i for i in range(50000)}), modes=ordinary)
+    add('large-literal', {'const': list(range(20000))}, array, modes=('cold', 'compile', 'context', 'eval', 'full'))
+    add('decimal-array', '{"type":"array","items":{"multipleOf":0.1,"minimum":0}}', '['+','.join(f'{i//10}.{i%10}' for i in range(5000))+']')
+    add('wide-integers', '{"type":"array","items":{"minimum":9007199254740993}}', '[9007199254740993,9223372036854775807,9223372036854775808]')
+    add('wide-adjacent', '{"minimum":9007199254740993}', '9007199254740992', 'fails')
+    add('arithmetic-stop', '{"multipleOf":3}', '1e'+'9'*5000, 'no-verdict')['expected']['code'] = 'numeric-arithmetic-limit'
+    add('huge-exponent', '{"minimum":1e400}', '10e399')
+    add('mixed-equality', '{"const":[-0,9223372036854775807,1e400]}', '[0.0,9223372036854775807.0,10e399]')
+    add('unique-array', dict(uniqueItems=True), array)
+    add('unique-objects', dict(uniqueItems=True), compact([dict(a=i, b=[i, i+1]) for i in range(1000)]))
+    add('late-duplicate', dict(uniqueItems=True), array[:-1]+',19999.0]', 'fails')
+    add('equal-decimals', dict(uniqueItems=True), '[0.1,0.10]', 'fails')
+    add('late-invalid', dict(type='array', items=dict(type='integer', minimum=0)), array[:-1]+',-1]', 'fails', modes=('eval', 'parse', 'full'))
+    add('one-of', dict(oneOf=[dict(const=i) for i in range(128)]), '127')
+    add('explicit-resource', {'$ref': 'https://benchmark.invalid/item'}, '1', resources={'https://benchmark.invalid/item': '{"type":"integer"}'}, modes=ordinary)
+    # Many independent referring resources share one large supplied carrier.
+    # context isolates public ValueContracts::prepare from input construction.
+    add('reference-fan-in', {'allOf': [
+        {'$id': f'https://scale.test/caller/{i}', '$ref': 'https://scale.test/target'}
+        for i in range(100)]}, '1', resources={'https://scale.test/target': compact({
+            '$id': 'https://scale.test/target', 'type': 'integer',
+            '$defs': {f'p{i}': {'type': 'integer'} for i in range(5000)}})},
+        modes=('cold', 'compile', 'context', 'eval', 'full'))
+    # Long repeated reference spellings must not be copied into each cache layer.
+    for count, width in [(1000, 256), (5000, 1024)]:
+        uri = 'https://memory.test/' + 'a' * width
+        add(f'reference-text-{count}', {'allOf': [
+            {'$ref': uri + '#/$defs/value'} for _ in range(count)]}, '1',
+            resources={uri: compact({'$id': uri, '$defs': {'value': {'type': 'integer'}}})},
+            modes=('compile', 'context', 'eval', 'full'))
+    add('missing-resource', {'$ref': 'https://benchmark.invalid/missing'}, '1', 'no-verdict', modes=('cold', 'compile', 'context', 'eval', 'full'))
+    add('missing-independent', {'anyOf': [True, {'$ref': 'https://benchmark.invalid/missing'}]}, '1')
+    # Known static defects retain a separate undefined outcome.
+    add('undefined-pointer', {'$ref': '#/$defs/absent'}, '1', 'undefined')
+    recursive = {'$defs': {'node': {'anyOf': [{'type': 'integer'}, {'type': 'array', 'items': {'$ref': '#/$defs/node'}}]}}, '$ref': '#/$defs/node'}
+    add('deep', recursive, '['*32+'0'+']'*32)
+    add('depth-stop', recursive, '['*32+'0'+']'*32, 'no-verdict', limits=dict(evaluation_depth=8))
+    add('work-stop', {'type': 'array', 'items': {'type': 'integer'}}, array, 'no-verdict', limits=dict(evaluation_steps=16))
+    add('regex-failure', dict(pattern='[A-Z]+[0-9]+'), compact('a'*65536), 'fails')
+    add('regex-stop', dict(pattern='[A-Z]+[0-9]+'), compact('a'*1048576), 'no-verdict')
+    add('cancelled', True, '1', 'no-verdict', cancelled=True)
+    add('source-diagnostics', '{"maximum":9223372036854775807}', '9223372036854775808', 'fails', upstream=True)
+    for name, code in [('missing-resource', 'resource-unavailable'), ('depth-stop', 'evaluation-work-limit'),
+                       ('work-stop', 'evaluation-work-limit'), ('regex-stop', 'regex-work-limit'), ('cancelled', 'caller-cancelled')]:
+        rows[name]['expected']['code'] = code
+    rows['undefined-pointer']['expected']['code'] = 'static-reference-defect'
+    rows['source-diagnostics']['expected'].update(problems_complete=False, problems=[dict(
+        code='maximum', details=dict(bound='9223372036854775807', kind='numeric-bound'), instance_pointer='',
+        message='number exceeds the inclusive upper bound; inspect maximum at the schema location',
+        schema_location=dict(pointer='/maximum', resource='https://benchmark.invalid/root'))])
+    return rows

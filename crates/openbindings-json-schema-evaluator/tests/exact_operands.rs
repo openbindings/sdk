@@ -219,3 +219,144 @@ fn compact_exponents_public_equality_and_arithmetic_refusal_remain_separate() {
         }
     }
 }
+
+#[test]
+fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
+    // Pair ordinary i64 tokens with decimal/exponent spellings and immediate
+    // neighbours outside i64. The expected order is exact, never f64-derived.
+    let tokens = [
+        "-9223372036854775809",
+        "-9223372036854775808",
+        "-9223372036854775807",
+        "-9007199254740993",
+        "-1",
+        "-0",
+        "0",
+        "1",
+        "9007199254740993",
+        "9223372036854775806",
+        "9223372036854775807",
+        "9223372036854775808",
+    ];
+    for mode in [Diagnostics::Coarse, Diagnostics::Upstream] {
+        for (i, bound) in tokens.iter().enumerate() {
+            for spelling in [
+                bound.to_string(),
+                format!("{bound}.0"),
+                format!("{bound}e0"),
+            ] {
+                for keyword in [
+                    "minimum",
+                    "maximum",
+                    "exclusiveMinimum",
+                    "exclusiveMaximum",
+                    "const",
+                ] {
+                    let contract = prepare(
+                        &format!(r#"{{"{keyword}":{spelling}}}"#),
+                        mode,
+                        ResourceSet::default(),
+                    );
+                    for (j, input) in tokens.iter().enumerate() {
+                        let same = i == j || (i == 5 && j == 6) || (i == 6 && j == 5);
+                        let expected = match keyword {
+                            "minimum" => j > i || same,
+                            "maximum" => j < i || same,
+                            "exclusiveMinimum" => j > i && !same,
+                            "exclusiveMaximum" => j < i && !same,
+                            "const" => same,
+                            _ => unreachable!(),
+                        };
+                        for value in [
+                            input.to_string(),
+                            format!("{input}.0"),
+                            format!("{input}e0"),
+                        ] {
+                            let outcome = contract.validate_json(&value).unwrap();
+                            assert!(
+                                matches!(
+                                    outcome,
+                                    ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
+                                ),
+                                "{keyword} {spelling}: {value}: {outcome:?}"
+                            );
+                            assert_eq!(
+                                matches!(outcome, ValueOutcome::Satisfies),
+                                expected,
+                                "{keyword} {spelling}: {value}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        for (divisor, input, expected) in [
+            ("1", "-9223372036854775808", true),
+            ("2", "-9223372036854775808", true),
+            ("3", "-9223372036854775808", false),
+            ("9223372036854775807", "9223372036854775807", true),
+            ("9223372036854775807", "-9223372036854775808", false),
+            ("9223372036854775808", "-9223372036854775808", true),
+            ("2.0", "9223372036854775808", true),
+            ("2", "9223372036854775808.0", true),
+            ("2", "-0", true),
+            ("2", "1e1", true),
+            ("2", "2.0000000000000000001", false),
+        ] {
+            let contract = prepare(
+                &format!(r#"{{"multipleOf":{divisor}}}"#),
+                mode,
+                ResourceSet::default(),
+            );
+            let outcome = contract.validate_json(input).unwrap();
+            assert!(matches!(
+                outcome,
+                ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
+            ));
+            assert_eq!(
+                matches!(outcome, ValueOutcome::Satisfies),
+                expected,
+                "{divisor}: {input}"
+            );
+        }
+        let integer = prepare(r#"{"type":"integer"}"#, mode, ResourceSet::default());
+        for token in tokens.into_iter().map(str::to_owned).chain([
+            "9".repeat(10_000),
+            "-0".into(),
+            "-0.000e-99999".into(),
+            "1e999999".into(),
+        ]) {
+            assert!(
+                matches!(
+                    integer.validate_json(&token).unwrap(),
+                    ValueOutcome::Satisfies
+                ),
+                "{token}"
+            );
+        }
+        for token in ["1e-99999", "-0.00000000001", "9223372036854775807.1"] {
+            assert!(matches!(
+                integer.validate_json(token).unwrap(),
+                ValueOutcome::Fails { .. }
+            ));
+        }
+        let unique = prepare(r#"{"uniqueItems":true}"#, mode, ResourceSet::default());
+        for (input, expected) in [
+            (
+                "[-9223372036854775808,9223372036854775807,9223372036854775808]",
+                true,
+            ),
+            ("[1,2,3,9223372036854775807,9223372036854775807.0]", false),
+            ("[-0,0e999999]", false),
+            ("[9223372036854775808,9223372036854775809]", true),
+        ] {
+            assert_eq!(
+                matches!(
+                    unique.validate_json(input).unwrap(),
+                    ValueOutcome::Satisfies
+                ),
+                expected
+            );
+        }
+    }
+}

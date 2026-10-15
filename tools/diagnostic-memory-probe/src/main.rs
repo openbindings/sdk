@@ -5,6 +5,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
 mod constructors;
+mod references;
 mod values;
 
 struct Counting;
@@ -55,9 +56,14 @@ fn measured<T>(call: impl FnOnce() -> T) -> (T, usize, u128) {
     (result, PEAK.load(Relaxed).saturating_sub(before), nanos)
 }
 fn main() {
+    if std::env::args().any(|arg| arg == "--references-only") {
+        println!("{}", serde_json::json!(references::run()));
+        return;
+    }
     constructors::run();
     if std::env::args().any(|arg| arg == "--values-only") {
         values::run();
+        drop(references::run());
         return;
     }
     use openbindings_internal_schema::RawDocument;
@@ -207,4 +213,6 @@ fn main() {
         }
     }
     values::run();
+    // Preserve the frozen probes' cache initialization and measurement order.
+    drop(references::run());
 }
