@@ -35,7 +35,8 @@ pub enum InputErrorKind {
     /// An input byte, nesting or node limit was reached.
     Limit,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+
+#[derive(Clone, PartialEq, Eq)]
 /// Exact JSON admission failure. It is separate from document conformance and schema-instance outcomes.
 pub struct InputError {
     /// Broad admission failure category.
@@ -44,6 +45,37 @@ pub struct InputError {
     pub byte_offset: usize,
     /// Stable detailed parse/admission code, suitable for branching.
     pub code: &'static str,
+}
+impl std::fmt::Debug for InputError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Only fixed parser/admission reasons are safe; this record is publicly constructible.
+        let code = match self.code {
+            "bom"
+            | "byte-limit"
+            | "colon"
+            | "comma-or-close"
+            | "depth-limit"
+            | "escape"
+            | "exponent"
+            | "fraction"
+            | "literal"
+            | "node-limit"
+            | "number"
+            | "object-key"
+            | "string-control"
+            | "trailing-token"
+            | "unicode-escape"
+            | "unterminated-string"
+            | "utf8"
+            | "value" => self.code,
+            _ => "<redacted>",
+        };
+        f.debug_struct("InputError")
+            .field("code", &code)
+            .field("kind", &self.kind)
+            .field("byte_offset", &self.byte_offset)
+            .finish_non_exhaustive()
+    }
 }
 impl fmt::Display for InputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -68,7 +100,7 @@ pub enum JsonKind {
     Object,
 }
 /// Original-source coordinates: zero-based byte offset, one-based line and byte column.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct SourceLocation {
     /// RFC 6901 pointer when representable; `Some("")` means root and `None` means unavailable, not root. Duplicate member occurrences can share a pointer, so use byte coordinates to distinguish them.
     pub pointer: Option<String>,
@@ -91,6 +123,15 @@ pub struct JsonRef<'a> {
     pub(crate) owner: &'a Arc<Arena>,
     pub(crate) id: Id,
 }
+impl std::fmt::Debug for JsonRef<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("JsonRef")
+            .field("kind", &self.kind())
+            .field("bytes", &self.text().len())
+            .finish_non_exhaustive()
+    }
+}
+
 /// An exact borrowed JSON string. Equality compares decoded UTF-16 units;
 /// scalar conversion is optional and never replaces unpaired units.
 #[derive(Clone, Copy)]
@@ -99,9 +140,7 @@ pub struct JsonStringRef<'a> {
 }
 impl fmt::Debug for JsonStringRef<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("JsonStringRef")
-            .field(&self.json.text())
-            .finish()
+        f.debug_tuple("JsonStringRef").field(&self.json).finish()
     }
 }
 impl<'a> JsonStringRef<'a> {
@@ -141,7 +180,7 @@ impl PartialEq<&str> for JsonStringRef<'_> {
     }
 }
 /// An object member; names are exact JSON strings and can preserve lone UTF-16 units.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct JsonMember<'a> {
     /// Exact original member-name string, including its token coordinates.
     pub name: JsonRef<'a>,
@@ -150,10 +189,16 @@ pub struct JsonMember<'a> {
 }
 impl JsonValue {
     /// Parse UTF-8 JSON under [`JsonLimits::default`], copying source into an immutable arena. Preserves number spelling, duplicate members and escaped unpaired UTF-16 units; no normative validation is performed.
+    ///
+    /// # Errors
+    /// Returns an input error for invalid UTF-8, a byte order mark, invalid JSON syntax, or an exceeded admission limit.
     pub fn parse(input: impl AsRef<[u8]>) -> Result<Self, InputError> {
         Self::parse_with_limits(input, JsonLimits::default())
     }
     /// Parse with explicit finite admission limits. Refuses invalid UTF-8, a byte order mark, invalid syntax or exhausted limits; does not coerce or discard JSON data.
+    ///
+    /// # Errors
+    /// Returns an input error for invalid UTF-8, a byte order mark, invalid JSON syntax, or an exceeded admission limit.
     pub fn parse_with_limits(
         input: impl AsRef<[u8]>,
         limits: JsonLimits,
@@ -238,6 +283,9 @@ impl JsonValue {
         Self::parse("null").expect("constant JSON")
     }
     /// Create an escaped JSON string from Unicode scalar text, subject to default input limits.
+    ///
+    /// # Errors
+    /// Returns an input error if the encoded string exceeds the default JSON admission limits.
     pub fn string(value: &str) -> Result<Self, InputError> {
         Self::parse(serde_json::to_vec(value).expect("a Rust string serializes as JSON"))
     }
@@ -455,7 +503,6 @@ impl fmt::Debug for JsonValue {
         f.debug_struct("JsonValue")
             .field("kind", &self.kind())
             .field("bytes", &self.bytes().len())
-            .field("location", &self.location())
             .finish()
     }
 }
@@ -479,6 +526,15 @@ impl<'de> Deserialize<'de> for JsonValue {
     }
 }
 
+impl std::fmt::Debug for SourceLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SourceLocation")
+            .field("byte_offset", &self.byte_offset)
+            .field("line", &self.line)
+            .field("byte_column", &self.byte_column)
+            .finish_non_exhaustive()
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

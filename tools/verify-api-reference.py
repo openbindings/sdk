@@ -31,7 +31,7 @@ def rust_reference():
         arguments = ["cargo", "rustdoc", "--locked", "--lib", "-p", crate]
         if crate == "openbindings-http-discovery":
             arguments += ["--features", "native"]
-        run(arguments + ["--", "-D", "missing_docs", "-D", "rustdoc::broken_intra_doc_links"])
+        run(arguments + ["--", "-D", "missing_docs", "-D", "missing_debug_implementations", "-D", "rustdoc::broken_intra_doc_links"])
     # The implementation support crate exposes other non-SDK internals. Its two
     # selected exact-value modules carry missing_docs lints; -D warnings enforces
     # those without treating all implementation helpers as public SDK contracts.

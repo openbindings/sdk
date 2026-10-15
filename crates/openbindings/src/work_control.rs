@@ -44,6 +44,9 @@ pub trait WorkControl: Send + Sync {
     /// Observe whether the caller has permanently cancelled this attempt.
     fn is_cancelled(&self) -> bool;
     /// Check cancellation at a cooperative work boundary.
+    ///
+    /// # Errors
+    /// Returns `Cancelled` once the caller has cancelled this work attempt.
     fn check(&self) -> Result<(), Cancelled> {
         if self.is_cancelled() {
             Err(Cancelled)
@@ -61,5 +64,11 @@ pub(crate) struct NeverCancelled;
 impl WorkControl for NeverCancelled {
     fn is_cancelled(&self) -> bool {
         false
+    }
+}
+
+impl fmt::Debug for dyn WorkControl + '_ {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("WorkControl").finish_non_exhaustive()
     }
 }

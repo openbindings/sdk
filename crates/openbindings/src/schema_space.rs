@@ -91,8 +91,9 @@ pub enum ReferenceRefusalReason {
     /// The resolver could not complete inspection.
     ResolverFailure,
 }
+
 /// A reference-inspection refusal, separate from a value outcome.
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, serde::Serialize)]
 pub struct ReferenceRefusal {
     /// Broad refusal category.
     pub reason: ReferenceRefusalReason,
@@ -102,6 +103,14 @@ pub struct ReferenceRefusal {
     pub message: String,
     /// Original schema location, when established.
     pub location: Option<SchemaLocation>,
+}
+impl std::fmt::Debug for ReferenceRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReferenceRefusal")
+            .field("reason", &self.reason)
+            .field("location", &self.location)
+            .finish_non_exhaustive()
+    }
 }
 impl std::fmt::Display for ReferenceRefusal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -153,7 +162,7 @@ pub enum ReferenceResolution {
         detail: ReferenceRefusal,
     },
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 /// One `$ref` or `$dynamicRef` encountered in supported schema positions; opaque JSON content is not traversed as schema.
 pub struct Reference {
     /// Original location of the reference keyword.
@@ -164,6 +173,14 @@ pub struct Reference {
     pub spelling: Option<String>,
     /// Static location result or a structured refusal; never triggers I/O.
     pub resolution: ReferenceResolution,
+}
+impl std::fmt::Debug for Reference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Reference")
+            .field("location", &self.location)
+            .field("resolution", &self.resolution)
+            .finish_non_exhaustive()
+    }
 }
 #[derive(Clone, Debug, Serialize)]
 /// Bounded original-context reference inspection, not conformance proof or successful schema preparation.
@@ -179,10 +196,16 @@ use serde::Serialize;
 
 impl ParsedDocument {
     /// Inspect references with no caller resources and a fresh uncancelled control. No network or filesystem access; success is not conformance proof.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance. Unresolved references and cancellation are recorded in the returned report.
     pub fn references(&self) -> Result<ReferenceReport, InterpretationError> {
         self.references_with_resources(ResourceSet::default(), &crate::work_control::NeverCancelled)
     }
     /// Inspect schema references in this exact snapshot plus supplied resources, with cooperative cancellation. Interpretation errors refuse the document; traversal limits are represented in [`ReferenceReport`].
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance. Unresolved references and cancellation are recorded in the returned report.
     pub fn references_with_resources(
         &self,
         resources: ResourceSet,

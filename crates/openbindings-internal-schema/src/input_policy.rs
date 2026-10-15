@@ -6,12 +6,12 @@ use std::{
     collections::{BTreeMap, HashSet},
     sync::{Arc, OnceLock},
 };
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct InputPolicy {
     pub(crate) names: BTreeMap<String, Vec<(usize, usize)>>,
     pub(crate) protected: HashSet<String>,
 }
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct Supplied {
     resources: Vec<ProjectedResource>,
     pub(crate) policy: Arc<InputPolicy>,
@@ -96,5 +96,17 @@ impl Supplied {
             resources,
             policy: Arc::new(policy),
         })
+    }
+}
+
+impl std::fmt::Debug for InputPolicy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InputPolicy").finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for Supplied {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Supplied").finish_non_exhaustive()
     }
 }

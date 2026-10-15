@@ -29,6 +29,14 @@ use std::{
 pub struct CancellationToken {
     state: Arc<State>,
 }
+impl std::fmt::Debug for CancellationToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CancellationToken")
+            .field("is_cancelled", &self.is_cancelled())
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Default)]
 struct State {
     cancelled: AtomicBool,
@@ -57,6 +65,9 @@ impl CancellationToken {
         self.state.cancelled.load(Ordering::Acquire)
     }
     /// Check the shared state at a cooperative work boundary.
+    ///
+    /// # Errors
+    /// Returns `Cancelled` once the caller has cancelled this work attempt.
     pub fn check(&self) -> Result<(), Cancelled> {
         WorkControl::check(self)
     }
@@ -79,6 +90,14 @@ pub struct Cancellation {
     control: CancellationToken,
     id: Option<usize>,
 }
+impl std::fmt::Debug for Cancellation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Cancellation")
+            .field("control", &self.control)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Future for Cancellation {
     type Output = ();
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {

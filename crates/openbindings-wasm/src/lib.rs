@@ -47,6 +47,12 @@ fn control(cancelled: bool) -> std::sync::atomic::AtomicBool {
 pub struct WasmJson {
     value: JsonValue,
 }
+impl std::fmt::Debug for WasmJson {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmJson").finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmJson {
     #[wasm_bindgen(js_name=parseBytes)]
@@ -122,6 +128,12 @@ pub struct WasmMembers {
     source: JsonValue,
     index: usize,
 }
+impl std::fmt::Debug for WasmMembers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmMembers").finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmMembers {
     #[wasm_bindgen(js_name = next)]
@@ -142,6 +154,12 @@ pub struct WasmElements {
     source: JsonValue,
     index: usize,
 }
+impl std::fmt::Debug for WasmElements {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmElements").finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmElements {
     #[wasm_bindgen(js_name = next)]
@@ -157,6 +175,12 @@ pub struct WasmMember {
     name: JsonValue,
     value: JsonValue,
 }
+impl std::fmt::Debug for WasmMember {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmMember").finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmMember {
     pub fn index(&self) -> usize {
@@ -208,6 +232,12 @@ impl DocumentHandle {
 pub struct WasmDocument {
     handle: DocumentHandle,
 }
+impl std::fmt::Debug for WasmDocument {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmDocument").finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmDocument {
     #[wasm_bindgen(js_name=parseBytes)]
@@ -421,6 +451,13 @@ impl WasmDocument {
 pub struct WasmDocumentValidation {
     handle: DocumentHandle,
 }
+impl std::fmt::Debug for WasmDocumentValidation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmDocumentValidation")
+            .finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmDocumentValidation {
     pub fn report(&self) -> String {
@@ -448,6 +485,13 @@ impl WasmDocumentValidation {
 pub struct WasmValidatedDocument {
     handle: DocumentHandle,
 }
+impl std::fmt::Debug for WasmValidatedDocument {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmValidatedDocument")
+            .finish_non_exhaustive()
+    }
+}
+
 impl WasmValidatedDocument {
     fn from_proof(document: ValidatedDocument) -> Self {
         Self {
@@ -573,6 +617,13 @@ impl WasmValidatedDocument {
 pub struct WasmOperationSelection {
     selection: Option<OperationSelection>,
 }
+impl std::fmt::Debug for WasmOperationSelection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmOperationSelection")
+            .finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmOperationSelection {
     pub fn result(&self) -> String {
@@ -597,6 +648,12 @@ impl WasmOperationSelection {
 pub struct WasmOperation {
     op: OperationView,
 }
+impl std::fmt::Debug for WasmOperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmOperation").finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmOperation {
     pub fn key(&self) -> String {
@@ -744,6 +801,12 @@ fn example_metadata(view: &ExampleView) -> Result<String, JsValue> {
 pub struct WasmBinding {
     view: BindingView,
 }
+impl std::fmt::Debug for WasmBinding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmBinding").finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmBinding {
     pub fn retain(&self) -> WasmBinding {
@@ -769,6 +832,12 @@ impl WasmBinding {
 pub struct WasmSource {
     view: SourceView,
 }
+impl std::fmt::Debug for WasmSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmSource").finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmSource {
     pub fn retain(&self) -> WasmSource {
@@ -794,6 +863,12 @@ impl WasmSource {
 pub struct WasmDependency {
     view: DependencyView,
 }
+impl std::fmt::Debug for WasmDependency {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmDependency").finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmDependency {
     pub fn retain(&self) -> WasmDependency {
@@ -814,6 +889,12 @@ impl WasmDependency {
 pub struct WasmExample {
     view: ExampleView,
 }
+impl std::fmt::Debug for WasmExample {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmExample").finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmExample {
     pub fn retain(&self) -> WasmExample {
@@ -844,6 +925,12 @@ impl WasmExample {
 pub struct WasmResources {
     resources: ResourceSet,
 }
+impl std::fmt::Debug for WasmResources {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmResources").finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmResources {
     #[wasm_bindgen(constructor)]
@@ -875,6 +962,12 @@ impl Default for WasmResources {
 pub struct WasmValueContracts {
     contracts: ValueContracts,
 }
+impl std::fmt::Debug for WasmValueContracts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmValueContracts").finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmValueContracts {
     pub fn prepare(
@@ -897,6 +990,12 @@ impl WasmValueContracts {
 pub struct WasmPreparation {
     preparation: Option<ValueContractPreparation>,
 }
+impl std::fmt::Debug for WasmPreparation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmPreparation").finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmPreparation {
     pub fn result(&self) -> String {
@@ -929,6 +1028,12 @@ impl WasmPreparation {
 pub struct WasmPrepared {
     prepared: ValueContract,
 }
+impl std::fmt::Debug for WasmPrepared {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmPrepared").finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmPrepared {
     pub fn validate(&self, value: &WasmJson, cancelled: bool) -> String {
@@ -986,6 +1091,12 @@ pub fn discovery_policy() -> String {
 pub struct WasmDiscovery {
     outcome: openbindings_http_discovery::DiscoveryOutcome,
 }
+impl std::fmt::Debug for WasmDiscovery {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmDiscovery").finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmDiscovery {
     #[wasm_bindgen(constructor)]
@@ -1028,6 +1139,12 @@ impl WasmDiscovery {
 pub struct WasmPublication {
     publication: openbindings_http_discovery::Publication,
 }
+impl std::fmt::Debug for WasmPublication {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmPublication").finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmPublication {
     #[wasm_bindgen(constructor)]

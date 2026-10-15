@@ -25,6 +25,16 @@ contracts reexported by `openbindings` remain documented at their original defin
 Rust's standard trait implementations inherit their standard contracts; the evaluator
 and transport traits document their additional SDK obligations explicitly.
 
+All public Rust types implement `Debug` as a structural aid: types, variants,
+fixed SDK reasons and byte coordinates may be shown. Caller- and document-owned
+text is omitted, including reference spellings, URLs, origins, JSON Pointers,
+evidence-map keys and values, diagnostic messages, schema operands, bodies,
+credentials, provider state and invocation context. `Display`, accessors and
+serialization retain their existing output; use them when disclosure is intended.
+Debug formatting is not a stable serialization format. Public authoring and evaluator records retain
+struct-literal construction. Result-returning APIs document caller-visible failures
+under `# Errors`; validation outcomes (including `DocumentValidation`) and configuration methods warn when ignored.
+
 ## Optional Rust role APIs
 
 Source inspection uses `SourceInspector` and `Inspector`; interface synthesis uses

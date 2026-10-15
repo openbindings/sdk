@@ -12,7 +12,7 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Deserialize)]
 /// One frozen evaluator observation. Exact JSON text avoids host numeric conversion; expected outcome and capability exceptions come from packaged provenance.
 pub struct Case {
     /// Stable case identity, also used for explicit capability allowances.
@@ -30,7 +30,13 @@ pub struct Case {
     /// Expected no-verdict reason wire spelling, when a refusal is expected.
     pub refusal_kind: Option<String>,
 }
-#[derive(Clone, Debug, Deserialize)]
+impl std::fmt::Debug for Case {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Case").finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone, Deserialize)]
 /// Related cases sharing one original document, operation `op` input contract and supplied resource set.
 pub struct Group {
     /// Stable group identity.
@@ -42,7 +48,15 @@ pub struct Group {
     /// Finite observations sharing this prepared value contract.
     pub cases: Vec<Case>,
 }
-#[derive(Clone, Debug, Deserialize)]
+impl std::fmt::Debug for Group {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Group")
+            .field("cases", &self.cases)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone, Deserialize)]
 /// One exact schema resource in the packaged fixture registry; no acquisition is implied.
 pub struct Resource {
     /// Absolute resource identity used when building the explicit resource set.
@@ -51,7 +65,13 @@ pub struct Resource {
     /// Exact resource JSON text; serialized fixture key is `documentJson`.
     pub document: String,
 }
-#[derive(Clone, Debug, Deserialize)]
+impl std::fmt::Debug for Resource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Resource").finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone, Deserialize)]
 /// Frozen finite evaluator contract suite. This is a qualification input, not a claim of complete JSON Schema coverage.
 pub struct Suite {
     /// Named resource fixtures available to groups.
@@ -61,6 +81,14 @@ pub struct Suite {
     /// Embedded meta-schema identities/text used to check original diagnostic locations.
     pub builtin_resources: BTreeMap<String, String>,
 }
+impl std::fmt::Debug for Suite {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Suite")
+            .field("groups", &self.groups)
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Deserialize)]
 struct PolicyTranslation {
     case: String,
@@ -200,11 +228,17 @@ pub fn suite() -> &'static Suite {
     })
 }
 /// Exact optional case IDs. Unknown, blank and unused declarations fail the run.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct Options {
     /// Exact optional case IDs mapped to their declared capability explanation. Unknown, mismatched, blank or unused allowances make the report fail.
     pub permitted_refusals: BTreeMap<String, String>,
 }
+impl std::fmt::Debug for Options {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Options").finish_non_exhaustive()
+    }
+}
+
 impl Options {
     /// The default companion's qualified Unicode-property limitation, case by case.
     pub fn without_unicode_property_matching() -> Self {
@@ -222,7 +256,7 @@ impl Options {
         }
     }
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 /// Receipt for one case, preserving verdicts and refusals separately from contract-check failures.
 pub struct Observation {
     /// Case identity from the fixture.
@@ -236,7 +270,17 @@ pub struct Observation {
     /// Contract-check failures for this observation; empty can include an allowed refusal.
     pub failures: Vec<String>,
 }
-#[derive(Clone, Debug, Serialize)]
+impl std::fmt::Debug for Observation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Observation")
+            .field("preparation_refusal", &self.preparation_refusal)
+            .field("outcome", &self.outcome)
+            .field("failure_count", &self.failures.len())
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone, Serialize)]
 /// Finite suite receipt. Success permits explicitly declared capability refusals; inspect verdict/refusal counts before claiming coverage.
 pub struct Report {
     /// Actual observations in fixture order.
@@ -244,6 +288,18 @@ pub struct Report {
     /// Invalid or unused allowance declarations and setup invariant failures.
     pub configuration_failures: Vec<String>,
 }
+impl std::fmt::Debug for Report {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Report")
+            .field("observations", &self.observations)
+            .field(
+                "configuration_failure_count",
+                &self.configuration_failures.len(),
+            )
+            .finish_non_exhaustive()
+    }
+}
+
 impl Report {
     /// Whether configuration is valid, every evaluator case was observed and no observation violates the kit contract. Permitted refusals are not counted as verdicts.
     pub fn is_success(&self) -> bool {

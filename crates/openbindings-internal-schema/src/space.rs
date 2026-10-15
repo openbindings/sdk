@@ -13,6 +13,12 @@ pub struct SpaceNode {
     pub source: usize,
     pub depth: usize,
 }
+impl std::fmt::Debug for SpaceNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SpaceNode").finish_non_exhaustive()
+    }
+}
+
 pub struct Resource {
     pub root: Option<usize>,
     pub base: Option<String>,
@@ -22,9 +28,15 @@ pub struct Resource {
     pub origin: ResourceOrigin,
     pub eligible: bool,
 }
+impl std::fmt::Debug for Resource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Resource").finish_non_exhaustive()
+    }
+}
+
 // Priority applies to name associations, not bodies or source provenance. A
 // supplied retrieval alias competes equally with every supplied declared ID.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum ResourceOrigin {
     Contained,
     Supplied,
@@ -40,6 +52,12 @@ pub struct Source {
     pub value: JsonValue,
     pub positions: HashMap<usize, usize>,
 }
+impl std::fmt::Debug for Source {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Source").finish_non_exhaustive()
+    }
+}
+
 pub struct SchemaSpace {
     pub document: RawDocument,
     pub supplied: Supplied,
@@ -49,11 +67,25 @@ pub struct SchemaSpace {
     names: BTreeMap<String, NameSelection>,
     library: std::sync::OnceLock<library::Targets>,
 }
+impl std::fmt::Debug for SchemaSpace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SchemaSpace").finish_non_exhaustive()
+    }
+}
+
 #[derive(Clone)]
 pub struct Target {
     pub node: usize,
     pub dynamic_name: Option<String>,
 }
+impl std::fmt::Debug for Target {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Target")
+            .field("node", &self.node)
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
 /// Static reference inspection outcome. Located dynamic references still require evaluation-time scope resolution.
@@ -71,7 +103,8 @@ pub enum ReferenceResolution {
         detail: Failure,
     },
 }
-#[derive(Clone, Debug, Serialize)]
+
+#[derive(Clone, Serialize)]
 /// One `$ref` or `$dynamicRef` encountered in supported schema positions; opaque JSON content is not traversed as schema.
 pub struct Reference {
     /// Original location of the reference keyword.
@@ -82,6 +115,14 @@ pub struct Reference {
     pub spelling: Option<String>,
     /// Static location result or a structured refusal; never triggers I/O.
     pub resolution: ReferenceResolution,
+}
+impl std::fmt::Debug for Reference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Reference")
+            .field("location", &self.location)
+            .field("resolution", &self.resolution)
+            .finish_non_exhaustive()
+    }
 }
 #[derive(Clone, Debug, Serialize)]
 /// Bounded original-context reference inspection, not conformance proof or successful schema preparation.
@@ -934,6 +975,12 @@ pub struct Reach {
     pub targets: HashMap<(usize, String), Target>,
     pub dynamic: BTreeMap<String, Vec<usize>>,
 }
+impl std::fmt::Debug for Reach {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Reach").finish_non_exhaustive()
+    }
+}
+
 /// Borrow pinned original meta-schema snapshots for source-location lookup.
 pub fn embedded_resources() -> &'static [ProjectedResource] {
     static RESOURCES: std::sync::OnceLock<Vec<ProjectedResource>> = std::sync::OnceLock::new();
@@ -1005,7 +1052,7 @@ mod projection_tests {
                             .to_owned(),
                     )
                     .unwrap();
-                let refusal = space.reach(entry, &control).err().expect("malformed reach");
+                let refusal = space.reach(entry, &control).expect_err("malformed reach");
                 assert!(
                     matches!(
                         refusal.code.as_str(),

@@ -119,12 +119,19 @@ pub fn fixed_string(value: crate::JsonRef<'_>) -> Option<Cow<'_, str>> {
     present_string(value.owner, value.id)
 }
 
+#[derive(Debug)]
 pub struct FlatJson;
 #[derive(Clone, Copy)]
 pub enum View<'a> {
     Stored(&'a Arena, Id),
     Text(&'a str),
 }
+impl std::fmt::Debug for View<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("View").finish_non_exhaustive()
+    }
+}
+
 impl Json for FlatJson {
     type Node<'a> = View<'a>;
     type PreparedKey = String;
@@ -140,6 +147,12 @@ impl Json for FlatJson {
     }
 }
 pub struct Number<'a>(&'a str);
+impl std::fmt::Debug for Number<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Number").finish_non_exhaustive()
+    }
+}
+
 impl JsonNumber for Number<'_> {
     fn as_u64(&self) -> Option<u64> {
         self.0.parse().ok()
@@ -297,13 +310,31 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
     }
 }
 pub struct ObjectView<'a>(&'a Arena, &'a [Member]);
+impl std::fmt::Debug for ObjectView<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ObjectView").finish_non_exhaustive()
+    }
+}
+
 pub struct Members<'a>(&'a Arena, std::slice::Iter<'a, Member>);
+impl std::fmt::Debug for Members<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Members").finish_non_exhaustive()
+    }
+}
+
 // Iterating values need not interpret their member names. Mark unsupported
 // access only when the engine requests the scalar name (matching or locating it).
 pub struct MemberName<'a> {
     text: Cow<'a, str>,
     unpaired: bool,
 }
+impl std::fmt::Debug for MemberName<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MemberName").finish_non_exhaustive()
+    }
+}
+
 impl AsRef<str> for MemberName<'_> {
     fn as_ref(&self) -> &str {
         if self.unpaired {
@@ -363,7 +394,19 @@ impl<'a> Object<'a, FlatJson> for ObjectView<'a> {
     }
 }
 pub struct ArrayView<'a>(&'a Arena, &'a [Id]);
+impl std::fmt::Debug for ArrayView<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ArrayView").finish_non_exhaustive()
+    }
+}
+
 pub struct Elements<'a>(&'a Arena, std::slice::Iter<'a, Id>);
+impl std::fmt::Debug for Elements<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Elements").finish_non_exhaustive()
+    }
+}
+
 impl<'a> Iterator for Elements<'a> {
     type Item = View<'a>;
     fn next(&mut self) -> Option<View<'a>> {

@@ -50,7 +50,8 @@ pub enum NoVerdictReason {
     /// Semantic undefinedness was established. Potential cycles or incomplete analysis alone must use a conservative refusal instead.
     Undefined,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+
+#[derive(Clone, PartialEq, Eq, Serialize)]
 /// Location in an original schema source; generated evaluation-program identities are mapped back before exposure.
 pub struct SchemaLocation {
     /// Original supplied-resource URI, or `None` for the OpenBindings document. A URI is an identity, never an instruction to fetch.
@@ -58,7 +59,7 @@ pub struct SchemaLocation {
     /// RFC 6901 JSON Pointer within the original source; the empty string denotes its root. Escape for presentation without changing `~0`/`~1` semantics.
     pub pointer: String,
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 /// Structured explanation for why no schema verdict was established. This public record may be constructed by custom evaluators.
 pub struct NoVerdict {
     /// Extensible broad refusal category.
@@ -69,6 +70,14 @@ pub struct NoVerdict {
     pub message: String,
     /// Original schema location when known; no generated or guessed location is substituted.
     pub location: Option<SchemaLocation>,
+}
+impl std::fmt::Debug for NoVerdict {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NoVerdict")
+            .field("reason", &self.reason)
+            .field("location", &self.location)
+            .finish_non_exhaustive()
+    }
 }
 impl NoVerdict {
     /// Construct an unlocated refusal; callers may set its public `location` when original-source evidence is available.
@@ -95,7 +104,7 @@ impl fmt::Display for NoVerdict {
     }
 }
 impl std::error::Error for NoVerdict {}
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 #[non_exhaustive]
 /// Optional schema facts. Treat source operands as sensitive; none contain a
@@ -128,7 +137,8 @@ pub enum ValueProblemDetails {
         choices: Vec<String>,
     },
 }
-#[derive(Clone, Debug, Serialize)]
+
+#[derive(Clone, Serialize)]
 /// One established instance failure with an optional original schema coordinate. Custom evaluators can construct this public record.
 pub struct ValueProblem {
     /// RFC 6901 pointer to an existing location in the input instance; empty means the root.
@@ -143,9 +153,55 @@ pub struct ValueProblem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<ValueProblemDetails>,
 }
-#[derive(Clone, Debug, Serialize)]
+impl std::fmt::Debug for ValueProblem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Fixed arms of the pinned evaluator's ValidationErrorKind::keyword;
+        // recognize exact spellings only, keeping arbitrary custom codes private.
+        let code = match self.code.as_str() {
+            "additionalItems"
+            | "additionalProperties"
+            | "anyOf"
+            | "pattern"
+            | "const"
+            | "contains"
+            | "contentEncoding"
+            | "contentMediaType"
+            | "enum"
+            | "exclusiveMaximum"
+            | "exclusiveMinimum"
+            | "falseSchema"
+            | "format"
+            | "maxItems"
+            | "maximum"
+            | "maxLength"
+            | "maxProperties"
+            | "minItems"
+            | "minimum"
+            | "minLength"
+            | "minProperties"
+            | "multipleOf"
+            | "not"
+            | "oneOf"
+            | "propertyNames"
+            | "required"
+            | "type"
+            | "unevaluatedItems"
+            | "unevaluatedProperties"
+            | "uniqueItems"
+            | "$ref" => self.code.as_str(),
+            _ => "<redacted>",
+        };
+        f.debug_struct("ValueProblem")
+            .field("code", &code)
+            .field("schema_location", &self.schema_location)
+            .field("details", &self.details)
+            .finish_non_exhaustive()
+    }
+}
+#[derive(Clone, Serialize)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
 /// Closed semantic partition for the selected schema and instance: satisfies, fails, or no verdict. Neither established verdict proves that the surrounding OpenBindings document conforms.
+#[must_use = "inspect the outcome before continuing"]
 pub enum ValueOutcome {
     /// The instance was established to satisfy the selected schema.
     Satisfies,
@@ -164,8 +220,27 @@ pub enum ValueOutcome {
         detail: NoVerdict,
     },
 }
+impl std::fmt::Debug for ValueOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Satisfies => f.write_str("Satisfies"),
+            Self::Fails {
+                problems,
+                problems_complete,
+                ..
+            } => f
+                .debug_struct("Fails")
+                .field("problems", problems)
+                .field("problems_complete", problems_complete)
+                .finish_non_exhaustive(),
+            Self::NoVerdict { detail } => {
+                f.debug_struct("NoVerdict").field("detail", detail).finish()
+            }
+        }
+    }
+}
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 /// An explicit immutable schema resource associated with its retrieval identity. Supplying it performs no I/O.
 pub struct SchemaResource {
     /// Absolute retrieval URI without a nonempty fragment; [`ResourceSet::new`] validates and normalizes identity.
@@ -175,12 +250,12 @@ pub struct SchemaResource {
 }
 /// Immutable caller-supplied resources. Separate contexts can use the same URI
 /// for different snapshots; this is not a process-wide registry or an acquirer.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct ResourceSet {
     resources: Arc<Vec<SchemaResource>>,
     pub(crate) input_policy: openbindings_internal_schema::Supplied,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 /// Invalid supplied-resource configuration, separate from schema preparation and value outcomes.
 pub struct ResourceError {
     /// Caller-supplied resource identifier associated with the error; treat it as untrusted display data.
@@ -200,6 +275,9 @@ impl ResourceSet {
     /// Canonical associations use the library's ordinary URI normalization;
     /// collisions and protected standard identities are retained as input policy
     /// and refuse when reached, without poisoning unrelated contracts.
+    ///
+    /// # Errors
+    /// Returns a resource error if a URI is not absolute or has a nonempty fragment, two resources have the same normalized URI, or a resource contains duplicate members.
     pub fn new(resources: impl IntoIterator<Item = SchemaResource>) -> Result<Self, ResourceError> {
         let mut by_uri = BTreeMap::new();
         for mut resource in resources {
@@ -255,6 +333,12 @@ pub struct SchemaRequest {
     pub(crate) entry: usize,
     document: ValidatedDocument,
 }
+impl std::fmt::Debug for SchemaRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SchemaRequest").finish_non_exhaustive()
+    }
+}
+
 impl SchemaRequest {
     /// Borrow the validated immutable snapshot owning this normative value contract.
     pub fn document(&self) -> &ValidatedDocument {
@@ -273,6 +357,9 @@ impl SchemaRequest {
         self.space.location(self.entry)
     }
     /// Build a finite evaluator projection with private resource identities, original-location mapping and cooperative cancellation. Refuses unsupported/ambiguous/unavailable references instead of retrieving data.
+    ///
+    /// # Errors
+    /// Returns a refusal if references cannot be resolved soundly, a required capability or resource is unavailable, work limits are exceeded, or cancellation is observed. A refusal is not an instance failure.
     pub fn evaluation_program(
         &self,
         control: &dyn WorkControl,
@@ -282,7 +369,7 @@ impl SchemaRequest {
 }
 /// A closed §7 schema projection with original provenance. Generated identifiers
 /// are private to this program and are not original source identities.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct EvaluationProgram {
     entry_uri: String,
     resources: Vec<SchemaResource>,
@@ -387,6 +474,9 @@ pub(crate) fn projection_failure(f: openbindings_internal_schema::Failure) -> No
 /// ```
 pub trait SchemaEvaluator: Send + Sync {
     /// Prepare this selected schema only, borrowing the request and control for the call. Return a shareable immutable [`PreparedSchema`] or truthful [`NoVerdict`]; never turn preparation refusal into instance failure.
+    ///
+    /// # Errors
+    /// Returns a refusal if references cannot be resolved soundly, a required capability or resource is unavailable, work limits are exceeded, or cancellation is observed. A refusal is not an instance failure.
     fn prepare(
         &self,
         request: &SchemaRequest,
@@ -407,6 +497,12 @@ pub trait PreparedSchema: Send + Sync {
 pub struct ValueContracts {
     inner: Arc<ContractsInner>,
 }
+impl std::fmt::Debug for ValueContracts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ValueContracts").finish_non_exhaustive()
+    }
+}
+
 struct ContractsInner {
     document: ValidatedDocument,
     space: Arc<SchemaSpace>,
@@ -414,7 +510,8 @@ struct ContractsInner {
 }
 /// Setup result. Ready means successfully prepared, not decidable. A ready
 /// contract may return no verdict for every instance (including a bare missing reference).
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+#[must_use = "inspect the outcome before continuing"]
 pub enum ValueContractPreparation {
     /// A retained prepared value contract, independently usable after context drop.
     Ready(ValueContract),
@@ -433,6 +530,22 @@ pub enum ValueContractPreparation {
         detail: NoVerdict,
     },
 }
+impl std::fmt::Debug for ValueContractPreparation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ready(value) => f.debug_tuple("Ready").field(value).finish(),
+            Self::NoValueContract => f.write_str("NoValueContract"),
+            Self::OperationMissing => f.write_str("OperationMissing"),
+            Self::OperationAmbiguous { .. } => {
+                f.debug_struct("OperationAmbiguous").finish_non_exhaustive()
+            }
+            Self::NoVerdict { detail } => {
+                f.debug_struct("NoVerdict").field("detail", detail).finish()
+            }
+        }
+    }
+}
+
 /// A ready value contract that retains its required compiled state independently of
 /// document/context lifetime. Cloning shares immutable state;
 /// dropping the final owner releases that owner, without promising lower RSS.
@@ -569,5 +682,55 @@ impl ValueContracts {
             Ok(schema) => ValueContractPreparation::Ready(ValueContract { schema }),
             Err(detail) => ValueContractPreparation::NoVerdict { detail },
         }
+    }
+}
+
+impl std::fmt::Debug for ValueProblemDetails {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ValueProblemDetails")
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for EvaluationProgram {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EvaluationProgram").finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for SchemaResource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SchemaResource").finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for ResourceSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResourceSet")
+            .field("resources", &self.resources.len())
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for SchemaLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SchemaLocation").finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for ResourceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let reason = match self.message.as_str() {
+            "retrieval URI must be absolute with no nonempty fragment" => {
+                "retrieval URI must be absolute with no nonempty fragment"
+            }
+            "resource repeats JSON member names" => "resource repeats JSON member names",
+            "invalid retrieval URI" => "invalid retrieval URI",
+            "duplicate retrieval URI" => "duplicate retrieval URI",
+            _ => "<redacted>",
+        };
+        f.debug_struct("ResourceError")
+            .field("reason", &reason)
+            .finish_non_exhaustive()
     }
 }

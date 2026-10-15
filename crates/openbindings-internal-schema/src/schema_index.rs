@@ -12,6 +12,12 @@ pub struct SchemaNode {
     pub obi_position: bool,
     pub base: Option<String>,
 }
+impl std::fmt::Debug for SchemaNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SchemaNode").finish_non_exhaustive()
+    }
+}
+
 #[derive(Default)]
 pub struct SchemaIndex {
     pub nodes: Vec<SchemaNode>,
@@ -19,6 +25,12 @@ pub struct SchemaIndex {
     pub anchors: BTreeMap<(usize, String), Vec<(JsonValue, &'static str)>>,
     pub identifiers: BTreeMap<String, Vec<JsonValue>>,
 }
+impl std::fmt::Debug for SchemaIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SchemaIndex").finish_non_exhaustive()
+    }
+}
+
 pub fn plain_name(name: &str) -> bool {
     !name.is_empty()
         && name.bytes().enumerate().all(|(i, c)| {
@@ -207,6 +219,7 @@ impl SchemaIndex {
         }
     }
 }
+#[derive(Debug)]
 pub enum SameDocument {
     Found(JsonValue),
     Missing,

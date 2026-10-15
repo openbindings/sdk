@@ -9,11 +9,22 @@ pub struct Client {
     http: reqwest::Client,
     options: ClientOptions,
 }
+impl std::fmt::Debug for Client {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Client")
+            .field("options", &self.options)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Client {
     /// Build the application builder after installing the SDK redirect policy last.
     /// HTTP is allowed only for literal loopback; every HTTPS-to-HTTP hop is
     /// refused before dispatch, and at most ten redirects are followed. A foreign-origin
     /// hop followed by a same-origin hop is refused to prevent upstream header replay.
+    ///
+    /// # Errors
+    /// Returns a configuration error for invalid byte or timeout limits, or if the configured HTTP client cannot be built.
     pub fn new(
         builder: reqwest::ClientBuilder,
         options: ClientOptions,
@@ -53,6 +64,9 @@ impl Client {
     /// TLS, resolved-address, proxy, credential and decoding restrictions remain
     /// the application's responsibility on both construction paths. The SDK
     /// still owns the Tokio whole-attempt timer and caller cancellation race.
+    ///
+    /// # Errors
+    /// Returns a configuration error for invalid byte or timeout limits.
     pub fn with_delegated_policy(
         http: reqwest::Client,
         options: ClientOptions,
@@ -61,11 +75,17 @@ impl Client {
         Ok(Self { http, options })
     }
     /// Run one discovery attempt with a fresh uncancelled control and the retained HTTP client.
+    ///
+    /// # Errors
+    /// Returns a configuration error for an invalid origin, byte limit, or timeout. HTTP, transport, body, and document failures are represented in the returned discovery outcome.
     pub async fn discover(&self, origin: &str) -> Result<DiscoveryResult, ConfigurationError> {
         self.discover_with_control(origin, &CancellationToken::new())
             .await
     }
     /// Run one cooperatively cancellable discovery attempt. Request/body work can be interrupted; synchronous validation observes cancellation only at its boundaries.
+    ///
+    /// # Errors
+    /// Returns a configuration error for an invalid origin, byte limit, or timeout. HTTP, transport, body, and document failures are represented in the returned discovery outcome.
     pub async fn discover_with_control(
         &self,
         origin: &str,

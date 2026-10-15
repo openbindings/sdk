@@ -414,3 +414,25 @@ fn external_evaluator_construction_and_matching_stay_supported() {
     );
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn retained_upstream_schema_facts_are_redacted_from_debug() {
+    let doc = document(serde_json::json!({"enum":["SECRET-schema-choice"]}));
+    let contract = ready(&doc);
+    for text in [format!("{contract:?}"), format!("{contract:#?}")] {
+        assert!(!text.contains("SECRET"));
+    }
+    let outcome = contract.validate(&JsonValue::string("SECRET-instance").unwrap());
+    let ValueOutcome::Fails { problems, .. } = &outcome else {
+        panic!("expected failure")
+    };
+    assert!(problems.iter().any(|problem| problem.details.is_some()));
+    assert!(
+        serde_json::to_string(&outcome)
+            .unwrap()
+            .contains("SECRET-schema-choice")
+    );
+    for text in [format!("{outcome:?}"), format!("{outcome:#?}")] {
+        assert!(!text.contains("SECRET"));
+    }
+}

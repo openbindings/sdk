@@ -46,7 +46,7 @@ pub enum Conformance {
     /// No violation was established, but evidence is insufficient to prove conformance.
     Undetermined,
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 /// One explanatory normative-rule finding. Findings may be bounded; the report's independent rule evidence determines its conclusion.
 pub struct Finding {
     /// Normative rule identifier, such as `OBI-01`.
@@ -60,7 +60,59 @@ pub struct Finding {
     /// Human-facing explanation; display as text and use `rule`, `code` and `status` for logic.
     pub message: String,
 }
-#[derive(Clone, Debug, Serialize)]
+impl std::fmt::Debug for Finding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let rule = if DOCUMENT_RULES.contains(&self.rule) {
+            self.rule
+        } else {
+            "<redacted>"
+        };
+        // Fixed Checks emissions and the non-limit parser codes forwarded to OBI-01.
+        let code = match self.code {
+            "bom"
+            | "colon"
+            | "comma-or-close"
+            | "escape"
+            | "exponent"
+            | "fraction"
+            | "literal"
+            | "number"
+            | "object-key"
+            | "string-control"
+            | "trailing-token"
+            | "unicode-escape"
+            | "unterminated-string"
+            | "utf8"
+            | "value"
+            | "input-limit"
+            | "schema-mismatch"
+            | "fixed-schema-limit-or-failure"
+            | "duplicate-member"
+            | "semver"
+            | "missing-version"
+            | "name-grammar"
+            | "duplicate-operation-name"
+            | "unknown-source"
+            | "unknown-operation"
+            | "schema-dialect"
+            | "absolute-schema-id"
+            | "reference-type"
+            | "reference-form"
+            | "reference-target"
+            | "duplicate-anchor"
+            | "duplicate-schema-id" => self.code,
+            _ => "<redacted>",
+        };
+        f.debug_struct("Finding")
+            .field("rule", &rule)
+            .field("code", &code)
+            .field("status", &self.status)
+            .field("location", &self.location)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone, Serialize)]
 /// Assessment of all normative document rules at the pinned specification revision. At most 4096 findings and 8 MiB of aggregate generated-pointer UTF-8 bytes are retained. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source.
 pub struct ValidationReport {
     /// Applied specification release, independent of package version.
@@ -76,7 +128,17 @@ pub struct ValidationReport {
     /// True when findings exceed the 4096-entry or 8 MiB aggregate generated-pointer byte cap. Omission never changes rule evidence or fabricates a shortened source pointer.
     pub findings_truncated: bool,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+impl std::fmt::Debug for ValidationReport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ValidationReport")
+            .field("conclusion", &self.conclusion)
+            .field("findings", &self.findings)
+            .field("findings_truncated", &self.findings_truncated)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize)]
 /// A well-formed declared version outside this implementation's supported line. This is separate from conformance evidence.
 pub struct VersionRefusal {
     /// Original declared version string.
@@ -84,6 +146,12 @@ pub struct VersionRefusal {
     /// Supported specification line used for the refusal.
     pub supported: &'static str,
 }
+impl std::fmt::Debug for VersionRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VersionRefusal").finish_non_exhaustive()
+    }
+}
+
 impl fmt::Display for VersionRefusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -118,6 +186,18 @@ impl fmt::Debug for ParsedDocument {
 }
 #[derive(Clone, Debug)]
 /// Normative evidence plus the parsed snapshot when one was admitted. Invalid JSON can still produce a report without a parsed document.
+/// Inspect the report or obtain a validated document; unwrapping only checks the version.
+///
+/// ```compile_fail
+/// #![deny(unused_must_use)]
+/// use openbindings::ParsedDocument;
+/// ParsedDocument::parse(r#"{"openbindings":"0.2.0"}"#).unwrap().validate().unwrap();
+/// ```
+/// ```compile_fail
+/// #![deny(unused_must_use)]
+/// openbindings::validate_document(r#"{"openbindings":"0.2.0"}"#).unwrap();
+/// ```
+#[must_use = "inspect the report or obtain a validated document before continuing"]
 pub struct DocumentValidation {
     document: Option<ParsedDocument>,
     report: Arc<ValidationReport>,
@@ -133,7 +213,7 @@ pub struct DocumentValidation {
 pub struct ValidatedDocument {
     document: ParsedDocument,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 /// Structured refusal to interpret typed fields. Causes are extensible; match specific cases or `code()` and retain a fallback. Exact parsed JSON remains available after this error.
 #[non_exhaustive]
 pub enum InterpretationError {
@@ -153,6 +233,21 @@ pub enum InterpretationError {
         location: SourceLocation,
     },
 }
+impl std::fmt::Debug for InterpretationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Version(value) => f.debug_tuple("Version").field(value).finish(),
+            Self::MalformedVersion => f.write_str("MalformedVersion"),
+            Self::DuplicateMembers => f.write_str("DuplicateMembers"),
+            Self::UnpairedString => f.write_str("UnpairedString"),
+            Self::InvalidField { location, .. } => f
+                .debug_struct("InvalidField")
+                .field("location", location)
+                .finish_non_exhaustive(),
+        }
+    }
+}
+
 impl fmt::Display for InterpretationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "document cannot be interpreted: {}", self.code())
@@ -190,6 +285,9 @@ impl ParsedDocument {
     /// Use [`Self::validate`] before treating this as a conformant document. See the
     /// [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
     /// for the progression from parsing to a prepared input contract.
+    ///
+    /// # Errors
+    /// Returns an input error for invalid UTF-8, a byte order mark, invalid JSON syntax, or an exceeded admission limit.
     pub fn parse(input: impl AsRef<[u8]>) -> Result<Self, InputError> {
         JsonValue::parse(input).map(Self::from_json)
     }
@@ -218,6 +316,9 @@ impl ParsedDocument {
         self.value().original_source()
     }
     /// Copy representable normative fields into an editable draft. Refuses duplicates and invalid typed shapes; exact opaque fields retain their values. This conversion does not establish conformance.
+    ///
+    /// # Errors
+    /// Returns an authoring error for duplicate members, malformed known fields, or strings/numbers that the typed authoring model cannot represent.
     pub fn to_authoring(&self) -> Result<Document, AuthoringError> {
         Document::from_json(self.value())
     }
@@ -226,6 +327,9 @@ impl ParsedDocument {
     /// [`DocumentValidation::validated`] yields a conformance proof. An unsupported
     /// declared version is a separate refusal. Explanatory finding messages are
     /// human-readable guidance; use rule/code/evidence fields for program logic.
+    ///
+    /// # Errors
+    /// Returns a version refusal only for a well-formed declaration outside the supported line. Malformed input and other rule violations are returned as validation evidence, not as this error.
     pub fn validate(&self) -> Result<DocumentValidation, VersionRefusal> {
         let report = self
             .inner
@@ -274,6 +378,9 @@ impl ParsedDocument {
     }
     /// Exact keys and aliases share one namespace. Every repeated occurrence is
     /// unresolved; candidate primary keys are distinct and lexically ordered.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
     pub fn resolve_operation(&self, name: &str) -> Result<OperationSelection, InterpretationError> {
         self.interpretable()?;
         let index = self.names()?;
@@ -319,6 +426,9 @@ impl ParsedDocument {
     /// Allocate retained operation views in lexical key order. Each view remains
     /// valid after this handle is dropped. Malformed entries refuse
     /// typed enumeration; `value()` remains available for exact inspection.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
     pub fn operations(&self) -> Result<Vec<OperationView>, InterpretationError> {
         self.interpretable()?;
         self.names()?
@@ -328,6 +438,9 @@ impl ParsedDocument {
             .collect()
     }
     /// Lexical presentation order; this does not select or rank bindings.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
     pub fn operation_bindings(&self, key: &str) -> Result<Vec<String>, InterpretationError> {
         self.interpretable()?;
         let index = self.names()?;
@@ -339,6 +452,9 @@ impl ParsedDocument {
     /// Return `None` when the dependency is absent, otherwise test its kind filter.
     /// Absence of `kinds` accepts all; an empty list matches none but is nonconformant.
     /// Interpretation may refuse the document; this method is not normative proof.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
     pub fn dependency_accepts_kind(
         &self,
         dependency: &str,
@@ -432,7 +548,7 @@ impl NameIndex {
         self.names.entry(name.into()).or_default().push(primary);
     }
 }
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 /// Name-resolution result after successful interpretation; missing and ambiguous names are not schema verdicts.
 pub enum OperationSelection {
     /// One retained operation view selected by primary key or alias; the view must still be assessed/prepared as needed.
@@ -445,8 +561,18 @@ pub enum OperationSelection {
         candidates: Vec<String>,
     },
 }
+impl std::fmt::Debug for OperationSelection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Found(value) => f.debug_tuple("Found").field(value).finish(),
+            Self::Missing => f.write_str("Missing"),
+            Self::Ambiguous { .. } => f.debug_struct("Ambiguous").finish_non_exhaustive(),
+        }
+    }
+}
+
 /// Immutable retained operation object. Its exact value is not conformance proof.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct OperationView {
     document: ParsedDocument,
     key: Arc<str>,
@@ -475,6 +601,9 @@ impl OperationView {
     }
     /// Interpret an optional string description. Unlike exact [`Self::input`]
     /// access, this can refuse a malformed field with its original location.
+    ///
+    /// # Errors
+    /// Returns an interpretation error if the present description is not a string.
     pub fn description(&self) -> Result<Option<JsonStringRef<'_>>, InterpretationError> {
         self.value
             .get("description")
@@ -486,6 +615,9 @@ impl OperationView {
     }
     /// Interpret optional string aliases, preserving absence separately from an
     /// empty array. A malformed array or item is a located interpretation error.
+    ///
+    /// # Errors
+    /// Returns an interpretation error if aliases is not an array of scalar strings, including a string with an unpaired UTF-16 unit.
     pub fn aliases(
         &self,
     ) -> Result<Option<impl ExactSizeIterator<Item = &str>>, InterpretationError> {
@@ -508,6 +640,9 @@ impl OperationView {
             .transpose()
     }
     /// Allocate binding keys in lexical presentation order; does not rank or invoke bindings.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
     pub fn bindings(&self) -> Result<Vec<String>, InterpretationError> {
         self.document.operation_bindings(&self.key)
     }
@@ -544,12 +679,18 @@ impl ValidatedDocument {
 }
 impl Document {
     /// Encode the current draft into a fresh independent parsed snapshot. May refuse collisions, unrepresentable fields or limits; does not establish conformance.
+    ///
+    /// # Errors
+    /// Returns an authoring error for extension names colliding with known fields, serialization failure, or exhausted encoding/admission limits. This does not establish normative conformance.
     pub fn build(&self) -> Result<ParsedDocument, AuthoringError> {
         self.to_json().map(ParsedDocument::from_json)
     }
 }
 
 /// Assess bytes even when parsing fails. A version refusal is never conformance evidence.
+///
+/// # Errors
+/// Returns a version refusal only for a well-formed declaration outside the supported line. Malformed input and other rule violations are returned as validation evidence, not as this error.
 pub fn validate_document(input: impl AsRef<[u8]>) -> Result<DocumentValidation, VersionRefusal> {
     validate_document_with_limits(
         input,
@@ -564,6 +705,9 @@ pub fn validate_document(input: impl AsRef<[u8]>) -> Result<DocumentValidation, 
 /// Admission precedes version selection: if parsing exceeds a limit, no complete
 /// declaration is established and all rules are inconclusive, even for another line.
 /// [`validate_document`] uses default byte/node limits and unlimited nesting.
+///
+/// # Errors
+/// Returns a version refusal only for a well-formed declaration outside the supported line. Malformed input and other rule violations are returned as validation evidence, not as this error.
 pub fn validate_document_with_limits(
     input: impl AsRef<[u8]>,
     limits: JsonLimits,
@@ -1067,6 +1211,13 @@ fn assess_value(document: &ParsedDocument) -> Result<ValidationReport, VersionRe
     Ok(c.finish())
 }
 
+impl std::fmt::Debug for OperationView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OperationView")
+            .field("value", &self.value)
+            .finish_non_exhaustive()
+    }
+}
 #[cfg(test)]
 mod name_index_storage_tests {
     use super::*;

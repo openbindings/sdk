@@ -111,12 +111,18 @@ impl PartialOrd for Power {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Decimal {
     negative: bool,
     digits: Box<str>,
     power: Power,
 }
+impl std::fmt::Debug for Decimal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Decimal").finish_non_exhaustive()
+    }
+}
+
 impl Decimal {
     pub fn parse(text: &str) -> Self {
         let negative = text.starts_with('-');

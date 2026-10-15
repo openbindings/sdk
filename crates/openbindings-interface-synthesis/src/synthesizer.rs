@@ -42,7 +42,7 @@ macro_rules! forward {($($wrapper:ty),+)=>{$(
 )+};}
 forward!(&P, std::sync::Arc<P>, std::rc::Rc<P>);
 /// Checked consumer entry point; reuse with owned, borrowed or shared providers.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Synthesizer<P> {
     provider: P,
 }
@@ -52,6 +52,9 @@ impl<P: InterfaceSynthesizer> Synthesizer<P> {
         Self { provider }
     }
     /// One pure verdict per unique kind in first-occurrence order.
+    ///
+    /// # Errors
+    /// Returns an error if any requested kind is empty.
     pub fn check_kind_support<K: AsRef<str>>(
         &self,
         kinds: impl IntoIterator<Item = K>,
@@ -76,6 +79,10 @@ impl<P: InterfaceSynthesizer> Synthesizer<P> {
             .collect())
     }
     /// Validate the advisory list; absence is not a negative support verdict.
+    ///
+    /// # Errors
+    /// Returns an error if the provider lists an empty kind or a kind it does not support.
+    /// Duplicate supported kinds are preserved in provider order.
     pub fn list_supported_kinds(&self) -> Result<Vec<SupportedKind>, SynthesisError> {
         let kinds = self.provider.supported_kinds();
         if kinds
@@ -184,5 +191,11 @@ async fn strict<F: Future<Output = Result<Synthesis, SynthesisError>>>(
         Ok(s.document)
     } else {
         Err(SynthesisError::incomplete(s))
+    }
+}
+
+impl<P> std::fmt::Debug for Synthesizer<P> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Synthesizer").finish_non_exhaustive()
     }
 }

@@ -4,15 +4,23 @@ use serde::{Serialize, Serializer, ser::SerializeMap};
 use std::collections::BTreeMap;
 
 /// Borrowed source plus an optional author-owned emitted key.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct SynthesisSource<'a> {
     /// Exact emitted source name, if specified.
     pub name: Option<&'a str>,
     /// Unchanged source value to interpret and emit.
     pub source: &'a Source,
 }
+impl std::fmt::Debug for SynthesisSource<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SynthesisSource")
+            .field("source", &self.source)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Borrowed synthesis request. Default requests a source-free skeleton.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Default)]
 pub struct SynthesisRequest<'a> {
     /// All supplied inputs; a provider must compose all or refuse.
     pub sources: &'a [SynthesisSource<'a>],
@@ -25,8 +33,16 @@ pub struct SynthesisRequest<'a> {
     /// Interface description override.
     pub description: Option<&'a str>,
 }
+impl std::fmt::Debug for SynthesisRequest<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SynthesisRequest")
+            .field("sources", &self.sources)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Advisory exact kind. An omitted kind has no implied support verdict.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 pub struct SupportedKind {
     /// Exact opaque kind label.
     pub kind: String,
@@ -34,14 +50,28 @@ pub struct SupportedKind {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 }
+impl std::fmt::Debug for SupportedKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SupportedKind").finish_non_exhaustive()
+    }
+}
+
 /// Authoritative answer for this provider's synthesis job.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 pub struct KindSupportVerdict {
     /// Unchanged kind label.
     pub kind: String,
     /// Knowledge of the kind, not universal coverage of its artifacts.
     pub supported: bool,
 }
+impl std::fmt::Debug for KindSupportVerdict {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KindSupportVerdict")
+            .field("supported", &self.supported)
+            .finish_non_exhaustive()
+    }
+}
+
 /// What the source unit represents, independently of its disposition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -72,7 +102,7 @@ pub enum CoverageStatus {
 }
 /// Editable provider evidence. Its correspondence is checked against the request
 /// and document before delivery; it is not independently serializable as success.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct CoverageEntry {
     /// Index in the original request's source slice.
     pub source_index: usize,
@@ -103,6 +133,16 @@ pub struct CoverageEntry {
     /// Additional evidence permitted by this open role object. Cannot shadow fields.
     pub additional_fields: BTreeMap<String, JsonValue>,
 }
+impl std::fmt::Debug for CoverageEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CoverageEntry")
+            .field("source_index", &self.source_index)
+            .field("scope", &self.scope)
+            .field("status", &self.status)
+            .finish_non_exhaustive()
+    }
+}
+
 impl CoverageEntry {
     /// Start a unit disposition; populate its required evidence/path fields before returning it.
     pub fn new(
@@ -130,7 +170,7 @@ impl CoverageEntry {
     }
 }
 /// Evidence explaining an unknown remainder, distinct from known unsupported units.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct CoverageLimitation {
     /// Nonempty stable namespaced code.
     pub code: String,
@@ -141,8 +181,14 @@ pub struct CoverageLimitation {
     /// Additional role evidence; cannot shadow known fields.
     pub additional_fields: BTreeMap<String, JsonValue>,
 }
+impl std::fmt::Debug for CoverageLimitation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CoverageLimitation").finish_non_exhaustive()
+    }
+}
+
 /// Provider-authored report before request/document correspondence checks.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct CoverageDraft {
     /// One disposition per observed unit identity.
     pub entries: Vec<CoverageEntry>,
@@ -153,6 +199,16 @@ pub struct CoverageDraft {
     /// Additional report evidence; cannot shadow known fields.
     pub additional_fields: BTreeMap<String, JsonValue>,
 }
+impl std::fmt::Debug for CoverageDraft {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CoverageDraft")
+            .field("entries", &self.entries)
+            .field("exhaustive", &self.exhaustive)
+            .field("limitation", &self.limitation)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Provider output; neither core conformance nor coverage correspondence is implied.
 #[derive(Clone, Debug)]
 pub struct SynthesisCandidate {
@@ -162,11 +218,19 @@ pub struct SynthesisCandidate {
     pub coverage: CoverageDraft,
 }
 /// Checked immutable report. Its flags express evidence, not proof of provider honesty.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct SynthesisCoverage {
     pub(crate) draft: CoverageDraft,
     pub(crate) source_keys: Vec<String>,
 }
+impl std::fmt::Debug for SynthesisCoverage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SynthesisCoverage")
+            .field("draft", &self.draft)
+            .finish_non_exhaustive()
+    }
+}
+
 impl SynthesisCoverage {
     /// Emitted source key for every input, in original request order.
     /// Equal inputs may share a key. Unnamed inputs with multiple equal emitted
@@ -230,11 +294,17 @@ impl Synthesis {
         (self.document, self.coverage)
     }
     /// Persist document and coverage as an exact JSON envelope with default limits.
+    ///
+    /// # Errors
+    /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
     pub fn to_json(&self) -> Result<JsonValue, SynthesisError> {
         self.to_json_with_limits(JsonLimits::default())
     }
     /// Bound emitted bytes and apply core JSON node/depth admission limits.
     /// Does not bound already retained owners or total process memory.
+    ///
+    /// # Errors
+    /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
     pub fn to_json_with_limits(&self, limits: JsonLimits) -> Result<JsonValue, SynthesisError> {
         crate::exact::encode(self, limits)
     }

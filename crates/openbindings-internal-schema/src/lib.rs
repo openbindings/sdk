@@ -15,12 +15,18 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct Location {
     pub resource: Option<String>,
     pub pointer: String,
 }
-#[derive(Clone, Debug)]
+impl std::fmt::Debug for Location {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Location").finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone)]
 pub struct ProjectedResource {
     pub uri: String,
     pub document: JsonValue,
@@ -30,6 +36,12 @@ pub struct RawDocument {
     value: JsonValue,
     index: Arc<schema_index::SchemaIndex>,
 }
+impl std::fmt::Debug for RawDocument {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RawDocument").finish_non_exhaustive()
+    }
+}
+
 impl RawDocument {
     pub fn new(value: JsonValue) -> Self {
         let index = Arc::new(schema_index::SchemaIndex::build(&value));
@@ -55,7 +67,8 @@ pub enum FailureReason {
     Cancelled,
     EvaluatorFailure,
 }
-#[derive(Clone, Debug, Serialize)]
+
+#[derive(Clone, Serialize)]
 pub struct Failure {
     pub reason: FailureReason,
     pub code: String,
@@ -64,6 +77,15 @@ pub struct Failure {
     /// Established static-reference semantics, independent of evaluator ability.
     #[serde(skip)]
     pub reference_defect: Option<StaticReferenceDefect>,
+}
+impl std::fmt::Debug for Failure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Failure")
+            .field("reason", &self.reason)
+            .field("location", &self.location)
+            .field("reference_defect", &self.reference_defect)
+            .finish_non_exhaustive()
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StaticReferenceDefect {
@@ -115,5 +137,11 @@ impl<F: Fn() -> bool + Send + Sync> Control for F {
 impl Control for AtomicBool {
     fn is_cancelled(&self) -> bool {
         self.load(Ordering::Acquire)
+    }
+}
+
+impl std::fmt::Debug for ProjectedResource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProjectedResource").finish_non_exhaustive()
     }
 }
