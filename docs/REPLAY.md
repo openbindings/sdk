@@ -6,6 +6,19 @@ toolchain. Install wasm-bindgen-cli 0.2.129 with its locked dependencies. Use No
 22.19.0/npm 10.9.3 and Python 3.13 or later. First acquisition needs public network
 access. Subsequent Cargo commands can use the resulting cache offline.
 
+For a source archive, export its tracked-file inventory from the same checkout
+with `git ls-files --cached -z > tracked-files.list` and ship the list alongside
+the archive. Pass it as `python3 tools/verify.py --tracked-files tracked-files.list`
+(also with `--browser` when needed). The label guard checks only that inventory;
+generated replay reports and other untracked outputs are never product inputs.
+
+Small-stack margins are qualified on the development toolchain. Older supported
+compilers may need larger stacks in debug builds. The independent MSRV lane uses
+`python3 tools/verify-msrv.py --version 1.88.0 --test`: it runs with `--no-fail-fast`
+and excludes only the exact workspace tests in the
+[stack-margin inventory](../tools/stack-margin-tests.json). Development-toolchain
+workspace tests run without exclusions, including cold compilation on 256 KiB.
+
 ```sh
 cargo install wasm-bindgen-cli --version 0.2.129 --locked
 python3 tools/verify.py

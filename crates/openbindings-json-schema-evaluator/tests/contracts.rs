@@ -218,7 +218,7 @@ fn retained_contracts_outlive_documents_and_distinguish_absent_sides() {
     ));
 }
 #[test]
-fn review_s09_anonymous_scope_selects_outer_dynamic_anchor() {
+fn anonymous_scope_selects_outer_dynamic_anchor() {
     let document=ParsedDocument::parse(r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://review.invalid/list"}}},"schemas":{"List":{"$id":"https://review.invalid/list","type":"array","items":{"$dynamicRef":"#element"},"$defs":{"element":{"$dynamicAnchor":"element","type":"string"}}},"Override":{"$dynamicAnchor":"element","type":"integer"}}}"##).unwrap();
     let context = document
         .validate()
@@ -248,7 +248,7 @@ fn review_s09_anonymous_scope_selects_outer_dynamic_anchor() {
     );
 }
 #[test]
-fn review_s11_same_uri_resources_are_isolated_and_precancellation_does_not_poison() {
+fn same_uri_resources_are_isolated_and_precancellation_does_not_poison() {
     let document = doc(r#"{"$ref":"https://review.invalid/shared"}"#);
     let evaluator = Arc::new(
         DefaultEvaluator::new()
@@ -365,7 +365,7 @@ fn cancellation_during_preparation_allows_independent_retries() {
     assert_eq!(evaluator.calls.load(Ordering::SeqCst), 3);
 }
 #[test]
-fn review_f01_f06_conservative_preparation_is_not_semantic_undefinedness() {
+fn conservative_preparation_is_not_semantic_undefinedness() {
     let result = contracts(r#"{"anyOf":[true,{"pattern":"["}]}"#)
         .prepare("op", Direction::Input)
         .validate(&value(r#""secret""#));
@@ -393,7 +393,7 @@ fn review_f01_f06_conservative_preparation_is_not_semantic_undefinedness() {
     ));
 }
 #[test]
-fn review_f06_positive_missing_disjunct_now_establishes_satisfaction() {
+fn positive_missing_disjunct_establishes_satisfaction() {
     // Intentionally expanded capability: missing positive disjuncts now use bounds.
     assert!(matches!(
         contracts(r#"{"anyOf":[true,{"$ref":"https://absent.invalid/x"}]}"#)
@@ -403,7 +403,7 @@ fn review_f06_positive_missing_disjunct_now_establishes_satisfaction() {
     ));
 }
 #[test]
-fn review_f04_diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
+fn diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
     let expensive = format!(
         r#"{{"allOf":[false,{{"allOf":[{}]}}]}}"#,
         vec!["false"; 200].join(",")

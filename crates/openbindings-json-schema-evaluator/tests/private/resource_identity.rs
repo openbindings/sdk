@@ -582,7 +582,7 @@ fn ri16_17_unique_nested_resources_survive_losing_lexical_ancestors() {
 }
 #[test]
 fn obi13_keeps_host_spelling_while_resolution_uses_library_identity() {
-    // Amendment 1: §7.4 leaves ordinary identity to JSON Schema; only OBI-13
+    // OpenBindings §7.4 leaves ordinary identity to JSON Schema; only OBI-13
     // compares the resolved, empty-fragment-stripped spellings exactly.
     let doc = one(
         json!({

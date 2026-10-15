@@ -41,6 +41,11 @@ Limits are observable errors, not silently truncated values. Structural/source
 locations use JSON Pointer, zero-based UTF-8 byte offsets and one-based lines/byte
 columns. Duplicate names remain available to document rules and diagnostics.
 
+The 256 KiB small-stack document validation regression is qualified on the
+development toolchain. Older supported compilers may need larger stacks in debug
+builds. Stack high-water marks depend on compiler code generation; the MSRV
+establishes language and library API compatibility, not that stack margin.
+
 Rust authoring retains opaque values as `JsonValue`. TypeScript exact text/bytes
 are the escape route for numbers JavaScript cannot represent. Checked ordinary
 conversion rejects unsupported values and reports inexact conversion; it cannot

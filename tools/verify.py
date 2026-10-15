@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse, os, subprocess, sys
 p = argparse.ArgumentParser()
 p.add_argument('--browser', action='store_true')
+p.add_argument('--tracked-files', type=Path, help='NUL-separated git ls-files list for a source archive')
 a = p.parse_args()
 root = Path(__file__).resolve().parents[1]
 env = os.environ.copy()
@@ -10,7 +11,8 @@ env.setdefault('CARGO_TARGET_DIR', str(root / 'target'))
 def run(args, cwd=root):
     print('+ ' + ' '.join(map(str, args)), flush=True)
     subprocess.run(list(map(str, args)), cwd=cwd, env=env, check=True)
-run([sys.executable, 'tools/verify-product-labels.py', '--self-test'])
+run([sys.executable, 'tools/verify-product-labels.py', '--self-test',
+     *(['--tracked-files', a.tracked_files.resolve()] if a.tracked_files else [])])
 run([sys.executable, 'tools/verify-msrv.py', '--version', '1.88'])
 run(['cargo', 'check', '--locked', '-p', 'openbindings', '--no-default-features'])
 run(['cargo', 'fmt', '--all', '--check'])

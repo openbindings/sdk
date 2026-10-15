@@ -36,6 +36,10 @@ source locations. Use its text/bytes for values such as 9007199254740993. Typed
 unknown members but cannot shadow typed fields. Building is separate from checking
 conformance. JSON input defaults to 64 MiB, 10,000 containers and 1,000,000 nodes.
 
+Document validation's 256 KiB small-stack regression is qualified on the
+development toolchain. Older supported compilers may need larger stacks in debug
+builds; MSRV support does not establish the same stack margin.
+
 To edit an existing document, call `ParsedDocument::to_authoring()`, update the
 builder, then `build()` and validate the new snapshot. Typed fields are re-encoded:
 integer preferences such as `1.0` or `1e0` become `1`, and `-0` becomes `0`.

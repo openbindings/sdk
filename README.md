@@ -125,6 +125,11 @@ builds the npm facade and runs the full core/evaluator corpus in Chromium and
 WebKit. Install their host dependencies first as described in [replay](docs/REPLAY.md).
 Tests use task-local loopback listeners and no external application services.
 
+The 256 KiB small-stack document regression is qualified on the development
+toolchain. Older supported compilers may need larger stacks in debug builds.
+MSRV CI checks language and library API compatibility; its exact stack-margin
+exclusions and their reasons are listed in [the test inventory](tools/stack-margin-tests.json).
+
 The verifier also compiles core independently with no default features. After
 building the facade, `npm run test:package` in `packages/typescript` packs and
 installs it into a temporary consumer, then imports its public API and packaged

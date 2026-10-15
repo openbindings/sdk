@@ -29,7 +29,7 @@ in the fixture. Native and browser qualification apply the same recorded transla
 This is an intentional supported-admission expansion, not a normative bug ruling.
 Library URI normalization additionally migrates `adversarial/case-variant-unmatched/0` to satisfaction
 and `adversarial/case-variant-collision/0` to ambiguous-resource preparation refusal,
-following library normalization under applied §7.4 (Amendment 1). OBI-13's exact
+following library normalization under OpenBindings §7.4. OBI-13's exact
 comparison remains unchanged.
 The current default evaluator records 42 refusals across 1,564 evaluator observations;
 competing-carrier alias/pointer/direct routes have separate maintained regressions.

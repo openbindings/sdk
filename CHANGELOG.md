@@ -26,9 +26,8 @@
   OBI-02 descends through member/name and array-element constraints and local
   pointer references; independent container failures remain alongside child failures. OBI-10 stays at
   each checked schema node. Location work and findings caps never change evidence.
-  See the [diagnostics verification receipt](tools/qualification/inputs/diagnostics-verification.json).
 - Evaluator kit/corpus diagnostics migrate by case ID; verdict and refusal
-  partitions are unchanged. See `tools/qualification/inputs/diagnostics-migration-ledger.json`.
+  partitions are unchanged.
 
 - S6d/e review fixes: make inspection string presentation injective, translate
   pointer references consistently, and select a collision-free synthetic root.

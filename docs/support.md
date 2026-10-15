@@ -12,6 +12,12 @@ replacing an existing dependency.
 | Browser | Desktop Chromium and WebKit with explicit initialization; use a Worker for potentially expensive work. Firefox, mobile devices, and particular framework/bundler versions require their own qualification. |
 | Worker service | Local workerd with a compiled Wasm module and initialization in an allowed request context. This is not evidence of deployed Cloudflare latency, quotas, or service availability. |
 
+The 256 KiB small-stack document regression is qualified on the development
+toolchain. Older supported compilers may need larger stacks in debug builds.
+MSRV CI runs all workspace tests except the exact stack-margin tests selected by
+[this inventory](../tools/stack-margin-tests.json), with reasons and scope for the
+vendored tests too. Development-toolchain jobs retain the workspace stack tests.
+
 The Rust and TypeScript APIs use the same engine and outcome meanings. They
 follow their languages' ownership conventions: Rust uses ordinary ownership and
 borrowing, while TypeScript owners support deterministic `dispose()` and

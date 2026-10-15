@@ -83,6 +83,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22.19.0'
+      - name: Verify development-toolchain stack margin
+        run: cargo test --locked -p openbindings --test document_stack
       - name: Check out the SDK's declared specification
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -129,8 +131,8 @@ jobs:
         with:
           toolchain: ${{ env.RUST_MSRV }}
           targets: wasm32-unknown-unknown
-      - run: python tools/verify-msrv.py --version "$RUST_MSRV"
-      - run: cargo +"$RUST_MSRV" test --workspace --all-features --locked
+      - name: Test minimum supported APIs with documented stack exclusions
+        run: python tools/verify-msrv.py --version "$RUST_MSRV" --test
       - run: cargo +"$RUST_MSRV" build -p openbindings-wasm --target wasm32-unknown-unknown --locked
 
   ci:
