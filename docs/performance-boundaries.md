@@ -1,10 +1,75 @@
 # Performance and allocation boundaries
 
-These measurements characterize engine revision
+The document-validation, regex-budget and diagnostic-allocation tables retain
+measurements of engine revision
 `a2e5a380018754bf8b96ffebadd4545fec0a07cb`, with documentation and measurement
 harness changes only. The host was macOS 26.6.2 arm64, Rust 1.99.0. Wasm used
 wasm-bindgen 0.2.129. Timings are examples, not latency guarantees or CI thresholds.
+Prepared-contract and Wasm measurements were updated on 2026-10-15 below.
 Use the locked dependencies and release profile to reproduce them.
+
+## Prepared value contracts
+
+Retain a prepared `ValueContract` for repeated validation. Reusing a validated
+document or `ValueContracts` context also saves work, but still prepares a fresh
+contract on each `prepare` call. The SDK does not transparently cache arbitrary
+custom evaluator results.
+
+On 2026-10-15, paired release measurements against revision `7013a36` on macOS
+arm64 / Rust 1.99.0 produced the following medians. Preparation includes schema
+parsing, minimal document proof, resource contexts, compilation and destruction;
+evaluation retains the contract and parsed value. Twelve adjacent randomized
+pairs used adaptive batches of at least 80 ms targeting 120 ms. Ratio intervals
+are 95% paired bootstrap intervals within this session, not portable budgets.
+
+| Workload | Preparation before → after µs | Evaluation before → after µs | Evaluation ratio (95% interval) |
+| --- | ---: | ---: | --- |
+| scalar | 399.68 → 84.66 | 0.584 → 0.083 | 0.142 (0.142–0.144) |
+| object | 466.50 → 138.15 | 0.805 → 0.560 | 0.696 (0.690–0.697) |
+| array | 402.33 → 89.65 | 5,557.058 → 371.109 | 0.067 (0.066–0.067) |
+| refs | 471.79 → 163.61 | 14.952 → 10.000 | 0.669 (0.666–0.677) |
+| large-object | 397.90 → 90.24 | 7,653.244 → 1,004.910 | 0.131 (0.130–0.132) |
+
+The direct SDK/jsonschema-rs 0.58.6 geometric mean over the original five
+workloads × four modes (prepare, evaluate, parse, full) fell from **12.62× to
+4.47×**. The peer supplies a two-outcome engine-cost reference with different
+number and resource semantics. This aggregate is not the earlier 13.1× comparison
+against the faster of two peers. Exact decimal-array evaluation changed by
++0.4% (ratio interval 1.002–1.008); these integer optimizations do not remove
+its general arithmetic costs. Parsing is effectively unchanged.
+
+Requested System heap was measured in twelve fresh-child pairs separately from
+time. Peaks below include protocol, retained owners and process caches; they
+are not incremental evaluation scratch or RSS. Identical repeated counts give
+degenerate intervals. Cached standard indexes add roughly 30 KiB to retained
+process memory.
+The original six array/object parse/evaluate/full RSS pairs were effectively
+unchanged: the SDK/jsonschema-rs geometric mean was 2.065× before and 2.069×
+after (twelve fresh-child pairs, no baseline subtraction).
+
+| Workload | Preparation peak before → after KiB | Evaluation peak before → after KiB |
+| --- | ---: | ---: |
+| scalar | 2,268.7 → 2,266.2 | 2,168.7 → 2,198.2 |
+| object | 2,274.9 → 2,299.4 | 2,182.0 → 2,211.6 |
+| array | 2,503.5 → 2,506.4 | 5,326.3 → 5,355.8 |
+| refs | 2,298.8 → 2,325.6 | 2,284.1 → 2,313.6 |
+| large-object | 4,100.9 → 4,103.2 | 18,186.1 → 18,215.7 |
+| unique-array | 2,502.4 → 2,498.8 | 7,511.6 → 7,093.1 |
+
+Exact integer shortcuts only apply where the original tokens prove the result;
+all other tokens retain decimal arithmetic. Lazy reference inspection still uses
+the library resolver and the complete explicit-resource identity policy. Standard
+indexes cache only pinned immutable documents. Uniqueness verifies exact equality
+for every hash collision. Work, depth, regex and cancellation allowances and
+original-source diagnostics remain in force.
+
+The separate [benchmark harness](../tools/evaluator-bench/README.md) and
+[advisory workflow](../.github/workflows/performance.yml) record outcomes before
+timing and keep allocation instrumentation separate. After calibration, shared
+runners will require a confirmed >20% paired regression above the absolute floor
+and a lower 95% bound >1.20; dedicated runners use >10% / >1.10. Heap thresholds
+are >10% and >128 KiB, allocation counts >5% and >32/op. Noise requests a rerun.
+See the harness for exact floors, confirmation and promotion policy.
 
 ## Document validation
 
@@ -70,8 +135,8 @@ print('sha256', hashlib.sha256(b).hexdigest())
 PY
 ```
 
-The measured asset is **6,043,108 bytes**, or **1,654,055 bytes** with gzip level 9.
-Its SHA-256 is `d059fc1e48ac878b0034316120440707343eea89f05a44f83b52a23b9b4c7c4f`.
+The 2026-10-15 implementation asset is **6,062,372 bytes**, or **1,658,935 bytes** with gzip level 9.
+Its SHA-256 is `14148399cb8a465992af93ad6c19aa1414c7f445f6eceb82c689d3ee6ab73fbc`.
 The build uses the workspace release profile and removes the Wasm name section.
 These lengths exclude JavaScript, declarations, runtime memory and host overhead.
 `build-info.json` beside the generated asset records its source and tool identities.

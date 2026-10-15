@@ -1,0 +1,91 @@
+name: Evaluator performance
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    # Calibration is advisory, including infrastructure and allocation reports.
+    # Correctness remains required by the ordinary CI tests and kit replays.
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CARGO_TARGET_DIR: ${{ runner.temp }}/evaluator-build
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.13'
+      - name: Read pinned compiler
+        id: compiler
+        run: |
+          python - <<'PY'
+          import os, tomllib
+          with open('rust-toolchain.toml', 'rb') as source:
+              version = tomllib.load(source)['toolchain']['channel']
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('version=' + version + '\n')
+          PY
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+        with:
+          toolchain: ${{ steps.compiler.outputs.version }}
+      - name: Prepare identical instruments on the merge base and candidate
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || 'origin/main' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/evaluator-baseline" "$RUNNER_TEMP/evaluator-results" "$RUNNER_TEMP/evaluator-bin"
+          git merge-base "$BASE_REF" HEAD > "$RUNNER_TEMP/evaluator-results/baseline-revision.txt"
+          git rev-parse HEAD > "$RUNNER_TEMP/evaluator-results/candidate-revision.txt"
+          git archive "$(cat "$RUNNER_TEMP/evaluator-results/baseline-revision.txt")" | tar -x -C "$RUNNER_TEMP/evaluator-baseline"
+          python - <<'PY'
+          import os, pathlib, shutil
+          target = pathlib.Path(os.environ['RUNNER_TEMP']) / 'evaluator-baseline/tools/evaluator-bench'
+          shutil.copytree('tools/evaluator-bench', target, dirs_exist_ok=True)
+          PY
+      - name: Build both release instruments before measuring
+        run: |
+          set -o pipefail
+          for variant in baseline candidate; do
+            source="$GITHUB_WORKSPACE"
+            if [ "$variant" = baseline ]; then source="$RUNNER_TEMP/evaluator-baseline"; fi
+            cargo build --locked --release --manifest-path "$source/tools/evaluator-bench/Cargo.toml" 2>&1 | tee "$RUNNER_TEMP/evaluator-results/build-$variant.log"
+            cp "$CARGO_TARGET_DIR/release/openbindings-evaluator-bench" "$RUNNER_TEMP/evaluator-bin/$variant"
+            cargo build --locked --release --features allocations --manifest-path "$source/tools/evaluator-bench/Cargo.toml" 2>&1 | tee "$RUNNER_TEMP/evaluator-results/build-$variant-alloc.log"
+            cp "$CARGO_TARGET_DIR/release/openbindings-evaluator-bench" "$RUNNER_TEMP/evaluator-bin/$variant-alloc"
+          done
+          sha256sum tools/evaluator-bench/Cargo.lock > "$RUNNER_TEMP/evaluator-results/instrument-lock.sha256"
+          uname -a > "$RUNNER_TEMP/evaluator-results/host.txt"
+          lscpu >> "$RUNNER_TEMP/evaluator-results/host.txt"
+      - name: Check policy and run serial advisory pairs
+        run: |
+          python tools/evaluator-bench/test_policy.py
+          python tools/evaluator-bench/compare.py \
+            --baseline "$RUNNER_TEMP/evaluator-bin/baseline" \
+            --candidate "$RUNNER_TEMP/evaluator-bin/candidate" \
+            --baseline-alloc "$RUNNER_TEMP/evaluator-bin/baseline-alloc" \
+            --candidate-alloc "$RUNNER_TEMP/evaluator-bin/candidate-alloc" \
+            --output "$RUNNER_TEMP/evaluator-results"
+      - name: Publish advisory summary
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/evaluator-results/summary.md" ]; then
+            cat "$RUNNER_TEMP/evaluator-results/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Advisory benchmark did not complete; inspect build logs.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: evaluator-performance
+          path: ${{ runner.temp }}/evaluator-results

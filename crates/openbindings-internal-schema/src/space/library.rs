@@ -198,9 +198,10 @@ impl SchemaSpace {
         reference: &str,
         missing: &mut impl FnMut(&str),
     ) -> Result<Target, Failure> {
-        match self
-            .library
-            .get_or_init(|| self.inspect_library())
+        let referring_resource = self.nodes[holder].resource;
+        match self.resources[referring_resource]
+            .inspection
+            .get_or_init(|| self.inspect_library(referring_resource))
             .get(&(holder, reference.to_owned()))
         {
             Some(Ok(target)) => {
@@ -224,7 +225,7 @@ impl SchemaSpace {
             )),
         }
     }
-    fn inspect_library(&self) -> Targets {
+    fn inspect_library(&self, referring_resource: usize) -> Targets {
         let mut targets = Targets::new();
         let uri_registry = Registry::new()
             .retriever(Recording::default())
@@ -233,6 +234,11 @@ impl SchemaSpace {
         let mut groups: BTreeMap<usize, Vec<(usize, String, String, String)>> = BTreeMap::new();
         let mut absent = Vec::new();
         for (holder, node) in self.nodes.iter().enumerate() {
+            // Defer unrelated queries, including those in packaged standards.
+            // Do not restrict the carrier registry or change library resolution.
+            if node.resource != referring_resource {
+                continue;
+            }
             let resource = &self.resources[node.resource];
             for keyword in ["$ref", "$dynamicRef"] {
                 let Some(reference) = node.value.get(keyword).and_then(|v| v.as_str()) else {

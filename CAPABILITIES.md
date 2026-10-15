@@ -45,6 +45,12 @@ two admissible completions that disagree. Other undefined results remain outside
 its supported fragment. Missing resources, unsupported capabilities and exhausted
 budgets produce no-verdict. Handle no-verdict in both preparation and validation.
 
+Retain prepared contracts for repeated validation. Paired macOS arm64 release
+measurements reduced 20,000-integer evaluation from 5.56 ms to 0.37 ms and the
+original twenty-pair SDK/jsonschema-rs time ratio from 12.62× to 4.47×. Exact
+fallbacks and evaluation budgets remain in force; these are measured examples,
+not latency guarantees. See [methodology and heap tradeoffs](docs/performance-boundaries.md).
+
 Coarse failure diagnostics are the default. Upstream diagnostics are an explicit
 choice with library allocation and stack limits. They can allocate in proportion
 to input and overflow on deep values. Diagnostic completeness is separate from
