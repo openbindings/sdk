@@ -48,17 +48,16 @@ public TypeScript role API.
 | `binding::BindingPreflight` | Optional provider trait extending `BindingInvoker`; its `Preflight<'a>` associated future and `preflight` method report advisory context requirements or no prediction. |
 | `binding::Invoker::preflight_with_provider`, `operation::Invoker::preflight_with_provider` | Opt into the provider hook after checked admission; require `P: BindingPreflight`. |
 | `binding::Invoker::preflight_with_provider_and_control`, `operation::Invoker::preflight_with_provider_and_control` | The same provider preflight with caller cancellation, isolated from sibling attempts. |
-| `InspectionLimitation::additional_fields` | `BTreeMap<String, JsonValue>` retaining additional exact evidence; `code`, `message` and `details` cannot be shadowed. Existing struct literals must supply this map. |
+| `InspectionLimitation::additional_fields` | `BTreeMap<String, JsonValue>` retaining additional exact evidence; `code`, `message` and `details` cannot be shadowed. |
 
-Providers that implemented `BindingInvoker::preflight` move the hook and declare
-its future type in `BindingPreflight`. Both facades' `preflight` and
-`preflight_with_control` admit the request and make no prediction; invoke-only
-providers need no new items. Provider preflight is Send when the provider is Sync
-and its associated future is Send; local futures and Rc providers remain supported.
+Implement `BindingPreflight` to provide advisory preflight. The facades' ordinary
+`preflight` methods admit the request and make no prediction. Provider preflight
+is `Send` when the provider is `Sync` and its associated future is `Send`; local
+futures and `Rc` providers are also supported.
 
 ## Boundaries to preserve
 
-- Parsing and authoring create exact snapshots. Normative assessment evaluates OBI
+- Parsing and authoring create exact snapshots. Normative validation evaluates OBI
   document rules; only its conformant branch creates a `ValidatedDocument` proof.
   Only that proof constructs normative value contracts and an operation invoker.
   Parsed snapshots retain fallible editor reads. Wasm owns the Rust proof; plain
@@ -106,24 +105,16 @@ and its associated future is Send; local futures and Rc providers remain support
 
 Value diagnostics use the typed `Diagnostics::{Coarse, Upstream}` policy, default
 Coarse. See the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md).
-Custom Rust evaluators constructing `ValueOutcome::Fails` now supply a value-free
+Custom Rust evaluators constructing `ValueOutcome::Fails` supply a value-free
 `message` alongside `problems` and `problems_complete`. Empty incomplete diagnostics
-are valid established failures. Diagnostic count/byte options are retired.
+are valid established failures.
 Custom evaluators receive a `SchemaRequest` with the original document, supplied
 resources, entry and entry location. `evaluation_program(control)` provides the
 strict §7 projection; read-only `EvaluationProgram::entry_uri()` and `resources()`
 keep its contents aligned with provenance, and `original_location` recovers
-original coordinates. Bounds planning, paired compilation, bounded source mapping and the
-fallback policy are private default-evaluator implementation details, with no
-replacement product API. The [proof and admission contract](partial-resource-bounds.md)
-records their retained guards and tests.
+original coordinates. See [evaluator integration](schema-evaluators.md) for the custom evaluator contract.
 
-Ordinary references use the library's documented APIs. OBI-13 retains exact
-comparison after its specified resolution, while §7.4 ordinary identity follows
-library normalization. Supplied canonical collisions and protected standard names
-remain input policy; static reference inspection never authorizes acquisition.
-
-## HTTP discovery host policy additions
+## HTTP discovery host policy
 
 Rust deadline and outcome items are defined in
 [`client.rs`](../crates/openbindings-http-discovery/src/client.rs); constants in
@@ -146,7 +137,7 @@ Rust deadline and outcome items are defined in
 | `ErrorKind::Decode` | Native only when the SDK refuses Content-Encoding left undecoded by the host. Native body-read errors yield `BodyError` with `Network` and upstream messages, including corrupt-coded and truncated bodies; identified deadlines yield `Timeout`. Portable transports may report their own decoding failures as `Decode`. |
 
 Rust `ClientOptions` literals must supply `timeout` or use `..ClientOptions::default()`.
-Native callers now pass a builder to `Client::new`; built clients use the explicit
+Native callers pass a builder to `Client::new`; built clients use the explicit
 delegated constructor. Portable discovery requires an explicit host timer. Admission codes
 are `origin-policy`, `invalid-timeout` and `http-client-build`. Exhaustive outcome
 matches must handle `DiscoveryOutcome::Timeout`.
@@ -184,35 +175,35 @@ gzip, brotli, deflate or stream features; applications opt into decoding on thei
 own dependency and client, with decoded-byte limits still enforced. See the
 [discovery guide](../crates/openbindings-http-discovery/README.md) for host obligations.
 
-## Document assessment
+## Document validation
 
-Rust `validate_document(input)` assesses exact JSON bytes using default admission
+Rust `validate_document(input)` validates exact JSON bytes using default admission
 limits of 64 MiB and 1,000,000 nodes, with no nesting cap.
 `validate_document_with_limits(input, JsonLimits)` accepts caller-selected byte, node
 and nesting limits, matching the explicit-limits shape of `JsonValue::parse_with_limits`.
 Both return `Result<DocumentValidation, VersionRefusal>`; only a conformant
-assessment provides a `ValidatedDocument` proof.
+validation provides a `ValidatedDocument` proof.
 
 Admission precedes version selection. Until the complete JSON text is admitted,
 no version declaration has been established. An admission refusal leaves every
 rule inconclusive, even if an initial fragment appears to name another specification
 line. After admission, version-refusal and OBI-01 priority are unchanged. Document
-assessment checks admitted schemas locally at any depth and carries escaped lone
+validation checks admitted schemas locally at any depth and carries escaped lone
 surrogates exactly; native namespace and primary-reference comparisons use UTF-16
 units. A violation established by any rule makes the document non-conformant.
 
 ### Finding-code catalog
 
-These are stable `Finding.code` values for document assessment. Messages are human
+These are stable `Finding.code` values for document validation. Messages are human
 explanations, not machine identifiers. Multiple rules can share a code. Parse
 locations use original byte coordinates; pointers are absent where a member name
 cannot be represented in Unicode scalar text. Input admission refusals are not
-violations. `InputError` outside whole-document assessment retains its existing
+violations. `InputError` outside whole-document validation retains its existing
 code-based Display representation.
 
 | Code | Rule | Meaning |
 | --- | --- | --- |
-| `input-limit` | OBI-01 through OBI-13 | Byte, node or caller-selected depth admission limit prevented assessment. |
+| `input-limit` | OBI-01 through OBI-13 | Byte, node or caller-selected depth admission limit prevented validation. |
 | `bom` | OBI-01 | A leading UTF-8 byte-order mark is forbidden. |
 | `utf8` | OBI-01 | The input is not valid UTF-8. |
 | `comma-or-close` | OBI-01 | A container needed a comma or closing delimiter. |
@@ -244,10 +235,6 @@ code-based Display representation.
 | `reference-target` | OBI-12 | A same-document reference identifies no schema at an OBI position. |
 | `duplicate-anchor` | OBI-13 | A plain name has multiple declarations in the document resource. |
 | `duplicate-schema-id` | OBI-13 | Multiple contained schemas declare the same compared identifier. |
-
-Historical assessment codes `representation-limit` (OBI-02 and OBI-04 through
-OBI-13) and `schema-depth-limit` (OBI-10) are no longer emitted. The latter remains
-a separate value-contract preparation code with its existing meaning.
 
 Raw parser admission codes `byte-limit`, `node-limit` and `depth-limit` remain
 `InputError` codes; whole-document findings translate them to `input-limit`.
@@ -291,14 +278,7 @@ or a compiled module bypass default loading in either host. Cleanup assertions
 import `liveStorageOwners` from `@openbindings/sdk/testing`; production entries
 export no test bookkeeping.
 
-The raw bridge transfers proof with `WasmDocument.validate()` returning
-`WasmDocumentValidation`; `report()` returns evidence and `takeValidated()` takes
-at most one `WasmValidatedDocument`. Bridge wrapper classes are not proof authority:
-contract construction, validated retention, proof transfer and publication derive
-proof from the actual snapshot's cached Rust validation at each call, including
-when a raw caller substitutes a document-family method receiver.
-
-## Inspection and exact editing additions
+## Inspection and exact editing
 
 Rust `ParsedDocument` enumerates and looks up retained binding, source and
 dependency views. `OperationView` retains its existing binding-key association,
@@ -315,18 +295,14 @@ convention. `ParsedDocument.toDraft()` creates an `OwnedDocumentDraft` whose
 `EditableDocumentDraft` value provides writable normative maps/lists and exact
 opaque leaves. The existing readonly-friendly `DocumentDraft` input and
 `authorDocument` function remain. Conversion, editing, building and normative
-assessment are separate; no operation-reference rewriting or implicit acquisition
+validation are separate; no operation-reference rewriting or implicit acquisition
 is introduced. See the shipped [inspection/edit caller](../packages/typescript/examples/inspect-edit.ts).
 
-This alpha API update adds required `tags` and `deprecated` fields to TypeScript
-`OperationMetadata`. Callers constructing metadata objects must provide them,
-using null for absence. The closed `AuthoringErrorCode` union adds `invalid-field`
-and `duplicate-members` for source conversion; exhaustive switches must handle
-those cases. `AuthoringFailure.sourceLocation`, when present, addresses original
-source bytes and never substitutes for a handwritten draft pointer. Parsed descriptions, tags and kind strings now return exact `JsonStringRef` values; downstream extension traits with newly occupied
-method names may need explicit qualification.
+`AuthoringFailure.sourceLocation`, when present, addresses original source bytes;
+`draftPointer` addresses the caller's draft. The two locations serve different
+purposes. Parsed descriptions, tags and kinds use exact `JsonStringRef` in Rust.
 
-Document findings now deduplicate explanations for the same source occurrence
+Document findings deduplicate explanations for the same source occurrence
 before presentation caps. Eliminating a repeat does not mark truncation; omitting
 a distinct finding does. Equal schema text at different original locations still
 produces distinct diagnostics. Repeated member names point to their offending
@@ -334,35 +310,13 @@ key tokens, including distinct byte offsets at an otherwise identical pointer.
 Per-rule evidence remains independent of finding presentation. Value-problem
 diagnostics use the separate typed policy described below.
 
-## Maintained verification
+## Reference verification
 
-After generating the current package (`npm run build:wasm` then `npm run build` in
-`packages/typescript`), run from the repository root:
+See the [maintainer guide](maintainers.md) for rendering and verification commands.
 
-```sh
-python3 tools/verify-api-reference.py target/api-reference
-node --test packages/typescript/test/api-reference.test.mjs
-```
+## Value diagnostics
 
-The standalone verifier denies missing Rust reference documentation and broken
-intra-doc links, compiles Rustdoc examples, checks actual emitted TypeScript exports
-and public/inherited members, and strictly compiles the reference consumer.
-Component CI requires the Rust checks through
-`tools/verify.py` and the TypeScript checks after building the package. Pass
-`--rust-only` or `--typescript-only` to run the corresponding half.
-A docs-only developer check may emit declarations with `tsc -p
-packages/typescript/tsconfig.json` using existing generated binding declarations;
-that checks types and documentation, not a source-bound Wasm artifact.
-
-The negative controls remove documentation from temporary emitted copies of a
-reexported type, a coordinate field and an inherited disposal method. Each must be
-rejected. Definition presence is an omission gate, **not a quality percentage**.
-Review rendered pages and compiled examples for truthful stage distinctions,
-actionable errors, ownership, defaults/units, capability limits and retention. The
-release checklist records those SDK-specific outcomes separately from source landing.
-
-
-The default evaluator decides validity with `is_valid`. `Diagnostics::Coarse`
+`Diagnostics::Coarse`
 (the default) returns `Fails` with the fixed message “value does not satisfy the
 contract”, no problems, and `problems_complete = false`. TypeScript uses
 `diagnostics: "coarse"`, `message`, and `problemsComplete: false`.
@@ -376,11 +330,6 @@ and can overflow the stack on deep values. The SDK promises nothing stronger tha
 the library. One first error does not establish diagnostic completeness, so the
 flag remains false. Work/regex limits and cancellation can omit detail after a
 verdict; missing detail never weakens failure and never counts as rule evidence.
-
-The former `with_schema_details` / `includeSchemaDetails` boolean and the
-`max_problems` / `maxProblems`, `diagnostic_bytes` / `diagnosticBytes` options are
-removed. There is no intermediate boolean diagnostics API or SDK construction
-bound for upstream errors.
 
 ## Caller-owned operation preparation
 
@@ -420,24 +369,10 @@ Discovery, invocation, source inspection and interface synthesis reexport one
 token, and providers receive an owned token. Token `check()` returns `Cancelled`,
 not a value verdict. Contract boundaries convert it to `caller-cancelled`; async
 consumers retain their existing cancellation outcomes. Invocation retains its
-synchronous relay and isolated local tokens. See the [offline primitive comparison](../crates/openbindings-internal-cancellation/README.md).
+synchronous relay and isolated local tokens. See the [cancellation definitions](../crates/openbindings-internal-cancellation/src/lib.rs).
 
 
-Document findings are independent of the value diagnostics mode. OBI-02 and OBI-10
-use the library's validity API only, with the fixed message
-`value violates the fixed normative schema`, their rule, and original source
-coordinates. OBI-02 follows failing object members, member names and array elements
-through the pinned schema's compiled validator map and local pointer references.
-It reports failing children and independently failing container constraints under
-the findings cap. Missing members, container constraints and non-descending
-constructs stay at their container, even when a child also fails;
-an empty walk falls back to the root. OBI-10 reports the schema node checked by its
-localized walk. Location work shares the existing work budget; stopping retains
-the deepest established failing node and marks findings truncated. Locations and
-missing detail never change validity or rule evidence. No document opt-in, size
-gate, library error construction or active diagnostic patch is involved.
-
-Migration: document findings keep source locations, lose keyword-specific wording,
-and can now contain several positions. OBI-10 uses the checked node rather than a
-keyword within it. Use rule, code and evidence for logic, not message text or
-finding count.
+Document findings are independent of the value diagnostics mode. Locations identify
+original document positions or checked schema nodes. Missing detail and truncated
+findings do not change validity or rule evidence. Use rule, code and evidence for
+logic, not message text or finding count.

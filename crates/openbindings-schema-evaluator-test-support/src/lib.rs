@@ -1,8 +1,4 @@
-//! Reusable, finite contract checks for an OpenBindings schema evaluator.
-//!
-//! Fixtures come from the pinned JSON Schema Test Suite and Go SDK adversarial
-//! kit. See `fixtures/provenance.json` for identities and intentional translations.
-//! A permitted refusal remains a refusal in the report, never a validity verdict.
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 use openbindings::*;

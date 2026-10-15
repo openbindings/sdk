@@ -1,5 +1,4 @@
-//! Private Wasm ABI used by the supported TypeScript facade.
-//! Semantic operations stay in core; no JavaScript callback enters a Send/Sync trait.
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};

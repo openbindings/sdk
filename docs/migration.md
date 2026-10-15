@@ -1,159 +1,132 @@
-# Migration boundaries
+# Migrate from the legacy Go and TypeScript SDKs
 
-The maintained reference engine is Rust, with native Rust packages and a
-TypeScript API over WebAssembly in this repository. Package versions are
-independent of specification versions. The specification remains authoritative.
+Move document handling first, then value validation and discovery. Keep a separate
+plan for callers using invocation, inspection or synthesis: those jobs have Rust
+companion APIs here, while the TypeScript facade exposes document semantics,
+value validation and HTTP discovery.
 
-This delivery covers document parsing and exact preservation, typed authoring,
-conformance, inspection, operation value contracts, optional default schema
-evaluation, evaluator test support and HTTP discovery. Optional Rust companions
-also provide source inspection, interface synthesis, binding/operation invocation
-through provider traits and checked caller APIs. These role APIs are provisional;
-their public TypeScript counterparts and CLI/application integration are not
-delivered by this SDK. These capabilities remain outside specification core.
+Use the [Rust first-use guide](rust-first-use.md) or the
+[TypeScript example](../packages/typescript/README.md) as the new caller skeleton.
+The Rust-backed packages are unpublished. Build an exact checkout or use local
+archives through [source replay](REPLAY.md). The npm package name is also used by
+the legacy implementation; a registry install alone does not select this API.
 
-The older Go and independent TypeScript SDKs are legacy implementations. Their
-source and historical packages are preserved. The older TypeScript SDK has a
-broader invocation/synthesis/adapter surface; replacing it requires checking each
-caller's actual capabilities. This API is not a drop-in replacement for all of
-those exports. See [CAPABILITIES.md](../CAPABILITIES.md) and the package guides for the supported scope.
+## Parse and validate a document
 
-The SDK supplies no kind-specific instances of its roles. The separate
-[OpenAPI project](https://github.com/openbindings/openapi) implements them and
-depends on the independent
-[client](https://github.com/openbindings/openapi-client).
-Consult that project's guide for its private kinds, supported profile and limits.
+| Legacy job | Rust-backed SDK |
+| --- | --- |
+| Go `ParseDocument(data)`, `ValidateDocument(data)` and `doc.Validate()` | `ParsedDocument::parse` preserves input; `validate()` returns document validation; `validated()` yields an owner only when conformance is established. `validate_document` is the bytes-to-validation convenience function. |
+| TypeScript `parseDocument(input)` returning `OBInterface`, and `validateDocument` / `validateInterface` throwing on invalid data | Await `initialize()`, narrow `parseDocument(input)` to `status === "parsed"`, then call `document.validated()` and narrow to `status === "validated"`. `validateDocument` returns a report outcome instead of an interface object. |
 
-## Source provenance
+Parsing here is not a conformance gate. Keep parsed snapshots for editors; require
+a validated owner before creating value contracts or publishing a document.
+Handle unsupported-version refusal separately from non-conformant and undetermined
+reports. Use rule evidence and codes instead of matching diagnostic prose.
 
-The initial implementation imports qualified source commit
-`dd076414006c5687c6eda8685a2569ebe55f7012` from the preserved Rust migration
-candidate. The subsequent import changes repository metadata and lifecycle
-instructions, and adds a reviewable repository history; the candidate's original
-history and qualification artifacts remain preserved by the project.
+Go's `json.RawMessage`-style opaque data maps to exact `JsonValue` or `JsonRef`.
+Legacy TypeScript object graphs map to disposable snapshots and exact values.
+Use JSON bytes/text for wide numbers; passing a previously rounded JavaScript
+number cannot restore its digits. Use `to_authoring()` in Rust or `toDraft()` in
+TypeScript for editing. The first-use guides show how to compose an opaque edit.
 
-The applied specification and Go comparison revisions are recorded in the root
-README. Original qualification and independent repair review are bounded to the
-capabilities they exercised. Source landing does not establish publication,
-complete legacy parity, stabilization or application cutover. New CI runs and
-package builds identify their own source, rather than reusing an old archive hash
-as evidence of a new build.
+## Read operations and bindings
 
-## API quality changes in the working prerelease
+| Legacy API | Replacement |
+| --- | --- |
+| Go `doc.Operations`, `doc.ResolveOperation(name)`, `doc.OperationBindings(key)` | Validated document operation reads and `resolve_operation(name)`; use the returned operation's `key()` and `bindings()`. Parsed lookup returns explicit found, missing or ambiguous selection. |
+| TypeScript `iface.operations`, `resolveOperation(iface, name)`, `PreparedInterface.operation(name)` | `document.operations` metadata and `resolveOperation(name)`; narrow the selection before using its operation owner. Read schema owners with `input()` and `output()`. |
 
-Rust callers replace `resolve_operation(name)?.is_some()` or optional unwrapping
-with a match on `OperationSelection`. A found view uses `key()`, `description()`,
-`aliases()`, `input()`, `output()`, `bindings()` and `value()`. Malformed required
-structure is a located interpretation error, independent of unrelated conformance.
-Every repeated name occurrence is ambiguous; even a one-key candidate list can
-represent repeated aliases in that operation.
+Primary names and aliases resolve operations; dependency operation references are
+primary keys. A missing value contract differs from a present `true`, `false` or
+object schema. Dispose TypeScript operation and exact-value owners. Metadata is
+plain data, while `schemas()` and schema access methods acquire new owners.
 
-Replace `context.prepare(name, direction).validate(value)` with a match on
-`ValueContractPreparation`. Only `Ready(contract)` calls `contract.validate(value)`.
-Absent schema, missing/ambiguous operation and preparation refusal are setup states.
-`ValueOutcome` has exactly the three semantic evaluation branches; custom evaluator
-traits return those branches and the qualification kit reports setup separately.
-Every preparation compiles anew; retain and clone ready owners for reuse after document/context drop. Cancellation of
-preparation yields no ready owner; retry uses a healthy context. Cancellation of a
-value check leaves a retained ready contract usable.
+## Prepare and validate value contracts
 
-Qualified missing-resource contracts now prepare ready under the default evaluator,
-including bare missing `$ref` and known alias chains. Resource-dependent values
-return `ResourceUnavailable` during validation. Existing code must handle no verdict
-in both phases. Known branch-independent values can now satisfy or fail with the
-original resource set; `anyOf(true, missing-U)` is a declared capability expansion.
-`anyOf(true, invalid-known-pattern)` still refuses. Ready owners remain bound to
-their original snapshots; supplying resources means creating a new context.
-Remove calls to `resource_completeness()` / `resourceCompleteness` and the
-`ResourceCompleteness` type; no replacement classification exists. Ready means
-prepared, not decidable (EV-9). Applications own replacement policy and continue
-to handle no verdict at both stages. Custom evaluators retain the original
-`SchemaRequest` context and strict `evaluation_program()` helper. Projected entry
-and resources now use read-only `entry_uri()` and `resources()` accessors. Remove
-`evaluation_bounds`, `EvaluationBounds`, `original_location_bounded` and
-`LocationBudgetExceeded` from adapter usage: bounds and bounded mapping are now
-private evaluator details. Static reference refusals use `ReferenceRefusal` and
-`ReferenceRefusalReason`, including Cancelled, separately from value no-verdict.
+| Legacy API | Replacement |
+| --- | --- |
+| Go `NewValueContractCompiler(evaluator, resources...)`, `Resolve(ctx, doc)`, `CompileInput` / `CompileOutput` | Select a `SchemaEvaluator`, create an immutable `ResourceSet`, call `validated.value_contracts`, then `prepare(name, Direction::Input)` or `Direction::Output`. |
+| Go `ValueContract.Validate(ctx, value)` / `ValidateJSON(ctx, bytes)` and error classification | Admit ordinary data with `JsonValue::from_serializable` or exact bytes with `JsonValue::parse`; match `ValueOutcome::Satisfies`, `Fails` or `NoVerdict`. |
+| TypeScript `compileOperationSchema(iface, name, position)` and `CompiledSchema.validate(value)` returning `valid` and failures | Create `validated.valueContracts()`, call `prepare(name, "input" / "output")`, narrow to ready, then call `valueContract.validate(value)`. Handle `satisfies`, `fails`, `no-verdict` and ordinary-input admission errors. |
 
-Ordinary `$id` and supplied-resource resolution follows library normalization and
-encoded-name handling under §7.4. OBI-13's exact compared strings are unchanged.
-The S6d/e migration ledger records each approved case delta. Supplied normalized
-peers remain ambiguous; no spelling fallback or implicit acquisition is added.
+Preparation has its own outcomes. An absent value contract is not success against
+an implicit schema. Retain a ready contract for reuse; preparation compiles anew.
+Resources are caller-supplied and immutable, with no automatic reference fetching.
+Changing resources creates a new context; old contracts keep their snapshots.
+A ready contract may still return no-verdict for individual values. Legacy
+`PreparedBoundaryContract.complete` and boundary-comparison helpers have no direct
+replacement or decidability equivalent here.
 
-`AuthoringError` fields are private: use `kind()`, `draft_pointer()`,
-`source_location()` and `message()`. Native draft paths spell `additional_fields`;
-TypeScript paths spell `additionalFields`; neither is an original source pointer.
-Checked `JsonValue::from_serializable` errors use emitted JSON pointers. Oversize
-conversion messages truncate at a UTF-8 boundary; oversize paths are omitted,
-never shortened into a false location. Explicit accessors disclose truncation.
+Rust core requires an explicit operation value evaluator, including for boolean
+schemas. TypeScript supplies the bundled evaluator. See
+[custom evaluator integration](schema-evaluators.md). Default failure diagnostics
+are coarse; requesting upstream detail accepts the library's allocation and stack
+limits. Diagnostic count and prose are not compatibility contracts.
 
-Checked Serde admission has an explicit 128-container ceiling; requested smaller
-`JsonLimits.max_depth` values apply, and larger values do not raise the ceiling.
-The existing iterative exact parse lane retains its 10,000-container default.
+## Invoke
 
-`JsonValue::from_serializable` accepts the documented ordinary Serde profile and
-retains exact i128/u128 digits. Ordinary `serde_json::Value` numeric leaves use
-the qualified pinned Number protocol and retain its token spelling. `RawValue`
-and exact `JsonValue` wrappers are explicitly refused in this lane. Keep `JsonValue::parse`/views/retention for exact token carriage and pass
-owned exact values to typed drafts. Converting to ordinary floating-point values
-first cannot recover lost digits.
+Legacy TypeScript callers use `OperationInvoker` or
+`OpenBindingsRuntime.invoke`, with provider and context selection. This facade
+has no public TypeScript invocation replacement. Retain that dependency for those
+jobs or move the integration to Rust.
 
-TypeScript callers match the analogous tagged selection and preparation unions,
-check ordinary-value admission results, and dispose only actual found/ready owners.
-Use `SchemaResources` entries for atomic batches. Import HTTP helpers from
-`@openbindings/sdk/http-discovery`; it shares the root's initialization and handle
-realm. Construct TypeScript validated documents through `parsed.validated()` and narrow
-`status === "validated"`; that branch is the sole public proof-construction route. The package guide gives
-complete before/after examples and nested exact-value ownership rules.
+In Rust, implement `binding::BindingInvoker` or select a kind implementation that
+does. Use `binding::Invoker` for source and binding values, or
+`operation::Invoker::new(validated, provider)` for document operations. Select an
+evaluator with `with_evaluator`, prepare an operation and invoke an `Attempt`.
+Read output through its terminal result and close input when finished. See the
+[invocation guide](invocation.md). Legacy `prepareOperation` is an advisory
+context/preflight job; it is not equivalent to Rust's retained `prepare` handle.
 
+The checked Go release line exposes no invocation package, so it has no API to
+map for this job. Earlier removed Go modules require their own migration analysis.
+Kind implementations and application context policy remain separate from core.
 
-The default evaluator decides validity with `is_valid`. `Diagnostics::Coarse`
-(the default) returns `Fails` with the fixed message “value does not satisfy the
-contract”, no problems, and `problems_complete = false`. TypeScript uses
-`diagnostics: "coarse"`, `message`, and `problemsComplete: false`.
+## Discover and publish over HTTP
 
-Select `DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream)` or
-`proof.valueContracts({ diagnostics: "upstream" })` to request the library's own
-first error through `validate()`. Messages remain value-free; available paths map
-to original locations and optional schema facts may expose source operands.
-This mode is **library-bounded**: construction can allocate in proportion to inputs
-and can overflow the stack on deep values. The SDK promises nothing stronger than
-the library. One first error does not establish diagnostic completeness, so the
-flag remains false. Work/regex limits and cancellation can omit detail after a
-verdict; missing detail never weakens failure and never counts as rule evidence.
+| Legacy API | Replacement |
+| --- | --- |
+| Go `httpdiscovery.Client.Discover(ctx, origin)` | Rust `native::Client::discover` with the `native` feature, or portable `discover` with host transport and timer. |
+| Go `httpdiscovery.NewHandler(data, options)` | Rust `Publication::from_bytes` / `respond`, adapted to your HTTP server. |
+| TypeScript `fetchInterface(url)` or `OpenBindingsRuntime.resolve(url)` | `discover(origin, options)` from `@openbindings/sdk/http-discovery` for well-known discovery. `DiscoveryPublication` publishes validated bytes. |
 
-The former `with_schema_details` / `includeSchemaDetails` boolean and the
-`max_problems` / `maxProblems`, `diagnostic_bytes` / `diagnosticBytes` options are
-removed. There is no intermediate boolean diagnostics API or SDK construction
-bound for upstream errors.
+Legacy TypeScript resolution tries direct fetching, discovery and optional
+synthesis. The new discovery call performs the well-known-origin job only;
+compose direct fetching or synthesis explicitly when needed. Acquisition URLs
+never become schema base URIs. The default decoded body limit is 1 MiB and the
+whole-attempt deadline is thirty seconds. Match absence, gated discovery,
+transport, HTTP and document outcomes separately. Publication defaults to CORS
+`*`; authentication and credentialed CORS remain application policy.
+Read [HTTP policy](http-discovery.md) before porting a custom transport.
 
-## Validated contract access (S6c)
+## Inspect sources and synthesize interfaces
 
-Move `parsed.value_contracts(evaluator, resources)?` to
-`proof.value_contracts(evaluator, resources)`, where `proof` comes from
-`parsed.validate()?.validated()`. TypeScript likewise moves `valueContracts()`
-to the document returned by `parsed.validated()`. `operation::Invoker::new`
-requires that proof, and `with_evaluator` no longer returns an interpretation error.
-Retain parsed views for editing invalid documents; acquire validated views for
-infallible field reads. Rust exact text now uses `JsonStringRef` for descriptions,
-tags and kinds; callers choose scalar conversion or exact UTF-16 explicitly.
+Legacy TypeScript exposes `SourceInspector.inspectSource`,
+`InterfaceSynthesizer.synthesizeInterface` / `synthesizeInterfaceWithCoverage`,
+and corresponding `OpenBindingsRuntime` methods. They have no public TypeScript
+replacement here. Rust uses `SourceInspector` with the checked `Inspector`, and
+`InterfaceSynthesizer` with `Synthesizer`. Callers assign source and operation
+keys, inspect coverage, and choose strict or partial-result policy. See the
+[inspection guide](../crates/openbindings-source-inspection/README.md) and
+[synthesis guide](../crates/openbindings-interface-synthesis/README.md).
 
+The checked Go release line exposes neither inspection nor synthesis. Providers
+must be integrated under their own kind contracts; the SDK does not infer a
+universal provider registry, credential policy or supported-kind set.
 
-Document findings are independent of the value diagnostics mode. OBI-02 and OBI-10
-use the library's validity API only, with the fixed message
-`value violates the fixed normative schema`, their rule, and original source
-coordinates. OBI-02 follows failing object members, member names and array elements
-through the pinned schema's compiled validator map and local pointer references.
-It reports failing children and independently failing container constraints under
-the findings cap. Missing members, container constraints and non-descending
-constructs stay at their container, even when a child also fails;
-an empty walk falls back to the root. OBI-10 reports the schema node checked by its
-localized walk. Location work shares the existing work budget; stopping retains
-the deepest established failing node and marks findings truncated. Locations and
-missing detail never change validity or rule evidence. No document opt-in, size
-gate, library error construction or active diagnostic patch is involved.
+## Legacy source references
 
-Migration: document findings keep source locations, lose keyword-specific wording,
-and can now contain several positions. OBI-10 uses the checked node rather than a
-keyword within it. Use rule, code and evidence for logic, not message text or
-finding count.
+The mappings above were checked against the legacy `origin/release/0.2` sources:
+Go revision `b67b7d4b0f754ea6f42dffe047db8dbabdaec8eb` and TypeScript revision
+`173a5b4a63a4574b9576338add880b215749a66f`.
+
+- Go: [parsing](https://github.com/openbindings/openbindings-go/blob/b67b7d4b0f754ea6f42dffe047db8dbabdaec8eb/parse.go),
+  [value contracts](https://github.com/openbindings/openbindings-go/blob/b67b7d4b0f754ea6f42dffe047db8dbabdaec8eb/value_contracts.go),
+  [operation lookup](https://github.com/openbindings/openbindings-go/blob/b67b7d4b0f754ea6f42dffe047db8dbabdaec8eb/resolve_operation.go),
+  [HTTP client](https://github.com/openbindings/openbindings-go/blob/b67b7d4b0f754ea6f42dffe047db8dbabdaec8eb/httpdiscovery/client.go)
+  and [publication](https://github.com/openbindings/openbindings-go/blob/b67b7d4b0f754ea6f42dffe047db8dbabdaec8eb/httpdiscovery/server.go).
+- TypeScript: [parsing](https://github.com/openbindings/openbindings-ts/blob/173a5b4a63a4574b9576338add880b215749a66f/packages/core/src/parse.ts),
+  [schema compilation](https://github.com/openbindings/openbindings-ts/blob/173a5b4a63a4574b9576338add880b215749a66f/packages/core/src/schema-validation.ts),
+  [prepared interfaces](https://github.com/openbindings/openbindings-ts/blob/173a5b4a63a4574b9576338add880b215749a66f/packages/core/src/prepared-interface.ts),
+  [runtime](https://github.com/openbindings/openbindings-ts/blob/173a5b4a63a4574b9576338add880b215749a66f/packages/sdk/src/runtime.ts)
+  and [fetching](https://github.com/openbindings/openbindings-ts/blob/173a5b4a63a4574b9576338add880b215749a66f/packages/synthesize/src/fetch.ts).

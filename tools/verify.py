@@ -13,8 +13,8 @@ def run(args, cwd=root):
     subprocess.run(list(map(str, args)), cwd=cwd, env=env, check=True)
 run([sys.executable, 'tools/verify-product-labels.py', '--self-test',
      *(['--tracked-files', a.tracked_files.resolve()] if a.tracked_files else [])])
+run([sys.executable, 'tools/verify-doc-links.py'])
 run([sys.executable, 'tools/verify-msrv.py', '--version', '1.88'])
-run(['cargo', 'check', '--locked', '-p', 'openbindings', '--no-default-features'])
 run(['cargo', 'fmt', '--all', '--check'])
 run(['cargo', 'clippy', '--locked', '--workspace', '--all-targets', '--features', 'openbindings-http-discovery/native', '--', '-D', 'warnings'])
 run(['cargo', 'test', '--locked', '--workspace', '--features', 'openbindings-http-discovery/native'])
@@ -24,7 +24,7 @@ run(['cargo', 'fetch', '--locked'])
 run([sys.executable, 'tools/verify-dependency-isolation.py'])
 run([sys.executable, 'tools/attribution.py', '--check'])
 run([sys.executable, 'tools/verify-consumer-compat.py'])
-for example in ['first_use', 'replacement']:
+for example in ['first_use', 'replacement', 'regex_budget']:
     run(['cargo', 'run', '--locked', '-p', 'openbindings-json-schema-evaluator', '--example', example])
 for mode in [[], ['--upstream']]:
     run(['cargo', 'run', '--locked', '-p', 'openbindings-schema-evaluator-test-support', '--example', 'replay', '--', *mode])

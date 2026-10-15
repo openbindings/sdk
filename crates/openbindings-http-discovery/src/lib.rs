@@ -1,8 +1,4 @@
-//! Optional OpenBindings HTTP discovery companion. Core never acquires resources.
-//!
-//! The portable client accepts a caller's asynchronous transport. Enable `native`
-//! for the reusable reqwest adapter. Publication returns ordinary response data,
-//! so applications keep ownership of their HTTP server and authorization policy.
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 mod client;

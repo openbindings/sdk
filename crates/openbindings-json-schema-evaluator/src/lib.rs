@@ -1,4 +1,4 @@
-//! Optional JSON Schema 2020-12 evaluation. Resources are explicit; no I/O.
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 mod details;

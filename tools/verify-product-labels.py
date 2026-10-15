@@ -7,8 +7,6 @@ import tempfile
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-# The two release narratives are maintained by the documentation workflow.
-EXEMPT = {'CHANGELOG.md', 'docs/migration.md'}
 SLICE = r'S(?:10|[1-9])(?:[a-f]{1,2}(?:/[a-f])?)?'
 PATTERNS = [
     # Bare numbered tokens also name upstream products. Require record syntax
@@ -37,8 +35,6 @@ def matches(text):
 
 
 def violations(name, content):
-    if name in EXEMPT:
-        return []
     result = [f'{name}: filename contains a campaign label'] if (
         matches(name) or re.search(r'(?:^|/)' + SLICE + r'(?:[_.-]|$)', name, re.I)
     ) else []
@@ -101,7 +97,8 @@ def self_test():
         assert not violations('src/' + name + '.rs', '')
     for name in ['s' + '6f_resolver', 'review_' + 'f01_f06_preparation', 'round' + '-01']:
         assert violations('tests/' + name + '.rs', '')
-    assert not violations('CHANGELOG.md', label)
+    assert violations('CHANGELOG.md', label)
+    assert violations('docs/migration.md', label)
     assert violations('docs/new.md', label)
     assert not violations('docs/upstream.patch', '-' + label)
     assert violations('docs/upstream.patch', '+' + label)
