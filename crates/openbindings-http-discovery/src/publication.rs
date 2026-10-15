@@ -47,9 +47,9 @@ pub enum PublicationError {
     Configuration(ConfigurationError),
     /// Unsupported declared version, separate from normative conformance.
     VersionRefused(VersionRefusal),
-    /// Assessment established a document violation; payload carries report and any parsed snapshot.
+    /// Validation established a document violation; payload carries report and any parsed snapshot.
     NonConformant(DocumentValidation),
-    /// Assessment could not establish conformance; payload preserves its evidence.
+    /// Validation could not establish conformance; payload preserves its evidence.
     Undetermined(DocumentValidation),
 }
 impl std::fmt::Display for PublicationError {
@@ -102,7 +102,7 @@ impl Publication {
             allow_origin: options.allow_origin,
         })
     }
-    /// Assess exact source bytes and create publication only on established conformance. Return distinct configuration, version, nonconformant or undetermined refusals.
+    /// Validate exact source bytes and create publication only on established conformance. Return distinct configuration, version, nonconformant or undetermined refusals.
     ///
     /// # Errors
     /// Returns a publication error for invalid CORS configuration, an unsupported version, or a document whose conformance is non-conformant or undetermined.

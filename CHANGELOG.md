@@ -4,6 +4,11 @@
 
 ### Added
 
+- Rust `value_contracts(&validated)` in the default evaluator companion,
+  `ValueContract::validate_json` for exact text admission, and
+  `ValueContractPreparation::into_result` with a payload-preserving
+  `ValueContractPreparationError` for error propagation.
+
 - Exact OpenBindings 0.2 document parsing, typed authoring and validation with
   original source locations, bounded findings and per-rule evidence.
 - Validated document views, operation and alias lookup, exact schema access,

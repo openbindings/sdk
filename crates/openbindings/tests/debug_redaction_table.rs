@@ -24,6 +24,53 @@ fn row(label: &'static str, value: &(impl Debug + ?Sized)) -> Row {
         ],
     }
 }
+
+#[test]
+fn preparation_errors_redact_payloads_like_no_verdict() {
+    let mut rows = vec![
+        row(
+            "preparation error absent contract",
+            &ValueContractPreparationError::NoValueContract,
+        ),
+        row(
+            "preparation error missing operation",
+            &ValueContractPreparationError::OperationMissing,
+        ),
+        row(
+            "preparation error ambiguous operation",
+            &ValueContractPreparationError::OperationAmbiguous {
+                candidates: vec![SECRET.into()],
+            },
+        ),
+    ];
+    for code in [
+        "caller-cancelled",
+        "resource-unavailable",
+        "schema-pattern-compilation",
+        SECRET,
+        "caller-cancelled-REVIEW-BEARER-TOKEN-7391",
+    ] {
+        let mut detail = refusal();
+        detail.code = code.into();
+        let error = ValueContractPreparation::NoVerdict { detail }
+            .into_result()
+            .unwrap_err();
+        // The error's Debug is NoVerdict's own: same redaction, no code text.
+        let ValueContractPreparationError::NoVerdict { detail } = &error else {
+            unreachable!("a no-verdict preparation converts to the no-verdict error")
+        };
+        assert!(format!("{error:?}").contains(&format!("{detail:?}")));
+        rows.push(row("preparation error code", &error));
+        assert!(error.to_string().contains(SECRET));
+        assert!(
+            std::error::Error::source(&error)
+                .unwrap()
+                .to_string()
+                .contains(SECRET)
+        );
+    }
+    check_rows(rows, 8);
+}
 fn evidence() -> BTreeMap<String, JsonValue> {
     BTreeMap::from([(
         format!("credential-{SECRET}"),

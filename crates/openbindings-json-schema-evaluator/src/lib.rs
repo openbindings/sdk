@@ -14,6 +14,27 @@ use openbindings_internal_schema::{
 use serde_json::Value;
 use std::sync::Arc;
 
+/// Create value contracts for a validated document with the default evaluator.
+/// Uses [`Limits::default`], [`Diagnostics::Coarse`] and an empty [`ResourceSet`].
+/// No resources are acquired. Schemas are prepared only through
+/// [`ValueContracts::prepare`]. Missing resources can still cause no-verdict, and
+/// ready contracts can return any of the four [`ValueOutcome`] variants.
+///
+/// Use [`ValidatedDocument::value_contracts`] to share an evaluator, configure
+/// budgets or diagnostics, supply resources or select a custom evaluator.
+///
+/// A parsed document must establish conformance before constructing value contracts:
+/// ```compile_fail,E0308
+/// use openbindings::ParsedDocument;
+/// use openbindings_json_schema_evaluator::value_contracts;
+/// fn draft(document: &ParsedDocument) {
+///     let _ = value_contracts(document);
+/// }
+/// ```
+pub fn value_contracts(document: &ValidatedDocument) -> ValueContracts {
+    document.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]
 /// Finite default-evaluator budgets. Work counts are implementation units, not milliseconds; exhaustion yields no verdict unless an established failure only loses diagnostic completeness. Zero is literal. These budgets do not bound upstream diagnostic allocation or stack use.

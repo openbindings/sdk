@@ -1,11 +1,8 @@
 //! Run with: cargo run -p openbindings-json-schema-evaluator --example first_use
-use openbindings::{
-    Direction, JsonValue, ParsedDocument, ResourceSet, ValidationReport, ValueContractPreparation,
-    ValueOutcome,
-};
-use openbindings_json_schema_evaluator::DefaultEvaluator;
+use openbindings::{Direction, JsonValue, ParsedDocument, ValidationReport, ValueOutcome};
+use openbindings_json_schema_evaluator::value_contracts;
 use serde::Serialize;
-use std::{error::Error, sync::Arc};
+use std::error::Error;
 
 #[derive(Serialize)]
 struct Input {
@@ -71,32 +68,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Validated reads preserve presence; schema preparation remains separate.
         println!("input schema at {:?}", schema.location().pointer);
     }
-    // The evaluator is an explicit optional companion. No resources are fetched.
-    let context = proof.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
-    let input = match context.prepare("lookup", Direction::Input) {
-        ValueContractPreparation::Ready(input) => input,
-        ValueContractPreparation::NoValueContract => {
-            return Err("operation has no input contract".into());
-        }
-        ValueContractPreparation::OperationMissing => return Err("operation is missing".into()),
-        ValueContractPreparation::OperationAmbiguous { candidates } => {
-            return Err(format!("operation is ambiguous: {candidates:?}").into());
-        }
-        ValueContractPreparation::NoVerdict { detail } => {
-            return Err(format!(
-                "preparation refused ({:?}, {}): {}",
-                detail.reason, detail.code, detail.message
-            )
-            .into());
-        }
-    };
+    // Default budgets, coarse diagnostics and no extra resources.
+    let context = value_contracts(&proof);
+    let input = context.prepare("lookup", Direction::Input).into_result()?;
     // Ordinary values have checked Serde admission. Exact text preserves its tokens.
     let ordinary = JsonValue::from_serializable(&Input {
         id: 9_007_199_254_740_993,
     })?;
-    let exact = JsonValue::parse(r#"{"id":9007199254740992}"#)?;
-    for value in [&ordinary, &exact] {
-        match input.validate(value) {
+    for outcome in [
+        input.validate(&ordinary),
+        input.validate_json(r#"{"id":9007199254740992}"#)?,
+    ] {
+        match outcome {
             ValueOutcome::Satisfies => println!("input satisfies the contract"),
             ValueOutcome::Fails {
                 problems,
