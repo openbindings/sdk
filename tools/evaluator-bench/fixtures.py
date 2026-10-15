@@ -43,6 +43,13 @@ def fixtures():
             '$id': 'https://scale.test/target', 'type': 'integer',
             '$defs': {f'p{i}': {'type': 'integer'} for i in range(5000)}})},
         modes=('cold', 'compile', 'context', 'eval', 'full'))
+    # Long repeated reference spellings must not be copied into each cache layer.
+    for count, width in [(1000, 256), (5000, 1024)]:
+        uri = 'https://memory.test/' + 'a' * width
+        add(f'reference-text-{count}', {'allOf': [
+            {'$ref': uri + '#/$defs/value'} for _ in range(count)]}, '1',
+            resources={uri: compact({'$id': uri, '$defs': {'value': {'type': 'integer'}}})},
+            modes=('compile', 'context', 'eval', 'full'))
     add('missing-resource', {'$ref': 'https://benchmark.invalid/missing'}, '1', 'no-verdict', modes=('cold', 'compile', 'context', 'eval', 'full'))
     add('missing-independent', {'anyOf': [True, {'$ref': 'https://benchmark.invalid/missing'}]}, '1')
     # Known static defects retain a separate undefined outcome.

@@ -13,7 +13,7 @@ pub(super) struct Refusal {
     reason: FailureReason,
     code: &'static str,
     message: &'static str,
-    missing: Option<String>,
+    missing: Option<Arc<str>>,
     defect: Option<StaticReferenceDefect>,
 }
 impl Refusal {
@@ -31,16 +31,40 @@ impl Refusal {
         self
     }
 }
-type Key = (usize, String);
+// A reference's original spelling is already owned by its immutable source.
+// Route by schema node and keyword slot, without owning another copy of it.
+const REFERENCE_KEYWORDS: [&str; 2] = ["$ref", "$dynamicRef"];
+type Key = (usize, usize);
 type Targets = HashMap<Key, Result<Target, Refusal>>;
-type Query = (usize, String, String, String);
+struct Queries {
+    references: Vec<Key>,
+    first_name: String,
+    other_names: HashSet<String>,
+}
+impl Queries {
+    fn new(name: &str) -> Self {
+        Self {
+            references: Vec::new(),
+            first_name: name.to_owned(),
+            other_names: HashSet::new(),
+        }
+    }
+    fn push(&mut self, key: Key, name: &str) {
+        self.references.push(key);
+        // Each distinct registration alias is needed only once per carrier.
+        // Keep the first alias for the parent's anonymous-base fallback.
+        if name != self.first_name && !self.other_names.contains(name) {
+            self.other_names.insert(name.to_owned());
+        }
+    }
+}
 enum Route {
     Carrier(usize),
     Absent,
     Refused(Refusal),
 }
 struct Carrier {
-    queries: Vec<Query>,
+    queries: Mutex<Option<Queries>>,
     targets: OnceLock<Targets>,
     #[cfg(test)]
     preparations: std::sync::atomic::AtomicUsize,
@@ -48,12 +72,14 @@ struct Carrier {
 // Build the association index once for the immutable space. A requested
 // reference initializes only its target carrier (or the missing-resource batch).
 // Every referrer then shares that carrier's single copy and library preparation.
-// Cache owned lookup results, so no borrowed registry outlives its inspection
-// tree and no library implementation details are needed to retain identities.
+// Move each pending batch into its initializer and release it afterward. Only
+// compact routes and owned lookup results remain; reference text stays in the
+// original source. No borrowed registry outlives its inspection tree and no
+// library implementation details are needed to retain identities.
 pub(super) struct Inspection {
     routes: HashMap<Key, Route>,
     carriers: BTreeMap<usize, Carrier>,
-    absent: Vec<(Key, String)>,
+    absent: Mutex<Option<BTreeMap<String, Vec<Key>>>>,
     missing: OnceLock<Targets>,
 }
 
@@ -223,9 +249,20 @@ impl SchemaSpace {
         missing: &mut impl FnMut(&str),
     ) -> Result<Target, Failure> {
         let index = self.inspection.get_or_init(|| self.index_inspection());
-        let key = (holder, reference.to_owned());
-        let result = match index.routes.get(&key) {
-            Some(Route::Carrier(id)) => {
+        // Both keywords may exist at one node. Matching the original spelling
+        // also preserves the refusal for queries absent from the original input.
+        let key = REFERENCE_KEYWORDS
+            .iter()
+            .position(|keyword| {
+                self.nodes[holder]
+                    .value
+                    .get(keyword)
+                    .and_then(|v| v.as_str())
+                    == Some(reference)
+            })
+            .map(|slot| (holder, slot));
+        let result = match key.and_then(|key| index.routes.get(&key).map(|route| (key, route))) {
+            Some((key, Route::Carrier(id))) => {
                 let carrier = &index.carriers[id];
                 carrier
                     .targets
@@ -234,17 +271,33 @@ impl SchemaSpace {
                         carrier
                             .preparations
                             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        self.inspect_carrier(*id, &carrier.queries)
+                        // OnceLock serializes initialization; take releases the query
+                        // storage instead of retaining it beside the completed cache.
+                        let queries = carrier
+                            .queries
+                            .lock()
+                            .unwrap()
+                            .take()
+                            .expect("pending carrier");
+                        self.inspect_carrier(*id, queries)
                     })
                     .get(&key)
                     .cloned()
             }
-            Some(Route::Absent) => index
+            Some((key, Route::Absent)) => index
                 .missing
-                .get_or_init(|| self.inspect_missing(&index.absent))
+                .get_or_init(|| {
+                    let absent = index
+                        .absent
+                        .lock()
+                        .unwrap()
+                        .take()
+                        .expect("pending missing resources");
+                    self.inspect_missing(absent)
+                })
                 .get(&key)
                 .cloned(),
-            Some(Route::Refused(refusal)) => Some(Err(refusal.clone())),
+            Some((_, Route::Refused(refusal))) => Some(Err(refusal.clone())),
             None => None,
         };
         match result {
@@ -269,24 +322,31 @@ impl SchemaSpace {
             )),
         }
     }
+    fn inspection_reference(&self, key: Key) -> &str {
+        self.nodes[key.0]
+            .value
+            .get(REFERENCE_KEYWORDS[key.1])
+            .and_then(|v| v.as_str())
+            .expect("indexed scalar reference")
+    }
     fn index_inspection(&self) -> Inspection {
         let mut routes = HashMap::new();
         let uri_registry = Registry::new()
             .retriever(Recording::default())
             .prepare()
             .expect("empty registry");
-        let mut groups: BTreeMap<usize, Vec<Query>> = BTreeMap::new();
-        let mut absent = Vec::new();
+        let mut groups: BTreeMap<usize, Queries> = BTreeMap::new();
+        let mut absent: BTreeMap<String, Vec<Key>> = BTreeMap::new();
         for (holder, node) in self.nodes.iter().enumerate() {
             let resource = &self.resources[node.resource];
-            for keyword in ["$ref", "$dynamicRef"] {
+            for (slot, keyword) in REFERENCE_KEYWORDS.iter().enumerate() {
                 let Some(reference) = node.value.get(keyword).and_then(|v| v.as_str()) else {
                     continue;
                 };
                 if resource.anonymous && !uri::absolute(reference) {
                     continue;
                 }
-                let key = (holder, reference.to_owned());
+                let key = (holder, slot);
                 let base = resource
                     .base
                     .as_deref()
@@ -299,12 +359,10 @@ impl SchemaSpace {
                         // A malformed invocation has no target to resolve. Use
                         // the existing carrier preparation path to establish
                         // that repairing it isolates the supported defect.
-                        groups.entry(node.resource).or_default().push((
-                            holder,
-                            reference.to_owned(),
-                            base.to_owned(),
-                            String::new(),
-                        ));
+                        groups
+                            .entry(node.resource)
+                            .or_insert_with(|| Queries::new(base))
+                            .push(key, base);
                         continue;
                     }
                     routes.insert(
@@ -323,7 +381,6 @@ impl SchemaSpace {
                 // URI normalization selects the carrier only. Preserve the
                 // authored fragment for Resolver::lookup; resolve_uri can
                 // normalize a percent-encoded plain name that lookup refuses.
-                let fragment = reference.split_once('#').map_or("", |(_, f)| f);
                 // This association table is the contained/supplied identity policy,
                 // not a pointer or plain-name resolver. A losing carrier cannot
                 // become authoritative because a registry happened to index it last.
@@ -331,12 +388,10 @@ impl SchemaSpace {
                     Some(NameSelection {
                         carrier: Some(id), ..
                     }) if self.resources[*id].eligible => {
-                        groups.entry(*id).or_default().push((
-                            holder,
-                            reference.to_owned(),
-                            name.to_owned(),
-                            fragment.to_owned(),
-                        ));
+                        groups
+                            .entry(*id)
+                            .or_insert_with(|| Queries::new(name))
+                            .push(key, name);
                     }
                     Some(NameSelection {
                         carrier: Some(_), ..
@@ -353,18 +408,26 @@ impl SchemaSpace {
                         );
                     }
                     None => {
-                        absent.push((key, name.to_owned()));
+                        // BTreeMap entry would allocate another copy even for
+                        // an existing name; borrow first and own only new names.
+                        if let Some(keys) = absent.get_mut(name) {
+                            keys.push(key);
+                        } else {
+                            absent.insert(name.to_owned(), vec![key]);
+                        }
                     }
                 }
             }
         }
         for (&id, queries) in &groups {
-            for (holder, reference, _, _) in queries {
-                routes.insert((*holder, reference.clone()), Route::Carrier(id));
+            for &key in &queries.references {
+                routes.insert(key, Route::Carrier(id));
             }
         }
-        for (key, _) in &absent {
-            routes.insert(key.clone(), Route::Absent);
+        for keys in absent.values() {
+            for &key in keys {
+                routes.insert(key, Route::Absent);
+            }
         }
         Inspection {
             routes,
@@ -374,7 +437,7 @@ impl SchemaSpace {
                     (
                         id,
                         Carrier {
-                            queries,
+                            queries: Mutex::new(Some(queries)),
                             targets: OnceLock::new(),
                             #[cfg(test)]
                             preparations: std::sync::atomic::AtomicUsize::new(0),
@@ -382,28 +445,27 @@ impl SchemaSpace {
                     )
                 })
                 .collect(),
-            absent,
+            absent: Mutex::new(Some(absent)),
             missing: OnceLock::new(),
         }
     }
-    fn inspect_missing(&self, absent: &[(Key, String)]) -> Targets {
+    fn inspect_missing(&self, absent: BTreeMap<String, Vec<Key>>) -> Targets {
         let mut targets = Targets::new();
         // Ask the retriever through preparation, including every distinct absent
         // resource. No absent resource can be mistaken for a resolved schema.
         if !absent.is_empty() {
             // Known reference carriers are already in `names`; borrow the
             // remaining carrier names rather than copying all identity strings.
-            let missing_names: HashSet<_> = absent.iter().map(|(_, name)| name.as_str()).collect();
             let mut inspection_uri = "urn:openbindings:missing-inspection".to_owned();
             while self.names.contains_key(&inspection_uri)
-                || missing_names.contains(inspection_uri.as_str())
+                || absent.contains_key(inspection_uri.as_str())
             {
                 inspection_uri.push('-');
             }
             let recording = Recording::default();
             let refs: Vec<_> = absent
-                .iter()
-                .map(|(_, uri)| serde_json::json!({"$ref":uri}))
+                .keys()
+                .map(|uri| serde_json::json!({"$ref":uri}))
                 .collect();
             let _inspection = Registry::new()
                 .draft(Draft::Draft202012)
@@ -412,13 +474,13 @@ impl SchemaSpace {
                 .expect("private URI")
                 .prepare();
             let recorded = recording.requested.lock().unwrap();
-            for (key, name) in absent {
-                let refusal = if recorded.contains(name) {
+            for (name, keys) in absent {
+                let refusal = if recorded.contains(&name) {
                     Refusal {
                         reason: FailureReason::ResourceUnavailable,
                         code: "resource-unavailable",
                         message: "static preparation requires a resource that was not supplied",
-                        missing: Some(name.clone()),
+                        missing: Some(name.into()),
                         defect: None,
                     }
                 } else {
@@ -427,12 +489,14 @@ impl SchemaSpace {
                         "the inspection registry could not identify the referenced resource",
                     )
                 };
-                targets.insert(key.clone(), Err(refusal));
+                for key in keys {
+                    targets.insert(key, Err(refusal.clone()));
+                }
             }
         }
         targets
     }
-    fn inspect_carrier(&self, resource_id: usize, queries: &[Query]) -> Targets {
+    fn inspect_carrier(&self, resource_id: usize, queries: Queries) -> Targets {
         let mut targets = Targets::new();
 
         let resource = &self.resources[resource_id];
@@ -445,28 +509,28 @@ impl SchemaSpace {
             &self.sources[self.nodes[root].source].positions,
             |id| self.malformed_reference_scope(id),
         );
-        let canonical = resource.base.as_ref().unwrap_or(&queries[0].2).clone();
+        let canonical = resource.base.as_deref().unwrap_or(&queries.first_name);
         // Registering a detached nested resource must preserve its already
         // established base. This only changes the root registration identity;
         // nested references and identifiers are interpreted by the library.
         if let Some(id) = tree.0.get_mut("$id") {
-            *id = Value::String(canonical.clone());
+            *id = Value::String(canonical.to_owned());
         }
         let recording = Recording::default();
         let builder = Registry::new()
             .draft(Draft::Draft202012)
             .retriever(recording);
-        let names: HashSet<_> = queries
-            .iter()
-            .map(|(_, _, name, _)| name.as_str())
-            .chain(std::iter::once(canonical.as_str()))
+        let names: HashSet<_> = std::iter::once(queries.first_name.as_str())
+            .chain(queries.other_names.iter().map(String::as_str))
+            .chain(std::iter::once(canonical))
             .collect();
         let registry = builder
             .extend(names.into_iter().map(|name| (name, &*tree.0)))
             .and_then(|b| b.prepare());
-        for (holder, reference, _, fragment) in queries {
-            let key = (*holder, reference.clone());
-            if !uri::valid(&key.1) {
+        for key in queries.references {
+            let reference = self.inspection_reference(key);
+            let fragment = reference.split_once('#').map_or("", |(_, f)| f);
+            if !uri::valid(reference) {
                 let mut refusal = Refusal::invalid(
                     "invalid-reference",
                     "reference is not a well-formed URI reference",
@@ -522,13 +586,13 @@ impl SchemaSpace {
                     }
                     // A fresh resolver has no dynamic history. This is the
                     // initial static target, never a runtime dynamic winner.
-                    let base = self.resources[self.nodes[*holder].resource]
+                    let base = self.resources[self.nodes[key.0].resource]
                         .base
                         .as_deref()
                         .unwrap_or("urn:openbindings:anonymous-inspection");
                     let resolved = registry
                         .resolver(Uri::parse(base.to_owned()).expect("admitted base URI"))
-                        .lookup(&presented_reference(&key.1));
+                        .lookup(&presented_reference(reference));
                     match resolved {
                         Ok(resolved) => match identity
                             .get(&(std::ptr::from_ref(resolved.contents()) as usize))
@@ -540,8 +604,8 @@ impl SchemaSpace {
                                         .value
                                         .get("$dynamicAnchor")
                                         .and_then(|v| v.as_str())
-                                        == Some(fragment.as_str()))
-                                .then_some(fragment.clone()),
+                                        == Some(fragment))
+                                .then(|| fragment.to_owned()),
                             }),
                             None => {
                                 let refusal = Refusal::invalid(
@@ -658,6 +722,51 @@ mod tests {
         }
         assert_eq!(preparations(&space), 1);
         assert!(index.missing.get().is_some());
+        assert!(index.absent.lock().unwrap().is_none());
+        assert!(
+            index.carriers[&space.nodes[target.node].resource]
+                .queries
+                .lock()
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn compact_routes_distinguish_keywords_and_require_original_spelling() {
+        let document = RawDocument::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://route.test/a","$dynamicRef":"https://route.test/b"}}},"schemas":{"a":{"$id":"https://route.test/a"},"b":{"$id":"https://route.test/b"}}}"#).unwrap();
+        let space = SchemaSpace::new(document, Supplied::default());
+        let holder = space
+            .document_node(
+                &space
+                    .document
+                    .value()
+                    .at("/operations/op/input")
+                    .unwrap()
+                    .to_owned(),
+            )
+            .unwrap();
+        for uri in [
+            "https://route.test/a",
+            "https://route.test/b",
+            "https://route.test/a",
+        ] {
+            let target = space.resolve(holder, uri).unwrap();
+            assert_eq!(
+                space.resources[space.nodes[target.node].resource]
+                    .base
+                    .as_deref(),
+                Some(uri)
+            );
+            // A contained schema keeps document-source provenance even with $id.
+            assert!(space.location(target.node).resource.is_none());
+            assert_eq!(
+                space.location(target.node).pointer,
+                format!("/schemas/{}", uri.rsplit('/').next().unwrap())
+            );
+        }
+        let failure = space.resolve(holder, "https://route.test/a#").unwrap_err();
+        assert_eq!(failure.code, "uninspected-reference");
     }
 
     #[test]

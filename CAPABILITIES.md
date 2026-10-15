@@ -46,10 +46,11 @@ its supported fragment. Missing resources, unsupported capabilities and exhauste
 budgets produce no-verdict. Handle no-verdict in both preparation and validation.
 
 Retain prepared contracts for repeated validation. Paired macOS arm64 release
-measurements reduced 20,000-integer evaluation from 5.72 ms to 0.39 ms and the
-original twenty-pair SDK/jsonschema-rs time ratio from 12.49× to 4.98×. Sharing one
-target carrier across 100 referring resources measured 7.81 ms before and 7.56 ms
-after for public preparation. Exact fallbacks and evaluation budgets remain in
+measurements reduced 20,000-integer evaluation from 5.61 ms to 0.39 ms and the
+original twenty-pair SDK/jsonschema-rs time ratio from 12.50× to 4.84×. Sharing one
+target carrier across 100 referring resources measured 8.01 ms before and 7.74 ms
+after for public preparation. The case with 5,000 long references uses 50.38 MiB peak
+requested heap versus 55.01 MiB before. Exact fallbacks and budgets remain in
 force; these are measured examples, not latency guarantees. See
 [methodology and heap tradeoffs](docs/performance-boundaries.md).
 
