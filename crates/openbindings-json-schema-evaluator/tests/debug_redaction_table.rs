@@ -61,5 +61,67 @@ fn debug_redacts_caller_text_at_every_boundary() {
         rows.push(row("actual evaluator outcome", &result));
     }
 
-    check_rows(rows, 8);
+    // Keep all three Upstream probes from the independent review, including their operands.
+    let mut rendered = Vec::new();
+    for (code, schema, instance) in [
+        ("type", serde_json::json!({"type":"string"}), "7"),
+        ("required", serde_json::json!({"required":["x"]}), "{}"),
+        ("enum", serde_json::json!({"enum":[true]}), "false"),
+    ] {
+        let document = validate_document(
+            serde_json::json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}})
+                .to_string(),
+        )
+        .unwrap()
+        .validated()
+        .unwrap();
+        let contracts = document.value_contracts(
+            Arc::new(DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream)),
+            ResourceSet::default(),
+        );
+        let ValueContractPreparation::Ready(contract) = contracts.prepare("op", Direction::Input)
+        else {
+            panic!("not ready")
+        };
+        let mut result = contract.validate(&JsonValue::parse(instance).unwrap());
+        let ValueOutcome::Fails { problems, .. } = &result else {
+            panic!("expected failure")
+        };
+        assert_eq!(problems.len(), 1);
+        assert_eq!(problems[0].code, code);
+        let item = row_with_fields("Upstream fixed problem code", &result, &[("code", code)]);
+        rendered.push(item.text[0].clone());
+        rows.push(item);
+        let ValueOutcome::Fails { problems, .. } = &mut result else {
+            unreachable!()
+        };
+        problems[0].code = format!("{code}-{SECRET}");
+        assert!(serde_json::to_string(&result).unwrap().contains(SECRET));
+        rows.push(row_with_fields(
+            "Upstream replaced problem code",
+            &result,
+            &[("code", "<redacted>")],
+        ));
+    }
+    assert_eq!(
+        rendered
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len(),
+        3
+    );
+
+    check_rows(rows, 14);
+}
+
+fn row_with_fields(label: &'static str, value: &impl Debug, fields: &[(&str, &str)]) -> Row {
+    let item = row(label, value);
+    for (field, expected) in fields {
+        let expected = format!("{field}: {expected:?}");
+        assert!(
+            item.text.iter().all(|text| text.contains(&expected)),
+            "{label}: missing {expected}"
+        );
+    }
+    item
 }

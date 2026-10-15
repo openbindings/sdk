@@ -367,5 +367,140 @@ fn debug_redacts_caller_text_at_every_boundary() {
     };
     rows.extend(authoring_rows(&source, &operation, &context));
 
-    check_rows(rows, 43);
+    // Public records accept custom codes; only exact fixed vocabulary is shown.
+    for code in ["type", "required", "enum"] {
+        let mut known = problem.clone();
+        known.code = code.into();
+        rows.push(row_with_fields(
+            "ValueProblem fixed code",
+            &known,
+            &[("code", code)],
+        ));
+        known.code = format!("{code}-{SECRET}");
+        rows.push(row_with_fields(
+            "ValueProblem custom code",
+            &known,
+            &[("code", "<redacted>")],
+        ));
+    }
+
+    // Keep the reviewer's real missing-binding-reference document and both findings.
+    let decision = validate_document(r#"{"openbindings":"0.2.0","operations":{},"bindings":{"b":{"operation":"missing","source":"missing"}}}"#).unwrap();
+    assert_eq!(
+        decision
+            .report()
+            .findings
+            .iter()
+            .map(|f| (f.rule, f.code))
+            .collect::<Vec<_>>(),
+        [
+            ("OBI-06", "unknown-operation"),
+            ("OBI-07", "unknown-source")
+        ]
+    );
+    rows.push(row_with_fields(
+        "DocumentValidation fixed reasons",
+        &decision,
+        &[
+            ("rule", "OBI-06"),
+            ("code", "unknown-operation"),
+            ("rule", "OBI-07"),
+            ("code", "unknown-source"),
+        ],
+    ));
+    for finding in &decision.report().findings {
+        let mut known = finding.clone();
+        known.message = SECRET.into();
+        known.location.as_mut().unwrap().pointer = Some(format!("/{SECRET}"));
+        rows.push(row_with_fields(
+            "Finding fixed reason",
+            &known,
+            &[("rule", known.rule), ("code", known.code)],
+        ));
+        let custom_code = Finding {
+            code: SECRET,
+            ..known.clone()
+        };
+        rows.push(row_with_fields(
+            "Finding custom code",
+            &custom_code,
+            &[("rule", known.rule), ("code", "<redacted>")],
+        ));
+        let custom_rule = Finding {
+            rule: SECRET,
+            ..known
+        };
+        rows.push(row_with_fields(
+            "Finding custom rule",
+            &custom_rule,
+            &[("rule", "<redacted>"), ("code", custom_rule.code)],
+        ));
+    }
+    for rule in DOCUMENT_RULES {
+        let finding = Finding {
+            rule,
+            code: "schema-mismatch",
+            status: Evidence::Violated,
+            location: Some(SourceLocation {
+                pointer: Some(format!("/{SECRET}")),
+                byte_offset: 42,
+                line: 2,
+                byte_column: 3,
+            }),
+            message: SECRET.into(),
+        };
+        rows.push(row_with_fields(
+            "Finding known OBI rule",
+            &finding,
+            &[("rule", rule), ("code", "schema-mismatch")],
+        ));
+    }
+    for rule in ["OBI-14", "OBI-01-REVIEW-BEARER-TOKEN-7391"] {
+        let finding = Finding {
+            rule,
+            code: "schema-mismatch",
+            status: Evidence::Violated,
+            location: None,
+            message: SECRET.into(),
+        };
+        rows.push(row_with_fields(
+            "Finding unknown OBI rule",
+            &finding,
+            &[("rule", "<redacted>"), ("code", "schema-mismatch")],
+        ));
+    }
+    // Parser and admission reasons are also nested in normative assessments.
+    for (input, limits, code) in [
+        ("[0,]", JsonLimits::default(), "value"),
+        (
+            "[0]",
+            JsonLimits {
+                max_bytes: 0,
+                ..Default::default()
+            },
+            "input-limit",
+        ),
+    ] {
+        let decision = validate_document_with_limits(input, limits).unwrap();
+        assert_eq!(decision.report().findings[0].code, code);
+        rows.push(row_with_fields(
+            "DocumentValidation admission reason",
+            &decision,
+            &[("rule", "OBI-01"), ("code", code)],
+        ));
+    }
+
+    check_rows(rows, 73);
+}
+
+fn row_with_fields(label: &'static str, value: &impl Debug, fields: &[(&str, &str)]) -> Row {
+    let item = row(label, value);
+    for (field, expected) in fields {
+        let expected = format!("{field}: {expected:?}");
+        assert!(
+            item.text.iter().all(|text| text.contains(&expected)),
+            "{label}: missing {expected}"
+        );
+    }
+    item
 }

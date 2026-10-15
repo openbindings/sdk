@@ -48,7 +48,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
         line: 2,
         byte_column: 3,
     };
-    let rows = vec![
+    let mut rows = vec![
         row("JsonValue", &context),
         row("JsonRef", &context.view()),
         row(
@@ -74,5 +74,91 @@ fn debug_redacts_caller_text_at_every_boundary() {
         ),
     ];
 
-    check_rows(rows, 7);
+    // Exercise every current parser reason with malformed input, not constructed codes.
+    for (input, code) in [
+        (b"\xff".as_slice(), "utf8"),
+        (b"\xef\xbb\xbf{}".as_slice(), "bom"),
+        (b"[0 1]".as_slice(), "comma-or-close"),
+        (b"{1:0}".as_slice(), "object-key"),
+        (b"{\"a\" 0}".as_slice(), "colon"),
+        (b"0 0".as_slice(), "trailing-token"),
+        (b"-x".as_slice(), "number"),
+        (b"1.".as_slice(), "fraction"),
+        (b"1e".as_slice(), "exponent"),
+        (b"]".as_slice(), "value"),
+        (b"nulx".as_slice(), "literal"),
+        (b"\"".as_slice(), "unterminated-string"),
+        (b"\"\x00\"".as_slice(), "string-control"),
+        (b"\"\\q\"".as_slice(), "escape"),
+        (b"\"\\uGGGG\"".as_slice(), "unicode-escape"),
+    ] {
+        record_error(&mut rows, JsonValue::parse(input).unwrap_err(), code);
+    }
+    // These are the reviewer's exact limit probes; byte/depth failures share offset zero.
+    for (code, limits) in [
+        (
+            "byte-limit",
+            JsonLimits {
+                max_bytes: 0,
+                ..Default::default()
+            },
+        ),
+        (
+            "depth-limit",
+            JsonLimits {
+                max_depth: 0,
+                ..Default::default()
+            },
+        ),
+        (
+            "node-limit",
+            JsonLimits {
+                max_nodes: 0,
+                ..Default::default()
+            },
+        ),
+    ] {
+        record_error(
+            &mut rows,
+            JsonValue::parse_with_limits("[0]", limits).unwrap_err(),
+            code,
+        );
+    }
+    rows.push(row_with_fields(
+        "InputError custom prefix",
+        &InputError {
+            kind: InputErrorKind::Limit,
+            byte_offset: 0,
+            code: "byte-limit-REVIEW-BEARER-TOKEN-7391",
+        },
+        &[("code", "<redacted>")],
+    ));
+
+    check_rows(rows, 44);
+}
+
+fn row_with_fields(label: &'static str, value: &impl Debug, fields: &[(&str, &str)]) -> Row {
+    let item = row(label, value);
+    for (field, expected) in fields {
+        let expected = format!("{field}: {expected:?}");
+        assert!(
+            item.text.iter().all(|text| text.contains(&expected)),
+            "{label}: missing {expected}"
+        );
+    }
+    item
+}
+
+fn record_error(rows: &mut Vec<Row>, mut error: InputError, code: &str) {
+    assert_eq!(error.code, code);
+    let item = row_with_fields("InputError actual reason", &error, &[("code", code)]);
+    let kind = format!("kind: {:?}", error.kind);
+    assert!(item.text.iter().all(|text| text.contains(&kind)));
+    rows.push(item);
+    error.code = SECRET;
+    rows.push(row_with_fields(
+        "InputError replaced reason",
+        &error,
+        &[("code", "<redacted>")],
+    ));
 }
