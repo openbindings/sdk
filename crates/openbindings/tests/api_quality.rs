@@ -1,8 +1,8 @@
 use openbindings::*;
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use std::{collections::BTreeMap, sync::Arc};
-fn parsed(operations: &str) -> ParsedDocument {
-    ParsedDocument::parse(format!(
+fn parsed(operations: &str) -> Document {
+    Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{operations}}}"#
     ))
     .unwrap()
@@ -69,7 +69,7 @@ fn typed_inspection_checks_the_namespace_and_retains_unrelated_metadata() {
         assert!(parsed(operations).operations().is_err());
     }
     assert!(
-        ParsedDocument::parse(r#"{"openbindings":"0.2.0"}"#)
+        Document::parse(r#"{"openbindings":"0.2.0"}"#)
             .unwrap()
             .resolve_operation("x")
             .is_err()
@@ -107,8 +107,9 @@ fn authoring_collision_has_native_draft_path_and_source_is_separate() {
     ex.additional_fields
         .insert("input".into(), JsonValue::null());
     op.examples = Some(BTreeMap::from([("a~/b".into(), ex)]));
-    b.operations.insert("x~/y".into(), op);
-    let e = b.to_json().unwrap_err();
+    let EditError::Authoring(e) = b.set_operation("x~/y", &op).unwrap_err() else {
+        panic!()
+    };
     assert_eq!(e.kind(), AuthoringErrorKind::FieldCollision);
     assert_eq!(
         e.draft_pointer(),
@@ -118,18 +119,16 @@ fn authoring_collision_has_native_draft_path_and_source_is_separate() {
     let wrong =
         JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{"x":{"aliases":false}}}"#)
             .unwrap();
-    let e = Document::from_json(&wrong).unwrap_err();
-    assert_eq!(e.kind(), AuthoringErrorKind::InvalidField);
-    assert!(e.draft_pointer().is_none());
+    let e = Document::from_json(wrong).operations().unwrap_err();
+    assert_eq!(e.code(), "invalid-operation-aliases");
     assert_eq!(
         e.source_location().unwrap().pointer.as_deref(),
         Some("/operations/x/aliases")
     );
     let mut b = Document::new();
-    b.additional_fields
-        .insert("unknown".into(), JsonValue::null());
+    b.set("/unknown", &JsonValue::null()).unwrap();
     assert_eq!(
-        b.build().unwrap().validate().unwrap().report().conclusion,
+        b.clone().validate().unwrap().report().conclusion,
         Conformance::NonConformant
     );
     let op = Operation {
@@ -137,8 +136,9 @@ fn authoring_collision_has_native_draft_path_and_source_is_separate() {
         ..Default::default()
     };
     let mut b = Document::new();
-    b.operations.insert("x".repeat(5000), op);
-    let e = b.build().unwrap_err();
+    let EditError::Authoring(e) = b.set_operation(&"x".repeat(5000), &op).unwrap_err() else {
+        panic!()
+    };
     assert!(e.draft_pointer().is_none());
     assert!(e.path_omitted_for_limit());
 }
@@ -203,19 +203,8 @@ fn serde_profile_preserves_numbers_enums_unicode_and_refuses_loss() {
     );
     assert_eq!(exact.text(), "1e999999999999999999999999");
     let mut draft = Document::new();
-    draft
-        .additional_fields
-        .insert("x-number".into(), exact.clone());
-    assert_eq!(
-        draft
-            .build()
-            .unwrap()
-            .value()
-            .get("x-number")
-            .unwrap()
-            .text(),
-        exact.text()
-    );
+    draft.set("/x-number", &exact).unwrap();
+    assert_eq!(draft.value().get("x-number").unwrap().text(), exact.text());
 }
 #[test]
 fn emitted_limits_duplicates_and_diagnostics_are_bounded_and_located() {

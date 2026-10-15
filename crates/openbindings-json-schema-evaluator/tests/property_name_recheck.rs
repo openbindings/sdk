@@ -30,7 +30,7 @@ fn coarse_property_name_failures_do_not_request_diagnostics() {
             .build(&schema)
             .unwrap();
         assert_eq!(validator.is_valid(backend::view(&value)), name == "not");
-        let document = ParsedDocument::parse(
+        let document = Document::parse(
             serde_json::json!({
                 "openbindings":"0.2.0", "operations":{"op":{"input":schema}}
             })
@@ -40,7 +40,7 @@ fn coarse_property_name_failures_do_not_request_diagnostics() {
         let context = document
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant document")
             .value_contracts(
                 std::sync::Arc::new(

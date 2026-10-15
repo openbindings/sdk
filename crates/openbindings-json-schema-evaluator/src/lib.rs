@@ -14,24 +14,24 @@ use openbindings_internal_schema::{
 use serde_json::Value;
 use std::sync::Arc;
 
-/// Create value contracts for a validated document with the default evaluator.
+/// Create value contracts for a conformant document with the default evaluator.
 /// Uses [`Limits::default`], [`Diagnostics::Coarse`] and an empty [`ResourceSet`].
 /// No resources are acquired. Schemas are prepared only through
 /// [`ValueContracts::prepare`]. Missing resources can still cause no-verdict, and
 /// ready contracts can return any of the four [`ValueOutcome`] variants.
 ///
-/// Use [`ValidatedDocument::value_contracts`] to share an evaluator, configure
+/// Use [`Conformant<Document>::value_contracts`] to share an evaluator, configure
 /// budgets or diagnostics, supply resources or select a custom evaluator.
 ///
-/// A parsed document must establish conformance before constructing value contracts:
+/// A document must establish conformance before constructing value contracts:
 /// ```compile_fail,E0308
-/// use openbindings::ParsedDocument;
+/// use openbindings::Document;
 /// use openbindings_json_schema_evaluator::value_contracts;
-/// fn draft(document: &ParsedDocument) {
+/// fn draft(document: &Document) {
 ///     let _ = value_contracts(document);
 /// }
 /// ```
-pub fn value_contracts(document: &ValidatedDocument) -> ValueContracts {
+pub fn value_contracts(document: &Conformant<Document>) -> ValueContracts {
     document.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
 }
 

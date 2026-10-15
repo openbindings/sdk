@@ -3,11 +3,11 @@ use openbindings_json_schema_evaluator::{DefaultEvaluator, Diagnostics};
 use std::sync::Arc;
 
 fn prepare(text: &str, resources: ResourceSet, details: bool) -> ValueContract {
-    let doc = ParsedDocument::parse(text).unwrap();
+    let doc = Document::parse(text).unwrap();
     let context = doc
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(
             Arc::new(DefaultEvaluator::new().with_diagnostics(if details {

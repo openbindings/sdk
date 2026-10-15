@@ -1,5 +1,5 @@
 //! Code-defined test kind, with independent source analysis shared by two roles.
-use openbindings::{Binding, Dependency, Document, JsonValue, Operation, Source};
+use openbindings::{Binding, Dependency, Document, Edit, JsonValue, Operation, Source};
 use openbindings_interface_synthesis::CancellationToken;
 use openbindings_interface_synthesis::*;
 use openbindings_source_inspection as inspect;
@@ -116,13 +116,7 @@ pub fn derive(
         .map(|s| analyze(s.source))
         .collect::<Result<_, _>>()?;
     let mut doc = Document::new();
-    doc.openbindings = request
-        .openbindings_version
-        .unwrap_or(openbindings::AUTHORING_VERSION)
-        .into();
-    doc.name = request.name.map(str::to_owned);
-    doc.version = request.version.map(str::to_owned);
-    doc.description = request.description.map(str::to_owned);
+    let mut operations = BTreeMap::new();
     let mut sources = BTreeMap::new();
     let mut bindings = BTreeMap::new();
     let mut dependencies = BTreeMap::new();
@@ -167,7 +161,7 @@ pub fn derive(
                 CoverageStatus::Represented | CoverageStatus::Lossy
             ) {
                 let key = format!("s{index}.u{ordinal}");
-                doc.operations.insert(
+                operations.insert(
                     key.clone(),
                     Operation {
                         input: Some(
@@ -225,17 +219,45 @@ pub fn derive(
             entries.push(e);
         }
     }
+    // DOC-1.3/4: one commit, with main's normative member emission order.
+    let text_fields = [
+        (
+            "/openbindings",
+            Some(
+                request
+                    .openbindings_version
+                    .unwrap_or(openbindings::AUTHORING_VERSION),
+            ),
+        ),
+        ("/name", request.name),
+        ("/version", request.version),
+        ("/description", request.description),
+    ]
+    .into_iter()
+    .filter_map(|(pointer, text)| text.map(|text| (pointer, text)))
+    .map(|(pointer, text)| JsonValue::string(text).map(|value| (pointer, value)))
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(openbindings::EditError::from)?;
+    let mut edits = vec![Edit::SetOperations { value: &operations }];
+    edits.extend(
+        text_fields
+            .iter()
+            .map(|(pointer, value)| Edit::Set { pointer, value }),
+    );
+    if !dependencies.is_empty() {
+        edits.push(Edit::SetDependencies {
+            value: &dependencies,
+        });
+    }
     if !sources.is_empty() {
-        doc.sources = Some(sources)
+        edits.push(Edit::SetSources { value: &sources });
     }
     if !bindings.is_empty() {
-        doc.bindings = Some(bindings)
+        edits.push(Edit::SetBindings { value: &bindings });
     }
-    if !dependencies.is_empty() {
-        doc.dependencies = Some(dependencies)
-    }
+    doc.edit(&edits)?;
     Ok(SynthesisCandidate {
-        document: doc.build()?,
+        document: doc,
         coverage: CoverageDraft {
             entries,
             exhaustive,
@@ -386,11 +408,30 @@ mod wasm {
     #[wasm_bindgen(js_name=synthesizeDocumentSource)]
     pub async fn synthesize_document_source(text: String) -> Result<String, JsValue> {
         async fn run(text: String) -> Result<String, Box<dyn std::error::Error>> {
-            let draft = Document::from_json(&JsonValue::parse(text)?)?;
-            let source = draft
-                .sources
-                .and_then(|mut s| s.remove("catalog"))
-                .ok_or("missing catalog")?;
+            let doc = Document::parse(text)?;
+            let view = doc.source("catalog")?.ok_or("missing catalog")?;
+            let source = Source {
+                kind: view.kind()?.as_str().ok_or("non-scalar kind")?.into(),
+                description: view
+                    .description()?
+                    .map(|v| {
+                        v.as_str()
+                            .ok_or("non-scalar description")
+                            .map(str::to_owned)
+                    })
+                    .transpose()?,
+                content: view.content().map(|v| v.to_owned()),
+                additional_fields: view
+                    .value()
+                    .members()
+                    .unwrap()
+                    .filter_map(|m| {
+                        let key = m.name.as_str()?;
+                        (!matches!(key, "kind" | "description" | "content"))
+                            .then(|| (key.into(), m.value.to_owned()))
+                    })
+                    .collect(),
+            };
             let provider = Rc::new(Local(Rc::new("local".into())));
             let facade = Synthesizer::new(provider.clone());
             let inputs = [SynthesisSource {

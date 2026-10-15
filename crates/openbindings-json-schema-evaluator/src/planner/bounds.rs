@@ -910,7 +910,7 @@ impl Write for Sink {
 mod tests {
     use super::*;
     pub(super) fn space(schema: &str) -> (SchemaSpace, usize) {
-        let document = ParsedDocument::parse(format!(
+        let document = Document::parse(format!(
             r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
         ))
         .unwrap();
@@ -1475,9 +1475,8 @@ mod tests {
         );
         let value = JsonValue::parse(text).unwrap();
         let nested = value.get(&"x".repeat(64)).unwrap().to_owned();
-        let doc =
-            ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":true}}}"#)
-                .unwrap();
+        let doc = Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":true}}}"#)
+            .unwrap();
         let mut supplied = SchemaSpace::new(doc, ResourceSet::default());
         let source = supplied.sources.len();
         let index = SchemaIndex::supplied(&nested, "https://known.invalid/R");

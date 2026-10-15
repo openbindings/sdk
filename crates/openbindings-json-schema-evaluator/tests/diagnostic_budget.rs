@@ -4,14 +4,14 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 fn prepared(schema: Value, limits: Limits, resources: ResourceSet) -> ValueContract {
-    let doc = ParsedDocument::parse(
+    let doc = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
     .unwrap();
     let context = doc
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(DefaultEvaluator::with_limits(limits)), resources);
     match context.prepare("op", Direction::Input) {
@@ -36,14 +36,14 @@ fn coarse_is_value_free_and_upstream_is_one_first_error() {
     assert_eq!(message, "value does not satisfy the contract");
     assert!(problems.is_empty());
     assert!(!problems_complete);
-    let doc = ParsedDocument::parse(
+    let doc = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
     .unwrap();
     let context = doc
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .unwrap()
         .value_contracts(
             Arc::new(
@@ -91,12 +91,11 @@ fn interrupted_upstream_detail_cannot_weaken_an_established_failure() {
         }
     }
     let doc =
-        ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":false}}}"#)
-            .unwrap();
+        Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":false}}}"#).unwrap();
     let context = doc
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .unwrap()
         .value_contracts(
             Arc::new(

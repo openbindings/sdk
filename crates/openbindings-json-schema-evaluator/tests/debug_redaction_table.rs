@@ -40,8 +40,8 @@ fn check_rows(rows: Vec<Row>, expected: usize) {
 
 #[test]
 fn debug_redacts_caller_text_at_every_boundary() {
-    let parsed = ParsedDocument::parse(serde_json::json!({"openbindings":"0.2.0", "operations":{"op":{"input":{"properties":{SECRET:{"type":"string"}}}}}}).to_string()).unwrap();
-    let validated = parsed.validate().unwrap().validated().unwrap();
+    let parsed = Document::parse(serde_json::json!({"openbindings":"0.2.0", "operations":{"op":{"input":{"properties":{SECRET:{"type":"string"}}}}}}).to_string()).unwrap();
+    let validated = parsed.validate().unwrap().conformant().unwrap();
     let mut rows = Vec::new();
     for diagnostics in [Diagnostics::Coarse, Diagnostics::Upstream] {
         let contracts = validated.value_contracts(
@@ -73,7 +73,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
                 .to_string(),
         )
         .unwrap()
-        .validated()
+        .conformant()
         .unwrap();
         let contracts = document.value_contracts(
             Arc::new(DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream)),

@@ -12,11 +12,11 @@ use std::{
 fn exact(text: &str) -> JsonValue {
     JsonValue::parse(text).expect("example fixture")
 }
-fn author() -> Result<(Document, ParsedDocument), Box<dyn std::error::Error>> {
-    let mut draft = Document::new();
-    draft.operations.insert(
-        "run".into(),
-        Operation {
+fn author() -> Result<(Document, Document), Box<dyn std::error::Error>> {
+    let mut editable = Document::new();
+    editable.set_operation(
+        "run",
+        &Operation {
             aliases: Some(vec!["execute".into()]),
             input: Some(exact(r#"{"$ref":"https://example.invalid/integer"}"#)),
             output: Some(exact("false")),
@@ -30,19 +30,17 @@ fn author() -> Result<(Document, ParsedDocument), Box<dyn std::error::Error>> {
             )])),
             ..Default::default()
         },
-    );
-    draft
-        .operations
-        .insert("no_contract".into(), Operation::default());
-    draft.sources = Some(BTreeMap::from([(
+    )?;
+    editable.set_operation("no_contract", &Operation::default())?;
+    editable.set_sources(&BTreeMap::from([(
         "local".into(),
         Source {
             kind: "https://example.invalid/raw".into(),
             content: Some(JsonValue::null()),
             ..Default::default()
         },
-    )]));
-    draft.bindings = Some(BTreeMap::from([(
+    )]))?;
+    editable.set_bindings(&BTreeMap::from([(
         "binding".into(),
         Binding {
             operation: "run".into(),
@@ -51,48 +49,45 @@ fn author() -> Result<(Document, ParsedDocument), Box<dyn std::error::Error>> {
             content: Some(exact("9007199254740993")),
             ..Default::default()
         },
-    )]));
-    draft.dependencies = Some(BTreeMap::from([(
+    )]))?;
+    editable.set_dependencies(&BTreeMap::from([(
         "dep".into(),
         Dependency {
             operation: "run".into(),
             kinds: Some(vec!["https://example.invalid/raw".into()]),
             ..Default::default()
         },
-    )]));
-    draft.schemas = Some(BTreeMap::from([("boolean".into(), exact("true"))]));
-    draft.additional_fields.insert(
-        "x-application".into(),
-        exact(r#"{"data":9007199254740993}"#),
-    );
-    let document = draft.build()?;
-    assert!(document.validate()?.validated().is_some());
-    let serialized = serde_json::to_vec(&draft)?;
-    let round = ParsedDocument::parse(serialized)?;
+    )]))?;
+    editable.set("/schemas", &exact(r#"{"boolean":true}"#))?;
+    editable.set("/x-application", &exact(r#"{"data":9007199254740993}"#))?;
+    let document = editable.clone();
+    assert!(document.validate()?.conformant().is_some());
+    let serialized = editable.to_bytes();
+    let round = Document::parse(serialized)?;
     assert_eq!(document.value().semantic_eq(round.value()), Some(true));
-    Ok((draft, document))
+    Ok((editable, document))
 }
 fn inspect() -> Result<(), Box<dyn std::error::Error>> {
     let broken = validate_document("{broken")?;
-    assert!(broken.validated().is_none());
+    assert!(broken.conformant().is_none());
     assert_eq!(broken.report().evidence["OBI-01"], Evidence::Violated);
     let bad = validate_document(r#"{"openbindings":"0.2.0","operations":{},"unknown":true}"#)?;
     assert_eq!(bad.report().conclusion, Conformance::NonConformant);
-    assert!(bad.validated().is_none());
+    assert!(bad.conformant().is_none());
     for finding in &bad.report().findings {
         println!("{}", serde_json::to_string(finding)?);
     }
     assert!(validate_document(r#"{"openbindings":"8.0.0","operations":{}}"#).is_err());
     Ok(())
 }
-fn value_contracts(document: &ParsedDocument) -> Result<(), Box<dyn std::error::Error>> {
+fn value_contracts(document: &Document) -> Result<(), Box<dyn std::error::Error>> {
     let resources = ResourceSet::new([SchemaResource {
         uri: "https://example.invalid/integer".into(),
         document: exact(r#"{"type":"integer","minimum":0}"#),
     }])?;
     let context = document
         .validate()?
-        .validated()
+        .conformant()
         .ok_or("document is not conformant")?
         .value_contracts(Arc::new(DefaultEvaluator::new()), resources);
     let ValueContractPreparation::Ready(input) = context.prepare("run", Direction::Input) else {
@@ -121,12 +116,19 @@ fn value_contracts(document: &ParsedDocument) -> Result<(), Box<dyn std::error::
     ));
     let unavailable = document
         .validate()?
-        .validated()
+        .conformant()
         .ok_or("document is not conformant")?
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
+    // Preparation may retain a resource-dependent schema; either way no value
+    // verdict is available without the missing resource.
+    let unresolved = match unavailable.prepare("run", Direction::Input) {
+        ValueContractPreparation::Ready(contract) => contract.validate(&exact("7")),
+        ValueContractPreparation::NoVerdict { detail } => ValueOutcome::NoVerdict { detail },
+        _ => return Err("unexpected resource-dependent preparation".into()),
+    };
     assert!(matches!(
-        unavailable.prepare("run", Direction::Input),
-        ValueContractPreparation::NoVerdict {
+        unresolved,
+        ValueOutcome::NoVerdict {
             detail: NoVerdict {
                 reason: NoVerdictReason::ResourceUnavailable,
                 ..
@@ -142,7 +144,7 @@ fn value_contracts(document: &ParsedDocument) -> Result<(), Box<dyn std::error::
 }
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut draft, document) = author()?;
+    let (mut editable, document) = author()?;
     inspect()?;
     let OperationSelection::Found(operation) = document.resolve_operation("execute")? else {
         return Err("execute did not resolve".into());
@@ -155,14 +157,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let references = document.references()?;
     println!("references: {}", serde_json::to_string(&references)?);
-    valueContracts(&document)?;
+    value_contracts(&document)?;
     let valid = document
         .validate()?
-        .validated()
+        .conformant()
         .expect("conformance established");
-    let original = valid.original_bytes().to_vec();
+    let original = valid.to_bytes().to_vec();
     let publication = Publication::new(&valid, PublicationOptions::default())?;
-    draft.operations.clear();
+    editable.set_operations(&BTreeMap::new())?;
     assert_eq!(
         publication.respond("GET", WELL_KNOWN_PATH).body.as_ref(),
         original

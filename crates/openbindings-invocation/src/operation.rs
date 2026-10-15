@@ -12,8 +12,8 @@ use crate::{
     value::source_from_json,
 };
 use openbindings::{
-    Direction, JsonKind, JsonValue, NoVerdict, NoVerdictReason, ResourceSet, SchemaEvaluator,
-    Source, ValidatedBindingView, ValidatedDocument, ValidatedOperationView, ValueContract,
+    Conformant, ConformantBindingView, ConformantOperationView, Direction, Document, JsonKind,
+    JsonValue, NoVerdict, NoVerdictReason, ResourceSet, SchemaEvaluator, Source, ValueContract,
     ValueContractPreparation, ValueContracts, ValueOutcome,
 };
 use std::{
@@ -146,13 +146,13 @@ impl fmt::Debug for Attempt<'_> {
 
 /// Reusable document/provider pair. Cloned document storage is retained,
 /// without a preparation cache, registry, implicit evaluator, network access,
-/// or retry policy. Construction requires a validated document.
+/// or retry policy. Construction requires a conformant document.
 ///
 /// The caller must supply a provider whose pure exact-kind support represents
 /// its routing policy. Multiple providers can be composed by the application;
 /// registration order never becomes SDK selection policy.
 pub struct Invoker<P> {
-    document: ValidatedDocument,
+    document: Conformant<Document>,
     binding: binding::Invoker<P>,
     contracts: Option<ValueContracts>,
     sources: CarrierCache<Source>,
@@ -167,9 +167,9 @@ impl<P> std::fmt::Debug for Invoker<P> {
 impl<P: BindingInvoker> Invoker<P> {
     /// Retain a document and an explicit binding provider.
     /// ```compile_fail
-    /// use openbindings::ParsedDocument;
+    /// use openbindings::Document;
     /// use openbindings_invocation::{binding::BindingInvoker, operation::Invoker};
-    /// fn draft<P: BindingInvoker>(document: ParsedDocument, provider: P) {
+    /// fn draft<P: BindingInvoker>(document: Document, provider: P) {
     ///     let _ = Invoker::new(document, provider);
     /// }
     /// ```
@@ -177,7 +177,7 @@ impl<P: BindingInvoker> Invoker<P> {
     /// Declared schemas
     /// yield `ERR_SCHEMA_UNRESOLVED` on actual values until an evaluator is supplied.
     /// Sides without a schema forward values without claiming validation.
-    pub fn new(document: ValidatedDocument, provider: P) -> Self {
+    pub fn new(document: Conformant<Document>, provider: P) -> Self {
         Self {
             document,
             binding: binding::Invoker::new(provider),
@@ -439,7 +439,7 @@ impl<P: BindingInvoker> Invoker<P> {
     }
     fn gate(
         &self,
-        operation: &ValidatedOperationView,
+        operation: &ConformantOperationView,
         direction: Direction,
         external: &CancellationToken,
         prepared: Option<&ValueContract>,
@@ -452,17 +452,17 @@ impl<P: BindingInvoker> Invoker<P> {
             external: external.clone(),
         })
     }
-    fn operation(&self, name: &str) -> Result<ValidatedOperationView, InvocationError> {
+    fn operation(&self, name: &str) -> Result<ConformantOperationView, InvocationError> {
         self.document
             .resolve_operation(name)
             .ok_or_else(|| error("ERR_OPERATION_NOT_FOUND"))
     }
-    fn binding(&self, key: &str) -> Result<ValidatedBindingView, InvocationError> {
+    fn binding(&self, key: &str) -> Result<ConformantBindingView, InvocationError> {
         self.document
             .binding(key)
             .ok_or_else(|| error("ERR_BINDING_NOT_FOUND"))
     }
-    fn supported(&self, binding: &ValidatedBindingView) -> Result<bool, InvocationError> {
+    fn supported(&self, binding: &ConformantBindingView) -> Result<bool, InvocationError> {
         let source = self
             .document
             .source(binding.source())
@@ -646,7 +646,7 @@ impl<P: BindingInvoker> PreparedOperation<'_, P> {
 }
 type CarrierCache<T> = OnceLock<HashMap<String, OnceLock<Result<T, crate::BoundaryError>>>>;
 struct Resolved<'a> {
-    operation: ValidatedOperationView,
+    operation: ConformantOperationView,
     source: &'a Source,
     binding: &'a BindingValue,
 }

@@ -9,8 +9,8 @@ const U: &str = "https://review.invalid/U";
 fn json(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
 }
-fn document(schema: &str) -> ParsedDocument {
-    ParsedDocument::parse(format!(
+fn document(schema: &str) -> Document {
+    Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
     ))
     .unwrap()
@@ -26,7 +26,7 @@ fn context(schema: &str, supplied: ResourceSet, evaluator: DefaultEvaluator) -> 
     document(schema)
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(evaluator), supplied)
 }
@@ -70,7 +70,7 @@ fn strict_refusal(schema: &str) -> NoVerdict {
     match document(schema)
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(Strict), ResourceSet::default())
         .prepare("op", Direction::Input)
@@ -342,13 +342,13 @@ fn missing_carriers_are_distinct_from_bad_fragments_or_known_targets() {
     for fragment in ["#/~2", "#/~", "#9invalid", "#/%ff", "#%"] {
         let schema = format!(r#"{{"anyOf":[true,{{"$ref":"{U}{fragment}"}}]}}"#);
         if fragment == "#%" {
-            let doc = ParsedDocument::parse(format!(
+            let doc = Document::parse(format!(
                 r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
             ))
             .unwrap();
             let validation = doc.validate().unwrap();
             assert_eq!(validation.report().evidence["OBI-11"], Evidence::Violated);
-            assert!(validation.validated().is_none());
+            assert!(validation.conformant().is_none());
             continue;
         }
         assert_ne!(
@@ -491,7 +491,7 @@ fn custom_evaluator_gets_original_request_and_is_not_retried_or_reinterpreted() 
     let contracts = document(&schema)
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(
             custom.clone(),
@@ -628,7 +628,7 @@ fn original_five_frozen_values_and_empty_resource_sets() {
             include_str!("../fixtures/partial-resources/list.json"),
         ),
     ] {
-        let doc = ParsedDocument::parse(source).unwrap();
+        let doc = Document::parse(source).unwrap();
         let evaluator = Arc::new(
             DefaultEvaluator::new()
                 .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
@@ -636,7 +636,7 @@ fn original_five_frozen_values_and_empty_resource_sets() {
         let empty = doc
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant document")
             .value_contracts(evaluator.clone(), ResourceSet::default());
         let ValueContractPreparation::Ready(partial) = empty.prepare(operation, Direction::Input)
@@ -648,7 +648,7 @@ fn original_five_frozen_values_and_empty_resource_sets() {
         let full = doc
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant document")
             .value_contracts(evaluator, resources(&[(supplied_uri, supplied_text)]));
         let ValueContractPreparation::Ready(full) = full.prepare(operation, Direction::Input)
@@ -699,13 +699,13 @@ fn oneof_alias_into_advancing_recursive_graph_retains_hole_dependence() {
 #[test]
 fn known_reference_errors_and_contained_id_anchor_identity_survive_holes() {
     let schema = format!(r#"{{"allOf":[{{"$ref":"{U}"}},{{"$ref":"relative"}}]}}"#);
-    let doc = ParsedDocument::parse(format!(
+    let doc = Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
     ))
     .unwrap();
     let validation = doc.validate().unwrap();
     assert_eq!(validation.report().evidence["OBI-11"], Evidence::Violated);
-    assert!(validation.validated().is_none());
+    assert!(validation.conformant().is_none());
     assert!(
         matches!(&doc.references().unwrap().references[1].resolution, ReferenceResolution::Unresolved { detail } if detail.code == "anonymous-relative-reference")
     );

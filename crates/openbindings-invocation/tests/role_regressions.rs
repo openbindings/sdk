@@ -1,4 +1,4 @@
-use openbindings::{JsonValue, ParsedDocument, ResourceSet, Source};
+use openbindings::{Document, JsonValue, ResourceSet, Source};
 use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
     BindingRequest, BindingValue, ContextChallenge, InvocationError, ProviderIo,
@@ -27,8 +27,8 @@ fn request<'a>(source: &'a Source, binding: &'a BindingValue) -> BindingRequest<
         context: None,
     }
 }
-fn document(operation: &str) -> ParsedDocument {
-    ParsedDocument::parse(format!(
+fn document(operation: &str) -> Document {
+    Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"run":{operation}}},"sources":{{"s":{{"kind":"example.roles"}},"unsupported":{{"kind":"other"}}}},"bindings":{{"b":{{"operation":"run","source":"s"}},"u":{{"operation":"run","source":"unsupported"}}}}}}"#
     )).unwrap()
 }
@@ -56,7 +56,7 @@ async fn unsupported_explicit_and_ordered_bindings_are_not_found() {
         document("{}")
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant invocation document"),
         SendProvider,
     );
@@ -167,7 +167,7 @@ async fn generic_send_preflight_and_invoke_only_default() {
             document("{}")
                 .validate()
                 .unwrap()
-                .validated()
+                .conformant()
                 .expect("conformant invocation document"),
             InvokeOnly
         )
@@ -182,7 +182,7 @@ async fn generic_send_preflight_and_invoke_only_default() {
             document("{}")
                 .validate()
                 .unwrap()
-                .validated()
+                .conformant()
                 .expect("conformant invocation document"),
             SendProvider,
         ),
@@ -231,7 +231,7 @@ async fn local_rc_preflight_and_forwarding_preserve_hooks() {
         document("{}")
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant invocation document"),
         &provider,
     );
@@ -265,7 +265,7 @@ async fn local_rc_preflight_and_forwarding_preserve_hooks() {
             document("{}")
                 .validate()
                 .unwrap()
-                .validated()
+                .conformant()
                 .expect("conformant invocation document"),
             shared,
         ),
@@ -364,7 +364,7 @@ async fn reserved_provider_invocation_and_preflight_codes_are_rejected() {
             document("{}")
                 .validate()
                 .unwrap()
-                .validated()
+                .conformant()
                 .expect("conformant invocation document"),
             Failure(code),
         );
@@ -426,7 +426,7 @@ async fn sdk_selection_and_validation_errors_still_surface() {
         document("{}")
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant invocation document"),
         InvokeOnly,
     );
@@ -457,16 +457,16 @@ async fn sdk_selection_and_validation_errors_still_surface() {
             "ERR_UNKNOWN_SOURCE",
         ),
     ] {
-        let validation = ParsedDocument::parse(text).unwrap().validate().unwrap();
+        let validation = Document::parse(text).unwrap().validate().unwrap();
         if code == "ERR_UNKNOWN_SOURCE" {
             assert_eq!(
                 validation.report().evidence["OBI-07"],
                 openbindings::Evidence::Violated
             );
-            assert!(validation.validated().is_none());
+            assert!(validation.conformant().is_none());
             continue;
         }
-        let facade = operation::Invoker::new(validation.validated().unwrap(), InvokeOnly);
+        let facade = operation::Invoker::new(validation.conformant().unwrap(), InvokeOnly);
         let mut call = facade.invoke(request);
         assert_eq!(call.next().await.unwrap().unwrap_err().code(), code);
         assert_eq!(facade.preflight(request).await.unwrap_err().code(), code);
@@ -495,7 +495,7 @@ async fn sdk_selection_and_validation_errors_still_surface() {
             document(r#"{"input":false}"#)
                 .validate()
                 .unwrap()
-                .validated()
+                .conformant()
                 .expect("conformant invocation document"),
             Reads,
         );

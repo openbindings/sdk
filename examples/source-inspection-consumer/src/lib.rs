@@ -154,7 +154,7 @@ pub enum AuthoringOutcome {
     Partial(SourceInspection),
     Empty,
     NeedsRepair {
-        draft: Box<Document>,
+        document: Box<Document>,
         validation: openbindings::DocumentValidation,
     },
 }
@@ -163,14 +163,14 @@ pub enum AuthoringOutcome {
 #[derive(Debug)]
 pub enum AuthoringFailure {
     Inspection(InspectionError),
-    Draft(openbindings::AuthoringError),
+    Edit(openbindings::EditError),
     Version(openbindings::VersionRefusal),
 }
 impl std::fmt::Display for AuthoringFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Inspection(error) => error.fmt(f),
-            Self::Draft(error) => error.fmt(f),
+            Self::Edit(error) => error.fmt(f),
             Self::Version(error) => error.fmt(f),
         }
     }
@@ -179,7 +179,7 @@ impl std::error::Error for AuthoringFailure {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(match self {
             Self::Inspection(error) => error,
-            Self::Draft(error) => error,
+            Self::Edit(error) => error,
             Self::Version(error) => error,
         })
     }
@@ -208,30 +208,30 @@ pub fn author_target(
     source: &Source,
     target: BindableTarget,
 ) -> Result<AuthoringOutcome, AuthoringFailure> {
-    let mut draft = Document::new();
-    draft.operations.insert(
-        "chosen.operation".into(),
-        target.operation.unwrap_or_default(),
-    );
-    draft.sources = Some(BTreeMap::from([("chosen.source".into(), source.clone())]));
-    draft.bindings = Some(BTreeMap::from([(
-        "chosen.binding".into(),
-        target
-            .binding
-            .bind("chosen.operation", "chosen.source")
-            .map_err(AuthoringFailure::Inspection)?,
-    )]));
-    let parsed = draft.build().map_err(AuthoringFailure::Draft)?;
-    let validation = parsed.validate().map_err(AuthoringFailure::Version)?;
-    if validation.validated().is_none() {
+    let mut document = Document::new();
+    document
+        .set_operation("chosen.operation", &target.operation.unwrap_or_default())
+        .map_err(AuthoringFailure::Edit)?;
+    document
+        .set_source("chosen.source", source)
+        .map_err(AuthoringFailure::Edit)?;
+    document
+        .set_binding(
+            "chosen.binding",
+            &target
+                .binding
+                .bind("chosen.operation", "chosen.source")
+                .map_err(AuthoringFailure::Inspection)?,
+        )
+        .map_err(AuthoringFailure::Edit)?;
+    let validation = document.validate().map_err(AuthoringFailure::Version)?;
+    if validation.conformant().is_none() {
         return Ok(AuthoringOutcome::NeedsRepair {
-            draft: Box::new(draft),
+            document: Box::new(document),
             validation,
         });
     }
-    Ok(AuthoringOutcome::Ready(
-        draft.to_json().map_err(AuthoringFailure::Draft)?,
-    ))
+    Ok(AuthoringOutcome::Ready(document.value().clone()))
 }
 
 #[cfg(all(target_arch = "wasm32", feature = "wasm-probe"))]
@@ -270,11 +270,30 @@ mod wasm {
     #[wasm_bindgen(js_name = inspectDocumentSource)]
     pub async fn inspect_document_source(document_json: String) -> Result<String, JsValue> {
         async fn run(text: String) -> Result<String, Box<dyn std::error::Error>> {
-            let draft = Document::from_json(&JsonValue::parse(text)?)?;
-            let source = draft
-                .sources
-                .and_then(|mut sources| sources.remove("catalog"))
-                .ok_or("missing catalog source")?;
+            let doc = Document::parse(text)?;
+            let view = doc.source("catalog")?.ok_or("missing catalog source")?;
+            let source = Source {
+                kind: view.kind()?.as_str().ok_or("non-scalar kind")?.into(),
+                description: view
+                    .description()?
+                    .map(|v| {
+                        v.as_str()
+                            .ok_or("non-scalar description")
+                            .map(str::to_owned)
+                    })
+                    .transpose()?,
+                content: view.content().map(|v| v.to_owned()),
+                additional_fields: view
+                    .value()
+                    .members()
+                    .unwrap()
+                    .filter_map(|m| {
+                        let key = m.name.as_str()?;
+                        (!matches!(key, "kind" | "description" | "content"))
+                            .then(|| (key.into(), m.value.to_owned()))
+                    })
+                    .collect(),
+            };
             let provider = Rc::new(LocalCatalog(Rc::new("local host".into())));
             let inspector = Inspector::new(provider.clone());
             let result = inspector.inspect(&source).await?;

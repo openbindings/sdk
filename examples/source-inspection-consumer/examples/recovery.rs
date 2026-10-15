@@ -36,17 +36,23 @@ fn present(outcome: AuthoringOutcome) {
                 inspection.targets.len()
             );
         }
-        AuthoringOutcome::NeedsRepair { draft, validation } => {
+        AuthoringOutcome::NeedsRepair {
+            document,
+            validation,
+        } => {
             for finding in &validation.report().findings {
                 println!(
                     "{} at {:?}: {}",
                     finding.code, finding.location, finding.message
                 );
             }
-            println!(
-                "Retained {} draft operations for editing.",
-                draft.operations.len()
-            );
+            match document.operations() {
+                Ok(operations) => println!(
+                    "Retained {} document operations for editing.",
+                    operations.len()
+                ),
+                Err(error) => println!("Retained the exact document for repair: {error}"),
+            }
         }
     }
 }

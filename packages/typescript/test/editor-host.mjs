@@ -31,11 +31,11 @@ const server = http.createServer(async (req, res) => {
       res.end(detailCases);
       return;
     }
-    if (name === "/validated-contracts.mjs") {
+    if (name === "/conformant-contracts.mjs") {
       res.setHeader("Content-Type", "text/javascript");
       res.end(
         await fs.readFile(
-          new URL("./validated-contracts.mjs", import.meta.url),
+          new URL("./conformant-contracts.mjs", import.meta.url),
         ),
       );
       return;

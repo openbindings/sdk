@@ -41,10 +41,7 @@ fn opaque_and_fixed_schema_strings_are_lossless() {
             "{fields}: {:?}",
             validation.report().findings
         );
-        assert_eq!(
-            validation.validated().unwrap().original_bytes(),
-            text.as_bytes()
-        );
+        assert_eq!(validation.conformant().unwrap().to_bytes(), text.as_bytes());
     }
     for (field, rule) in [
         (

@@ -5,11 +5,11 @@ explicitly. Core has no transport, operation invoker, binding adapter or synthes
 layer. A private schema engine supports normative document-schema checking; the
 optional default operation evaluator implements the public Rust trait boundary.
 
-`ParsedDocument` owns an immutable exact JSON arena and lazily indexed names.
+`Document` owns an immutable exact JSON arena and lazily indexed names.
 `DocumentValidation` carries evidence for every rule; only a conformant validation
-can yield `ValidatedDocument`. Typed `Document` fields represent normative
-objects and preserve additional exact fields. Building and establishing conformance
-are separate steps. Source views keep their owner's storage, not borrowed external
+can yield `Conformant<Document>`. The same `Document` is edited in place through atomic exact-text batches and
+typed part setters. Editing commits a new arena and fresh caches; clones and proofs
+retain the earlier revision. `Conformant<Document>` exposes no mutable access. Source views keep their owner's storage, not borrowed external
 buffers; standalone document views rebase byte locations correctly.
 
 `ValueContracts` owns a document, an explicit immutable `ResourceSet` and evaluator.

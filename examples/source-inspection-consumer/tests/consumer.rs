@@ -59,10 +59,10 @@ async fn inventory_authoring_and_retained_values() {
     let AuthoringOutcome::Ready(authored) = author_selected(&source).await.unwrap() else {
         panic!("expected a ready document")
     };
-    let draft = Document::from_json(&authored).unwrap();
-    let binding = &draft.bindings.unwrap()["chosen.binding"];
-    assert_eq!(binding.operation, "chosen.operation");
-    assert_eq!(binding.source, "chosen.source");
+    let document = Document::from_json(authored);
+    let binding = document.binding("chosen.binding").unwrap().unwrap();
+    assert_eq!(binding.operation().unwrap(), "chosen.operation");
+    assert_eq!(binding.source().unwrap(), "chosen.source");
     drop(source);
     assert_eq!(
         first.targets[0]
@@ -130,27 +130,29 @@ async fn authoring_preserves_partial_inventory_and_document_repair_evidence() {
         AuthoringOutcome::Ready(_)
     ));
     // A caller can edit framing after inspection. Retain the resulting validation
-    // and editable draft if that edit makes the final OBI invalid.
+    // and editable document if that edit makes the final OBI invalid.
     let mut edited = selected;
     edited.operation = Some(openbindings::Operation {
         input: Some(JsonValue::parse("42").unwrap()),
         ..Default::default()
     });
-    let AuthoringOutcome::NeedsRepair { draft, validation } =
-        author_target(&source, edited).unwrap()
+    let AuthoringOutcome::NeedsRepair {
+        document,
+        validation,
+    } = author_target(&source, edited).unwrap()
     else {
         panic!("expected repair evidence")
     };
     assert_eq!(
-        draft.operations["chosen.operation"]
-            .input
-            .as_ref()
+        document
+            .value()
+            .at("/operations/chosen.operation/input")
             .unwrap()
             .text(),
         "42"
     );
     assert!(!validation.report().findings.is_empty());
-    assert!(validation.validated().is_none());
+    assert!(validation.conformant().is_none());
     let unsupported = Source {
         kind: "urn:other".into(),
         ..Default::default()

@@ -11,7 +11,7 @@ impl SchemaEvaluator for OriginalContext {
         request: &SchemaRequest,
         control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-        let document: &ValidatedDocument = request.document();
+        let document: &Conformant<Document> = request.document();
         assert_eq!(
             document
                 .value()
@@ -38,7 +38,7 @@ fn main() {
         &Options::without_unicode_property_matching(),
     );
     let admission: Vec<_> = suite().groups.iter().map(|group| {
-        let document = ParsedDocument::parse(&group.document).unwrap();
+        let document = Document::parse(&group.document).unwrap();
         let validation = document.validate().unwrap();
         serde_json::json!({"id":group.id, "document":group.document, "resources":group.resources, "report":validation.report()})
     }).collect();

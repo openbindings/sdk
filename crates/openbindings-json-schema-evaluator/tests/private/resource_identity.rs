@@ -14,13 +14,13 @@ const B: &str = "https://identity.example.invalid/B";
 fn value(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
 }
-fn document(schemas: Value, operations: Value) -> ParsedDocument {
-    ParsedDocument::parse(
+fn document(schemas: Value, operations: Value) -> Document {
+    Document::parse(
         json!({"openbindings":"0.2.0","schemas":schemas,"operations":operations}).to_string(),
     )
     .unwrap()
 }
-fn one(schemas: Value, schema: Value) -> ParsedDocument {
+fn one(schemas: Value, schema: Value) -> Document {
     document(schemas, json!({"op":{"input":schema}}))
 }
 fn owner() -> Value {
@@ -33,10 +33,10 @@ fn resources(rows: &[(&str, Value)]) -> ResourceSet {
     }))
     .unwrap()
 }
-fn context(doc: &ParsedDocument, supplied: &ResourceSet) -> ValueContracts {
+fn context(doc: &Document, supplied: &ResourceSet) -> ValueContracts {
     doc.validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(
             Arc::new(
@@ -88,12 +88,12 @@ impl SchemaEvaluator for Project {
         Ok(Arc::new(Projected))
     }
 }
-fn helpers_ready(doc: &ParsedDocument, supplied: &ResourceSet, operation: &str) {
+fn helpers_ready(doc: &Document, supplied: &ResourceSet, operation: &str) {
     for bounds in [false, true] {
         let ctx = doc
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant document")
             .value_contracts(Arc::new(Project(bounds)), supplied.clone());
         ready(&ctx, operation);
@@ -105,7 +105,7 @@ fn refusal(prepared: ValueContractPreparation) -> NoVerdict {
         other => panic!("expected setup refusal: {other:?}"),
     }
 }
-fn identity_refusal(doc: &ParsedDocument, supplied: &ResourceSet, operation: &str) {
+fn identity_refusal(doc: &Document, supplied: &ResourceSet, operation: &str) {
     let mut engines: Vec<Arc<dyn SchemaEvaluator>> = vec![
         Arc::new(
             DefaultEvaluator::new()
@@ -118,7 +118,7 @@ fn identity_refusal(doc: &ParsedDocument, supplied: &ResourceSet, operation: &st
         let detail = refusal(
             doc.validate()
                 .unwrap()
-                .validated()
+                .conformant()
                 .expect("conformant document")
                 .value_contracts(evaluator, supplied.clone())
                 .prepare(operation, Direction::Input),
@@ -138,7 +138,7 @@ fn identity_refusal(doc: &ParsedDocument, supplied: &ResourceSet, operation: &st
         assert!(detail.location.is_some(), "{detail:?}");
     }
 }
-fn reference(doc: &ParsedDocument, supplied: &ResourceSet, pointer: &str) -> ReferenceResolution {
+fn reference(doc: &Document, supplied: &ResourceSet, pointer: &str) -> ReferenceResolution {
     doc.references_with_resources(supplied.clone(), &std::sync::atomic::AtomicBool::new(false))
         .unwrap()
         .references
@@ -148,7 +148,7 @@ fn reference(doc: &ParsedDocument, supplied: &ResourceSet, pointer: &str) -> Ref
         .resolution
 }
 fn located(
-    doc: &ParsedDocument,
+    doc: &Document,
     supplied: &ResourceSet,
     pointer: &str,
     target: &str,
@@ -167,7 +167,7 @@ fn located(
         other => panic!("{other:?}"),
     }
 }
-fn unresolved_identity(doc: &ParsedDocument, supplied: &ResourceSet, pointer: &str) {
+fn unresolved_identity(doc: &Document, supplied: &ResourceSet, pointer: &str) {
     match reference(doc, supplied, pointer) {
         ReferenceResolution::Unresolved { detail } => {
             assert_eq!(detail.reason, ReferenceRefusalReason::IdentityConflict);
@@ -216,7 +216,7 @@ fn ri01_03_exact_b32_original_and_edited_resources() {
             include_str!("../fixtures/resource-identity/B32-edited.json"),
         ),
     ] {
-        let doc = ParsedDocument::parse(text).unwrap();
+        let doc = Document::parse(text).unwrap();
         let local = context(&doc, &ResourceSet::default());
         let external = context(&doc, &supplied);
         for case in expectations["valueCases"].as_array().unwrap() {
@@ -302,7 +302,7 @@ fn ri04_05_contained_authority_ignores_supplied_body_and_keeps_raw_catalog() {
         let ctx = doc
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant document")
             .value_contracts(Arc::new(Catalog(observed.clone())), supplied.clone());
         let contract = ready(&ctx, "op");
@@ -340,7 +340,7 @@ fn ri06_duplicate_contained_owners_refuse_lookup_and_direct_entry() {
         doc.validate().unwrap().report().evidence["OBI-13"],
         Evidence::Violated
     );
-    assert!(doc.validate().unwrap().validated().is_none());
+    assert!(doc.validate().unwrap().conformant().is_none());
     unresolved_identity(&doc, &supplied, "/operations/lookup/input/$ref");
     unresolved_identity(&doc, &supplied, "/operations/pointer/input/$ref");
 }
@@ -594,7 +594,7 @@ fn obi13_keeps_host_spelling_while_resolution_uses_library_identity() {
     );
     let validation = doc.validate().unwrap();
     assert_eq!(validation.report().evidence["OBI-13"], Evidence::Met);
-    assert!(validation.validated().is_some());
+    assert!(validation.conformant().is_some());
     let detail = refusal(context(&doc, &ResourceSet::default()).prepare("op", Direction::Input));
     assert_eq!(detail.code, "ambiguous-resource");
     assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
@@ -713,7 +713,7 @@ fn ri20_34_missing_winner_fragments_never_fall_back_to_loser() {
             let ctx = doc
                 .validate()
                 .unwrap()
-                .validated()
+                .conformant()
                 .expect("conformant document")
                 .value_contracts(Arc::new(Project(true)), supplied.clone());
             ready(&ctx, "op");
@@ -786,7 +786,7 @@ fn ri22_23_original_dialect_follows_selected_resource() {
         let ctx = doc
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant document")
             .value_contracts(engine, supplied.clone());
         let detail = refusal(ctx.prepare("nested", Direction::Input));
@@ -839,7 +839,7 @@ fn ri24_user_standard_names_do_not_replace_trusted_assessment() {
         let supplied = resources(&[(uri, json!(true))]);
         let validation = doc.validate().unwrap();
         assert_eq!(validation.report().evidence["OBI-10"], Evidence::Violated);
-        assert!(validation.validated().is_none());
+        assert!(validation.conformant().is_none());
         let valid = one(
             json!({"E":{"$id":uri,"type":"integer"}}),
             json!({"$ref":uri}),
@@ -853,7 +853,7 @@ fn ri24_user_standard_names_do_not_replace_trusted_assessment() {
             doc.validate().unwrap().report().evidence["OBI-10"],
             Evidence::Violated
         );
-        let malformed=ParsedDocument::parse(json!({"openbindings":"0.2.0","operations":{},"unexpected":true,"schemas":{"E":{"$id":uri}}}).to_string()).unwrap();
+        let malformed=Document::parse(json!({"openbindings":"0.2.0","operations":{},"unexpected":true,"schemas":{"E":{"$id":uri}}}).to_string()).unwrap();
         assert_eq!(
             malformed.validate().unwrap().report().evidence["OBI-02"],
             Evidence::Violated
@@ -926,7 +926,7 @@ fn ri25_27_contexts_and_retained_owners_are_independent() {
         let ctx =
             doc.validate()
                 .unwrap()
-                .validated()
+                .conformant()
                 .expect("conformant document")
                 .value_contracts(
                     Arc::new(DefaultEvaluator::new().with_diagnostics(
@@ -975,7 +975,7 @@ fn ri28_29_conflicts_do_not_poison_healthy_preparation_or_become_holes() {
         let ctx = doc
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant document")
             .value_contracts(engine, supplied.clone());
         let detail = refusal(ctx.prepare("mixed", Direction::Input));
@@ -1030,7 +1030,7 @@ fn ri30_oversized_supplied_closure_keeps_limits_and_healthy_catalog_entries() {
         let ctx = doc
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant document")
             .value_contracts(evaluator, supplied.clone());
         ready(&ctx, "healthy");
@@ -1058,7 +1058,7 @@ fn identity_refusal_location_is_optional_and_measured_before_copy() {
             let detail = refusal(
                 doc.validate()
                     .unwrap()
-                    .validated()
+                    .conformant()
                     .expect("conformant document")
                     .value_contracts(engine, supplied.clone())
                     .prepare("op", Direction::Input),
@@ -1083,7 +1083,7 @@ fn ri32_selected_unsupported_or_invalid_owner_never_falls_back() {
         let supplied = resources(&[(U, json!(true))]);
         let validation = doc.validate().unwrap();
         assert_eq!(validation.report().evidence[rule], Evidence::Violated);
-        assert!(validation.validated().is_none());
+        assert!(validation.conformant().is_none());
         located(
             &doc,
             &supplied,
@@ -1106,7 +1106,7 @@ fn ri33_anonymous_document_has_no_acquisition_or_generated_identity() {
         let strict = doc
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant document")
             .value_contracts(Arc::new(Project(false)), supplied.clone());
         assert_eq!(
@@ -1145,7 +1145,7 @@ fn ri28_unused_contained_and_supplied_peer_conflicts_are_local() {
         if contained_conflict {
             let validation = doc.validate().unwrap();
             assert_eq!(validation.report().evidence["OBI-13"], Evidence::Violated);
-            assert!(validation.validated().is_none());
+            assert!(validation.conformant().is_none());
             unresolved_identity(&doc, &supplied, "/operations/conflict/input/$ref");
             continue;
         }
@@ -1242,7 +1242,7 @@ fn collision_policy_matrix_used_and_unused() {
             if origins == [Contained, Contained] {
                 let validation = doc.validate().unwrap();
                 assert_eq!(validation.report().evidence["OBI-13"], Evidence::Violated);
-                assert!(validation.validated().is_none());
+                assert!(validation.conformant().is_none());
                 unresolved_identity(&doc, &supplied, "/operations/used/input/$ref");
                 continue;
             }
@@ -1273,7 +1273,7 @@ fn collision_policy_matrix_used_and_unused() {
                     let detail = refusal(
                         doc.validate()
                             .unwrap()
-                            .validated()
+                            .conformant()
                             .expect("conformant document")
                             .value_contracts(engine, supplied.clone())
                             .prepare("used", Direction::Input),

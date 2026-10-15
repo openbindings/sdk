@@ -6,7 +6,7 @@ use embedding::schema_index::SchemaIndex;
 use embedding::{
     Control as WorkControl, Failure as NoVerdict, FailureReason as NoVerdictReason,
     Location as SchemaLocation, Program as EvaluationProgram, ProjectedResource as SchemaResource,
-    RawDocument as ParsedDocument, Supplied as ResourceSet,
+    RawDocument as Document, Supplied as ResourceSet,
 };
 use openbindings_internal_json::backend::node_id;
 use openbindings_internal_schema::{self as embedding, *};
@@ -16,7 +16,7 @@ use std::{
 };
 pub(super) struct SchemaSpace(embedding::SchemaSpace);
 impl SchemaSpace {
-    fn new(document: ParsedDocument, supplied: ResourceSet) -> Self {
+    fn new(document: Document, supplied: ResourceSet) -> Self {
         Self(embedding::SchemaSpace::new(document, supplied))
     }
 }
@@ -91,7 +91,7 @@ impl EvaluationBounds {
 
 pub(super) fn space(request: &openbindings::SchemaRequest) -> (SchemaSpace, usize) {
     let space = SchemaSpace::new(
-        ParsedDocument::new(request.document().parsed().value().clone()),
+        Document::new(request.document().as_document().value().clone()),
         embedding::Supplied::new(request.supplied_resources().iter().map(|r| SchemaResource {
             uri: r.uri.clone(),
             document: r.document.clone(),

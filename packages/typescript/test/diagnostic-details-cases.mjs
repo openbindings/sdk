@@ -1,5 +1,5 @@
 import * as testing from "../dist/testing.js";
-import { validatedContracts } from "./validated-contracts.mjs";
+import { conformantContracts } from "./conformant-contracts.mjs";
 /** Public-package detail/privacy/retention controls; portable across Node and browsers. */
 export function diagnosticDetailsCases(sdk) {
   let assertions = 0;
@@ -9,14 +9,14 @@ export function diagnosticDetailsCases(sdk) {
   };
   const utf8 = (text) => new TextEncoder().encode(text).length;
   function prepare(text, options = {}) {
-    const parsed = sdk.parseDocument(text);
+    const parsed = sdk.Document.parse(text);
     check(parsed.status === "parsed", "parse");
     let proof, context;
     try {
-      const checked = parsed.value.validated();
-      check(checked.status === "validated", "proof");
+      const checked = parsed.value.validate();
+      check(checked.status === "conformant", "proof");
       proof = checked.document;
-      context = validatedContracts(proof, options);
+      context = conformantContracts(proof, options);
       const ready = context.prepare("op", "input");
       check(ready.status === "ready", "ready");
       return ready.valueContract;
@@ -181,12 +181,12 @@ export function diagnosticDetailsCases(sdk) {
   const released = testing.liveStorageOwners();
   check(released === baseline, "all application owners released");
   check(optInArenas > defaultArenas, "opt-in source retention observable");
-  const probe = sdk.parseDocument(doc("true"));
+  const probe = sdk.Document.parse(doc("true"));
   check(probe.status === "parsed", "option probe");
   try {
     let error;
     try {
-      validatedContracts(probe.value, { diagnostics: "yes" });
+      conformantContracts(probe.value, { diagnostics: "yes" });
     } catch (e) {
       error = e;
     }

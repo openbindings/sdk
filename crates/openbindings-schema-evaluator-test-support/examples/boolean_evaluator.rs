@@ -44,12 +44,12 @@ impl PreparedSchema for BooleanContract {
     }
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let document = ParsedDocument::parse(
+    let document = Document::parse(
         r#"{"openbindings":"0.2.0","operations":{"op":{"input":true,"output":false}}}"#,
     )?;
     let context = document
         .validate()?
-        .validated()
+        .conformant()
         .ok_or("document is not conformant")?
         .value_contracts(Arc::new(BooleanEvaluator), ResourceSet::default());
     let value = JsonValue::null();

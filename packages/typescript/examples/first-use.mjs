@@ -1,4 +1,4 @@
-import { parseDocument } from "@openbindings/sdk";
+import { Document } from "@openbindings/sdk";
 
 export const exampleDocument = `{
   "openbindings": "0.2.0",
@@ -24,12 +24,12 @@ export function firstUse(
   documentBytes = exampleDocument,
   operation = "find",
 ) {
-  const parsed = parseDocument(documentBytes);
+  const parsed = Document.parse(documentBytes);
   if (parsed.status !== "parsed") return parsed;
   let proof, context, contract;
   try {
-    const checked = parsed.value.validated();
-    if (checked.status !== "validated") return checked;
+    const checked = parsed.value.validate();
+    if (checked.status !== "conformant") return checked;
     proof = checked.document;
     const operations = proof.operations;
     context = proof.valueContracts();

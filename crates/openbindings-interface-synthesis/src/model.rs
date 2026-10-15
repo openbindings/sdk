@@ -1,5 +1,5 @@
 use crate::SynthesisError;
-use openbindings::{JsonLimits, JsonValue, ParsedDocument, Source, ValidatedDocument};
+use openbindings::{Conformant, Document, JsonLimits, JsonValue, Source};
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use std::collections::BTreeMap;
 
@@ -212,8 +212,8 @@ impl std::fmt::Debug for CoverageDraft {
 /// Provider output; neither core conformance nor coverage correspondence is implied.
 #[derive(Clone, Debug)]
 pub struct SynthesisCandidate {
-    /// Retained immutable document to validate.
-    pub document: ParsedDocument,
+    /// Editable exact candidate document to validate.
+    pub document: Document,
     /// Editable coverage claim.
     pub coverage: CoverageDraft,
 }
@@ -277,12 +277,12 @@ impl SynthesisCoverage {
 /// Conformant document and checked coverage derived from the same provider call.
 #[derive(Clone, Debug)]
 pub struct Synthesis {
-    pub(crate) document: ValidatedDocument,
+    pub(crate) document: Conformant<Document>,
     pub(crate) coverage: SynthesisCoverage,
 }
 impl Synthesis {
     /// Borrow core conformance evidence. Kind soundness remains a provider claim.
-    pub fn document(&self) -> &ValidatedDocument {
+    pub fn document(&self) -> &Conformant<Document> {
         &self.document
     }
     /// Borrow coverage without discarding it.
@@ -290,7 +290,7 @@ impl Synthesis {
         &self.coverage
     }
     /// Transfer both the document and its evidence explicitly.
-    pub fn into_parts(self) -> (ValidatedDocument, SynthesisCoverage) {
+    pub fn into_parts(self) -> (Conformant<Document>, SynthesisCoverage) {
         (self.document, self.coverage)
     }
     /// Persist document and coverage as an exact JSON envelope with default limits.
@@ -312,7 +312,7 @@ impl Synthesis {
 impl Serialize for Synthesis {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut m = serializer.serialize_map(Some(2))?;
-        m.serialize_entry("interface", self.document.parsed().value())?;
+        m.serialize_entry("interface", self.document.as_document().value())?;
         m.serialize_entry("coverage", &self.coverage)?;
         m.end()
     }

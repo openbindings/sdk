@@ -1,7 +1,7 @@
 # OpenBindings invocation
 
 Invoke a realization through a binding, or invoke an operation through its
-validated interface document. Implement `binding::BindingInvoker` for a kind;
+conformant interface document. Implement `binding::BindingInvoker` for a kind;
 `binding::Invoker` manages input, output and the terminal result. An operation
 invoker adds document selection and declared value-contract checks.
 
@@ -67,7 +67,7 @@ write_result?;
 ```
 
 The same input/output lifetime supports empty, unary and streaming interactions.
-For document calls, create `operation::Invoker` with a `ValidatedDocument` and
+For document calls, create `operation::Invoker` with a `Conformant<Document>` and
 provider, select an evaluator with `with_evaluator`, then `prepare` an operation
 and invoke an `Attempt`. The [invocation guide](https://github.com/openbindings/sdk/blob/main/docs/invocation.md)
 shows the complete caller and describes selection, limits and cancellation.

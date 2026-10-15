@@ -142,7 +142,7 @@ pub struct BindableTarget {
     /// Optional suggestion; the author owns the actual operation key.
     pub operation_key: Option<String>,
     /// Optional sound projection of this target. It must not carry `idempotent`.
-    /// This is authoring data, not an already validated operation contract.
+    /// This is authoring data, not an already conformant operation contract.
     pub operation: Option<Operation>,
 }
 impl std::fmt::Debug for BindableTarget {

@@ -5,7 +5,7 @@ use std::sync::{Arc, atomic::AtomicBool};
 
 const BASE: &str = "https://probe.invalid/root";
 
-fn fixture(schema: &str, reference: &str, supplied: bool) -> (ParsedDocument, ResourceSet) {
+fn fixture(schema: &str, reference: &str, supplied: bool) -> (Document, ResourceSet) {
     let (schemas, resources) = if supplied {
         (
             "{}".into(),
@@ -19,8 +19,8 @@ fn fixture(schema: &str, reference: &str, supplied: bool) -> (ParsedDocument, Re
         (format!(r#"{{"R":{schema}}}"#), ResourceSet::default())
     };
     let reference = serde_json::to_string(reference).unwrap();
-    let doc = ParsedDocument::parse(format!(r#"{{"openbindings":"0.2.0","schemas":{schemas},"operations":{{"op":{{"input":{{"$ref":{reference}}}}}}}}}"#)).unwrap();
-    assert!(doc.validate().unwrap().validated().is_some());
+    let doc = Document::parse(format!(r#"{{"openbindings":"0.2.0","schemas":{schemas},"operations":{{"op":{{"input":{{"$ref":{reference}}}}}}}}}"#)).unwrap();
+    assert!(doc.validate().unwrap().conformant().is_some());
     (doc, resources)
 }
 
@@ -77,7 +77,7 @@ fn contained_and_supplied_surrogate_collision_preserves_each_original_target() {
                         "{found:?}"
                     );
                     let validation = doc.validate().unwrap();
-                    let context = validation.validated().unwrap().value_contracts(
+                    let context = validation.conformant().unwrap().value_contracts(
                         Arc::new(DefaultEvaluator::new().with_diagnostics(
                             openbindings_json_schema_evaluator::Diagnostics::Upstream,
                         )),
@@ -132,13 +132,13 @@ fn inspection_root_never_masks_missing_references_including_suffix_candidates() 
                 })
                 .collect::<Vec<_>>()
                 .join(",");
-            let doc = ParsedDocument::parse(format!(r#"{{"openbindings":"0.2.0","schemas":{{{schemas}}},"operations":{{"op":{{"input":{input}}}}}}}"#)).unwrap();
+            let doc = Document::parse(format!(r#"{{"openbindings":"0.2.0","schemas":{{{schemas}}},"operations":{{"op":{{"input":{input}}}}}}}"#)).unwrap();
             let report = doc.references().unwrap();
             assert!(report.complete);
             assert!(report.references.iter().all(|r| matches!(&r.resolution, ReferenceResolution::Unresolved { detail } if detail.reason == ReferenceRefusalReason::ResourceUnavailable && detail.code == "resource-unavailable")), "{report:?}");
             let validation = doc.validate().unwrap();
             let context =
-                validation.validated().unwrap().value_contracts(
+                validation.conformant().unwrap().value_contracts(
                     Arc::new(DefaultEvaluator::new().with_diagnostics(
                         openbindings_json_schema_evaluator::Diagnostics::Upstream,
                     )),
@@ -189,7 +189,7 @@ fn unused_malformed_reference_sibling_is_isolated_but_malformed_id_stays_refused
             }
             let validation = doc.validate().unwrap();
             let context =
-                validation.validated().unwrap().value_contracts(
+                validation.conformant().unwrap().value_contracts(
                     Arc::new(DefaultEvaluator::new().with_diagnostics(
                         openbindings_json_schema_evaluator::Diagnostics::Upstream,
                     )),

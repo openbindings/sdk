@@ -1,4 +1,4 @@
-//! Immutable document snapshots and complete conformance evidence.
+//! One exact editable document and retained conformance evidence.
 use crate::{
     fixed_schema,
     schema_index::{DIALECT, SameDocument, SchemaIndex},
@@ -6,8 +6,11 @@ use crate::{
 };
 use openbindings_internal_json::backend;
 use serde::Serialize;
+mod edit;
 mod read_views;
-mod validated_views;
+pub use edit::{Edit, EditError};
+mod conformant_views;
+pub use conformant_views::*;
 use read_views::NamespaceCache;
 pub use read_views::{BindingView, DependencyView, ExampleView, SourceView};
 use std::{
@@ -15,7 +18,6 @@ use std::{
     fmt,
     sync::{Arc, OnceLock},
 };
-pub use validated_views::*;
 
 /// Stable rule identifiers OBI-01 through OBI-13, in specification order.
 pub const DOCUMENT_RULES: [&str; 13] = [
@@ -39,7 +41,7 @@ pub enum Evidence {
 #[serde(rename_all = "kebab-case")]
 /// Overall normative document conclusion. This is a closed semantic partition, not a schema-instance validation result.
 pub enum Conformance {
-    /// Every applicable document rule was established; a validated document can be obtained.
+    /// Every applicable document rule was established; a conformant document can be obtained.
     Conformant,
     /// At least one document rule was established as violated.
     NonConformant,
@@ -163,8 +165,8 @@ impl fmt::Display for VersionRefusal {
 }
 impl std::error::Error for VersionRefusal {}
 #[derive(Clone)]
-/// Immutable retained exact JSON snapshot, without a conformance claim. Clones share storage and lazily cached interpretation/validation. Dropping all owners releases storage; it does not promise an immediate process RSS decrease.
-pub struct ParsedDocument {
+/// Exact OBI document, edited in place without a conformance claim. Clones share storage and lazily cached interpretation/validation. Dropping all owners releases storage; it does not promise an immediate process RSS decrease.
+pub struct Document {
     pub(crate) inner: Arc<DocumentInner>,
 }
 pub(crate) struct DocumentInner {
@@ -177,41 +179,56 @@ pub(crate) struct DocumentInner {
     sources: NamespaceCache,
     dependencies: NamespaceCache,
 }
-impl fmt::Debug for ParsedDocument {
+impl fmt::Debug for Document {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ParsedDocument")
+        f.debug_struct("Document")
             .field("value", &self.inner.value)
             .finish()
     }
 }
 #[derive(Clone, Debug)]
-/// Normative evidence plus the parsed snapshot when one was admitted. Invalid JSON can still produce a report without a parsed document.
-/// Inspect the report or obtain a validated document; unwrapping only checks the version.
+/// Normative evidence plus the document snapshot when one was admitted. Invalid JSON can still produce a report without a document.
+/// Inspect the report or obtain a conformant document; unwrapping only checks the version.
 ///
 /// ```compile_fail
 /// #![deny(unused_must_use)]
-/// use openbindings::ParsedDocument;
-/// ParsedDocument::parse(r#"{"openbindings":"0.2.0"}"#).unwrap().validate().unwrap();
+/// use openbindings::Document;
+/// Document::parse(r#"{"openbindings":"0.2.0"}"#).unwrap().validate().unwrap();
 /// ```
 /// ```compile_fail
 /// #![deny(unused_must_use)]
 /// openbindings::validate_document(r#"{"openbindings":"0.2.0"}"#).unwrap();
 /// ```
-#[must_use = "inspect the report or obtain a validated document before continuing"]
+#[must_use = "inspect the report or obtain a conformant document before continuing"]
 pub struct DocumentValidation {
-    document: Option<ParsedDocument>,
+    document: Option<Document>,
     report: Arc<ValidationReport>,
 }
 #[derive(Clone, Debug)]
-/// Retained proof that this immutable snapshot satisfied every applicable normative document rule.
+/// Retained proof that a document revision satisfied every applicable normative rule.
 /// Proof has no public unchecked constructor or deserializer:
 /// ```compile_fail
 /// use openbindings::*;
-/// fn forge(document: ParsedDocument) { let _ = ValidatedDocument { document }; }
+/// fn forge(document: Document) { let _ = Conformant { document }; }
 /// ```
-/// Obtain it through [`DocumentValidation::validated`]; value contract preparation is still a separate evaluator-dependent step.
-pub struct ValidatedDocument {
-    document: ParsedDocument,
+/// Editing requires giving up this proof:
+/// ```compile_fail
+/// use openbindings::{Conformant, Document};
+/// fn edit(mut proof: Conformant<Document>) { proof.set_description("changed").unwrap(); }
+/// ```
+/// ```compile_fail
+/// use openbindings::{Conformant, Document};
+/// fn consume(proof: Conformant<Document>) { let document = proof.into_inner(); proof.operations(); }
+/// ```
+/// ```compile_fail
+/// use openbindings::{Document, ResourceSet, SchemaEvaluator};
+/// fn contracts(doc: Document, evaluator: std::sync::Arc<dyn SchemaEvaluator>) {
+///     doc.value_contracts(evaluator, ResourceSet::default());
+/// }
+/// ```
+/// Obtain it through [`DocumentValidation::conformant`]; value contract preparation is still a separate evaluator-dependent step.
+pub struct Conformant<T> {
+    document: T,
 }
 #[derive(Clone, PartialEq, Eq)]
 /// Structured refusal to interpret typed fields. Causes are extensible; match specific cases or `code()` and retain a fallback. Exact parsed JSON remains available after this error.
@@ -280,7 +297,7 @@ impl InterpretationError {
     }
 }
 
-impl ParsedDocument {
+impl Document {
     /// Parse and retain exact bytes and source locations without establishing conformance.
     /// Use [`Self::validate`] before treating this as a conformant document. See the
     /// [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
@@ -311,20 +328,13 @@ impl ParsedDocument {
     pub fn value(&self) -> &JsonValue {
         &self.inner.value
     }
-    /// Borrow the complete immutable source bytes, including whitespace.
-    pub fn original_bytes(&self) -> &[u8] {
+    /// Borrow the current revision's exact bytes, including surrounding whitespace.
+    pub fn to_bytes(&self) -> &[u8] {
         self.value().original_source()
-    }
-    /// Copy representable normative fields into an editable draft. Refuses duplicates and invalid typed shapes; exact opaque fields retain their values. This conversion does not establish conformance.
-    ///
-    /// # Errors
-    /// Returns an authoring error for duplicate members, malformed known fields, or strings/numbers that the typed authoring model cannot represent.
-    pub fn to_authoring(&self) -> Result<Document, AuthoringError> {
-        Document::from_json(self.value())
     }
     /// Assess every document rule, retaining findings at original source locations.
     /// A supported version can still be nonconformant or undetermined; only
-    /// [`DocumentValidation::validated`] yields a conformance proof. An unsupported
+    /// [`DocumentValidation::conformant`] yields a conformance proof. An unsupported
     /// declared version is a separate refusal. Explanatory finding messages are
     /// human-readable guidance; use rule/code/evidence fields for program logic.
     ///
@@ -574,7 +584,7 @@ impl std::fmt::Debug for OperationSelection {
 /// Immutable retained operation object. Its exact value is not conformance proof.
 #[derive(Clone)]
 pub struct OperationView {
-    document: ParsedDocument,
+    document: Document,
     key: Arc<str>,
     value: JsonValue,
     examples: Arc<NamespaceCache>,
@@ -653,40 +663,34 @@ impl DocumentValidation {
         &self.report
     }
     /// Borrow the admitted snapshot, or `None` when input could not be parsed within admission limits.
-    pub fn parsed(&self) -> Option<&ParsedDocument> {
+    pub fn document(&self) -> Option<&Document> {
         self.document.as_ref()
     }
     /// Return a retained proof only for a conformant report; nonconformant and undetermined reports return `None`.
-    pub fn validated(&self) -> Option<ValidatedDocument> {
+    pub fn conformant(&self) -> Option<Conformant<Document>> {
         if self.report.conclusion == Conformance::Conformant {
             self.document
                 .clone()
-                .map(|document| ValidatedDocument { document })
+                .map(|document| Conformant { document })
         } else {
             None
         }
     }
 }
-impl ValidatedDocument {
-    /// Borrow the exact snapshot certified by this proof, for interpretation or value contract setup.
-    pub fn parsed(&self) -> &ParsedDocument {
+impl Conformant<Document> {
+    /// Borrow the exact snapshot certified by this proof, for plain fallible reads.
+    pub fn as_document(&self) -> &Document {
         &self.document
     }
+    /// Consume the proof to obtain an editable document.
+    pub fn into_inner(self) -> Document {
+        self.document
+    }
     /// Borrow the exact bytes certified by this proof, including original formatting.
-    pub fn original_bytes(&self) -> &[u8] {
-        self.document.original_bytes()
+    pub fn to_bytes(&self) -> &[u8] {
+        self.document.to_bytes()
     }
 }
-impl Document {
-    /// Encode the current draft into a fresh independent parsed snapshot. May refuse collisions, unrepresentable fields or limits; does not establish conformance.
-    ///
-    /// # Errors
-    /// Returns an authoring error for extension names colliding with known fields, serialization failure, or exhausted encoding/admission limits. This does not establish normative conformance.
-    pub fn build(&self) -> Result<ParsedDocument, AuthoringError> {
-        self.to_json().map(ParsedDocument::from_json)
-    }
-}
-
 /// Assess bytes even when parsing fails. A version refusal is never conformance evidence.
 ///
 /// # Errors
@@ -714,7 +718,7 @@ pub fn validate_document_with_limits(
 ) -> Result<DocumentValidation, VersionRefusal> {
     let bytes = input.as_ref();
     match JsonValue::parse_with_limits(bytes, limits) {
-        Ok(value) => ParsedDocument::from_json(value).validate(),
+        Ok(value) => Document::from_json(value).validate(),
         Err(error) => {
             let mut checks = Checks::new();
             let limit = error.kind == InputErrorKind::Limit;
@@ -992,7 +996,7 @@ pub fn valid_name(name: &str) -> bool {
             c.is_ascii_alphanumeric() || c == b'_' || (i > 0 && (c == b'-' || c == b'.'))
         })
 }
-fn assess_value(document: &ParsedDocument) -> Result<ValidationReport, VersionRefusal> {
+fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal> {
     let value = document.value();
     if let Some(refusal) = version_refusal(value) {
         return Err(refusal);
@@ -1233,7 +1237,7 @@ mod name_index_storage_tests {
                 "openbindings": "0.2.0",
                 "operations": { &primary: { "aliases": aliases } },
             });
-            let document = ParsedDocument::parse(source.to_string()).unwrap();
+            let document = Document::parse(source.to_string()).unwrap();
             let index = document.names().unwrap();
             assert_eq!(index.primary_keys.len(), 1);
             let key = &index.primary_keys[0];
@@ -1282,7 +1286,7 @@ mod name_index_storage_tests {
                 "a": { "aliases": ["shared"] },
             },
         });
-        let document = ParsedDocument::parse(source.to_string()).unwrap();
+        let document = Document::parse(source.to_string()).unwrap();
         let OperationSelection::Ambiguous { candidates } =
             document.resolve_operation("shared").unwrap()
         else {

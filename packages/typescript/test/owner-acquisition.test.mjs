@@ -19,8 +19,8 @@ await sdk.initialize();
 test("owner acquisition is a method; property access creates no owner", () => {
   const paths = [
     [sdk.ExactMember, ["name", "value"]],
-    [sdk.ParsedDocument, ["value", "schemas"]],
-    [sdk.ValidatedDocument, ["value", "schemas"]],
+    [sdk.Document, ["value", "schemas"]],
+    [sdk.ConformantDocument, ["value", "schemas"]],
     [sdk.OperationView, ["value", "input", "output"]],
     [sdk.DependencyView, ["value"]],
     [sdk.BindingView, ["value", "content"]],
@@ -50,11 +50,11 @@ test("owner acquisition is a method; property access creates no owner", () => {
     "reading every acquisition property allocates no handle",
   );
   const baseline = testing.liveStorageOwners();
-  const document = sdk.parseDocument(
+  const document = sdk.Document.parse(
     '{"openbindings":"0.2.0","operations":{}}',
   ).value;
   const count = registrations;
-  assert.equal(document.value, sdk.ParsedDocument.prototype.value);
+  assert.equal(document.value, sdk.Document.prototype.value);
   assert.equal(
     registrations,
     count,
@@ -74,11 +74,13 @@ test("owner acquisition is a method; property access creates no owner", () => {
   assert.equal(testing.liveStorageOwners(), baseline);
   for (const [type, name] of [
     [sdk.ExactJson, "text"],
-    [sdk.ParsedDocument, "operations"],
-    [sdk.OwnedDocumentDraft, "value"],
+    [sdk.Document, "operations"],
   ]) {
+    let prototype = type.prototype;
+    while (!Object.hasOwn(prototype, name))
+      prototype = Object.getPrototypeOf(prototype);
     assert.equal(
-      typeof Object.getOwnPropertyDescriptor(type.prototype, name).get,
+      typeof Object.getOwnPropertyDescriptor(prototype, name).get,
       "function",
     );
   }

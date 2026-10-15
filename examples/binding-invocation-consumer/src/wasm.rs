@@ -224,12 +224,12 @@ impl InvocationBridge {
         gate: js_sys::Promise,
         validate: bool,
     ) -> Result<InvocationBridge, JsValue> {
-        let document = openbindings::ParsedDocument::parse(document)
+        let document = openbindings::Document::parse(document)
             .map_err(|_| JsValue::from_str("INVALID_DOCUMENT"))?;
         let proof = document
             .validate()
             .map_err(|_| JsValue::from_str("INVALID_DOCUMENT"))?
-            .validated()
+            .conformant()
             .ok_or_else(|| JsValue::from_str("INVALID_DOCUMENT"))?;
         let provider = Local {
             token: Rc::new(Count::new(&TOKENS)),

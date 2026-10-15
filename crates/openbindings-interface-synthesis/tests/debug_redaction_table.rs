@@ -46,7 +46,7 @@ impl synthesis::InterfaceSynthesizer for Provider {
     }
 }
 
-async fn synthesis_rows(source: &Source, parsed: &ParsedDocument) -> Vec<Row> {
+async fn synthesis_rows(source: &Source, parsed: &Document) -> Vec<Row> {
     let sources = [synthesis::SynthesisSource {
         name: Some(SECRET),
         source,
@@ -153,9 +153,9 @@ async fn synthesis_rows(source: &Source, parsed: &ParsedDocument) -> Vec<Row> {
     assert!(rejected.rejected().is_some());
     rows.push(row("SynthesisError::rejected", &rejected));
     let mut document = Document::new();
-    document.sources = Some(BTreeMap::from([(SECRET.into(), source.clone())]));
+    document.set_source(SECRET, source).unwrap();
     let candidate = synthesis::SynthesisCandidate {
-        document: document.build().unwrap(),
+        document: document.clone(),
         coverage: synthesis::CoverageDraft {
             exhaustive: false,
             limitation: Some(limitation),
@@ -211,7 +211,7 @@ async fn debug_redacts_caller_text_at_every_boundary() {
         serde_json::json!({"authorization":format!("Bearer {SECRET}"), SECRET: SECRET}).to_string(),
     )
     .unwrap();
-    let parsed = ParsedDocument::parse(serde_json::json!({"openbindings":"0.2.0", "operations":{"op":{"input":{"properties":{SECRET:{"type":"string"}}}}}}).to_string()).unwrap();
+    let parsed = Document::parse(serde_json::json!({"openbindings":"0.2.0", "operations":{"op":{"input":{"properties":{SECRET:{"type":"string"}}}}}}).to_string()).unwrap();
     let source = Source {
         kind: SECRET.into(),
         content: Some(context.clone()),
@@ -223,8 +223,10 @@ async fn debug_redacts_caller_text_at_every_boundary() {
     operation
         .additional_fields
         .insert("description".into(), JsonValue::null());
-    draft.operations.insert(SECRET.into(), operation);
-    let authoring = draft.build().unwrap_err();
+    let EditError::Authoring(authoring) = draft.set_operation(SECRET, &operation).unwrap_err()
+    else {
+        panic!()
+    };
     assert!(authoring.draft_pointer().unwrap().contains(SECRET));
     let mut rows = synthesis_rows(&source, &parsed).await;
     rows.push(row(

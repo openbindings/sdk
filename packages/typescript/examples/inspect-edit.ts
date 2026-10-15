@@ -1,15 +1,14 @@
 // Initialize @openbindings/sdk for the host before calling these functions.
 import {
-  authorDocument,
   ExactJson,
-  parseDocument,
-  type EditableDocumentDraft,
+  Document,
+  SdkError,
   type JsonInput,
 } from "@openbindings/sdk";
 
 /** Inspect declared bindings; this neither selects a provider nor invokes it. */
 export function inspectBindings(text: string, operationName: string) {
-  const parsed = parseDocument(text);
+  const parsed = Document.parse(text);
   if (parsed.status !== "parsed") return parsed;
   using document = parsed.value;
   const selected = document.resolveOperation(operationName);
@@ -26,48 +25,59 @@ export function inspectBindings(text: string, operationName: string) {
   return { status: "inspected" as const, operation: operation.metadata, rows };
 }
 
+const pointer = (name: string) =>
+  name.replaceAll("~", "~0").replaceAll("/", "~1");
 /** Application editing policy: add a tag to a primary operation, if present. */
 export function addTag(
-  draft: EditableDocumentDraft,
+  document: Document,
   primaryKey: string,
   tag: string,
 ): boolean {
-  if (!Object.hasOwn(draft.operations, primaryKey)) return false;
-  const operation = draft.operations[primaryKey];
+  const operation = document.operations.find((row) => row.key === primaryKey);
   if (!operation) return false;
-  const tags = (operation.tags ??= []);
-  if (!tags.includes(tag)) tags.push(tag);
+  document.set(`/operations/${pointer(primaryKey)}/tags`, [
+    ...new Set([...(operation.tags ?? []), tag]),
+  ]);
   return true;
 }
-
-/** Edit metadata while carrying every unrelated exact field through the draft. */
+function edited(document: Document) {
+  const checked = document.validate();
+  if (checked.status === "version-refused") return checked;
+  if (checked.status === "conformant") checked.document.dispose();
+  return {
+    status: "edited" as const,
+    bytes: document.toBytes(),
+    report: checked.report,
+  };
+}
+/** Edit two fields atomically while preserving every unrelated byte. */
 export function editMetadata(
   text: string,
   description: string,
   primaryKey: string,
   tag: string,
 ) {
-  const parsed = parseDocument(text);
-  if (parsed.status !== "parsed") return parsed;
-  using original = parsed.value;
-  const converted = original.toDraft();
-  if (converted.status !== "drafted") return converted;
-  using editing = converted.draft;
-  editing.value.description = description;
-  if (!addTag(editing.value, primaryKey, tag))
-    return { status: "operation-missing" as const };
-  const built = authorDocument(editing.value);
-  if (built.status !== "authored") return built;
-  using revised = built.document;
-  const checked = revised.validate();
-  if (checked.status !== "report") return checked;
-  // Bytes and reports are ordinary values; no disposable owner escapes this call.
-  // The caller decides whether a non-conformant edited document may be saved.
-  return {
-    status: "edited" as const,
-    bytes: revised.originalBytes,
-    report: checked.report,
-  };
+  const opened = Document.parse(text);
+  if (opened.status !== "parsed") return opened;
+  using document = opened.value;
+  try {
+    const operation = document.operations.find((row) => row.key === primaryKey);
+    if (!operation) return { status: "operation-missing" as const };
+    document.edit([
+      { op: "set", pointer: "/description", value: description },
+      {
+        op: "set",
+        pointer: `/operations/${pointer(primaryKey)}/tags`,
+        value: [...new Set([...(operation.tags ?? []), tag])],
+      },
+    ]);
+    // Bytes and reports are detached. Application policy decides whether to save.
+    return edited(document);
+  } catch (error) {
+    if (error instanceof SdkError)
+      return { status: "edit-error" as const, error };
+    throw error;
+  }
 }
 
 /** Display a bounded object prefix without decoding exact names or values. */
@@ -133,33 +143,21 @@ export function replaceExactObjectMember(
   }
 }
 
-/** Application edit using the same scoped draft/build path as metadata edits. */
+/** Edit an extension member in place, keeping unrelated exact bytes. */
 export function editExtensionMember(
   text: string,
   extensionKey: string,
   memberKey: string,
   replacement: JsonInput,
 ) {
-  const parsed = parseDocument(text);
-  if (parsed.status !== "parsed") return parsed;
-  using original = parsed.value;
-  const converted = original.toDraft();
-  if (converted.status !== "drafted") return converted;
-  using editing = converted.draft;
-  const fields = editing.value.additionalFields;
-  const leaf = fields?.[extensionKey];
-  if (!fields || !(leaf instanceof ExactJson))
-    return { status: "extension-missing" as const };
-  using changed = replaceExactObjectMember(leaf, memberKey, replacement);
-  fields[extensionKey] = changed;
-  const built = authorDocument(editing.value);
-  if (built.status !== "authored") return built;
-  using revised = built.document;
-  const checked = revised.validate();
-  if (checked.status !== "report") return checked;
-  return {
-    status: "edited" as const,
-    bytes: revised.originalBytes,
-    report: checked.report,
-  };
+  const opened = Document.parse(text);
+  if (opened.status !== "parsed") return opened;
+  using document = opened.value;
+  using root = document.value();
+  using extension = root.get(extensionKey);
+  if (!extension) return { status: "extension-missing" as const };
+  using member = extension.get(memberKey);
+  if (!member) throw new TypeError("Replacement member is absent.");
+  document.set(`/${pointer(extensionKey)}/${pointer(memberKey)}`, replacement);
+  return edited(document);
 }

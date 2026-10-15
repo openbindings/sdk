@@ -215,8 +215,8 @@ test("invalid body chunks have a typed non-network failure", async () => {
 
 // canonical CORS values, permissive default, exact reserved route spelling.
 test("publication uses serialized origins and matches the route exactly", async () => {
-  const parsed = sdk.parseDocument(text).value;
-  const proof = parsed.validated().document;
+  const parsed = sdk.Document.parse(text).value;
+  const proof = parsed.validate().document;
   const publication = new discovery.DiscoveryPublication(proof);
   const response = publication.respond(
     new Request("https://example.test/.well-known/openbindings"),

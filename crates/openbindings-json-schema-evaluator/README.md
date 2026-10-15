@@ -5,19 +5,19 @@ optional companion supports JSON Schema 2020-12, exact JSON numbers and explicit
 immutable schema resources. Use it alongside `openbindings`.
 
 ```rust
-use openbindings::{Direction, ParsedDocument, ValueOutcome};
+use openbindings::{Direction, Document, ValueOutcome};
 use openbindings_json_schema_evaluator::value_contracts;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let document = ParsedDocument::parse(
+    let document = Document::parse(
         br#"{"openbindings":"0.2.0","operations":{"lookup":{"input":{"type":"string"}}}}"#,
     )?;
     let validation = document.validate()?;
-    if validation.validated().is_none() {
+    if validation.conformant().is_none() {
         return Err(format!("document conformance: {:?}; findings: {:?}",
             validation.report().conclusion, validation.report().findings).into());
     }
-    let proof = validation.validated().ok_or("document is not conformant")?;
+    let proof = validation.conformant().ok_or("document is not conformant")?;
     let context = value_contracts(&proof);
     let input = context.prepare("lookup", Direction::Input).into_result()?;
     match input.validate_json(r#""item""#)? {
@@ -44,15 +44,15 @@ individual handling. `validate_json` admits exact text or bytes under the defaul
 JSON limits; `Err` means admission failed and `Ok` contains any of the four value
 outcomes. Duplicate members yield no-verdict after admission.
 
-Use `ValidatedDocument::value_contracts(evaluator, resources)` to share or
+Use `Conformant<Document>::value_contracts(evaluator, resources)` to share or
 configure an evaluator or supply resources. For example:
 
 ```rust,edition2024
-use openbindings::{ResourceSet, ValidatedDocument, ValueContracts};
+use openbindings::{ResourceSet, Conformant, Document, ValueContracts};
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Diagnostics};
 use std::sync::Arc;
 
-fn with_resources(proof: &ValidatedDocument, resources: ResourceSet) -> ValueContracts {
+fn with_resources(proof: &Conformant<Document>, resources: ResourceSet) -> ValueContracts {
     let evaluator = Arc::new(DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream));
     proof.value_contracts(evaluator, resources)
 }

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import * as sdk from "../dist/index.js";
-import { validatedContracts } from "./validated-contracts.mjs";
+import { conformantContracts } from "./conformant-contracts.mjs";
 await sdk.initialize(
   await readFile(
     new URL("../dist/wasm/openbindings_wasm_bg.wasm", import.meta.url),
@@ -28,7 +28,7 @@ function subset(expected, actual, id) {
 test("static reference matrix and concrete completions through Wasm", async () => {
   const receipt = [];
   for (const c of cases) {
-    const parsed = sdk.parseDocument(
+    const parsed = sdk.Document.parse(
       JSON.stringify(
         c.document ?? {
           openbindings: "0.2.0",
@@ -50,7 +50,7 @@ test("static reference matrix and concrete completions through Wasm", async () =
           value,
         ]),
       );
-      context = validatedContracts(parsed.value, { resources, limits });
+      context = conformantContracts(parsed.value, { resources, limits });
       const setup = context.prepare("op", "input");
       contract = setup.valueContract;
       const result =

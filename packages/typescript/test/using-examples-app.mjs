@@ -1,5 +1,5 @@
 import * as testing from "../dist/testing.js";
-import { validatedContracts } from "./validated-contracts.mjs";
+import { conformantContracts } from "./conformant-contracts.mjs";
 import * as sdk from "@openbindings/sdk";
 
 function check(condition, message) {
@@ -16,13 +16,13 @@ await sdk.initialize();
 const coldOwners = testing.liveStorageOwners();
 // DocumentValidation/preparation retain instance-lifetime meta-schema state. Establish
 // that fixed baseline before checking whether the examples release their owners.
-const warm = sdk.parseDocument(
+const warm = sdk.Document.parse(
   '{"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"}}}}',
 );
 check(warm.status === "parsed", "warm document");
 try {
   warm.value.validate();
-  const context = validatedContracts(warm.value);
+  const context = conformantContracts(warm.value);
   try {
     const setup = context.prepare("run", "input");
     check(setup.status === "ready", "warm contract");
@@ -64,7 +64,7 @@ for (let cycle = 0; cycle < 25; cycle++) {
   );
   check(changed.status === "edited", "edit did not produce bytes");
   check(changed.report.conclusion === "conformant", "edit conformance");
-  const parsed = sdk.parseDocument(changed.bytes);
+  const parsed = sdk.Document.parse(changed.bytes);
   check(parsed.status === "parsed", "reopening edited document");
   const root = parsed.value.value();
   try {

@@ -17,12 +17,12 @@ keeps old work usable while a new document and resource context are installed.
 This caller diagnoses an unexpected document field, corrects it and prepares input:
 
 ```rust
-use openbindings::{Direction, ParsedDocument};
+use openbindings::{Direction, Document};
 use openbindings_json_schema_evaluator::value_contracts;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let text = r#"{"openbindings":"0.2.0","operations":{"lookup":{"inputSchema":{"type":"integer"}}}}"#;
-    let document = ParsedDocument::parse(text)?;
+    let document = Document::parse(text)?;
     let validation = document.validate()?;
     for finding in &validation.report().findings {
         // Debug quotes and escapes the pointer, including any control characters.
@@ -35,9 +35,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     // Correct this known fixture's original source, not a normalized JSON value.
     let corrected = text.replace("\"inputSchema\":", "\"input\":");
-    let corrected = ParsedDocument::parse(corrected)?;
+    let corrected = Document::parse(corrected)?;
     let validation = corrected.validate()?;
-    let Some(proof) = validation.validated() else {
+    let Some(proof) = validation.conformant() else {
         return Err(format!("document conformance: {:?}", validation.report().conclusion).into());
     };
     let context = value_contracts(&proof);
@@ -49,17 +49,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 `validate()` returns a document report or an unsupported-version refusal.
 A report can be conformant, non-conformant or undetermined. Only established
-conformance yields a `ValidatedDocument`. Its typed field reads are infallible;
-parsed editor reads remain fallible. Resolve primary names or aliases with
-`resolve_operation`. A validated lookup returns an optional operation; a parsed
+conformance yields a `Conformant<Document>`. Its typed field reads are infallible;
+document editor reads remain fallible. Resolve primary names or aliases with
+`resolve_operation`. A conformant lookup returns an optional operation; a document
 lookup distinguishes found, missing and ambiguous.
 
 ## Validate values
 
-Create a context with `openbindings_json_schema_evaluator::value_contracts(&validated)`,
+Create a context with `openbindings_json_schema_evaluator::value_contracts(&conformant)`,
 then `prepare(name, Direction::Input)` or `Direction::Output`. The function uses the
 default evaluator budgets, coarse diagnostics and no extra resources. Creating the context performs no preparation. The SDK never acquires resources. Use the explicit
-`validated.value_contracts(evaluator, resources)` method for shared evaluators,
+`conformant.value_contracts(evaluator, resources)` method for shared evaluators,
 custom budgets or diagnostics, supplied resources or custom evaluators.
 
 Call `into_result()?` to retain a ready contract or propagate the full
@@ -88,65 +88,51 @@ compiles independently. Ready does not imply that every value is decidable.
 
 ## Edit an opaque value
 
-Use `to_authoring()` to obtain a typed draft, change its fields, then build and
-validate a new snapshot. To change a member inside a schema, content or extension
-object, compose the changed object from retained exact children:
+Edit the same `Document` through a mutable borrow. Generic paths use RFC 6901:
+`~0` escapes a tilde and `~1` a slash. Parents must exist; `set` inserts missing
+object members and `/-` appends to arrays. Use exact JSON values to preserve
+number spellings and escaped UTF-16.
 
 ```rust,edition2024
-use openbindings::{JsonValue, ParsedDocument};
-use std::collections::BTreeMap;
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-
-pub fn replace_exact_object_member(
-    object: &JsonValue,
-    key: &str,
-    replacement: &JsonValue,
-) -> Result<JsonValue> {
-    if object.has_duplicate_names() {
-        return Err("this recipe requires unique member names".into());
-    }
-    let members = object.view().members().ok_or("expected an exact object")?;
-    let mut composed = BTreeMap::new();
-    for member in members {
-        let name = member
-            .name
-            .as_str()
-            .ok_or("member name is not UTF-8 representable")?;
-        composed.insert(name, member.value.to_owned());
-    }
-    let target = composed
-        .get_mut(key)
-        .ok_or("replacement member is absent")?;
-    *target = replacement.clone();
-    // JsonValue's Serde representation carries raw JSON tokens. Do not convert
-    // these exact values through ordinary serde_json::Value or floating point.
-    Ok(JsonValue::parse(serde_json::to_vec(&composed)?)?)
-}
-
-fn main() -> Result<()> {
-    let parsed = ParsedDocument::parse(
+use openbindings::{Document, Edit, JsonValue};
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut document = Document::parse(
         r#"{"openbindings":"0.2.0","operations":{},"x-editor":{"note":null,"id":9007199254740993}}"#,
     )?;
-    let mut draft = parsed.to_authoring()?;
-    let original = draft.additional_fields.get("x-editor").ok_or("missing extension")?;
-    let replacement = JsonValue::string("Reviewed")?;
-    let edited = replace_exact_object_member(original, "note", &replacement)?;
-    draft.additional_fields.insert("x-editor".into(), edited);
-    let revised = draft.build()?;
-    assert!(revised.validate()?.validated().is_some());
-    assert_eq!(revised.value().at("/x-editor/id").unwrap().text(), "9007199254740993");
+    let note = JsonValue::string("Reviewed")?;
+    let description = JsonValue::string("Ready for review")?;
+    document.edit(&[
+        Edit::Set { pointer: "/x-editor/note", value: &note },
+        Edit::Set { pointer: "/description", value: &description },
+    ])?;
+    assert_eq!(document.value().at("/x-editor/id").unwrap().text(), "9007199254740993");
+    let proven = document.validate()?.conformant().ok_or("nonconformant")?;
+    assert!(proven.operations().is_empty());
+    let mut document = proven.into_inner();
+    document.set_description("Editing again")?;
     Ok(())
 }
 ```
 
-This is application code using existing APIs. It replaces one existing member,
-requires unique names throughout the subtree and UTF-8-representable immediate
-names, and refuses a missing member. Exact siblings retain numeric tokens.
-Formatting, name escaping and order may change. The whole changed object is
-serialized and parsed; `build()` also serializes the document. Typed fields are
-re-encoded, and operation renaming leaves reference updates to the caller.
-The packaged [exact-edit example](../crates/openbindings/examples/exact_edit.rs)
-includes additional numeric and error cases.
+Each batch splices the current bytes once and parses the result once. A failed
+batch changes nothing. Untouched extension members, number tokens, member order
+and whitespace remain exact; inserted members use compact punctuation. Sibling
+insertions at one boundary coalesce in request order. Overlapping replacements
+and removals are refused. Default byte, node and depth limits apply to the result;
+byte preflight happens before replacement allocation.
+
+Use typed parts for construction: `set_operation`, `set_binding`, `set_source`,
+`set_dependency` and `set_example`. `set_operations(&operations)` commits a complete
+operations map once for synthesis; the bindings, sources and dependencies maps
+have corresponding setters. These setters check typed collisions and admission,
+while `validate()` separately establishes document conformance.
+
+`Conformant<Document>` has no setters or mutable borrow. `as_document()` borrows
+plain reads, and `into_inner()` consumes proof to return an editable owner.
+Retained views and proofs keep their earlier bytes. Findings and source positions
+always describe the revision being read. The packaged
+[exact-edit example](../crates/openbindings/examples/exact_edit.rs) includes
+additional numeric and error cases.
 
 ## Resources, diagnostics and lifetime
 
@@ -162,7 +148,7 @@ an `AtomicBool` or a companion's `CancellationToken`. Cancellation is cooperativ
 Use a fresh flag or token for a retry. Cancelled preparation returns no ready
 owner; cancelled validation leaves an existing owner usable.
 
-Document findings have original JSON Pointers, zero-based UTF-8 byte offsets and
+Document findings describe the assessed revision with JSON Pointers, zero-based UTF-8 byte offsets and
 one-based lines and byte columns. Quote pointers when displaying them. Truncation
 leaves rule evidence intact. Use codes and evidence for logic; messages are
 advisory. Value failures use coarse diagnostics by default. Upstream diagnostics

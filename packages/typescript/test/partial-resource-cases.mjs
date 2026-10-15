@@ -1,5 +1,5 @@
 import * as testing from "../dist/testing.js";
-import { validatedContracts } from "./validated-contracts.mjs";
+import { conformantContracts } from "./conformant-contracts.mjs";
 // Shared Node/browser tests: the facade keeps the same context → prepare → validate workflow.
 export function partialResourceCases(sdk) {
   let count = 0;
@@ -10,7 +10,7 @@ export function partialResourceCases(sdk) {
   const U = "https://review.invalid/U";
   const hole = { $ref: U };
   const run = (schema, value, expected, keyword) => {
-    const parsed = sdk.parseDocument(
+    const parsed = sdk.Document.parse(
       JSON.stringify({
         openbindings: "0.2.0",
         operations: { op: { input: schema } },
@@ -20,7 +20,7 @@ export function partialResourceCases(sdk) {
     const document = parsed.value;
     let context, contract;
     try {
-      context = validatedContracts(document, { diagnostics: "upstream" });
+      context = conformantContracts(document, { diagnostics: "upstream" });
       const setup = context.prepare("op", "input");
       if (expected === "refuse") {
         check(
@@ -146,13 +146,13 @@ export function partialResourceCases(sdk) {
     { if: hole, then: false, else: true },
     { anyOf: [true, hole], unevaluatedItems: false },
   ]) {
-    const parsed = sdk.parseDocument(
+    const parsed = sdk.Document.parse(
       JSON.stringify({
         openbindings: "0.2.0",
         operations: { op: { input: schema } },
       }),
     );
-    const context = validatedContracts(parsed.value);
+    const context = conformantContracts(parsed.value);
     try {
       const result = context.prepare("op", "input");
       check(
@@ -176,7 +176,7 @@ export function partialResourceCases(sdk) {
     }
   }
   const V = "https://review.invalid/V";
-  const doc = sdk.parseDocument(
+  const doc = sdk.Document.parse(
     JSON.stringify({
       openbindings: "0.2.0",
       operations: {
@@ -189,7 +189,7 @@ export function partialResourceCases(sdk) {
     JSON.stringify({ properties: { x: { $ref: V } } }),
   ).value;
   const supplied = new sdk.SchemaResources([[U, known]]);
-  const oldContext = validatedContracts(doc, { resources: supplied });
+  const oldContext = conformantContracts(doc, { resources: supplied });
   const old = oldContext.prepare("op", "input").valueContract;
   let completeResources, yes, newContext, next, retained;
   try {
@@ -209,7 +209,7 @@ export function partialResourceCases(sdk) {
     );
     yes = sdk.parseJson("true").value;
     completeResources = supplied.with(V, yes);
-    newContext = validatedContracts(doc, { resources: completeResources });
+    newContext = conformantContracts(doc, { resources: completeResources });
     next = newContext.prepare("op", "input").valueContract;
     check(
       next.validate({ x: 1 }).outcome === "satisfies",

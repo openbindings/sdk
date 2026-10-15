@@ -1,5 +1,5 @@
 use crate::*;
-use openbindings::{DocumentValidation, ValidatedDocument, VersionRefusal};
+use openbindings::{Conformant, Document, DocumentValidation, VersionRefusal};
 use std::sync::Arc;
 
 /// Publication CORS policy. Exact origins must be canonical ASCII tuple origins.
@@ -47,7 +47,7 @@ pub enum PublicationError {
     Configuration(ConfigurationError),
     /// Unsupported declared version, separate from normative conformance.
     VersionRefused(VersionRefusal),
-    /// Validation established a document violation; payload carries report and any parsed snapshot.
+    /// Validation established a document violation; payload carries report and any document snapshot.
     NonConformant(DocumentValidation),
     /// Validation could not establish conformance; payload preserves its evidence.
     Undetermined(DocumentValidation),
@@ -82,7 +82,7 @@ impl Publication {
     /// use openbindings::validate_document;
     /// use openbindings_http_discovery::{Publication, PublicationOptions, WELL_KNOWN_PATH};
     /// let validation = validate_document(r#"{"openbindings":"0.2.0","operations":{}}"#)?;
-    /// let proof = validation.validated().expect("all normative rules established");
+    /// let proof = validation.conformant().expect("all normative rules established");
     /// let publication = Publication::new(&proof, PublicationOptions::default())?;
     /// let head = publication.respond("HEAD", WELL_KNOWN_PATH);
     /// assert_eq!(head.status, 200);
@@ -93,12 +93,12 @@ impl Publication {
     /// # Errors
     /// Returns a configuration error for an invalid exact CORS origin.
     pub fn new(
-        document: &ValidatedDocument,
+        document: &Conformant<Document>,
         options: PublicationOptions,
     ) -> Result<Self, ConfigurationError> {
         validate_allow_origin(&options.allow_origin)?;
         Ok(Self {
-            body: Arc::from(document.parsed().original_bytes()),
+            body: Arc::from(document.as_document().to_bytes()),
             allow_origin: options.allow_origin,
         })
     }

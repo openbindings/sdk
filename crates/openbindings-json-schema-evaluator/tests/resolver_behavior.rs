@@ -144,7 +144,7 @@ fn encoded_plain_names_keep_document_decoding_and_follow_the_library_elsewhere()
             } else {
                 json!({"E":schema})
             };
-            let doc = ParsedDocument::parse(
+            let doc = Document::parse(
                 json!({
                     "openbindings":"0.2.0", "schemas":schemas,
                     "operations":{"op":{"input":{"$ref":reference}}}
@@ -154,7 +154,7 @@ fn encoded_plain_names_keep_document_decoding_and_follow_the_library_elsewhere()
             .unwrap();
             let validation = doc.validate().unwrap();
             let proof = validation
-                .validated()
+                .conformant()
                 .expect("reference spellings are conformant");
             let report = proof.references_with_resources(
                 supplied.clone(),

@@ -22,8 +22,8 @@ impl SchemaEvaluator for Capture {
         ))
     }
 }
-fn document(schema: &str) -> ParsedDocument {
-    ParsedDocument::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}},"healthy":{{"input":true}}}}}}"#)).unwrap()
+fn document(schema: &str) -> Document {
+    Document::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}},"healthy":{{"input":true}}}}}}"#)).unwrap()
 }
 fn resources(entries: &[(&str, &str)]) -> ResourceSet {
     ResourceSet::new(entries.iter().map(|(uri, text)| SchemaResource {
@@ -32,12 +32,12 @@ fn resources(entries: &[(&str, &str)]) -> ResourceSet {
     }))
     .unwrap()
 }
-fn request(document: &ParsedDocument, resources: ResourceSet) -> SchemaRequest {
+fn request(document: &Document, resources: ResourceSet) -> SchemaRequest {
     let capture = Arc::new(Capture(Mutex::new(None)));
     let _ = document
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(capture.clone(), resources)
         .prepare("op", Direction::Input);
@@ -88,7 +88,7 @@ fn frozen_fragment_witnesses_and_escaped_supplied_source_keep_original_locations
             let context = doc
                 .validate()
                 .unwrap()
-                .validated()
+                .conformant()
                 .expect("conformant document")
                 .value_contracts(Arc::new(DefaultEvaluator::new()), entries);
             let detail = refused(&context);
@@ -144,7 +144,7 @@ fn direct_keyword_refusals_and_recovered_strict_holders_are_precise_and_stable()
         let context = doc
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant document")
             .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
         assert_eq!(
@@ -197,7 +197,7 @@ fn strict_and_partial_multinode_cycle_roots_are_stable() {
             let context = doc
                 .validate()
                 .unwrap()
-                .validated()
+                .conformant()
                 .expect("conformant document")
                 .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
             at(
@@ -234,7 +234,7 @@ fn actual_production_node_and_edge_caps_preserve_known_limits_before_and_after_s
             let context = doc
                 .validate()
                 .unwrap()
-                .validated()
+                .conformant()
                 .expect("conformant document")
                 .value_contracts(Arc::new(DefaultEvaluator::new()), entries);
             let detail = refused(&context);

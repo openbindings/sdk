@@ -16,7 +16,7 @@ fn label(outcome: &ValueOutcome) -> &'static str {
     }
 }
 fn ready(
-    document: &ParsedDocument,
+    document: &Document,
     op: &str,
     direction: Direction,
     resources: ResourceSet,
@@ -25,7 +25,7 @@ fn ready(
     match document
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(
             Arc::new(
@@ -54,7 +54,7 @@ fn frozen_c22_original_values_and_renamed_operation_keep_their_independent_truth
                 r#""aliases":["2x.thumbnail","thumb.render""#,
             );
         }
-        let document = ParsedDocument::parse(text).unwrap();
+        let document = Document::parse(text).unwrap();
         let contract = ready(
             &document,
             op,
@@ -90,8 +90,8 @@ fn frozen_c22_original_values_and_renamed_operation_keep_their_independent_truth
     }
 }
 
-fn document(schema: &str) -> ParsedDocument {
-    ParsedDocument::parse(format!(
+fn document(schema: &str) -> Document {
+    Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"probe":{{"input":{schema}}}}}}}"#
     ))
     .unwrap()
@@ -384,13 +384,13 @@ fn unsupported_influence_and_known_closure_defects_remain_refusals() {
         if code == "non-schema-target" {
             let validation = document(schema).validate().unwrap();
             assert_eq!(validation.report().evidence["OBI-12"], Evidence::Violated);
-            assert!(validation.validated().is_none());
+            assert!(validation.conformant().is_none());
             continue;
         }
         let setup = document(schema)
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant document")
             .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
             .prepare("probe", Direction::Input);
@@ -496,7 +496,7 @@ fn adapters_receive_unmodified_requests_and_each_bound_compiles_without_the_othe
     let context = document(r#"{"oneOf":[true,{"$ref":"https://oneof.invalid/U"}]}"#)
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(custom.clone(), ResourceSet::default());
     let ValueContractPreparation::NoVerdict { detail } = context.prepare("probe", Direction::Input)
@@ -590,7 +590,7 @@ fn bounded_nested_runtime_and_original_exact_details_retain_separate_policies() 
     let contracts = self::document(schema)
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(
             Arc::new(

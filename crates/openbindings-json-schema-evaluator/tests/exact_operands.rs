@@ -3,13 +3,13 @@ use openbindings_json_schema_evaluator::{DefaultEvaluator, Diagnostics};
 use std::sync::Arc;
 
 fn prepare(schema: &str, mode: Diagnostics, resources: ResourceSet) -> ValueContract {
-    let document = ParsedDocument::parse(format!(
+    let document = Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
     ))
     .unwrap();
     let validation = document.validate().unwrap();
     let context = validation
-        .validated()
+        .conformant()
         .expect("conformant schema")
         .value_contracts(
             Arc::new(DefaultEvaluator::new().with_diagnostics(mode)),

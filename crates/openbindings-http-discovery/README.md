@@ -1,7 +1,7 @@
 # OpenBindings HTTP discovery
 
-Discover an OpenBindings interface document at an origin, or publish validated
-immutable bytes through your HTTP server. Core document semantics remain
+Discover an OpenBindings interface document at an origin, or publish a conformant
+document's immutable bytes through your HTTP server. Core document semantics remain
 independent of acquisition metadata.
 
 Publish a document without choosing a server framework:

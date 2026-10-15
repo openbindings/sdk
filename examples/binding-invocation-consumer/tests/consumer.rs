@@ -53,15 +53,12 @@ async fn inspect_synthesize_choose_explicitly_and_invoke_preserved_values() {
         })
         .await
         .unwrap();
-    let authored = synthesized.parsed().to_authoring().unwrap();
+    let authored = synthesized.clone();
     // The caller explicitly chooses this known binding; invocation does no lookup.
-    let chosen = &authored.bindings.as_ref().unwrap()["s0.u0"];
-    assert_eq!(
-        chosen.content.as_ref().unwrap().view().as_str(),
-        Some("空.🚲")
-    );
-    let carrier = BindingValue::from(chosen);
-    let selected_source = &authored.sources.as_ref().unwrap()[&chosen.source];
+    let chosen = authored.binding("s0.u0").unwrap();
+    assert_eq!(chosen.content().unwrap().as_str(), Some("空.🚲"));
+    let carrier = BindingValue::from_json_ref(chosen.value()).unwrap();
+    let selected_source = &invocation_input(&authored, chosen.key()).source;
     assert_eq!(
         selected_source.content.as_ref().unwrap().text(),
         source.content.as_ref().unwrap().text()
@@ -250,13 +247,15 @@ async fn synthesized_colliding_ids_execute_the_exact_scope() {
         })
         .await
         .unwrap();
-    let authored = synthesized.parsed().to_authoring().unwrap();
-    let bindings = authored.bindings.as_ref().unwrap();
+    let authored = synthesized.clone();
+    let bindings: std::collections::BTreeMap<_, _> = authored
+        .bindings()
+        .unwrap()
+        .into_iter()
+        .map(|v| (v.key().to_owned(), v))
+        .collect();
     assert!(!bindings.contains_key("s0.u0"));
-    assert_eq!(
-        bindings["s0.u3"].content.as_ref().unwrap().view().as_str(),
-        Some("same")
-    );
+    assert_eq!(bindings["s0.u3"].content().unwrap().as_str(), Some("same"));
     for (key, scope, input, values) in [
         ("s0.u1", "projection", "7", vec!["1"]),
         ("s0.u2", "alternative", "9", vec!["9"; 7]),
@@ -264,12 +263,12 @@ async fn synthesized_colliding_ids_execute_the_exact_scope() {
     ] {
         let chosen = &bindings[key];
         if scope != "target" {
-            let content = chosen.content.as_ref().unwrap();
+            let content = chosen.content().unwrap();
             assert_eq!(content.get("scope").unwrap().as_str(), Some(scope));
             assert_eq!(content.get("id").unwrap().as_str(), Some("same"));
         }
-        let binding = BindingValue::from(chosen);
-        let source = &authored.sources.as_ref().unwrap()[&chosen.source];
+        let binding = BindingValue::from_json_ref(chosen.value()).unwrap();
+        let source = &invocation_input(&authored, chosen.key()).source;
         let facade = Invoker::new(&provider);
         let mut call = facade.invoke(BindingRequest {
             source,
@@ -316,14 +315,19 @@ async fn dependency_first_cannot_shadow_a_lossy_target_or_impose_operation_schem
         })
         .await
         .unwrap();
-    let authored = synthesized.parsed().to_authoring().unwrap();
+    let authored = synthesized.clone();
     assert_eq!(
-        authored.operations["s0.u1"].input.as_ref().unwrap().text(),
+        authored
+            .resolve_operation("s0.u1")
+            .unwrap()
+            .input()
+            .unwrap()
+            .text(),
         r#"{"type":"null"}"#
     );
-    let chosen = &authored.bindings.as_ref().unwrap()["s0.u1"];
-    let binding = BindingValue::from(chosen);
-    let source = &authored.sources.as_ref().unwrap()[&chosen.source];
+    let chosen = authored.binding("s0.u1").unwrap();
+    let binding = BindingValue::from_json_ref(chosen.value()).unwrap();
+    let source = &invocation_input(&authored, chosen.key()).source;
     let facade = Invoker::new(&provider);
     let mut call = facade.invoke(BindingRequest {
         source,
@@ -467,17 +471,17 @@ async fn every_admitted_interaction_can_be_inspected_synthesized_and_invoked() {
                     result.coverage().fully_represented(),
                     status == "represented"
                 );
-                let authored = result.document().parsed().to_authoring().unwrap();
-                let chosen = &authored.bindings.as_ref().unwrap()["s0.u0"];
+                let authored = result.document().clone();
+                let chosen = authored.binding("s0.u0").unwrap();
                 if let Some(target) = inventory.targets.first() {
                     assert_eq!(target.source_ref, "unit");
                     assert_eq!(
                         target.binding.content.as_ref().unwrap().text(),
-                        chosen.content.as_ref().unwrap().text()
+                        chosen.content().unwrap().text()
                     );
                 }
-                let binding = BindingValue::from(chosen);
-                let emitted_source = &authored.sources.as_ref().unwrap()[&chosen.source];
+                let binding = BindingValue::from_json_ref(chosen.value()).unwrap();
+                let emitted_source = &invocation_input(&authored, chosen.key()).source;
                 let facade = Invoker::new(&provider);
                 let (mut input, mut output) = facade
                     .invoke(BindingRequest {
@@ -526,4 +530,20 @@ async fn every_admitted_interaction_can_be_inspected_synthesized_and_invoked() {
             }
         }
     }
+}
+
+// Materialize the role's by-value request through its existing exact carrier API.
+fn invocation_input(
+    document: &openbindings::Conformant<openbindings::Document>,
+    key: &str,
+) -> BindingInvocationInput {
+    let binding = document.binding(key).unwrap();
+    let source = document.source(binding.source()).unwrap();
+    let value = JsonValue::parse(format!(
+        r#"{{"source":{},"binding":{}}}"#,
+        source.value().text(),
+        binding.value().text()
+    ))
+    .unwrap();
+    BindingInvocationInput::from_json(&value).unwrap()
 }

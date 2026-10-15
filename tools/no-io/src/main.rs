@@ -3,11 +3,11 @@ use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::json;
 use std::sync::Arc;
 
-fn evaluate(document: &ParsedDocument, resources: ResourceSet) -> ValueOutcome {
+fn evaluate(document: &Document, resources: ResourceSet) -> ValueOutcome {
     let context = document
         .validate()
         .unwrap()
-        .validated()
+        .conformant()
         .expect("conformant document")
         .value_contracts(Arc::new(DefaultEvaluator::new()), resources);
     match context.prepare("op", Direction::Input) {
@@ -52,7 +52,7 @@ fn main() {
         } else {
             (schema, ResourceSet::default())
         };
-        let document = ParsedDocument::parse(
+        let document = Document::parse(
             json!({"openbindings":"0.2.0","operations":{"op":{"input":input}}}).to_string(),
         )
         .unwrap();
@@ -60,10 +60,10 @@ fn main() {
         assert!(matches!(result, ValueOutcome::NoVerdict { .. }));
         observations.push(json!({"name":key,"outcome":result}));
     }
-    let document = ParsedDocument::parse(
+    let document = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":true}},"sources":{"source":{"kind":uri,"content":{"$ref":uri,"$schema":uri}}},"bindings":{"binding":{"source":"source","operation":"op"}}}).to_string(),
     ).unwrap();
-    assert!(document.validate().unwrap().validated().is_some());
+    assert!(document.validate().unwrap().conformant().is_some());
     assert!(matches!(
         evaluate(&document, ResourceSet::default()),
         ValueOutcome::Satisfies
@@ -73,7 +73,7 @@ fn main() {
         uri: uri.clone(),
         document: JsonValue::parse("false").unwrap(),
     };
-    let document = ParsedDocument::parse(
+    let document = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":uri}}}}).to_string(),
     )
     .unwrap();

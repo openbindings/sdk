@@ -15,9 +15,9 @@ test("Rust proof transfer is single-use and unavailable to parsed or forged hand
   assert.equal(typeof parsed.valueContracts, "undefined");
   const transfer = parsed.validate();
   assert.equal(JSON.parse(transfer.report()).report.conclusion, "conformant");
-  const proof = transfer.takeValidated();
-  assert.ok(proof instanceof bridge.WasmValidatedDocument);
-  assert.equal(transfer.takeValidated(), undefined);
+  const proof = transfer.takeConformant();
+  assert.ok(proof instanceof bridge.WasmConformantDocument);
+  assert.equal(transfer.takeConformant(), undefined);
   transfer.free();
   parsed.free();
   const retained = proof.retain();
@@ -31,34 +31,34 @@ test("Rust proof transfer is single-use and unavailable to parsed or forged hand
     '{"openbindings":"0.2.0"}',
     '{"openbindings":"0.3.0","operations":{}}',
   ]) {
-    const draft = bridge.WasmDocument.parseBytes(
+    const unproven = bridge.WasmDocument.parseBytes(
       new TextEncoder().encode(source),
     );
-    const result = draft.validate();
-    assert.equal(result.takeValidated(), undefined);
-    assert.equal(result.takeValidated(), undefined);
+    const result = unproven.validate();
+    assert.equal(result.takeConformant(), undefined);
+    assert.equal(result.takeConformant(), undefined);
     result.free();
-    draft.free();
+    unproven.free();
   }
-  const draft = sdk.parseDocument(text).value;
-  assert.equal(typeof draft.valueContracts, "undefined");
+  const unproven = sdk.Document.parse(text).value;
+  assert.equal(typeof unproven.valueContracts, "undefined");
   assert.throws(() =>
-    sdk.ValidatedDocument.prototype.valueContracts.call(draft),
+    sdk.ConformantDocument.prototype.valueContracts.call(unproven),
   );
   assert.throws(() =>
-    sdk.ValidatedDocument.prototype.valueContracts.call(
-      Object.create(sdk.ValidatedDocument.prototype),
+    sdk.ConformantDocument.prototype.valueContracts.call(
+      Object.create(sdk.ConformantDocument.prototype),
     ),
   );
   // Overriding JS evidence cannot mint Rust proof.
-  const invalid = sdk.parseDocument('{"openbindings":"0.2.0"}').value;
+  const invalid = sdk.Document.parse('{"openbindings":"0.2.0"}').value;
   invalid.validate = () => ({
     status: "report",
     report: { conclusion: "conformant" },
   });
-  assert.equal(invalid.validated().status, "report");
+  assert.equal(sdk.Document.prototype.validate.call(invalid).status, "report");
   invalid.dispose();
-  draft.dispose();
+  unproven.dispose();
 });
 
 test("raw document receiver substitution rechecks proof at every authority entry", () => {
@@ -75,13 +75,13 @@ test("raw document receiver substitution rechecks proof at every authority entry
       );
       const transfer = parsed.validate();
       try {
-        assert.equal(transfer.takeValidated(), undefined);
+        assert.equal(transfer.takeConformant(), undefined);
         // Claude's exact receiver-substitution probe: no pointer or prototype edits.
         // Exercise both live snapshot carriers, including consumed evidence.
         for (const receiver of [parsed, transfer]) {
           assert.throws(
             () =>
-              bridge.WasmValidatedDocument.prototype.valueContracts.call(
+              bridge.WasmConformantDocument.prototype.valueContracts.call(
                 receiver,
                 resources,
                 "{}",
@@ -90,23 +90,23 @@ test("raw document receiver substitution rechecks proof at every authority entry
             refuses("document-conformance"),
           );
           assert.throws(
-            () => bridge.WasmValidatedDocument.prototype.retain.call(receiver),
+            () => bridge.WasmConformantDocument.prototype.retain.call(receiver),
             refuses("document-conformance"),
           );
           assert.equal(
-            bridge.WasmDocumentValidation.prototype.takeValidated.call(
+            bridge.WasmDocumentValidation.prototype.takeConformant.call(
               receiver,
             ),
             undefined,
           );
           const again =
-            bridge.WasmValidatedDocument.prototype.validate.call(receiver);
-          assert.equal(again.takeValidated(), undefined);
+            bridge.WasmConformantDocument.prototype.validate.call(receiver);
+          assert.equal(again.takeConformant(), undefined);
           again.free();
           const editor =
-            bridge.WasmValidatedDocument.prototype.parsed.call(receiver);
+            bridge.WasmConformantDocument.prototype.asDocument.call(receiver);
           assert.throws(
-            () => bridge.WasmValidatedDocument.prototype.retain.call(editor),
+            () => bridge.WasmConformantDocument.prototype.retain.call(editor),
             refuses("document-conformance"),
           );
           editor.free();
@@ -116,7 +116,7 @@ test("raw document receiver substitution rechecks proof at every authority entry
           try {
             Object.setPrototypeOf(
               receiver,
-              bridge.WasmValidatedDocument.prototype,
+              bridge.WasmConformantDocument.prototype,
             );
             assert.throws(
               () => new bridge.WasmPublication(receiver, "*"),
@@ -138,15 +138,16 @@ test("raw document receiver substitution rechecks proof at every authority entry
         '{"openbindings":"0.2.0","name":"readable","operations":{"op":{"input":true}}}',
       ),
     );
-    const retained = bridge.WasmValidatedDocument.prototype.retain.call(parsed);
+    const retained =
+      bridge.WasmConformantDocument.prototype.retain.call(parsed);
     const proof =
-      bridge.WasmDocumentValidation.prototype.takeValidated.call(parsed);
+      bridge.WasmDocumentValidation.prototype.takeConformant.call(parsed);
     assert.ok(proof);
     assert.equal(
-      bridge.WasmDocumentValidation.prototype.takeValidated.call(parsed),
+      bridge.WasmDocumentValidation.prototype.takeConformant.call(parsed),
       undefined,
     );
-    const context = bridge.WasmValidatedDocument.prototype.valueContracts.call(
+    const context = bridge.WasmConformantDocument.prototype.valueContracts.call(
       parsed,
       resources,
       "{}",
@@ -176,7 +177,7 @@ test("raw document receiver substitution rechecks proof at every authority entry
 
 test("top-level editor reads preserve field-local errors, exact text and absence", () => {
   // Claude's metadata-parity probe: only the version field is malformed.
-  const parsed = sdk.parseDocument(
+  const parsed = sdk.Document.parse(
     '{"openbindings":"0.2.0","name":"readable","version":7,"operations":{}}',
   ).value;
   assert.equal(parsed.openbindings, "0.2.0");
@@ -198,7 +199,7 @@ test("top-level editor reads preserve field-local errors, exact text and absence
       description: "\udc00",
     };
     const source = JSON.stringify({ ...values, [bad]: 7, operations: {} });
-    const doc = sdk.parseDocument(source).value;
+    const doc = sdk.Document.parse(source).value;
     const raw = bridge.WasmDocument.parseBytes(
       new TextEncoder().encode(source),
     );
@@ -228,15 +229,15 @@ test("top-level editor reads preserve field-local errors, exact text and absence
 });
 
 test("validated text and retained reads preserve exact UTF-16 and presence", () => {
-  const draft = sdk.parseDocument(text).value;
-  const result = draft.validated();
-  assert.equal(result.status, "validated");
+  const unproven = sdk.Document.parse(text).value;
+  const result = unproven.validate();
+  assert.equal(result.status, "conformant");
   const proof = result.document;
   assert.equal(proof.openbindings, "0.2.0");
   assert.equal(proof.name.charCodeAt(0), 0xd800);
   assert.equal(proof.version.charCodeAt(0), 0xdc00);
   assert.equal(proof.description.charCodeAt(0), 0xd800);
-  const parsed = proof.parsed();
+  const parsed = proof.asDocument();
   assert.equal(parsed.name.charCodeAt(0), 0xd800);
   parsed.dispose();
   assert.equal(proof.operations[0].description.charCodeAt(0), 0xd800);
@@ -257,7 +258,7 @@ test("validated text and retained reads preserve exact UTF-16 and presence", () 
   example.dispose();
   operation.dispose();
   proof.dispose();
-  draft.dispose();
+  unproven.dispose();
   assert.equal(input.text, "true");
   assert.equal(output.text, "false");
   assert.equal(exampleInput.text, "null");
@@ -270,7 +271,7 @@ test("validated text and retained reads preserve exact UTF-16 and presence", () 
   for (const direction of ["input", "output"]) {
     for (const value of [undefined, "null", "true", "false", "{}"]) {
       const field = value === undefined ? "" : `,"${direction}":${value}`;
-      const doc = sdk.parseDocument(
+      const doc = sdk.Document.parse(
         `{"openbindings":"0.2.0","operations":{"run":{"description":"x"${field}}}}`,
       ).value;
       const op = doc.resolveOperation("run").operation;
@@ -289,10 +290,10 @@ test("validated text and retained reads preserve exact UTF-16 and presence", () 
     ["", undefined],
     [',"schemas":{}', 0],
   ]) {
-    const doc = sdk.parseDocument(
+    const doc = sdk.Document.parse(
       `{"openbindings":"0.2.0","operations":{}${fields}}`,
     ).value;
-    const proof = doc.validated().document;
+    const proof = doc.validate().document;
     assert.equal(proof.schemas()?.size, expected);
     assert.equal(proof.name, undefined);
     proof.dispose();
@@ -312,8 +313,8 @@ test("undetermined admission evidence cannot produce a proof through Rust/Wasm o
   const result = sdk.validateDocument(bytes);
   assert.equal(result.status, "report");
   assert.equal(result.report.conclusion, "undetermined");
-  assert.equal(sdk.parseDocument(bytes).status, "input-error");
+  assert.equal(sdk.Document.parse(bytes).status, "input-error");
   assert.throws(() =>
-    sdk.ValidatedDocument.prototype.valueContracts.call(result),
+    sdk.ConformantDocument.prototype.valueContracts.call(result),
   );
 });

@@ -193,7 +193,7 @@ view!(
 
 macro_rules! document_namespace {
     ($many:ident, $one:ident, $view:ident, $field:literal, $code:literal) => {
-        impl ParsedDocument {
+        impl Document {
             #[doc = concat!("Allocate retained ", $field, " views in lexical key order. None means an absent namespace; an empty vector means a present empty object. Checks identity/object shapes, not metadata fields; each accessor reports its own field errors. Global interpretation prerequisites still apply.")]
             ///
             /// # Errors
@@ -412,7 +412,7 @@ impl OperationView {
     }
 }
 
-impl ParsedDocument {
+impl Document {
     /// Read the supported declaration, preserving absence separately from malformed text.
     ///
     /// # Errors
@@ -491,7 +491,7 @@ mod tests {
     use super::*;
     #[test]
     fn indexes_and_keys_are_reused_across_retained_views() {
-        let doc = ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"run":{"examples":{"e":{}}}},"sources":{"s":{"kind":"k"}}}"#).unwrap();
+        let doc = Document::parse(r#"{"openbindings":"0.2.0","operations":{"run":{"examples":{"e":{}}}},"sources":{"s":{"kind":"k"}}}"#).unwrap();
         assert!(doc.inner.sources.get().is_none());
         let first = doc.source("s").unwrap().unwrap();
         let clone = doc.clone();

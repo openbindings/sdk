@@ -6,7 +6,7 @@ import { initialize } from "../dist/index.js";
 import { exampleDocument, firstUse } from "../examples/first-use.mjs";
 import {
   DocumentEditor,
-  exampleDraft,
+  editorDocument,
   formatEditorResult,
 } from "../examples/editor.mjs";
 
@@ -47,7 +47,7 @@ test("first-use caller keeps setup refusals separate and releases its owners", (
 });
 
 test("source editor requires conformance and retains prepared partial snapshots", () => {
-  const corrected = exampleDraft.replace('"inputSchema":', '"input":');
+  const corrected = editorDocument.replace('"inputSchema":', '"input":');
   const warm = new DocumentEditor();
   warm.update(corrected);
   warm.dispose();
@@ -55,7 +55,7 @@ test("source editor requires conformance and retains prepared partial snapshots"
   const editor = new DocumentEditor();
   let retained;
   try {
-    const rejected = editor.update(exampleDraft);
+    const rejected = editor.update(editorDocument);
     assert.equal(rejected.status, "report");
     assert.equal(rejected.report.conclusion, "non-conformant");
     const finding = rejected.report.findings.find(
@@ -70,7 +70,7 @@ test("source editor requires conformance and retains prepared partial snapshots"
     assert.equal(accepted.status, "updated");
     assert.equal(accepted.result.outcome, "satisfies");
     retained = editor.snapshot();
-    assert.equal(new TextDecoder().decode(retained.originalBytes), corrected);
+    assert.equal(new TextDecoder().decode(retained.toBytes()), corrected);
     assert.equal(editor.update("{").status, "input-error");
     assert.equal(
       editor.update(
@@ -95,10 +95,7 @@ test("source editor requires conformance and retains prepared partial snapshots"
     );
     const current = editor.snapshot();
     try {
-      assert.equal(
-        new TextDecoder().decode(current.originalBytes),
-        partialText,
-      );
+      assert.equal(new TextDecoder().decode(current.toBytes()), partialText);
     } finally {
       current.dispose();
     }

@@ -2,7 +2,7 @@
 //! The only unsafe code forwards allocator contracts unchanged to System.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use openbindings::{JsonValue, ParsedDocument, Source};
+use openbindings::{Document, JsonValue, Source};
 use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
     BindingRequest, BindingValue, InvocationError, InvocationLimits, ProviderIo, WriteError,
@@ -528,13 +528,13 @@ fn main() {
     measurements.push(measure("checked_cancel_release", iterations, 0, || {
         cancelled(&parked_invoker, request, &subtree)
     }));
-    let document = ParsedDocument::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"echo":{{"aliases":["say"]}}}},"bindings":{{"b":{{"operation":"echo","source":"s"}}}},"sources":{{"s":{{"kind":"resource.fixture","content":{}}}}}}}"#, parent.text())).unwrap();
+    let document = Document::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"echo":{{"aliases":["say"]}}}},"bindings":{{"b":{{"operation":"echo","source":"s"}}}},"sources":{{"s":{{"kind":"resource.fixture","content":{}}}}}}}"#, parent.text())).unwrap();
     let operation = openbindings_invocation::operation::Invoker::new(
         document
             .clone()
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant invocation document"),
         &fixture,
     );
@@ -542,7 +542,7 @@ fn main() {
         document
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant invocation document"),
         &parked,
     );
@@ -581,12 +581,12 @@ fn main() {
     }));
     // The missing-evaluator case exercises diagnostic release, without making
     // the invocation companion depend on a particular evaluator implementation.
-    let declared = ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{"input":true}},"bindings":{"b":{"operation":"echo","source":"s"}},"sources":{"s":{"kind":"resource.fixture","content":null}}}"#).unwrap();
+    let declared = Document::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{"input":true}},"bindings":{"b":{"operation":"echo","source":"s"}},"sources":{"s":{"kind":"resource.fixture","content":null}}}"#).unwrap();
     let unresolved = openbindings_invocation::operation::Invoker::new(
         declared
             .validate()
             .unwrap()
-            .validated()
+            .conformant()
             .expect("conformant invocation document"),
         &fixture,
     );
@@ -610,12 +610,12 @@ fn main() {
     // carrier slots, document indexes and backing owners as well.
     let owners_before = Snapshot::now();
     {
-        let document = ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{}},"bindings":{"b":{"operation":"echo","source":"s"}},"sources":{"s":{"kind":"resource.fixture","content":null}}}"#).unwrap();
+        let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{}},"bindings":{"b":{"operation":"echo","source":"s"}},"sources":{"s":{"kind":"resource.fixture","content":null}}}"#).unwrap();
         let invoker = openbindings_invocation::operation::Invoker::new(
             document
                 .validate()
                 .unwrap()
-                .validated()
+                .conformant()
                 .expect("conformant invocation document"),
             &fixture,
         );

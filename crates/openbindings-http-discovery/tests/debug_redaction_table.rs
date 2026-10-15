@@ -1,5 +1,5 @@
 //! Debug is structural. Explicit display/accessors/serialization retain payloads.
-use openbindings::{DocumentValidation, ParsedDocument, VersionRefusal};
+use openbindings::{Document, DocumentValidation, VersionRefusal};
 use openbindings_http_discovery as http;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -115,7 +115,7 @@ fn http_rows(
         ),
     ]);
     let publication = http::Publication::new(
-        &validation.validated().unwrap(),
+        &validation.conformant().unwrap(),
         http::PublicationOptions {
             allow_origin: http::AllowOrigin::Exact(format!(
                 "https://{}.invalid",
@@ -146,7 +146,7 @@ fn check_rows(rows: Vec<Row>, expected: usize) {
 #[test]
 fn debug_redacts_caller_text_at_every_boundary() {
     let reference = format!("https://user:{SECRET}@example.invalid/schema?access_token={SECRET}");
-    let parsed = ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"properties":{"MEMBER":{"type":"string"}}}}}}"#.replace("MEMBER", SECRET)).unwrap();
+    let parsed = Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"properties":{"MEMBER":{"type":"string"}}}}}}"#.replace("MEMBER", SECRET)).unwrap();
     let validation = parsed.validate().unwrap();
     let version = VersionRefusal {
         declared: SECRET.into(),

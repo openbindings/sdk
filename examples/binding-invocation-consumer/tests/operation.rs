@@ -1,7 +1,7 @@
 //! External-consumer checks: literal catalog expectations, public APIs only.
 use binding_invocation_consumer::{Catalog, KIND, yield_once};
 use openbindings::{
-    Direction, JsonValue, NoVerdict, NoVerdictReason, ParsedDocument, PreparedSchema, ResourceSet,
+    Direction, Document, JsonValue, NoVerdict, NoVerdictReason, PreparedSchema, ResourceSet,
     SchemaEvaluator, SchemaRequest, Source, ValueOutcome, ValueProblem,
 };
 use openbindings_interface_synthesis::{
@@ -34,8 +34,8 @@ fn source(content: &str) -> Source {
         ..Default::default()
     }
 }
-fn document(operation: &str, content: &str) -> openbindings::ValidatedDocument {
-    ParsedDocument::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"run":{operation}}},"sources":{{"catalog":{{"kind":"{KIND}","content":{content}}}}},"bindings":{{"chosen":{{"operation":"run","source":"catalog","content":"manual"}}}}}}"#)).unwrap().validate().unwrap().validated().unwrap()
+fn document(operation: &str, content: &str) -> openbindings::Conformant<openbindings::Document> {
+    Document::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"run":{operation}}},"sources":{{"catalog":{{"kind":"{KIND}","content":{content}}}}},"bindings":{{"chosen":{{"operation":"run","source":"catalog","content":"manual"}}}}}}"#)).unwrap().validate().unwrap().conformant().unwrap()
 }
 
 // Deliberately independent of the default evaluator. Unsupported schemas must
@@ -52,7 +52,7 @@ impl SchemaEvaluator for Booleans {
         control: &dyn openbindings::WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         control.check()?;
-        let proof: &openbindings::ValidatedDocument = request.document();
+        let proof: &openbindings::Conformant<openbindings::Document> = request.document();
         assert_eq!(proof.openbindings(), "0.2.0");
         self.preparations.fetch_add(1, Ordering::Relaxed);
         request
@@ -175,12 +175,12 @@ async fn inspect_synthesize_and_invoke_operation_preserves_exact_values() {
 
 #[tokio::test]
 async fn manual_alias_ordered_selection_and_invalid_suffix_are_explicit() {
-    let doc = ParsedDocument::parse(format!(r#"{{"openbindings":"0.2.0",
+    let doc = Document::parse(format!(r#"{{"openbindings":"0.2.0",
         "operations":{{"run":{{"aliases":["go"]}},"other":{{}}}},
         "sources":{{"catalog":{{"kind":"{KIND}","content":{{"units":[{{"id":"first"}},{{"id":"second"}}]}}}},"unsupported":{{"kind":"urn:unsupported"}}}},
         "bindings":{{"first":{{"operation":"run","source":"catalog","content":"first"}},"second":{{"operation":"run","source":"catalog","content":"second"}},"skip":{{"operation":"run","source":"unsupported"}},"foreign":{{"operation":"other","source":"catalog","content":"first"}}}}}}"#)).unwrap();
     let provider = Catalog::default();
-    let invoker = Invoker::new(doc.validate().unwrap().validated().unwrap(), &provider);
+    let invoker = Invoker::new(doc.validate().unwrap().conformant().unwrap(), &provider);
     assert_eq!(
         invoker
             .preflight(Request::operation("go"))

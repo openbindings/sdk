@@ -118,18 +118,17 @@ fn authoring_rows(source: &Source, operation: &Operation, context: &JsonValue) -
         description: Some(SECRET.into()),
         additional_fields: evidence(),
     };
-    let document = Document {
-        openbindings: SECRET.into(),
-        name: Some(SECRET.into()),
-        version: Some(SECRET.into()),
-        description: Some(SECRET.into()),
-        operations: BTreeMap::from([(SECRET.into(), operation.clone())]),
-        schemas: Some(evidence()),
-        sources: Some(BTreeMap::from([(SECRET.into(), source.clone())])),
-        bindings: Some(BTreeMap::from([(SECRET.into(), binding.clone())])),
-        dependencies: Some(BTreeMap::from([(SECRET.into(), dependency.clone())])),
-        additional_fields: evidence(),
-    };
+    let document = Document::parse(
+        serde_json::json!({
+            "openbindings": SECRET, "name": SECRET, "version": SECRET,
+            "description": SECRET, "operations": {SECRET: &operation},
+            "schemas": {SECRET: &context}, "sources": {SECRET: &source},
+            "bindings": {SECRET: &binding}, "dependencies": {SECRET: &dependency},
+            "x-private": &context,
+        })
+        .to_string(),
+    )
+    .unwrap();
     vec![
         row("Document", &document),
         row("Source", source),
@@ -162,10 +161,10 @@ fn debug_redacts_caller_text_at_every_boundary() {
     )
     .unwrap();
     let reference = format!("https://user:{SECRET}@example.invalid/schema?access_token={SECRET}");
-    let parsed_ref = ParsedDocument::parse(serde_json::json!({"openbindings":"0.2.0", "operations":{"op":{"input":{"$ref":reference}}}}).to_string()).unwrap();
-    let parsed = ParsedDocument::parse(serde_json::json!({"openbindings":"0.2.0", "operations":{"op":{"input":{"properties":{SECRET:{"type":"string"}}}}}}).to_string()).unwrap();
+    let parsed_ref = Document::parse(serde_json::json!({"openbindings":"0.2.0", "operations":{"op":{"input":{"$ref":reference}}}}).to_string()).unwrap();
+    let parsed = Document::parse(serde_json::json!({"openbindings":"0.2.0", "operations":{"op":{"input":{"properties":{SECRET:{"type":"string"}}}}}}).to_string()).unwrap();
     let validation = parsed.validate().unwrap();
-    let validated = validation.validated().unwrap();
+    let validated = validation.conformant().unwrap();
     let source_location = SourceLocation {
         pointer: Some(format!("/{SECRET}")),
         byte_offset: 42,
@@ -237,9 +236,9 @@ fn debug_redacts_caller_text_at_every_boundary() {
                 location: source_location,
             },
         ),
-        row("ParsedDocument", &parsed),
+        row("Document", &parsed),
         row("DocumentValidation", &validation),
-        row("ValidatedDocument", &validated),
+        row("Conformant<Document>", &validated),
         row(
             "OperationSelection",
             &OperationSelection::Ambiguous {
@@ -384,8 +383,10 @@ fn debug_redacts_caller_text_at_every_boundary() {
     operation
         .additional_fields
         .insert("description".into(), JsonValue::null());
-    draft.operations.insert(SECRET.into(), operation);
-    let authoring = draft.build().unwrap_err();
+    let EditError::Authoring(authoring) = draft.set_operation(SECRET, &operation).unwrap_err()
+    else {
+        panic!()
+    };
     assert!(authoring.draft_pointer().unwrap().contains(SECRET));
     rows.push(row("AuthoringError", &authoring));
     let source = Source {

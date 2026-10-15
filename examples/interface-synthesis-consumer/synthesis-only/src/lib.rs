@@ -1,5 +1,5 @@
 //! Compiles without the inspection companion anywhere in its dependency graph.
-use openbindings::Document;
+use openbindings::{Document, Edit, JsonValue};
 use openbindings_interface_synthesis::CancellationToken;
 use openbindings_interface_synthesis::*;
 use std::future::{Ready, ready};
@@ -14,26 +14,38 @@ impl InterfaceSynthesizer for Skeleton {
         r: &'a SynthesisRequest<'a>,
         _: CancellationToken,
     ) -> Self::Synthesis<'a> {
-        let mut draft = Document::new();
-        draft.openbindings = r
-            .openbindings_version
-            .unwrap_or(openbindings::AUTHORING_VERSION)
-            .into();
-        draft.name = r.name.map(str::to_owned);
-        draft.version = r.version.map(str::to_owned);
-        draft.description = r.description.map(str::to_owned);
-        ready(
-            draft
-                .build()
-                .map(|document| SynthesisCandidate {
-                    document,
-                    coverage: CoverageDraft {
-                        exhaustive: true,
-                        ..Default::default()
-                    },
-                })
-                .map_err(Into::into),
-        )
+        ready((|| {
+            let mut document = Document::new();
+            let fields = [
+                (
+                    "/openbindings",
+                    Some(
+                        r.openbindings_version
+                            .unwrap_or(openbindings::AUTHORING_VERSION),
+                    ),
+                ),
+                ("/name", r.name),
+                ("/version", r.version),
+                ("/description", r.description),
+            ]
+            .into_iter()
+            .filter_map(|(pointer, text)| text.map(|text| (pointer, text)))
+            .map(|(pointer, text)| JsonValue::string(text).map(|value| (pointer, value)))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(openbindings::EditError::from)?;
+            let edits: Vec<_> = fields
+                .iter()
+                .map(|(pointer, value)| Edit::Set { pointer, value })
+                .collect();
+            document.edit(&edits)?;
+            Ok(SynthesisCandidate {
+                document,
+                coverage: CoverageDraft {
+                    exhaustive: true,
+                    ..Default::default()
+                },
+            })
+        })())
     }
 }
 #[cfg(test)]
@@ -50,15 +62,25 @@ async fn source_free_overrides_and_ownership() {
     let result = provider.synthesize_with_coverage(&request).await.unwrap();
     let strict = provider.synthesize(&request).await.unwrap();
     assert_eq!(
-        result.document().parsed().original_bytes(),
-        strict.original_bytes()
+        result.document().as_document().to_bytes(),
+        strict.to_bytes()
     );
     assert_eq!(
-        strict.parsed().value().get("version").unwrap().as_str(),
+        strict
+            .as_document()
+            .value()
+            .get("version")
+            .unwrap()
+            .as_str(),
         Some("app.v1")
     );
     assert_eq!(
-        strict.parsed().value().get("description").unwrap().as_str(),
+        strict
+            .as_document()
+            .value()
+            .get("description")
+            .unwrap()
+            .as_str(),
         request.description
     );
     assert_eq!(result.coverage().entries().len(), 0);

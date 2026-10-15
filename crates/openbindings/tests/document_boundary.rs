@@ -1,16 +1,12 @@
 use openbindings::*;
 
 #[test]
-fn original_bytes_include_whitespace_and_rebased_children_have_local_locations() {
+fn to_bytes_include_whitespace_and_rebased_children_have_local_locations() {
     let text = " \n {\"openbindings\":\"0.2.0\",\"operations\":{}}\t\n";
-    let doc = ParsedDocument::parse(text).unwrap();
-    assert_eq!(doc.original_bytes(), text.as_bytes());
+    let doc = Document::parse(text).unwrap();
+    assert_eq!(doc.to_bytes(), text.as_bytes());
     assert_eq!(
-        doc.validate()
-            .unwrap()
-            .validated()
-            .unwrap()
-            .original_bytes(),
+        doc.validate().unwrap().conformant().unwrap().to_bytes(),
         text.as_bytes()
     );
     let parent =
@@ -18,9 +14,9 @@ fn original_bytes_include_whitespace_and_rebased_children_have_local_locations()
             .unwrap();
     let child = parent.get("child").unwrap().to_owned();
     let expected = child.text().to_owned();
-    let doc = ParsedDocument::from_json(child);
+    let doc = Document::from_json(child);
     drop(parent);
-    assert_eq!(doc.original_bytes(), expected.as_bytes());
+    assert_eq!(doc.to_bytes(), expected.as_bytes());
     assert_eq!(doc.value().location().byte_offset, 0);
     assert_eq!(doc.value().location().pointer.as_deref(), Some(""));
 }
@@ -31,14 +27,13 @@ fn validation(text: &str) -> DocumentValidation {
 #[test]
 fn states_do_not_confuse_empty_findings_with_conformance() {
     let parsed =
-        ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{},"unknown":true}"#)
-            .unwrap();
+        Document::parse(r#"{"openbindings":"0.2.0","operations":{},"unknown":true}"#).unwrap();
     let checked = parsed.validate().unwrap();
     assert_eq!(checked.report().conclusion, Conformance::NonConformant);
-    assert!(checked.validated().is_none());
+    assert!(checked.conformant().is_none());
     assert_eq!(checked.report().evidence.len(), 13);
     let invalid = validate_document(b"{broken").unwrap();
-    assert!(invalid.parsed().is_none());
+    assert!(invalid.document().is_none());
     assert_eq!(invalid.report().evidence["OBI-01"], Evidence::Violated);
     for rule in &DOCUMENT_RULES[1..] {
         assert_eq!(invalid.report().evidence[rule], Evidence::NotApplicable);
@@ -79,7 +74,7 @@ fn lone_surrogates_remain_exact_and_are_not_syntax_errors() {
     let checked = validation(text);
     assert_eq!(checked.report().conclusion, Conformance::Conformant);
     assert_eq!(checked.report().evidence["OBI-01"], Evidence::Met);
-    assert_eq!(checked.parsed().unwrap().original_bytes(), text.as_bytes());
+    assert_eq!(checked.document().unwrap().to_bytes(), text.as_bytes());
     let duplicate = validation(r#"{"openbindings":"0.2.0","operations":{},"\ud800":1,"\ud800":2}"#);
     assert_eq!(duplicate.report().evidence["OBI-01"], Evidence::Violated);
 }
@@ -112,18 +107,18 @@ fn meta_checks_find_local_errors_before_a_depth_limit() {
 fn immutable_snapshot_is_independent_of_authoring_mutation() {
     let mut builder = Document::new();
     builder
-        .operations
-        .insert("first".into(), Operation::default());
-    let snapshot = builder.build().unwrap();
-    builder.operations.clear();
-    let valid = snapshot.validate().unwrap().validated().unwrap();
+        .set_operation("first", &Operation::default())
+        .unwrap();
+    let snapshot = builder.clone();
+    builder.set_operations(&Default::default()).unwrap();
+    let valid = snapshot.validate().unwrap().conformant().unwrap();
     assert!(matches!(
-        valid.parsed().resolve_operation("first").unwrap(),
+        valid.as_document().resolve_operation("first").unwrap(),
         OperationSelection::Found(_)
     ));
     fn send_sync<T: Send + Sync>() {}
-    send_sync::<ParsedDocument>();
-    send_sync::<ValidatedDocument>();
+    send_sync::<Document>();
+    send_sync::<Conformant<Document>>();
     send_sync::<JsonValue>();
 }
 

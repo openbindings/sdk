@@ -18,12 +18,12 @@ fn exact_views_and_authoring_owners_do_not_print_source_data() {
     redacted(&member.name.to_owned());
     redacted(&member.value.location());
     redacted(&member.value.as_string().unwrap());
-    let parsed = ParsedDocument::parse(format!(
+    let parsed = Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{}},"x-{SECRET}":"{SECRET}"}}"#
     ))
     .unwrap();
     redacted(&parsed);
-    redacted(&parsed.to_authoring().unwrap());
+    redacted(&parsed.clone());
     redacted(&Source {
         kind: SECRET.into(),
         content: Some(value),
@@ -58,11 +58,11 @@ impl SchemaEvaluator for PrivateEvaluator {
 
 #[test]
 fn evaluator_requests_and_resources_redact_original_snapshots_and_identifiers() {
-    let parsed = ParsedDocument::parse(format!(
+    let parsed = Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{{"enum":["{SECRET}"]}}}}}}}}"#
     ))
     .unwrap();
-    let document = parsed.validate().unwrap().validated().unwrap();
+    let document = parsed.validate().unwrap().conformant().unwrap();
     let resource = SchemaResource {
         uri: format!("https://example.invalid/{SECRET}"),
         document: JsonValue::parse(format!(r#"{{"const":"{SECRET}"}}"#)).unwrap(),

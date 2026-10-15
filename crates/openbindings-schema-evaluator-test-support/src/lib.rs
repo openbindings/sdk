@@ -196,12 +196,12 @@ fn translate_documents(suite: &mut Suite) {
             group.cases.iter().map(|c| &c.id).collect::<Vec<_>>(),
             m.case_ids.iter().collect::<Vec<_>>()
         );
-        let validation = ParsedDocument::parse(&group.document)
+        let validation = Document::parse(&group.document)
             .unwrap()
             .validate()
             .unwrap();
         assert_eq!(validation.report().evidence["OBI-12"], Evidence::Violated);
-        assert!(validation.validated().is_none());
+        assert!(validation.conformant().is_none());
     }
 }
 /// Frozen inputs. No network access, environment variables, or sibling checkout is needed.
@@ -359,7 +359,7 @@ pub fn run(evaluator: Arc<dyn SchemaEvaluator>, options: &Options) -> Report {
         }
     }
     for group in &suite.groups {
-        let document = ParsedDocument::parse(&group.document).expect("packaged document JSON");
+        let document = Document::parse(&group.document).expect("packaged document JSON");
         let resources = ResourceSet::new(group.resources.iter().map(|id| {
             let r = &suite.resources[id];
             SchemaResource {
@@ -371,7 +371,7 @@ pub fn run(evaluator: Arc<dyn SchemaEvaluator>, options: &Options) -> Report {
         let validated = document
             .validate()
             .expect("supported fixture version")
-            .validated()
+            .conformant()
             .expect("conformant fixture document");
         let context = validated.value_contracts(evaluator.clone(), resources);
         let prepared = context.prepare("op", Direction::Input);

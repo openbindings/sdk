@@ -13,7 +13,7 @@ const source = firstUseSnippet(readme);
 
 test("README source is captured verbatim with LF or CRLF", () => {
   assert(original.includes(firstUseSnippet(original)));
-  assert(source.startsWith("import { parseDocument, type JsonInput }"));
+  assert(source.startsWith("import { Document, type JsonInput }"));
   assert(source.endsWith('console.log(checkInput("seven"));\n'));
   assert.equal(
     firstUseSnippet(readme.replaceAll("\n", "\r\n")),

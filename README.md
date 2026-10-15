@@ -13,27 +13,32 @@ see [migration](docs/migration.md) before replacing a dependency.
 ## Read an operation in Rust
 
 ```rust
-use openbindings::{Conformance, ParsedDocument};
+use openbindings::{Conformance, Document};
 
-let document = ParsedDocument::parse(
+let document = Document::parse(
     br#"{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"]}}}"#,
 )?;
 let validation = document.validate()?;
 assert_eq!(validation.report().conclusion, Conformance::Conformant);
-let validated = validation.validated().ok_or("document is not conformant")?;
-let operation = validated.resolve_operation("find").ok_or("operation is missing")?;
+let conformant = validation.conformant().ok_or("document is not conformant")?;
+let operation = conformant.resolve_operation("find").ok_or("operation is missing")?;
 assert_eq!(operation.key(), "lookup");
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
 Continue with [Rust first use](docs/rust-first-use.md) to prepare a value contract,
 validate input, edit opaque values and retain prepared work. Rust needs no runtime
-initialization. The evaluator companion's `value_contracts(&validated)` function
+initialization. The evaluator companion's `value_contracts(&conformant)` function
 supplies default budgets, coarse diagnostics and no extra resources. Prepare with
 `context.prepare(name, Direction::Input).into_result()?`, then check JSON text or
 bytes with `contract.validate_json(input)?`. The explicit context method remains
 available for shared evaluators and supplied resources. The [TypeScript guide](packages/typescript/README.md) starts with a
 complete document-to-verdict example and covers initialization and disposal.
+
+Edit a mutable `Document` with `set`, `remove`, atomic `edit(&[Edit])`, or typed
+field and part setters. Untouched bytes remain exact. `Conformant<Document>`
+has no mutable access; consume it with `into_inner()` to edit again. Clones,
+views and proofs retain their revision.
 
 ## Choose the work you need
 

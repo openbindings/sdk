@@ -1,8 +1,8 @@
 use openbindings::*;
 use std::fmt::Debug;
 
-fn document(fields: &str) -> ParsedDocument {
-    ParsedDocument::parse(format!(
+fn document(fields: &str) -> Document {
+    Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{}}{fields}}}"#
     ))
     .unwrap()
@@ -63,7 +63,7 @@ fn namespaces_preserve_absence_empty_shape_and_lexical_order() {
 
 #[test]
 fn keyed_lookup_and_each_field_are_local() {
-    let doc = ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"unrelated":{"aliases":[false]}},"sources":{"good":{"kind":"good-kind","description":"ok"},"bad":{"kind":"valid-kind","description":42},"shape":null},"dependencies":{"good":{"operation":"absent"},"bad":{"kinds":42}},"bindings":{"good":{"operation":"absent","source":"missing","description":false}}}"#).unwrap();
+    let doc = Document::parse(r#"{"openbindings":"0.2.0","operations":{"unrelated":{"aliases":[false]}},"sources":{"good":{"kind":"good-kind","description":"ok"},"bad":{"kind":"valid-kind","description":42},"shape":null},"dependencies":{"good":{"operation":"absent"},"bad":{"kinds":42}},"bindings":{"good":{"operation":"absent","source":"missing","description":false}}}"#).unwrap();
     assert!(doc.operations().is_err());
     let good = doc.source("good").unwrap().unwrap();
     assert_eq!(good.kind().unwrap(), "good-kind");
@@ -186,12 +186,22 @@ fn preference_reuses_exact_authoring_rules() {
                 .get(),
             expected
         );
+        let preference = Preference::new(expected).unwrap();
+        let mut edited = doc.clone();
+        edited
+            .set_binding(
+                "b",
+                &Binding {
+                    operation: "x".into(),
+                    source: "s".into(),
+                    preference: Some(preference),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
         assert_eq!(
-            doc.to_authoring().unwrap().bindings.unwrap()["b"]
-                .preference
-                .unwrap()
-                .get(),
-            expected
+            edited.binding("b").unwrap().unwrap().preference().unwrap(),
+            Some(preference)
         );
     }
     for token in ["null", "true", r#""1""#, "1.1", "9007199254740992", "1e999"] {
@@ -203,7 +213,10 @@ fn preference_reuses_exact_authoring_rules() {
             "invalid-binding-preference",
             "/bindings/b/preference",
         );
-        assert!(doc.to_authoring().is_err());
+        assert_eq!(
+            doc.validate().unwrap().report().conclusion,
+            Conformance::NonConformant
+        );
     }
 }
 
@@ -243,7 +256,7 @@ fn lists_are_checked_before_any_items_escape() {
     );
     // Even a matching first item cannot hide the invalid later item.
     assert!(doc.dependency_accepts_kind("bad", "kind").is_err());
-    let opdoc = ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"a":{"tags":["ok",null],"deprecated":null},"b":{"tags":[],"deprecated":false},"c":{}}}"#).unwrap();
+    let opdoc = Document::parse(r#"{"openbindings":"0.2.0","operations":{"a":{"tags":["ok",null],"deprecated":null},"b":{"tags":[],"deprecated":false},"c":{}}}"#).unwrap();
     let ops = opdoc.operations().unwrap();
     let error = match ops[0].tags() {
         Err(e) => e,
@@ -263,7 +276,7 @@ fn lists_are_checked_before_any_items_escape() {
 
 #[test]
 fn examples_share_operation_namespace_and_retain_exact_instances() {
-    let doc=ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{"a":{"aliases":["alias"],"tags":["one"],"examples":{"z":{"description":42,"input":null},"a":{"input":9007199254740993,"output":0.29000000000000001},"bad":false}},"empty":{"examples":{}},"none":{}}}"#).unwrap();
+    let doc=Document::parse(r#"{"openbindings":"0.2.0","operations":{"a":{"aliases":["alias"],"tags":["one"],"examples":{"z":{"description":42,"input":null},"a":{"input":9007199254740993,"output":0.29000000000000001},"bad":false}},"empty":{"examples":{}},"none":{}}}"#).unwrap();
     let OperationSelection::Found(op) = doc.resolve_operation("alias").unwrap() else {
         panic!()
     };
@@ -327,7 +340,7 @@ fn owned_traits_document_drop_and_global_refusals() {
         ),
         (r#"{"openbindings":1,"sources":{}}"#, "malformed-version"),
     ] {
-        let error = ParsedDocument::parse(text).unwrap().sources().unwrap_err();
+        let error = Document::parse(text).unwrap().sources().unwrap_err();
         assert_eq!(error.code(), code);
         assert!(error.source_location().is_none());
     }

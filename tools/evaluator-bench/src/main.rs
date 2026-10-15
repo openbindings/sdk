@@ -46,7 +46,7 @@ fn one() -> usize {
     1
 }
 fn context(r: &Request) -> ValueContracts {
-    let document = ParsedDocument::parse(format!(
+    let document = Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{{"$ref":"{ROOT}"}}}}}}}}"#
     ))
     .unwrap();
@@ -63,7 +63,7 @@ fn context(r: &Request) -> ValueContracts {
         uri: ROOT.into(),
         document: JsonValue::parse(&r.schema).unwrap(),
     });
-    validation.validated().unwrap().value_contracts(
+    validation.conformant().unwrap().value_contracts(
         Arc::new(
             DefaultEvaluator::with_limits(r.limits.clone()).with_diagnostics(if r.upstream {
                 Diagnostics::Upstream

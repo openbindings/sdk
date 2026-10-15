@@ -18,11 +18,14 @@ const packageRoot = path.resolve(
 const root = path.resolve(packageRoot, "../..");
 const engine = process.argv[2] ?? "chromium";
 const id = crypto.randomUUID(),
-  output = path.join(root, "tools/qualification/hosts", engine);
+  output =
+    process.env.OB_BROWSER_OUTPUT ??
+    path.join(root, "tools/qualification/hosts", engine);
 await fs.mkdir(output, { recursive: true });
 const requests = JSON.parse(
   await fs.readFile(
-    path.join(root, "tools/qualification/corpus/browser-requests.json"),
+    process.env.OB_BROWSER_REQUESTS ??
+      path.join(root, "tools/qualification/corpus/browser-requests.json"),
     "utf8",
   ),
 );
@@ -38,12 +41,12 @@ for (const name of [
 ]) {
   const bytes = await fs.readFile(path.join(packageRoot, "dist", name));
   files.set(
-    "/validated-contracts.mjs",
-    await fs.readFile(path.join(packageRoot, "test/validated-contracts.mjs")),
+    "/conformant-contracts.mjs",
+    await fs.readFile(path.join(packageRoot, "test/conformant-contracts.mjs")),
   );
   files.set(
-    "/using/validated-contracts.mjs",
-    await fs.readFile(path.join(packageRoot, "test/validated-contracts.mjs")),
+    "/using/conformant-contracts.mjs",
+    await fs.readFile(path.join(packageRoot, "test/conformant-contracts.mjs")),
   );
   files.set("/dist/" + name, bytes); // match the installed package layout
 }

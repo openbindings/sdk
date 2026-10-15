@@ -1,8 +1,6 @@
 //! Default value failures must not construct eager library diagnostics.
 use super::{JsonValue, measured};
-use openbindings::{
-    Direction, ParsedDocument, ResourceSet, ValueContractPreparation, ValueOutcome,
-};
+use openbindings::{Direction, Document, ResourceSet, ValueContractPreparation, ValueOutcome};
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::json;
 use std::sync::Arc;
@@ -25,10 +23,10 @@ pub fn run() {
     ] {
         let text =
             json!({"openbindings":"0.2.0","operations":{"check":{"input":schema}}}).to_string();
-        let document = ParsedDocument::parse(text).unwrap();
+        let document = Document::parse(text).unwrap();
         let validation = document.validate().unwrap();
         let context = validation
-            .validated()
+            .conformant()
             .expect("conformant fixture")
             .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
         let ValueContractPreparation::Ready(contract) = context.prepare("check", Direction::Input)

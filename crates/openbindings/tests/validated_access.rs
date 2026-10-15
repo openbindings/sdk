@@ -1,14 +1,14 @@
 use openbindings::*;
 
-fn proof(text: &str) -> ValidatedDocument {
+fn proof(text: &str) -> Conformant<Document> {
     let validation = validate_document(text).unwrap();
     validation
-        .validated()
+        .conformant()
         .unwrap_or_else(|| panic!("{:?}", validation.report()))
 }
 
 #[test]
-fn exact_strings_and_retained_validated_views_preserve_every_utf16_unit() {
+fn exact_strings_and_retained_conformant_views_preserve_every_utf16_unit() {
     let document = proof(
         r#"{"openbindings":"0.2.0","name":"\ud800","version":"\udc00","description":"\ud800","operations":{"run":{"description":"\ud800","tags":["\ud800","𝄞"],"aliases":["go"],"deprecated":false,"input":true,"output":false,"examples":{"e":{"description":"\ud800","input":null}}}},"sources":{"s":{"kind":"\ud800","description":"\udc00","content":null}},"bindings":{"b":{"operation":"run","source":"s","description":"\ud800","preference":0,"idempotent":false,"deprecated":false,"content":null}},"dependencies":{"d":{"operation":"run","kinds":["\uD800"],"description":"\ud800"}},"schemas":{"z":false,"a":{}}}"#,
     );
@@ -43,10 +43,10 @@ fn exact_strings_and_retained_validated_views_preserve_every_utf16_unit() {
     let dependency = document.dependency("d").unwrap();
     let example = operation.example("e").unwrap();
     assert!(dependency.accepts_kind(source.kind()));
-    assert_eq!(document.parsed().description().unwrap().unwrap(), name);
+    assert_eq!(document.as_document().description().unwrap().unwrap(), name);
     assert_eq!(
         document
-            .parsed()
+            .as_document()
             .source("s")
             .unwrap()
             .unwrap()
@@ -123,7 +123,7 @@ fn presence_and_field_local_editor_errors_remain_distinct() {
     assert_eq!(op.tags().unwrap().len(), 0);
     assert_eq!(op.aliases().unwrap().len(), 0);
     assert!(op.examples().unwrap().is_empty());
-    let parsed = ParsedDocument::parse(r#"{"openbindings":"0.2.0","name":7,"operations":{"run":{"input":null,"description":false}}}"#).unwrap();
+    let parsed = Document::parse(r#"{"openbindings":"0.2.0","name":7,"operations":{"run":{"input":null,"description":false}}}"#).unwrap();
     assert_eq!(
         parsed
             .name()
@@ -137,7 +137,7 @@ fn presence_and_field_local_editor_errors_remain_distinct() {
     let op = parsed.operations().unwrap().remove(0);
     assert_eq!(op.input().unwrap().kind(), JsonKind::Null);
     assert!(op.description().is_err());
-    assert!(parsed.validate().unwrap().validated().is_none());
+    assert!(parsed.validate().unwrap().conformant().is_none());
 }
 
 #[test]
@@ -145,7 +145,7 @@ fn rejected_and_undetermined_documents_cannot_produce_proof() {
     assert!(
         validate_document(r#"{"openbindings":"0.2.0"}"#)
             .unwrap()
-            .validated()
+            .conformant()
             .is_none()
     );
     assert!(validate_document(r#"{"openbindings":"0.3.0","operations":{}}"#).is_err());
@@ -158,7 +158,7 @@ fn rejected_and_undetermined_documents_cannot_produce_proof() {
     )
     .unwrap();
     assert_eq!(result.report().conclusion, Conformance::Undetermined);
-    assert!(result.validated().is_none());
+    assert!(result.conformant().is_none());
 }
 
 #[test]
@@ -175,7 +175,7 @@ fn migrated_unreached_uncopied_target_cases_reject_at_obi12() {
             Evidence::Violated,
             "{id}"
         );
-        assert!(validation.validated().is_none(), "{id}: {instance}");
+        assert!(validation.conformant().is_none(), "{id}: {instance}");
         assert!(
             validation
                 .report()

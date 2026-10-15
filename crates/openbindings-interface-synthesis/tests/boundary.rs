@@ -1,5 +1,5 @@
 mod support;
-use openbindings::{Document, JsonLimits, ParsedDocument, VersionRefusal};
+use openbindings::{Document, JsonLimits, VersionRefusal};
 use openbindings_interface_synthesis::CancellationToken;
 use openbindings_interface_synthesis::*;
 use std::{
@@ -175,7 +175,7 @@ async fn source_preservation_is_exact_structural_and_panic_free() {
     assert!(deliver(&absent, candidate(&null)).await.is_err());
     let s = source(None);
     let mut c = candidate(&s);
-    c.document=ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":{},"sources":{"\ud800":{"kind":"example.coverage@1"}}}"#).unwrap();
+    c.document=Document::parse(r#"{"openbindings":"0.2.0","operations":{},"sources":{"\ud800":{"kind":"example.coverage@1"}}}"#).unwrap();
     assert!(deliver(&s, c).await.is_err());
 }
 
@@ -209,7 +209,7 @@ async fn source_indices_names_and_projection_identity() {
     assert_eq!(
         result
             .document()
-            .parsed()
+            .as_document()
             .value()
             .get("sources")
             .unwrap()
@@ -241,13 +241,14 @@ async fn source_indices_names_and_projection_identity() {
             .is_ok()
     );
     let mut reused = c.clone();
-    let mut b = reused.document.to_authoring().unwrap();
-    let binding = b.bindings.as_ref().unwrap()["getUser.api"].clone();
-    b.bindings
-        .as_mut()
+    let binding = reused
+        .document
+        .binding("getUser.api")
         .unwrap()
-        .insert("second".into(), binding);
-    reused.document = b.build().unwrap();
+        .unwrap()
+        .value()
+        .to_owned();
+    reused.document.set("/bindings/second", &binding).unwrap();
     let e = &mut reused.coverage.entries[0];
     e.scope = CoverageScope::Projection;
     let mut second = e.clone();
@@ -261,7 +262,7 @@ async fn source_indices_names_and_projection_identity() {
     assert!(deliver(&s, reused).await.is_err());
     let mut dropped = c.clone();
     let b = Document::new();
-    dropped.document = b.build().unwrap();
+    dropped.document = b.clone();
     dropped.coverage.entries.clear();
     assert!(deliver(&s, dropped).await.is_err());
 }
@@ -309,11 +310,11 @@ async fn every_boundary_failure_retains_a_repairable_candidate() {
             11 => bad.coverage.entries[0].dependency_key = Some("wrong-scope".into()),
             12 => {
                 bad.document =
-                    ParsedDocument::parse(r#"{"openbindings":"0.2.0","operations":null}"#).unwrap()
+                    Document::parse(r#"{"openbindings":"0.2.0","operations":null}"#).unwrap()
             }
             13 => {
                 bad.document =
-                    ParsedDocument::parse(r#"{"openbindings":"1.0.0","operations":{}}"#).unwrap()
+                    Document::parse(r#"{"openbindings":"1.0.0","operations":{}}"#).unwrap()
             }
             14 => {
                 bad.coverage
@@ -335,7 +336,7 @@ async fn every_boundary_failure_retains_a_repairable_candidate() {
             assert_eq!(finding.code, "shadowed-field");
             assert_eq!(finding.path, "/coverage/sourceKeys");
         }
-        let _editable = rejected.candidate.document.to_authoring();
+        let _editable = rejected.candidate.document.clone();
     }
     // A real wrong-input source link: both carriers exist, so simple key membership is insufficient.
     let different = source(Some("null"));
@@ -354,12 +355,7 @@ async fn every_boundary_failure_retains_a_repairable_candidate() {
         ..Default::default()
     };
     let mut c = c;
-    let mut b = c.document.to_authoring().unwrap();
-    b.sources
-        .as_mut()
-        .unwrap()
-        .insert("other".into(), different.clone());
-    c.document = b.build().unwrap();
+    c.document.set_source("other", &different).unwrap();
     c.coverage.entries[0].source_index = 1;
     assert!(
         Synthesizer::new(Fixed::new(c))
@@ -413,7 +409,7 @@ async fn exact_persistence_budgets_and_editing_do_not_reassign_evidence() {
         );
     }
     let reloaded = json(encoded.text());
-    let doc = ParsedDocument::parse(reloaded.get("interface").unwrap().text()).unwrap();
+    let doc = Document::parse(reloaded.get("interface").unwrap().text()).unwrap();
     assert_eq!(
         reloaded
             .get("coverage")
@@ -425,16 +421,9 @@ async fn exact_persistence_budgets_and_editing_do_not_reassign_evidence() {
             .number_text(),
         Some("1")
     );
-    let mut draft = doc.to_authoring().unwrap();
-    draft
-        .sources
-        .as_mut()
-        .unwrap()
-        .get_mut("api")
-        .unwrap()
-        .content = Some(json("null"));
-    let edited = draft.build().unwrap();
-    assert_ne!(edited.original_bytes(), doc.original_bytes());
+    let mut edited = doc.clone();
+    edited.set("/sources/api/content", &json("null")).unwrap();
+    assert_ne!(edited.to_bytes(), doc.to_bytes());
     assert!(
         result
             .to_json()
@@ -449,9 +438,9 @@ async fn exact_persistence_budgets_and_editing_do_not_reassign_evidence() {
 async fn unbound_contracts_pass_strict_and_partial_synthesis() {
     let s = source(None);
     let mut c = candidate(&s);
-    let mut draft = c.document.to_authoring().unwrap();
-    draft.operations.insert("event".into(), Default::default());
-    c.document = draft.build().unwrap();
+    let mut draft = c.document.clone();
+    draft.set_operation("event", &Default::default()).unwrap();
+    c.document = draft.clone();
     let inputs = [SynthesisSource {
         name: Some("api"),
         source: &s,
@@ -481,7 +470,7 @@ async fn unbound_contracts_pass_strict_and_partial_synthesis() {
             .partial()
             .unwrap()
             .document()
-            .parsed()
+            .as_document()
             .value()
             .get("operations")
             .unwrap()
@@ -493,14 +482,8 @@ async fn unbound_contracts_pass_strict_and_partial_synthesis() {
 #[tokio::test]
 async fn unnamed_source_mapping_is_stable_without_restricting_equal_binding_aliases() {
     let (s, mut c) = complete();
-    let mut draft = c.document.to_authoring().unwrap();
-    // Binding uses "api"; the mapping may use the first of its equal aliases.
-    draft
-        .sources
-        .as_mut()
-        .unwrap()
-        .insert("alias".into(), s.clone());
-    c.document = draft.build().unwrap();
+    // Binding uses "api"; the mapping may use an equal alias.
+    c.document.set_source("alias", &s).unwrap();
     let inputs = [SynthesisSource {
         name: None,
         source: &s,
@@ -600,7 +583,7 @@ async fn undetermined_conformance_is_not_upgraded() {
     assert_eq!(
         result
             .document()
-            .parsed()
+            .as_document()
             .validate()
             .unwrap()
             .report()
@@ -610,7 +593,7 @@ async fn undetermined_conformance_is_not_upgraded() {
     assert!(
         result
             .document()
-            .parsed()
+            .as_document()
             .value()
             .text()
             .contains("\\ud800")

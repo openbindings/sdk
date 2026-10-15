@@ -1,7 +1,9 @@
 // Exercise public proof acquisition and release the temporary owner after setup.
-export function validatedContracts(document, options) {
-  const result = document.validated();
-  if (result.status !== "validated")
+export function conformantContracts(document, options) {
+  if (typeof document.valueContracts === "function")
+    return document.valueContracts(options);
+  const result = document.validate();
+  if (result.status !== "conformant")
     throw new Error("Fixture document lacks conformance proof");
   try {
     return result.document.valueContracts(options);

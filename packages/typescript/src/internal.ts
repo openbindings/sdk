@@ -80,12 +80,12 @@ export interface InputFailure {
     message: string;
   };
 }
-/** Parse result only. The parsed branch transfers one disposable owner to the caller; it establishes neither document conformance nor schema readiness. */
+/** Parse result only. The successful parse branch transfers one disposable owner to the caller; it establishes neither document conformance nor schema readiness. */
 export type ParseResult<T> =
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
       status: "parsed";
-      /** Parsed owner or detached converted value, as specified by this branch. */
+      /** Acquired owner or detached converted value, as specified by this branch. */
       value: T;
     }
   | InputFailure;
@@ -130,7 +130,7 @@ export interface ValidationReport {
   /** True when the 4096-finding or 8 MiB aggregate generated-pointer byte cap omitted findings. Omission never changes evidence or substitutes a shortened pointer. */
   findingsTruncated: boolean;
 }
-/** Normative assessment or a distinct unsupported-version refusal. An assessed report can be conformant, non-conformant or undetermined. This plain-data result owns no handles; use ParsedDocument.validated() to obtain a retained proof. */
+/** Normative assessment or a distinct unsupported-version refusal. An assessed report can be conformant, non-conformant or undetermined. This plain-data result owns no handles; use Document.validate() to obtain a retained proof. */
 export type DocumentValidation =
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
@@ -158,7 +158,7 @@ export interface SchemaLocation {
   /** RFC 6901 pointer within that original source; empty string denotes root. */
   pointer: string;
 }
-/** Known refusal causes for this facade and its bundled engine. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. A potential cycle alone is conservative-preparation. Later package versions may add causes. Qualified partial value contracts can prepare ready; values whose result depends on missing content return resource-unavailable during validation. For unavailable resources, ParsedDocument.references() exposes document-wide reference spellings and original keyword locations, not an exact per-value-contract missing-resource list; apply an application disclosure policy before logging them. */
+/** Known refusal causes for this facade and its bundled engine. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. A potential cycle alone is conservative-preparation. Later package versions may add causes. Qualified partial value contracts can prepare ready; values whose result depends on missing content return resource-unavailable during validation. For unavailable resources, Document.references() exposes document-wide reference spellings and original keyword locations, not an exact per-value-contract missing-resource list; apply an application disclosure policy before logging them. */
 export type NoVerdictReason =
   | "unsupported-capability"
   | "conservative-preparation"
@@ -231,7 +231,7 @@ export interface ValueProblem {
   /** Optional schema facts. Absent means disabled or unavailable. */
   details?: ValueProblemDetails;
 }
-/** Closed selected-schema result partition: satisfies, fails, undefined, or no-verdict. An established failure may have incomplete diagnostics; problemsComplete does not weaken its verdict. Neither satisfies nor fails proves normative OBI conformance of the surrounding draft. */
+/** Closed selected-schema result partition: satisfies, fails, undefined, or no-verdict. An established failure may have incomplete diagnostics; problemsComplete does not weaken its verdict. Neither satisfies nor fails proves normative OBI conformance of the surrounding document. */
 export type ValueOutcome =
   | {
       /** Semantic result discriminant; narrow before reading branch-specific data. */
@@ -277,7 +277,7 @@ export type OperationSelection =
       /** Distinct primary keys in lexical order; repeated occurrences can yield one key. */
       candidates: readonly string[];
     };
-/** Setup partition: ready transfers a disposable ValueContract; no-value-contract means the selected direction is absent; operation-missing is a selection outcome; the retained operation-ambiguous branch is unreachable from validated documents; no-verdict is preparation refusal. Present false is a value contract. Ready means prepared, not decidable: a contract can return no-verdict for every value. None of these setup refusals judges an instance. */
+/** Setup partition: ready transfers a disposable ValueContract; no-value-contract means the selected direction is absent; operation-missing is a selection outcome; the retained operation-ambiguous branch is unreachable from conformant documents; no-verdict is preparation refusal. Present false is a value contract. Ready means prepared, not decidable: a contract can return no-verdict for every value. None of these setup refusals judges an instance. */
 export type ValueContractPreparation =
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
@@ -616,9 +616,9 @@ const finalizer =
     ? undefined
     : new FinalizationRegistry<Raw>((raw) => raw.free());
 const handles = new WeakMap<object, Raw>();
-function registerHandle(owner: object, raw: Raw, finalize: boolean): void {
+function registerHandle(owner: object, raw: Raw): void {
   handles.set(owner, raw);
-  if (finalize) finalizer?.register(owner, raw, owner);
+  finalizer?.register(owner, raw, owner);
 }
 function handle<T extends Raw>(owner: Managed): T {
   const raw = handles.get(owner);
@@ -627,10 +627,8 @@ function handle<T extends Raw>(owner: Managed): T {
   return raw as T;
 }
 abstract class Managed {
-  protected constructor(raw: Raw);
-  /** @internal */ protected constructor(raw: Raw, finalize: boolean);
-  protected constructor(raw: Raw, finalize = true) {
-    registerHandle(this, raw, finalize);
+  protected constructor(raw: Raw) {
+    registerHandle(this, raw);
   }
   /** Whether this handle has been released. Safe to inspect after disposal. */
   get disposed(): boolean {
@@ -655,15 +653,24 @@ function isExact(value: unknown): value is ExactJson {
   return typeof value === "object" && value !== null && exactOwners.has(value);
 }
 const jsonRaw = (owner: ExactJson) => handle<wasm.WasmJson>(owner);
-const documentRaw = (owner: ParsedDocument) =>
-  handle<wasm.WasmDocument | wasm.WasmValidatedDocument>(owner);
-function validatedRaw(
-  owner: ValidatedDocument,
+const documentRaw = (owner: DocumentReads) =>
+  handle<wasm.WasmDocument | wasm.WasmConformantDocument>(owner);
+function editableRaw(owner: DocumentReads): wasm.WasmDocument {
+  const raw = handle<wasm.WasmDocument>(owner);
+  if (!(raw instanceof wasm.WasmDocument))
+    throw new SdkError(
+      "immutable-document",
+      "A conformant document cannot be edited.",
+    );
+  return raw;
+}
+function conformantRaw(
+  owner: ConformantDocument,
   code = "document-conformance",
-): wasm.WasmValidatedDocument {
-  const raw = handle<wasm.WasmValidatedDocument>(owner);
-  if (!(raw instanceof wasm.WasmValidatedDocument))
-    throw new SdkError(code, "A validated document is required.");
+): wasm.WasmConformantDocument {
+  const raw = handle<wasm.WasmConformantDocument>(owner);
+  if (!(raw instanceof wasm.WasmConformantDocument))
+    throw new SdkError(code, "A conformant document is required.");
   return raw;
 }
 const resourceRaw = (owner: SchemaResources) =>
@@ -850,7 +857,7 @@ export class ExactJson extends Managed {
     | {
         /** Result discriminant; narrow this before reading branch-specific fields. */
         status: "converted";
-        /** Parsed owner or detached converted value, as specified by this branch. */
+        /** Acquired owner or detached converted value, as specified by this branch. */
         value: JsonOutput;
       }
     | {
@@ -909,19 +916,6 @@ export function parseJson(input: ExactInput): ParseResult<ExactJson> {
     return failure(e);
   }
 }
-/** Parse an exact immutable document under default admission limits. The parsed branch transfers a disposable ParsedDocument but proves no OBI rules. Use validated() for a retained proof or validate() for plain evidence. Initialization, wrong input types and literal unpaired UTF-16 text throw; JSON escapes preserve such units. */
-export function parseDocument(input: ExactInput): ParseResult<ParsedDocument> {
-  requireReady();
-  const data = bytes(input);
-  try {
-    return {
-      status: "parsed",
-      value: new ParsedDocument(wasm.WasmDocument.parseBytes(data)),
-    };
-  } catch (e) {
-    return failure(e);
-  }
-}
 /** Assess all normative document rules directly from exact source, including invalid JSON. Unsupported declared versions return version-refused; parse/limit failures become truthful evidence. Returns plain data with no handle to dispose. Initialization, wrong input types and literal unpaired UTF-16 text throw; represent unpaired units with JSON escapes or exact UTF-8 bytes. */
 export function validateDocument(input: ExactInput): DocumentValidation {
   requireReady();
@@ -947,41 +941,28 @@ export function checkVersion(
   scalar(version);
   return wasm.checkVersion(version) as ReturnType<typeof checkVersion>;
 }
-/** Disposable immutable exact snapshot without normative proof. retain() creates an independent owner. Validation may be cached in Rust; operations caches frozen plain metadata. Owner-producing methods create fresh handles on every call and require separate disposal. */
-export class ParsedDocument extends Managed {
+/** Shared reads for a document revision. Document reads can refuse malformed typed fields; ConformantDocument already establishes their shape. Owner-producing methods create fresh handles and require separate disposal. */
+abstract class DocumentReads extends Managed {
   #operations?: readonly OperationMetadata[];
   #bindings?: readonly BindingMetadata[] | null;
   #sources?: readonly SourceMetadata[] | null;
   #dependencies?: readonly DependencyMetadata[] | null;
-  /** @internal */ constructor(
-    raw: wasm.WasmDocument | wasm.WasmValidatedDocument,
-  ) {
+  protected constructor(raw: wasm.WasmDocument | wasm.WasmConformantDocument) {
     super(raw);
   }
-  /** Create an independently disposable owner sharing this immutable snapshot and Rust caches. */
-  retain(): ParsedDocument {
-    return new ParsedDocument(handle<wasm.WasmDocument>(this).retain());
+  protected invalidateMetadata(): void {
+    this.#operations = undefined;
+    this.#bindings = undefined;
+    this.#sources = undefined;
+    this.#dependencies = undefined;
   }
-  /** Allocate a detached copy of the complete original UTF-8 source, including formatting. */
-  get originalBytes(): Uint8Array {
-    return handle<wasm.WasmDocument>(this).originalBytes();
+  /** Allocate detached exact UTF-8 bytes of the current revision, including formatting. */
+  toBytes(): Uint8Array {
+    return handle<wasm.WasmDocument>(this).toBytes();
   }
   /** Return a NEW independently disposable ExactJson owner on every call. Cache it locally and dispose it; disposing this document does not release that separate owner. */
   value(): ExactJson {
     return new ExactJson(handle<wasm.WasmDocument>(this).value());
-  }
-  /** Return plain normative evidence or version refusal; no proof owner is created and no result needs disposal. */
-  validate(): DocumentValidation {
-    const validation = documentRaw(this).validate();
-    try {
-      return decode(validation.report());
-    } finally {
-      validation.free();
-    }
-  }
-  /** Establish normative conformance and, only on validated, return a NEW independent proof owner. The original document remains caller-owned. Other branches preserve plain evidence/refusal. */
-  validated(): ValidationResult {
-    return validateParsed(this);
   }
   /** Read the declaration as exact JavaScript UTF-16 text. Invalid typed fields throw. */
   get openbindings(): string | undefined {
@@ -1028,7 +1009,7 @@ export class ParsedDocument extends Managed {
       throw error;
     }
   }
-  /** Return cached frozen plain metadata in lexical primary-key order. No handles are created. Throws a located interpretation error for malformed typed namespace/metadata; does not validate all OBI rules. */
+  /** Return cached frozen plain metadata in lexical primary-key order. No handles are created. Document throws a located error for malformed typed fields; ConformantDocument reads are infallible while live. */
   get operations(): readonly OperationMetadata[] {
     handle<wasm.WasmDocument>(this);
     return (this.#operations ??= Object.freeze(
@@ -1043,26 +1024,7 @@ export class ParsedDocument extends Managed {
       ),
     ));
   }
-  /** Convert through Rust's typed authoring model into a new registry-owned editable draft. Expected invalid typed data returns located authoring-error; no conformance proof is created. */
-  toDraft(): DraftResult {
-    let raw: wasm.WasmDraft;
-    try {
-      raw = documentRaw(this).toDraft();
-    } catch (error) {
-      if (typeof error === "string") {
-        let result: DraftResult | undefined;
-        try {
-          result = decode<DraftResult>(error);
-        } catch {
-          /* Unexpected engine failure. */
-        }
-        if (result?.status === "authoring-error") return result;
-      }
-      throw error;
-    }
-    return { status: "drafted", draft: OwnedDocumentDraft.fromRaw(raw) };
-  }
-  /** Cached frozen binding metadata in lexical key order; null means namespace absent. Checks all rows, never copies opaque payloads, and throws located interpretation errors. */
+  /** Cached frozen binding metadata in lexical key order; null means absent. Never copies opaque payloads. Document can throw located interpretation errors; a live ConformantDocument cannot. */
   get bindings(): readonly BindingMetadata[] | null {
     const raw = documentRaw(this);
     if (this.#bindings === undefined)
@@ -1077,7 +1039,7 @@ export class ParsedDocument extends Managed {
     const raw = sdkCall(() => documentRaw(this).binding(key));
     return raw ? adopt(raw, BindingView.fromRaw) : undefined;
   }
-  /** Cached frozen source metadata in lexical key order; null means namespace absent. Checks all rows, never copies opaque payloads, and throws located interpretation errors. */
+  /** Cached frozen source metadata in lexical key order; null means absent. Never copies opaque payloads. Document can throw located interpretation errors; a live ConformantDocument cannot. */
   get sources(): readonly SourceMetadata[] | null {
     const raw = documentRaw(this);
     if (this.#sources === undefined)
@@ -1092,7 +1054,7 @@ export class ParsedDocument extends Managed {
     const raw = sdkCall(() => documentRaw(this).source(key));
     return raw ? adopt(raw, SourceView.fromRaw) : undefined;
   }
-  /** Cached frozen dependency metadata in lexical key order; null means namespace absent. Checks all rows, never copies opaque payloads, and throws located interpretation errors. */
+  /** Cached frozen dependency metadata in lexical key order; null means absent. Never copies opaque payloads. Document can throw located interpretation errors; a live ConformantDocument cannot. */
   get dependencies(): readonly DependencyMetadata[] | null {
     const raw = documentRaw(this);
     if (this.#dependencies === undefined)
@@ -1163,43 +1125,327 @@ export class ParsedDocument extends Managed {
     }
   }
 }
-/** Document proof acquisition: validated transfers an independent ValidatedDocument owner and report. Otherwise the original DocumentValidation explains refusal, nonconformance or uncertainty; no proof owner is created. */
+/** One exact pointer edit or typed namespace replacement. All pointers address the revision before the atomic batch. */
+export type Edit =
+  | {
+      /** Replace or insert a JSON value at the specified pointer. */
+      op: "set";
+      /** RFC 6901 path into the revision before the batch. */
+      pointer: string;
+      /** Borrowed exact or checked ordinary JSON; never consumed. */
+      value: JsonInput;
+    }
+  | {
+      /** Remove an existing member or array element. */
+      op: "remove";
+      /** RFC 6901 path; removing the root is refused. */
+      pointer: string;
+    }
+  | {
+      /** Replace the complete operations map using typed parts. */
+      op: "set-operations";
+      /** Borrowed typed inputs; opaque exact values retain their spelling. */
+      value: Readonly<Record<string, Operation>>;
+    }
+  | {
+      /** Replace the complete sources map using typed parts. */
+      op: "set-sources";
+      /** Borrowed typed inputs; opaque exact values retain their spelling. */
+      value: Readonly<Record<string, Source>>;
+    }
+  | {
+      /** Replace the complete bindings map using typed parts. */
+      op: "set-bindings";
+      /** Borrowed typed inputs; opaque exact values retain their spelling. */
+      value: Readonly<Record<string, Binding>>;
+    }
+  | {
+      /** Replace the complete dependencies map using typed parts. */
+      op: "set-dependencies";
+      /** Borrowed typed inputs; opaque exact values retain their spelling. */
+      value: Readonly<Record<string, Dependency>>;
+    };
+let adoptDocument: (raw: wasm.WasmDocument) => Document;
+const documentToken = Symbol("document owner");
+/** One exact, editable OBI. Reads may refuse malformed typed fields. Clones, views and proofs retain their revision after editing. */
+export class Document extends DocumentReads {
+  private constructor(raw: wasm.WasmDocument, token: symbol) {
+    if (token !== documentToken)
+      throw new TypeError("Use Document.parse() or Document.create().");
+    super(raw);
+  }
+  static {
+    adoptDocument = (raw) => new Document(raw, documentToken);
+  }
+  /** Admit exact JSON, including broken documents, without conformance proof. Expected input refusal uses input-error; initialization and API misuse throw. */
+  static parse(input: ExactInput): ParseResult<Document> {
+    requireReady();
+    const data = bytes(input);
+    try {
+      return {
+        status: "parsed",
+        value: adoptDocument(wasm.WasmDocument.parseBytes(data)),
+      };
+    } catch (error) {
+      return failure(error);
+    }
+  }
+  /** Create an empty OBI declaring the supported authoring version. Validate separately to obtain proof. */
+  static create(): Document {
+    requireReady();
+    return adoptDocument(wasm.WasmDocument.create());
+  }
+  /** Retain a separate editable owner sharing this revision until either owner is edited. */
+  retain(): Document {
+    return adoptDocument(handle<wasm.WasmDocument>(this).retain());
+  }
+  /** Assess all rules; the conformant branch owns a new ConformantDocument. The original owner stays editable. Other branches retain evidence or a version refusal. */
+  validate(): ValidationResult {
+    return assessDocument(this);
+  }
+  #commit(call: (raw: wasm.WasmDocument) => void): void {
+    const raw = editableRaw(this);
+    try {
+      sdkCall(() => call(raw));
+    } catch (error) {
+      if (error instanceof SdkError && error.code !== "disposed-handle")
+        throw new EditError(error.code, error.message);
+      throw error;
+    }
+    this.invalidateMetadata();
+  }
+  #encoded(
+    value: unknown,
+    context?: AuthorContext,
+    destination?: { namespace: string; key: string },
+    prefix = "",
+    suffix = "",
+  ): void {
+    handle(this);
+    const exact: EditEncoding = {
+      chunks: [],
+      owners: [],
+      indices: [],
+      seen: new Map(),
+    };
+    const tail = encodeOrdinary(value, context, exact);
+    exact.chunks.push(tail + suffix);
+    exact.chunks[0] = prefix + exact.chunks[0];
+    const values = exact.owners.map(jsonRaw);
+    this.#commit((raw) => {
+      const result = raw.editEncoded(
+        exact.chunks,
+        new Uint32Array(exact.indices),
+        values,
+        destination?.namespace,
+        destination?.key,
+      );
+      // The native call returns every temporarily transferred owner on failure too.
+      // Reattach them before reporting the error; aliases and finalizers stay valid.
+      for (let i = 0; i < exact.owners.length; i++) {
+        const owner = exact.owners[i]!;
+        finalizer?.unregister(owner);
+        registerHandle(owner, result[i + 1] as wasm.WasmJson);
+      }
+      if (result[0] !== null) throw result[0];
+    });
+  }
+  /** Atomically apply pointer edits and typed namespace replacements in request order at shared insertion boundaries, with one bridge call including exact inputs. Untouched bytes stay exact. Invalid paths, duplicates, overlaps and admission limits throw EditError and leave the document unchanged. */
+  edit(edits: readonly Edit[]): void {
+    handle(this);
+    editableRaw(this);
+    this.#encoded(edits, { origins: new WeakMap(), editBatch: true });
+  }
+  /** Replace or insert a value at an RFC 6901 pointer. Exact owners are borrowed; ordinary values are checked without invoking getters/toJSON. */
+  set(pointer: string, value: JsonInput): void {
+    scalar(pointer);
+    if (isExact(value)) this.#commit((raw) => raw.set(pointer, jsonRaw(value)));
+    else this.edit([{ op: "set", pointer, value }]);
+  }
+  /** Remove an existing member/array element. Throws EditError on refusal; removing the root is not supported. */
+  remove(pointer: string): void {
+    scalar(pointer);
+    this.#commit((raw) => raw.remove(pointer));
+  }
+  /** Set the version declaration; conformance is assessed separately. */
+  setOpenbindings(value: string): void {
+    this.set("/openbindings", checkedText(value));
+  }
+  /** Set the interface name. */
+  setName(value: string): void {
+    this.set("/name", checkedText(value));
+  }
+  /** Set the interface version label. */
+  setVersion(value: string): void {
+    this.set("/version", checkedText(value));
+  }
+  /** Set descriptive text, including escaped unpaired UTF-16 units. */
+  setDescription(value: string): void {
+    this.set("/description", checkedText(value));
+  }
+  /** Set a description on an existing operation, escaping its key. */
+  setOperationDescription(key: string, value: string): void {
+    this.set(
+      pointerChild("/operations", key) + "/description",
+      checkedText(value),
+    );
+  }
+  /** Set an existing operation's input schema. Absence and explicit null remain distinct. */
+  setOperationInput(key: string, value: JsonInput): void {
+    this.set(pointerChild("/operations", key) + "/input", value);
+  }
+  /** Set an existing operation's output schema. */
+  setOperationOutput(key: string, value: JsonInput): void {
+    this.set(pointerChild("/operations", key) + "/output", value);
+  }
+  #part(
+    namespace: string,
+    key: string,
+    kind: AuthorKind,
+    value: unknown,
+  ): void {
+    scalar(key);
+    handle(this);
+    const context: AuthorContext = { origins: new WeakMap() };
+    const object = authorObject(
+      value,
+      kind,
+      pointerChild("/" + namespace, key),
+      context,
+    );
+    this.#encoded(object, context, { namespace: "/" + namespace, key });
+  }
+  #parts(namespace: string, values: unknown): void {
+    this.edit([{ op: "set-" + namespace, value: values } as Edit]);
+  }
+  /** Set a whole typed operation, creating its namespace if absent. Collisions and invalid typed input throw EditError with a logical partPointer. */
+  setOperation(key: string, value: Operation): void {
+    this.#part("operations", key, "operation", value);
+  }
+  /** Commit a whole operations map once, for bulk synthesis. */
+  setOperations(value: Readonly<Record<string, Operation>>): void {
+    this.#parts("operations", value);
+  }
+  /** Set a whole typed binding, creating its namespace if absent. */
+  setBinding(key: string, value: Binding): void {
+    this.#part("bindings", key, "binding", value);
+  }
+  /** Commit a whole bindings map once. */
+  setBindings(value: Readonly<Record<string, Binding>>): void {
+    this.#parts("bindings", value);
+  }
+  /** Set a whole typed source, creating its namespace if absent. */
+  setSource(key: string, value: Source): void {
+    this.#part("sources", key, "source", value);
+  }
+  /** Commit a whole sources map once. */
+  setSources(value: Readonly<Record<string, Source>>): void {
+    this.#parts("sources", value);
+  }
+  /** Set a whole typed dependency, creating its namespace if absent. */
+  setDependency(key: string, value: Dependency): void {
+    this.#part("dependencies", key, "dependency", value);
+  }
+  /** Commit a whole dependencies map once. */
+  setDependencies(value: Readonly<Record<string, Dependency>>): void {
+    this.#parts("dependencies", value);
+  }
+  /** Set a typed example on an existing operation, creating its examples map if absent. */
+  setExample(operation: string, key: string, value: Example): void {
+    scalar(operation);
+    scalar(key);
+    handle(this);
+    const context: AuthorContext = { origins: new WeakMap() };
+    const object = authorObject(
+      value,
+      "example",
+      pointerChild(pointerChild("/operations", operation) + "/examples", key),
+      context,
+    );
+    this.#encoded(object, context, {
+      namespace: pointerChild("/operations", operation) + "/examples",
+      key,
+    });
+  }
+}
+function checkedText(value: string): string {
+  if (typeof value !== "string") throw new TypeError("Expected a string.");
+  return value;
+}
+function checkPartField(
+  kind: AuthorKind,
+  key: string,
+  value: unknown,
+  path: string,
+): void {
+  if (!typedFields[kind].includes(key)) return;
+  let valid = true;
+  if (["description", "kind", "operation", "source"].includes(key))
+    valid = typeof value === "string";
+  if (["deprecated", "idempotent"].includes(key))
+    valid = typeof value === "boolean";
+  if (key === "preference")
+    valid = typeof value === "number" && Number.isSafeInteger(value);
+  if (["tags", "aliases", "kinds"].includes(key)) {
+    // Read descriptors, never getters. The ordinary encoder checks dense arrays.
+    valid = Array.isArray(value);
+    if (valid)
+      for (const [name, d] of Object.entries(
+        Object.getOwnPropertyDescriptors(value),
+      )) {
+        if (name === "length") continue;
+        if (!("value" in d))
+          throw new PartSerializationError(
+            "accessor-property",
+            pointerChild(path, name),
+            "Typed lists cannot contain accessors.",
+          );
+        if (typeof d.value !== "string") valid = false;
+      }
+  }
+  if (!valid)
+    throw new PartSerializationError(
+      "invalid-authoring-object",
+      path,
+      "Field does not have its typed representation.",
+    );
+}
+
+/** Document proof acquisition: conformant transfers an independent ConformantDocument owner and report. Otherwise the original DocumentValidation explains refusal, nonconformance or uncertainty; no proof owner is created. */
 export type ValidationResult =
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
-      status: "validated";
+      status: "conformant";
       /** Caller-owned document handle for this branch; dispose independently. */
-      document: ValidatedDocument;
+      document: ConformantDocument;
       /** Plain normative report for the exact snapshot. */
       report: ValidationReport;
     }
   | DocumentValidation;
 const conformanceToken = Symbol("established conformance");
-let validateParsed: (document: ParsedDocument) => ValidationResult;
-/** Retained proof for one immutable snapshot whose normative OBI rules were established. Obtain via ParsedDocument.validated(); preparation remains evaluator-dependent. It inherits exact inspection methods and deterministic disposal from ParsedDocument. */
-export class ValidatedDocument extends ParsedDocument {
-  declare private readonly validatedDocumentBrand: void;
-  private constructor(raw: wasm.WasmValidatedDocument, token: symbol) {
+let assessDocument: (document: DocumentReads) => ValidationResult;
+/** Retained proof for one immutable snapshot whose normative OBI rules were established. Obtain via Document.validate(); preparation remains evaluator-dependent. It shares read-only inspection and deterministic disposal, without inheriting Document or its setters. */
+export class ConformantDocument extends DocumentReads {
+  declare private readonly conformantDocumentBrand: void;
+  private constructor(raw: wasm.WasmConformantDocument, token: symbol) {
     if (token !== conformanceToken)
-      throw new TypeError(
-        "Use ParsedDocument.validated() to establish conformance.",
-      );
+      throw new TypeError("Use Document.validate() to establish conformance.");
     super(raw);
   }
   static {
-    validateParsed = (document: ParsedDocument): ValidationResult => {
+    assessDocument = (document: DocumentReads): ValidationResult => {
       const transfer = documentRaw(document).validate();
       try {
         const result = decode<DocumentValidation>(transfer.report());
-        const proof = transfer.takeValidated();
+        const proof = transfer.takeConformant();
         if (!proof) return result;
         if (result.status !== "report") {
           proof.free();
           throw new Error("Validation transfer invariant.");
         }
         return {
-          status: "validated",
-          document: new ValidatedDocument(proof, conformanceToken),
+          status: "conformant",
+          document: new ConformantDocument(proof, conformanceToken),
           report: result.report,
         };
       } finally {
@@ -1208,18 +1454,26 @@ export class ValidatedDocument extends ParsedDocument {
     };
   }
   /** Retain an independent Rust proof for this same immutable snapshot. */
-  override retain(): ValidatedDocument {
-    return new ValidatedDocument(
-      sdkCall(() => validatedRaw(this).retain()),
+  retain(): ConformantDocument {
+    return new ConformantDocument(
+      sdkCall(() => conformantRaw(this).retain()),
       conformanceToken,
     );
   }
-  /** Acquire an independent parsed owner for editor reads. */
-  parsed(): ParsedDocument {
-    return new ParsedDocument(validatedRaw(this).parsed());
+  /** Acquire an independent editable document owner; its changes do not affect this proof. */
+  asDocument(): Document {
+    return adoptDocument(conformantRaw(this).asDocument());
+  }
+  /** Consume this proof and return an independent editable owner. Every alias of this proof becomes disposed; independently retained owners survive. */
+  intoDocument(): Document {
+    const raw = sdkCall(() => conformantRaw(this).intoInner());
+    handles.delete(this);
+    finalizer?.unregister(this);
+    return adoptDocument(raw);
   }
   /** The supported scalar specification declaration established by OBI-03. */
   override get openbindings(): string {
+    conformantRaw(this);
     return super.openbindings!;
   }
   /** Create a NEW disposable evaluator/resource context from this Rust-owned conformance proof. Preparation is separate and may refuse. */
@@ -1239,7 +1493,7 @@ export class ValidatedDocument extends ParsedDocument {
     try {
       return new ValueContracts(
         sdkCall(() =>
-          validatedRaw(this).valueContracts(
+          conformantRaw(this).valueContracts(
             resourceRaw(resources ?? empty!),
             limits,
             options.diagnostics ?? "coarse",
@@ -1266,7 +1520,7 @@ export class OperationView extends Managed {
   value(): ExactJson {
     return new ExactJson(handle<wasm.WasmOperation>(this).value());
   }
-  /** Acquire a NEW independently disposable input value; undefined means absent, including on parsed documents. JSON null, true, false and objects remain present values. */
+  /** Acquire a NEW independently disposable input value; undefined means absent, including on documents. JSON null, true, false and objects remain present values. */
   input(): ExactJson | undefined {
     const raw = handle<wasm.WasmOperation>(this).input();
     return raw ? new ExactJson(raw) : undefined;
@@ -1597,14 +1851,14 @@ export class ValueContract extends Managed {
       try {
         text = encodeOrdinary(value, { origins: new WeakMap() });
       } catch (error) {
-        if (!(error instanceof DraftFailure)) throw error;
+        if (!(error instanceof PartSerializationError)) throw error;
         return {
           outcome: "input-error",
           error: {
             code: (error.code === "authoring-limit"
               ? "input-limit"
               : error.code) as ValueAdmissionFailure["code"],
-            instancePointer: error.draftPointer,
+            instancePointer: error.partPointer,
             message: error.message,
           },
         };
@@ -1701,13 +1955,13 @@ export interface DiscoveryMetadata {
   /** Frozen observed header strings under host Fetch combining/visibility rules. */
   headers: Readonly<Record<string, string>>;
 }
-/** Validation of a complete bounded discovery body. Found owns proof; other document handles, when present, remain unproved parsed snapshots. */
+/** Validation of a complete bounded discovery body. Found owns proof; other document handles, when present, remain unproven documents. */
 type DiscoveryBodyResult =
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
       status: "found";
       /** Caller-owned document handle for this branch; dispose independently. */
-      document: ValidatedDocument;
+      document: ConformantDocument;
       /** Plain normative report for the exact snapshot. */
       report: ValidationReport;
     }
@@ -1715,7 +1969,7 @@ type DiscoveryBodyResult =
       /** Result discriminant; narrow this before reading branch-specific fields. */
       status: "non-conformant" | "undetermined";
       /** Caller-owned document handle for this branch; dispose independently. */
-      document?: ParsedDocument;
+      document?: Document;
       /** Plain normative report for the exact snapshot. */
       report: ValidationReport;
     }
@@ -1990,16 +2244,14 @@ export async function discover(
     try {
       const result = decode<DiscoveryBodyResult>(assessed.result()),
         raw = assessed.document();
-      let document: ParsedDocument | undefined = raw
-        ? new ParsedDocument(raw)
-        : undefined;
+      let document: Document | undefined = raw ? adoptDocument(raw) : undefined;
       if (result.status === "found") {
         if (!document)
           throw new Error("Discovery invariant: conformant document missing.");
-        const validation = document.validated();
+        const validation = document.validate();
         document.dispose();
         document = undefined;
-        if (validation.status !== "validated")
+        if (validation.status !== "conformant")
           throw new Error("Discovery invariant: conformance changed.");
         if (check()) {
           validation.document.dispose();
@@ -2052,9 +2304,9 @@ export type AllowOrigin =
 
 /** Disposable immutable copy of a proved discovery document. Creates no listener or server; authorization and request routing remain caller-owned. Existing publication remains usable after the original proof is disposed. */
 export class DiscoveryPublication extends Managed {
-  /** Copy a ValidatedDocument into an independently owned publication. allowOrigin defaults to "any"; supports "omit", "null", or an exact ASCII serialized tuple origin. Opaque schemes and noncanonical spellings are refused. Invalid configuration throws; the source proof remains caller-owned. */
+  /** Copy a ConformantDocument into an independently owned publication. allowOrigin defaults to "any"; supports "omit", "null", or an exact ASCII serialized tuple origin. Opaque schemes and noncanonical spellings are refused. Invalid configuration throws; the source proof remains caller-owned. */
   constructor(
-    document: ValidatedDocument,
+    document: ConformantDocument,
     options: {
       /** Optional typed CORS policy; omitted emits *, "omit" omits the header. Authentication, credentials and preflight remain application-owned. */
       allowOrigin?: AllowOrigin;
@@ -2087,7 +2339,7 @@ export class DiscoveryPublication extends Managed {
       sdkCall(
         () =>
           new wasm.WasmPublication(
-            validatedRaw(document, "publication-conformance"),
+            conformantRaw(document, "publication-conformance"),
             allow,
           ),
       ),
@@ -2115,11 +2367,21 @@ export class DiscoveryPublication extends Managed {
     return new Response(body, { status: result.status, headers });
   }
 }
+interface EditEncoding {
+  chunks: string[];
+  owners: ExactJson[];
+  indices: number[];
+  seen: Map<ExactJson, number>;
+}
 /** Iterative, checked serialization. No getters, toJSON hooks, omission, or implicit coercion. */
-function encodeOrdinary(value: unknown, authoring?: AuthorContext): string {
+function encodeOrdinary(
+  value: unknown,
+  authoring?: AuthorContext,
+  exact?: EditEncoding,
+): string {
   const childPath = (owner: object, name: string, parent: string) =>
     authoring
-      ? (authoring.origins.get(owner)?.get(name) ?? draftPath(parent, name))
+      ? (authoring.origins.get(owner)?.get(name) ?? pointerChild(parent, name))
       : "";
   function reject(
     code: AuthoringErrorCode,
@@ -2127,7 +2389,7 @@ function encodeOrdinary(value: unknown, authoring?: AuthorContext): string {
     message: string,
     limit = false,
   ): never {
-    if (authoring) throw new DraftFailure(code, pointer, message);
+    if (authoring) throw new PartSerializationError(code, pointer, message);
     if (limit) throw new RangeError(message);
     throw new TypeError(message);
   }
@@ -2161,7 +2423,11 @@ function encodeOrdinary(value: unknown, authoring?: AuthorContext): string {
       active.delete(job.leave);
       continue;
     }
-    const { value, pointer } = job;
+    const { pointer } = job;
+    const value =
+      authoring?.editBatch && job.depth === 1
+        ? normalizeEdit(job.value, authoring)
+        : job.value;
     if (++nodes > 1_000_000 || job.depth > 10_000)
       reject(
         "authoring-limit",
@@ -2170,7 +2436,18 @@ function encodeOrdinary(value: unknown, authoring?: AuthorContext): string {
         true,
       );
     if (isExact(value)) {
-      add(value.text, pointer);
+      if (exact) {
+        jsonRaw(value); // Check lifecycle before any owner crosses the bridge.
+        let index = exact.seen.get(value);
+        if (index === undefined) {
+          index = exact.owners.length;
+          exact.seen.set(value, index);
+          exact.owners.push(value);
+        }
+        exact.chunks.push(parts.join(""));
+        parts.length = 0;
+        exact.indices.push(index);
+      } else add(value.text, pointer);
       continue;
     }
     if (
@@ -2269,8 +2546,8 @@ function encodeOrdinary(value: unknown, authoring?: AuthorContext): string {
   return parts.join("");
 }
 
-/** Editable normative operation fields. Typed optional undefined means absence; opaque JSON fields preserve explicit null and reject undefined. A built draft still requires normative assessment and separate schema preparation. */
-export interface OperationDraft {
+/** Editable normative operation fields. Typed optional undefined means absence; opaque JSON fields preserve explicit null and reject undefined. The edited document still requires normative assessment and separate schema preparation. */
+export interface Operation {
   /** Optional operation description. */
   description?: string;
   /** Optional deprecation annotation. */
@@ -2284,34 +2561,34 @@ export interface OperationDraft {
   /** Optional exact output schema; absence differs from present false or null. */
   output?: JsonInput;
   /** Named exact example instances. */
-  examples?: Readonly<Record<string, ExampleDraft>>;
-  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
+  examples?: Readonly<Record<string, Example>>;
+  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a part serialization error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
 /** Exact input/output example instances, not schemas or proof that an operation accepts them. */
-export interface ExampleDraft {
+export interface Example {
   /** Optional example explanation. */
   description?: string;
   /** Optional exact input instance, including explicit null. */
   input?: JsonInput;
   /** Optional exact output instance, including explicit null. */
   output?: JsonInput;
-  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
+  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a part serialization error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
 /** Binding source vocabulary; kind-specific content is exact opaque JSON and is never executed or acquired by core. */
-export interface SourceDraft {
+export interface Source {
   /** Source-kind identifier selecting external interpretation. */
   kind: string;
   /** Optional exact kind-specific content; not interpreted by core. */
   content?: JsonInput;
   /** Optional source explanation. */
   description?: string;
-  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
+  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a part serialization error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
 /** Link from an operation to a source with opaque kind-specific content and annotations. Core does not rank or invoke bindings. */
-export interface BindingDraft {
+export interface Binding {
   /** Referenced primary operation name. */
   operation: string;
   /** Referenced source key. */
@@ -2326,149 +2603,24 @@ export interface BindingDraft {
   deprecated?: boolean;
   /** Optional binding explanation. */
   description?: string;
-  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
+  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a part serialization error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
 /** Dependency declaration with an optional exact source-kind filter. Absence accepts all; a conformant present filter must be nonempty. */
-export interface DependencyDraft {
+export interface Dependency {
   /** Referenced operation name. */
   operation: string;
-  /** Exact permitted source kinds; absence accepts all. An empty array is representable for draft inspection but fails normative assessment. */
+  /** Exact permitted source kinds; absence accepts all. An empty array is representable for inspection but fails normative assessment. */
   kinds?: readonly string[];
   /** Optional dependency explanation. */
   description?: string;
-  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
+  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a part serialization error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
-}
-/** Editable normative document shape. authorDocument supplies the default version when openbindings is omitted, checks typed representability and returns a new independent parsed snapshot. It does not establish conformance. */
-export interface DocumentDraft {
-  /** Declared specification version; omission defaults to 0.2.0. */
-  openbindings?: string;
-  /** Primary operation map; namespace/shape checks and normative assessment remain separate stages. */
-  operations: Readonly<Record<string, OperationDraft>>;
-  /** Optional interface name. */
-  name?: string;
-  /** Optional interface-defined version, independent of openbindings. */
-  version?: string;
-  /** Optional interface explanation. */
-  description?: string;
-  /** Named exact JSON Schema values. */
-  schemas?: Readonly<Record<string, JsonInput>>;
-  /** Named source declarations. */
-  sources?: Readonly<Record<string, SourceDraft>>;
-  /** Named operation-to-source bindings. */
-  bindings?: Readonly<Record<string, BindingDraft>>;
-  /** Named operation dependencies. */
-  dependencies?: Readonly<Record<string, DependencyDraft>>;
-  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a logical draft error. */
-  additionalFields?: Readonly<Record<string, JsonInput>>;
-}
-/** Finite writable projection of normative draft containers and scalar lists. Stops at opaque JsonInput values and preserves optional fields and ExactJson ownership. */
-type EditableNormativeDraft<T> = {
-  -readonly [K in keyof T]: K extends "operations"
-    ? Record<string, EditableNormativeDraft<OperationDraft>>
-    : K extends "sources"
-      ? Record<string, EditableNormativeDraft<SourceDraft>>
-      : K extends "bindings"
-        ? Record<string, EditableNormativeDraft<BindingDraft>>
-        : K extends "dependencies"
-          ? Record<string, EditableNormativeDraft<DependencyDraft>>
-          : K extends "examples"
-            ? Record<string, EditableNormativeDraft<ExampleDraft>>
-            : K extends "schemas" | "additionalFields"
-              ? Record<string, JsonInput>
-              : K extends "tags" | "aliases" | "kinds"
-                ? string[]
-                : T[K];
-};
-/** Writable normative output from parsed conversion. Opaque JsonInput interiors and ExactJson ownership remain unchanged; readonly-friendly DocumentDraft inputs remain accepted. */
-export type EditableDocumentDraft = EditableNormativeDraft<DocumentDraft>;
-/** Parsed-to-draft conversion result; drafted transfers one aggregate owner, while authoring-error leaves the parsed source usable and owns nothing. */
-export type DraftResult =
-  | {
-      /** Successful typed conversion, not conformance. */ status: "drafted";
-      /** Caller-owned editing scope. */ draft: OwnedDocumentDraft;
-    }
-  | {
-      /** Expected source conversion refusal. */ status: "authoring-error";
-      /** Structured source error; never an invented draft coordinate. */ error: AuthoringFailure;
-    };
-const scopedDrafts = new WeakMap<object, OwnedDocumentDraft>();
-type DraftWire =
-  | { kind: "plain"; value: JsonPrimitive | string[] }
-  | { kind: "exact"; value: number }
-  | { kind: "object"; value: [string, DraftWire][] };
-/** Disposable scope owning the exact leaves created during native typed conversion, including leaves later removed or replaced. Caller-inserted external handles remain caller-owned. Retain a borrowed leaf before explicitly disposing this scope. Abandoning an undisposed scope does not invalidate reachable leaves; unreachable leaves have their own best-effort finalizers. */
-export class OwnedDocumentDraft extends Managed {
-  private constructor(
-    private readonly graph: EditableDocumentDraft,
-    registry: ExactJson[],
-  ) {
-    super(
-      {
-        free() {
-          for (const owner of registry.splice(0)) owner.dispose();
-        },
-      },
-      // This aggregate owns no native allocation. Its leaves have individual
-      // finalizers; a scope finalizer would revoke still-reachable leaf wrappers.
-      false,
-    );
-    scopedDrafts.set(graph, this);
-  }
-  /** @internal */ static fromRaw(raw: wasm.WasmDraft): OwnedDocumentDraft {
-    const registry: ExactJson[] = [];
-    try {
-      function materialize(node: DraftWire): unknown {
-        switch (node.kind) {
-          case "plain":
-            return node.value;
-          case "exact": {
-            const value = raw.takeExact(node.value);
-            if (!value)
-              throw new Error("Draft transfer invariant: exact leaf missing.");
-            const owner = adopt(value, (r) => new ExactJson(r));
-            registry.push(owner);
-            return owner;
-          }
-          case "object": {
-            const result: Record<string, unknown> = {};
-            for (const [key, value] of node.value)
-              Object.defineProperty(result, key, {
-                value: materialize(value),
-                writable: true,
-                enumerable: true,
-                configurable: true,
-              });
-            return result;
-          }
-          default:
-            throw new Error("Draft transfer invariant: invalid node kind.");
-        }
-      }
-      // This is a tagged typed-model transfer, never serialized opaque JSON.
-      // Do not camel-case application map keys or coerce opaque numeric values.
-      const graph = materialize(
-        JSON.parse(raw.shape()) as DraftWire,
-      ) as EditableDocumentDraft;
-      return new OwnedDocumentDraft(graph, registry);
-    } catch (error) {
-      for (const owner of registry) owner.dispose();
-      throw error;
-    } finally {
-      raw.free();
-    }
-  }
-  /** The same writable plain typed graph on every access; no ownership is acquired. Exact leaves made by conversion are borrowed from this scope. Throws after disposal. */
-  get value(): EditableDocumentDraft {
-    handle(this);
-    return this.graph;
-  }
 }
 /**
- * Expected-invalid-draft codes for this package. This is a closed TypeScript union; later releases may add codes. Messages explain; codes identify.
+ * Typed part serialization refusal codes for this package. This is a closed TypeScript union; later releases may add codes. Messages explain; codes identify.
  * - field-collision: additionalFields shadows a typed member.
- * - duplicate-field: a draft represents the same emitted field more than once.
+ * - duplicate-field: an input represents the same emitted field more than once.
  * - non-finite-number: NaN or infinity cannot enter JSON.
  * - unsupported-value: undefined, bigint, function or symbol appears in opaque JSON.
  * - sparse-array / array-property: an array has holes or extra named properties.
@@ -2476,14 +2628,12 @@ export class OwnedDocumentDraft extends Managed {
  * - non-plain-object: an object has a custom prototype.
  * - accessor-property / non-enumerable-property / symbol-key: admission would require
  *   executing or silently dropping a property, so the value is refused.
- * - invalid-authoring-object: a typed draft container or known field is not representable.
+ * - invalid-authoring-object: a typed part container or known field is not representable.
  * - authoring-limit: encoded output exceeds a finite character/byte/node/depth limit.
- * - invalid-draft: the checked Rust authoring boundary refuses the encoded draft.
- * - invalid-field / duplicate-members: native parsed-to-draft conversion refuses a typed field or repeated member names, with original source coordinates.
- * A draftPointer addresses the caller's draft, including additionalFields, rather
+ * A partPointer addresses the caller's input, including additionalFields, rather
  * than the emitted JSON. Initialization/owner misuse and unexpected exceptions throw.
  */
-export type AuthoringErrorCode =
+type AuthoringErrorCode =
   | "field-collision"
   | "duplicate-field"
   | "non-finite-number"
@@ -2496,135 +2646,68 @@ export type AuthoringErrorCode =
   | "non-enumerable-property"
   | "symbol-key"
   | "invalid-authoring-object"
-  | "authoring-limit"
-  | "invalid-draft"
-  | "invalid-field"
-  | "duplicate-members";
-/** Expected invalid-draft diagnostic. code supports branching, draftPointer locates the original caller draft (including additionalFields), and message is explanatory. No generated JSON byte location is substituted. */
-export interface AuthoringFailure {
-  /** Original parsed-source coordinates for conversion failures; absent/null for caller-created drafts. */
-  sourceLocation?: SourceLocation | null;
-  /** Stable expected-draft failure category. */
-  code: AuthoringErrorCode;
-  /** JSON Pointer into the caller's draft; empty means root, null means unavailable. Never a byte offset. */
-  draftPointer: string | null;
-  /** Human-readable guidance; use code and draftPointer for logic. */
-  message: string;
-}
-/** Authoring admission result. Authored transfers one disposable ParsedDocument without normative proof; authoring-error returns a logical draft diagnostic and owns no handle. */
-export type AuthoringResult =
-  | {
-      /** Result discriminant; narrow this before reading branch-specific fields. */
-      status: "authored";
-      /** Caller-owned document handle for this branch; dispose independently. */
-      document: ParsedDocument;
-    }
-  | {
-      /** Result discriminant; narrow this before reading branch-specific fields. */
-      status: "authoring-error";
-      /** Structured expected failure for this branch. */
-      error: AuthoringFailure;
-    };
-class DraftFailure extends Error {
+  | "authoring-limit";
+/** An atomic edit was refused. code is stable; partPointer locates a typed part input when available. The document remains unchanged. */
+export class EditError extends SdkError {
+  /** Logical pointer into a typed part input; null when unavailable. */
+  readonly partPointer: string | null;
+  /** Construct an edit refusal without inventing source byte coordinates. */
   constructor(
-    readonly code: AuthoringErrorCode,
-    readonly draftPointer: string | null,
+    code: string,
+    message: string,
+    partPointer: string | null = null,
+  ) {
+    super(code, message);
+    this.name = "EditError";
+    this.partPointer = partPointer;
+  }
+}
+class PartSerializationError extends EditError {
+  constructor(
+    code: AuthoringErrorCode,
+    pointer: string | null,
     message: string,
   ) {
-    super(message);
-  }
-  diagnostic(): AuthoringFailure {
-    return {
-      code: this.code,
-      draftPointer: this.draftPointer,
-      message: this.message,
-    };
+    super(code, message, pointer);
   }
 }
 interface AuthorContext {
   origins: WeakMap<object, Map<string, string>>;
+  editBatch?: boolean;
 }
-function draftPath(parent: string, name: string): string {
+function normalizeEdit(value: unknown, context: AuthorContext): unknown {
+  const entries = ownEntries(value, "");
+  const fields = Object.fromEntries(entries);
+  const namespaces: Record<string, AuthorKind> = {
+    "set-operations": "operation",
+    "set-sources": "source",
+    "set-bindings": "binding",
+    "set-dependencies": "dependency",
+  };
+  const kind =
+    typeof fields.op === "string" && Object.hasOwn(namespaces, fields.op)
+      ? namespaces[fields.op]
+      : undefined;
+  if (!kind) return value;
+  if (entries.some(([key]) => key !== "op" && key !== "value"))
+    throw new EditError(
+      "invalid-edits",
+      "Typed namespace edits accept op and value only.",
+    );
+  const pointer = "/" + (fields.op as string).slice(4);
+  const parts = Object.fromEntries(
+    ownEntries(fields.value, pointer).map(([key, part]) => [
+      key,
+      authorObject(part, kind, pointerChild(pointer, key), context),
+    ]),
+  );
+  return { op: "set", pointer, value: parts };
+}
+function pointerChild(parent: string, name: string): string {
   return parent + "/" + name.replace(/~/g, "~0").replace(/\//g, "~1");
 }
-function bridgeDraftFailure(error: unknown): never {
-  // Only known expected refusals from the two authoring ABI calls are normalized.
-  if (typeof error === "string") {
-    let info: { code?: string; kind?: string } | undefined;
-    try {
-      info = JSON.parse(error);
-    } catch {
-      /* Unexpected non-JSON engine failure. */
-    }
-    if (info?.code === "authoring")
-      throw new DraftFailure(
-        "invalid-draft",
-        null,
-        "Draft fields do not satisfy the typed authoring model.",
-      );
-    if (info?.kind === "Limit")
-      throw new DraftFailure(
-        "authoring-limit",
-        null,
-        "The encoded draft exceeds the admitted JSON limits.",
-      );
-  }
-  throw error;
-}
-/** Expected invalid data returns a draft diagnostic; initialization, disposed handles and unexpected failures throw.
- * Typed optional fields use undefined for absence; opaque JSON never silently omits it.
- */
-export function authorDocument(draft: DocumentDraft): AuthoringResult {
-  requireReady();
-  const scope = scopedDrafts.get(draft);
-  if (scope) handle(scope);
-  let exact: ExactJson | undefined;
-  try {
-    const context: AuthorContext = { origins: new WeakMap() };
-    const object = authorObject(draft, "document", "", context);
-    if (!("openbindings" in object)) object.openbindings = "0.2.0";
-    const text = encodeOrdinary(object, context);
-    try {
-      exact = new ExactJson(wasm.WasmJson.parseText(text));
-    } catch (error) {
-      return bridgeDraftFailure(error);
-    }
-    try {
-      return {
-        status: "authored",
-        document: new ParsedDocument(jsonRaw(exact).authorDocument()),
-      };
-    } catch (error) {
-      return bridgeDraftFailure(error);
-    }
-  } catch (error) {
-    if (error instanceof DraftFailure)
-      return { status: "authoring-error", error: error.diagnostic() };
-    throw error;
-  } finally {
-    exact?.dispose();
-  }
-}
-
-type AuthorKind =
-  | "document"
-  | "operation"
-  | "example"
-  | "source"
-  | "binding"
-  | "dependency";
+type AuthorKind = "operation" | "example" | "source" | "binding" | "dependency";
 const typedFields: Record<AuthorKind, readonly string[]> = {
-  document: [
-    "openbindings",
-    "operations",
-    "name",
-    "version",
-    "description",
-    "schemas",
-    "sources",
-    "bindings",
-    "dependencies",
-  ],
   operation: [
     "description",
     "deprecated",
@@ -2648,7 +2731,6 @@ const typedFields: Record<AuthorKind, readonly string[]> = {
   dependency: ["operation", "kinds", "description"],
 };
 const requiredFields: Record<AuthorKind, readonly string[]> = {
-  document: ["operations"],
   operation: [],
   example: [],
   source: ["kind"],
@@ -2662,7 +2744,7 @@ function ownEntries(object: unknown, pointer?: string): [string, unknown][] {
     message: string,
   ): never {
     if (pointer === undefined) throw new TypeError(message);
-    throw new DraftFailure(code, at, message);
+    throw new PartSerializationError(code, at, message);
   }
   if (
     !object ||
@@ -2686,7 +2768,7 @@ function ownEntries(object: unknown, pointer?: string): [string, unknown][] {
       if (!d.enumerable || !("value" in d))
         invalid(
           "value" in d ? "non-enumerable-property" : "accessor-property",
-          draftPath(pointer ?? "", key),
+          pointerChild(pointer ?? "", key),
           "Authoring requires enumerable data properties.",
         );
       return [key, d.value];
@@ -2703,22 +2785,22 @@ function authorObject(
   const origins = new Map<string, string>();
   context.origins.set(out, origins);
   for (const [key, value] of ownEntries(object, pointer)) {
-    const fieldPath = draftPath(pointer, key);
+    const fieldPath = pointerChild(pointer, key);
     if (key === "additionalFields") {
       if (value === undefined) continue;
       for (const [name, content] of ownEntries(value, fieldPath)) {
-        const contentPath = draftPath(fieldPath, name);
+        const contentPath = pointerChild(fieldPath, name);
         if (typedFields[kind].includes(name))
-          throw new DraftFailure(
+          throw new PartSerializationError(
             "field-collision",
             contentPath,
             "Additional field shadows a typed member.",
           );
         if (Object.hasOwn(out, name))
-          throw new DraftFailure(
+          throw new PartSerializationError(
             "duplicate-field",
             contentPath,
-            "The draft supplies the same document member twice.",
+            "The input supplies the same member twice.",
           );
         out[name] = content as JsonInput;
         origins.set(name, contentPath);
@@ -2732,33 +2814,31 @@ function authorObject(
     )
       continue;
     const child: AuthorKind | undefined =
-      kind === "document"
-        ? key === "operations"
-          ? "operation"
-          : key === "sources"
-            ? "source"
-            : key === "bindings"
-              ? "binding"
-              : key === "dependencies"
-                ? "dependency"
-                : undefined
-        : kind === "operation" && key === "examples"
-          ? "example"
-          : undefined;
+      kind === "operation" && key === "examples" ? "example" : undefined;
+    checkPartField(kind, key, value, fieldPath);
     if (Object.hasOwn(out, key))
-      throw new DraftFailure(
+      throw new PartSerializationError(
         "duplicate-field",
         fieldPath,
-        "The draft supplies the same document member twice.",
+        "The input supplies the same member twice.",
       );
+    origins.set(key, fieldPath);
     out[key] = child
       ? Object.fromEntries(
           ownEntries(value, fieldPath).map(([name, v]) => [
             name,
-            authorObject(v, child, draftPath(fieldPath, name), context),
+            authorObject(v, child, pointerChild(fieldPath, name), context),
           ]),
         )
       : (value as JsonInput);
+  }
+  for (const key of requiredFields[kind]) {
+    if (!Object.hasOwn(out, key))
+      throw new PartSerializationError(
+        "invalid-authoring-object",
+        pointerChild(pointer, key),
+        "Required typed field is absent.",
+      );
   }
   return out;
 }

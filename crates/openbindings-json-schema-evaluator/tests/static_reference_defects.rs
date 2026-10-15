@@ -9,9 +9,9 @@ fn observe(case: &Value) -> Value {
             "openbindings":"0.2.0", "operations":{"op":{"input":case["schema"]}}
         })
     });
-    let parsed = ParsedDocument::parse(document.to_string()).unwrap();
+    let parsed = Document::parse(document.to_string()).unwrap();
     let validation = parsed.validate().unwrap();
-    let proof = validation.validated().expect("conformant fixture");
+    let proof = validation.conformant().expect("conformant fixture");
     let supplied = ResourceSet::new(case["resources"].as_array().into_iter().flatten().map(|r| {
         SchemaResource {
             uri: r["uri"].as_str().unwrap().into(),
@@ -78,10 +78,10 @@ fn matrix_and_concrete_reference_completions() {
 }
 #[test]
 fn semantic_preparation_and_validation_honor_cancellation() {
-    let parsed = ParsedDocument::parse(r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$id":"https://controls.test/root","$ref":"#missing"}}}}"##).unwrap();
+    let parsed = Document::parse(r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$id":"https://controls.test/root","$ref":"#missing"}}}}"##).unwrap();
     let validation = parsed.validate().unwrap();
     let contracts = validation
-        .validated()
+        .conformant()
         .unwrap()
         .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let cancelled = AtomicBool::new(true);

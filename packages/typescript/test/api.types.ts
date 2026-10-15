@@ -1,11 +1,9 @@
 import {
-  authorDocument,
   parseJson,
-  parseDocument,
+  Document,
   SchemaResources,
   ExactJson,
-  ValidatedDocument,
-  type ParsedDocument,
+  ConformantDocument,
   initialize,
   type JsonOutput,
   type ValueOutcome,
@@ -18,38 +16,32 @@ async function caller(
   request: Request,
 ): Promise<Response | undefined> {
   await initialize(bytes);
-  const authored = authorDocument({
-    operations: {
-      run: {
-        input: { type: "integer" },
-        examples: { a: { input: 1, output: null } },
-      },
+  using created = Document.create();
+  created.setOperations({
+    run: {
+      input: { type: "integer" },
+      examples: { a: { input: 1, output: null } },
     },
-    sources: { local: { kind: "test", content: null } },
   });
-  if (authored.status === "authored") {
-    using document = authored.document;
-    const checked = document.validated();
-    if (checked.status === "validated") {
-      using validated = checked.document;
-      using publication = new DiscoveryPublication(validated, {
-        allowOrigin: "any",
-      });
-      return publication.respond(request);
-    }
-    if (checked.status === "version-refused")
-      checked.refusal.declared satisfies string;
-    if (checked.status === "report") checked.report.conclusion satisfies string;
+  created.setSource("local", { kind: "test", content: null });
+  const checked = created.validate();
+  if (checked.status === "conformant") {
+    using proof = checked.document;
+    using publication = new DiscoveryPublication(proof, { allowOrigin: "any" });
+    return publication.respond(request);
   }
-  const parsed = parseDocument(bytes),
+  if (checked.status === "version-refused")
+    checked.refusal.declared satisfies string;
+  if (checked.status === "report") checked.report.conclusion satisfies string;
+  const parsed = Document.parse(bytes),
     resource = parseJson('{"type":"integer"}');
   if (parsed.status === "parsed" && resource.status === "parsed") {
     using document = parsed.value;
     using schema = resource.value;
     using empty = new SchemaResources();
     using resources = empty.with("https://example.test/schema", schema);
-    const proof = document.validated();
-    if (proof.status !== "validated") return undefined;
+    const proof = document.validate();
+    if (proof.status !== "conformant") return undefined;
     using validated = proof.document;
     using contracts = validated.valueContracts({
       resources,
@@ -64,9 +56,9 @@ async function caller(
     using value = ExactJson.from(7);
     const result: ValueOutcome = input.validate(value);
     if (result.outcome === "fails") {
-      result.problems[0].instancePointer satisfies string;
+      result.problems[0]!.instancePointer satisfies string;
       const detail: ValueProblemDetails | undefined =
-        result.problems[0].details;
+        result.problems[0]!.details;
       if (detail?.kind === "required") detail.member satisfies string;
       if (detail?.kind === "enum") detail.choices satisfies readonly string[];
       if (detail?.kind === "type") detail.expected satisfies readonly string[];
@@ -89,7 +81,7 @@ async function caller(
 }
 void caller;
 // @ts-expect-error conformant handles can only come from assessment
-new ValidatedDocument();
+new ConformantDocument();
 // @ts-expect-error raw ABI constructors are not exported
 new ExactJson();
 // @ts-expect-error undefined generic content is never silently omitted
@@ -98,25 +90,28 @@ ExactJson.from({ missing: undefined });
 const output: JsonOutput = ExactJson.from(1);
 void output;
 
-declare const parsedOnly: ParsedDocument;
+declare const parsedOnly: Document;
 // @ts-expect-error publication requires established conformance
 new DiscoveryPublication(parsedOnly);
 // @ts-expect-error parsed is not nominally validated
-const invalidAssignment: ValidatedDocument = parsedOnly;
+const invalidAssignment: ConformantDocument = parsedOnly;
 void invalidAssignment;
-const invalidDraft = authorDocument({
-  operations: {},
-  additionalFields: { operations: {} },
-});
-if (invalidDraft.status === "authoring-error") {
-  invalidDraft.error.code satisfies string;
-  invalidDraft.error.draftPointer satisfies string | null;
-}
+// DOC-1: proof is nominal and has no editing or unchecked construction surface.
+declare const proofOnly: ConformantDocument;
+// @ts-expect-error a proof cannot be edited
+proofOnly.setDescription("changed");
+// @ts-expect-error a plain object is not a conformance proof
+const plainProof: ConformantDocument = {};
+// @ts-expect-error proof and editable document are separate classes
+const proofAsEditable: Document = proofOnly;
+using editableAgain = proofOnly.intoDocument();
+using independentDocument = proofOnly.asDocument();
+void [plainProof, proofAsEditable, editableAgain, independentDocument];
 
 // @ts-expect-error metadata fields match the immutable runtime snapshot
-parsedOnly.operations[0].key = "changed";
+parsedOnly.operations[0]!.key = "changed";
 // @ts-expect-error proof construction has one public method
-ValidatedDocument.fromParsed(parsedOnly);
+ConformantDocument.fromParsed(parsedOnly);
 // @ts-expect-error root no longer exports the HTTP companion
 import { discover as rootDiscovery } from "../dist/index.js";
 
@@ -162,17 +157,14 @@ void obsoleteOutcome;
 // Check actual emitted declarations.
 import {
   ExactMember,
-  OwnedDocumentDraft,
   BindingView,
   SourceView,
   DependencyView,
   ExampleView,
-  type EditableDocumentDraft,
-  type DocumentDraft,
   type JsonInput,
   type ExactIterator,
 } from "../dist/index.js";
-function roundOneTypes(document: ParsedDocument) {
+function roundOneTypes(document: Document) {
   using root = document.value();
   using members = root.members();
   if (members) {
@@ -192,7 +184,7 @@ function roundOneTypes(document: ParsedDocument) {
   for (const metadata of document.operations) {
     metadata.tags satisfies readonly string[] | null;
     metadata.deprecated satisfies boolean | null;
-    // @ts-expect-error Immutable metadata is not editable draft data.
+    // @ts-expect-error Immutable metadata is not editable input data.
     metadata.tags?.push("x");
   }
   using source = document.source("a");
@@ -216,59 +208,27 @@ function roundOneTypes(document: ParsedDocument) {
       example.metadata.hasInput satisfies boolean;
     }
   }
-  const conversion = document.toDraft();
-  if (conversion.status !== "drafted") {
-    conversion.error.sourceLocation?.byteOffset satisfies number | undefined;
-    return;
-  }
-  using editing = conversion.draft;
-  const draft: EditableDocumentDraft = editing.value;
-  editWritableDraft(draft);
-  const input: DocumentDraft = draft;
-  authorDocument(input);
-  const leaf = draft.schemas?.a;
-  if (leaf instanceof ExactJson) {
-    using retained = leaf.retain();
-    draft.additionalFields = {
-      ...draft.additionalFields,
-      "x-retained": retained,
-    };
-  }
-  // @ts-expect-error Opaque JsonInput does not promise an exact owner.
-  leaf?.retain();
-  // @ts-expect-error No second convenience authoring surface.
-  editing.clone();
-  // @ts-expect-error No implicit aggregate capture convenience.
-  editing.keep(root);
-}
-function editWritableDraft(draft: EditableDocumentDraft) {
-  draft.operations.added = { aliases: ["alias"], tags: ["tag"], examples: {} };
-  draft.operations.added.aliases?.push("alias2");
-  draft.operations.added.tags?.splice(0, 1);
-  draft.operations.added.examples!.newExample = { input: null };
-  delete draft.operations.added.examples!.newExample;
-  draft.dependencies ??= {};
-  draft.dependencies.newDependency = { operation: "added", kinds: [] };
-  draft.dependencies.newDependency.kinds?.push("a");
-  delete draft.dependencies.newDependency;
-  draft.sources ??= {};
-  draft.sources.newSource = { kind: "a" };
-  delete draft.sources.newSource;
-  draft.bindings ??= {};
-  draft.bindings.newBinding = { operation: "added", source: "x" };
-  delete draft.bindings.newBinding;
-  draft.schemas ??= {};
-  draft.schemas.a = true;
-  delete draft.schemas.a;
-  delete draft.operations.added;
+  document.setOperation("added", {
+    aliases: ["alias"],
+    tags: ["tag"],
+    examples: {},
+  });
+  document.setExample("added", "one", { input: null });
+  document.setDependency("d", { operation: "added", kinds: ["a"] });
+  document.setSource("s", { kind: "a" });
+  document.setBinding("b", { operation: "added", source: "s" });
+  document.set("/schemas", { a: true });
+  document.remove("/operations/added");
   const opaque: JsonInput = { nested: [1, 2] as const };
-  draft.schemas.a = opaque;
+  document.set("/x-opaque", opaque);
+  // @ts-expect-error opaque values do not promise an exact owner
+  opaque.retain();
+  // @ts-expect-error typed part fields do not accept null in place of description
+  document.setOperation("bad", { description: null });
 }
 function inaccessibleConstructors() {
   // @ts-expect-error Acquire through exact members().
   new ExactMember();
-  // @ts-expect-error Acquire through toDraft().
-  new OwnedDocumentDraft();
   // @ts-expect-error Acquire through keyed lookup.
   new BindingView();
   // @ts-expect-error Acquire through keyed lookup.
@@ -284,7 +244,8 @@ const readonlyRoundOneInput = {
   },
   dependencies: { d: { operation: "run", kinds: ["k"] } },
 } as const;
-authorDocument(readonlyRoundOneInput);
+parsedOnly.setOperations(readonlyRoundOneInput.operations);
+parsedOnly.setDependencies(readonlyRoundOneInput.dependencies);
 void roundOneTypes;
 void inaccessibleConstructors;
 
@@ -321,17 +282,17 @@ const omittedAllowOrigin: import("../dist/http-discovery.js").AllowOrigin =
 const oldAllowOrigin: import("../dist/http-discovery.js").AllowOrigin = "*";
 void [exactAllowOrigin, omittedAllowOrigin, oldAllowOrigin];
 
-// @ts-expect-error parsed documents cannot construct normative value contracts
+// @ts-expect-error unproven documents cannot construct normative value contracts
 parsedOnly.valueContracts();
 
-function validatedReads(proof: ValidatedDocument, parsed: ParsedDocument) {
+function validatedReads(proof: ConformantDocument, parsed: Document) {
   proof.openbindings satisfies string;
   proof.name satisfies string | undefined;
   proof.version satisfies string | undefined;
   proof.description satisfies string | undefined;
   const schemas: ReadonlyMap<string, ExactJson> | undefined = proof.schemas();
   for (const value of schemas?.values() ?? []) value.dispose();
-  using editor = proof.parsed();
+  using editor = proof.asDocument();
   const selection = parsed.resolveOperation("run");
   if (selection.status === "found") {
     using operation = selection.operation;
@@ -379,3 +340,59 @@ function exhaustiveValueOutcome(value: ValueOutcome): string {
     }
   }
 }
+
+// DOC-1: part names match the specification vocabulary, with no retired aliases.
+import type {
+  Operation,
+  Binding,
+  Source,
+  Dependency,
+  Example,
+} from "../dist/index.js";
+function namedParts(document: Document) {
+  const example: Example = { input: null };
+  const operation: Operation = { input: true, examples: { sample: example } };
+  const source: Source = { kind: "custom", content: null };
+  const binding: Binding = { operation: "run", source: "local" };
+  const dependency: Dependency = { operation: "run" };
+  document.setOperation("run", operation);
+  document.setBinding("binding", binding);
+  document.setSource("local", source);
+  document.setDependency("dependency", dependency);
+  document.setExample("run", "sample", example);
+}
+void namedParts;
+// @ts-expect-error retired part name has no alias
+import type { OperationDraft } from "../dist/index.js";
+// @ts-expect-error retired part name has no alias
+import type { BindingDraft } from "../dist/index.js";
+// @ts-expect-error retired part name has no alias
+import type { SourceDraft } from "../dist/index.js";
+// @ts-expect-error retired part name has no alias
+import type { DependencyDraft } from "../dist/index.js";
+// @ts-expect-error retired part name has no alias
+import type { ExampleDraft } from "../dist/index.js";
+declare const partError: import("../dist/index.js").EditError;
+partError.partPointer satisfies string | null;
+// @ts-expect-error retired pointer name has no alias
+partError.draftPointer;
+
+// DOC-1.3: typed maps and exact pointer edits share the existing batch API.
+function typedBatch(
+  document: Document,
+  operation: Operation,
+  source: Source,
+  binding: Binding,
+  dependency: Dependency,
+) {
+  document.edit([
+    { op: "set-operations", value: { run: operation } },
+    { op: "set-sources", value: { local: source } },
+    { op: "set-bindings", value: { binding } },
+    { op: "set-dependencies", value: { dependency } },
+    { op: "set", pointer: "/name", value: "Batch" },
+  ]);
+  // @ts-expect-error typed source kind is required in a batch, too
+  document.edit([{ op: "set-sources", value: { local: {} } }]);
+}
+void typedBatch;
