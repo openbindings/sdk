@@ -18,6 +18,13 @@ PUBLIC_CRATES = {
     "openbindings-interface-synthesis", "openbindings-invocation",
 }
 
+INTERNAL_CRATES = {
+    "openbindings-internal-json", "openbindings-internal-schema",
+    "openbindings-internal-cancellation", "openbindings-internal-jsonschema",
+    "openbindings-internal-regress",
+}
+BUILD_ONLY_CRATES = {"openbindings-wasm"}
+
 
 def require(condition, message):
     if not condition:
@@ -57,7 +64,18 @@ def publication_order(packages):
 
     for name in sorted(PUBLIC_CRATES):
         visit(name)
+    require(set(result) == PUBLIC_CRATES | INTERNAL_CRATES,
+            "Publication closure differs from the supported artifact inventory.")
     return result
+
+
+def artifact_manifests():
+    manifests = sorted([*ROOT.glob("crates/*/Cargo.toml"), *ROOT.glob("vendor/*/Cargo.toml")])
+    names = [tomllib.loads(manifest.read_text())["package"]["name"] for manifest in manifests]
+    require(len(names) == len(set(names)), "Duplicate local package names.")
+    require(set(names) == PUBLIC_CRATES | INTERNAL_CRATES | BUILD_ONLY_CRATES,
+            "Local packages differ from the supported artifact inventory.")
+    return manifests
 
 
 def main():
@@ -65,6 +83,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--offline", action="store_true", help="Require cached Cargo dependencies")
     args = parser.parse_args()
+    manifests = artifact_manifests()
     out = args.output.resolve()
     require(not out.is_relative_to(ROOT) or out.is_relative_to(ROOT / "target"),
             "Inside the checkout, use an ignored target/ output directory.")
@@ -101,11 +120,17 @@ def main():
     npm_root = out / "npm/package"
     identity = json.loads((npm_root / "dist/wasm/build-info.json").read_text())
     require(identity["commit"] == commit and identity["treeClean"], "Wasm was not built from this clean candidate.")
+    current_identity = json.loads(run("wasm-source-identity", ["node", "--input-type=module", "-e",
+        "import {rustSourceIdentity} from './packages/typescript/scripts/source-identity.mjs'; "
+        "console.log(JSON.stringify(await rustSourceIdentity()));"]))
+    require(identity["rustSource"] == current_identity, "Wasm source identity differs from this candidate.")
+    require(set(identity["artifacts"]) == {"openbindings_wasm.js", "openbindings_wasm_bg.wasm"},
+            "Incomplete Wasm artifact inventory.")
     for name, expected in identity["artifacts"].items():
         require(digest(npm_root / "dist/wasm" / name) == expected, f"Wasm artifact mismatch: {name}")
     version = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
     packages = []
-    for manifest in sorted([*ROOT.glob("crates/*/Cargo.toml"), *ROOT.glob("vendor/*/Cargo.toml")]):
+    for manifest in manifests:
         spec = tomllib.loads(manifest.read_text())["package"]
         name = spec["name"]
         package_version = spec["version"] if isinstance(spec["version"], str) else version
@@ -136,7 +161,7 @@ def main():
     (consumer / "src/bin").mkdir(parents=True)
     (consumer / "Cargo.toml").write_text(
         '[package]\nname="sdk-release-consumer"\nversion="0.0.0"\nedition="2024"\n[workspace]\n[dependencies]\n'
-        f'openbindings="={version}"\nopenbindings-json-schema-evaluator="={version}"\n'
+        + "".join(f'{name}="={version}"\n' for name in sorted(PUBLIC_CRATES)) +
         'serde={version="1.0.229",features=["derive"]}\nserde_json="=1.0.151"\n' + patches)
     shutil.copyfile(ROOT / "Cargo.lock", consumer / "Cargo.lock")
     evaluator = Path(next(item["source"] for item in packages if item["name"] == "openbindings-json-schema-evaluator"))
@@ -164,7 +189,8 @@ def main():
     (compat / "Cargo.toml").write_text(manifest + patches)
     shutil.copyfile(ROOT / "tools/consumer-compat/src/lib.rs", compat / "src/lib.rs")
     shutil.copyfile(ROOT / "tools/consumer-compat/Cargo.lock", compat / "Cargo.lock")
-    for features in ["", "ap", "sdk", "sdk,ap", "evaluator", "native", "native,ap"]:
+    for features in ["", "ap", "sdk", "sdk,ap", "evaluator", "native", "native,ap",
+                     "portable", "inspection", "synthesis", "invocation"]:
         feature_args = ["--features", features] if features else []
         label = features.replace(",", "-") or "baseline"
         run("compat-" + label, ["cargo", "test", *offline, "--no-default-features", *feature_args], compat)
@@ -196,7 +222,7 @@ def main():
                "workspaceLockSha256": digest(ROOT / "Cargo.lock"),
                "npm": {"archive": npm_archive.name, "sha256": digest(npm_archive), "buildIdentity": identity},
                "cargo": packages, "publicationOrder": publication_order(packages),
-               "cargoBuildOnly": ["openbindings-wasm"], "archiveConsumers": "passed",
+               "cargoBuildOnly": sorted(BUILD_ONLY_CRATES), "archiveConsumers": "passed",
                "status": "local artifacts verified; publication not performed"}
     (out / "MANIFEST.json").write_text(json.dumps(receipt, indent=2) + "\n")
     print(json.dumps({"manifest": str(out / "MANIFEST.json"), "cargoArchives": len(packages), "publicationPerformed": False}))

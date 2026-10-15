@@ -1,4 +1,4 @@
-"""HD-9: private test CA and TLS loopback server, with no OS trust changes."""
+"""private test CA and TLS loopback server, with no OS trust changes."""
 import http.server
 import pathlib
 import ssl

@@ -111,8 +111,8 @@ and value allocation checks. No construction-memory guarantee is made for Upstre
 - `Cargo.toml`, `src/lib.rs`: private identity and internal modules; the SDK explicitly selects the classical interpreter required by the work budget.
 - `src/api.rs`, `src/classicalbacktrack.rs`, `src/ob_budget.rs`: finite interpreter work and cancellation propagation; a failed/exhausted match must never become an ordinary non-match that supports a wrong validation verdict.
 - `src/parse.rs`, `src/ob_ecma11_properties.rs`: ECMAScript 11 property-name recognition and bounded pattern expansion/admission. Supported syntax and selected matching capability are distinct. Unicode property matching remains an explicitly qualified refusal only when selected by evaluation; irrelevant branches retain existing verdicts.
-- Empty quantifier semantics (EV-4): `src/classicalbacktrack.rs` treats an unrepresentable single-character atom as matching zero characters only when its quantifier admits zero repetitions, including lazy extension. Lone-surrogate escapes still match no scalar code point. `tests/fixtures/lone-surrogate.mjs` computes the checked-in 470-row differential fixture using Node's `RegExp` with the `u` flag (Node v22.19.0, V8 12.4.254.21-node.29); `tests/tests.rs` asserts every row, and the evaluator's `pattern_correctness` integration test runs every row through `pattern` and `patternProperties`.
-- Backtrack budget restoration (EV-5): both mid-interpreter budget exits truncate the backtrack stack to its exhaustion sentinel. The direct matcher regression uses `^(a+)+$` on 28 `a` characters plus `b`, without `catch_unwind`, at budgets 0–255 in debug tests; positive/negative lookaround variants and fresh-scope recovery are also checked. Re-run the fork with `cargo test --manifest-path vendor/openbindings-internal-regress/Cargo.toml --no-default-features --features std` to select the SDK's classical matcher configuration.
+- Empty quantifier semantics: `src/classicalbacktrack.rs` treats an unrepresentable single-character atom as matching zero characters only when its quantifier admits zero repetitions, including lazy extension. Lone-surrogate escapes still match no scalar code point. `tests/fixtures/lone-surrogate.mjs` computes the checked-in 470-row differential fixture using Node's `RegExp` with the `u` flag (Node v22.19.0, V8 12.4.254.21-node.29); `tests/tests.rs` asserts every row, and the evaluator's `pattern_correctness` integration test runs every row through `pattern` and `patternProperties`.
+- Backtrack budget restoration: both mid-interpreter budget exits truncate the backtrack stack to its exhaustion sentinel. The direct matcher regression uses `^(a+)+$` on 28 `a` characters plus `b`, without `catch_unwind`, at budgets 0–255 in debug tests; positive/negative lookaround variants and fresh-scope recovery are also checked. Re-run the fork with `cargo test --manifest-path vendor/openbindings-internal-regress/Cargo.toml --no-default-features --features std` to select the SDK's classical matcher configuration.
 
 `OPENBINDINGS-PATCH.md` identifies each retained fork and links this contract.
 
@@ -154,9 +154,7 @@ artifact gates described above on the same committed candidate. Exact source
 reconstruction is a maintenance rehearsal; it neither upgrades the dependency
 nor establishes that a future upstream rebase will be straightforward.
 
-Historical upstream-test dispositions remain in
-`docs/upstream-disposition-witnesses.json`; they describe the former full fork,
-not fresh qualification of removed patches. They must never become broad skip
-filters. The maintained SDK exact-operand, ECMA, resolver, diagnostic, corpus and
-kit tests govern this supported graph. Re-run upstream source suites when updating
-the corresponding library and investigate each changed result explicitly.
+The maintained SDK exact-operand, ECMA, resolver, diagnostic, corpus and kit tests
+govern this supported graph. Re-run upstream source suites when updating the
+corresponding library and investigate each changed result explicitly. Historical
+upstream-test dispositions are archived outside the product and are not skip filters.

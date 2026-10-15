@@ -20,7 +20,7 @@
         {
           "file": "Cargo.toml",
           "upstream_sha256": "a8318117cc87a9a88027d5820fc5507eda16cbf04e166cb35a26be5492a1f8d7",
-          "current_sha256": "62025bc7b44cca26565247221a3f77e1abcf414e35886afd0acf0358ada9da8c"
+          "current_sha256": "e620bd721b5bea9d6992e80fae5da09c19dae5c6395957f31138122fb478b49c"
         },
         {
           "file": "Cargo.toml.orig",
@@ -120,7 +120,7 @@
         {
           "file": "Cargo.toml",
           "upstream_sha256": "f06441afb2bec691c9f3ca5dd4f2372a70f8fa0cd229da13d371bc40abf57dce",
-          "current_sha256": "ea6917275abb8beb1d7617645f9d739fa19e282a90c945609a1f072a4d53ecad"
+          "current_sha256": "79159d26f89655bf2c8e3affa4250198e27ddf2c05893ed1646d603a1501893e"
         },
         {
           "file": "Cargo.toml.orig",
@@ -130,7 +130,7 @@
         {
           "file": "OPENBINDINGS-PATCH.md",
           "upstream_sha256": null,
-          "current_sha256": "376bdb92454e3e395eee8aaef3ff07474716017e02eef30d1bba21f0e652c9a5"
+          "current_sha256": "676c386c5401e4cd7e775531ce77b088c2944b8f753c212416442ca82995a697"
         },
         {
           "file": "UPSTREAM-Cargo.toml",

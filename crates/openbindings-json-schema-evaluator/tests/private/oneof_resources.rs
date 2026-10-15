@@ -504,7 +504,7 @@ fn adapters_receive_unmodified_requests_and_each_bound_compiles_without_the_othe
     };
     assert_eq!(detail.code, "my-adapter");
     assert_eq!(custom.calls.load(Ordering::SeqCst), 1);
-    let (lower, upper, _, _) = custom.bounds.lock().unwrap().take().unwrap().into_parts();
+    let EvaluationBounds { lower, upper, .. } = custom.bounds.lock().unwrap().take().unwrap();
     drop(context);
     drop(custom);
     for (program, expected) in [(lower, false), (upper, true)] {

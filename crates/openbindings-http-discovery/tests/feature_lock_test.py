@@ -1,4 +1,4 @@
-"""S5b review F6 / HD-6: the witness rejects drift in shared versions/checksums."""
+"""the witness rejects drift in shared versions/checksums."""
 import copy
 import pathlib
 import runpy

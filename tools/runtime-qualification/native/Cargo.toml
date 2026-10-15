@@ -1,4 +1,5 @@
 [package]
+rust-version = "1.88"
 name = "sdk-runtime-qualification"
 version = "0.0.0"
 edition = "2024"

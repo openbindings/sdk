@@ -58,7 +58,7 @@ for role in ['http-discovery', 'invocation', 'source-inspection', 'interface-syn
     assert 'pub use openbindings_internal_cancellation::{Cancellation, CancellationToken};' in (package / 'src/lib.rs').read_text()
 print('Cancellation: one shared identity, std-only implementation above synchronous core.')
 
-# S6d: core's complete implementation closure must not compile the bounds planner.
+# Core's complete implementation closure must not compile the bounds planner.
 graph = json.loads(subprocess.check_output(
     ['cargo', 'metadata', '--offline', '--locked', '--format-version', '1'], cwd=root))
 packages = {p['id']: p for p in graph['packages']}

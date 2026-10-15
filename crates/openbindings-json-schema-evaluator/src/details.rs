@@ -2,11 +2,6 @@
 use jsonschema::error::{TypeKind, ValidationErrorKind as Kind};
 use openbindings::*;
 
-pub(crate) enum Collection {
-    Available(ValueProblemDetails),
-    Unavailable,
-    Interrupted,
-}
 fn work(control: &dyn WorkControl, units: usize) -> bool {
     !control.is_cancelled() && jsonschema::ob_work::charge(units.max(1))
 }
@@ -150,15 +145,12 @@ fn copied(bytes: usize, items: usize) {
     #[cfg(not(test))]
     let _ = (bytes, items);
 }
-fn owned(detail: ValueProblemDetails, _bytes: usize) -> Collection {
-    Collection::Available(detail)
-}
 pub(crate) fn collect(
     request: &SchemaRequest,
     at: Option<&SchemaLocation>,
     kind: &Kind,
     control: &dyn WorkControl,
-) -> Collection {
+) -> Option<ValueProblemDetails> {
     if let Kind::Type { kind } = kind {
         let cost = match kind {
             TypeKind::Single(expected) => "type".len() + expected.as_str().len(),
@@ -167,7 +159,7 @@ pub(crate) fn collect(
             }
         };
         if !work(control, cost) {
-            return Collection::Interrupted;
+            return None;
         }
         copied(cost, 0);
         let expected = match kind {
@@ -176,7 +168,7 @@ pub(crate) fn collect(
                 expected.iter().map(|t| t.as_str().to_owned()).collect()
             }
         };
-        return owned(ValueProblemDetails::Type { expected }, cost);
+        return Some(ValueProblemDetails::Type { expected });
     }
     let code = kind.keyword();
     if !matches!(
@@ -194,36 +186,28 @@ pub(crate) fn collect(
             | "maxProperties"
             | "enum"
     ) {
-        return Collection::Unavailable;
+        return None;
     }
-    let Some(at) = at else {
-        return Collection::Unavailable;
-    };
+    let at = at?;
     let operand = match original(request, at, control) {
         Ok(Some((value, end))) if end == at.pointer.len() => value,
-        Ok(_) => return Collection::Unavailable,
-        Err(()) => return Collection::Interrupted,
+        Ok(_) => return None,
+        Err(()) => return None,
     };
     match code {
         "required" => {
-            let Some(required) = operand.elements() else {
-                return Collection::Unavailable;
-            };
+            let required = operand.elements()?;
             let Kind::Required { property } = kind else {
-                return Collection::Unavailable;
+                return None;
             };
             // Recover only the missing member established by the library.
-            let Some(member) = property.as_str() else {
-                return Collection::Unavailable;
-            };
+            let member = property.as_str()?;
             let cost = "required".len().saturating_add(member.len());
             let mut verified = false;
             for required in required {
-                let Some(name) = required.as_str() else {
-                    return Collection::Unavailable;
-                };
+                let name = required.as_str()?;
                 if !work(control, name.len().saturating_add(member.len())) {
-                    return Collection::Interrupted;
+                    return None;
                 }
                 if name == member {
                     verified = true;
@@ -231,20 +215,15 @@ pub(crate) fn collect(
                 }
             }
             if !verified {
-                return Collection::Unavailable;
+                return None;
             }
             copied(cost, 0);
-            owned(
-                ValueProblemDetails::Required {
-                    member: member.to_owned(),
-                },
-                cost,
-            )
+            Some(ValueProblemDetails::Required {
+                member: member.to_owned(),
+            })
         }
         "enum" => {
-            let Some(choices) = operand.elements() else {
-                return Collection::Unavailable;
-            };
+            let choices = operand.elements()?;
             let mut cost = "enum".len();
             let mut count = 0usize;
             for choice in choices {
@@ -252,24 +231,22 @@ pub(crate) fn collect(
                 // Thus collection/wire framing is bounded without a full Vec.
                 cost = cost.saturating_add(choice.text().len());
                 if !work(control, choice.text().len()) {
-                    return Collection::Interrupted;
+                    return None;
                 }
                 count += 1;
             }
             if !work(control, 1) {
-                return Collection::Interrupted;
+                return None;
             }
             copied(cost, count);
             let mut choices = Vec::with_capacity(count);
             for choice in operand.elements().expect("preflight array") {
                 choices.push(choice.text().to_owned());
             }
-            owned(ValueProblemDetails::Enum { choices }, cost)
+            Some(ValueProblemDetails::Enum { choices })
         }
         _ => {
-            let Some(bound) = operand.number_text() else {
-                return Collection::Unavailable;
-            };
+            let bound = operand.number_text()?;
             let numeric = matches!(
                 code,
                 "minimum" | "maximum" | "exclusiveMinimum" | "exclusiveMaximum"
@@ -281,21 +258,18 @@ pub(crate) fn collect(
             };
             let cost = tag.len().saturating_add(bound.len());
             if !work(control, bound.len()) {
-                return Collection::Interrupted;
+                return None;
             }
             copied(cost, 0);
-            owned(
-                if numeric {
-                    ValueProblemDetails::NumericBound {
-                        bound: bound.to_owned(),
-                    }
-                } else {
-                    ValueProblemDetails::SizeBound {
-                        bound: bound.to_owned(),
-                    }
-                },
-                cost,
-            )
+            Some(if numeric {
+                ValueProblemDetails::NumericBound {
+                    bound: bound.to_owned(),
+                }
+            } else {
+                ValueProblemDetails::SizeBound {
+                    bound: bound.to_owned(),
+                }
+            })
         }
     }
 }
@@ -305,6 +279,80 @@ mod tests {
     use super::*;
     use crate::DefaultEvaluator;
     use std::sync::Arc;
+    #[test]
+    fn interrupted_lookup_and_enum_collection_copy_no_details() {
+        use std::sync::{
+            Mutex,
+            atomic::{AtomicUsize, Ordering},
+        };
+        #[derive(Default)]
+        struct Capture(Mutex<Option<SchemaRequest>>);
+        impl SchemaEvaluator for Capture {
+            fn prepare(
+                &self,
+                request: &SchemaRequest,
+                control: &dyn WorkControl,
+            ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+                *self.0.lock().unwrap() = Some(request.clone());
+                DefaultEvaluator::new().prepare(request, control)
+            }
+        }
+        struct StopAfter {
+            calls: AtomicUsize,
+            limit: usize,
+        }
+        impl WorkControl for StopAfter {
+            fn is_cancelled(&self) -> bool {
+                self.calls.fetch_add(1, Ordering::Relaxed) >= self.limit
+            }
+        }
+        let capture = Arc::new(Capture::default());
+        let document = ParsedDocument::parse(
+            r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"enum":[0,1,2]}}}}"#,
+        )
+        .unwrap();
+        let context = document
+            .validate()
+            .unwrap()
+            .validated()
+            .unwrap()
+            .value_contracts(capture.clone(), ResourceSet::default());
+        assert!(matches!(
+            context.prepare("op", Direction::Input),
+            ValueContractPreparation::Ready(_)
+        ));
+        let request = capture.0.lock().unwrap().take().unwrap();
+        let at = SchemaLocation {
+            resource: None,
+            pointer: "/operations/op/input/enum".into(),
+        };
+        let lookup = StopAfter {
+            calls: AtomicUsize::new(0),
+            limit: usize::MAX,
+        };
+        assert!(original(&request, &at, &lookup).unwrap().is_some());
+        let lookup_calls = lookup.calls.load(Ordering::Relaxed);
+        let validator = jsonschema::validator_for(&serde_json::json!({"enum":[0,1,2]})).unwrap();
+        let value = serde_json::Value::Null;
+        let error = validator.validate(&value).unwrap_err();
+        for limit in [0, lookup_calls + 1] {
+            COPIED_DETAIL_BYTES.set(0);
+            COPIED_ENUM_ITEMS.set(0);
+            let control = StopAfter {
+                calls: AtomicUsize::new(0),
+                limit,
+            };
+            assert!(collect(&request, Some(&at), error.kind(), &control).is_none());
+            assert_eq!(COPIED_DETAIL_BYTES.get(), 0);
+            assert_eq!(COPIED_ENUM_ITEMS.get(), 0);
+            assert_eq!(control.calls.load(Ordering::Relaxed), limit + 1);
+        }
+        assert!(
+            matches!(collect(&request, Some(&at), error.kind(), &lookup),
+            Some(ValueProblemDetails::Enum { choices }) if choices == ["0", "1", "2"])
+        );
+    }
+
     #[test]
     fn nonexistent_locations_use_the_nearest_existing_pointer_prefix() {
         let source = JsonValue::parse(r#"{"object":{"a/~雪":[null],"0":false},"":true}"#).unwrap();

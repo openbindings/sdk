@@ -119,7 +119,7 @@ fn localize(value: &mut Value) {
         _ => {}
     }
 }
-const META_FILES: [&str; 8] = [
+pub(crate) const META_FILES: [&str; 8] = [
     include_str!("../schemas/draft2020-12/schema.json"),
     include_str!("../schemas/draft2020-12/meta/core.json"),
     include_str!("../schemas/draft2020-12/meta/applicator.json"),

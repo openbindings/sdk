@@ -104,10 +104,10 @@ fn duplicate_recovery_is_sdk_policy_not_an_interface_requirement() {
     assert!(SourceInspection::complete(vec![target]).validate().is_ok());
 }
 
-// RO-15: the pinned InspectionLimitation schema omits additionalProperties,
+// the pinned InspectionLimitation schema omits additionalProperties,
 // which permits additional evidence. Both serializers must preserve it exactly.
 #[test]
-fn ro15_limitation_additional_evidence_matches_the_published_interface() {
+fn limitation_additional_evidence_matches_the_published_interface() {
     let document =
         ParsedDocument::parse(include_bytes!("fixtures/source-inspector-0.1.json")).unwrap();
     assert!(

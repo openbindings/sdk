@@ -143,7 +143,7 @@ struct CoreRejection {
 }
 fn translate_documents(suite: &mut Suite) {
     let migrations: DocumentMigrations =
-        serde_json::from_str(include_str!("../fixtures/document-migrations.json"))
+        serde_json::from_str(include_str!("../fixtures/document-admission.json"))
             .expect("document migrations");
     for m in migrations.reexpressions {
         let group = suite

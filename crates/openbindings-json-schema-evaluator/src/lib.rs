@@ -147,7 +147,12 @@ impl SchemaEvaluator for DefaultEvaluator {
                     .bounds(entry, &cancellation)
                     .map_err(projection_failure)
                     .map_err(|decline| recover_partial_decline(detail, decline))?;
-                let (lower, upper, unavailable, semantic_completions) = bounds.into_parts();
+                let planner::EvaluationBounds {
+                    lower,
+                    upper,
+                    unavailable,
+                    semantic_completions,
+                } = bounds;
                 let unavailable = unavailable.map(projection_failure);
                 let upper = self.compile(upper, request, control)?;
                 control.check()?;
@@ -310,11 +315,7 @@ impl Compiled {
                 if original_only && location.is_none() {
                     return Ok(None);
                 }
-                let detail =
-                    match details::collect(source, location.as_ref(), error.kind(), control) {
-                        details::Collection::Available(detail) => Some(detail),
-                        _ => None,
-                    };
+                let detail = details::collect(source, location.as_ref(), error.kind(), control);
                 control.check()?;
                 Ok(Some(ValueProblem {
                     instance_pointer: error.instance_path().as_str().into(),

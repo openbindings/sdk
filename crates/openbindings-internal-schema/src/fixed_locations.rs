@@ -34,18 +34,7 @@ fn escape(token: &str) -> String {
 
 fn local_pointer(reference: &str) -> Option<String> {
     let fragment = reference.strip_prefix('#')?;
-    let mut decoded = Vec::with_capacity(fragment.len());
-    let mut bytes = fragment.bytes();
-    while let Some(byte) = bytes.next() {
-        decoded.push(if byte == b'%' {
-            let hi = (bytes.next()? as char).to_digit(16)?;
-            let lo = (bytes.next()? as char).to_digit(16)?;
-            (hi * 16 + lo) as u8
-        } else {
-            byte
-        });
-    }
-    let pointer = String::from_utf8(decoded).ok()?;
+    let pointer = crate::uri::decode_fragment(fragment)?;
     (pointer.is_empty() || pointer.starts_with('/')).then(|| format!("#{pointer}"))
 }
 
@@ -522,6 +511,33 @@ mod tests {
     use crate::JsonValue;
     use serde_json::json;
     use std::collections::BTreeSet;
+
+    #[test]
+    fn local_fragments_preserve_utf8_and_pointer_admission() {
+        for (input, expected) in [
+            ("", None),
+            ("#", Some("#")),
+            ("#/", Some("#/")),
+            ("#/雪/~01", Some("#/雪/~01")),
+            ("#/%C3%A9", Some("#/é")),
+            ("#/a%", None),
+            ("#/a%1", None),
+            ("#/a%GG", None),
+            ("#plain", None),
+            ("not-a-fragment", None),
+        ] {
+            assert_eq!(local_pointer(input).as_deref(), expected, "{input}");
+        }
+        for hi in 0..=255u8 {
+            for lo in 0..=255u8 {
+                let input = format!("#/%{hi:02X}%{lo:02x}/~01");
+                let expected = String::from_utf8(vec![hi, lo])
+                    .ok()
+                    .map(|decoded| format!("#/{decoded}/~01"));
+                assert_eq!(local_pointer(&input), expected, "{input}");
+            }
+        }
+    }
 
     fn locate(schema: Value, text: &str, work: usize) -> (Vec<String>, bool) {
         let map = LocationMap::compile(&schema).unwrap();

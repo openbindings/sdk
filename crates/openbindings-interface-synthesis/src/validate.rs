@@ -85,7 +85,7 @@ fn tokens(value: JsonRef<'_>) -> impl Iterator<Item = Token<'_>> {
     })
 }
 fn same_json(a: JsonRef<'_>, b: JsonRef<'_>) -> bool {
-    // RO-9: ambiguous duplicate-member values cannot establish preservation.
+    // ambiguous duplicate-member values cannot establish preservation.
     // Retain owners cheaply and defer exact decimal and UTF-16 equality to core.
     a.to_owned().semantic_eq(&b.to_owned()) == Some(true)
 }
@@ -633,10 +633,10 @@ mod numeric_tests {
     use super::*;
     use openbindings::JsonValue;
 
-    // RO-9: numeric spelling does not affect source hash buckets. Comparison
+    // numeric spelling does not affect source hash buckets. Comparison
     // within each bucket remains core's exact value equality.
     #[test]
-    fn ro9_values_differing_only_in_number_spelling_hash_equally() {
+    fn values_differing_only_in_number_spelling_hash_equally() {
         let left = JsonValue::parse(r#"{"n":[1,-0,{"large":9007199254740993}]}"#).unwrap();
         let right = JsonValue::parse(r#"{"n":[1.0,0e0,{"large":9007199254740993e0}]}"#).unwrap();
         let hash = |value: &JsonValue| {
@@ -648,10 +648,10 @@ mod numeric_tests {
         assert!(same_json(left.view(), right.view()));
     }
 
-    // RO-9: equal values must hash equally. Distinct values may collide, but
+    // equal values must hash equally. Distinct values may collide, but
     // core equality and checked synthesis must still distinguish their sources.
     #[test]
-    fn ro9_decimal_equality_and_hashes_are_congruent() {
+    fn decimal_equality_and_hashes_are_congruent() {
         for (left, right, equal) in [
             ("1", "1.0", true),
             ("1.0", "1e0", true),

@@ -77,8 +77,8 @@ names in `$id` and external resources follow the library's refusal; document-res
 decoding remains §7.3. An encoded leading slash likewise follows the library's
 plain-name refusal in ordinary resources. Unused malformed `$ref` or `$id` siblings
 can cause conservative `resource-inspection` refusal of the whole carrier until
-S9's static-reference-defect handling. Duplicate anchors and non-schema pointers retain their
-current refusals until S9. Trusted fixed assessment is separate.
+static-reference-defect handling. Duplicate anchors and non-schema pointers follow their
+documented completion rules. Trusted fixed assessment is separate.
 
 Default limits: 2,000,000 evaluation steps per verdict/diagnostic pass; evaluation
 depth 1,024; 2,000,000 regex steps; compiler JSON depth 512;

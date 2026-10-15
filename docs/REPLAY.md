@@ -1,6 +1,6 @@
 # Source replay
 
-Start with a clean clone or extracted source archive. Rust 1.99.0 is the MSRV and
+Start with a clean clone or extracted source archive. Rust 1.88 is the MSRV; Rust 1.99.0 is the
 qualification compiler; install rustfmt, Clippy and wasm32-unknown-unknown for that
 toolchain. Install wasm-bindgen-cli 0.2.129 with its locked dependencies. Use Node
 22.19.0/npm 10.9.3 and Python 3.13 or later. First acquisition needs public network

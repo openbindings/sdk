@@ -24,7 +24,7 @@ fn outcome(schema: &str, value: &str) -> ValueOutcome {
 }
 #[test]
 fn uninterpreted_surrogates_do_not_disable_contracts() {
-    // EV-3: description, example and source content, plus reached annotations.
+    // description, example and source content, plus reached annotations.
     for extra in [
         r#", "description":"cut \ud83d""#,
         r#", "sources":{"s":{"kind":"k","content":"\ud800"}}"#,
@@ -79,7 +79,7 @@ fn uninterpreted_surrogates_do_not_disable_contracts() {
 }
 #[test]
 fn only_reached_string_interpretation_refuses_and_scopes_do_not_leak() {
-    // EV-3: never skip an actual JSON string as if it were another JSON type.
+    // never skip an actual JSON string as if it were another JSON type.
     for (schema, value) in [
         (r#"{"pattern":"a"}"#, r#""\ud800""#),
         (r#"{"minLength":1}"#, r#""\ud800""#),
@@ -119,7 +119,7 @@ fn only_reached_string_interpretation_refuses_and_scopes_do_not_leak() {
 }
 #[test]
 fn partial_evaluations_use_the_same_string_scope() {
-    // EV-3: both bounds use the runtime access gate, including decisive bounds.
+    // both bounds use the runtime access gate, including decisive bounds.
     for (schema, succeeds) in [
         (
             r#"{"anyOf":[true,{"$ref":"https://missing.invalid/schema"}]}"#,
@@ -145,7 +145,7 @@ fn partial_evaluations_use_the_same_string_scope() {
 
 #[test]
 fn visiting_values_does_not_interpret_their_names_and_diagnostics_preserve_failure() {
-    // EV-3: an applicator can visit every value without interpreting name strings.
+    // an applicator can visit every value without interpreting name strings.
     assert!(matches!(
         outcome(
             r#"{"additionalProperties":{"type":"integer"}}"#,

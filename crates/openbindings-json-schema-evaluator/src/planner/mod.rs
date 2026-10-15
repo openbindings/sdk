@@ -87,24 +87,6 @@ impl EvaluationBounds {
     pub fn unavailable(&self) -> Option<&NoVerdict> {
         self.unavailable.as_ref()
     }
-    /// Transfer the programs and evidence without cloning their owned storage.
-    /// Tuple order is `(lower, upper, unavailable)`.
-    ///
-    pub fn into_parts(
-        self,
-    ) -> (
-        EvaluationProgram,
-        EvaluationProgram,
-        Option<NoVerdict>,
-        bool,
-    ) {
-        (
-            self.lower,
-            self.upper,
-            self.unavailable,
-            self.semantic_completions,
-        )
-    }
 }
 
 pub(super) fn space(request: &openbindings::SchemaRequest) -> (SchemaSpace, usize) {

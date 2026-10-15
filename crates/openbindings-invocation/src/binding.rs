@@ -248,7 +248,7 @@ impl<P: BindingInvoker> Invoker<P> {
                 local.cancel();
                 Poll::Ready(Err(InvocationError::cancelled()))
             } else {
-                // RO-8: this branch alone has provider provenance.
+                // this branch alone has provider provenance.
                 result.map(|r| {
                     r.map_err(|e| {
                         e.admit_provider_code()

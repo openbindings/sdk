@@ -1,4 +1,4 @@
-//! Review-round regressions: inspection must not alter authored identity or truth.
+//! Schema-embedding regressions: inspection must not alter authored identity or truth.
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::sync::{Arc, atomic::AtomicBool};

@@ -1,4 +1,4 @@
-// HD-6: this is an application dependency graph, not an SDK dev-feature toggle.
+// this is an application dependency graph, not an SDK dev-feature toggle.
 use std::{
     io::{BufRead, BufReader, Write},
     net::TcpListener,
@@ -114,7 +114,7 @@ async fn main() {
         );
         #[cfg(feature = "compression")]
         {
-            // HD-6: each application-enabled decoder retains the decoded-byte bound.
+            // each application-enabled decoder retains the decoded-byte bound.
             for (bytes, coding) in [(GZIP, "gzip"), (DEFLATE, "deflate"), (BROTLI, "br")] {
                 let (origin, worker) = server(bytes, coding);
                 let r = client.discover(&origin).await.unwrap();
@@ -125,7 +125,7 @@ async fn main() {
                     r.outcome
                 );
             }
-            // S5b review F4 / HD-7: corrupt codecs are Network, with upstream text retained.
+            // corrupt codecs are Network, with upstream text retained.
             for (bytes, coding) in [
                 (b"corrupt gzip".as_slice(), "gzip"),
                 (b"\xff\xff\xff\xff".as_slice(), "deflate"),

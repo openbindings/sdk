@@ -251,7 +251,7 @@ impl Arena {
                 let Kind::Object(members) = &parser.out.nodes[id].kind else {
                     unreachable!()
                 };
-                // CR-1: compare only distinct names sharing this keyed hash.
+                // compare only distinct names sharing this keyed hash.
                 // Expected work is linear in decoded key units plus matching
                 // repeats. A bucket of b adversarially colliding distinct names
                 // still takes up to b exact comparisons per insertion/lookup,
@@ -395,7 +395,7 @@ impl Arena {
             Some(self.string(member.key) == Some(key))
         };
         if let Some(index) = self.member_indexes.get(&id) {
-            // CR-2: hash the token once, then inspect only its exact-name bucket.
+            // hash the token once, then inspect only its exact-name bucket.
             // Charge the table lookup as well as each collision candidate when
             // called by the evaluator. Small objects scan at most 15 members.
             if !probe() {
@@ -764,8 +764,8 @@ mod tests {
     }
 
     #[test]
-    fn cr1_cr2_key_comparisons_and_member_probes_are_linear() {
-        // CR-1/CR-2: N distinct names, and N names followed by the same N again.
+    fn key_comparisons_and_member_probes_are_linear() {
+        // N distinct names, and N names followed by the same N again.
         // Assert exact operation counts rather than scheduler-dependent timing.
         for n in [10_000, 20_000, 40_000] {
             for repeated in [false, true] {
@@ -808,8 +808,8 @@ mod tests {
     }
 
     #[test]
-    fn cr2_many_schema_pointer_references_have_linear_member_probes() {
-        // CR-2: match the reported shape, including reading each actual $ref.
+    fn many_schema_pointer_references_have_linear_member_probes() {
+        // match the reported shape, including reading each actual $ref.
         for n in [10_000, 20_000, 40_000] {
             let mut text = String::from("{\"schemas\":{");
             for i in 0..n {
@@ -840,8 +840,8 @@ mod tests {
     }
 
     #[test]
-    fn cr1_cr2_forced_collisions_keep_exact_names_order_and_coordinates() {
-        // CR-1/CR-2: all hashes collide, including unpaired and escaped-equal
+    fn forced_collisions_keep_exact_names_order_and_coordinates() {
+        // all hashes collide, including unpaired and escaped-equal
         // UTF-16 names. A hash is never authority for name equality.
         let prefix = "shared".repeat(1024);
         let mut text = format!(
@@ -888,8 +888,8 @@ mod tests {
     }
 
     #[test]
-    fn cr2_indexed_pointers_and_nested_retained_views_are_thread_safe() {
-        // CR-2: shared, fully initialized indexes survive parent drops, preserve
+    fn indexed_pointers_and_nested_retained_views_are_thread_safe() {
+        // shared, fully initialized indexes survive parent drops, preserve
         // first occurrence and leave RFC 6901 object/array semantics unchanged.
         let mut text = String::from(r#"{"outer":{"a/~":[{"":1,"~1":2}],"a\u002f~":false,"01":3"#);
         for i in 0..20 {
@@ -946,8 +946,8 @@ mod tests {
     }
 
     #[test]
-    fn cr2_evaluator_index_preserves_collision_work_accounting() {
-        // CR-2: the evaluator charges the table access and every exact candidate,
+    fn evaluator_index_preserves_collision_work_accounting() {
+        // the evaluator charges the table access and every exact candidate,
         // and refuses exhausted budgets without returning a partial match.
         use jsonschema::json::{JsonNumber as _, Node as _, Object as _};
         let mut text = String::from("{");
@@ -990,8 +990,8 @@ mod tests {
     }
 
     #[test]
-    fn cr2_member_index_threshold_keeps_first_match_and_absence() {
-        // CR-2: exercise both sides of the small-object scan threshold.
+    fn member_index_threshold_keeps_first_match_and_absence() {
+        // exercise both sides of the small-object scan threshold.
         for n in [INDEX_MIN_MEMBERS - 1, INDEX_MIN_MEMBERS] {
             let mut text = String::from(r#"{"a":1,"\u0061":2"#);
             for i in 2..n {

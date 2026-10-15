@@ -87,7 +87,7 @@ resources requires a new immutable context; retained contracts keep their inputs
 Name comparison remains exact after RFC resolution, literal-dot removal and empty
 fragment removal, without added case folding or percent-encoding equivalence.
 
-Version 0.2.0-alpha.1 is an unpublished candidate requiring Rust 1.99. Applied
+Version 0.2.0-alpha.1 is an unpublished candidate requiring Rust 1.88. Applied
 specification revision: 2f7d754dc2da374058cd517064c17e50f7d95d99. Package publication
 and application cutover are separate actions.
 

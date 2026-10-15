@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import * as sdk from "../dist/index.js";
 import { DiscoveryPublication } from "../dist/http-discovery.js";
 
-// HD-4/HD-9: real cross-origin Chromium/WebKit CORS and automatically followed redirects.
+// real cross-origin Chromium/WebKit CORS and automatically followed redirects.
 export async function discoveryPage(browser, pageOrigin) {
   await sdk.initialize(
     await readFile(

@@ -304,7 +304,7 @@ async fn real_http_media_types_statuses_compression_and_location_independence() 
             DiscoveryOutcome::BodyError { error: failure } if failure.kind == ErrorKind::Decode => {
                 "decode"
             }
-            // S5b review F4 / HD-7: truncated reads remain Network, not Decode.
+            // truncated reads remain Network, not Decode.
             DiscoveryOutcome::BodyError { error: failure }
                 if failure.kind == ErrorKind::Network =>
             {
@@ -460,7 +460,7 @@ async fn cancellation_timeout_bounded_status_cleanup_and_connection_reuse() {
     assert_eq!(log[log.len() - 1].connection, log[log.len() - 2].connection);
 }
 
-// HD-9: generate a private CA at test time and run a real TLS fixture.
+// generate a private CA at test time and run a real TLS fixture.
 struct TlsServer {
     origin: String,
     root: std::path::PathBuf,
@@ -514,7 +514,7 @@ impl Drop for TlsServer {
 
 #[tokio::test(flavor = "current_thread")]
 async fn tls_uses_private_ca_and_downgrade_chain_is_refused_before_plaintext_dispatch() {
-    // HD-1/HD-9: a final HTTPS target cannot excuse the intervening HTTP hop.
+    // a final HTTPS target cannot excuse the intervening HTTP hop.
     let tls = TlsServer::new();
     let plain = Server::new();
     let ordinary = native::Client::new(
@@ -532,7 +532,7 @@ async fn tls_uses_private_ca_and_downgrade_chain_is_refused_before_plaintext_dis
         trusted.discover(&tls.origin).await.unwrap().outcome,
         DiscoveryOutcome::Found { .. }
     ));
-    // HD-1: an HTTP literal-loopback request may upgrade to the trusted TLS fixture.
+    // an HTTP literal-loopback request may upgrade to the trusted TLS fixture.
     let mut upgrade_headers = reqwest::header::HeaderMap::new();
     upgrade_headers.insert("x-case", "redirect-302".parse().unwrap());
     upgrade_headers.insert(
@@ -586,7 +586,7 @@ async fn tls_uses_private_ca_and_downgrade_chain_is_refused_before_plaintext_dis
 
 #[tokio::test(flavor = "current_thread")]
 async fn safe_native_constructor_follows_five_statuses_relative_locations_and_ten_hops() {
-    // HD-1/HD-9: SDK policy is installed last, overriding a builder's old redirect policy.
+    // SDK policy is installed last, overriding a builder's old redirect policy.
     let server = Server::new();
     for status in [301, 302, 303, 307, 308] {
         let mut headers = reqwest::header::HeaderMap::new();
@@ -633,7 +633,7 @@ async fn safe_native_constructor_follows_five_statuses_relative_locations_and_te
 
 #[tokio::test(flavor = "current_thread")]
 async fn normalized_loopback_http_and_non_loopback_admission() {
-    // HD-1/HD-5: metadata agrees with reqwest's actual requested URL.
+    // metadata agrees with reqwest's actual requested URL.
     let server = Server::new();
     let client = native::Client::new(
         reqwest::Client::builder().no_proxy(),
@@ -668,7 +668,7 @@ async fn normalized_loopback_http_and_non_loopback_admission() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn sdk_deadline_covers_slow_headers_and_slow_body() {
-    // HD-2/HD-9: no caller/client timeout is needed, and metadata survives body expiry.
+    // no caller/client timeout is needed, and metadata survives body expiry.
     let server = Server::new();
     for case in ["slow-headers", "stall"] {
         let mut headers = reqwest::header::HeaderMap::new();
@@ -692,7 +692,7 @@ async fn sdk_deadline_covers_slow_headers_and_slow_body() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn native_pre_cancelled_attempt_has_no_dispatch_and_overrides_are_explicit() {
-    // HD-2: cancellation wins before dispatch, including an otherwise expiring attempt.
+    // cancellation wins before dispatch, including an otherwise expiring attempt.
     let control = CancellationToken::new();
     control.cancel();
     let client = native::Client::new(
@@ -725,7 +725,7 @@ async fn native_pre_cancelled_attempt_has_no_dispatch_and_overrides_are_explicit
 
 #[tokio::test(flavor = "current_thread")]
 async fn native_builder_retains_application_resolver_policy() {
-    // HD-5: application address filtering remains effective with SDK redirects installed.
+    // application address filtering remains effective with SDK redirects installed.
     struct DenyResolver(Arc<std::sync::atomic::AtomicUsize>);
     impl reqwest::dns::Resolve for DenyResolver {
         fn resolve(&self, _: reqwest::dns::Name) -> reqwest::dns::Resolving {
@@ -758,7 +758,7 @@ async fn native_builder_retains_application_resolver_policy() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn native_cancellation_wins_when_timer_and_caller_are_ready_together() {
-    // HD-2: hold resolution pending, then make both causes ready before the next poll.
+    // hold resolution pending, then make both causes ready before the next poll.
     struct PendingResolver;
     impl reqwest::dns::Resolve for PendingResolver {
         fn resolve(&self, _: reqwest::dns::Name) -> reqwest::dns::Resolving {
@@ -793,7 +793,7 @@ async fn native_cancellation_wins_when_timer_and_caller_are_ready_together() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn credential_origin_chains_refuse_only_cross_origin_then_same_origin() {
-    // S5b review F1 / HD-1: never replay A's default credentials on B -> B.
+    // never replay A's default credentials on B -> B.
     let a = Server::new();
     let b = Server::new();
     for chain in ["A-B-B", "A-B", "A-A-B", "A-B-A"] {
@@ -888,7 +888,7 @@ async fn credential_origin_chains_refuse_only_cross_origin_then_same_origin() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn malformed_native_location_is_a_typed_policy_refusal() {
-    // S5b review F2 / HD-7: tower-http can return this response without consulting the policy.
+    // tower-http can return this response without consulting the policy.
     let server = Server::new();
     for status in [301, 302, 303, 307, 308] {
         let client = native::Client::new(
@@ -918,7 +918,7 @@ async fn malformed_native_location_is_a_typed_policy_refusal() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn truncated_native_body_is_network_without_coding_evidence() {
-    // S5b review F4 / HD-7: retain upstream explanations without interpreting wording.
+    // retain upstream explanations without interpreting wording.
     let server = Server::new();
     let mut response = http("broken", &[], reqwest::redirect::Policy::none())
         .build()

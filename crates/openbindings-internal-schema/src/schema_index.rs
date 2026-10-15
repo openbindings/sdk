@@ -27,7 +27,7 @@ pub fn plain_name(name: &str) -> bool {
                 || (i > 0 && (c.is_ascii_digit() || c == b'-' || c == b'.'))
         })
 }
-// D-METASCHEMA: the test derives these selectors from the pinned originals.
+// the test derives these selectors from the pinned originals.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SchemaSelector {
     Direct,
@@ -219,8 +219,8 @@ mod tests {
     use std::fmt::Write;
 
     #[test]
-    fn cr2_many_same_document_references_keep_the_target() {
-        // CR-2: exercise the normative OBI-12 route at all work-count sizes.
+    fn many_same_document_references_keep_the_target() {
+        // exercise the normative OBI-12 route at all work-count sizes.
         // The arena tests count member probes in the shared pointer evaluator.
         for n in [10_000, 20_000, 40_000] {
             let mut text = String::from("{\"schemas\":{");
@@ -254,8 +254,8 @@ mod tests {
     }
 
     #[test]
-    fn cr2_pointer_escapes_arrays_and_resource_boundaries() {
-        // CR-2: indexing must leave RFC 6901 and OBI-position semantics intact.
+    fn pointer_escapes_arrays_and_resource_boundaries() {
+        // indexing must leave RFC 6901 and OBI-position semantics intact.
         let document = JsonValue::parse(
             r##"{"schemas":{
             "a/~":{"allOf":[true,{"properties":{"~1":false}}]},

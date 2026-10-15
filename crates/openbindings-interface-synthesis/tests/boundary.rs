@@ -156,10 +156,10 @@ async fn source_preservation_is_exact_structural_and_panic_free() {
             r#"{ "b": [null,true], "a": 9007199254740993 }"#,
             true,
         ),
-        // CR-5: equivalent surrogate spellings preserve opaque source content.
+        // equivalent surrogate spellings preserve opaque source content.
         (r#""\uD800""#, r#""\ud800""#, true),
         (r#""\uD800""#, r#""\"\\uD800\"""#, false),
-        // CR-5: opaque member names also compare as exact UTF-16 units.
+        // opaque member names also compare as exact UTF-16 units.
         (r#"{"\uD800":1,"a":2}"#, r#"{"a":2,"\ud800":1}"#, true),
         ("9007199254740993", "9007199254740992", false),
         ("1.0", "1", true),
@@ -444,9 +444,9 @@ async fn exact_persistence_budgets_and_editing_do_not_reassign_evidence() {
     );
 }
 
-// RO-14: the publication permits an unbound contract even in a partial result.
+// the publication permits an unbound contract even in a partial result.
 #[tokio::test]
-async fn ro14_unbound_contracts_pass_strict_and_partial_synthesis() {
+async fn unbound_contracts_pass_strict_and_partial_synthesis() {
     let s = source(None);
     let mut c = candidate(&s);
     let mut draft = c.document.to_authoring().unwrap();
@@ -595,7 +595,7 @@ fn cancellation_wakes_and_drops_both_pending_calls() {
 #[tokio::test]
 async fn undetermined_conformance_is_not_upgraded() {
     let s = source(Some(r#""\ud800""#));
-    // CR-5: opaque source content now establishes conformance without refusal.
+    // opaque source content now establishes conformance without refusal.
     let result = deliver(&s, candidate(&s)).await.unwrap();
     assert_eq!(
         result

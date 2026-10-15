@@ -1,4 +1,4 @@
-"""HD-6/HD-7: downstream graph and unrelated-client decoding witness, offline."""
+"""downstream graph and unrelated-client decoding witness, offline."""
 import argparse
 import json
 import os
@@ -50,7 +50,7 @@ def main():
         assert features["control"] == features["sdk"], features
         assert not {"gzip", "brotli", "deflate", "stream"}.intersection(features["sdk"]), features
         assert {"gzip", "brotli", "deflate"}.issubset(features["decoding"]), features
-        print("HD-6: matched reqwest features with/without SDK; application decoding opt-in compiled" + (" (loopback execution deferred)" if args.graph_only else "; runtime decoding witnesses passed"))
+        print("matched reqwest features with/without SDK; application decoding opt-in compiled" + (" (loopback execution deferred)" if args.graph_only else "; runtime decoding witnesses passed"))
 
 
 if __name__ == "__main__":

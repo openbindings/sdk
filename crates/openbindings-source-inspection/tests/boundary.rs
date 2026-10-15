@@ -545,10 +545,10 @@ fn source_ref_uniqueness_is_exact_and_valid_serializers_agree() {
     );
 }
 
-// RO-15: every operation extension obeys the same carrier rule as binding and
+// every operation extension obeys the same carrier rule as binding and
 // source extensions. Neither standalone serialization nor inspection bypasses it.
 #[tokio::test]
-async fn ro15_operation_framing_refuses_unknown_non_extension_members() {
+async fn operation_framing_refuses_unknown_non_extension_members() {
     for key in ["foo", "idempotent", "input", "x-evidence"] {
         let item = BindableTarget {
             operation: Some(Operation {
@@ -570,10 +570,10 @@ async fn ro15_operation_framing_refuses_unknown_non_extension_members() {
     }
 }
 
-// RO-18: keep crate-local forwarding and bounded writers while there is no
+// keep crate-local forwarding and bounded writers while there is no
 // shared private package boundary. Exercise their composition to prevent drift.
 #[tokio::test]
-async fn ro18_forwarded_inspectors_preserve_exact_encoding_and_byte_limits() {
+async fn forwarded_inspectors_preserve_exact_encoding_and_byte_limits() {
     struct Provider;
     impl SourceInspector for Provider {
         type Inspection<'a> = Ready<Result<SourceInspection, InspectionError>>;

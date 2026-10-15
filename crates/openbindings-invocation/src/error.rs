@@ -163,7 +163,7 @@ impl InvocationError {
         }
     }
 
-    // RO-8: only call this on an error returned by a binding provider. Facade
+    // only call this on an error returned by a binding provider. Facade
     // selection and validation errors legitimately use these reserved codes.
     pub(crate) fn admit_provider_code(self) -> Result<Self, BoundaryError> {
         if matches!(

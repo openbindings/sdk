@@ -110,7 +110,7 @@ project.
 
 ## Build and verify
 
-Use Rust 1.99.0 (the declared MSRV), its `wasm32-unknown-unknown` target,
+Use Rust 1.99.0 for development (the declared MSRV is 1.88), its `wasm32-unknown-unknown` target,
 wasm-bindgen-cli 0.2.129, Node 22.19.0/npm 10.9.3 and Python 3.13+. Dependency
 locks are tracked. Initial dependency/tool acquisition requires network access.
 

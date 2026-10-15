@@ -2,35 +2,22 @@
 
 The specification corpus is copied from revision 2f7d754dc2da374058cd517064c17e50f7d95d99. The immutable inventory contains 435 cases. The observer uses public SDK APIs; the Python judge is independent and includes deliberately incorrect-result controls. These files support repository CI and replay, not runtime SDK features. Generated observations are ignored. The reusable evaluator kit separately preserves 1,566 case IDs with its own provenance: 1,564 evaluator observations and two core rejection cases.
 
-S6c's [case-ID ledger](inputs/s6c-migration-ledger.json) retains all 1,566 evaluator
-IDs and all 435 corpus IDs, with original input hashes, exact before/after
-observations, refusal stages, source coordinates and explicit partition changes.
-To check a fresh replay against it, run the test-support `replay` example and pass
-its JSON plus the production corpus JSONL to `replay/check-s6c-migrations.py`:
+The inputs directory contains only the pinned specification snapshot and inventory,
+plus the independent container-finding regression cases. Historical migration
+ledgers and one-off receipts are maintained outside the product. The evaluator
+kit in `crates/openbindings-schema-evaluator-test-support/fixtures` contains the
+frozen raw cases and the admission/expectation policies consumed by native and
+browser replay. These policies remain live contract inputs.
+
+Run both diagnostic modes through the public evaluator API:
 
 ```sh
-cargo run --locked -p openbindings-schema-evaluator-test-support --example replay > kit.json
-python3 tools/qualification/replay/check-s6c-migrations.py --kit-receipt kit.json --corpus-receipt path/to/full-actual.jsonl
+cargo run --locked -p openbindings-schema-evaluator-test-support --example replay
+cargo run --locked -p openbindings-schema-evaluator-test-support --example replay -- --upstream
 ```
 
-The nine supplied-resource migrations retain refusal reason/code and change only
-source location. `adversarial/unreached-uncopied-targets/0` (formerly satisfies) and
-`/1` (formerly fails) are now core OBI-12 rejection regressions. No raw fixture seam
-survives, because the nine re-expressions preserve their outcomes.
-
-The diagnostics migration records diagnostic-only changes for every affected case in
-[`diagnostics-migration-ledger.json`](inputs/diagnostics-migration-ledger.json). The new
-`replay/check-diagnostics-migrations.py` compares exact before/after receipts, including
-both default Coarse and explicit Upstream kit runs (`--example replay -- --upstream`).
-It fails on any verdict, refusal stage/reason/code, inventory, or rule-evidence drift.
-Diagnostic completeness no longer serves as verdict evidence in either native or
-browser judges; malformed complete diagnostics and bogus locations still fail.
-
-
-Document location expectations separately account for the probe's 19 changed
-locations: five array-element fixes and fourteen intentionally localized OBI-10
-nodes. See `inputs/document-location-expectations.json`. The memory qualification
-and raw numbers are documented in `../diagnostic-memory-probe/README.md`.
+The live allocation thresholds and generators are described in
+`../diagnostic-memory-probe/README.md`.
 
 A listener-free TypeScript corpus lane uses the shipped facade:
 
@@ -49,9 +36,7 @@ Independent container failures have four additional public regression cases in
 `inputs/container-findings-cases.json`, outside the unchanged specification corpus
 inventory. `replay/check-container-findings.py --binary PATH` replays them through
 native and TypeScript APIs and compares complete findings, including coordinates.
-The current review changes no existing kit/corpus observation; the migration ledger
-reproduces without changes. The verification receipt records the new regressions
-and the producerless schema-detail variant's removal.
+These cases check complete container findings without changing the frozen corpus.
 
 `static_reference_defects.rs` and `static-reference-defects.test.mjs` read the
 same packaged evaluator fixtures (`tests/fixtures/reference-{matrix,completions}.json`).

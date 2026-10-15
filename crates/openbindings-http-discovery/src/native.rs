@@ -164,7 +164,7 @@ fn credential_replay_hop(first: &url::Url, previous: &url::Url, next: &url::Url)
     same_origin(previous, next) && !same_origin(first, previous)
 }
 fn message_with_sources(error: &(dyn std::error::Error + 'static)) -> String {
-    // F4 / HD-7: reqwest exposes no documented codec diagnosis for chunk errors.
+    // reqwest exposes no documented codec diagnosis for chunk errors.
     // Retain upstream Display/source explanations for humans without interpreting them.
     let mut message = error.to_string();
     let mut source = error.source();
@@ -253,7 +253,7 @@ mod review_tests {
     use super::*;
     #[test]
     fn credential_replay_guard_uses_reqwest_origin_comparison() {
-        // S5b review F1 / HD-1: path changes do not authorize original headers on B.
+        // path changes do not authorize original headers on B.
         let a = url::Url::parse("https://a.test/start").unwrap();
         let b = url::Url::parse("https://b.test/first").unwrap();
         for (previous, next, refused) in [
@@ -273,7 +273,7 @@ mod review_tests {
     }
     #[test]
     fn upstream_body_messages_are_retained_without_interpretation() {
-        // S5b review F4 / HD-7: arbitrary upstream wording survives for human diagnosis.
+        // arbitrary upstream wording survives for human diagnosis.
         #[derive(Debug)]
         struct Frame(std::io::Error);
         impl std::fmt::Display for Frame {

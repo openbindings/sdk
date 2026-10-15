@@ -159,7 +159,7 @@ bound for upstream errors.
 
 The vendored adaptation is an implementation detail. Upgrade it with the recorded patch invariants and the complete evaluator contract suite; a dependency draft label alone is insufficient evidence.
 
-Version 0.2.0-alpha.1 is an unpublished candidate requiring Rust 1.99. Package publication and application cutover are separate actions.
+Version 0.2.0-alpha.1 is an unpublished candidate requiring Rust 1.88. Package publication and application cutover are separate actions.
 
 `WorkControl` is a synchronous trait accepted as `&dyn WorkControl`. A plain
 `AtomicBool` or an async companion’s `CancellationToken` can supply it. Cancellation
