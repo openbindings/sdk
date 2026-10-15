@@ -19855,7 +19855,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ========================================================================
-rustls 0.23.45
+rustls 0.23.46
 Declared license: Apache-2.0 OR ISC OR MIT
 Repository: https://github.com/rustls/rustls
 

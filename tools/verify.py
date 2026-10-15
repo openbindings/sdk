@@ -14,10 +14,12 @@ def run(args, cwd=root):
 run([sys.executable, 'tools/verify-product-labels.py', '--self-test',
      *(['--tracked-files', a.tracked_files.resolve()] if a.tracked_files else [])])
 run([sys.executable, 'tools/verify-doc-links.py'])
+run([sys.executable, 'tools/test-reference.py'])
 run([sys.executable, 'tools/verify-msrv.py', '--version', '1.88'])
 run(['cargo', 'fmt', '--all', '--check'])
 run(['cargo', 'clippy', '--locked', '--workspace', '--all-targets', '--features', 'openbindings-http-discovery/native', '--', '-D', 'warnings'])
 run(['cargo', 'test', '--locked', '--workspace', '--features', 'openbindings-http-discovery/native'])
+run(['cargo', 'test', '--locked', '-p', 'openbindings-internal-regress', '--lib'])
 run([sys.executable, 'tools/verify-api-reference.py', '--rust-only'])
 # Offline checks below read every platform's dependencies; fetch them all first.
 run(['cargo', 'fetch', '--locked'])

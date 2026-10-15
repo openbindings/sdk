@@ -536,7 +536,7 @@ pub trait PreparedSchema: Send + Sync {
 /// Select a value contract using [`Self::prepare`], then retain its ready owner for
 /// repeated validation. Replacing an application's active context does not
 /// mutate already prepared work. See the
-/// [Rust lifecycle guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md#retained-work-and-replacement).
+/// [Rust lifecycle guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md#resources-diagnostics-and-lifetime).
 #[derive(Clone)]
 pub struct ValueContracts {
     inner: Arc<ContractsInner>,

@@ -4,6 +4,7 @@ use openbindings_internal_schema::fixed_schema;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
+mod constructors;
 mod values;
 
 struct Counting;
@@ -54,6 +55,7 @@ fn measured<T>(call: impl FnOnce() -> T) -> (T, usize, u128) {
     (result, PEAK.load(Relaxed).saturating_sub(before), nanos)
 }
 fn main() {
+    constructors::run();
     if std::env::args().any(|arg| arg == "--values-only") {
         values::run();
         return;

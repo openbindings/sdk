@@ -173,6 +173,16 @@
           "current_sha256": "e31a8553c391a16e74960966acf5dbe3692c4d27f524149bc87eb5697f4f1140"
         },
         {
+          "file": "src/position.rs",
+          "upstream_sha256": "725f869a8de2ec1d6162afc720647f779dfcd996da1c85882521269af819fe16",
+          "current_sha256": "ed0a8aa85376ccbea4807a847868c38b499aabececc7619081c3707d18b17316"
+        },
+        {
+          "file": "src/unicode.rs",
+          "upstream_sha256": "61cd57b07ef5823bfaea7b3f52a81d045173007fad71b8336a69ab2adacb215a",
+          "current_sha256": "11dfca534b4e736f3a476f93918af117a4ce113a883be8fbaf55514e8bcaa80d"
+        },
+        {
           "file": "tests/fixtures/lone-surrogate.mjs",
           "upstream_sha256": null,
           "current_sha256": "2564393b729a3da8560bcfbb0e9f8bea304e39a2a88edf8021e852e2a6883166"

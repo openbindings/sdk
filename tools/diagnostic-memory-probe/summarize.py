@@ -37,6 +37,7 @@ files = [root / 'crates/openbindings-internal-schema/src/fixed_schema.rs',
          root / 'crates/openbindings-internal-schema/src/fixed_locations.rs',
          root / 'tools/diagnostic-memory-probe/src/main.rs',
          root / 'tools/diagnostic-memory-probe/src/values.rs',
+         root / 'tools/diagnostic-memory-probe/src/constructors.rs',
          root / 'crates/openbindings-json-schema-evaluator/src/lib.rs',
          root / 'tools/diagnostic-memory-probe/generate_inputs.py']
 files += sorted((root / 'crates/openbindings-internal-schema/schemas').rglob('*.json'))

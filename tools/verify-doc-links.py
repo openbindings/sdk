@@ -24,6 +24,26 @@ def prose(text):
     return '\n'.join(output)
 
 
+def rustdoc(text):
+    """Extract doc comments, preserving source line numbers and Markdown fences."""
+    output, block = [], False
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if block:
+            body, end, _ = stripped.partition('*/')
+            output.append(re.sub(r'^\* ?', '', body))
+            block = not end
+        elif stripped.startswith(('///', '//!')) and not stripped.startswith('////'):
+            output.append(stripped[3:].removeprefix(' '))
+        elif stripped.startswith(('/**', '/*!')) and not stripped.startswith('/***'):
+            body, end, _ = stripped[3:].partition('*/')
+            output.append(body.removeprefix(' '))
+            block = not end
+        else:
+            output.append('')
+    return '\n'.join(output)
+
+
 def anchors(path):
     text = prose(path.read_text(encoding='utf-8'))
     found = set(re.findall(r'(?:id|name)=["\']([^"\']+)', text))
@@ -41,15 +61,11 @@ def anchors(path):
     return found
 
 
-def main():
-    paths = sorted(set([
-        *ROOT.glob('*.md'), *ROOT.glob('docs/*.md'),
-        *ROOT.glob('crates/*/README.md'),
-        ROOT / 'packages/typescript/README.md',
-    ]))
+def check(paths):
     errors, checked, remote = [], 0, set()
     for path in paths:
-        text = prose(path.read_text(encoding='utf-8'))
+        source = path.read_text(encoding="utf-8")
+        text = prose(rustdoc(source) if path.suffix == ".rs" else source)
         # Inline links, reference definitions and HTML links. Code spans alone
         # are not links; no HTTP requests are made for external destinations.
         pattern = r'\]\(([^\s)]+)(?:\s+["\'][^\n]*?["\'])?\)|^ {0,3}\[[^\]]+\]:\s*(\S+)|(?:href|src)=["\']([^"\']+)'
@@ -74,9 +90,19 @@ def main():
                 errors.append(f'{location}: missing target {raw}')
             elif parsed.fragment and local.suffix == '.md' and unquote(parsed.fragment) not in anchors(local):
                 errors.append(f'{location}: missing heading {raw}')
+    return errors, checked, remote
+
+
+def main():
+    paths = sorted(set([
+        *ROOT.glob('*.md'), *ROOT.glob('docs/*.md'),
+        *ROOT.glob('crates/*/README.md'), *ROOT.glob('crates/**/*.rs'),
+        ROOT / 'packages/typescript/README.md',
+    ]))
+    errors, checked, remote = check(paths)
     if errors:
         raise SystemExit('\n'.join(errors))
-    print(f'Documentation links: {checked} local targets/fragments in {len(paths)} pages passed; '
+    print(f'Documentation links: {checked} local targets/fragments in {len(paths)} Markdown/Rust files passed; '
           f'{len(remote)} external URLs unchecked (offline).')
 
 

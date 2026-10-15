@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use core::cmp::Eq;
 use core::fmt;
 use core::marker::PhantomData;
@@ -129,11 +131,7 @@ impl RefPosition<'_> {
         debug_assert!(!ptr.is_null(), "Pointer cannot be null");
         // Annoyingly there's no *const NonNull.
         let mutp = ptr as *mut u8;
-        let nonnullp = if cfg!(feature = "prohibit-unsafe") {
-            core::ptr::NonNull::new(mutp).expect("Pointer was null")
-        } else {
-            unsafe { core::ptr::NonNull::new_unchecked(mutp) }
-        };
+        let nonnullp = core::ptr::NonNull::new(mutp).expect("Pointer was null");
         Self(nonnullp, PhantomData)
     }
 }
@@ -145,7 +143,9 @@ impl ops::Add<usize> for RefPosition<'_> {
 
     #[inline(always)]
     fn add(self, rhs: usize) -> Self::Output {
-        Self::new(unsafe { self.ptr().add(rhs) })
+        // Wrapping arithmetic preserves provenance without requiring an unsafe
+        // in-allocation proof here. Input indexers check positions before use.
+        Self::new(self.ptr().wrapping_add(rhs))
     }
 }
 
@@ -156,7 +156,9 @@ impl<'a> ops::Sub<RefPosition<'a>> for RefPosition<'a> {
     fn sub(self, rhs: Self) -> Self::Output {
         debug_assert!(self.0 >= rhs.0, "Underflow");
         // Note Rust has backwards naming here. The "origin" is self, not the param; the rhs is the offset value.
-        unsafe { self.ptr().offset_from(rhs.ptr()) as usize }
+        // Positions in one input are ordered byte addresses. Subtracting their
+        // addresses gives the same distance without pointer offset preconditions.
+        self.ptr() as usize - rhs.ptr() as usize
     }
 }
 
@@ -166,7 +168,7 @@ impl ops::Sub<usize> for RefPosition<'_> {
     #[inline(always)]
     fn sub(self, rhs: usize) -> Self::Output {
         debug_assert!(self.ptr() as usize >= rhs, "Underflow");
-        Self::new(unsafe { self.ptr().sub(rhs) })
+        Self::new(self.ptr().wrapping_sub(rhs))
     }
 }
 
@@ -181,5 +183,25 @@ impl ops::SubAssign<usize> for RefPosition<'_> {
     #[inline(always)]
     fn sub_assign(&mut self, rhs: usize) {
         *self = *self - rhs;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reference_positions_cover_empty_and_one_past_end() {
+        for bytes in [b"".as_slice(), b"a", b"abcd"] {
+            let start = RefPosition::new(bytes.as_ptr());
+            let end = start + bytes.len();
+            assert_eq!(end.ptr(), bytes.as_ptr().wrapping_add(bytes.len()));
+            assert_eq!(end - start, bytes.len());
+            assert_eq!(end - bytes.len(), start);
+            let mut pos = start;
+            pos += bytes.len();
+            pos -= bytes.len();
+            assert_eq!(pos, start);
+        }
     }
 }
