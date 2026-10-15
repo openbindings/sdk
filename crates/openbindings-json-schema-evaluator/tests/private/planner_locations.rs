@@ -34,7 +34,7 @@ fn resources(entries: &[(&str, &str)]) -> ResourceSet {
 }
 fn request(document: &ParsedDocument, resources: ResourceSet) -> SchemaRequest {
     let capture = Arc::new(Capture(Mutex::new(None)));
-    document
+    let _ = document
         .validate()
         .unwrap()
         .validated()

@@ -13,6 +13,7 @@ pub const APPLIED_SPEC_REVISION: &str = "2f7d754dc2da374058cd517064c17e50f7d95d9
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 /// Declared-version classification, independent of document conformance.
+#[must_use = "inspect the outcome before continuing"]
 pub enum VersionDecision {
     /// Well-formed stable version in the supported line; document rules still need validation.
     Supported,

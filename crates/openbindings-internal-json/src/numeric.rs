@@ -41,6 +41,12 @@ impl<'i, F: Json> Keyword<'i, F> for Constraint {
 /// private compiler projection. The handles satisfy the schema's numeric shape.
 #[derive(Default)]
 pub struct Operands(Vec<Decimal>);
+impl std::fmt::Debug for Operands {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Operands").finish_non_exhaustive()
+    }
+}
+
 impl Operands {
     pub fn insert(&mut self, token: &str) -> Value {
         self.0.push(Decimal::parse(token));

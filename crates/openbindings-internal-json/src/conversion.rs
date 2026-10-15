@@ -309,6 +309,9 @@ impl JsonValue {
     /// values directly. Limits bound emitted storage, not user serializer work.
     /// This recursive Serde profile has a ceiling of 128 containers, independent
     /// of the larger iterative exact-parser depth limit.
+    ///
+    /// # Errors
+    /// Returns a conversion error if serialization fails, a value cannot be represented as JSON (including non-finite numbers or unsupported map keys), or an admission limit is exceeded.
     pub fn from_serializable<T: Serialize + ?Sized>(
         value: &T,
     ) -> Result<Self, ValueConversionError> {
@@ -317,6 +320,9 @@ impl JsonValue {
     /// Checked conversion with explicit byte/node/depth bounds. Effective container
     /// depth is `min(limits.max_depth, 128)`; larger requested depths do not lift
     /// the recursive Serde profile ceiling. Exact parsing is unaffected.
+    ///
+    /// # Errors
+    /// Returns a conversion error if serialization fails, a value cannot be represented as JSON (including non-finite numbers or unsupported map keys), or an admission limit is exceeded.
     pub fn from_serializable_with_limits<T: Serialize + ?Sized>(
         value: &T,
         mut limits: JsonLimits,

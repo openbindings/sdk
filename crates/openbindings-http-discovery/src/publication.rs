@@ -59,6 +59,12 @@ pub struct Publication {
     body: Arc<[u8]>,
     allow_origin: AllowOrigin,
 }
+impl std::fmt::Debug for Publication {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Publication").finish_non_exhaustive()
+    }
+}
+
 impl Publication {
     /// Retain an immutable publication of a proved snapshot's exact original bytes. Validate CORS configuration; no server or listener is created.
     ///
@@ -73,6 +79,9 @@ impl Publication {
     /// assert!(head.body.is_empty());
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
+    ///
+    /// # Errors
+    /// Returns a configuration error for an invalid exact CORS origin.
     pub fn new(
         document: &ValidatedDocument,
         options: PublicationOptions,
@@ -84,6 +93,9 @@ impl Publication {
         })
     }
     /// Assess exact source bytes and create publication only on established conformance. Return distinct configuration, version, nonconformant or undetermined refusals.
+    ///
+    /// # Errors
+    /// Returns a publication error for invalid CORS configuration, an unsupported version, or a document whose conformance is non-conformant or undetermined.
     pub fn from_bytes(
         bytes: impl AsRef<[u8]>,
         options: PublicationOptions,
@@ -154,9 +166,19 @@ pub struct PublicationResponse {
     /// Shared exact body for GET; empty for HEAD, unsupported methods and unmatched routes.
     pub body: Arc<[u8]>,
 }
+impl std::fmt::Debug for PublicationResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PublicationResponse")
+            .field("status", &self.status)
+            .finish_non_exhaustive()
+    }
+}
 
 /// Validate a typed CORS choice, including an exact ASCII browser-serialized
 /// tuple origin. Opaque schemes, credentials and noncanonical spellings are refused.
+///
+/// # Errors
+/// Returns a configuration error if the supplied origin is not an allowed canonical origin; credentials, paths, queries, and fragments are refused.
 pub fn validate_allow_origin(origin: &AllowOrigin) -> Result<(), ConfigurationError> {
     let invalid = || ConfigurationError {
         code: "invalid-allow-origin",

@@ -91,6 +91,12 @@ pub struct Invoker<P> {
     pub(crate) provider: P,
     pub(crate) limits: InvocationLimits,
 }
+impl<P> std::fmt::Debug for Invoker<P> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Invoker").finish_non_exhaustive()
+    }
+}
+
 impl<P: BindingInvoker> Invoker<P> {
     /// Wrap a provider with the default finite handoff policy.
     pub fn new(provider: P) -> Self {
@@ -100,6 +106,9 @@ impl<P: BindingInvoker> Invoker<P> {
         }
     }
     /// Wrap a provider with an explicitly checked resource policy.
+    ///
+    /// # Errors
+    /// Returns `LimitError` if a queue capacity or the value byte limit is zero, or the error byte limit is below 256 bytes.
     pub fn with_limits(provider: P, limits: InvocationLimits) -> Result<Self, LimitError> {
         Ok(Self {
             provider,
@@ -110,6 +119,9 @@ impl<P: BindingInvoker> Invoker<P> {
         !kind.is_empty() && self.provider.supports_kind(kind)
     }
     /// One pure verdict per unique requested kind, in first-occurrence order.
+    ///
+    /// # Errors
+    /// Returns an error if any requested kind is empty.
     pub fn check_kind_support<K: AsRef<str>>(
         &self,
         kinds: impl IntoIterator<Item = K>,
@@ -130,6 +142,9 @@ impl<P: BindingInvoker> Invoker<P> {
             .collect())
     }
     /// Validate the advisory list against exact support; omission means nothing.
+    ///
+    /// # Errors
+    /// Returns an error if the provider lists empty or duplicate kinds, or lists a kind it does not support.
     pub fn list_supported_kinds(&self) -> Result<Vec<SupportedKind>, BoundaryError> {
         let kinds = self.provider.supported_kinds();
         if kinds.iter().any(|k| !self.supports_kind(&k.kind)) {
@@ -176,6 +191,9 @@ impl<P: BindingInvoker> Invoker<P> {
     }
     /// Admit advisory preflight and make no prediction. This default path needs
     /// only an invoke provider; use `preflight_with_provider` to opt into its hook.
+    ///
+    /// # Errors
+    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation.
     pub async fn preflight(
         &self,
         request: BindingRequest<'_>,
@@ -184,6 +202,9 @@ impl<P: BindingInvoker> Invoker<P> {
             .await
     }
     /// Advisory preflight with caller cancellation, isolated from sibling attempts.
+    ///
+    /// # Errors
+    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation.
     pub async fn preflight_with_control(
         &self,
         request: BindingRequest<'_>,
@@ -194,6 +215,9 @@ impl<P: BindingInvoker> Invoker<P> {
     }
     /// Call the optional provider preflight hook after checked admission.
     /// The future is Send when the provider is Sync and its Preflight is Send.
+    ///
+    /// # Errors
+    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. Provider refusals and malformed provider challenges also return an error.
     pub async fn preflight_with_provider(
         &self,
         request: BindingRequest<'_>,
@@ -205,6 +229,9 @@ impl<P: BindingInvoker> Invoker<P> {
             .await
     }
     /// Call the optional provider preflight hook with caller cancellation.
+    ///
+    /// # Errors
+    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. Provider refusals and malformed provider challenges also return an error.
     pub async fn preflight_with_provider_and_control(
         &self,
         request: BindingRequest<'_>,

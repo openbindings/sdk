@@ -135,6 +135,12 @@ pub struct WasmDraft {
     shape: String,
     exact: Vec<Option<JsonValue>>,
 }
+impl std::fmt::Debug for WasmDraft {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmDraft").finish_non_exhaustive()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmDraft {
     pub fn shape(&self) -> String {

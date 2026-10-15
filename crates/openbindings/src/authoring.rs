@@ -202,7 +202,7 @@ impl Read for Preference {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 /// Owned, editable normative vocabulary. `None` omits an optional member; opaque `JsonValue::null()` remains present JSON null. Building checks representability and collisions, not conformance. Assess the new immutable snapshot before publication.
 pub struct Document {
     /// Declared specification version; defaults to [`AUTHORING_VERSION`].
@@ -332,7 +332,7 @@ impl Read for Document {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 /// Editable operation metadata and optional input/output schemas. A present schema is not evidence that an evaluator supports it.
 pub struct Operation {
     /// Optional human-facing operation description.
@@ -435,7 +435,7 @@ impl Read for Operation {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 /// Editable example values; these are instances, not schemas or proof that an operation accepts them.
 pub struct Example {
     /// Optional human-facing explanation of this example.
@@ -494,7 +494,7 @@ impl Read for Example {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 /// Editable dependency on another operation, with an optional source-kind restriction.
 pub struct Dependency {
     /// Referenced operation name; document validation checks the applicable normative constraints.
@@ -556,7 +556,7 @@ impl Read for Dependency {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 /// Editable source metadata and opaque kind-specific content. Core preserves content without acquiring resources or executing it.
 pub struct Source {
     /// Source-kind identifier selecting the external binding vocabulary.
@@ -613,7 +613,7 @@ impl Read for Source {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 /// Editable link from an operation to a source. Core retains binding content and annotations; invocation and selection policy belong to the consumer.
 pub struct Binding {
     /// Primary operation name referenced by this binding.
@@ -734,6 +734,9 @@ impl Document {
         Self::default()
     }
     /// Reads only representable normative fields; validation remains available for every parsed input.
+    ///
+    /// # Errors
+    /// Returns an authoring error for duplicate members, malformed known fields, or strings/numbers that the typed authoring model cannot represent.
     pub fn from_json(value: &JsonValue) -> Result<Self, AuthoringError> {
         if value.has_duplicate_names() {
             let mut error = error(
@@ -746,6 +749,9 @@ impl Document {
         Self::read(value.view())
     }
     /// Creates a new independent snapshot. This does not claim conformance.
+    ///
+    /// # Errors
+    /// Returns an authoring error for extension names colliding with known fields, serialization failure, or exhausted encoding/admission limits. This does not establish normative conformance.
     pub fn to_json(&self) -> Result<JsonValue, AuthoringError> {
         self.check_collisions()?;
         struct BoundedOutput {
@@ -880,6 +886,42 @@ impl Document {
             }
         }
         Ok(())
+    }
+}
+
+impl std::fmt::Debug for Document {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Document").finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for Operation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Operation").finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for Example {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Example").finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for Binding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Binding").finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for Source {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Source").finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for Dependency {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Dependency").finish_non_exhaustive()
     }
 }
 

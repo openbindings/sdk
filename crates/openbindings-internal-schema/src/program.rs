@@ -2,7 +2,7 @@ use crate::*;
 use std::{collections::BTreeMap, fmt, sync::Arc};
 /// A closed JSON Schema projection with an original-source map. Names are private
 /// to this program; consumers must not rely on their spelling or numbering.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Program {
     /// Private absolute URI selecting the projected entry; never expose it as an original diagnostic location.
     pub entry_uri: String,
@@ -103,5 +103,11 @@ impl Program {
             };
             end = previous;
         }
+    }
+}
+
+impl std::fmt::Debug for Program {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Program").finish_non_exhaustive()
     }
 }

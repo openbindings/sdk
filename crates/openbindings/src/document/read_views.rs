@@ -128,10 +128,17 @@ fn strings<'a>(
 macro_rules! view {
     ($name:ident, $description:literal, $object_code:literal, $description_code:literal) => {
         #[doc = $description]
-        #[derive(Clone, Debug)]
+        #[derive(Clone)]
         pub struct $name {
             key: Arc<str>,
             value: JsonValue,
+        }
+        impl fmt::Debug for $name {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.debug_struct(stringify!($name))
+                    .field("value", &self.value)
+                    .finish_non_exhaustive()
+            }
         }
         impl $name {
             fn new(key: &Arc<str>, value: &JsonValue) -> Result<Self, InterpretationError> {
@@ -150,6 +157,9 @@ macro_rules! view {
                 self.value.view()
             }
             /// Interpret only this optional description, retaining original error coordinates.
+            ///
+            /// # Errors
+            /// Returns an interpretation error if the present description is not a string.
             pub fn description(&self) -> Result<Option<JsonStringRef<'_>>, InterpretationError> {
                 exact_string(&self.value, "description", $description_code)
             }
@@ -185,6 +195,9 @@ macro_rules! document_namespace {
     ($many:ident, $one:ident, $view:ident, $field:literal, $code:literal) => {
         impl ParsedDocument {
             #[doc = concat!("Allocate retained ", $field, " views in lexical key order. None means an absent namespace; an empty vector means a present empty object. Checks identity/object shapes, not metadata fields; each accessor reports its own field errors. Global interpretation prerequisites still apply.")]
+            ///
+            /// # Errors
+            /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
             pub fn $many(&self) -> Result<Option<Vec<$view>>, InterpretationError> {
                 self.interpretable()?;
                 namespace(&self.inner.$many, self.value().view(), $field, $code)?
@@ -192,6 +205,9 @@ macro_rules! document_namespace {
                     .transpose()
             }
             #[doc = concat!("Retain one ", $field, " declaration by exact key. Missing namespace/key returns None. Checks the selected object's shape without interpreting unrelated entries. Indexed identities are shared across document clones; acquisition is not conformance proof.")]
+            ///
+            /// # Errors
+            /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
             pub fn $one(&self, key: &str) -> Result<Option<$view>, InterpretationError> {
                 self.interpretable()?;
                 let index = namespace(&self.inner.$many, self.value().view(), $field, $code)?;
@@ -225,6 +241,9 @@ document_namespace!(
 
 impl BindingView {
     /// Read the required operation name; its target need not exist for inspection.
+    ///
+    /// # Errors
+    /// Returns an interpretation error if the required operation field is missing, is not a string, or contains an unpaired UTF-16 unit.
     pub fn operation(&self) -> Result<&str, InterpretationError> {
         required_string(
             &self.value,
@@ -234,6 +253,9 @@ impl BindingView {
         )
     }
     /// Read the required source key without resolving or acquiring it.
+    ///
+    /// # Errors
+    /// Returns an interpretation error if the required source field is missing, is not a string, or contains an unpaired UTF-16 unit.
     pub fn source(&self) -> Result<&str, InterpretationError> {
         required_string(
             &self.value,
@@ -243,6 +265,9 @@ impl BindingView {
         )
     }
     /// Read the optional exact interoperable integer; absence is not a default preference.
+    ///
+    /// # Errors
+    /// Returns an interpretation error if the present preference is not an integer in the inclusive range ±9,007,199,254,740,991.
     pub fn preference(&self) -> Result<Option<Preference>, InterpretationError> {
         self.value
             .get("preference")
@@ -253,10 +278,16 @@ impl BindingView {
             .transpose()
     }
     /// Read the optional idempotence annotation, preserving absence versus false.
+    ///
+    /// # Errors
+    /// Returns an interpretation error if the present idempotent field is not a Boolean.
     pub fn idempotent(&self) -> Result<Option<bool>, InterpretationError> {
         boolean(&self.value, "idempotent", "invalid-binding-idempotent")
     }
     /// Read the optional deprecation annotation, preserving absence versus false.
+    ///
+    /// # Errors
+    /// Returns an interpretation error if the present deprecated field is not a Boolean.
     pub fn deprecated(&self) -> Result<Option<bool>, InterpretationError> {
         boolean(&self.value, "deprecated", "invalid-binding-deprecated")
     }
@@ -267,6 +298,9 @@ impl BindingView {
 }
 impl SourceView {
     /// Read the required declared kind without interpreting or executing it.
+    ///
+    /// # Errors
+    /// Returns an interpretation error if the required kind field is missing or is not a string.
     pub fn kind(&self) -> Result<JsonStringRef<'_>, InterpretationError> {
         exact_string(&self.value, "kind", "invalid-source-kind")?
             .ok_or_else(|| InterpretationError::invalid("missing-source-kind", self.value()))
@@ -278,6 +312,9 @@ impl SourceView {
 }
 impl DependencyView {
     /// Read the required operation name without resolving its target.
+    ///
+    /// # Errors
+    /// Returns an interpretation error if the required operation field is missing, is not a string, or contains an unpaired UTF-16 unit.
     pub fn operation(&self) -> Result<&str, InterpretationError> {
         required_string(
             &self.value,
@@ -289,6 +326,9 @@ impl DependencyView {
     /// Read all declared kinds after checking every item. None accepts every kind;
     /// an empty iterator matches none but is nonconformant: a present list must be
     /// nonempty. This does not establish conformance or select a provider.
+    ///
+    /// # Errors
+    /// Returns an interpretation error if the present kinds field is not an array of strings.
     pub fn kinds(
         &self,
     ) -> Result<Option<impl ExactSizeIterator<Item = JsonStringRef<'_>>>, InterpretationError> {
@@ -312,6 +352,9 @@ impl ExampleView {
 }
 impl OperationView {
     /// Read optional tags after checking every item. Absence and an empty array differ.
+    ///
+    /// # Errors
+    /// Returns an interpretation error if the present tags field is not an array of strings.
     pub fn tags(
         &self,
     ) -> Result<Option<impl ExactSizeIterator<Item = JsonStringRef<'_>>>, InterpretationError> {
@@ -323,12 +366,18 @@ impl OperationView {
         )
     }
     /// Read the optional operation deprecation annotation, preserving absence versus false.
+    ///
+    /// # Errors
+    /// Returns an interpretation error if the present deprecated field is not a Boolean.
     pub fn deprecated(&self) -> Result<Option<bool>, InterpretationError> {
         boolean(&self.value, "deprecated", "invalid-operation-deprecated")
     }
     /// Allocate retained examples in lexical key order. None means absence, while
     /// an empty vector means a present empty object. Checks example object shapes;
     /// description interpretation remains local to its accessor.
+    ///
+    /// # Errors
+    /// Returns an interpretation error if examples is not an object, a key is not a scalar string, or an example is not an object.
     pub fn examples(&self) -> Result<Option<Vec<ExampleView>>, InterpretationError> {
         namespace(
             &self.examples,
@@ -347,6 +396,9 @@ impl OperationView {
     }
     /// Retain an example by exact key without interpreting unrelated entries.
     /// Its identity index is shared across operation views and their clones.
+    ///
+    /// # Errors
+    /// Returns an interpretation error if examples is not an object, a key is not a scalar string, or the selected example is not an object.
     pub fn example(&self, key: &str) -> Result<Option<ExampleView>, InterpretationError> {
         namespace(
             &self.examples,
@@ -362,27 +414,42 @@ impl OperationView {
 
 impl ParsedDocument {
     /// Read the supported declaration, preserving absence separately from malformed text.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
     pub fn openbindings(&self) -> Result<Option<JsonStringRef<'_>>, InterpretationError> {
         self.interpretable()?;
         exact_string(self.value(), "openbindings", "invalid-openbindings")
     }
     /// Read optional exact interface name; unpaired UTF-16 remains a string.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
     pub fn name(&self) -> Result<Option<JsonStringRef<'_>>, InterpretationError> {
         self.interpretable()?;
         exact_string(self.value(), "name", "invalid-name")
     }
     /// Read the optional opaque interface version, distinct from the spec declaration.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
     pub fn version(&self) -> Result<Option<JsonStringRef<'_>>, InterpretationError> {
         self.interpretable()?;
         exact_string(self.value(), "version", "invalid-version")
     }
     /// Read optional exact descriptive text with located shape errors.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
     pub fn description(&self) -> Result<Option<JsonStringRef<'_>>, InterpretationError> {
         self.interpretable()?;
         exact_string(self.value(), "description", "invalid-description")
     }
     /// Read optional schema declarations in lexical key order. Values remain exact;
     /// no schema is prepared. None and an empty vector distinguish absence and empty.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
     pub fn schemas(&self) -> Result<Option<Vec<(&str, JsonRef<'_>)>>, InterpretationError> {
         self.interpretable()?;
         self.value()
@@ -407,6 +474,9 @@ impl ParsedDocument {
             .transpose()
     }
     /// Borrow one exact schema declaration after checking the namespace shape.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
     pub fn schema(&self, name: &str) -> Result<Option<JsonRef<'_>>, InterpretationError> {
         Ok(self.schemas()?.and_then(|rows| {
             rows.into_iter()

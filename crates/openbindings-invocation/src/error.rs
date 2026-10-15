@@ -58,6 +58,9 @@ impl InvocationError {
     ///
     /// This preserves the exact data snapshot. Its final delivery size is
     /// separately checked by the invocation's resource policy.
+    ///
+    /// # Errors
+    /// Returns a boundary error for a malformed carrier: invalid field types, missing required fields, duplicate members, or unsupported fields. Opaque payloads are preserved.
     pub fn new(code: impl Into<String>, data: Option<JsonValue>) -> Result<Self, BoundaryError> {
         let code = code.into();
         if code.is_empty() {
@@ -73,11 +76,17 @@ impl InvocationError {
     }
 
     /// Read a closed portable error object without collapsing duplicate fields.
+    ///
+    /// # Errors
+    /// Returns a boundary error for a malformed carrier: invalid field types, missing required fields, duplicate members, or unsupported fields. Opaque payloads are preserved.
     pub fn from_json(value: &JsonValue) -> Result<Self, BoundaryError> {
         Self::from_json_ref(value.view())
     }
 
     /// Read an exact borrowed portable error object, retaining its data owner.
+    ///
+    /// # Errors
+    /// Returns a boundary error for a malformed carrier: invalid field types, missing required fields, duplicate members, or unsupported fields. Opaque payloads are preserved.
     pub fn from_json_ref(value: JsonRef<'_>) -> Result<Self, BoundaryError> {
         object(value, &["code", "data"], false, "")?;
         let code = value
@@ -110,11 +119,17 @@ impl InvocationError {
     }
 
     /// Encode the portable shape under the default finite exact-JSON limits.
+    ///
+    /// # Errors
+    /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
     pub fn to_json(&self) -> Result<JsonValue, BoundaryError> {
         self.to_json_with_limits(JsonLimits::default())
     }
 
     /// Encode under explicit byte, nesting and node limits, preserving exact data.
+    ///
+    /// # Errors
+    /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
     pub fn to_json_with_limits(&self, limits: JsonLimits) -> Result<JsonValue, BoundaryError> {
         encode(&ErrorFields(self), limits)
     }

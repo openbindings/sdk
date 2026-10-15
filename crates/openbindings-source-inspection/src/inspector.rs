@@ -84,7 +84,7 @@ forward_inspector!(&P, std::sync::Arc<P>, std::rc::Rc<P>);
 /// This is not a registry or a
 /// transport. The source is borrowed during work; returned inventories own their
 /// values and remain valid after the source/provider are dropped.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Inspector<P> {
     provider: P,
 }
@@ -97,6 +97,9 @@ impl<P: SourceInspector> Inspector<P> {
 
     /// Return one verdict per unique kind, preserving first-occurrence order.
     /// Empty kind strings are invalid input. Checks never inspect a source.
+    ///
+    /// # Errors
+    /// Returns an error if any requested kind is empty.
     pub fn check_kind_support<K: AsRef<str>>(
         &self,
         kinds: impl IntoIterator<Item = K>,
@@ -119,6 +122,9 @@ impl<P: SourceInspector> Inspector<P> {
 
     /// Validate and return the provider's advisory list. An empty list is valid
     /// and must never be used to infer that every kind is unsupported.
+    ///
+    /// # Errors
+    /// Returns an error if the provider lists empty or duplicate kinds, or lists a kind it does not support.
     pub fn list_supported_kinds(&self) -> Result<Vec<SupportedKind>, InspectionError> {
         let kinds = self.provider.supported_kinds();
         if kinds
@@ -213,4 +219,10 @@ where
     }
     result.validate()?;
     Ok(result)
+}
+
+impl<P> std::fmt::Debug for Inspector<P> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Inspector").finish_non_exhaustive()
+    }
 }

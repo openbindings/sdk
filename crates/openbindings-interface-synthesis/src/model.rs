@@ -230,11 +230,17 @@ impl Synthesis {
         (self.document, self.coverage)
     }
     /// Persist document and coverage as an exact JSON envelope with default limits.
+    ///
+    /// # Errors
+    /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
     pub fn to_json(&self) -> Result<JsonValue, SynthesisError> {
         self.to_json_with_limits(JsonLimits::default())
     }
     /// Bound emitted bytes and apply core JSON node/depth admission limits.
     /// Does not bound already retained owners or total process memory.
+    ///
+    /// # Errors
+    /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
     pub fn to_json_with_limits(&self, limits: JsonLimits) -> Result<JsonValue, SynthesisError> {
         crate::exact::encode(self, limits)
     }

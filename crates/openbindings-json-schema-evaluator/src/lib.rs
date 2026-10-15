@@ -77,6 +77,7 @@ impl DefaultEvaluator {
     /// [`Diagnostics::Upstream`] requests the library's first error and retains
     /// original source snapshots for schema facts, which may contain secrets.
     /// Its allocations and stack use are library-bounded, not SDK-bounded.
+    #[must_use = "use the returned value to retain this configuration"]
     pub fn with_diagnostics(mut self, diagnostics: Diagnostics) -> Self {
         self.diagnostics = diagnostics;
         self

@@ -13,6 +13,12 @@ pub struct SpaceNode {
     pub source: usize,
     pub depth: usize,
 }
+impl std::fmt::Debug for SpaceNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SpaceNode").finish_non_exhaustive()
+    }
+}
+
 pub struct Resource {
     pub root: Option<usize>,
     pub base: Option<String>,
@@ -22,9 +28,15 @@ pub struct Resource {
     pub origin: ResourceOrigin,
     pub eligible: bool,
 }
+impl std::fmt::Debug for Resource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Resource").finish_non_exhaustive()
+    }
+}
+
 // Priority applies to name associations, not bodies or source provenance. A
 // supplied retrieval alias competes equally with every supplied declared ID.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum ResourceOrigin {
     Contained,
     Supplied,
@@ -40,6 +52,12 @@ pub struct Source {
     pub value: JsonValue,
     pub positions: HashMap<usize, usize>,
 }
+impl std::fmt::Debug for Source {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Source").finish_non_exhaustive()
+    }
+}
+
 pub struct SchemaSpace {
     pub document: RawDocument,
     pub supplied: Supplied,
@@ -49,7 +67,13 @@ pub struct SchemaSpace {
     names: BTreeMap<String, NameSelection>,
     library: std::sync::OnceLock<library::Targets>,
 }
-#[derive(Clone)]
+impl std::fmt::Debug for SchemaSpace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SchemaSpace").finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Target {
     pub node: usize,
     pub dynamic_name: Option<String>,
@@ -934,6 +958,12 @@ pub struct Reach {
     pub targets: HashMap<(usize, String), Target>,
     pub dynamic: BTreeMap<String, Vec<usize>>,
 }
+impl std::fmt::Debug for Reach {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Reach").finish_non_exhaustive()
+    }
+}
+
 /// Borrow pinned original meta-schema snapshots for source-location lookup.
 pub fn embedded_resources() -> &'static [ProjectedResource] {
     static RESOURCES: std::sync::OnceLock<Vec<ProjectedResource>> = std::sync::OnceLock::new();
@@ -1005,7 +1035,7 @@ mod projection_tests {
                             .to_owned(),
                     )
                     .unwrap();
-                let refusal = space.reach(entry, &control).err().expect("malformed reach");
+                let refusal = space.reach(entry, &control).expect_err("malformed reach");
                 assert!(
                     matches!(
                         refusal.code.as_str(),

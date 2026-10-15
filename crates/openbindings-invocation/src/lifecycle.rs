@@ -351,6 +351,12 @@ pub struct Invocation<F: Future<Output = Outcome>> {
     input: Input<F>,
     outputs: Outputs<F>,
 }
+impl<F: Future<Output = Outcome>> std::fmt::Debug for Invocation<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Invocation").finish_non_exhaustive()
+    }
+}
+
 impl<F: Future<Output = Outcome>> Invocation<F> {
     pub(crate) fn new(shared: Arc<Shared>, future: F) -> Self {
         let engine = Arc::new(Engine {
@@ -381,6 +387,9 @@ impl<F: Future<Output = Outcome>> Invocation<F> {
         self.outputs.control()
     }
     /// Accept one value into the bounded SDK handoff. This is not dispatch acknowledgement.
+    ///
+    /// # Errors
+    /// Returns `WriteError::Closed` when input no longer accepts values, or `WriteError::ValueTooLarge` if the submitted token exceeds the value byte limit.
     pub async fn write(&mut self, value: JsonValue) -> Result<(), WriteError> {
         self.input.write(value).await
     }
@@ -416,6 +425,12 @@ pub struct Control<F: Future<Output = Outcome>> {
     engine: Weak<Engine<F>>,
     shared: Arc<Shared>,
 }
+impl<F: Future<Output = Outcome>> std::fmt::Debug for Control<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Control").finish_non_exhaustive()
+    }
+}
+
 impl<F: Future<Output = Outcome>> Clone for Control<F> {
     fn clone(&self) -> Self {
         Self {
@@ -456,9 +471,18 @@ impl<F: Future<Output = Outcome>> Control<F> {
 pub struct Input<F: Future<Output = Outcome>> {
     engine: Arc<Engine<F>>,
 }
+impl<F: Future<Output = Outcome>> std::fmt::Debug for Input<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Input").finish_non_exhaustive()
+    }
+}
+
 impl<F: Future<Output = Outcome>> Input<F> {
     /// Accept a value into the SDK handoff when capacity permits. Dropping a
     /// pending write does not admit it. Success does not acknowledge dispatch.
+    ///
+    /// # Errors
+    /// Returns `WriteError::Closed` when input no longer accepts values, or `WriteError::ValueTooLarge` if the submitted token exceeds the value byte limit.
     pub async fn write(&mut self, value: JsonValue) -> Result<(), WriteError> {
         if value.bytes().len() > self.engine.shared.limits.max_value_bytes {
             return Err(WriteError::ValueTooLarge);
@@ -524,6 +548,12 @@ pub struct Outputs<F: Future<Output = Outcome>> {
     waiter: Waiter,
     exhausted: bool,
 }
+impl<F: Future<Output = Outcome>> std::fmt::Debug for Outputs<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Outputs").finish_non_exhaustive()
+    }
+}
+
 impl<F: Future<Output = Outcome>> Outputs<F> {
     /// Obtain independent cancellation/outcome observation for this borrowed lifetime.
     pub fn control(&self) -> Control<F> {
@@ -610,6 +640,12 @@ pub struct ProviderIo {
     input: ProviderInput,
     output: ProviderOutput,
 }
+impl std::fmt::Debug for ProviderIo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProviderIo").finish_non_exhaustive()
+    }
+}
+
 impl ProviderIo {
     pub(crate) fn new(shared: Arc<Shared>) -> Self {
         Self::with_gates(shared, None, None)
@@ -641,6 +677,9 @@ impl ProviderIo {
     }
     /// Commit one output with backpressure. Earlier committed outputs precede
     /// the terminal; an oversized value ends unsuccessfully without emission.
+    ///
+    /// # Errors
+    /// Returns the terminal invocation error when output can no longer be accepted, including cancellation, invalid output, or an established output-contract failure.
     pub async fn emit(&mut self, value: JsonValue) -> Result<(), InvocationError> {
         self.output.emit(value).await
     }
@@ -655,6 +694,12 @@ pub struct ProviderInput {
     gate: Option<Gate>,
     failed: bool,
 }
+impl std::fmt::Debug for ProviderInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProviderInput").finish_non_exhaustive()
+    }
+}
+
 impl ProviderInput {
     /// Receive one accepted input, or None after input closes and drains.
     pub async fn next(&mut self) -> Option<JsonValue> {
@@ -713,9 +758,18 @@ pub struct ProviderOutput {
     shared: Arc<Shared>,
     gate: Option<Gate>,
 }
+impl std::fmt::Debug for ProviderOutput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProviderOutput").finish_non_exhaustive()
+    }
+}
+
 impl ProviderOutput {
     /// Commit one output with backpressure. Earlier committed outputs precede
     /// the terminal; an oversized value ends unsuccessfully without emission.
+    ///
+    /// # Errors
+    /// Returns the terminal invocation error when output can no longer be accepted, including cancellation, invalid output, or an established output-contract failure.
     pub async fn emit(&mut self, value: JsonValue) -> Result<(), InvocationError> {
         if value.bytes().len() > self.shared.limits.max_value_bytes {
             self.shared

@@ -43,6 +43,9 @@ impl std::error::Error for ConfigurationError {}
 /// Construct and admit the normalized discovery URL using the same WHATWG parser
 /// as reqwest. HTTP is permitted only for literal IPv4 127/8 or IPv6 ::1.
 /// Credentials, resource paths, query and fragment are refused before I/O.
+///
+/// # Errors
+/// Returns a configuration error for a malformed origin, a non-HTTP(S) scheme, non-loopback HTTP, credentials, a resource path, query, or fragment.
 pub fn endpoint(origin: &str) -> Result<String, ConfigurationError> {
     let invalid = || ConfigurationError {
         code: "invalid-origin",

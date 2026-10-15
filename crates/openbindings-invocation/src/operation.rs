@@ -69,6 +69,7 @@ impl<'a> Request<'a> {
         }
     }
     /// Supply an opaque object unchanged for this attempt; never resolve credentials.
+    #[must_use = "use the returned value to retain this configuration"]
     pub fn with_context(mut self, context: &'a JsonValue) -> Self {
         self.context = Some(context);
         self
@@ -123,6 +124,7 @@ impl<'a> Attempt<'a> {
         }
     }
     /// Supply an opaque object unchanged for this attempt; never resolve credentials.
+    #[must_use = "use the returned value to retain this configuration"]
     pub fn with_context(mut self, context: &'a JsonValue) -> Self {
         self.context = Some(context);
         self
@@ -156,6 +158,12 @@ pub struct Invoker<P> {
     sources: CarrierCache<Source>,
     bindings: CarrierCache<BindingValue>,
 }
+impl<P> std::fmt::Debug for Invoker<P> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Invoker").finish_non_exhaustive()
+    }
+}
+
 impl<P: BindingInvoker> Invoker<P> {
     /// Retain a document and an explicit binding provider.
     /// ```compile_fail
@@ -181,6 +189,7 @@ impl<P: BindingInvoker> Invoker<P> {
     /// Set the explicit evaluator and immutable supplied resources.
     /// No schema is prepared and no URI is fetched.
     /// The document proof already establishes typed namespace shapes.
+    #[must_use = "use the returned value to retain this configuration"]
     pub fn with_evaluator(
         mut self,
         evaluator: Arc<dyn SchemaEvaluator>,
@@ -190,6 +199,9 @@ impl<P: BindingInvoker> Invoker<P> {
         self
     }
     /// Set the same finite handoff policy used by binding invocation.
+    ///
+    /// # Errors
+    /// Returns `LimitError` if a queue capacity or the value byte limit is zero, or the error byte limit is below 256 bytes.
     pub fn with_limits(mut self, limits: InvocationLimits) -> Result<Self, LimitError> {
         self.binding.limits = limits.validate()?;
         Ok(self)
@@ -202,12 +214,18 @@ impl<P: BindingInvoker> Invoker<P> {
     /// `ERR_OPERATION_NOT_FOUND`. Unrepresentable role metadata returns `ERR_REFUSED`.
     /// Preparation refusal returns `ERR_SCHEMA_UNRESOLVED` and retains no handle.
     /// Ready means prepared, not that every value will receive a verdict.
+    ///
+    /// # Errors
+    /// Returns `ERR_OPERATION_NOT_FOUND` for a missing operation, `ERR_REFUSED` for unrepresentable role metadata, or `ERR_SCHEMA_UNRESOLVED` when a declared value contract cannot be prepared. Cooperative cancellation returns `ERR_CANCELLED`.
     pub fn prepare(&self, operation: &str) -> Result<PreparedOperation<'_, P>, InvocationError> {
         self.prepare_with_control(operation, &CancellationToken::new())
     }
     /// Prepare with cooperative caller cancellation. Cancellation returns
     /// `ERR_CANCELLED`; any contracts prepared so far are released on error.
     /// A failed call stores nothing in this invoker; a fresh call prepares anew.
+    ///
+    /// # Errors
+    /// Returns `ERR_OPERATION_NOT_FOUND` for a missing operation, `ERR_REFUSED` for unrepresentable role metadata, or `ERR_SCHEMA_UNRESOLVED` when a declared value contract cannot be prepared. Cooperative cancellation returns `ERR_CANCELLED`.
     pub fn prepare_with_control(
         &self,
         operation: &str,
@@ -343,6 +361,9 @@ impl<P: BindingInvoker> Invoker<P> {
     /// Resolve by the same rules and make no prediction. Use
     /// `preflight_with_provider` to opt into the optional provider hook. Neither
     /// path prepares schemas, consumes values, dispatches, or pins selection.
+    ///
+    /// # Errors
+    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. A missing operation returns `ERR_OPERATION_NOT_FOUND`; unrepresentable role metadata returns `ERR_REFUSED`.
     pub async fn preflight(
         &self,
         request: Request<'_>,
@@ -351,6 +372,9 @@ impl<P: BindingInvoker> Invoker<P> {
             .await
     }
     /// Advisory preflight with cancellation, isolated from sibling attempts.
+    ///
+    /// # Errors
+    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. A missing operation returns `ERR_OPERATION_NOT_FOUND`; unrepresentable role metadata returns `ERR_REFUSED`.
     pub async fn preflight_with_control(
         &self,
         request: Request<'_>,
@@ -373,6 +397,9 @@ impl<P: BindingInvoker> Invoker<P> {
     }
     /// Resolve and call the optional provider preflight hook. Its named future
     /// permits generic callers to require `P::Preflight<'a>: Send`.
+    ///
+    /// # Errors
+    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. A missing operation returns `ERR_OPERATION_NOT_FOUND`; unrepresentable role metadata returns `ERR_REFUSED`. Provider refusals and malformed provider challenges also return an error.
     pub async fn preflight_with_provider(
         &self,
         request: Request<'_>,
@@ -384,6 +411,9 @@ impl<P: BindingInvoker> Invoker<P> {
             .await
     }
     /// Call the optional provider preflight hook with caller cancellation.
+    ///
+    /// # Errors
+    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. A missing operation returns `ERR_OPERATION_NOT_FOUND`; unrepresentable role metadata returns `ERR_REFUSED`. Provider refusals and malformed provider challenges also return an error.
     pub async fn preflight_with_provider_and_control(
         &self,
         request: Request<'_>,
@@ -571,6 +601,12 @@ pub struct PreparedOperation<'a, P> {
     input: Option<ValueContract>,
     output: Option<ValueContract>,
 }
+impl<P> std::fmt::Debug for PreparedOperation<'_, P> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PreparedOperation").finish_non_exhaustive()
+    }
+}
+
 impl<P: BindingInvoker> PreparedOperation<'_, P> {
     /// Invoke using retained contracts and this attempt's selection and context.
     /// The operation is fixed by this handle. An exact binding belonging to

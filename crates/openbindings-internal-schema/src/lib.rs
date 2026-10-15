@@ -20,7 +20,7 @@ pub struct Location {
     pub resource: Option<String>,
     pub pointer: String,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ProjectedResource {
     pub uri: String,
     pub document: JsonValue,
@@ -30,6 +30,12 @@ pub struct RawDocument {
     value: JsonValue,
     index: Arc<schema_index::SchemaIndex>,
 }
+impl std::fmt::Debug for RawDocument {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RawDocument").finish_non_exhaustive()
+    }
+}
+
 impl RawDocument {
     pub fn new(value: JsonValue) -> Self {
         let index = Arc::new(schema_index::SchemaIndex::build(&value));
@@ -115,5 +121,11 @@ impl<F: Fn() -> bool + Send + Sync> Control for F {
 impl Control for AtomicBool {
     fn is_cancelled(&self) -> bool {
         self.load(Ordering::Acquire)
+    }
+}
+
+impl std::fmt::Debug for ProjectedResource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProjectedResource").finish_non_exhaustive()
     }
 }

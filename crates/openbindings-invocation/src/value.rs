@@ -48,11 +48,17 @@ impl BindingValue {
     ///
     /// Opaque content and extension values retain exact snapshots, including
     /// duplicate names, number spelling and escaped unpaired UTF-16 units.
+    ///
+    /// # Errors
+    /// Returns a boundary error for a malformed carrier: invalid field types, missing required fields, duplicate members, or unsupported fields. Opaque payloads are preserved.
     pub fn from_json(value: &JsonValue) -> Result<Self, BoundaryError> {
         Self::from_json_ref(value.view())
     }
 
     /// Read a borrowed role binding, retaining owners only for opaque values.
+    ///
+    /// # Errors
+    /// Returns a boundary error for a malformed carrier: invalid field types, missing required fields, duplicate members, or unsupported fields. Opaque payloads are preserved.
     pub fn from_json_ref(value: JsonRef<'_>) -> Result<Self, BoundaryError> {
         object(value, BINDING_FIELDS, true, "/binding")?;
         let mut binding = Self::default();
@@ -85,11 +91,17 @@ impl BindingValue {
     }
 
     /// Encode this carrier under the default finite exact-JSON limits.
+    ///
+    /// # Errors
+    /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
     pub fn to_json(&self) -> Result<JsonValue, BoundaryError> {
         self.to_json_with_limits(JsonLimits::default())
     }
 
     /// Check extension names and encode with explicit exact-JSON limits.
+    ///
+    /// # Errors
+    /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
     pub fn to_json_with_limits(&self, limits: JsonLimits) -> Result<JsonValue, BoundaryError> {
         self.admit()?;
         encode(&BindingFields(self), limits)
@@ -227,11 +239,17 @@ pub struct BindingInvocationInput {
 
 impl BindingInvocationInput {
     /// Read the closed input envelope and all interpreted carrier members.
+    ///
+    /// # Errors
+    /// Returns a boundary error for a malformed carrier: invalid field types, missing required fields, duplicate members, or unsupported fields. Opaque payloads are preserved.
     pub fn from_json(value: &JsonValue) -> Result<Self, BoundaryError> {
         Self::from_json_ref(value.view())
     }
 
     /// Read a borrowed exact input without collapsing any duplicate carrier field.
+    ///
+    /// # Errors
+    /// Returns a boundary error for a malformed carrier: invalid field types, missing required fields, duplicate members, or unsupported fields. Opaque payloads are preserved.
     pub fn from_json_ref(value: JsonRef<'_>) -> Result<Self, BoundaryError> {
         object(value, &["source", "binding", "context"], false, "")?;
         let input = Self {
@@ -253,11 +271,17 @@ impl BindingInvocationInput {
     }
 
     /// Encode the admitted payload under default finite exact-JSON limits.
+    ///
+    /// # Errors
+    /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
     pub fn to_json(&self) -> Result<JsonValue, BoundaryError> {
         self.to_json_with_limits(JsonLimits::default())
     }
 
     /// Check native carrier fields and encode under explicit exact-JSON limits.
+    ///
+    /// # Errors
+    /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
     pub fn to_json_with_limits(&self, limits: JsonLimits) -> Result<JsonValue, BoundaryError> {
         self.request().admit()?;
         encode(&InputFields(self), limits)
@@ -338,6 +362,9 @@ impl ContextChallenge {
     /// Alternatives and requirements must be nonempty. `config.value` requires
     /// string `point` and RFC 6901 `path`, and admits an optional object or Boolean
     /// schema. Empty opaque targets and empty pointers are valid.
+    ///
+    /// # Errors
+    /// Returns a boundary error for a malformed carrier: invalid field types, missing required fields, duplicate members, or unsupported fields. Opaque payloads are preserved.
     pub fn new(value: JsonValue) -> Result<Self, BoundaryError> {
         Self::validate(value.view())?;
         Ok(Self(value))
@@ -391,11 +418,17 @@ impl ContextChallenge {
     }
 
     /// Copy the exact challenge into a standalone snapshot under default limits.
+    ///
+    /// # Errors
+    /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
     pub fn to_json(&self) -> Result<JsonValue, BoundaryError> {
         self.to_json_with_limits(JsonLimits::default())
     }
 
     /// Copy the exact challenge under explicit byte, nesting and node limits.
+    ///
+    /// # Errors
+    /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
     pub fn to_json_with_limits(&self, limits: JsonLimits) -> Result<JsonValue, BoundaryError> {
         JsonValue::parse_with_limits(self.0.bytes(), limits)
             .map_err(|_| BoundaryError::new("encoding-limit", ""))

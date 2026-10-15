@@ -25,11 +25,13 @@ impl Retrieve for LocalResources {
             .ok_or_else(|| format!("fixed resource unavailable: {uri}").into())
     }
 }
+#[derive(Debug)]
 pub struct Problems<'a> {
     pub entries: Vec<Problem<'a>>,
     pub violated: bool,
     pub truncated: bool,
 }
+#[derive(Debug)]
 pub struct Problem<'a> {
     pub at: JsonRef<'a>,
     pub message: Cow<'static, str>,

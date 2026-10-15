@@ -11,7 +11,7 @@ use std::{
     task::Poll,
 };
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 /// Owned HTTP header name and uninterpreted value bytes, preserving non-UTF-8 values.
 pub struct Header {
     /// Header name; lookup uses ASCII case-insensitive comparison.
@@ -28,7 +28,7 @@ impl Header {
         }
     }
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 /// Response facts retained independently from body acquisition or document validation.
 pub struct ResponseMetadata {
     /// Constructed discovery URL sent to the caller's transport.
@@ -69,7 +69,7 @@ pub enum ErrorKind {
     /// The transport cannot classify the failure more specifically.
     Other,
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 /// Caller-transport failure during request or body reading. Its message is supplied by the adapter, not normative evidence.
 pub struct RequestError {
     /// Transport failure category.
@@ -109,7 +109,16 @@ pub struct HttpResponse<B> {
     /// Decoded-body stream whose drop releases transport resources.
     pub body: B,
 }
-#[derive(Clone, Debug)]
+impl<B> std::fmt::Debug for HttpResponse<B> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HttpResponse")
+            .field("status", &self.status)
+            .field("headers", &self.headers)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone)]
 /// One finite request constructed by the portable discovery client; the callback performs acquisition.
 pub struct DiscoveryRequest {
     /// Absolute discovery endpoint derived from the caller's HTTP(S) origin.
@@ -131,6 +140,9 @@ pub enum AttemptTimeout {
 }
 impl AttemptTimeout {
     /// Resolve the default or override; reject zero rather than disabling the timer.
+    ///
+    /// # Errors
+    /// Returns a configuration error for a zero timeout duration.
     pub fn duration(self) -> Result<Option<std::time::Duration>, ConfigurationError> {
         match self {
             Self::Default => Ok(Some(std::time::Duration::from_secs(
@@ -178,6 +190,9 @@ impl Default for ClientOptions {
 /// enforce application DNS/peer/proxy restrictions at connection time, deliver
 /// decoded bytes (or a typed decode refusal), and cancel/release work on drop.
 /// The SDK follows at most ten admitted DISC-C-02 redirects. It stores no cache.
+///
+/// # Errors
+/// Returns a configuration error for an invalid origin, byte limit, or timeout. HTTP, transport, body, and document failures are represented in the returned discovery outcome.
 pub async fn discover<B, F, T, C>(
     origin: &str,
     options: &ClientOptions,
@@ -198,6 +213,9 @@ where
 
 impl ClientOptions {
     /// Resolve the positive decoded-byte limit with room for one over-limit sentinel.
+    ///
+    /// # Errors
+    /// Returns a configuration error for zero or `usize::MAX`, which leaves no room for the over-limit sentinel.
     pub fn byte_limit(&self) -> Result<usize, ConfigurationError> {
         match self.max_document_bytes {
             0 | usize::MAX => Err(ConfigurationError {
@@ -469,6 +487,7 @@ async fn until_stopped<C: DiscoveryTimer, F: Future, E: Future<Output = ()>>(
 }
 #[derive(Clone, Debug)]
 /// Acquisition and validation partition. Only `Found` carries normative proof; HTTP status, refusal and incomplete work remain distinct.
+#[must_use = "inspect the outcome before continuing"]
 pub enum DiscoveryOutcome {
     /// A complete bounded 200 body established normative document conformance.
     Found {
@@ -602,5 +621,36 @@ mod review_tests {
             assert_eq!(r.metadata.unwrap().status, 302);
             assert!(r.body.is_none());
         }
+    }
+}
+
+impl std::fmt::Debug for Header {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Header")
+            .field("name", &self.name)
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for ResponseMetadata {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResponseMetadata")
+            .field("status", &self.status)
+            .field("headers", &self.headers)
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for DiscoveryRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DiscoveryRequest").finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for RequestError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RequestError")
+            .field("kind", &self.kind)
+            .finish_non_exhaustive()
     }
 }

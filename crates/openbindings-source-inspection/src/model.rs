@@ -61,6 +61,9 @@ impl BindingFragment {
     /// Rejects illegal extension keys, including `operation` and `source`, even
     /// when a fragment was constructed directly rather than returned by inspection.
     /// The completed document still needs ordinary core conformance validation.
+    ///
+    /// # Errors
+    /// Returns an inspection error if an extension key does not start with `x-`.
     pub fn bind(
         self,
         operation: impl Into<String>,
@@ -191,12 +194,18 @@ pub struct SourceInspection {
 impl SourceInspection {
     /// Encode a checked inventory as exact JSON with the core's default limits.
     /// Opaque content is written as raw JSON, never converted through binary64.
+    ///
+    /// # Errors
+    /// Returns an inspection error if the inventory fails carrier validation, cannot be serialized, or its encoded JSON exceeds the admission limits.
     pub fn to_json(&self) -> Result<JsonValue, InspectionError> {
         self.to_json_with_limits(JsonLimits::default())
     }
 
     /// Encode with explicit byte, node and depth admission limits. The byte
     /// budget bounds emitted storage; it is not a bound on existing result owners.
+    ///
+    /// # Errors
+    /// Returns an inspection error if the inventory fails carrier validation, cannot be serialized, or its encoded JSON exceeds the admission limits.
     pub fn to_json_with_limits(&self, limits: JsonLimits) -> Result<JsonValue, InspectionError> {
         self.validate()?;
         struct Output {
@@ -251,6 +260,9 @@ impl SourceInspection {
     /// Check the SDK's result structure and policy, including duplicate rejection.
     /// This is stricter than the shared interface and does not prove source
     /// correspondence, inventory completeness, or sound operation framing.
+    ///
+    /// # Errors
+    /// Returns an inspection error if targets, limitations, or additional fields violate the inspection carrier requirements.
     pub fn validate(&self) -> Result<(), InspectionError> {
         if !self.exhaustive && self.limitation.is_none() {
             return Err(InspectionError::result(

@@ -179,10 +179,16 @@ use serde::Serialize;
 
 impl ParsedDocument {
     /// Inspect references with no caller resources and a fresh uncancelled control. No network or filesystem access; success is not conformance proof.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance. Unresolved references and cancellation are recorded in the returned report.
     pub fn references(&self) -> Result<ReferenceReport, InterpretationError> {
         self.references_with_resources(ResourceSet::default(), &crate::work_control::NeverCancelled)
     }
     /// Inspect schema references in this exact snapshot plus supplied resources, with cooperative cancellation. Interpretation errors refuse the document; traversal limits are represented in [`ReferenceReport`].
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance. Unresolved references and cancellation are recorded in the returned report.
     pub fn references_with_resources(
         &self,
         resources: ResourceSet,

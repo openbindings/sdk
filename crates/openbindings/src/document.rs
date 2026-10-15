@@ -190,6 +190,9 @@ impl ParsedDocument {
     /// Use [`Self::validate`] before treating this as a conformant document. See the
     /// [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
     /// for the progression from parsing to a prepared input contract.
+    ///
+    /// # Errors
+    /// Returns an input error for invalid UTF-8, a byte order mark, invalid JSON syntax, or an exceeded admission limit.
     pub fn parse(input: impl AsRef<[u8]>) -> Result<Self, InputError> {
         JsonValue::parse(input).map(Self::from_json)
     }
@@ -218,6 +221,9 @@ impl ParsedDocument {
         self.value().original_source()
     }
     /// Copy representable normative fields into an editable draft. Refuses duplicates and invalid typed shapes; exact opaque fields retain their values. This conversion does not establish conformance.
+    ///
+    /// # Errors
+    /// Returns an authoring error for duplicate members, malformed known fields, or strings/numbers that the typed authoring model cannot represent.
     pub fn to_authoring(&self) -> Result<Document, AuthoringError> {
         Document::from_json(self.value())
     }
@@ -226,6 +232,9 @@ impl ParsedDocument {
     /// [`DocumentValidation::validated`] yields a conformance proof. An unsupported
     /// declared version is a separate refusal. Explanatory finding messages are
     /// human-readable guidance; use rule/code/evidence fields for program logic.
+    ///
+    /// # Errors
+    /// Returns a version refusal only for a well-formed declaration outside the supported line. Malformed input and other rule violations are returned as validation evidence, not as this error.
     pub fn validate(&self) -> Result<DocumentValidation, VersionRefusal> {
         let report = self
             .inner
@@ -274,6 +283,9 @@ impl ParsedDocument {
     }
     /// Exact keys and aliases share one namespace. Every repeated occurrence is
     /// unresolved; candidate primary keys are distinct and lexically ordered.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
     pub fn resolve_operation(&self, name: &str) -> Result<OperationSelection, InterpretationError> {
         self.interpretable()?;
         let index = self.names()?;
@@ -319,6 +331,9 @@ impl ParsedDocument {
     /// Allocate retained operation views in lexical key order. Each view remains
     /// valid after this handle is dropped. Malformed entries refuse
     /// typed enumeration; `value()` remains available for exact inspection.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
     pub fn operations(&self) -> Result<Vec<OperationView>, InterpretationError> {
         self.interpretable()?;
         self.names()?
@@ -328,6 +343,9 @@ impl ParsedDocument {
             .collect()
     }
     /// Lexical presentation order; this does not select or rank bindings.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
     pub fn operation_bindings(&self, key: &str) -> Result<Vec<String>, InterpretationError> {
         self.interpretable()?;
         let index = self.names()?;
@@ -339,6 +357,9 @@ impl ParsedDocument {
     /// Return `None` when the dependency is absent, otherwise test its kind filter.
     /// Absence of `kinds` accepts all; an empty list matches none but is nonconformant.
     /// Interpretation may refuse the document; this method is not normative proof.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
     pub fn dependency_accepts_kind(
         &self,
         dependency: &str,
@@ -446,7 +467,7 @@ pub enum OperationSelection {
     },
 }
 /// Immutable retained operation object. Its exact value is not conformance proof.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct OperationView {
     document: ParsedDocument,
     key: Arc<str>,
@@ -475,6 +496,9 @@ impl OperationView {
     }
     /// Interpret an optional string description. Unlike exact [`Self::input`]
     /// access, this can refuse a malformed field with its original location.
+    ///
+    /// # Errors
+    /// Returns an interpretation error if the present description is not a string.
     pub fn description(&self) -> Result<Option<JsonStringRef<'_>>, InterpretationError> {
         self.value
             .get("description")
@@ -486,6 +510,9 @@ impl OperationView {
     }
     /// Interpret optional string aliases, preserving absence separately from an
     /// empty array. A malformed array or item is a located interpretation error.
+    ///
+    /// # Errors
+    /// Returns an interpretation error if aliases is not an array of scalar strings, including a string with an unpaired UTF-16 unit.
     pub fn aliases(
         &self,
     ) -> Result<Option<impl ExactSizeIterator<Item = &str>>, InterpretationError> {
@@ -508,6 +535,9 @@ impl OperationView {
             .transpose()
     }
     /// Allocate binding keys in lexical presentation order; does not rank or invoke bindings.
+    ///
+    /// # Errors
+    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
     pub fn bindings(&self) -> Result<Vec<String>, InterpretationError> {
         self.document.operation_bindings(&self.key)
     }
@@ -544,12 +574,18 @@ impl ValidatedDocument {
 }
 impl Document {
     /// Encode the current draft into a fresh independent parsed snapshot. May refuse collisions, unrepresentable fields or limits; does not establish conformance.
+    ///
+    /// # Errors
+    /// Returns an authoring error for extension names colliding with known fields, serialization failure, or exhausted encoding/admission limits. This does not establish normative conformance.
     pub fn build(&self) -> Result<ParsedDocument, AuthoringError> {
         self.to_json().map(ParsedDocument::from_json)
     }
 }
 
 /// Assess bytes even when parsing fails. A version refusal is never conformance evidence.
+///
+/// # Errors
+/// Returns a version refusal only for a well-formed declaration outside the supported line. Malformed input and other rule violations are returned as validation evidence, not as this error.
 pub fn validate_document(input: impl AsRef<[u8]>) -> Result<DocumentValidation, VersionRefusal> {
     validate_document_with_limits(
         input,
@@ -564,6 +600,9 @@ pub fn validate_document(input: impl AsRef<[u8]>) -> Result<DocumentValidation, 
 /// Admission precedes version selection: if parsing exceeds a limit, no complete
 /// declaration is established and all rules are inconclusive, even for another line.
 /// [`validate_document`] uses default byte/node limits and unlimited nesting.
+///
+/// # Errors
+/// Returns a version refusal only for a well-formed declaration outside the supported line. Malformed input and other rule violations are returned as validation evidence, not as this error.
 pub fn validate_document_with_limits(
     input: impl AsRef<[u8]>,
     limits: JsonLimits,
@@ -1067,6 +1106,13 @@ fn assess_value(document: &ParsedDocument) -> Result<ValidationReport, VersionRe
     Ok(c.finish())
 }
 
+impl std::fmt::Debug for OperationView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OperationView")
+            .field("value", &self.value)
+            .finish_non_exhaustive()
+    }
+}
 #[cfg(test)]
 mod name_index_storage_tests {
     use super::*;
