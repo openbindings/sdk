@@ -9,7 +9,9 @@
 - Validated document views, operation and alias lookup, exact schema access,
   reference inspection and opaque kind comparison.
 - Explicit immutable resources and reusable input/output value contracts, with
-  distinct preparation results and satisfies, fails or no-verdict outcomes.
+  distinct preparation results and satisfies, fails, undefined or no-verdict outcomes.
+  Undefined results carry a code, message and optional original schema location;
+  no-verdict describes inability to answer.
 - An optional JSON Schema 2020-12 evaluator with exact numeric semantics,
   cooperative cancellation, declared work limits and selectable diagnostics.
 - An evaluator integration trait and a reusable qualification suite for custom

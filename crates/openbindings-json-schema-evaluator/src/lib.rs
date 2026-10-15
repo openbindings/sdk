@@ -368,26 +368,25 @@ impl PreparedSchema for PartialCompiled {
             Err(detail) => ValueOutcome::NoVerdict { detail },
             Ok(Some(false)) => self.upper.diagnostics(value, control, true),
             Ok(Some(true)) => ValueOutcome::Satisfies,
-            Ok(None) => ValueOutcome::NoVerdict {
-                detail: self
-                    .unavailable
-                    .clone()
-                    .map(|mut detail| {
-                        // In the positive fragment these are actual completions,
-                        // not merely interval endpoints. Both completed evaluations
-                        // finished within the shared budget and disagree here.
-                        if self.semantic_completions {
-                            detail.reason = NoVerdictReason::Undefined;
-                        }
-                        detail
-                    })
-                    .unwrap_or_else(|| {
-                        no_verdict(
-                            NoVerdictReason::EvaluatorFailure,
-                            "inconsistent-exact-bounds",
-                            "the evaluator disagreed on two exact projections",
-                        )
-                    }),
+            Ok(None) => match self.unavailable.clone() {
+                // In the positive fragment these are actual completions,
+                // not merely interval endpoints. Both completed evaluations
+                // finished within the shared budget and disagree here.
+                Some(detail) if self.semantic_completions => ValueOutcome::Undefined {
+                    detail: UndefinedResult {
+                        code: detail.code,
+                        message: detail.message,
+                        location: detail.location,
+                    },
+                },
+                Some(detail) => ValueOutcome::NoVerdict { detail },
+                None => ValueOutcome::NoVerdict {
+                    detail: no_verdict(
+                        NoVerdictReason::EvaluatorFailure,
+                        "inconsistent-exact-bounds",
+                        "the evaluator disagreed on two exact projections",
+                    ),
+                },
             },
         }
     }

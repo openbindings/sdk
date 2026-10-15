@@ -14,6 +14,7 @@ export {
   SchemaLocation,
   NoVerdictReason,
   NoVerdict,
+  UndefinedResult,
   ValueProblem,
   ValueProblemDetails,
   ValueOutcome,

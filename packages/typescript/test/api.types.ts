@@ -348,3 +348,34 @@ import { liveStorageOwners } from "../dist/testing.js";
 // @ts-expect-error Test bookkeeping is available only through the testing entry.
 import { liveStorageOwners as productionCounter } from "../dist/index.js";
 liveStorageOwners() satisfies number;
+
+// Undefined is its own exhaustive value outcome, with constructible plain detail.
+const undefinedDetail: import("../dist/index.js").UndefinedResult = {
+  code: "custom",
+  message: "established undefined result",
+  location: null,
+};
+const undefinedOutcome: ValueOutcome = {
+  outcome: "undefined",
+  detail: undefinedDetail,
+};
+undefinedOutcome.detail satisfies import("../dist/index.js").UndefinedResult;
+// @ts-expect-error semantic undefinedness is not an inability reason
+const obsoleteUndefinedReason: import("../dist/index.js").NoVerdictReason =
+  "undefined";
+function exhaustiveValueOutcome(value: ValueOutcome): string {
+  switch (value.outcome) {
+    case "satisfies":
+      return value.outcome;
+    case "fails":
+      return value.message;
+    case "undefined":
+      return value.detail.code;
+    case "no-verdict":
+      return value.detail.reason;
+    default: {
+      const unreachable: never = value;
+      return unreachable;
+    }
+  }
+}

@@ -38,9 +38,12 @@ unsupported capabilities produce no-verdict. Work and regex budgets can also
 prevent a verdict; a ready contract can remain undecidable for a particular value.
 
 Missing content or undefined reference results do not prevent a verdict when the
-evaluator proves that they cannot affect it. Semantic undefinedness, missing
-resources and implementation inability retain distinct reasons. Applications must
-handle no-verdict in both preparation and validation.
+evaluator proves that they cannot affect it. An established undefined result has
+its own `Undefined` outcome, separate from no-verdict. The default evaluator
+establishes it for static reference defects with original-source provenance and
+two admissible completions that disagree. Other undefined results remain outside
+its supported fragment. Missing resources, unsupported capabilities and exhausted
+budgets produce no-verdict. Handle no-verdict in both preparation and validation.
 
 Coarse failure diagnostics are the default. Upstream diagnostics are an explicit
 choice with library allocation and stack limits. They can allocate in proportion

@@ -40,9 +40,11 @@ Pass it and an immutable `ResourceSet` to `ValidatedDocument::value_contracts`.
 The [evaluator integration guide](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md)
 explains the no-evaluator behavior and custom implementations.
 
-Prepare a direction, retain a ready `ValueContract`, and handle satisfies, fails
+Prepare a direction, retain a ready `ValueContract`, and handle satisfies, fails, undefined
 and no-verdict for each value. Preparation can also report a missing operation,
-an absent value contract or no-verdict. Each preparation compiles independently;
+an absent value contract or no-verdict. Undefined means the value-contract rules
+leave whether the value satisfies its contract undefined; no-verdict means the
+evaluator could not answer. Each preparation compiles independently;
 cloning a ready contract reuses its retained document and resources.
 
 Core performs no resource acquisition, binding selection or invocation. Source

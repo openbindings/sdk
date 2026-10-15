@@ -504,3 +504,43 @@ fn row_with_fields(label: &'static str, value: &impl Debug, fields: &[(&str, &st
     }
     item
 }
+
+#[test]
+fn undefined_result_redacts_text_and_locations_but_shows_the_fixed_code() {
+    let custom = UndefinedResult::new(SECRET, SECRET).with_location(location());
+    let fixed = UndefinedResult::new("static-reference-defect", SECRET).with_location(location());
+    let lookalike = UndefinedResult::new(format!("static-reference-defect-{SECRET}"), SECRET);
+    let fixed_row = row("UndefinedResult fixed code", &fixed);
+    for text in &fixed_row.text {
+        assert!(text.contains("static-reference-defect"));
+    }
+    let outcome = ValueOutcome::Undefined {
+        detail: fixed.clone(),
+    };
+    let outcome_row = row("ValueOutcome::Undefined fixed code", &outcome);
+    for text in &outcome_row.text {
+        assert!(text.contains("static-reference-defect"));
+    }
+    check_rows(
+        vec![
+            row("UndefinedResult custom code", &custom),
+            row("UndefinedResult lookalike code", &lookalike),
+            row(
+                "ValueOutcome::Undefined custom code",
+                &ValueOutcome::Undefined { detail: custom },
+            ),
+            fixed_row,
+            outcome_row,
+        ],
+        5,
+    );
+    let wire = serde_json::to_value(&outcome).unwrap();
+    assert_eq!(wire["outcome"], "undefined");
+    assert!(wire["detail"].get("reason").is_none());
+    assert_eq!(wire["detail"]["message"], SECRET);
+    assert_eq!(wire["detail"]["location"]["pointer"], format!("/{SECRET}"));
+    assert_eq!(
+        serde_json::to_value(UndefinedResult::new("custom", "proof")).unwrap()["location"],
+        serde_json::Value::Null
+    );
+}

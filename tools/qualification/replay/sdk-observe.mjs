@@ -15,10 +15,7 @@ export function observe(sdk, request) {
     result.status === "no-verdict"
       ? { outcome: "no-verdict", detail: result.detail }
       : result.status === "operation-ambiguous"
-        ? {
-            outcome: "no-verdict",
-            detail: { reason: "undefined", code: "operation-ambiguous" },
-          }
+        ? { outcome: "operation-missing" }
         : { outcome: result.status === "no-value-contract" ? "no-contract" : result.status };
   const output = { id: request.id, executed: true };
   const given = request.given;

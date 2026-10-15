@@ -37,6 +37,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ValueOutcome::Fails { message, problems, problems_complete } => {
             println!("{message}: {problems:?}; diagnostics complete: {problems_complete}");
         }
+        ValueOutcome::Undefined { detail } => {
+            println!("undefined result: {}", detail.message);
+        }
         ValueOutcome::NoVerdict { detail } => {
             println!("no verdict ({:?}): {}", detail.reason, detail.message);
         }
@@ -57,6 +60,14 @@ new resources require a new context. Some values can be decided despite missing
 resources or undefined reference results when those results cannot affect the
 verdict. A ready contract does not promise a verdict for every value. Handle
 no-verdict during both preparation and validation.
+
+`ValueOutcome::Undefined` establishes that whether the value satisfies its value
+contract is undefined. The default evaluator proves this for static reference
+defects: pointers that reach no schema, missing or duplicate plain names, and
+malformed `$ref` values within resources declaring `$id`. It requires original
+provenance and two admissible completions that disagree. Unsupported fragments,
+missing resources and inconclusive analysis remain no-verdict. `UndefinedResult`
+retains a code, message and optional original schema location.
 
 `Limits` controls work, recursion, regex steps, compilation depth and pattern
 admission. The default regex allowance is 2,000,000 steps. Large unanchored

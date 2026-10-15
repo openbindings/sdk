@@ -59,9 +59,12 @@ test("static reference matrix and concrete completions through Wasm", async () =
           : { outcome: "no-verdict", detail: setup.detail };
       const actual = {
         stage: setup.status === "ready" ? "ready" : "preparation",
-        outcome: { satisfies: "S", fails: "F", "no-verdict": "N" }[
-          result.outcome
-        ],
+        outcome: {
+          satisfies: "S",
+          fails: "F",
+          undefined: "undefined",
+          "no-verdict": "N",
+        }[result.outcome],
       };
       if (result.detail)
         actual.detail = {
@@ -74,7 +77,16 @@ test("static reference matrix and concrete completions through Wasm", async () =
               }
             : null,
         };
-      subset(c.expected, actual, c.id);
+      const expected = structuredClone(c.expected);
+      if (expected.outcome === "N" && expected.detail?.reason === "undefined") {
+        expected.outcome = "undefined";
+        delete expected.detail.reason;
+      }
+      if (result.outcome === "undefined") {
+        assert.equal("reason" in result.detail, false, c.id);
+        assert.equal(typeof result.detail.message, "string", c.id);
+      }
+      subset(expected, actual, c.id);
       receipt.push({ id: c.id, actual });
     } finally {
       contract?.dispose();

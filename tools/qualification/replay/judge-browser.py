@@ -35,6 +35,10 @@ def current_fixture(fixture):
         assert group['document']==change['original_document']
         assert [c['id'] for c in group['cases']]==change['case_ids']
         translated['groups'].remove(group)
+    for group in translated['groups']:
+        for case in group['cases']:
+            if case['expected']=='no-verdict' and case.get('refusal_kind')=='undefined':
+                case.update(expected='undefined',refusal_kind=None)
     return translated
 
 
@@ -56,7 +60,14 @@ def judge_value(case,result,sources):
     if tag=='no-verdict':
         if detail.get('reason')!=case.get('refusal_kind'):failures.append('wrong refusal distinction')
         if not detail.get('code','').strip() or not detail.get('message','').strip():failures.append('unexplained refusal')
-        if detail.get('reason') not in ['unsupported-capability','conservative-preparation','resource-unavailable'] and not (detail.get('reason') == 'undefined' and case.get('refusal_kind') == 'undefined'):failures.append('unjustified refusal reason')
+        if detail.get('reason') not in ['unsupported-capability','conservative-preparation','resource-unavailable']:failures.append('unjustified refusal reason')
+    if tag=='undefined':
+        if not detail.get('code','').strip() or not detail.get('message','').strip():failures.append('unexplained undefined result')
+        location=detail.get('location')
+        if location:
+            resource=location.get('resource');pointer=location.get('pointer')
+            if resource is not None and resource.startswith('https://sdk-program.openbindings.invalid/'):failures.append('generated identity leaked')
+            if resource not in sources or not pointer_exists(sources[resource],pointer):failures.append('nonexistent original schema location')
     if tag=='fails':
         problems=result.get('problems',[])
         if not problems and result.get('problemsComplete') is True:failures.append('complete diagnostics lack problems')
@@ -106,6 +117,14 @@ def controls():
     optional={**case,'optional_capability':'unicode','refusal_kind':'unsupported-capability'}
     for reason in ['cancelled','limit-exceeded','evaluator-failure','undefined','resource-unavailable']:
         assert judge_value(optional,{'outcome':'no-verdict','detail':{'reason':reason,'code':'x','message':'x'}},sources)
+    undefined={'outcome':'undefined','detail':{'code':'proof','message':'established undefined result','location':{'resource':None,'pointer':'/type'}}}
+    semantic={**case,'expected':'undefined','refusal_kind':None}
+    assert not judge_value(semantic,undefined,sources)
+    assert judge_value(optional,undefined,sources)
+    assert judge_value(semantic,{'outcome':'no-verdict','detail':{'reason':'undefined','code':'proof','message':'old representation'}},sources)
+    assert judge_value(semantic,{'outcome':'undefined','detail':{}},sources)
+    for location in [{'resource':None,'pointer':'/missing'}, {'resource':'https://sdk-program.openbindings.invalid/private','pointer':''}]:
+        assert judge_value(semantic,{**undefined,'detail':{**undefined['detail'],'location':location}},sources)
     fixture={'resources':{},'groups':[{'id':'group','document':'{"type":"string"}','resources':[],'cases':[case]}]}
     group={'id':'group','executed':True,'values':[valid]}
     assert not judge_evaluator(fixture,[group])[1]
@@ -129,7 +148,7 @@ def controls():
         try:current_fixture(altered)
         except AssertionError:pass
         else:raise AssertionError('changed input inherited policy translation: '+field)
-    return {'status':'pass','wrong_results_rejected':len(bad)+6,'accounting_mutations_rejected':6,'policy_input_mutations_rejected':7}
+    return {'status':'pass','wrong_results_rejected':len(bad)+11,'accounting_mutations_rejected':6,'policy_input_mutations_rejected':7}
 
 
 def main():

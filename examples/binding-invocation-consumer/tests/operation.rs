@@ -284,6 +284,7 @@ async fn schema_rejection_withholds_values_and_retains_only_local_evidence() {
                 assert_eq!(problems[0].code, "consumer.false");
             }
             ValueOutcome::NoVerdict { .. } => assert_eq!(stage, ValidationStage::Preparation),
+            ValueOutcome::Undefined { .. } => panic!("boolean schemas have no undefined result"),
             ValueOutcome::Satisfies => panic!("a successful value is not a rejection"),
         }
         let (_, mut outputs) = call.split();

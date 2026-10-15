@@ -17,7 +17,15 @@ fn pinned_suite_and_adversarial_contracts() {
     }
     assert!(report.is_success(), "{:?}", report.configuration_failures);
     assert_eq!(report.observations.len(), 1564);
-    assert_eq!(report.refusal_count(), 42);
+    assert_eq!(report.refusal_count(), 32);
+    assert_eq!(
+        report
+            .observations
+            .iter()
+            .filter(|o| matches!(o.outcome, Some(ValueOutcome::Undefined { .. })))
+            .count(),
+        10
+    );
 }
 #[test]
 fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {
@@ -253,7 +261,6 @@ fn optional_capability_declaration_does_not_authorize_other_refusal_reasons() {
         NoVerdictReason::ResourceUnavailable,
         NoVerdictReason::Cancelled,
         NoVerdictReason::LimitExceeded,
-        NoVerdictReason::Undefined,
         NoVerdictReason::EvaluatorFailure,
     ] {
         let outcome = ValueOutcome::NoVerdict {
@@ -261,4 +268,46 @@ fn optional_capability_declaration_does_not_authorize_other_refusal_reasons() {
         };
         assert!(!judge(case, &value, &outcome, true).is_empty());
     }
+}
+
+#[test]
+fn undefined_is_an_answer_and_not_an_optional_refusal() {
+    let case = suite()
+        .groups
+        .iter()
+        .flat_map(|g| &g.cases)
+        .find(|c| c.expected == "undefined")
+        .unwrap();
+    let value = JsonValue::parse(&case.value).unwrap();
+    let outcome = ValueOutcome::Undefined {
+        detail: UndefinedResult::new("proof", "established undefined result"),
+    };
+    assert!(judge(case, &value, &outcome, false).is_empty());
+    let refusal = ValueOutcome::NoVerdict {
+        detail: NoVerdict::new(
+            NoVerdictReason::ConservativePreparation,
+            "unknown",
+            "not proved",
+        ),
+    };
+    assert!(!judge(case, &value, &refusal, true).is_empty());
+    let optional = suite()
+        .groups
+        .iter()
+        .flat_map(|g| &g.cases)
+        .find(|c| c.optional_capability.is_some())
+        .unwrap();
+    assert!(
+        !judge(
+            optional,
+            &JsonValue::parse(&optional.value).unwrap(),
+            &outcome,
+            true
+        )
+        .is_empty()
+    );
+    let unexplained = ValueOutcome::Undefined {
+        detail: UndefinedResult::new("", ""),
+    };
+    assert!(!judge(case, &value, &unexplained, false).is_empty());
 }

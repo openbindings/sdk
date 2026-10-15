@@ -54,7 +54,11 @@ Preparation returns `ERR_OPERATION_NOT_FOUND` for an unknown operation, `ERR_REF
 for role metadata it cannot represent, and `ERR_SCHEMA_UNRESOLVED` when a declared
 value contract cannot be prepared; each releases partial work. `prepare_with_control`
 returns `ERR_CANCELLED` when cancelled, leaving no handle.
-A ready contract can still return no verdict for a particular value.
+A ready contract can still return no verdict or an undefined result for a
+particular value. Both stop the affected value with `ERR_SCHEMA_UNRESOLVED`.
+`ValidationFailure::outcome()` retains `ValueOutcome::Undefined` separately from
+`NoVerdict`, so callers can distinguish an established undefined result from
+inability to answer.
 `PreparedOperation::invoke_with_control` isolates each attempt's cancellation,
 queues and validation evidence, so concurrent attempts can share one handle.
 
