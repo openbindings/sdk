@@ -603,8 +603,9 @@ impl fmt::Debug for ValueContract {
     }
 }
 impl ValueContract {
-    /// Validate an admitted exact value, distinguishing satisfies, fails and
-    /// no-verdict. For ordinary Rust data first use [`JsonValue::from_serializable`];
+    /// Validate an admitted exact value, distinguishing satisfies, fails, undefined
+    /// (the specification gives the value no defined validity) and no-verdict (the
+    /// evaluator could not answer). For ordinary Rust data first use [`JsonValue::from_serializable`];
     /// for exact JSON text/bytes use [`JsonValue::parse`]. Admission failure is
     /// separate from validation. Failure diagnostics can be incomplete; inspect
     /// `problems_complete` rather than assuming every failed keyword is reported.

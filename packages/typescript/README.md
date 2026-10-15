@@ -58,8 +58,9 @@ Parsing retains an inspectable snapshot. `validated()` returns either a validate
 owner or a version refusal or conformance report. Only the validated owner creates
 value contracts. Preparation distinguishes a ready contract, an absent value
 contract, a missing operation and no-verdict. Handle each setup result before
-validating a value. Value results distinguish `satisfies`, `fails`, `no-verdict`
-and an `input-error` when ordinary JavaScript data cannot be admitted.
+validating a value. Value results distinguish `satisfies`, `fails`, `undefined`
+(the specification gives the value no defined validity), `no-verdict` (the SDK could
+not answer) and an `input-error` when ordinary JavaScript data cannot be admitted.
 
 ## Browser resource management
 
