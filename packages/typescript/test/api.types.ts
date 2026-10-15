@@ -159,7 +159,7 @@ const obsoleteOutcome: ValueOutcome = {
 };
 void obsoleteOutcome;
 
-// Round 1: actual emitted declarations, not declaration-only proposal stubs.
+// Check actual emitted declarations.
 import {
   ExactMember,
   OwnedDocumentDraft,
@@ -298,7 +298,7 @@ function preparedResources(
 }
 void preparedResources;
 
-// S5b review F5 / HD-7: only observable failure kinds belong to this union.
+// only observable failure kinds belong to this union.
 type DiscoveryFailureKind = Extract<
   import("../dist/http-discovery.js").DiscoveryResult,
   { status: "transport-error" | "body-error" }

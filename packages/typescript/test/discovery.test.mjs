@@ -17,7 +17,7 @@ function responseUrl(response, url, type = "default") {
   return response;
 }
 
-// HD-1/HD-5: admission and requested metadata use the normalized client URL.
+// admission and requested metadata use the normalized client URL.
 test("normalized literal loopback admission and Fetch automatic following", async () => {
   for (const host of ["2130706433", "0x7f.1", "%31%32%37.0.0.1", "127.1"]) {
     const result = await discovery.discover(`http://${host}`, {
@@ -52,7 +52,7 @@ test("normalized literal loopback admission and Fetch automatic following", asyn
   }
 });
 
-// HD-1/HD-7: final downgrade and opaque visibility are acquisition policy failures.
+// final downgrade and opaque visibility are acquisition policy failures.
 test("final HTTPS downgrade and opaque responses cannot establish policy", async () => {
   for (const type of ["default", "opaque", "opaqueredirect"]) {
     let cancelled = false;
@@ -81,7 +81,7 @@ test("final HTTPS downgrade and opaque responses cannot establish policy", async
   }
 });
 
-// HD-2: one deadline covers never-ready headers and body, independent of caller signals.
+// one deadline covers never-ready headers and body, independent of caller signals.
 test("SDK deadline interrupts stalled acquisition and retains body-phase metadata", async () => {
   for (const phase of ["headers", "body"]) {
     let cancelled = false;
@@ -121,7 +121,7 @@ test("SDK deadline interrupts stalled acquisition and retains body-phase metadat
   result.document.dispose();
 });
 
-// HD-2: already-ready cancellation wins a tie; first observed expiry stays timeout.
+// already-ready cancellation wins a tie; first observed expiry stays timeout.
 test("caller cancellation and timeout remain distinct with deterministic ties", async () => {
   // A controlled clock makes the tie exact: the deadline passes and the caller
   // aborts at the same observation, independent of how fast the host runs.
@@ -158,7 +158,7 @@ test("caller cancellation and timeout remain distinct with deterministic ties", 
   assert.equal(timeout.status, "timeout");
 });
 
-// HD-2: checking monotonic time catches elapsed validation even with a blocked event loop.
+// checking monotonic time catches elapsed validation even with a blocked event loop.
 test("over-deadline synchronous validation releases handles and retains complete bytes", async () => {
   const original = performance.now.bind(performance);
   const before = sdk.liveStorageOwners();
@@ -195,7 +195,7 @@ test("over-deadline synchronous validation releases handles and retains complete
   }
 });
 
-// HD-7: SDK-detected chunk contract errors are not fabricated network failures.
+// SDK-detected chunk contract errors are not fabricated network failures.
 test("invalid body chunks have a typed non-network failure", async () => {
   const result = await discovery.discover("https://example.test", {
     fetch: async () =>
@@ -212,7 +212,7 @@ test("invalid body chunks have a typed non-network failure", async () => {
   assert.equal(result.error.kind, "other");
 });
 
-// HD-3/HD-4/HD-10: canonical CORS values, permissive default, exact reserved route spelling.
+// canonical CORS values, permissive default, exact reserved route spelling.
 test("publication uses serialized origins and matches the route exactly", async () => {
   const parsed = sdk.parseDocument(text).value;
   const proof = parsed.validated().document;
@@ -280,7 +280,7 @@ test("publication uses serialized origins and matches the route exactly", async 
   parsed.dispose();
 });
 
-// HD-2: the default installs one thirty-second timer and releases it on success.
+// the default installs one thirty-second timer and releases it on success.
 test("default thirty-second timer and late response cleanup", async () => {
   const nativeSetTimeout = globalThis.setTimeout;
   const delays = [];
@@ -322,7 +322,7 @@ test("default thirty-second timer and late response cleanup", async () => {
   assert.ok(released);
 });
 
-// S5b review F3 / HD-2: successful EOF retains all bytes before checking the terminal cause.
+// successful EOF retains all bytes before checking the terminal cause.
 test("EOF expiry retains complete bytes while interrupted prefixes stay absent", async () => {
   const original = performance.now;
   try {

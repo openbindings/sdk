@@ -41,6 +41,11 @@ Limits are observable errors, not silently truncated values. Structural/source
 locations use JSON Pointer, zero-based UTF-8 byte offsets and one-based lines/byte
 columns. Duplicate names remain available to document rules and diagnostics.
 
+The 256 KiB small-stack document validation regression is qualified on the
+development toolchain. Older supported compilers may need larger stacks in debug
+builds. Stack high-water marks depend on compiler code generation; the MSRV
+establishes language and library API compatibility, not that stack margin.
+
 Rust authoring retains opaque values as `JsonValue`. TypeScript exact text/bytes
 are the escape route for numbers JavaScript cannot represent. Checked ordinary
 conversion rejects unsupported values and reports inexact conversion; it cannot
@@ -77,8 +82,8 @@ names in `$id` and external resources follow the library's refusal; document-res
 decoding remains §7.3. An encoded leading slash likewise follows the library's
 plain-name refusal in ordinary resources. Unused malformed `$ref` or `$id` siblings
 can cause conservative `resource-inspection` refusal of the whole carrier until
-S9's static-reference-defect handling. Duplicate anchors and non-schema pointers retain their
-current refusals until S9. Trusted fixed assessment is separate.
+static-reference-defect handling. Duplicate anchors and non-schema pointers follow their
+documented completion rules. Trusted fixed assessment is separate.
 
 Default limits: 2,000,000 evaluation steps per verdict/diagnostic pass; evaluation
 depth 1,024; 2,000,000 regex steps; compiler JSON depth 512;

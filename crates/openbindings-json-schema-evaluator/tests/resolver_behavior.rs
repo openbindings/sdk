@@ -1,4 +1,4 @@
-//! S6e documented-API behavior witnesses for migration review.
+//! Documented resolver API behavior witnesses.
 //! Differences from frozen expectations do not themselves establish a spec gap.
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
@@ -19,7 +19,7 @@ impl jsonschema::Retrieve for Recording {
 
 #[test]
 fn library_treats_encoded_leading_slash_as_an_anchor() {
-    const BASE: &str = "https://s6e.example.invalid/root";
+    const BASE: &str = "https://resolver.example.invalid/root";
     const REFERENCE: &str = "#%2F$defs%2Ftask";
     let schema = json!({
         "$id": BASE,
@@ -48,7 +48,7 @@ fn library_treats_encoded_leading_slash_as_an_anchor() {
             .lookup(&reference)
             .unwrap_err();
         assert_eq!(error.to_string(), "Anchor '%2F$defs%2Ftask' does not exist");
-        println!("S6E-ENCODED-LEADING-SLASH: {reference}: {error}");
+        println!("ENCODED-LEADING-SLASH: {reference}: {error}");
     }
     // URI resolution is another documented entry point, but it retains the
     // encoded fragment. No SDK decoding or alternate lookup is introduced.
@@ -66,7 +66,7 @@ fn library_treats_encoded_leading_slash_as_an_anchor() {
 
 #[test]
 fn recording_retrieval_and_borrowed_identity_controls() {
-    const BASE: &str = "https://s6e.example.invalid/root";
+    const BASE: &str = "https://resolver.example.invalid/root";
     let schema = json!({
         "$id": BASE,
         "$defs": {
@@ -123,7 +123,7 @@ fn library_normalizes_the_frozen_case_variant_unmatched_identity() {
 fn encoded_plain_names_keep_document_decoding_and_follow_the_library_elsewhere() {
     use openbindings::*;
     use openbindings_json_schema_evaluator::DefaultEvaluator;
-    const URI: &str = "https://s6e.example.invalid/anchor";
+    const URI: &str = "https://resolver.example.invalid/anchor";
     for carrier in ["document", "contained", "supplied"] {
         for fragment in ["task", "t%61sk"] {
             let mut schema = json!({"$defs":{"target":{"$anchor":"task","type":"string"}}});

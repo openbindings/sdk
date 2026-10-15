@@ -716,46 +716,24 @@ fn variant<'a>(
     c.variant_parent = Some(parent);
     Ok(c)
 }
-impl SerializeSeq for Compound<'_> {
-    type Ok = ();
-    type Error = ValueConversionError;
-    fn serialize_element<T: Serialize + ?Sized>(&mut self, v: &T) -> Result<(), Self::Error> {
-        self.element(v)
-    }
-    fn end(self) -> Result<(), Self::Error> {
-        self.finish()
-    }
+macro_rules! sequence_impl {
+    ($trait:path, $method:ident) => {
+        impl $trait for Compound<'_> {
+            type Ok = ();
+            type Error = ValueConversionError;
+            fn $method<T: Serialize + ?Sized>(&mut self, v: &T) -> Result<(), Self::Error> {
+                self.element(v)
+            }
+            fn end(self) -> Result<(), Self::Error> {
+                self.finish()
+            }
+        }
+    };
 }
-impl ser::SerializeTuple for Compound<'_> {
-    type Ok = ();
-    type Error = ValueConversionError;
-    fn serialize_element<T: Serialize + ?Sized>(&mut self, v: &T) -> Result<(), Self::Error> {
-        self.element(v)
-    }
-    fn end(self) -> Result<(), Self::Error> {
-        self.finish()
-    }
-}
-impl ser::SerializeTupleStruct for Compound<'_> {
-    type Ok = ();
-    type Error = ValueConversionError;
-    fn serialize_field<T: Serialize + ?Sized>(&mut self, v: &T) -> Result<(), Self::Error> {
-        self.element(v)
-    }
-    fn end(self) -> Result<(), Self::Error> {
-        self.finish()
-    }
-}
-impl ser::SerializeTupleVariant for Compound<'_> {
-    type Ok = ();
-    type Error = ValueConversionError;
-    fn serialize_field<T: Serialize + ?Sized>(&mut self, v: &T) -> Result<(), Self::Error> {
-        self.element(v)
-    }
-    fn end(self) -> Result<(), Self::Error> {
-        self.finish()
-    }
-}
+sequence_impl!(SerializeSeq, serialize_element);
+sequence_impl!(ser::SerializeTuple, serialize_element);
+sequence_impl!(ser::SerializeTupleStruct, serialize_field);
+sequence_impl!(ser::SerializeTupleVariant, serialize_field);
 impl SerializeMap for Compound<'_> {
     type Ok = ();
     type Error = ValueConversionError;

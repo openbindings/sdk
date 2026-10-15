@@ -67,11 +67,12 @@ pub fn fixed_strings<T>(evaluate: impl FnOnce() -> T) -> T {
     evaluate()
 }
 fn interpreted_unpaired() {
-    STRING_ACCESS.update(|mut state| {
+    STRING_ACCESS.with(|cell| {
+        let mut state = cell.get();
         if !state.fixed {
             state.unsupported = true;
         }
-        state
+        cell.set(state);
     });
 }
 fn present_string(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
@@ -350,7 +351,7 @@ impl<'a> Object<'a, FlatJson> for ObjectView<'a> {
         self.1.len()
     }
     fn get(&self, key: &String) -> Option<View<'a>> {
-        // CR-2: recover the containing object from its first key token, so the
+        // recover the containing object from its first key token, so the
         // adapter shares the arena index and charges every collision candidate.
         let (object, _) = self.0.nodes[self.1.first()?.key].parent?;
         self.0

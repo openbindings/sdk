@@ -1,0 +1,33 @@
+{
+  "policy": "Fixed stack margins qualify development-toolchain code generation, not the minimum supported language/library API level. Older supported compilers may need larger stacks in debug builds. Only workspace entries are skipped by the MSRV workspace test command; development-toolchain workspace runs use no exclusions.",
+  "tests": [
+    {
+      "source": "crates/openbindings/tests/document_stack.rs",
+      "workspace": true,
+      "names": [
+        "local_meta_checks_at_arbitrary_depth_on_small_stack"
+      ],
+      "reason": "Cold document schema compilation and local validation on a 256 KiB thread stack; Rust 1.88 debug code generation exceeds this margin."
+    },
+    {
+      "source": "vendor/openbindings-internal-jsonschema/tests/ref_chain.rs",
+      "workspace": false,
+      "names": [
+        "long_ref_chain_compiles_on_small_stack::test_case_1_property",
+        "long_ref_chain_compiles_on_small_stack::test_case_2_all_of",
+        "long_ref_chain_compiles_on_small_stack::test_case_3_bare"
+      ],
+      "reason": "Compiles 1,000-reference chains on a 256 KiB thread stack. This excluded dependency's standalone tests are not selected by cargo test --workspace; their existing tests remain enabled."
+    },
+    {
+      "source": "vendor/openbindings-internal-jsonschema/tests/ref_chain.rs",
+      "workspace": false,
+      "names": [
+        "long_ref_chain_drops_on_small_stack::test_case_1_property",
+        "long_ref_chain_drops_on_small_stack::test_case_2_all_of",
+        "long_ref_chain_drops_on_small_stack::test_case_3_bare"
+      ],
+      "reason": "Drops 1,000-reference validators on a 256 KiB thread stack. This excluded dependency's standalone tests are not selected by cargo test --workspace; their existing tests remain enabled."
+    }
+  ]
+}

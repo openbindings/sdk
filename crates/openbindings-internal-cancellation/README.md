@@ -21,18 +21,10 @@ cancel its caller or siblings. Applications should use a fresh token for retries
 Synchronous Wasm still needs a worker or a cooperative host yield to observe a
 same-thread JavaScript abort.
 
-## Offline primitive comparison (S6b)
-
-The locked graph contains `futures-util` 0.3.34. The supplied offline Cargo home
-also contains Tokio-util 0.7.19 and 0.7.20. No dedicated cancellation package was
-present. This comparison reads those local manifests and implementations; it does
-not claim a network survey or current upstream maintenance audit.
-
-| Primitive | Required behavior | Dependency cost / decision |
-| --- | --- | --- |
-| Tokio-util `CancellationToken` | `cancel()` marks children and notifies waiters synchronously; `child_token()` isolates child cancellation from parent and siblings. Owned cancellation futures can support the existing relay. | Both cached versions expose `sync` without `rt`; nevertheless the mandatory graph adds Tokio `sync`, bytes, futures-core, futures-sink and pin-project-lite. The invoker-only qualification explicitly excludes Tokio. Retain the existing lightweight registry to preserve that portable dependency boundary. |
-| Futures `AbortHandle` / `AbortRegistration` | Synchronous abort flag plus one `AtomicWaker`; the registration is consumed by one `Abortable`. It cannot directly provide independent driver, relay and sibling registrations. | Already locked, but adapting it would still require a waiter/fan-out registry. It does not retire the SDK machinery. |
-| SDK scoped registry | Multiple independent registrations, synchronous relay, fresh isolated local tokens and reentrant wake/drop. | Uses only `std` plus core for its synchronous trait; retained here with the invariant regressions. |
+The scoped registry supports multiple independent registrations, synchronous
+relay, isolated local tokens and reentrant wake/drop using only `std` and core.
+The invoker-only qualification excludes Tokio. A single abort registration cannot
+replace the independent driver, relay and sibling registrations.
 
 A plain `&AtomicBool` would cover today's synchronous checks. The object-safe
 `WorkControl` trait also admits caller-owned composite signals and deadlines

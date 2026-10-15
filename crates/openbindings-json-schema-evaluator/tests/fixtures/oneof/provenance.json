@@ -1,15 +1,22 @@
 {
-  "C22.json": {
-    "original": "authors/c/C22/document.json",
-    "sha256": "dfd8cd330b83f183445284ba97fcab626ee2edd6b0a689d50a5691554d79f03b"
+  "description": "Maintained fixture inventory. Fixture paths are relative to this file; embedded author document identifiers are opaque provenance IDs, not filesystem links.",
+  "fixtures": {
+    "C22.json": {
+      "sha256": "dfd8cd330b83f183445284ba97fcab626ee2edd6b0a689d50a5691554d79f03b",
+      "purpose": "Frozen authored document with the original operation name and contracts."
+    },
+    "C22-cases.json": {
+      "sha256": "a57214a060bba2f80c22da5ec0e53dc04fc789786cfd21e4a4d837f9c8fb74ca",
+      "purpose": "Frozen output cases for operation 2x.thumbnail without resource setup; expected verdicts are preserved."
+    },
+    "owner-cases.json": {
+      "sha256": "df3616520eeac68e0edc07b716f0e577c395b2f51cb7191d84475dec8fbcc2f9",
+      "purpose": "Frozen oneOf controls for endpoints, siblings, nesting and diagnostic summaries."
+    }
   },
-  "C22-cases.json": {
-    "source": "rounds/02/oracle/accepted/C22.json",
-    "selection": "operation == 2x.thumbnail, side == output, setup == none",
-    "expectedUnchanged": true
-  },
-  "owner-cases.json": {
-    "source": "rounds/02/design/oneof-acceptance/CASES02.json",
-    "sha256": "df3616520eeac68e0edc07b716f0e577c395b2f51cb7191d84475dec8fbcc2f9"
-  }
+  "consumers": [
+    "../../private/oneof_resources.rs",
+    "../../../../../packages/typescript/test/oneof.test.mjs",
+    "../../../../../packages/typescript/test/browser.mjs"
+  ]
 }

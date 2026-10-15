@@ -18,7 +18,7 @@ helper and core dispatch to custom evaluators retain their contracts.
 
 Prepared owners expose no resource-completeness classification. Applications retain
 ready owners and handle `NoVerdict` during validation. A ready owner can return no
-verdict for every value (EV-9); a bare missing reference and an alias of one are
+verdict for every value; a bare missing reference and an alias of one are
 stage-tested, while `not` around one retains a preparation refusal. Applications
 that need a reference inventory can inspect the original context. Inspection is
 not a proof of value decidability, and no completeness promise is inferred for
@@ -305,8 +305,7 @@ missing carriers while inspection preparation finishes; its placeholder schemas
 never enter verdict compilation.
 
 Original locations use pointer identity over the borrowed inspection resources.
-The identity table is built where those inspection copies are made; its source
-comment marks the S8 numeric-copy integration point. It never uses schema equality.
+The identity table is built where those inspection copies are made; it preserves numeric-copy provenance. It never uses schema equality.
 ResourceSet retains supplied canonical-ID conflicts and protected standard IDs as
 input policy, consulting the library's `contains_resource`. Supplied peers that
 normalize to one identity refuse as `ambiguous-resource`.
@@ -314,13 +313,12 @@ normalize to one identity refuse as `ambiguous-resource`.
 OBI-13 still compares exact strings after RFC 3986 §5.2 resolution and empty-fragment
 removal. Ordinary identity follows the library's normalization under §7.4, including
 host case, default port and unreserved percent spellings. Encoded plain names in
-`$id` and external resources follow the library's refusal. Duplicate plain-name
-and non-schema-pointer refusals remain until S9. The [migration ledger](../tools/qualification/inputs/s6de-migration-ledger.json)
-records approved case changes; these are not new document conformance violations.
+`$id` and external resources follow the library's refusal. Static reference defects follow the completion rules described below; they are
+not new document conformance violations.
 
-## Review round 1: inspection presentation and limits
+## Inspection presentation and limits
 
-Inspection copies now use S2's injective string presentation for every name:
+Inspection copies now use an injective string presentation for every name:
 literal U+E000 markers double, while lone surrogates have distinct marked spellings.
 JSON Pointer references apply the same marker encoding, preserving other percent
 and tilde escapes for the library. Both query strings and references carried in
@@ -337,11 +335,11 @@ query-scoped preparation route was found. This is a conservative implementation
 limit under §5.2, not an undefinedness verdict. An unused malformed `$ref` no
 longer has this effect; see [Static reference defects](#static-reference-defects).
 
-Review round 1 explicitly accepts `#%2F$defs%2Fgood` as another ordinary spelling
+Ordinary resolution accepts `#%2F$defs%2Fgood` as another ordinary spelling
 migration: inside `$id` and supplied resources the library treats the encoded
 leading slash as a plain name and refuses it. The gate test remains. The document
 resource still follows §7.3 decoding before classification. Probe IDs and their
-individual dispositions are in the S6d/e migration ledger.
+the resolver regression tests cover individual outcomes.
 
 
 ## Static reference defects
@@ -399,4 +397,4 @@ with sixteen completions each. The independent complete-fragment oracle checks
 actual truth values; differential guards reject false agreement and require
 opposite completions for reported Undefined. Injected false verdicts, reasons and
 locations prove that these checks fail. Finite controls corroborate the argument;
-they do not replace it. The case-ID migration ledger records all kit/corpus deltas.
+they do not replace it. The kit and corpus replays check the supported outcomes.

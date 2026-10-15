@@ -1,4 +1,4 @@
-// D-METASCHEMA / CR-4: selectors are derived from normative data, not another list.
+// selectors are derived from normative data, not another list.
 use super::*;
 use crate::schema_index::{SCHEMA_SELECTORS, SchemaSelector, schema_children};
 use std::collections::BTreeSet;
@@ -351,7 +351,7 @@ fn reviewer_meta_cases_agree_with_original_and_local_checks() {
 
 #[test]
 fn fixed_string_presentation_preserves_every_pinned_string_constraint() {
-    // CR-5: a new fixed constraint must not silently outgrow the presentation proof.
+    // a new fixed constraint must not silently outgrow the presentation proof.
     let document: Value =
         serde_json::from_str(include_str!("../../schemas/openbindings.schema.json")).unwrap();
     let allowed_patterns = [

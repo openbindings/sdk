@@ -76,7 +76,7 @@ and its associated future is Send; local futures and Rc providers remain support
   For a missing resource, Rust `ParsedDocument::references()` and TypeScript
   `ParsedDocument.references()` expose explicit reference spellings and keyword
   locations; apply an application disclosure policy before logging these source facts.
-- Ready means prepared, not decidable (EV-9). Every value may still return
+- Ready means prepared, not decidable. Every value may still return
   `NoVerdict`. Contracts expose no resource-completeness classification. Applications
   own replacement policy and handle refusal at preparation and validation.
 - Static inspection uses `ReferenceRefusal` and `ReferenceRefusalReason`, including

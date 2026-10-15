@@ -1,4 +1,4 @@
-use crate::planner::BoundsRequest;
+use crate::planner::{BoundsRequest, EvaluationBounds};
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use std::sync::{
@@ -509,7 +509,12 @@ fn custom_evaluator_gets_original_request_and_is_not_retried_or_reinterpreted() 
         .unwrap();
     assert!(bounds.unavailable().is_some());
     assert!(bounds.lower_program().resources.iter().all(|r| r.uri != U));
-    let (lower, upper, evidence, _) = bounds.into_parts();
+    let EvaluationBounds {
+        lower,
+        upper,
+        unavailable: evidence,
+        ..
+    } = bounds;
     drop(request);
     drop(contracts);
     drop(custom);

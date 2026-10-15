@@ -1,4 +1,4 @@
-//! Manual CR-1/CR-2 measurement, never a timing assertion.
+//! Manual indexed-lookup measurement, never a timing assertion.
 use openbindings::{Conformance, validate_document};
 use std::{fmt::Write, hint::black_box, time::Instant};
 
@@ -27,7 +27,7 @@ fn fixture(n: usize, duplicates: bool) -> String {
 
 #[test]
 #[ignore = "manual release measurement; run with --release --ignored --nocapture"]
-fn cr1_cr2_release_medians() {
+fn release_medians() {
     println!("debug_assertions={}", cfg!(debug_assertions));
     for (duplicates, sizes) in [
         (true, [10_000, 20_000, 46_000]),
@@ -55,8 +55,12 @@ fn cr1_cr2_release_medians() {
             }
             elapsed.sort_unstable();
             println!(
-                "CR-{} N={n} bytes={} median_ms={:.3}",
-                if duplicates { 1 } else { 2 },
+                "{} N={n} bytes={} median_ms={:.3}",
+                if duplicates {
+                    "duplicate-member"
+                } else {
+                    "schema-reference"
+                },
                 text.len(),
                 elapsed[2].as_secs_f64() * 1000.0
             );

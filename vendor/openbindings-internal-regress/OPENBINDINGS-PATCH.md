@@ -10,7 +10,7 @@ The repository maintenance contract is DEPENDENCY-MAINTENANCE.md. Original
 upstream identity and manifest are retained as UPSTREAM-VCS.json and
 UPSTREAM-Cargo.toml; these names avoid Cargo-reserved packaging metadata.
 
-S3 evaluator correctness (2026-10-13): `src/classicalbacktrack.rs` preserves
+Evaluator correctness: `src/classicalbacktrack.rs` preserves
 zero repetitions when a single-character loop's atom cannot be represented by
 the input element type (notably lone surrogates on scalar strings). Lazy loop
 extension likewise consumes nothing. Positive minima still fail; UTF-16 input

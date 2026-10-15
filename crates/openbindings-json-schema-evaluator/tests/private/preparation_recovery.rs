@@ -44,7 +44,7 @@ fn detail_json(detail: &NoVerdict) -> serde_json::Value {
     serde_json::to_value(detail).unwrap()
 }
 #[test]
-fn ev9_bare_and_aliased_holes_are_ready_but_not_is_a_preparation_refusal() {
+fn bare_and_aliased_holes_are_ready_but_not_is_a_preparation_refusal() {
     for (schema, ready) in [
         (format!(r#"{{"$ref":"{U}"}}"#), true),
         (

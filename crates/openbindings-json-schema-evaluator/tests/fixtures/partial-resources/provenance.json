@@ -1,5 +1,5 @@
 {
-  "description": "Unmodified frozen round-01 author documents and resources; the original five regression values use an empty ResourceSet. Supplied resources are used only for diagnostic comparison.",
+  "description": "Unmodified frozen partial-resource author documents and resources; the original five regression values use an empty ResourceSet. Supplied resources are used only for diagnostic comparison.",
   "files": {
     "B02.json": "327550a2989983bf42bba969394f93f12f7f67500f5dfe50ddbe427685213a44",
     "C02.json": "b4824d900d7e4ff107b544ecf639128e26da9c2fec0d5c00084ab489f80cb70a",

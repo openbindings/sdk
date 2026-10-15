@@ -147,5 +147,5 @@ with `python3 crates/openbindings-http-discovery/tests/feature-unification.py`;
 Chromium/WebKit lane runs `test/discovery-browser.mjs` through `test/browser.mjs`
 for real CORS, followed redirects, slow headers and slow bodies.
 
-Version 0.2.0-alpha.1 is an unpublished candidate requiring Rust 1.99. Package
+Version 0.2.0-alpha.1 is an unpublished candidate requiring Rust 1.88. Package
 publication and application cutover are separate actions.

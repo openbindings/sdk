@@ -36,6 +36,10 @@ source locations. Use its text/bytes for values such as 9007199254740993. Typed
 unknown members but cannot shadow typed fields. Building is separate from checking
 conformance. JSON input defaults to 64 MiB, 10,000 containers and 1,000,000 nodes.
 
+Document validation's 256 KiB small-stack regression is qualified on the
+development toolchain. Older supported compilers may need larger stacks in debug
+builds; MSRV support does not establish the same stack margin.
+
 To edit an existing document, call `ParsedDocument::to_authoring()`, update the
 builder, then `build()` and validate the new snapshot. Typed fields are re-encoded:
 integer preferences such as `1.0` or `1e0` become `1`, and `-0` becomes `0`.
@@ -87,7 +91,7 @@ resources requires a new immutable context; retained contracts keep their inputs
 Name comparison remains exact after RFC resolution, literal-dot removal and empty
 fragment removal, without added case folding or percent-encoding equivalence.
 
-Version 0.2.0-alpha.1 is an unpublished candidate requiring Rust 1.99. Applied
+Version 0.2.0-alpha.1 is an unpublished candidate requiring Rust 1.88. Applied
 specification revision: 2f7d754dc2da374058cd517064c17e50f7d95d99. Package publication
 and application cutover are separate actions.
 

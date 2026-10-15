@@ -513,6 +513,8 @@ impl SchemaSpace {
         let address =
             |node: usize| format!("{}#/$defs/n{node}", resource_uri(self.nodes[node].resource));
         let reference = |node: usize| format!("{{\"$ref\":{}}}", quoted(&address(node)));
+        // Reach admits every node through check_known_node before projection.
+        // Its meta-schema and scalar-name checks establish the shapes below.
         let mut definitions: BTreeMap<usize, BTreeMap<String, String>> = BTreeMap::new();
         let mut locations = BTreeMap::new();
         let mut byte_count = 0usize;
@@ -525,22 +527,8 @@ impl SchemaSpace {
                 node.value.text().to_owned()
             } else {
                 let mut fields = BTreeMap::new();
-                for member in node.value.view().members().ok_or_else(|| {
-                    self.failure(
-                        id,
-                        FailureReason::ConservativePreparation,
-                        "schema-type",
-                        "a schema is an object or boolean",
-                    )
-                })? {
-                    let keyword = member.name.as_str().ok_or_else(|| {
-                        self.failure(
-                            id,
-                            FailureReason::UnsupportedCapability,
-                            "schema-string",
-                            "schema member is not a Unicode scalar string",
-                        )
-                    })?;
+                for member in node.value.view().members().expect("checked schema object") {
+                    let keyword = member.name.as_str().expect("checked schema member");
                     if matches!(
                         keyword,
                         "$id"
@@ -597,14 +585,7 @@ impl SchemaSpace {
                     let value = match keyword {
                         "properties" | "patternProperties" | "dependentSchemas" => {
                             let mut children = BTreeMap::new();
-                            for m in member.value.members().ok_or_else(|| {
-                                self.failure(
-                                    id,
-                                    FailureReason::ConservativePreparation,
-                                    "schema-shape",
-                                    "schema map is not an object",
-                                )
-                            })? {
+                            for m in member.value.members().expect("checked schema map") {
                                 children.insert(
                                     m.name.as_str().unwrap().to_owned(),
                                     child_reference(m.value)?,
@@ -616,14 +597,7 @@ impl SchemaSpace {
                             let children: Result<Vec<_>, _> = member
                                 .value
                                 .elements()
-                                .ok_or_else(|| {
-                                    self.failure(
-                                        id,
-                                        FailureReason::ConservativePreparation,
-                                        "schema-shape",
-                                        "schema list is not an array",
-                                    )
-                                })?
+                                .expect("checked schema list")
                                 .map(child_reference)
                                 .collect();
                             format!("[{}]", children?.join(","))
@@ -715,7 +689,7 @@ impl SchemaSpace {
                 "the resource does not use the supported 2020-12 dialect",
             ));
         }
-        // EV-3: annotations, literal values and child schemas are not interpreted
+        // annotations, literal values and child schemas are not interpreted
         // by this node. Children receive their own reached-node checks.
         let interprets_unpaired = node.value.view().members().is_some_and(|mut members| {
             members.any(|member| {
@@ -964,16 +938,7 @@ pub struct Reach {
 pub fn embedded_resources() -> &'static [ProjectedResource] {
     static RESOURCES: std::sync::OnceLock<Vec<ProjectedResource>> = std::sync::OnceLock::new();
     RESOURCES.get_or_init(|| {
-        let files = [
-            include_str!("../schemas/draft2020-12/schema.json"),
-            include_str!("../schemas/draft2020-12/meta/core.json"),
-            include_str!("../schemas/draft2020-12/meta/applicator.json"),
-            include_str!("../schemas/draft2020-12/meta/unevaluated.json"),
-            include_str!("../schemas/draft2020-12/meta/validation.json"),
-            include_str!("../schemas/draft2020-12/meta/meta-data.json"),
-            include_str!("../schemas/draft2020-12/meta/format-annotation.json"),
-            include_str!("../schemas/draft2020-12/meta/content.json"),
-        ];
+        let files = crate::fixed_schema::META_FILES;
         files
             .into_iter()
             .map(|text| {
@@ -996,6 +961,69 @@ mod projection_tests {
         backend::{self, FlatJson},
         numeric,
     };
+    #[test]
+    fn malformed_reached_shapes_refuse_before_projection() {
+        let control = std::sync::atomic::AtomicBool::new(false);
+        for schema in [
+            "17",
+            r#"{"properties":[]}"#,
+            r#"{"patternProperties":null}"#,
+            r#"{"dependentSchemas":false}"#,
+            r#"{"allOf":{}}"#,
+            r#"{"anyOf":false}"#,
+            r#"{"oneOf":{}}"#,
+            r#"{"prefixItems":{}}"#,
+            r#"{"\ud800":true}"#,
+            r#"{"properties":{"\ud800":true}}"#,
+        ] {
+            for reference in [None, Some("$ref"), Some("$dynamicRef")] {
+                let entry_schema = reference.map_or_else(
+                    || schema.to_owned(),
+                    |keyword| format!(r#"{{"{keyword}":"https://example.invalid/supplied"}}"#),
+                );
+                let document = RawDocument::parse(format!(
+                    r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{entry_schema}}}}}}}"#
+                ))
+                .unwrap();
+                let supplied = if reference.is_some() {
+                    Supplied::new([ProjectedResource {
+                        uri: "https://example.invalid/supplied".into(),
+                        document: JsonValue::parse(schema).unwrap(),
+                    }])
+                    .unwrap()
+                } else {
+                    Supplied::default()
+                };
+                let space = SchemaSpace::new(document, supplied);
+                let entry = space
+                    .document_node(
+                        &space
+                            .document
+                            .value()
+                            .at("/operations/op/input")
+                            .unwrap()
+                            .to_owned(),
+                    )
+                    .unwrap();
+                let refusal = space.reach(entry, &control).err().expect("malformed reach");
+                assert!(
+                    matches!(
+                        refusal.code.as_str(),
+                        "invalid-schema" | "lone-surrogate-schema"
+                    ),
+                    "{schema} {reference:?}: {refusal:?}"
+                );
+                let projected = space
+                    .program(entry, &control)
+                    .expect_err("malformed program");
+                assert_eq!(
+                    serde_json::to_value(refusal).unwrap(),
+                    serde_json::to_value(projected).unwrap()
+                );
+            }
+        }
+    }
+
     fn verdict(program: &Program, value: &JsonValue) -> (bool, Vec<Location>) {
         let mut registry = jsonschema::Registry::new();
         let mut root = None;

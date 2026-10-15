@@ -6,7 +6,7 @@ fn checked(text: &str) -> DocumentValidation {
 
 #[test]
 fn independent_violations_survive_unpaired_and_deep_opaque_data() {
-    // CR-3: every row of the review's evidence table.
+    // every row of the review's evidence table.
     for (text, rules) in [
         (r#"{"openbindings":"0.2.0","description":"\ud800"}"#.to_owned(), vec!["OBI-02"]),
         (r#"{"openbindings":"0.2.0","operations":{"-bad":{}},"description":"\ud800"}"#.into(), vec!["OBI-02", "OBI-04"]),
@@ -24,7 +24,7 @@ fn independent_violations_survive_unpaired_and_deep_opaque_data() {
 
 #[test]
 fn opaque_and_fixed_schema_strings_are_lossless() {
-    // CR-5: scalar conversion is unnecessary for opaque data and ASCII constraints.
+    // scalar conversion is unnecessary for opaque data and ASCII constraints.
     for fields in [
         r#""description":"cut \ud83d""#,
         r#""name":"\ud800","version":"\ud800""#,
@@ -71,7 +71,7 @@ fn opaque_and_fixed_schema_strings_are_lossless() {
 
 #[test]
 fn native_names_compare_utf16_units_even_when_grammar_is_violated() {
-    // CR-3/CR-5: invalid names still participate in exact namespace/reference rules.
+    // invalid names still participate in exact namespace/reference rules.
     let validation = checked(
         r#"{"openbindings":"0.2.0","operations":{"\ud800":{"aliases":["\uD800"]}},"sources":{"\udc00":{"kind":"k"}},"bindings":{"b":{"operation":"\uD800","source":"\uDC00"}},"dependencies":{"d":{"operation":"\ud800"}}}"#,
     );
@@ -85,7 +85,7 @@ fn native_names_compare_utf16_units_even_when_grammar_is_violated() {
 
 #[test]
 fn assessment_admission_is_caller_selected_and_precedes_version() {
-    // CR-9 and HD-12: all three limits precede a complete version declaration.
+    // all three limits precede a complete version declaration.
     let text = r#"{"openbindings":"0.3.0","operations":{},"x":[0]}"#;
     for limits in [
         JsonLimits {
@@ -140,7 +140,7 @@ fn assessment_admission_is_caller_selected_and_precedes_version() {
 
 #[test]
 fn parse_findings_explain_the_syntax_failure() {
-    // N-1/CR-6: stable machine codes and concise human text are separate.
+    // stable machine codes and concise human text are separate.
     for (text, code, message) in [
         ("{x}", "object-key", "expected a quoted object member name"),
         (

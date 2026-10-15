@@ -53,7 +53,7 @@ for (const name of metaSchemas) {
 }
 
 function testDrift() {
-  // CR-7: the unmodified copy passes; a one-byte change in each bundled input fails.
+  // the unmodified copy passes; a one-byte change in each bundled input fails.
   const temporary = mkdtempSync(join(tmpdir(), 'openbindings-spec-pinning-'));
   try {
     const copy = join(temporary, 'sdk');
@@ -67,7 +67,7 @@ function testDrift() {
       return result;
     }
     const baseline = run();
-    assert.equal(baseline.status, 0, 'CR-7 unmodified temporary inputs must pass: ' + baseline.stderr);
+    assert.equal(baseline.status, 0, 'unmodified temporary inputs must pass: ' + baseline.stderr);
     const inputs = [
       [derivedPath, 'Bundled derived schema differs from pinned spec: ' + derivedPath],
       ...metaSchemas.map(name => [schemasPath + '/' + name, 'Bundled meta-schema SHA-256 differs: ' + schemasPath + '/' + name]),
@@ -78,22 +78,22 @@ function testDrift() {
       const altered = Buffer.from(original);
       // Preserve the JSON value to prove that verification pins exact bytes.
       const newline = original.indexOf('\n');
-      assert(newline >= 0, 'CR-7 test input must contain a newline: ' + name);
+      assert(newline >= 0, 'test input must contain a newline: ' + name);
       altered[newline] = 0x20;
       writeFileSync(path, altered);
       const result = run();
       writeFileSync(path, original);
-      assert.equal(result.status, 1, 'CR-7 altered input must fail: ' + name);
-      assert(result.stderr.includes(message), 'CR-7 failure must identify the altered input: ' + result.stderr);
+      assert.equal(result.status, 1, 'altered input must fail: ' + name);
+      assert(result.stderr.includes(message), 'failure must identify the altered input: ' + result.stderr);
     }
-    // CR-7: deleting a digest must fail rather than silently stop checking that input.
+    // deleting a digest must fail rather than silently stop checking that input.
     const path = join(copy, digestsPath);
     const incomplete = {...digests};
     delete incomplete[metaSchemas[0]];
     writeFileSync(path, JSON.stringify(incomplete));
     const result = run();
-    assert.equal(result.status, 1, 'CR-7 incomplete digest inventory must fail');
-    assert(result.stderr.includes('Bundled meta-schema digest inventory'), 'CR-7 failure must identify the incomplete digest inventory: ' + result.stderr);
+    assert.equal(result.status, 1, 'incomplete digest inventory must fail');
+    assert(result.stderr.includes('Bundled meta-schema digest inventory'), 'failure must identify the incomplete digest inventory: ' + result.stderr);
     return inputs.length + 1;
   } finally {
     rmSync(temporary, {recursive:true, force:true});

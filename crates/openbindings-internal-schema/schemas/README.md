@@ -46,7 +46,7 @@ including whitespace and line endings, using paths relative to this directory.
 `tools/verify-spec.mjs` requires all eight entries and checks every digest.
 Update the recorded digests only after confirming publication equivalence.
 
-Run the verifier and its CR-7 negative regression harness from the SDK root:
+Run the verifier and its negative regression harness from the SDK root:
 
 ```sh
 node tools/verify-spec.mjs SDK_ROOT SPEC_CHECKOUT APPLIED_SPEC_COMMIT --self-test

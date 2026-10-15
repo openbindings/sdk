@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse, os, subprocess, sys
 p = argparse.ArgumentParser()
 p.add_argument('--browser', action='store_true')
+p.add_argument('--tracked-files', type=Path, help='NUL-separated git ls-files list for a source archive')
 a = p.parse_args()
 root = Path(__file__).resolve().parents[1]
 env = os.environ.copy()
@@ -10,6 +11,9 @@ env.setdefault('CARGO_TARGET_DIR', str(root / 'target'))
 def run(args, cwd=root):
     print('+ ' + ' '.join(map(str, args)), flush=True)
     subprocess.run(list(map(str, args)), cwd=cwd, env=env, check=True)
+run([sys.executable, 'tools/verify-product-labels.py', '--self-test',
+     *(['--tracked-files', a.tracked_files.resolve()] if a.tracked_files else [])])
+run([sys.executable, 'tools/verify-msrv.py', '--version', '1.88'])
 run(['cargo', 'check', '--locked', '-p', 'openbindings', '--no-default-features'])
 run(['cargo', 'fmt', '--all', '--check'])
 run(['cargo', 'clippy', '--locked', '--workspace', '--all-targets', '--features', 'openbindings-http-discovery/native', '--', '-D', 'warnings'])
@@ -42,6 +46,7 @@ if a.browser:
     for command in ['build:wasm', 'build', 'test', 'test:types', 'format:check', 'test:package']:
         run([npm, 'run', command], package)
     run([sys.executable, 'tools/verify-api-reference.py', '--typescript-only'])
+    run([sys.executable, 'tools/qualification/replay/check-container-findings.py', '--binary', Path(env['CARGO_TARGET_DIR']) / 'debug' / ('sdk-production-observer.exe' if os.name == 'nt' else 'sdk-production-observer')])
     run([sys.executable, 'tools/verify-source-inspection.py', '--archives', '--wasm'])
     run([sys.executable, 'tools/verify-interface-synthesis.py', '--archives', '--wasm'])
     run([sys.executable, 'tools/verify-binding-invocation.py', '--archives', '--wasm'])

@@ -2,10 +2,10 @@ mod support;
 use openbindings_interface_synthesis::*;
 use support::*;
 
-// RO-9: both named matching and unnamed hash-first matching use exact decimal
+// both named matching and unnamed hash-first matching use exact decimal
 // value, including nested values and extension evidence, without binary64.
 #[tokio::test]
-async fn ro9_named_and_unnamed_sources_compare_exact_decimal_values() {
+async fn named_and_unnamed_sources_compare_exact_decimal_values() {
     for (a, b, equal) in [
         ("1", "1.0", true),
         ("1.0", "1e0", true),
@@ -93,9 +93,9 @@ async fn ro9_named_and_unnamed_sources_compare_exact_decimal_values() {
     }
 }
 
-// RO-9: number normalization does not conflate presence or admit ambiguous JSON.
+// number normalization does not conflate presence or admit ambiguous JSON.
 #[tokio::test]
-async fn ro9_absent_null_and_duplicate_member_policy_remain_distinct() {
+async fn absent_null_and_duplicate_member_policy_remain_distinct() {
     for name in [Some("api"), None] {
         for (left, right) in [(None, Some("null")), (Some("null"), None)] {
             let input = source(left);
@@ -138,10 +138,10 @@ async fn ro9_absent_null_and_duplicate_member_policy_remain_distinct() {
     }
 }
 
-// RO-14: attribution is optional and many-to-one; an emitted dependency does
+// attribution is optional and many-to-one; an emitted dependency does
 // not require a keyed evidence row. Supplied keys must still exist.
 #[tokio::test]
-async fn ro14_dependency_attribution_is_optional_and_many_to_one() {
+async fn dependency_attribution_is_optional_and_many_to_one() {
     let input = source(None);
     let mut output = candidate(&input);
     let mut draft = output.document.to_authoring().unwrap();
@@ -204,10 +204,10 @@ async fn ro14_dependency_attribution_is_optional_and_many_to_one() {
     }
 }
 
-// RO-18: independently packaged roles retain private helpers. Forwarding and
+// independently packaged roles retain private helpers. Forwarding and
 // byte-budget behavior must agree across borrowed, shared and local handles.
 #[tokio::test]
-async fn ro18_forwarded_synthesizers_preserve_exact_encoding_and_byte_limits() {
+async fn forwarded_synthesizers_preserve_exact_encoding_and_byte_limits() {
     let source = source(Some("9007199254740993"));
     let provider = std::sync::Arc::new(Fixed::new(candidate(&source)));
     let borrowed = Synthesizer::new(&*provider);

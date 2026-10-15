@@ -16,7 +16,7 @@ interface snapshots. The latter comes from `conformance/synthesis-coverage/cases
 The 28 `coverage-cases.json` cases are SDK-owned regressions, adapted
 from interfaces `56aadc07aef362d1bbe1f42dd3081f4a750555f6` and identified by
 `openbindings.sdk-synthesis-policy-cases@1`. They no longer claim portable rejection,
-source-preservation or strict-eligibility requirements. RO-14 permits unbound
+source-preservation or strict-eligibility requirements. The published interface permits unbound
 operations, optional dependency attribution, and many-to-one evidence. Supplied
 dependency keys must still exist in the emitted map.
 The interface shape examples independently allow optional attribution and other

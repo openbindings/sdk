@@ -582,7 +582,7 @@ fn ri16_17_unique_nested_resources_survive_losing_lexical_ancestors() {
 }
 #[test]
 fn obi13_keeps_host_spelling_while_resolution_uses_library_identity() {
-    // Amendment 1: §7.4 leaves ordinary identity to JSON Schema; only OBI-13
+    // OpenBindings §7.4 leaves ordinary identity to JSON Schema; only OBI-13
     // compares the resolved, empty-fragment-stripped spellings exactly.
     let doc = one(
         json!({
@@ -1202,7 +1202,7 @@ fn inherited_conservative_policy_case_has_both_value_controls() {
 }
 
 #[test]
-fn s3_collision_policy_matrix_used_and_unused() {
+fn collision_policy_matrix_used_and_unused() {
     #[derive(Clone, Copy, Debug, PartialEq)]
     enum Origin {
         Contained,
@@ -1287,7 +1287,7 @@ fn s3_collision_policy_matrix_used_and_unused() {
 }
 
 #[test]
-fn s3_packaged_retrieval_aliases_conflict_even_with_a_different_declared_id() {
+fn packaged_retrieval_aliases_conflict_even_with_a_different_declared_id() {
     for suffix in [
         "schema",
         "meta/core",
@@ -1317,7 +1317,7 @@ fn s3_packaged_retrieval_aliases_conflict_even_with_a_different_declared_id() {
 }
 
 #[test]
-fn s3_standard_identity_completions_cannot_invert_partial_verdicts() {
+fn standard_identity_completions_cannot_invert_partial_verdicts() {
     let standard = "https://json-schema.org/draft/2020-12/meta/validation";
     for (keyword, instance, before, replacement) in [
         ("anyOf", "5", "satisfies", false),

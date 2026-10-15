@@ -429,7 +429,7 @@ fn stopped<C: DiscoveryTimer>(
     timer: &C,
     deadline: Option<std::time::Duration>,
 ) -> Option<DiscoveryOutcome> {
-    // HD-2: deterministic tie rule, caller cancellation wins when both are ready.
+    // deterministic tie rule, caller cancellation wins when both are ready.
     if control.is_cancelled() {
         Some(DiscoveryOutcome::Cancelled)
     } else if deadline.is_some_and(|deadline| timer.now() >= deadline) {
@@ -571,7 +571,7 @@ mod review_tests {
     }
     #[tokio::test(flavor = "current_thread")]
     async fn malformed_location_is_refused_for_exposed_and_host_followed_hops() {
-        // S5b review F2 / HD-7: identical visible redirects have identical typed outcomes.
+        // identical visible redirects have identical typed outcomes.
         for individual_hops in [true, false] {
             let r = ClientOptions::default()
                 .discover_using(

@@ -159,7 +159,7 @@ fn fixed_cors_origin_matches_the_published_syntax_policy() {
             "{origin:?}"
         );
     }
-    // HD-3: only spellings a browser can serialize are usable fixed CORS origins.
+    // only spellings a browser can serialize are usable fixed CORS origins.
     for origin in [
         "",
         "*",
@@ -272,7 +272,7 @@ async fn complete_bad_body_and_version_priority_survive_with_metadata() {
         "}".repeat(260)
     );
     let (r, _) = get(200, deep.as_bytes(), DEFAULT_MAX_DOCUMENT_BYTES).await;
-    // CR-4: local schema checks establish conformance beyond depth 256.
+    // local schema checks establish conformance beyond depth 256.
     let DiscoveryOutcome::Found { document } = r.outcome else {
         panic!("expected found")
     };
@@ -286,7 +286,7 @@ async fn complete_bad_body_and_version_priority_survive_with_metadata() {
         DEFAULT_MAX_DOCUMENT_BYTES,
     )
     .await;
-    // CR-3: a lone surrogate does not hide the invalid extension name "x".
+    // a lone surrogate does not hide the invalid extension name "x".
     assert!(matches!(r.outcome, DiscoveryOutcome::NonConformant { .. }));
     assert!(r.body.is_some());
 }
@@ -482,7 +482,7 @@ fn publication_refuses_every_unestablished_conformance_state() {
         ),
         Err(PublicationError::VersionRefused(_))
     ));
-    // CR-5: publication accepts a conformant document with an opaque surrogate.
+    // publication accepts a conformant document with an opaque surrogate.
     assert!(
         Publication::from_bytes(
             br#"{"openbindings":"0.2.0","operations":{},"x-value":"\ud800"}"#,
@@ -492,7 +492,7 @@ fn publication_refuses_every_unestablished_conformance_state() {
     );
 }
 
-// HD-1/HD-5: WHATWG alternate IP spellings are admitted and recorded canonically.
+// WHATWG alternate IP spellings are admitted and recorded canonically.
 #[test]
 fn alternate_loopback_hosts_are_normalized_before_admission() {
     for origin in [
@@ -521,7 +521,7 @@ fn alternate_loopback_hosts_are_normalized_before_admission() {
     }
 }
 
-// HD-2: zero timeout remains a configuration refusal before I/O.
+// zero timeout remains a configuration refusal before I/O.
 #[tokio::test(flavor = "current_thread")]
 async fn zero_timeout_refuses_before_io() {
     let error = discover::<Body, _, _, _>(
@@ -589,7 +589,7 @@ impl DiscoveryTimer for Clock {
     }
 }
 
-// HD-2: the default host timer wakes never-ready headers/body, and cancellation wins a tie.
+// the default host timer wakes never-ready headers/body, and cancellation wins a tie.
 #[tokio::test(flavor = "current_thread")]
 async fn whole_attempt_timer_wakes_pending_io_and_cancellation_wins_ties() {
     for body_phase in [false, true] {
@@ -635,7 +635,7 @@ async fn whole_attempt_timer_wakes_pending_io_and_cancellation_wins_ties() {
     }
 }
 
-// HD-1/HD-2: hop admission is before dispatch, and redirects do not reset the deadline.
+// hop admission is before dispatch, and redirects do not reset the deadline.
 #[tokio::test(flavor = "current_thread")]
 async fn portable_redirects_obey_statuses_relative_location_limit_and_total_time() {
     for status in [301, 302, 303, 307, 308] {
@@ -745,7 +745,7 @@ async fn portable_redirects_obey_statuses_relative_location_limit_and_total_time
     }
 }
 
-// HD-1/HD-7: observable hidden following is a contract failure, never document invalidity.
+// observable hidden following is a contract failure, never document invalidity.
 #[tokio::test(flavor = "current_thread")]
 async fn portable_hidden_redirect_is_a_typed_policy_refusal() {
     let r = discover(
@@ -773,7 +773,7 @@ async fn portable_hidden_redirect_is_a_typed_policy_refusal() {
     assert!(r.body.is_none());
 }
 
-// HD-4: permissive CORS is the publication default; omission remains explicit.
+// permissive CORS is the publication default; omission remains explicit.
 #[test]
 fn publication_cors_default_and_explicit_omission() {
     for allow_origin in ["*", ""] {
@@ -799,7 +799,7 @@ fn publication_cors_default_and_explicit_omission() {
     }
 }
 
-// HD-2: committed HTTP status survives expiry in a noncooperating cleanup future.
+// committed HTTP status survives expiry in a noncooperating cleanup future.
 #[tokio::test(flavor = "current_thread")]
 async fn status_cleanup_is_bounded_by_remaining_attempt_time() {
     struct StatusBody(Rc<std::cell::Cell<bool>>);
@@ -844,7 +844,7 @@ async fn status_cleanup_is_bounded_by_remaining_attempt_time() {
     assert_eq!(clock.dropped.get(), 1);
 }
 
-// HD-2: monotonic boundary checks discard an validation completed after expiry.
+// monotonic boundary checks discard an validation completed after expiry.
 #[tokio::test(flavor = "current_thread")]
 async fn validation_boundary_expiry_retains_complete_bytes_and_no_success() {
     struct BoundaryClock(std::cell::Cell<usize>);
@@ -900,7 +900,7 @@ async fn validation_boundary_expiry_retains_complete_bytes_and_no_success() {
     assert_eq!(result.metadata.unwrap().status, 200);
 }
 
-// S5b review F3 / HD-2: EOF proves completeness before the terminal boundary check.
+// EOF proves completeness before the terminal boundary check.
 #[tokio::test(flavor = "current_thread")]
 async fn eof_boundary_retains_complete_body_on_timeout_or_cancellation() {
     struct EofBody<'a> {

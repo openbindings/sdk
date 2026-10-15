@@ -164,7 +164,7 @@ fn rejected_and_undetermined_documents_cannot_produce_proof() {
 #[test]
 fn migrated_unreached_uncopied_target_cases_reject_at_obi12() {
     // Both historical instance observations are unreachable through normative contracts.
-    let document = include_str!("fixtures/s6c-obi12.json");
+    let document = include_str!("fixtures/local-reference-target.json");
     for (id, instance) in [
         ("adversarial/unreached-uncopied-targets/0", "\"s\""),
         ("adversarial/unreached-uncopied-targets/1", "1"),

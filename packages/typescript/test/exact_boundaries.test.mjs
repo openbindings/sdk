@@ -375,7 +375,7 @@ test("draft conversion errors are located native refusals, independent of confor
     ],
     [
       '{"openbindings":"0.2.0","operations":{"run":{"input":null}},"unexpected":{"\\ud800":9007199254740993}}',
-      // CR-3: an opaque surrogate does not hide invalid input or an unknown member.
+      // an opaque surrogate does not hide invalid input or an unknown member.
       "non-conformant",
     ],
   ]) {

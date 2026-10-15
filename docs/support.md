@@ -7,10 +7,16 @@ replacing an existing dependency.
 
 | Environment | Supported path and qualification |
 | --- | --- |
-| Rust | Toolchain 1.99, edition 2024; Linux, macOS, and Windows native CI. Earlier toolchains are not qualified. Core has no mandatory async runtime. |
+| Rust | MSRV 1.88, edition 2024; independent native/Wasm MSRV CI. Development toolchain 1.99; Linux, macOS, and Windows native CI. Core has no mandatory async runtime. |
 | Node | ESM on Node 22 or later; CI pins 22.19.0. Read the exported Wasm asset and initialize explicitly. |
 | Browser | Desktop Chromium and WebKit with explicit initialization; use a Worker for potentially expensive work. Firefox, mobile devices, and particular framework/bundler versions require their own qualification. |
 | Worker service | Local workerd with a compiled Wasm module and initialization in an allowed request context. This is not evidence of deployed Cloudflare latency, quotas, or service availability. |
+
+The 256 KiB small-stack document regression is qualified on the development
+toolchain. Older supported compilers may need larger stacks in debug builds.
+MSRV CI runs all workspace tests except the exact stack-margin tests selected by
+[this inventory](../tools/stack-margin-tests.json), with reasons and scope for the
+vendored tests too. Development-toolchain jobs retain the workspace stack tests.
 
 The Rust and TypeScript APIs use the same engine and outcome meanings. They
 follow their languages' ownership conventions: Rust uses ordinary ownership and
