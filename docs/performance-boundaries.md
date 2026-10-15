@@ -72,7 +72,7 @@ PY
 
 The measured asset is **6,043,108 bytes**, or **1,654,055 bytes** with gzip level 9.
 Its SHA-256 is `d059fc1e48ac878b0034316120440707343eea89f05a44f83b52a23b9b4c7c4f`.
-The build optimizes the private bridge for size and removes the Wasm name section.
+The build uses the workspace release profile and removes the Wasm name section.
 These lengths exclude JavaScript, declarations, runtime memory and host overhead.
 `build-info.json` beside the generated asset records its source and tool identities.
 

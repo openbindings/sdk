@@ -62,7 +62,50 @@ pub struct Finding {
 }
 impl std::fmt::Debug for Finding {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let rule = if DOCUMENT_RULES.contains(&self.rule) {
+            self.rule
+        } else {
+            "<redacted>"
+        };
+        // Fixed Checks emissions and the non-limit parser codes forwarded to OBI-01.
+        let code = match self.code {
+            "bom"
+            | "colon"
+            | "comma-or-close"
+            | "escape"
+            | "exponent"
+            | "fraction"
+            | "literal"
+            | "number"
+            | "object-key"
+            | "string-control"
+            | "trailing-token"
+            | "unicode-escape"
+            | "unterminated-string"
+            | "utf8"
+            | "value"
+            | "input-limit"
+            | "schema-mismatch"
+            | "fixed-schema-limit-or-failure"
+            | "duplicate-member"
+            | "semver"
+            | "missing-version"
+            | "name-grammar"
+            | "duplicate-operation-name"
+            | "unknown-source"
+            | "unknown-operation"
+            | "schema-dialect"
+            | "absolute-schema-id"
+            | "reference-type"
+            | "reference-form"
+            | "reference-target"
+            | "duplicate-anchor"
+            | "duplicate-schema-id" => self.code,
+            _ => "<redacted>",
+        };
         f.debug_struct("Finding")
+            .field("rule", &rule)
+            .field("code", &code)
             .field("status", &self.status)
             .field("location", &self.location)
             .finish_non_exhaustive()
