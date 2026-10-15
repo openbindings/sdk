@@ -246,8 +246,8 @@ Server auth, credentialed CORS and preflight remain application policy.
 Normative value contracts and operation invocation require `ValidatedDocument`.
 Validated typed reads include top-level metadata and schemas, and preserve exact
 UTF-16 descriptive text. Parsed editor reads remain available on rejected documents.
-TypeScript operation input/output getters preserve presence separately from null;
-each acquired value is independently disposable.
+TypeScript operation `input()` and `output()` methods preserve presence separately
+from null; each call acquires a new value that is independently disposable.
 
 
 Document findings are independent of the value diagnostics mode. OBI-02 and OBI-10

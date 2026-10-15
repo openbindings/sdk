@@ -8,6 +8,6 @@ license inventory and verification instructions. Package publication and applica
 cutover are separate actions.
 
 Build the packaged asset with `npm run build:wasm` in `packages/typescript`.
-The release profile optimizes only this private bridge crate for size and removes
-the Wasm name section with wasm-bindgen. Other crates retain their release settings;
-optimizing the whole Wasm dependency graph for size increases evaluation latency.
+The build uses the workspace release profile and removes the Wasm name section with
+wasm-bindgen. Size-optimizing the whole Wasm dependency graph roughly halves the
+asset but makes evaluation near its limits several times slower, so it is not used.
