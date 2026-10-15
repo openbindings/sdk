@@ -155,7 +155,44 @@ pub struct ValueProblem {
 }
 impl std::fmt::Debug for ValueProblem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Fixed arms of the pinned evaluator's ValidationErrorKind::keyword;
+        // recognize exact spellings only, keeping arbitrary custom codes private.
+        let code = match self.code.as_str() {
+            "additionalItems"
+            | "additionalProperties"
+            | "anyOf"
+            | "pattern"
+            | "const"
+            | "contains"
+            | "contentEncoding"
+            | "contentMediaType"
+            | "enum"
+            | "exclusiveMaximum"
+            | "exclusiveMinimum"
+            | "falseSchema"
+            | "format"
+            | "maxItems"
+            | "maximum"
+            | "maxLength"
+            | "maxProperties"
+            | "minItems"
+            | "minimum"
+            | "minLength"
+            | "minProperties"
+            | "multipleOf"
+            | "not"
+            | "oneOf"
+            | "propertyNames"
+            | "required"
+            | "type"
+            | "unevaluatedItems"
+            | "unevaluatedProperties"
+            | "uniqueItems"
+            | "$ref" => self.code.as_str(),
+            _ => "<redacted>",
+        };
         f.debug_struct("ValueProblem")
+            .field("code", &code)
             .field("schema_location", &self.schema_location)
             .field("details", &self.details)
             .finish_non_exhaustive()

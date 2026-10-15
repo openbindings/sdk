@@ -48,7 +48,30 @@ pub struct InputError {
 }
 impl std::fmt::Debug for InputError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Only fixed parser/admission reasons are safe; this record is publicly constructible.
+        let code = match self.code {
+            "bom"
+            | "byte-limit"
+            | "colon"
+            | "comma-or-close"
+            | "depth-limit"
+            | "escape"
+            | "exponent"
+            | "fraction"
+            | "literal"
+            | "node-limit"
+            | "number"
+            | "object-key"
+            | "string-control"
+            | "trailing-token"
+            | "unicode-escape"
+            | "unterminated-string"
+            | "utf8"
+            | "value" => self.code,
+            _ => "<redacted>",
+        };
         f.debug_struct("InputError")
+            .field("code", &code)
             .field("kind", &self.kind)
             .field("byte_offset", &self.byte_offset)
             .finish_non_exhaustive()
