@@ -87,6 +87,8 @@ struct Plan {
     holes: HashSet<usize>,
     hole_order: Vec<usize>,
     first_hole: Option<usize>,
+    first_missing: Option<usize>,
+    first_semantic: Option<(usize, StaticReferenceDefect)>,
     edge_count: usize,
     // Numeric namespace segments only: original resolved identities remain borrowed.
     occupied_namespaces: HashSet<usize>,
@@ -155,6 +157,27 @@ fn add_bytes(total: &mut usize, size: usize, cap: usize) -> Result<(), NoVerdict
     Ok(())
 }
 impl Plan {
+    fn split_evidence(&self) -> (NoVerdictReason, &'static str, &'static str) {
+        if self.first_semantic.is_none() {
+            (
+                NoVerdictReason::ResourceUnavailable,
+                UNAVAILABLE_CODE,
+                UNAVAILABLE_MESSAGE,
+            )
+        } else if self.oneofs.is_empty() {
+            (
+                NoVerdictReason::ConservativePreparation,
+                "static-reference-defect",
+                "validity depends on a defective static reference",
+            )
+        } else {
+            (
+                NoVerdictReason::ConservativePreparation,
+                "partial-unproven-completions",
+                "interval bounds do not establish disagreeing semantic completions",
+            )
+        }
+    }
     fn edge(&mut self, cap: Admission) -> Result<(), NoVerdict> {
         if self.edge_count >= cap.edges {
             return Err(limit(
@@ -397,6 +420,27 @@ impl SchemaSpace {
                             out.holes.insert(id);
                             out.hole_order.push(id);
                             out.first_hole.get_or_insert(id);
+                            out.first_missing.get_or_insert(id);
+                        }
+                        Err(detail) if detail.reference_defect.is_some() => {
+                            if out.holes.len() >= cap.holes {
+                                return Err(self.bounds_failure(
+                                    limit(
+                                        "schema-hole-limit",
+                                        "partial preparation exceeds 100,000 reference holes",
+                                    ),
+                                    id,
+                                    "/$ref",
+                                    Some(id),
+                                    cap,
+                                ));
+                            }
+                            out.edge(cap)?;
+                            out.holes.insert(id);
+                            out.hole_order.push(id);
+                            out.first_hole.get_or_insert(id);
+                            out.first_semantic
+                                .get_or_insert((id, detail.reference_defect.unwrap()));
                         }
                         Err(detail) => return Err(detail),
                     }
@@ -431,6 +475,21 @@ impl SchemaSpace {
         // holes.len(). No source-controlled text is copied to choose it.
         while out.occupied_namespaces.contains(&out.namespace) {
             out.namespace += 1;
+        }
+        if out.first_semantic.is_some()
+            && let Some(id) = out.first_missing
+        {
+            return Err(self.bounds_failure(
+                NoVerdict::new(
+                    NoVerdictReason::ResourceUnavailable,
+                    UNAVAILABLE_CODE,
+                    UNAVAILABLE_MESSAGE,
+                ),
+                id,
+                "/$ref",
+                Some(entry),
+                cap,
+            ));
         }
         self.check_cycles(&out.reach, control)?;
         out.qualify(self, control, cap)?;
@@ -499,7 +558,7 @@ impl SchemaSpace {
             add_bytes(&mut total, self.location_bytes(id)?, cap.text)?;
             add_bytes(
                 &mut total,
-                "/$ref".len() + UNAVAILABLE_CODE.len() + UNAVAILABLE_MESSAGE.len(),
+                "/$ref".len() + plan.split_evidence().1.len() + plan.split_evidence().2.len(),
                 cap.text,
             )?;
         }
@@ -540,12 +599,8 @@ impl SchemaSpace {
         let unavailable = plan.first_hole.map(|id| {
             let mut location = self.location(id);
             location.pointer.push_str("/$ref");
-            NoVerdict::new(
-                NoVerdictReason::ResourceUnavailable,
-                UNAVAILABLE_CODE,
-                UNAVAILABLE_MESSAGE,
-            )
-            .located(location)
+            let (reason, code, message) = plan.split_evidence();
+            NoVerdict::new(reason, code, message).located(location)
         });
         let mut programs = Vec::with_capacity(2);
         for (pass, lower) in [true, false].into_iter().enumerate() {
@@ -590,6 +645,7 @@ impl SchemaSpace {
             lower,
             upper,
             unavailable,
+            semantic_completions: plan.first_semantic.is_some(),
         })
     }
     fn write_resource(

@@ -358,10 +358,15 @@ fn missing_carriers_are_distinct_from_bad_fragments_or_known_targets() {
     }
     for fragment in ["#/type", "#missing"] {
         let schema = format!(r#"{{"anyOf":[true,{{"$ref":"{U}{fragment}"}}]}}"#);
-        assert_eq!(
-            refusal(&schema, resources(&[(U, r#"{"type":"string"}"#)])).reason,
-            NoVerdictReason::ConservativePreparation
+        let ctx = context(
+            &schema,
+            resources(&[(U, r#"{"type":"string"}"#)]),
+            DefaultEvaluator::new(),
         );
+        let ValueContractPreparation::Ready(contract) = ctx.prepare("op", Direction::Input) else {
+            panic!("semantic bounds prepare")
+        };
+        assert_eq!(label(contract.validate(&json("0"))), "satisfies");
     }
 }
 #[test]
@@ -504,7 +509,7 @@ fn custom_evaluator_gets_original_request_and_is_not_retried_or_reinterpreted() 
         .unwrap();
     assert!(bounds.unavailable().is_some());
     assert!(bounds.lower_program().resources.iter().all(|r| r.uri != U));
-    let (lower, upper, evidence) = bounds.into_parts();
+    let (lower, upper, evidence, _) = bounds.into_parts();
     drop(request);
     drop(contracts);
     drop(custom);
@@ -704,7 +709,7 @@ fn known_reference_errors_and_contained_id_anchor_identity_survive_holes() {
     let known = r#"{"$defs":{"a":{"$anchor":"dup"},"b":{"$anchor":"dup"}}}"#;
     assert_eq!(
         refusal(&schema, resources(&[("https://review.invalid/K", known)])).code,
-        "ambiguous-anchor"
+        "resource-unavailable"
     );
     let schema = format!(
         r#"{{"properties":{{"external":{{"$ref":"{U}"}},"known":{{"$ref":"https://review.invalid/contained#value"}}}}}}"#

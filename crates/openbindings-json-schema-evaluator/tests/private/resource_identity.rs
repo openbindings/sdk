@@ -691,12 +691,20 @@ fn ri20_34_missing_winner_fragments_never_fall_back_to_loser() {
         ("$ref", "/$defs/target"),
     ] {
         let doc = one(owner(), json!({keyword:format!("{U}#{fragment}")}));
-        let detail = refusal(context(&doc, &supplied).prepare("op", Direction::Input));
-        assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
-        assert!(
-            matches!(detail.code.as_str(), "anchor-missing" | "non-schema-target"),
-            "{detail:?}"
-        );
+        let detail = if keyword == "$ref" {
+            let contract = ready(&context(&doc, &supplied), "op");
+            let ValueOutcome::NoVerdict { detail } =
+                contract.validate(&JsonValue::parse("null").unwrap())
+            else {
+                panic!("semantic hole")
+            };
+            assert_eq!(detail.reason, NoVerdictReason::Undefined);
+            detail
+        } else {
+            let detail = refusal(context(&doc, &supplied).prepare("op", Direction::Input));
+            assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
+            detail
+        };
         assert!(matches!(
             reference(&doc, &supplied, &format!("/operations/op/input/{keyword}")),
             ReferenceResolution::Unresolved { .. }
@@ -708,10 +716,8 @@ fn ri20_34_missing_winner_fragments_never_fall_back_to_loser() {
                 .validated()
                 .expect("conformant document")
                 .value_contracts(Arc::new(Project(true)), supplied.clone());
-            assert_eq!(
-                refusal(ctx.prepare("op", Direction::Input)).code,
-                detail.code
-            );
+            ready(&ctx, "op");
+            assert_eq!(detail.code, "static-reference-defect");
         }
     }
 }

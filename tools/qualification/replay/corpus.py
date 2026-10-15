@@ -76,6 +76,7 @@ def judge_value(expected,actual,features,profile):
     if result=='no-contract': return want=='no-contract'
     if result=='no-verdict':
         reason=actual.get('detail',{}).get('reason')
+        if reason == 'undefined': return want == 'undefined'
         return reason in ('conservative-preparation','resource-unavailable','unsupported-capability') and (want in ('undefined','external') or form.get('orNoVerdict',False) or unsupported)
     if result=='fails' and not actual.get('problems') and actual.get('problems_complete',actual.get('problemsComplete')) is True:return False
     return result=={'satisfies':'satisfies','fails':'fails'}.get(want)
@@ -119,6 +120,9 @@ def controls():
             'reject_wrong_verdict':not judge_value('satisfies',{'outcome':'fails'},[],PROFILE),
             'reject_no_contract_for_undefined':not judge_value('undefined',{'outcome':'no-contract'},[],PROFILE),
             'reject_no_verdict_for_absence':not judge_value('no-contract',{'outcome':'no-verdict','detail':{'reason':'resource-unavailable'}},[],PROFILE),
+            'reject_undefined_for_external':not judge_value('external',{'outcome':'no-verdict','detail':{'reason':'undefined'}},[],PROFILE),
+            'reject_undefined_for_valid':not judge_value('satisfies',{'outcome':'no-verdict','detail':{'reason':'undefined'}},[],PROFILE),
+            'accept_proven_undefined':judge_value('undefined',{'outcome':'no-verdict','detail':{'reason':'undefined'}},[],PROFILE),
             'reject_unsupported_misuse':not judge_value('satisfies',{'outcome':'no-verdict'},['exact-numbers'],PROFILE)}
     for n in range(1,14):
         rule=f'OBI-{n:02}'; case=next(c for c in cases if rule in c['expected'].get('violates',[]))

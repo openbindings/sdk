@@ -70,6 +70,9 @@ pub(super) struct EvaluationBounds {
     pub(crate) lower: EvaluationProgram,
     pub(crate) upper: EvaluationProgram,
     pub(crate) unavailable: Option<NoVerdict>,
+    /// The projections themselves are admissible all-false/all-true
+    /// completions of proven semantic holes, with no absent carriers.
+    pub(crate) semantic_completions: bool,
 }
 impl EvaluationBounds {
     /// Borrow the closed lower projection. Its failures alone prove nothing
@@ -87,8 +90,20 @@ impl EvaluationBounds {
     /// Transfer the programs and evidence without cloning their owned storage.
     /// Tuple order is `(lower, upper, unavailable)`.
     ///
-    pub fn into_parts(self) -> (EvaluationProgram, EvaluationProgram, Option<NoVerdict>) {
-        (self.lower, self.upper, self.unavailable)
+    pub fn into_parts(
+        self,
+    ) -> (
+        EvaluationProgram,
+        EvaluationProgram,
+        Option<NoVerdict>,
+        bool,
+    ) {
+        (
+            self.lower,
+            self.upper,
+            self.unavailable,
+            self.semantic_completions,
+        )
     }
 }
 
