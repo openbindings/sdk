@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use crate::codepointset::{CodePointSet, Interval};
 use crate::unicodetables::{
     FOLDS, TO_UPPERCASE, binary_property_ranges, general_category_property_value_ranges,
@@ -158,11 +160,7 @@ pub fn fold(cu: u32) -> u32 {
         }
     });
     if let Ok(index) = searched {
-        let fr: &FoldRange = if cfg!(feature = "prohibit-unsafe") {
-            FOLDS.get(index).expect("Invalid index")
-        } else {
-            unsafe { FOLDS.get_unchecked(index) }
-        };
+        let fr = &FOLDS[index];
         fr.apply(cu)
     } else {
         cu
@@ -180,11 +178,7 @@ fn uppercase(cu: u32) -> u32 {
         }
     });
     if let Ok(index) = searched {
-        let fr: &FoldRange = if cfg!(feature = "prohibit-unsafe") {
-            unsafe { TO_UPPERCASE.get_unchecked(index) }
-        } else {
-            TO_UPPERCASE.get(index).expect("Invalid index")
-        };
+        let fr = &TO_UPPERCASE[index];
         fr.apply(cu)
     } else {
         cu
@@ -592,5 +586,32 @@ mod tests {
                 from = last;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod checked_case_mapping {
+    use super::*;
+
+    #[test]
+    fn mappings_match_every_table_entry_and_gap() {
+        for (table, mapping) in [
+            (&FOLDS[..], fold as fn(u32) -> u32),
+            (&TO_UPPERCASE[..], uppercase),
+        ] {
+            let mut ranges = table.iter().peekable();
+            for cu in 0..=0x10ffff {
+                while ranges.peek().is_some_and(|range| range.last() < cu) {
+                    ranges.next();
+                }
+                let expected = ranges
+                    .peek()
+                    .filter(|range| range.first() <= cu)
+                    .map_or(cu, |range| range.apply(cu));
+                assert_eq!(mapping(cu), expected, "code point {cu:x}");
+            }
+        }
+        let regex = crate::Regex::with_flags("a", "i").unwrap();
+        assert_eq!(regex.find("A").unwrap().range(), 0..1);
     }
 }

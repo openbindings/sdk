@@ -908,6 +908,147 @@
                      let Some(value) =
                          unicode_property_from_str(&buffer, name, self.flags.unicode_sets)
                      else {
+--- a/src/position.rs
++++ b/src/position.rs
+@@ -1,3 +1,5 @@
++#![forbid(unsafe_code)]
++
+ use core::cmp::Eq;
+ use core::fmt;
+ use core::marker::PhantomData;
+@@ -129,11 +131,7 @@
+         debug_assert!(!ptr.is_null(), "Pointer cannot be null");
+         // Annoyingly there's no *const NonNull.
+         let mutp = ptr as *mut u8;
+-        let nonnullp = if cfg!(feature = "prohibit-unsafe") {
+-            core::ptr::NonNull::new(mutp).expect("Pointer was null")
+-        } else {
+-            unsafe { core::ptr::NonNull::new_unchecked(mutp) }
+-        };
++        let nonnullp = core::ptr::NonNull::new(mutp).expect("Pointer was null");
+         Self(nonnullp, PhantomData)
+     }
+ }
+@@ -145,7 +143,9 @@
+ 
+     #[inline(always)]
+     fn add(self, rhs: usize) -> Self::Output {
+-        Self::new(unsafe { self.ptr().add(rhs) })
++        // Wrapping arithmetic preserves provenance without requiring an unsafe
++        // in-allocation proof here. Input indexers check positions before use.
++        Self::new(self.ptr().wrapping_add(rhs))
+     }
+ }
+ 
+@@ -156,7 +156,9 @@
+     fn sub(self, rhs: Self) -> Self::Output {
+         debug_assert!(self.0 >= rhs.0, "Underflow");
+         // Note Rust has backwards naming here. The "origin" is self, not the param; the rhs is the offset value.
+-        unsafe { self.ptr().offset_from(rhs.ptr()) as usize }
++        // Positions in one input are ordered byte addresses. Subtracting their
++        // addresses gives the same distance without pointer offset preconditions.
++        self.ptr() as usize - rhs.ptr() as usize
+     }
+ }
+ 
+@@ -166,7 +168,7 @@
+     #[inline(always)]
+     fn sub(self, rhs: usize) -> Self::Output {
+         debug_assert!(self.ptr() as usize >= rhs, "Underflow");
+-        Self::new(unsafe { self.ptr().sub(rhs) })
++        Self::new(self.ptr().wrapping_sub(rhs))
+     }
+ }
+ 
+@@ -183,3 +185,23 @@
+         *self = *self - rhs;
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn reference_positions_cover_empty_and_one_past_end() {
++        for bytes in [b"".as_slice(), b"a", b"abcd"] {
++            let start = RefPosition::new(bytes.as_ptr());
++            let end = start + bytes.len();
++            assert_eq!(end.ptr(), bytes.as_ptr().wrapping_add(bytes.len()));
++            assert_eq!(end - start, bytes.len());
++            assert_eq!(end - bytes.len(), start);
++            let mut pos = start;
++            pos += bytes.len();
++            pos -= bytes.len();
++            assert_eq!(pos, start);
++        }
++    }
++}
+--- a/src/unicode.rs
++++ b/src/unicode.rs
+@@ -1,3 +1,5 @@
++#![forbid(unsafe_code)]
++
+ use crate::codepointset::{CodePointSet, Interval};
+ use crate::unicodetables::{
+     FOLDS, TO_UPPERCASE, binary_property_ranges, general_category_property_value_ranges,
+@@ -158,11 +160,7 @@
+         }
+     });
+     if let Ok(index) = searched {
+-        let fr: &FoldRange = if cfg!(feature = "prohibit-unsafe") {
+-            FOLDS.get(index).expect("Invalid index")
+-        } else {
+-            unsafe { FOLDS.get_unchecked(index) }
+-        };
++        let fr = &FOLDS[index];
+         fr.apply(cu)
+     } else {
+         cu
+@@ -180,11 +178,7 @@
+         }
+     });
+     if let Ok(index) = searched {
+-        let fr: &FoldRange = if cfg!(feature = "prohibit-unsafe") {
+-            unsafe { TO_UPPERCASE.get_unchecked(index) }
+-        } else {
+-            TO_UPPERCASE.get(index).expect("Invalid index")
+-        };
++        let fr = &TO_UPPERCASE[index];
+         fr.apply(cu)
+     } else {
+         cu
+@@ -594,3 +588,30 @@
+         }
+     }
+ }
++
++#[cfg(test)]
++mod checked_case_mapping {
++    use super::*;
++
++    #[test]
++    fn mappings_match_every_table_entry_and_gap() {
++        for (table, mapping) in [
++            (&FOLDS[..], fold as fn(u32) -> u32),
++            (&TO_UPPERCASE[..], uppercase),
++        ] {
++            let mut ranges = table.iter().peekable();
++            for cu in 0..=0x10ffff {
++                while ranges.peek().is_some_and(|range| range.last() < cu) {
++                    ranges.next();
++                }
++                let expected = ranges
++                    .peek()
++                    .filter(|range| range.first() <= cu)
++                    .map_or(cu, |range| range.apply(cu));
++                assert_eq!(mapping(cu), expected, "code point {cu:x}");
++            }
++        }
++        let regex = crate::Regex::with_flags("a", "i").unwrap();
++        assert_eq!(regex.find("A").unwrap().range(), 0..1);
++    }
++}
 --- /dev/null
 +++ b/tests/fixtures/lone-surrogate.mjs
 @@ -0,0 +1,43 @@

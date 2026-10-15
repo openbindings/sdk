@@ -108,6 +108,16 @@ and value allocation checks. No construction-memory guarantee is made for Upstre
 
 ## regress
 
+The upstream 0.12.0 archive contains the reversed `prohibit-unsafe` branch in
+`unicode.rs::uppercase`; it was not introduced by the SDK patch. Both case-table
+lookups now use checked indexing. `position.rs` uses checked non-null construction,
+provenance-preserving wrapping pointer arithmetic and byte-address subtraction.
+These produce the same positions/distances for valid input ranges without unsafe
+blocks, including empty inputs and one-past-end positions. Both modules forbid
+unsafe code at compile time. Tests cover every Unicode table entry and gap,
+case-insensitive matching, and position arithmetic. Run those regressions with
+`cargo test --manifest-path vendor/openbindings-internal-regress/Cargo.toml --no-default-features --features std,utf16,prohibit-unsafe --lib`.
+
 - `Cargo.toml`, `src/lib.rs`: private identity and internal modules; the SDK explicitly selects the classical interpreter required by the work budget.
 - `src/api.rs`, `src/classicalbacktrack.rs`, `src/ob_budget.rs`: finite interpreter work and cancellation propagation; a failed/exhausted match must never become an ordinary non-match that supports a wrong validation verdict.
 - `src/parse.rs`, `src/ob_ecma11_properties.rs`: ECMAScript 11 property-name recognition and bounded pattern expansion/admission. Supported syntax and selected matching capability are distinct. Unicode property matching remains an explicitly qualified refusal only when selected by evaluation; irrelevant branches retain existing verdicts.

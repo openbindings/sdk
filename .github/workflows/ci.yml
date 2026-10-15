@@ -102,6 +102,8 @@ jobs:
       - name: Verify clean candidate archives and Wasm identity
         run: python tools/package-candidate.py --output target/release-candidate
       - run: python tools/verify-api-reference.py --typescript-only
+      - name: Build and check the complete reference bundle
+        run: python tools/build-reference.py --output "${{ github.workspace }}/target/reference"
       - name: Verify container findings through native and TypeScript APIs
         run: |
           cargo build --locked --manifest-path tools/conformance-observer/Cargo.toml

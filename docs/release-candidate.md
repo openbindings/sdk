@@ -106,3 +106,8 @@ The internal cancellation delivery package is included in the Rust archive closu
 for all four async companions. Its Apache-2.0 license and notice ship in its archive;
 its token and future are imported through the companion roles. The default core
 and evaluator graphs do not depend on this package.
+
+For local checks before committing, add `--preview` to `build-reference.py` after
+rebuilding the Wasm package from the current source. This mode records the actual
+source file hashes and labels the bundle as a preview, not a release candidate.
+The default command still requires clean committed source.

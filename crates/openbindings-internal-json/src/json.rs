@@ -287,7 +287,41 @@ impl JsonValue {
     /// # Errors
     /// Returns an input error if the encoded string exceeds the default JSON admission limits.
     pub fn string(value: &str) -> Result<Self, InputError> {
-        Self::parse(serde_json::to_vec(value).expect("a Rust string serializes as JSON"))
+        Self::string_with_limits(value, JsonLimits::default())
+    }
+    fn string_with_limits(value: &str, limits: JsonLimits) -> Result<Self, InputError> {
+        // Count with the same serializer before allocating any encoded output.
+        // A string is immutable and its serialization cannot fail except when
+        // this writer stops at the byte limit. This also preserves serde_json's
+        // exact escape spelling for accepted strings.
+        struct EncodedSize {
+            bytes: usize,
+            max: usize,
+        }
+        impl std::io::Write for EncodedSize {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                if bytes.len() > self.max - self.bytes {
+                    return Err(std::io::ErrorKind::FileTooLarge.into());
+                }
+                self.bytes += bytes.len();
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let mut size = EncodedSize {
+            bytes: 0,
+            max: limits.max_bytes,
+        };
+        serde_json::to_writer(&mut size, value).map_err(|_| InputError {
+            kind: InputErrorKind::Limit,
+            byte_offset: limits.max_bytes,
+            code: "byte-limit",
+        })?;
+        let mut bytes = Vec::with_capacity(size.bytes);
+        serde_json::to_writer(&mut bytes, value).expect("a Rust string serializes as JSON");
+        Self::parse_with_limits(bytes, limits)
     }
     /// Create a standalone exact signed 64-bit integer without floating-point conversion.
     pub fn integer(value: i64) -> Self {
@@ -538,6 +572,28 @@ impl std::fmt::Debug for SourceLocation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn string_encoding_and_admission_match_serialized_input() {
+        let controls: String = (0..=0x7f).map(char::from).collect();
+        for value in ["", "plain text", "\"\\\n\r\t\u{8}\u{c}", "é𝄞", &controls] {
+            let encoded = serde_json::to_vec(value).unwrap();
+            for max_bytes in 0..=encoded.len() + 1 {
+                let limits = JsonLimits {
+                    max_bytes,
+                    ..JsonLimits::default()
+                };
+                let expected = JsonValue::parse_with_limits(&encoded, limits);
+                let actual = JsonValue::string_with_limits(value, limits);
+                assert_eq!(
+                    actual.as_ref().map(JsonValue::text),
+                    expected.as_ref().map(JsonValue::text)
+                );
+                if let Ok(actual) = actual {
+                    assert_eq!(actual.view().as_str(), Some(value));
+                }
+            }
+        }
+    }
     #[test]
     fn retained_child_and_exact_serde() {
         let parent = JsonValue::parse(r#"{"n":9007199254740993,"v":null}"#).unwrap();
