@@ -1,4 +1,4 @@
-//! Shared cancellation implementation, reexported by the async SDK companions.
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 use openbindings::{Cancelled, WorkControl};

@@ -1,4 +1,4 @@
-//! Private, shared OpenBindings embedding implementation. No evaluator planning.
+#![doc = include_str!("../README.md")]
 pub use openbindings_internal_json::{JsonKind, JsonRef, JsonValue};
 pub mod fixed_locations;
 pub mod fixed_schema;

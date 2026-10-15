@@ -1,5 +1,4 @@
-//! Implementation support shared by the core and optional evaluator.
-//! Consumers use the exact-value APIs re-exported by `openbindings`.
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 pub mod backend;
 #[warn(missing_docs)]

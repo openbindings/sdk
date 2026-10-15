@@ -1,57 +1,20 @@
 # First useful result in Rust
 
-Start with the optional evaluator companion's [first-use example](../crates/openbindings-json-schema-evaluator/examples/first_use.rs). It diagnoses a mistaken document member, corrects the original source, establishes conformance, reads operation metadata, resolves an alias, prepares input, and handles validation outcomes. The separate [replacement example](../crates/openbindings-json-schema-evaluator/examples/replacement.rs) adds explicit resources and retained work.
+Parse an interface document, validate it, read an operation and prepare its input
+value contract. Select `openbindings` and `openbindings-json-schema-evaluator` from
+an exact checkout or local archives through [source replay](REPLAY.md). Packages
+are unpublished; Rust needs no runtime initialization.
 
-These packages are unpublished. Use an exact checkout or locally built archives as described in [source replay](REPLAY.md); the package version is independent of the document's `openbindings` version. Rust requires no runtime initialization. A consuming package selects its evaluator explicitly:
-
-```toml
-[dependencies]
-openbindings = "=0.2.0-alpha.1"
-openbindings-json-schema-evaluator = "=0.2.0-alpha.1"
-serde = { version = "1.0.229", features = ["derive"] }
-```
-
-Until publication, patch those version dependencies and their unpublished siblings to extracted Cargo archives. The companion archive includes both examples and its README; it needs no HTTP client, async executor or evaluator qualification kit to run them. From a source checkout or the companion's extracted package with sibling patches configured:
+Run the packaged examples:
 
 ```sh
 cargo run -p openbindings-json-schema-evaluator --example first_use
 cargo run -p openbindings-json-schema-evaluator --example replacement
 ```
 
-## Load, inspect and prepare
-
-`ParsedDocument::parse(bytes)` preserves exact JSON and source evidence. Parsing does not prove conformance. `document.validate()` returns a report for the supported specification line or a separate unsupported-version refusal. A report can be conformant, nonconformant or undetermined. Only `assessment.validated()` yields a conformant document owner.
-
-The first-use example requires conformance before continuing and prints findings when that policy is not met. For editor-style inspection you may choose to keep a parsed document and its findings instead. Only the validated proof creates a normative value-contract context.
-
-`document.resolve_operation(name)` accepts either a primary name or an alias. Match `Found`, `Missing` and `Ambiguous`; ambiguity retains candidate primary keys. A found operation gives you `key()`, `description()`, `aliases()`, `bindings()` and its exact `value()`.
-
-There is a deliberate difference between typed metadata and exact schema access. `description()` and `aliases()` interpret strings and can return located errors. `input()` and `output()` return `Option<JsonRef>` with no `?`: absence is `None`, while a present null or false stays an exact value. A present field has not yet been established as a supported contract.
-
-Validated reads are infallible: `proof.resolve_operation(name)` returns an optional
-`ValidatedOperationView`, and `name()`, `version()` and `description()` return
-optional `JsonStringRef` values. `as_str()` is optional because JSON text may
-contain unpaired UTF-16; `utf16_units()` and `json()` preserve that text exactly.
-`openbindings()` is a scalar SemVer string. `schemas()` distinguishes an absent
-namespace from a present empty namespace, with exact object/boolean values.
-
-Keep the returned conformance proof, select `DefaultEvaluator` from the optional companion, then call `proof.value_contracts(Arc::new(DefaultEvaluator::new()), resources)`. `ResourceSet::default()` supplies no external resources. The SDK never fetches a missing reference.
-
-`context.prepare(name, Direction::Input)` has these setup outcomes:
-
-| Outcome | Application decision |
-| --- | --- |
-| `Ready(input)` | Retain the owner and validate admitted values. |
-| `NoValueContract` | Decide whether the operation is usable without that contract. |
-| `OperationMissing` | Correct the selected name or choose another operation. |
-| `OperationAmbiguous { candidates }` | Retained enum branch; unreachable from validated documents because OBI-05 proves uniqueness. |
-| `NoVerdict { detail }` | Inspect the reason/code/location; correct resources or capability/work conditions as appropriate. |
-
-Preparation refusal is not an input failure and does not prove that the schema has no meaning. Different applications may accept different setup states; the examples require a ready input.
-
-## Diagnose and correct a document
-
-For example, this editor draft uses `inputSchema` where the normative operation member is `input`. Parsing succeeds; assessment locates the unexpected member:
+The first example adds exact values and verdict handling. The replacement example
+keeps old work usable while a new document and resource context are installed.
+This caller diagnoses an unexpected document field, corrects it and prepares input:
 
 ```rust
 use openbindings::{ValueContractPreparation, ParsedDocument, ResourceSet, Direction};
@@ -61,21 +24,22 @@ use std::sync::Arc;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let text = r#"{"openbindings":"0.2.0","operations":{"lookup":{"inputSchema":{"type":"integer"}}}}"#;
     let document = ParsedDocument::parse(text)?;
-    let assessment = document.validate()?;
-    for finding in &assessment.report().findings {
+    let validation = document.validate()?;
+    for finding in &validation.report().findings {
         // Debug quotes and escapes the pointer, including any control characters.
+        let pointer = finding.location.as_ref().and_then(|at| at.pointer.as_deref());
         println!("{}/{} ({:?}) at {:?}: {}",
-            finding.rule, finding.code, finding.status, finding.location, finding.message);
+            finding.rule, finding.code, finding.status, pointer, finding.message);
     }
-    if assessment.report().findings_truncated {
+    if validation.report().findings_truncated {
         println!("More findings were omitted; rule evidence remains available.");
     }
     // Correct this known fixture's original source, not a normalized JSON value.
     let corrected = text.replace("\"inputSchema\":", "\"input\":");
     let corrected = ParsedDocument::parse(corrected)?;
-    let assessment = corrected.validate()?;
-    let Some(proof) = assessment.validated() else {
-        return Err(format!("document conformance: {:?}", assessment.report().conclusion).into());
+    let validation = corrected.validate()?;
+    let Some(proof) = validation.validated() else {
+        return Err(format!("document conformance: {:?}", validation.report().conclusion).into());
     };
     let context = proof.value_contracts(
         Arc::new(DefaultEvaluator::new()), ResourceSet::default());
@@ -87,109 +51,110 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-The `OBI-02` / `schema-mismatch` finding points to `/operations/lookup/inputSchema` at the original key token and says `value violates the fixed normative schema`. The caller chooses the intended correction. Missing members locate the containing object; array item failures locate the element. Several positions may be reported. OBI-10 findings locate the schema node checked by the localized walk. The native `name-grammar` message still explains the permitted ASCII spelling. Use rule, code, evidence and location for logic; fixed-schema messages contain no rejected values or member names.
+`validate()` returns a document report or an unsupported-version refusal.
+A report can be conformant, non-conformant or undetermined. Only established
+conformance yields a `ValidatedDocument`. Its typed field reads are infallible;
+parsed editor reads remain fallible. Resolve primary names or aliases with
+`resolve_operation`. A validated lookup returns an optional operation; a parsed
+lookup distinguishes found, missing and ambiguous.
 
-Locations use original JSON Pointers, zero-based UTF-8 byte offsets, and one-based lines and byte columns. Preserve the original document bytes when presenting them. These are not character indexes or JavaScript UTF-16 editor selection offsets: an editor must convert coordinates against the same source bytes before selecting text. Quote or escape pointers when displaying them, and render them as text rather than HTML. Correcting text creates a new snapshot; it does not mutate retained views of the old one. A truncated findings list still accompanies the complete rule evidence map.
+## Validate values
 
-## Edit a document while preserving exact opaque values
+Create a context with `validated.value_contracts(evaluator, resources)`, then
+`prepare(name, Direction::Input)` or `Direction::Output`. Match ready,
+no-value-contract, operation-missing or no-verdict before validating a value.
+The retained ambiguity branch is unreachable from conformant documents.
+Document validation itself needs no caller-supplied evaluator; operation value
+validation always does. See [evaluator integration](schema-evaluators.md).
 
-`ParsedDocument::to_authoring()` returns an owned `Document`. Change its
-typed fields and call `build()` to obtain a new snapshot; validate that snapshot
-before treating it as conformant. Renaming an operation does not rewrite its
-references. Typed fields are re-encoded: an integer preference spelled `1.0` or
-`1e0` becomes `1`, and `-0` becomes `0`. Opaque exact values keep their numeric
-tokens. This authoring path preserves values, not whole-document source spelling.
+Use `JsonValue::from_serializable` for ordinary Rust data and `JsonValue::parse`
+for exact JSON text. The ordinary converter preserves integer digits but cannot
+recover a value already rounded by application code. It refuses exact wrappers;
+keep those on the parse/retain route.
 
-For a change inside an opaque object, see the runnable
-[`exact_edit` example](../crates/openbindings/examples/exact_edit.rs), also included
-in the `openbindings` Cargo package. It uses `JsonRef::members()` and retained
-`JsonValue` siblings to compose a replacement object. Serializing those exact
-values with `serde_json::to_vec` preserves their raw tokens; parsing the result
-creates an independent exact snapshot. This is the exact Serde lane, distinct
-from `JsonValue::from_serializable` for ordinary Rust data. No ordinary
-`serde_json::Value` or floating-point conversion is needed.
+A ready contract's `validate` returns `Satisfies`, `Fails` or `NoVerdict`.
+Preparation and validation refusals remain separate from an established failure.
+Retain and clone a ready contract to reuse compiled state. Every `prepare` call
+compiles independently. Ready does not imply that every value is decidable.
 
-The generic example replaces one existing member and then uses the same typed
-builder. It refuses non-objects, absent members, duplicate names anywhere in the
-input subtree, and names that are not representable as Rust UTF-8 strings. It
-retains untouched numeric tokens and decoded Unicode name distinctions; formatting,
-name escaping and order may change. It visits every immediate member and serializes
-and parses the whole changed object, followed by document serialization during
-`build()`. These allocations are part of the editing cost, not a constant-time edit
-or a general JSON Patch facility. Input owners may be dropped after the build.
+## Edit an opaque value
 
-## Admit a value and interpret the result
+Use `to_authoring()` to obtain a typed draft, change its fields, then build and
+validate a new snapshot. To change a member inside a schema, content or extension
+object, compose the changed object from retained exact children:
 
-For ordinary Rust data, use `JsonValue::from_serializable(&value)` and handle a possible conversion refusal before validation. Its checked Serde profile retains exact `u64`/`i128`/`u128` values, rejects non-finite floats and unsupported representations, and bounds emitted JSON. For exact text or bytes, use `JsonValue::parse`. Do not route already exact `JsonValue` or Serde `RawValue` wrappers through ordinary conversion. An ordinary float cannot recover digits already rounded by application code.
+```rust,edition2024
+use openbindings::{JsonValue, ParsedDocument};
+use std::collections::BTreeMap;
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-Retain one ready contract and call `input.validate(&value)` repeatedly:
+pub fn replace_exact_object_member(
+    object: &JsonValue,
+    key: &str,
+    replacement: &JsonValue,
+) -> Result<JsonValue> {
+    if object.has_duplicate_names() {
+        return Err("this recipe requires unique member names".into());
+    }
+    let members = object.view().members().ok_or("expected an exact object")?;
+    let mut composed = BTreeMap::new();
+    for member in members {
+        let name = member
+            .name
+            .as_str()
+            .ok_or("member name is not UTF-8 representable")?;
+        composed.insert(name, member.value.to_owned());
+    }
+    let target = composed
+        .get_mut(key)
+        .ok_or("replacement member is absent")?;
+    *target = replacement.clone();
+    // JsonValue's Serde representation carries raw JSON tokens. Do not convert
+    // these exact values through ordinary serde_json::Value or floating point.
+    Ok(JsonValue::parse(serde_json::to_vec(&composed)?)?)
+}
 
-| Outcome | Meaning |
-| --- | --- |
-| `Satisfies` | The input satisfies the contract. |
-| `Fails { message, problems, problems_complete }` | A failure is established; selected diagnostics may be incomplete. |
-| `NoVerdict { detail }` | The evaluator did not establish a verdict; this is neither success nor failure. |
+fn main() -> Result<()> {
+    let parsed = ParsedDocument::parse(
+        r#"{"openbindings":"0.2.0","operations":{},"x-editor":{"note":null,"id":9007199254740993}}"#,
+    )?;
+    let mut draft = parsed.to_authoring()?;
+    let original = draft.additional_fields.get("x-editor").ok_or("missing extension")?;
+    let replacement = JsonValue::string("Reviewed")?;
+    let edited = replace_exact_object_member(original, "note", &replacement)?;
+    draft.additional_fields.insert("x-editor".into(), edited);
+    let revised = draft.build()?;
+    assert!(revised.validate()?.validated().is_some());
+    assert_eq!(revised.value().at("/x-editor/id").unwrap().text(), "9007199254740993");
+    Ok(())
+}
+```
 
-Upstream failure problems identify instance pointers and original schema locations when available. `problems_complete` describes the selected diagnostic pass, not every logically redundant failed keyword. The first-use example validates an ordinary struct containing `9007199254740993`, then an adjacent smaller exact integer to show a failure without losing digits.
+This is application code using existing APIs. It replaces one existing member,
+requires unique names throughout the subtree and UTF-8-representable immediate
+names, and refuses a missing member. Exact siblings retain numeric tokens.
+Formatting, name escaping and order may change. The whole changed object is
+serialized and parsed; `build()` also serializes the document. Typed fields are
+re-encoded, and operation renaming leaves reference updates to the caller.
+The packaged [exact-edit example](../crates/openbindings/examples/exact_edit.rs)
+includes additional numeric and error cases.
 
-## Retained work and replacement
+## Resources, diagnostics and lifetime
 
-The replacement example owns an `active: ValueContract` slot. Its `candidate` helper parses a prospective document, establishes conformance, constructs immutable resources, and requires a fully located reference inventory and a ready input (an application policy, not a decidability proof). Only a successful result is assigned to `active`. The helper retains distinct parse, version, conformance, interpretation and preparation failures with their diagnostics.
+Schema resources are explicit and immutable. The SDK never fetches missing
+references. Construct a new context to change resources; retained contracts keep
+their original snapshots. An application can prepare a candidate before replacing
+its active contract and keep serving old work if preparation fails.
 
-A qualified missing-resource contract can be ready and declare Incomplete. The
-example's candidate helper checks borrowed completeness evidence before accepting it,
-returns a distinct missing-resources error, and keeps the active owner. Undeclared
-custom evaluators require caller policy. A partial preview can deliberately retain
-an Incomplete owner instead. Complete does not guarantee decidability: budgets,
-cancellation and unsupported instances can still return no verdict. Recovery creates
-a new context; it cannot update an old owner's evidence.
+`prepare_with_control` and `validate_with_control` accept `WorkControl`, including
+an `AtomicBool` or a companion's `CancellationToken`. Cancellation is cooperative.
+Use a fresh flag or token for a retry. Cancelled preparation returns no ready
+owner; cancelled validation leaves an existing owner usable.
 
-The old job clones the ready owner before the application changes the slot. It can still use its original document/resource context after replacement, even when the new context supplies a different schema at exactly the same URI. A channel makes the example's scheduling deterministic; it does not claim to interrupt an evaluation already executing. Applications can use their own threads, queues or other scheduling policy.
-
-Every `prepare` call compiles independently. A separate fixture block in `main` prepares both directions and retains its input contract after dropping the context. The reusable `candidate` helper uses the conformance proof and requires only the requested input contract, with no assumption that an output is present. Retain and clone ready owners for repeated validation without recompilation. Use Rust scopes and `drop` to release obsolete owners; a released owner does not imply lower allocator RSS.
-
-`prepare_with_control` and `validate_with_control` accept `&dyn WorkControl`, a synchronous observation trait. Pass an `AtomicBool` (release-store `true` to cancel) or a companion’s `CancellationToken`. Cancellation is permanent during an attempt; use a fresh flag or token for an independent retry. Cancelled preparation returns no ready owner; cancellation and transient evaluator failure do not poison healthy subsequent preparation on the context. A cancelled validation yields no-verdict and leaves the ready contract usable.
-
-Cancellation is cooperative, not a hard deadline. The example exercises cancellation before entry and recovery afterward. Invalid and cancelled candidates leave the existing active owner intact; the application chooses whether and when to install a later healthy replacement. No SDK-managed scheduler or active-document service is needed.
-
-### Interpretation and diagnostic compatibility
-
-Creating a value-contract context checks the entire operation namespace. A malformed
-operation or alias returns its specific `InterpretationError` and source location
-before selection, even when another operation would otherwise be usable.
-`resolve_operation` checks the same namespace. Unrelated metadata may remain
-nonconformant for draft evaluation; applications requiring a normative document
-must establish conformance before accepting it.
-
-`ValueOutcome::Fails` is the established failure outcome. `NoVerdictReason` and
-`InterpretationError` are non-exhaustive cause families: external matches need a
-wildcard for future causes. Semantic outcome enums remain closed, and public
-diagnostic structs remain constructible by evaluator implementations.
-
-Default diagnostic messages are advisory and bounded. Reference/resource prose
-omits source identifiers; value-failure prose omits instance data and user-schema
-enum/member strings. Type guidance uses only fixed JSON type names. Structured
-locations, reference spellings and explicitly accessed source fields can still
-contain source text; apply your application's disclosure policy before logging
-them. Custom evaluator messages are supplied by their authors.
-
-
-The default evaluator decides validity with `is_valid`. `Diagnostics::Coarse`
-(the default) returns `Fails` with the fixed message “value does not satisfy the
-contract”, no problems, and `problems_complete = false`. TypeScript uses
-`diagnostics: "coarse"`, `message`, and `problemsComplete: false`.
-
-Select `DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream)` or
-`proof.valueContracts({ diagnostics: "upstream" })` to request the library's own
-first error through `validate()`. Messages remain value-free; available paths map
-to original locations and optional schema facts may expose source operands.
-This mode is **library-bounded**: construction can allocate in proportion to inputs
-and can overflow the stack on deep values. The SDK promises nothing stronger than
-the library. One first error does not establish diagnostic completeness, so the
-flag remains false. Work/regex limits and cancellation can omit detail after a
-verdict; missing detail never weakens failure and never counts as rule evidence.
-
-The former `with_schema_details` / `includeSchemaDetails` boolean and the
-`max_problems` / `maxProblems`, `diagnostic_bytes` / `diagnosticBytes` options are
-removed. There is no intermediate boolean diagnostics API or SDK construction
-bound for upstream errors.
+Document findings have original JSON Pointers, zero-based UTF-8 byte offsets and
+one-based lines and byte columns. Quote pointers when displaying them. Truncation
+leaves rule evidence intact. Use codes and evidence for logic; messages are
+advisory. Value failures use coarse diagnostics by default. Upstream diagnostics
+are an explicit choice with library allocation and stack limits, including possible
+stack overflow on deep values. See the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md)
+and [host support](support.md).

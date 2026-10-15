@@ -1,4 +1,4 @@
-"""Compile and run the two first-use Rust fences without rewriting their contents."""
+"""Test repository prose with rustdoc and run the two standalone first-use fences."""
 from pathlib import Path
 import json
 import os
@@ -12,7 +12,7 @@ SNIPPETS = [
     (ROOT / 'docs/rust-first-use.md', 'rust_first_use'),
     (ROOT / 'crates/openbindings-json-schema-evaluator/README.md', 'evaluator_readme'),
 ]
-CRATES = ['openbindings', 'openbindings_json_schema_evaluator']
+CRATES = ['openbindings', 'openbindings_json_schema_evaluator', 'openbindings_invocation', 'serde_json', 'tokio']
 
 
 def read_snippet(path):
@@ -57,7 +57,8 @@ def main():
     sources = [(path, name, read_snippet(path)) for path, name in SNIPPETS]
     # Reuse the locked Cargo graph rather than resolve a separate consumer manifest.
     build = run([
-        'cargo', 'build', '--locked', '-p', 'openbindings-json-schema-evaluator',
+        'cargo', 'build', '--locked', '--tests', '-p', 'openbindings-invocation',
+        '-p', 'openbindings-json-schema-evaluator',
         '--message-format=json-render-diagnostics',
     ], stdout=subprocess.PIPE, text=True)
     libraries = {}
@@ -70,7 +71,14 @@ def main():
         elif message['reason'] == 'compiler-message':
             print(message['message']['rendered'] or message['message']['message'], end='')
     if set(libraries) != set(CRATES):
-        raise RuntimeError(f'Cargo did not report both snippet dependencies: {libraries}')
+        raise RuntimeError(f'Cargo did not report snippet dependencies: {libraries}')
+    # Repository prose is not included from outside an archived crate. Test it
+    # here with the same locked dependencies, including every Rust fence.
+    for document in ['README.md', 'docs/rust-first-use.md', 'docs/invocation.md']:
+        args = [os.environ.get('RUSTDOC', 'rustdoc'), '--test', '--edition=2024', ROOT / document]
+        for crate, library in libraries.items():
+            args += ['--extern', f'{crate}={library}', '-L', f'dependency={library.parent}']
+        run(args)
     with tempfile.TemporaryDirectory(prefix='sdk-rust-snippets-') as temporary:
         for path, name, source in sources:
             print(f'Checking verbatim Rust fence: {path}', flush=True)

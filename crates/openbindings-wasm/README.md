@@ -1,13 +1,11 @@
-# openbindings-wasm
+# OpenBindings Wasm bridge
 
-This crate builds the Rust/Wasm engine for `@openbindings/sdk`. The supported TypeScript API is the handwritten facade, not these ABI types. Rust applications normally use the other public crates directly. Build with wasm-bindgen 0.2.129 and the pinned wasm32 toolchain.
+Builds the engine included in `@openbindings/sdk`. TypeScript applications use the
+handwritten facade and its bundled Wasm asset. Start with the
+[TypeScript example](https://github.com/openbindings/sdk/blob/main/packages/typescript/README.md).
 
-Version 0.2.0-alpha.1 is an unpublished development build. It requires Rust 1.88.
-The full repository includes public caller examples, capabilities, release process,
-license inventory and verification instructions. Package publication and application
-cutover are separate actions.
-
-Build the packaged asset with `npm run build:wasm` in `packages/typescript`.
-The build uses the workspace release profile and removes the Wasm name section with
-wasm-bindgen. Size-optimizing the whole Wasm dependency graph roughly halves the
-asset but makes evaluation near its limits several times slower, so it is not used.
+The bridge ABI is private. Rust applications use the public Rust crates. This
+unpublished build package requires Rust 1.88; its generated bindings require
+wasm-bindgen 0.2.129. Run `npm run build:wasm` in `packages/typescript` to rebuild
+the packaged asset. See [build instructions](https://github.com/openbindings/sdk/blob/main/docs/maintainers.md)
+and [size measurements](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md).

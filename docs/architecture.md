@@ -1,4 +1,4 @@
-# Architecture
+# Maintainer architecture
 
 Normative semantics live in `openbindings`; companion behavior is imported
 explicitly. Core has no transport, operation invoker, binding adapter or synthesis
@@ -6,7 +6,7 @@ layer. A private schema engine supports normative document-schema checking; the
 optional default operation evaluator implements the public Rust trait boundary.
 
 `ParsedDocument` owns an immutable exact JSON arena and lazily indexed names.
-`DocumentValidation` carries evidence for every rule; only a conformant assessment
+`DocumentValidation` carries evidence for every rule; only a conformant validation
 can yield `ValidatedDocument`. Typed `Document` fields represent normative
 objects and preserve additional exact fields. Building and establishing conformance
 are separate steps. Source views keep their owner's storage, not borrowed external
@@ -40,7 +40,7 @@ no dependency from core to role behavior; its narrow Wasm probe does not extend 
 published TypeScript surface. See the [role mapping](../crates/openbindings-source-inspection/README.md).
 
 `openbindings-wasm` is a private bridge behind the first-class TypeScript facade,
-separate from this new Rust companion.
+separate from the Rust role companions.
 Rust owns semantic work and exact values. The facade exposes discriminated outcomes,
 checked JS conveniences, immutable resource sets and disposable retained handles.
 Repeated UI metadata reads use cached JS snapshots. It performs no second schema
@@ -62,7 +62,7 @@ remain provider responsibilities. See the [synthesis guide](../crates/openbindin
 
 `openbindings-invocation` adds the optional binding-kind provider seam, document-based operation invocation, and one
 checked input/output lifetime for all cardinalities. It depends on core only,
-without inspection, synthesis, HTTP or a mandatory executor. Caller polling
+without inspection, synthesis, HTTP or a mandatory runtime. Caller polling
 drives bounded I/O; source interpretation and external effects remain provider
 responsibilities. `operation::Invoker` adds explicit document-based selection and
 per-value validation through a caller-selected evaluator, returning that same

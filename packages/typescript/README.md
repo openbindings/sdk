@@ -1,38 +1,27 @@
-# OpenBindings SDK
+# OpenBindings SDK for TypeScript
 
-An unpublished development build with Rust semantics and a first-class
-TypeScript API. Document parsing, authoring, conformance, exact values, names,
-references, prepared contracts, and optional HTTP discovery are included.
-Invocation, binding adaptation, and synthesis are separate work.
-
-The declarations and examples are qualified with TypeScript 5.9.3. Include
-`ESNext.Disposable` in your compiler `lib` configuration for disposable handles
-and `using`. An older compiler minimum has not been qualified.
+Parse, validate and author OpenBindings interface documents, inspect operations
+and validate their caller-facing values. This package includes the Rust engine as
+WebAssembly. Applications need no Rust toolchain.
 
 ## First useful result
 
-Install a locally built archive of this unpublished candidate, then run its Node
-entry directly:
+This `0.2.0-alpha.1` package is unpublished. Install a locally built archive;
+registry releases use the legacy API. Run the packaged Node example:
 
 ```sh
 npm install ./openbindings-sdk-0.2.0-alpha.1.tgz
 node node_modules/@openbindings/sdk/examples/first-use-node.mjs
 ```
 
-For a browser, serve the installed package directory over HTTP and open
-`examples/first-use.html`. Its import map resolves the package's JavaScript entry;
-the included Wasm asset loads relative to that module. Both entries run the same
-[small document-to-verdict example](examples/first-use.mjs) and print operation
-metadata plus a successful input, a failure and an ordinary-input admission error.
-Existing registry releases belong to the legacy API; they do not install this
-candidate.
-
-The progression is initialization, parsing, conformance, operation inspection,
-contract preparation, then value validation. After the host initialization below,
-the same progression in TypeScript is:
+The same workflow in TypeScript initializes the engine, validates a document,
+resolves an alias and checks two values:
 
 ```ts
 import { parseDocument, type JsonInput } from "@openbindings/sdk";
+import { initialize } from "@openbindings/sdk";
+
+await initialize();
 
 const documentText = `{
   "openbindings": "0.2.0",
@@ -60,93 +49,27 @@ console.log(checkInput(7));
 console.log(checkInput("seven"));
 ```
 
-Parsing preserves a document even when a field is malformed. This application
-uses `validated()` to require conformance before exposing operations. A successful
-validation returns an independently owned `ValidatedDocument`; `validate()` instead
-returns the report without creating that owner. The [source editor](examples/editor.html)
-starts with a mistaken `inputSchema` operation member, renders its actual findings,
-corrects the original source to `input`, validates it, then prepares and checks an
-input. Unexpected-member findings point to the original key token. Quote pointers
-and render them as text, including `findingsTruncated` when true. Lines and byte
-columns refer to UTF-8 source bytes, not JavaScript UTF-16 selection offsets.
-Reports retain at most 4,096 findings; expanded unexpected-field pointers also
-share an 8 MiB byte budget. Omitted findings set `findingsTruncated`; all 13 rule
-evidence states remain available. Expanded findings can displace later ones at
-the count cap.
-Messages explain the problem; rule and code fields are the machine-readable
-classifications. The separate [authoring recovery lesson](examples/authoring-recovery.mjs)
-uses pointers into a caller's typed draft, which have no source byte coordinates.
+For a browser, serve the installed package directory over HTTP and open
+[examples/first-use.html](examples/first-use.html). TypeScript 5.9.3 is qualified;
+include `ESNext.Disposable` in the compiler `lib` setting and target ES2022 for
+`using`. An older compiler minimum has not been qualified.
 
-Handle setup separately from a value's verdict:
-
-| Stage       | Result                                                    | Caller action                                                                                             |
-| ----------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Parse       | `input-error`                                             | Correct the JSON or its admission problem.                                                                |
-| Conformance | `version-refused` or `report`                           | Report the refused version or nonconformant/undetermined report.                                          |
-| Prepare     | `operation-missing`, `operation-ambiguous`, `no-value-contract` | Correct operation selection or explicitly decide how an absent contract fits the application.             |
-| Prepare     | `no-verdict`                                              | Inspect `detail`; for example, supply a missing schema resource before retrying.                          |
-| Validate    | `satisfies`                                               | The value satisfies this prepared contract.                                                               |
-| Validate    | `fails`                                                | Show the bounded problems and their original schema/instance locations.                                   |
-| Validate    | `input-error`                                             | Correct unsupported ordinary JavaScript input; it was not evaluated.                                      |
-| Validate    | `no-verdict`                                              | Report that evaluation could not establish a verdict; inspect the reason and retry only when appropriate. |
-
-The first-use function closes its owners after each demonstration. For repeated
-validation, prepare once and keep the ready contract. The [retained service](examples/service.mjs)
-does that; [replacement and recovery](examples/service-lifecycle.mjs) adds explicit
-resources and asynchronous request ownership after the initialization instructions.
-
-The default evaluator first tries complete-resource preparation. Missing static
-references in a qualified bounds fragment can prepare `ready`: an absent optional
-property, independent known failure, or known passing `anyOf` branch can make a value
-decidable. Values that depend on missing content return `no-verdict` with reason
-`resource-unavailable` from validation. Even a bare missing `$ref` now prepares
-ready and returns no verdict for every admitted value. Keep handling both phases.
-Ready means prepared, not decidable; contracts expose no resource-completeness
-classification. The retained service/editor examples can retain a ready partial
-contract and handle `no-verdict` for individual values. Applications own their
-replacement policy. `document.references()` reports static inspection facts using
-`ReferenceRefusal` and `ReferenceRefusalReason`, separately from value outcomes;
-this inventory performs no acquisition and cannot promise decidability.
-
-When the default evaluator declines optional partial planning, it preserves the
-original located `resource-unavailable` refusal. Known-closure defects, cancellation,
-shared limits and compilation failures keep their actual classifications.
-
-Hole-dependent `oneOf` uses both bound polarities: zero possible or multiple certain
-winners fail, and one certain sole winner satisfies. Correlated unknown branches can
-remain undecided. Sufficient-budget failure reports identify the original oneOf with
-a cardinality-neutral message, without claiming which branches matched.
-Missing influence through `not`, conditionals or `contains` refuses, while
-closed subgraphs remain supported. Evaluated `unevaluated*` and dynamic keywords
-reject partial bounds. Known invalid/unsupported schemas remain refusals. Both
-internal bounds share one verdict work/regex allowance; failures retain separately
-bounded known-source diagnostics. There is no new application validation mode.
-The [proof and limits](https://github.com/openbindings/sdk/blob/main/docs/partial-resource-bounds.md)
-include a 64 MiB combined projection-text cap and explicit graph/scratch guards.
-Dependent-oneOf plans additionally admit 100,000 emitted schema nodes and 200,000
-reference/applicator edges across both closed programs. These limits are unmeasured;
-nested predicates may be revisited under the shared work allowance.
-
-Inspect `document.references()` for document-wide spellings and locations, apply
-your application's acquisition policy, then supply resources in a new context.
-The inventory is not an exact per-contract missing-resource list. The SDK never
-fetches references. Existing prepared owners retain their original snapshots; a
-new context with colliding or unsupported supplied resources can itself refuse.
-
-The bundled resolver selects a unique contained `$id` before caller-supplied
-schemas, with packaged standards last. Supplied retrieval names and declared IDs
-otherwise have equal priority. Another alias cannot bypass a conflict over a
-resource's canonical ID: preparation returns `no-verdict` with reason
-`conservative-preparation`. Unused conflicts do not block unrelated contracts.
-Diagnostic resource URIs retain their original retrieval provenance.
+Parsing retains an inspectable snapshot. `validated()` returns either a validated
+owner or a version refusal or conformance report. Only the validated owner creates
+value contracts. Preparation distinguishes a ready contract, an absent value
+contract, a missing operation and no-verdict. Handle each setup result before
+validating a value. Value results distinguish `satisfies`, `fails`, `no-verdict`
+and an `input-error` when ordinary JavaScript data cannot be admitted.
 
 ## Browser resource management
 
-TypeScript's `using` needs both compiler support and the runtime `Symbol.dispose`
-symbol. Compile with `target: "ES2022"` and include `ESNext.Disposable` in `lib`;
-this transforms the syntax but does not supply the symbol. For browsers without
-that symbol, use a separate application bootstrap before loading any module that
-imports the SDK:
+Use `using` or `try`/`finally` with `dispose()` for timely release. Methods such as
+`value()`, `schemas()`, `input()` and `output()` acquire independent owners. Dispose
+each returned owner, including every value in a schema map. Metadata getters
+return plain data. `retain()` acquires another owner when work must outlive a scope.
+
+For `using` in a browser without `Symbol.dispose`, load the SDK from a separate
+application module after this bootstrap. Static imports run before statements:
 
 ```js
 if (Symbol.dispose === undefined) {
@@ -155,543 +78,82 @@ if (Symbol.dispose === undefined) {
 await import("./app.js");
 ```
 
-Put your SDK imports and initialization in `app.js`. Static imports evaluate
-before the importing module's statements, so placing a static SDK import below
-the conditional in the same file is too late. Apply this setup separately in each
-Worker that uses `using`. Existing native symbols are preserved. The SDK does not
-modify global objects; explicit `dispose()` calls in `try`/`finally` also work
-without this setup. See the [TypeScript resource-management documentation](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-2.html#using-declarations-and-explicit-resource-management)
-for the distinction between compilation and runtime support.
+Apply the bootstrap separately in each Worker that uses `using`. The SDK leaves
+global symbols to the application. Finalizers are best effort; disposal releases
+owners but does not promise shrinking process memory or Wasm capacity.
 
 ## Initialization
 
-Initialization is asynchronous and explicit. Browser modules can load the Wasm
-asset relative to the included module:
-
-```ts
-import { initialize, parseDocument } from '@openbindings/sdk';
-await initialize();
-const parsed = parseDocument(documentBytes);
-if (parsed.status === 'parsed') {
-  using document = parsed.value;
-  const assessment = document.validate();
-  // Version refusal and undetermined conformance are explicit outcomes.
-}
-```
-
-Node ESM reads the included asset relative to the installed package, regardless of
-the working directory. No Rust toolchain or fetch is needed:
-
-```ts
-import { initialize } from '@openbindings/sdk';
-await initialize(); // reads the installed package asset; no fetch
-```
-
-Hosts that provide compiled Wasm imports, including workerd, can import
-`@openbindings/sdk/openbindings.wasm` and pass that `WebAssembly.Module` to `initialize(module)`.
-Initialize inside a request handler in hosts that restrict random-number access
-to active requests. Initialization seeds the engine's randomized hash tables and
-is shared across concurrent calls; subsequent requests reuse it:
-
-```ts
-import module from '@openbindings/sdk/openbindings.wasm';
-import { initialize, validateDocument } from '@openbindings/sdk';
-export default {
-  async fetch(request: Request): Promise<Response> {
-    await initialize(module);
-    return Response.json(validateDocument(new Uint8Array(await request.arrayBuffer())));
-  },
-};
-```
-
-Missing or prohibited host entropy rejects with `host-entropy-unavailable` before
-entering Rust. Retry inside a permitted context; no insecure fallback is used.
-Configure the host/bundler to preserve or compile this asset. The default browser
-loader needs ordinary Wasm/fetch CSP permissions. Loading failures reject with
-`SdkError.code === 'wasm-initialization'`; initialization can be retried.
-
-## Exact values and authoring
-
-`parseJson` and `parseDocument` accept UTF-8 `Uint8Array` or JSON text. JSON tokens,
-duplicate member evidence, and original source locations are retained. Locations
-use zero-based byte offsets, one-based lines/byte columns, and JSON Pointers.
-The text lane rejects literal unpaired UTF-16; JSON escapes such as `"\ud800"`
-remain exact. Interpretation can explicitly decline unsupported string values.
-
-`ExactJson.from` checks ordinary JavaScript values. It rejects nonfinite numbers,
-undefined, bigint, functions, symbols, cycles, sparse arrays, accessors and
-non-plain objects. It never silently omits a value or invokes `toJSON`. This
-cannot recover precision already lost before the call. Use exact JSON text or
-bytes for numbers such as `9007199254740993`.
-
-```ts
-import { authorDocument, parseJson } from '@openbindings/sdk';
-const exact = parseJson('9007199254740993');
-if (exact.status === 'parsed') {
-  using large = exact.value;
-  const authored = authorDocument({
-    operations: { lookup: { input: { type: 'integer' } } },
-    sources: { local: { kind: 'https://kind.example/raw', content: null } },
-    additionalFields: { 'x-exact': large },
-  });
-  if (authored.status === 'authored') {
-    using document = authored.document;
-    const result = document.validated();
-    if (result.status === 'validated') result.document.dispose();
-  }
-}
-```
-
-Typed optional authoring members use `undefined` for absence. Generic
-schema/content/additional-field values reject undefined. Null remains present.
-Unknown fields can be retained while conformance correctly rejects them;
-additional fields cannot shadow typed members. Authoring establishes a parsed
-snapshot; `validate()` establishes conformance separately. `toValue()` either
-returns a checked ordinary JSON value or explicitly declines an inexact conversion.
-
-### Editing an existing document
-
-`document.toDraft()` returns `drafted` with one `OwnedDocumentDraft`, or a
-structured `authoring-error`. Its `value` is an `EditableDocumentDraft`: the
-normative maps and scalar lists are writable, and schemas, content, examples and
-additional fields retain exact values. Build with the same `authorDocument` used
-for handwritten drafts; building does not establish conformance.
-
-```ts
-const converted = document.toDraft();
-if (converted.status === 'drafted') {
-  using editing = converted.draft;
-  editing.value.description = 'Updated description';
-  const operation = editing.value.operations.lookup;
-  if (operation) (operation.tags ??= []).push('reviewed');
-  const built = authorDocument(editing.value);
-  if (built.status === 'authored') {
-    using revised = built.document;
-    console.log(revised.validate());
-  } else {
-    console.log(built.error);
-  }
-}
-```
-
-Exact leaves supplied by conversion belong to the editing scope. Removing or
-replacing a field does not leak its old leaf: the owner retains its acquisition
-registry until disposal. Narrow a leaf with `instanceof ExactJson`, then call
-`retain()` if it must survive explicit scope disposal. Abandoning an undisposed
-scope does not invalidate still-reachable leaf wrappers; unreachable leaves have
-their own best-effort finalizers. Use `using` or `dispose()` for timely cleanup.
-Caller-inserted exact values remain
-caller-owned and must be live through the build. The scoped draft root cannot be
-built after disposal. Keep editing scopes short; a retained leaf may keep its
-original source arena alive. Renaming operations never rewrites references.
-
-Typed fields are re-encoded according to their declared types: for example, an
-integer `preference` written as `1.0` or `1e0` becomes `1`, and `-0` becomes `0`.
-Opaque exact leaves retain their original numeric tokens.
-
-The [complete inspection/edit example](examples/inspect-edit.ts) uses a named
-`EditableDocumentDraft` helper, returns plain output, and disposes every acquired
-owner. Existing readonly inputs remain accepted by `authorDocument`; opaque
-interiors are not promised as mutable JavaScript graphs.
-
-To change a member **inside** an exact opaque object, the same example supplies
-`replaceExactObjectMember(object, key, replacement)` and an
-`editExtensionMember` caller. These are application recipes, not additional SDK
-exports. The helper traverses `members()`, borrows unchanged sibling values as
-`ExactJson`, and composes a new object with `ExactJson.from`. It converts member
-names only; it never decodes the sibling values through JavaScript numbers.
-Assign the result to the ordinary editable draft, then call `authorDocument`.
-The returned exact object is caller-owned and must remain live through that build;
-the example uses `using` for the result and all temporary owners.
-
-This recipe replaces one existing member. It refuses non-objects, absent members,
-duplicate names anywhere in the input subtree, and names that checked conversion
-cannot represent. It preserves untouched exact numeric tokens and decoded Unicode
-name distinctions, but may change formatting, name escaping and member order.
-Traversal visits every immediate member; composition encodes and parses the whole
-changed object. Building the document then encodes its full result. For large
-opaque objects, include both costs in the application's editing budget.
-
-### Recovering invalid drafts
-
-`authorDocument` returns `authoring-error` for expected invalid draft data:
-
-```ts
-const result = authorDocument(draft);
-if (result.status === 'authoring-error') {
-  if (result.error.code === 'field-collision') {
-    // For example: /operations/a~1~0b/additionalFields/input
-    focusEditorField(result.error.draftPointer);
-  }
-  showDiagnostic(result.error.message);
-}
-```
-
-`error.code` is a stable `AuthoringErrorCode`; `message` is explanatory text.
-`draftPointer` is a JSON Pointer into the **caller's draft**, including
-`additionalFields`, with `~` escaped as `~0` and `/` as `~1`. Empty string means
-the draft root; null means a trustworthy draft location is unavailable. There
-are no source byte offsets in an authoring failure. A cycle points to the edge
-that re-enters an active ancestor; repeated acyclic objects are allowed. Sparse
-arrays point to the first missing index. Symbol keys point to their containing
-object. Messages omit opaque values.
-
-| Code | Expected invalid data |
-| --- | --- |
-| `field-collision` | An additional field shadows a typed member. |
-| `duplicate-field` | Two draft paths produce the same document member. |
-| `non-finite-number` | NaN or either infinity. |
-| `unsupported-value` | Undefined in opaque JSON, bigint, symbol or function. |
-| `sparse-array`, `array-property` | Missing index or extra array properties. |
-| `cyclic-value`, `non-plain-object` | Cycle or unsupported object prototype. |
-| `accessor-property`, `non-enumerable-property`, `symbol-key` | Unsupported property representation. |
-| `invalid-authoring-object` | A normative object or map is not a plain object. |
-| `authoring-limit` | Ordinary conversion or encoded JSON admission limit. |
-| `invalid-draft` | Rust rejects an encoded handwritten draft; no logical draft pointer is available. |
-| `invalid-field`, `duplicate-members` | Parsed-to-draft conversion cannot represent a typed field or repeated member; inspect `sourceLocation` when available. |
-
-Known optional typed fields accept undefined as absence. Opaque fields do not.
-Rust model refusals and encoded-input admission limits can have null pointers;
-no serialized JSON offset is invented as a draft location. Conversion errors use
-`sourceLocation` for original bytes, distinct from a handwritten `draftPointer`.
-Accessors and `toJSON`
-are never invoked on ordinary drafts. Proxy meta-object traps are outside that
-ordinary-data guarantee; their failures propagate rather than being misclassified.
-
-Initialization and disposed-handle misuse still throw structured `SdkError`s.
-Unexpected engine failures also propagate. The result union is not a catch-all
-for arbitrary thrown errors, and standalone `parseJson`/`ExactJson.from` contracts
-are unchanged. See the runnable [editor recovery example](examples/authoring-recovery.mjs).
-
-`ValidatedDocument` has a private instance brand. A `ParsedDocument` cannot be
-assigned to it or passed to `DiscoveryPublication`: call `validate()` and narrow
-on `status === 'validated'`. `retain()` on that handle preserves the validated
-type. Runtime publication still verifies conformance for JavaScript and unsafe
-casts; the brand is not a substitute for runtime checks.
-
-## Exact traversal
-
-`exact.members()` and `exact.elements()` return lazy disposable iterators, or
-`undefined` for the wrong container kind. Object members retain source order,
-duplicate occurrences and exact name tokens. Each yielded member/value is an
-owner; a member's `name()` and `value()` methods each acquire another owner.
-
-```ts
-using members = exact.members();
-if (members) {
-  for (using member of members) {
-    using name = member.name();
-    using value = member.value();
-    console.log(name.text, value.text);
-    break; // closes the cursor; the using scopes release the yielded owners
-  }
-}
-```
-
-Use `using` for both cursor and yielded items, including arrays. Exhaustion or
-`return()` closes a cursor and later `next()` stays done. Disposing a live cursor
-makes later `next()` throw `disposed-handle`; disposal never revives it. Manual
-`next()` callers must dispose yielded owners themselves. Retained children survive
-parent/cursor disposal, and an early prefix read need not materialize all children.
-The shipped [prefix preview](examples/inspect-edit.ts) handles cleanup explicitly.
-
-## Inspection and contracts
-
-`document.operations`, `bindings`, `sources` and `dependencies` expose frozen
-ordinary metadata. Optional namespaces distinguish missing (`null`) from present
-empty arrays. Keyed `binding(key)`, `source(key)` and `dependency(key)` return an
-independent disposable view or `undefined`; a selected operation has `metadata`,
-`examples` and `example(key)`. Exact `value()`, `content()`, `input()` and `output()`
-methods acquire separate owners. Missing exact fields are `undefined`; present
-JSON null is an exact value. Keep each owner in its own `using` scope.
-
-A keyed view interprets its selected row's metadata when requested. A malformed
-unrelated row can make whole-namespace metadata fail while a valid selected row
-remains readable. Existing global version/duplicate/unpaired-string prerequisites
-still apply. A binding with a missing source remains readable; the source lookup
-returns `undefined`, and conformance assessment reports the broken reference.
-
-`document.operations` is a cached immutable metadata snapshot. Alias lookup,
-binding enumeration, dependency-kind comparison, and reference inspection do not
-select or invoke anything. A contract context retains its immutable document,
-supplied resources, configuration and prepared state:
-
-```ts
-const validation = document.validated();
-if (validation.status !== "validated") throw new Error("Document is not conformant");
-using proof = validation.document;
-using contracts = proof.valueContracts({ resources, diagnostics: "upstream" });
-const setup = contracts.prepare('lookup', 'input');
-if (setup.status === 'ready') {
-  using input = setup.valueContract;
-  const ordinary = input.validate(7); // ValueCheck: semantic outcome or input-error
-  using value = ExactJson.from(7);
-  const exact = input.validate(value); // ValueOutcome: satisfies | fails | no-verdict
-}
-// Other setup states: no-value-contract | operation-missing | operation-ambiguous | no-verdict
-```
-
-Application-owned replacement can retain a ready candidate, as shown by the
-[service lifecycle example](examples/service-lifecycle.mjs). Keep handling
-`no-verdict` on each validation; supplying resources requires a new context and
-does not change previously retained owners.
-
-`resolveOperation(name)` returns `found` with an independently owned operation,
-`missing`, or `ambiguous` with lexically ordered primary keys. The returned
-metadata and candidate lists are readonly. Invalid interpreted document
-structures throw `SdkError` with `code === 'interpretation'` and the original
-`location` when available; raw exact evidence remains accessible. Unknown names
-and absent contracts remain setup outcomes, so value validation never silently
-stands for missing setup.
-
-Ordinary validation treats a string as a JSON string value. Nonfinite numbers,
-undefined, cycles, sparse arrays and unsupported property representations return
-`input-error` with a stable `error.code`, explanatory `message` and
-`instancePointer` into the caller's value. The root pointer is `''`; `null` means
-no trustworthy input location is available. Admission does not invoke getters or
-`toJSON`. Caller Proxy exceptions propagate. Nested `ExactJson` owners preserve
-their tokens and remain caller-owned; temporaries are released on every result.
-Disposed nested owners are misuse and throw when traversal reaches them.
-
-An initialized SDK, live prepared handle, live exact root handle, and valid work
-options are checked before cancellation. A pre-cancelled call returns
-`no-verdict/cancelled` before ordinary traversal. A second check after admission
-releases its temporary before returning cancellation. Work options contain only
-an optional genuine `AbortSignal`. Exact overloads never return `input-error`.
-
-Every `prepare` call compiles independently. Retain the ready `valueContract`
-for repeated validation without recompilation. Disposing the context leaves that
-contract usable; dispose the contract when the application no longer needs it.
-
-`new SchemaResources([[uri, exactDocument], ...])` constructs an immutable batch.
-Input handles are borrowed. Duplicate normalized URIs are rejected, even for equal
-bytes. An invalid entry or throwing iterator releases the partial set; supplied
-handles remain yours. `with(uri, exactDocument)` returns another owned set.
-Dispose each set when no longer needed. Resources are explicit; core never
-retrieves HTTP or files. `evaluatorLimits()` describes defaults. No-verdict reasons
-distinguish unsupported capability, resource absence, conservative preparation,
-limits, cancellation, evaluator failure and established undefinedness.
-Failure problems identify original schema/instance locations and omit instance
-values. `problemsComplete` describes the selected diagnostic pass, not every
-redundant possible failure. Truncation is explicit.
-
-## Ownership and scheduling
-
-Each returned handle owns its required storage. Use `using` or idempotent
-`dispose()`; where available, `retain()` creates another independently disposable
-owner. Retained values and contracts survive disposal of their source handles. Using a disposed
-handle throws `SdkError` with code `disposed-handle`. Garbage collection is a
-fallback, not a resource-lifetime contract. The fixed meta-schema snapshots live
-for the Wasm instance's lifetime; Wasm memory pages may retain allocator high-water
-marks even when live owners have been released.
-
-| Returned owner                                                     | Lifetime                                                                                                                           |
-| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Parsed or validated document, exact value/view | Dispose each returned handle; `retain()` creates an independent owner.                                                             |
-| Selected operation (`OperationView`) | Dispose the independently returned selection. It has no `retain()` method; its `value()` method returns a separate owned `ExactJson`. |
-| Binding, source, dependency or example view | Dispose each acquired view. Metadata is plain data; exact methods acquire separate owners. `retain()` retains the view. |
-| Exact iterator/member | Dispose the cursor and every yielded owner. Early iteration closure releases the cursor only. |
-| Owned editable draft | Dispose after the edit/build transaction. Converted exact leaves belong to this scope; independently retain leaves that must outlive it. |
-| Resource set or contract context                                   | Dispose after setup when only the prepared contract is needed. Supplied resource handles are borrowed and remain caller-owned.     |
-| Ready prepared contract                                            | Retain for repeated validation; it survives disposal of setup owners. Acquire a request's retained owner before its first `await`. |
-
-For cleanup assertions, import the optional testing entry:
-
-```ts
-import { liveStorageOwners } from '@openbindings/sdk/testing';
-```
-
-The production entries export no test bookkeeping. `liveStorageOwners()` counts live exact-JSON **storage arenas** in the initialized
-Wasm instance. Retained handles and views can share an arena, so this is not a total
-of facade handles. Fixed evaluator arenas may initialize lazily and remain for the
-instance's lifetime. Record that startup retention separately; for a cleanup check,
-warm the complete parse/prepare/validate job, release its application owners, then
-compare later release counts with that baseline. No particular baseline number is
-an API guarantee. The testing counter is not a byte measurement, and neither it nor disposal
-establishes allocator RSS or shrinking Wasm memory.
-
-Run the complete replacement example after installation:
-
-```sh
-node node_modules/@openbindings/sdk/examples/service-lifecycle.mjs
-```
-
-It supplies integer and string schemas under the same URI in separate immutable
-contexts. An old request retains its contract before awaiting its body; preparing
-and committing a replacement releases only the service's previous owner. New work
-uses the new context, while the old request still validates its original exact
-integer. A malformed replacement leaves the service unchanged. The example also
-shows pre-cancellation, healthy recovery and warmed arena-count cleanup. Its
-assertions check known fixtures; an application's setup refusals still need the
-result handling described above.
-
-Parsing, assessment, inspection, preparation and validation are synchronous.
-`AbortSignal` can prevent a cancelled call but cannot preempt synchronous Wasm on
-the same thread. Use [the Worker and owner examples](examples/worker-owner.mjs) for large CPU jobs.
-The owner terminates its Worker to interrupt work, rejects pending jobs, ignores
-stale IDs, and creates a fresh Worker for recovery. Live SDK handles never cross
-Worker realms. A bundler resolves bare imports in the module Worker. Discovery I/O is asynchronous
-and observes cancellation during a pending response read.
-
-## HTTP discovery
-
-Import `discover`, `DiscoveryPublication`, and `discoveryPolicy` from
-`@openbindings/sdk/http-discovery`. Both entry points share initialization,
-`SdkError` identity and managed-handle ownership. `discover(origin, options)`
-uses Fetch or a supplied local async callback. The default decoded body limit is
-1 MiB; omission selects that default, and zero or negative values are rejected. The facade
-retains only bounded body bytes; Fetch controls its own stream chunk buffering.
-
-Only 404 means absence; 401/403 are gated. Unsupported versions, nonconformance,
-undetermined conformance, size limits and transport failures remain distinct.
-Observable response metadata and complete bounded 200 bytes survive these
-outcomes. Dispose any returned document. CORS can hide headers or the entire
-response. Opaque redirects expose no final destination; `finalUrl` is null and
-`responseType` records the host restriction. The acquisition URL supplies no
-schema base URI.
-
-`new DiscoveryPublication(validatedDocument, { allowOrigin: 'any' })` copies the
-exact approved bytes. Use `"omit"` to omit CORS, `"null"` for the opaque origin,
-or `{ origin: "https://example.test" }` for a canonical tuple origin. Its `respond(request)` method returns a standard Response
-for a Node or Worker adapter: GET, HEAD, 405/Allow, and 404 routing. Authentication,
-credentialed CORS and preflight policy remain application responsibilities.
-
-## Complete host examples
-
-- [First use: Node](examples/first-use-node.mjs) and
-  [browser](examples/first-use.html): the same complete metadata, alias and input
-  verdict path in [one shared caller](examples/first-use.mjs).
-- [Service lifecycle](examples/service-lifecycle.mjs): explicit same-URI resources,
-  retained requests, transactional replacement, cancellation/recovery and cleanup.
-- [Editor component](examples/editor.html): a mistaken source member, quoted
-  diagnostics, correction, conformance proof, contract setup and owned snapshots.
-  Serve the installed package directory over HTTP.
-- [Worker owner](examples/worker-owner.mjs) and [Worker job](examples/worker.mjs):
-  initialization, transferred input bytes, plain results, termination and recovery.
-  [Component rendering](examples/worker-view.mjs) suppresses results from older edits.
-- [Retained service](examples/service.mjs): setup returns a contract owner; each
-  request retains before awaiting its body, and replacement releases only the
-  service owner. The [Node adapter](examples/node-service.mjs) reads the exported
-  Wasm; the [local workerd adapter](examples/workerd-service.mjs) initializes in
-  request context. `DELETE` tears down the example service. No deployment needed.
-
-When migrating from this candidate's earlier facade, import HTTP discovery from
-its companion path, replace `ValidatedDocument.fromParsed(parsed)` with
-`parsed.validated()`, and narrow selection/preparation before accessing their
-owned result. Handle absent or ambiguous setup once; validate ordinary and exact
-values through the same prepared contract. There is no implicit fetch of schema
-resources and no deterministic garbage-collection promise.
-
-## Building this repository
-
-Use the pinned Rust toolchain/wasm32 target, wasm-bindgen 0.2.129, Node 22+,
-and the package lock. Run `npm ci`, `npm run build:wasm`, `npm run build`,
-`npm test`, and `npm run test:types`. `WASM_BINDGEN` may name an explicit CLI path.
-The build checks that generated Wasm matches current Rust source and records its
-source/artifact identities. Consumers of a packed package need only its included
-JavaScript, declarations and Wasm asset. The bundled `dist/wasm/build-info.json`
-records the engine source and artifact hashes; [component CI](https://github.com/openbindings/sdk/actions/workflows/ci.yml)
-records checks for each tested commit.
-Dependency notices and compiler attribution are included; this candidate is not published.
-
-### Interpretation errors and diagnostic text
-
-`ParsedDocument.resolveOperation()` checks the complete operation namespace,
-including unrelated malformed operations or aliases. It throws `SdkError` with
-`code: "interpretation"`, a specific `interpretationCode` and an original source
-`location` when available. Parsed reads remain useful for invalid editor drafts.
-Only a `ValidatedDocument` has `valueContracts()`: acquire proof through
-`parsed.validated()` and handle nonconformance, uncertainty or version refusal.
-The Wasm bridge owns this proof; a plain report cannot manufacture it.
-
-Both documents expose `openbindings`, `name`, `version`, `description` and `schemas()`.
-Text preserves JavaScript UTF-16 exactly, including lone units; optional text is
-undefined when absent. Validated field reads cannot fail on document shape.
-`schemas()` returns undefined for absence or a lexical map whose values are NEW
-independently disposable `ExactJson` owners on every call. The operation view's
-`input()` and `output()` methods likewise acquire independent owners; undefined means
-absent, while null, true, false and objects remain exact values. Dispose every
-acquired schema/value. `validated.parsed()` acquires an independent parsed owner.
-
-The established value-failure tag is `"fails"`. Default messages omit reference
-identifiers, rejected instance data and user-schema enum/member strings. Type
-guidance uses fixed JSON type names. Structured locations and explicit reference
-spellings retain source information and need an application disclosure policy
-before logging. Messages are advisory; use tagged outcomes and codes for control
-flow.
-
-`NoVerdictReason` lists the reasons emitted by this version of the TypeScript
-facade and its bundled Wasm engine, which are distributed together. It is not
-widened to arbitrary strings. Rust's cause enums are non-exhaustive so adding a
-cause does not invalidate external wildcard matches. During pre-1.0 development,
-a new minor release may change source compatibility; review the changelog before
-upgrading. Neither language adds an `unknown` semantic outcome.
-
-Definition-level reference contracts, rendered documentation and maintained checks
-are described in the [API reference guide](https://github.com/openbindings/sdk/blob/main/docs/api-reference.md).
-
-The default evaluator decides validity with `is_valid`. `Diagnostics::Coarse`
-(the default) returns `Fails` with the fixed message “value does not satisfy the
-contract”, no problems, and `problems_complete = false`. TypeScript uses
-`diagnostics: "coarse"`, `message`, and `problemsComplete: false`.
-
-Select `DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream)` or
-`proof.valueContracts({ diagnostics: "upstream" })` to request the library's own
-first error through `validate()`. Messages remain value-free; available paths map
-to original locations and optional schema facts may expose source operands.
-This mode is **library-bounded**: construction can allocate in proportion to inputs
-and can overflow the stack on deep values. The SDK promises nothing stronger than
-the library. One first error does not establish diagnostic completeness, so the
-flag remains false. Work/regex limits and cancellation can omit detail after a
-verdict; missing detail never weakens failure and never counts as rule evidence.
-
-The former `with_schema_details` / `includeSchemaDetails` boolean and the
-`max_problems` / `maxProblems`, `diagnostic_bytes` / `diagnosticBytes` options are
-removed. There is no intermediate boolean diagnostics API or SDK construction
-bound for upstream errors.
-
-Upstream mode retains whole original document/resource snapshots until the prepared
-contracts release them. Exact `details` include type names, required members, bound
-tokens and enum choices. These schema operands can be sensitive. Missing details
-mean unavailable; the built-in evaluator no longer emits a byte-truncation marker.
-
-The delivered [editor](./examples/editor.html) sends source and selected input text
-to a component-owned module Worker. Its unchecked disclosure checkbox is the
-explicit opt-in. It suppresses stale results, retains the last proved snapshot,
-terminates the Worker on teardown, and converts original UTF-8 byte offsets to
-textarea UTF-16 coordinates before moving the caret. It renders strings with
-`textContent`; the small renderer is application code, not an SDK API.
-
-Text entry points may throw for initialization errors, wrong JavaScript argument
-types or literal unpaired UTF-16 surrogates. A malformed JSON document instead
-returns its documented parse outcome. Keep operational recovery around the call:
-
-```ts
-try {
-  const result = validateDocument(sourceText);
-  if (result.status === "input-error") showParseError(result.error);
-  else showAssessment(result);
-} catch (error) {
-  showOperationalError(error); // retry initialization or correct the JS input
-}
-```
-
-
-Document findings are independent of the value diagnostics mode. OBI-02 and OBI-10
-use the library's validity API only, with the fixed message
-`value violates the fixed normative schema`, their rule, and original source
-coordinates. OBI-02 follows failing object members, member names and array elements
-through the pinned schema's compiled validator map and local pointer references.
-It reports failing children and independently failing container constraints under
-the findings cap. Missing members, container constraints and non-descending
-constructs stay at their container, even when a child also fails;
-an empty walk falls back to the root. OBI-10 reports the schema node checked by its
-localized walk. Location work shares the existing work budget; stopping retains
-the deepest established failing node and marks findings truncated. Locations and
-missing detail never change validity or rule evidence. No document opt-in, size
-gate, library error construction or active diagnostic patch is involved.
-
-Migration: document findings keep source locations, lose keyword-specific wording,
-and can now contain several positions. OBI-10 uses the checked node rather than a
-keyword within it. Use rule, code and evidence for logic, not message text or
-finding count.
+Call and await `initialize()` before using the SDK. In Node ESM it reads the
+installed package's Wasm asset independently of the working directory. Browser
+modules load the asset relative to the package module. Hosts with compiled Wasm
+imports pass a `WebAssembly.Module` to `initialize(module)`; the asset export is
+`@openbindings/sdk/openbindings.wasm`.
+
+Hosts that restrict entropy to active requests must initialize inside an allowed
+request context. [The workerd example](examples/workerd-service.mjs) shows this.
+Initialization is shared across concurrent calls. Loading and entropy failures
+reject with `SdkError`; retry after correcting the host condition.
+
+## Exact values and editing
+
+Use JSON text or UTF-8 bytes for exact numbers such as `9007199254740993`.
+`parseJson` retains tokens; `ExactJson.from` checks ordinary JavaScript input and
+cannot restore precision already lost to a JavaScript number. Nonfinite numbers,
+undefined opaque values, bigint, cycles, sparse arrays and accessors are refused.
+
+`authorDocument` builds a parsed snapshot from typed fields. To edit a document,
+call `toDraft()`, retain the returned editing scope, change `draft.value`, then
+call `authorDocument` and validate the result. Typed fields are re-encoded;
+opaque values retain exact tokens. Renaming an operation leaves reference updates
+to the caller.
+
+For a change inside an opaque object, use the tested
+[inspection and editing recipe](examples/inspect-edit.ts). It traverses `members()`,
+retains unchanged exact siblings, composes a replacement with `ExactJson.from`,
+then assigns it to the draft. It refuses duplicates, missing members and names it
+cannot represent. The changed object is encoded and parsed in full; formatting,
+member order and name escaping may change. Keep caller-created exact values live
+through the build and dispose them afterward.
+
+## Limits and diagnostics
+
+Schema resources are explicit and immutable. Supply `SchemaResources` when
+creating a value-contract context; the SDK never fetches a missing reference.
+Retain a ready contract for repeated validation. Ready does not promise a verdict
+for every value; missing resources, unsupported capabilities and exhausted work
+budgets can produce no-verdict. Replacing resources requires a new context.
+
+Default `coarse` diagnostics return an established failure with no problem list
+and `problemsComplete: false`. Opt into `diagnostics: "upstream"` on
+`valueContracts` for the library's first error. That mode can allocate in proportion
+to input and overflow the stack on deep values. Schema facts may disclose source
+operands and retain source snapshots. Messages are advisory; use result tags,
+codes and rule evidence for control flow.
+
+Document findings use original JSON Pointers and UTF-8 byte coordinates. Render
+pointers as text and convert byte offsets before selecting text in a JavaScript
+editor. Findings are capped at 4,096 and 8 MiB of pointers; `findingsTruncated`
+leaves rule evidence available. The [editor example](examples/editor.html)
+shows source correction, Worker scheduling and coordinate conversion.
+
+Parsing, inspection, preparation and value validation run synchronously. An
+`AbortSignal` cannot preempt same-thread Wasm. The
+[Worker owner](examples/worker-owner.mjs) demonstrates termination and recovery.
+The [service lifecycle example](examples/service-lifecycle.mjs) retains old work
+while installing a replacement. Public TypeScript invocation, inspection and
+synthesis providers and custom evaluator callbacks are not provided.
+
+## HTTP discovery and reference
+
+Import `discover` and `DiscoveryPublication` from
+`@openbindings/sdk/http-discovery`. Discovery uses Fetch with a default 1 MiB
+decoded body limit and thirty-second attempt deadline. Only 404 means absence;
+401 and 403 mean gated discovery. Dispose returned document owners. Publication
+copies validated bytes and defaults to CORS `*`; application middleware owns
+authentication and credentialed CORS.
+
+See [HTTP policy](https://github.com/openbindings/sdk/blob/main/docs/http-discovery.md),
+[capabilities](https://github.com/openbindings/sdk/blob/main/CAPABILITIES.md),
+[migration](https://github.com/openbindings/sdk/blob/main/docs/migration.md) and
+[the API reference](https://github.com/openbindings/sdk/blob/main/docs/api-reference.md).

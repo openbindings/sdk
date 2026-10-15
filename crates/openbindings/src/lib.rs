@@ -1,16 +1,4 @@
-//! The normative OpenBindings document model and conformance boundary.
-//!
-//! ```
-//! use openbindings::{Document, Operation, Conformance};
-//! let mut draft = Document::new();
-//! draft.operations.insert("lookup".into(), Operation::default());
-//! let snapshot = draft.build()?;
-//! let validation = snapshot.validate()?;
-//! assert_eq!(validation.report().conclusion, Conformance::Conformant);
-//! let validated = validation.validated().expect("conformance was established");
-//! assert!(matches!(validated.parsed().resolve_operation("lookup")?, openbindings::OperationSelection::Found(_)));
-//! # Ok::<(), Box<dyn std::error::Error>>(())
-//! ```
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 mod uri;

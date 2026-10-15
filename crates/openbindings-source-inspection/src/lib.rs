@@ -1,11 +1,3 @@
-//! Optional source-inspection role, separate from normative document semantics.
-//!
-//! Implement [`SourceInspector`] in a kind adapter; consume it through [`Inspector`]
-//! to check carriers, support, cancellation and returned binding fragments.
-//! Providers own acquisition and interpretation. No network client, executor,
-//! registry, synthesizer or invoker is required.
-//!
-//! See the crate README for a complete implementer example and the role mapping.
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 #![doc = include_str!("../README.md")]
