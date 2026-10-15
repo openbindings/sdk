@@ -24,8 +24,9 @@ pub enum SynthesisErrorKind {
     /// Caller cancellation.
     Cancelled,
 }
+
 /// Located report/request error. Paths use JSON Pointer syntax.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct SynthesisFinding {
     /// Machine-readable reason.
     pub code: String,
@@ -34,6 +35,12 @@ pub struct SynthesisFinding {
     /// Explanation, not an identifier.
     pub message: String,
 }
+impl std::fmt::Debug for SynthesisFinding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SynthesisFinding").finish_non_exhaustive()
+    }
+}
+
 /// Rejected provider candidate, never a checked partial success.
 #[derive(Clone, Debug)]
 pub struct RejectedSynthesis {
@@ -51,7 +58,7 @@ enum Cause {
     Provider(Box<SynthesisError>),
 }
 /// Typed refusal retaining recovery evidence without another provider call.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct SynthesisError {
     kind: SynthesisErrorKind,
     code: String,
@@ -59,6 +66,16 @@ pub struct SynthesisError {
     partial: Option<Box<Synthesis>>,
     rejected: Option<Box<RejectedSynthesis>>,
     cause: Option<Box<Cause>>,
+}
+impl std::fmt::Debug for SynthesisError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SynthesisError")
+            .field("kind", &self.kind)
+            .field("partial", &self.partial)
+            .field("rejected", &self.rejected)
+            .field("cause", &self.cause)
+            .finish_non_exhaustive()
+    }
 }
 impl SynthesisError {
     /// Construct a provider refusal. Reserved facade categories remain subject to facade checks.

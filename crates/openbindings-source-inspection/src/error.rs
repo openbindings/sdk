@@ -24,11 +24,18 @@ pub enum InspectionErrorKind {
 ///
 /// `code` is a stable provider- or companion-specific identifier; `message` is
 /// diagnostic prose. Neither should include credentials or entire source bodies.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct InspectionError {
     kind: InspectionErrorKind,
     code: String,
     message: String,
+}
+impl std::fmt::Debug for InspectionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InspectionError")
+            .field("kind", &self.kind)
+            .finish_non_exhaustive()
+    }
 }
 
 impl InspectionError {

@@ -25,7 +25,7 @@ pub const APPLIED_COMPANION_REVISION: &str = "2f7d754dc2da374058cd517064c17e50f7
 /// Default decoded discovery-body limit: 1 MiB (1,048,576 bytes).
 pub const DEFAULT_MAX_DOCUMENT_BYTES: usize = 1 << 20;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 /// Caller configuration rejected before acquisition/publication; contains stable code and fixed explanation.
 pub struct ConfigurationError {
     /// Stable configuration failure identifier.
@@ -33,6 +33,23 @@ pub struct ConfigurationError {
     /// Human-readable explanation; branch on `code` instead.
     pub message: &'static str,
 }
+impl std::fmt::Debug for ConfigurationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let code = match self.code {
+            "invalid-allow-origin" => "invalid-allow-origin",
+            "invalid-origin" => "invalid-origin",
+            "origin-policy" => "origin-policy",
+            "http-client-build" => "http-client-build",
+            "invalid-timeout" => "invalid-timeout",
+            "invalid-byte-limit" => "invalid-byte-limit",
+            _ => "<redacted>",
+        };
+        f.debug_struct("ConfigurationError")
+            .field("code", &code)
+            .finish_non_exhaustive()
+    }
+}
+
 impl std::fmt::Display for ConfigurationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.message)

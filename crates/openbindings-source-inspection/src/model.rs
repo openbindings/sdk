@@ -7,7 +7,7 @@ use serde::{
 use std::collections::{BTreeMap, HashSet};
 
 /// Advisory description of a supported exact kind; omission implies nothing.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 pub struct SupportedKind {
     /// Exact, opaque source kind.
     pub kind: String,
@@ -15,9 +15,14 @@ pub struct SupportedKind {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 }
+impl std::fmt::Debug for SupportedKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SupportedKind").finish_non_exhaustive()
+    }
+}
 
 /// Authoritative support verdict for this provider's inspection job.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct KindSupportVerdict {
     /// Exact requested kind, unchanged.
     pub kind: String,
@@ -25,12 +30,19 @@ pub struct KindSupportVerdict {
     /// that every artifact can be handled completely.
     pub supported: bool,
 }
+impl std::fmt::Debug for KindSupportVerdict {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KindSupportVerdict")
+            .field("supported", &self.supported)
+            .finish_non_exhaustive()
+    }
+}
 
 /// Binding data returned before an author assigns operation and source keys.
 ///
 /// Absent content and explicit JSON null remain distinct. Metadata is information,
 /// not execution policy. Only source-evidenced idempotency claims belong here.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct BindingFragment {
     /// Optional exact kind-owned target description.
     pub content: Option<JsonValue>,
@@ -44,6 +56,15 @@ pub struct BindingFragment {
     pub deprecated: Option<bool>,
     /// Extension members. Keys must begin with `x-`; checked before use.
     pub extensions: BTreeMap<String, JsonValue>,
+}
+impl std::fmt::Debug for BindingFragment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BindingFragment")
+            .field("content", &self.content)
+            .field("idempotent", &self.idempotent)
+            .field("deprecated", &self.deprecated)
+            .finish_non_exhaustive()
+    }
 }
 
 impl BindingFragment {
@@ -110,7 +131,7 @@ impl Serialize for BindingFragment {
 }
 
 /// One target admitted by the source's kind, with optional operation framing.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct BindableTarget {
     /// Stable source-local identity. This SDK requires uniqueness within one
     /// inspection by exact string equality. Cross-provider equality exists only if the
@@ -124,9 +145,17 @@ pub struct BindableTarget {
     /// This is authoring data, not an already validated operation contract.
     pub operation: Option<Operation>,
 }
+impl std::fmt::Debug for BindableTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BindableTarget")
+            .field("binding", &self.binding)
+            .field("operation", &self.operation)
+            .finish_non_exhaustive()
+    }
+}
 
 /// Evidence explaining omitted or unestablished admitted targets.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct InspectionLimitation {
     /// Nonempty, stable namespaced reason code.
     pub code: String,
@@ -137,6 +166,12 @@ pub struct InspectionLimitation {
     /// Additional evidence members permitted by Source Inspector 0.1. Typed
     /// members (`code`, `message`, `details`) must not be shadowed.
     pub additional_fields: BTreeMap<String, JsonValue>,
+}
+impl std::fmt::Debug for InspectionLimitation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InspectionLimitation")
+            .finish_non_exhaustive()
+    }
 }
 
 impl InspectionLimitation {

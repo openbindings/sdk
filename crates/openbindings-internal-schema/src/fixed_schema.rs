@@ -31,10 +31,17 @@ pub struct Problems<'a> {
     pub violated: bool,
     pub truncated: bool,
 }
-#[derive(Debug)]
+
 pub struct Problem<'a> {
     pub at: JsonRef<'a>,
     pub message: Cow<'static, str>,
+}
+impl std::fmt::Debug for Problem<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Problem")
+            .field("at", &self.at)
+            .finish_non_exhaustive()
+    }
 }
 const GENERIC_MESSAGE: &str = "value violates the fixed normative schema";
 // Source pointer retention shares the document findings allowance.

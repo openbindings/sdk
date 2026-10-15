@@ -81,7 +81,8 @@ impl<P: InterfaceSynthesizer> Synthesizer<P> {
     /// Validate the advisory list; absence is not a negative support verdict.
     ///
     /// # Errors
-    /// Returns an error if the provider lists empty or duplicate kinds, or lists a kind it does not support.
+    /// Returns an error if the provider lists an empty kind or a kind it does not support.
+    /// Duplicate supported kinds are preserved in provider order.
     pub fn list_supported_kinds(&self) -> Result<Vec<SupportedKind>, SynthesisError> {
         let kinds = self.provider.supported_kinds();
         if kinds

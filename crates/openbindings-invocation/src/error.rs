@@ -199,8 +199,24 @@ impl InvocationError {
 
 impl fmt::Debug for InvocationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Known protocol codes are safe; application-defined codes are opaque.
+        let code = match self.code.as_str() {
+            "CONTEXT_REQUIRED" => "CONTEXT_REQUIRED",
+            "ERR_REFUSED" => "ERR_REFUSED",
+            "ERR_CANCELLED" => "ERR_CANCELLED",
+            "ERR_EXECUTION_FAILED" => "ERR_EXECUTION_FAILED",
+            "ERR_TRANSPORT_CLOSED" => "ERR_TRANSPORT_CLOSED",
+            "ERR_FRAME_PROTOCOL" => "ERR_FRAME_PROTOCOL",
+            "ERR_OPERATION_NOT_FOUND" => "ERR_OPERATION_NOT_FOUND",
+            "ERR_BINDING_NOT_FOUND" => "ERR_BINDING_NOT_FOUND",
+            "ERR_BINDING_SELECTION_REQUIRED" => "ERR_BINDING_SELECTION_REQUIRED",
+            "ERR_UNKNOWN_SOURCE" => "ERR_UNKNOWN_SOURCE",
+            "ERR_OPERATION_VALIDATION_FAILED" => "ERR_OPERATION_VALIDATION_FAILED",
+            "ERR_SCHEMA_UNRESOLVED" => "ERR_SCHEMA_UNRESOLVED",
+            _ => "<redacted>",
+        };
         f.debug_struct("InvocationError")
-            .field("code", &self.code)
+            .field("code", &code)
             .field("data_present", &self.data.is_some())
             .finish()
     }

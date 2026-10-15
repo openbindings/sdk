@@ -35,7 +35,8 @@ pub enum InputErrorKind {
     /// An input byte, nesting or node limit was reached.
     Limit,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+
+#[derive(Clone, PartialEq, Eq)]
 /// Exact JSON admission failure. It is separate from document conformance and schema-instance outcomes.
 pub struct InputError {
     /// Broad admission failure category.
@@ -44,6 +45,14 @@ pub struct InputError {
     pub byte_offset: usize,
     /// Stable detailed parse/admission code, suitable for branching.
     pub code: &'static str,
+}
+impl std::fmt::Debug for InputError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InputError")
+            .field("kind", &self.kind)
+            .field("byte_offset", &self.byte_offset)
+            .finish_non_exhaustive()
+    }
 }
 impl fmt::Display for InputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

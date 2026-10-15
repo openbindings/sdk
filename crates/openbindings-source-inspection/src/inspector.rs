@@ -124,7 +124,8 @@ impl<P: SourceInspector> Inspector<P> {
     /// and must never be used to infer that every kind is unsupported.
     ///
     /// # Errors
-    /// Returns an error if the provider lists empty or duplicate kinds, or lists a kind it does not support.
+    /// Returns an error if the provider lists an empty kind or a kind it does not support.
+    /// Duplicate supported kinds are preserved in provider order.
     pub fn list_supported_kinds(&self) -> Result<Vec<SupportedKind>, InspectionError> {
         let kinds = self.provider.supported_kinds();
         if kinds

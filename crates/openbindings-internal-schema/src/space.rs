@@ -73,11 +73,19 @@ impl std::fmt::Debug for SchemaSpace {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Target {
     pub node: usize,
     pub dynamic_name: Option<String>,
 }
+impl std::fmt::Debug for Target {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Target")
+            .field("node", &self.node)
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
 /// Static reference inspection outcome. Located dynamic references still require evaluation-time scope resolution.
@@ -95,7 +103,8 @@ pub enum ReferenceResolution {
         detail: Failure,
     },
 }
-#[derive(Clone, Debug, Serialize)]
+
+#[derive(Clone, Serialize)]
 /// One `$ref` or `$dynamicRef` encountered in supported schema positions; opaque JSON content is not traversed as schema.
 pub struct Reference {
     /// Original location of the reference keyword.
@@ -106,6 +115,14 @@ pub struct Reference {
     pub spelling: Option<String>,
     /// Static location result or a structured refusal; never triggers I/O.
     pub resolution: ReferenceResolution,
+}
+impl std::fmt::Debug for Reference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Reference")
+            .field("location", &self.location)
+            .field("resolution", &self.resolution)
+            .finish_non_exhaustive()
+    }
 }
 #[derive(Clone, Debug, Serialize)]
 /// Bounded original-context reference inspection, not conformance proof or successful schema preparation.

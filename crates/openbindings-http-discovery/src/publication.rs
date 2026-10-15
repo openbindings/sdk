@@ -3,7 +3,7 @@ use openbindings::{DocumentValidation, ValidatedDocument, VersionRefusal};
 use std::sync::Arc;
 
 /// Publication CORS policy. Exact origins must be canonical ASCII tuple origins.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub enum AllowOrigin {
     /// Emit the wildcard origin `*` (the default).
     #[default]
@@ -14,6 +14,16 @@ pub enum AllowOrigin {
     Null,
     /// Emit a canonical ASCII serialized tuple origin.
     Exact(String),
+}
+impl std::fmt::Debug for AllowOrigin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Any => f.write_str("Any"),
+            Self::Omit => f.write_str("Omit"),
+            Self::Null => f.write_str("Null"),
+            Self::Exact(_) => f.debug_tuple("Exact").field(&"<redacted>").finish(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

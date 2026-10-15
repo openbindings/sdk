@@ -627,7 +627,7 @@ mod review_tests {
 impl std::fmt::Debug for Header {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Header")
-            .field("name", &self.name)
+            .field("value_bytes", &self.value.len())
             .finish_non_exhaustive()
     }
 }

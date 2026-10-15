@@ -46,7 +46,7 @@ pub enum Conformance {
     /// No violation was established, but evidence is insufficient to prove conformance.
     Undetermined,
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 /// One explanatory normative-rule finding. Findings may be bounded; the report's independent rule evidence determines its conclusion.
 pub struct Finding {
     /// Normative rule identifier, such as `OBI-01`.
@@ -60,7 +60,16 @@ pub struct Finding {
     /// Human-facing explanation; display as text and use `rule`, `code` and `status` for logic.
     pub message: String,
 }
-#[derive(Clone, Debug, Serialize)]
+impl std::fmt::Debug for Finding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Finding")
+            .field("status", &self.status)
+            .field("location", &self.location)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone, Serialize)]
 /// Assessment of all normative document rules at the pinned specification revision. At most 4096 findings and 8 MiB of aggregate generated-pointer UTF-8 bytes are retained. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source.
 pub struct ValidationReport {
     /// Applied specification release, independent of package version.
@@ -76,7 +85,17 @@ pub struct ValidationReport {
     /// True when findings exceed the 4096-entry or 8 MiB aggregate generated-pointer byte cap. Omission never changes rule evidence or fabricates a shortened source pointer.
     pub findings_truncated: bool,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+impl std::fmt::Debug for ValidationReport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ValidationReport")
+            .field("conclusion", &self.conclusion)
+            .field("findings", &self.findings)
+            .field("findings_truncated", &self.findings_truncated)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize)]
 /// A well-formed declared version outside this implementation's supported line. This is separate from conformance evidence.
 pub struct VersionRefusal {
     /// Original declared version string.
@@ -84,6 +103,12 @@ pub struct VersionRefusal {
     /// Supported specification line used for the refusal.
     pub supported: &'static str,
 }
+impl std::fmt::Debug for VersionRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VersionRefusal").finish_non_exhaustive()
+    }
+}
+
 impl fmt::Display for VersionRefusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -118,6 +143,18 @@ impl fmt::Debug for ParsedDocument {
 }
 #[derive(Clone, Debug)]
 /// Normative evidence plus the parsed snapshot when one was admitted. Invalid JSON can still produce a report without a parsed document.
+/// Inspect the report or obtain a validated document; unwrapping only checks the version.
+///
+/// ```compile_fail
+/// #![deny(unused_must_use)]
+/// use openbindings::ParsedDocument;
+/// ParsedDocument::parse(r#"{"openbindings":"0.2.0"}"#).unwrap().validate().unwrap();
+/// ```
+/// ```compile_fail
+/// #![deny(unused_must_use)]
+/// openbindings::validate_document(r#"{"openbindings":"0.2.0"}"#).unwrap();
+/// ```
+#[must_use = "inspect the report or obtain a validated document before continuing"]
 pub struct DocumentValidation {
     document: Option<ParsedDocument>,
     report: Arc<ValidationReport>,
@@ -133,7 +170,7 @@ pub struct DocumentValidation {
 pub struct ValidatedDocument {
     document: ParsedDocument,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 /// Structured refusal to interpret typed fields. Causes are extensible; match specific cases or `code()` and retain a fallback. Exact parsed JSON remains available after this error.
 #[non_exhaustive]
 pub enum InterpretationError {
@@ -153,6 +190,21 @@ pub enum InterpretationError {
         location: SourceLocation,
     },
 }
+impl std::fmt::Debug for InterpretationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Version(value) => f.debug_tuple("Version").field(value).finish(),
+            Self::MalformedVersion => f.write_str("MalformedVersion"),
+            Self::DuplicateMembers => f.write_str("DuplicateMembers"),
+            Self::UnpairedString => f.write_str("UnpairedString"),
+            Self::InvalidField { location, .. } => f
+                .debug_struct("InvalidField")
+                .field("location", location)
+                .finish_non_exhaustive(),
+        }
+    }
+}
+
 impl fmt::Display for InterpretationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "document cannot be interpreted: {}", self.code())
@@ -453,7 +505,7 @@ impl NameIndex {
         self.names.entry(name.into()).or_default().push(primary);
     }
 }
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 /// Name-resolution result after successful interpretation; missing and ambiguous names are not schema verdicts.
 pub enum OperationSelection {
     /// One retained operation view selected by primary key or alias; the view must still be assessed/prepared as needed.
@@ -466,6 +518,16 @@ pub enum OperationSelection {
         candidates: Vec<String>,
     },
 }
+impl std::fmt::Debug for OperationSelection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Found(value) => f.debug_tuple("Found").field(value).finish(),
+            Self::Missing => f.write_str("Missing"),
+            Self::Ambiguous { .. } => f.debug_struct("Ambiguous").finish_non_exhaustive(),
+        }
+    }
+}
+
 /// Immutable retained operation object. Its exact value is not conformance proof.
 #[derive(Clone)]
 pub struct OperationView {

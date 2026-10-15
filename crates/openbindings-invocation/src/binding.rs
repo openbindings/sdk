@@ -9,7 +9,7 @@ use serde::Serialize;
 use std::collections::HashSet;
 
 /// Advisory kind description; omission conveys no negative support verdict.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 pub struct SupportedKind {
     /// Exact opaque kind label.
     pub kind: String,
@@ -17,14 +17,28 @@ pub struct SupportedKind {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 }
+impl std::fmt::Debug for SupportedKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SupportedKind").finish_non_exhaustive()
+    }
+}
+
 /// Exact support for this provider’s invocation job.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct KindSupportVerdict {
     /// Exact requested kind, unchanged.
     pub kind: String,
     /// Authoritative support for this job; not a guarantee every case is handled.
     pub supported: bool,
 }
+impl std::fmt::Debug for KindSupportVerdict {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KindSupportVerdict")
+            .field("supported", &self.supported)
+            .finish_non_exhaustive()
+    }
+}
+
 use std::{
     future::{Future, poll_fn},
     pin::pin,
@@ -144,7 +158,8 @@ impl<P: BindingInvoker> Invoker<P> {
     /// Validate the advisory list against exact support; omission means nothing.
     ///
     /// # Errors
-    /// Returns an error if the provider lists empty or duplicate kinds, or lists a kind it does not support.
+    /// Returns an error if the provider lists an empty kind or a kind it does not support.
+    /// Duplicate supported kinds are preserved in provider order.
     pub fn list_supported_kinds(&self) -> Result<Vec<SupportedKind>, BoundaryError> {
         let kinds = self.provider.supported_kinds();
         if kinds.iter().any(|k| !self.supports_kind(&k.kind)) {

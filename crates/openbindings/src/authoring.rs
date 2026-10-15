@@ -19,7 +19,8 @@ pub enum AuthoringErrorKind {
     /// Encoding or parsing exceeded an admission limit.
     Limit,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+
+#[derive(Clone, PartialEq, Eq)]
 /// Expected authoring failure. A native draft pointer and an original source location are distinct coordinates; inspect the available one. Messages explain failures, while `kind` supports branching.
 pub struct AuthoringError {
     kind: AuthoringErrorKind,
@@ -27,6 +28,15 @@ pub struct AuthoringError {
     source_location: Option<crate::SourceLocation>,
     message: String,
     path_omitted_for_limit: bool,
+}
+impl std::fmt::Debug for AuthoringError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthoringError")
+            .field("kind", &self.kind)
+            .field("source_location", &self.source_location)
+            .field("path_omitted_for_limit", &self.path_omitted_for_limit)
+            .finish_non_exhaustive()
+    }
 }
 impl AuthoringError {
     /// Return the stable failure category; callers must allow future categories.

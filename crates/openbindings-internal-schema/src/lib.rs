@@ -15,11 +15,17 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct Location {
     pub resource: Option<String>,
     pub pointer: String,
 }
+impl std::fmt::Debug for Location {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Location").finish_non_exhaustive()
+    }
+}
+
 #[derive(Clone)]
 pub struct ProjectedResource {
     pub uri: String,
@@ -61,7 +67,8 @@ pub enum FailureReason {
     Cancelled,
     EvaluatorFailure,
 }
-#[derive(Clone, Debug, Serialize)]
+
+#[derive(Clone, Serialize)]
 pub struct Failure {
     pub reason: FailureReason,
     pub code: String,
@@ -70,6 +77,15 @@ pub struct Failure {
     /// Established static-reference semantics, independent of evaluator ability.
     #[serde(skip)]
     pub reference_defect: Option<StaticReferenceDefect>,
+}
+impl std::fmt::Debug for Failure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Failure")
+            .field("reason", &self.reason)
+            .field("location", &self.location)
+            .field("reference_defect", &self.reference_defect)
+            .finish_non_exhaustive()
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StaticReferenceDefect {

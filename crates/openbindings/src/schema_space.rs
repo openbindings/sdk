@@ -91,8 +91,9 @@ pub enum ReferenceRefusalReason {
     /// The resolver could not complete inspection.
     ResolverFailure,
 }
+
 /// A reference-inspection refusal, separate from a value outcome.
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, serde::Serialize)]
 pub struct ReferenceRefusal {
     /// Broad refusal category.
     pub reason: ReferenceRefusalReason,
@@ -102,6 +103,14 @@ pub struct ReferenceRefusal {
     pub message: String,
     /// Original schema location, when established.
     pub location: Option<SchemaLocation>,
+}
+impl std::fmt::Debug for ReferenceRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReferenceRefusal")
+            .field("reason", &self.reason)
+            .field("location", &self.location)
+            .finish_non_exhaustive()
+    }
 }
 impl std::fmt::Display for ReferenceRefusal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -153,7 +162,7 @@ pub enum ReferenceResolution {
         detail: ReferenceRefusal,
     },
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 /// One `$ref` or `$dynamicRef` encountered in supported schema positions; opaque JSON content is not traversed as schema.
 pub struct Reference {
     /// Original location of the reference keyword.
@@ -164,6 +173,14 @@ pub struct Reference {
     pub spelling: Option<String>,
     /// Static location result or a structured refusal; never triggers I/O.
     pub resolution: ReferenceResolution,
+}
+impl std::fmt::Debug for Reference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Reference")
+            .field("location", &self.location)
+            .field("resolution", &self.resolution)
+            .finish_non_exhaustive()
+    }
 }
 #[derive(Clone, Debug, Serialize)]
 /// Bounded original-context reference inspection, not conformance proof or successful schema preparation.

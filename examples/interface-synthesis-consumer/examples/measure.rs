@@ -82,7 +82,8 @@ async fn main() {
             black_box(fresh.validate().unwrap().validated().unwrap());
             cold_assessment.push(t.elapsed().as_nanos());
             let t = Instant::now();
-            black_box(fresh.validate().unwrap());
+            // The cold assessment above already checked this immutable snapshot.
+            let _ = black_box(fresh.validate().unwrap());
             warm_assessment.push(t.elapsed().as_nanos());
             let mut candidate = seed.clone();
             candidate.document = fresh;
