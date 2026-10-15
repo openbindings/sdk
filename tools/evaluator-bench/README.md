@@ -17,6 +17,9 @@ python3 tools/evaluator-bench/compare.py --baseline /path/base --candidate /path
 ```
 
 Use `--workloads array` to replay a single workload. Use an unused output directory.
+When a change alters the public API the instrument calls, the candidate's
+instrument cannot build against the merge base; the workflow then reports the
+pair as not comparable and makes no timing comparison.
 One fresh child reads one JSON request and emits one JSON-line observation. The
 saved `fixtures.json` contains complete replay requests; add `mode` and
 `iterations` from `commands.jsonl` to feed one directly to a binary. Every case
