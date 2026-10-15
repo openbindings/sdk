@@ -47,7 +47,7 @@ pub enum PublicationError {
     Configuration(ConfigurationError),
     /// Unsupported declared version, separate from normative conformance.
     VersionRefused(VersionRefusal),
-    /// Validation established a document violation; payload carries report and any parsed snapshot.
+    /// Validation established a document violation; payload carries report and any document snapshot.
     NonConformant(DocumentValidation),
     /// Validation could not establish conformance; payload preserves its evidence.
     Undetermined(DocumentValidation),

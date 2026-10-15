@@ -15,7 +15,7 @@ const exact = (text) => {
   return r.value;
 };
 const parsed = (text) => {
-  const r = sdk.parseDocument(text);
+  const r = sdk.Document.parse(text);
   assert.equal(r.status, "parsed");
   return r.value;
 };
@@ -214,220 +214,177 @@ test("cursor failure closes only cursor; metadata-only prefix never acquires unv
 const documentText =
   '{"openbindings":"0.2.0","description":"before","operations":{"__proto__":{"tags":[],"aliases":["alias"],"input":{"const":9007199254740993},"examples":{"constructor":{"input":9007199254740993,"output":null,"x-exact":0.29000000000000001}}},"constructor":{}},"schemas":{"__proto__":{"enum":[9007199254740992,9007199254740993]},"constructor":true},"sources":{"toString":{"kind":"local","content":null}},"bindings":{"constructor":{"operation":"__proto__","source":"toString","content":{"large":1000000000000000128},"preference":-1,"deprecated":false}},"dependencies":{"__proto__":{"operation":"__proto__","kinds":[]}},"x-exact":1000000000000000128,"additionalFields":false}';
 
-test("native parsed-to-editable draft roundtrip, direct edits and prototype-sensitive names preserve exact unrelated values", () => {
+test("document edits and prototype-sensitive names preserve exact unrelated values", () => {
+  // DOC-1: the exact document replaces the converted draft graph.
   const original = parsed(documentText),
     originalValue = original.value();
-  const converted = original.toDraft();
-  assert.equal(converted.status, "drafted");
-  const editing = converted.draft,
-    draft = editing.value;
-  assert.equal(editing.value, draft);
+  const document = original.retain();
   original.dispose();
   try {
-    assert.equal(Object.hasOwn(draft.operations, "__proto__"), true);
-    assert.equal(Object.getPrototypeOf(draft.operations), Object.prototype);
-    assert.equal(Object.hasOwn(draft.schemas, "constructor"), true);
-    assert.equal(
-      draft.operations.__proto__.input instanceof sdk.ExactJson,
-      true,
-    );
-    draft.description = "after";
-    draft.operations.temporary = { input: { type: "integer" } };
-    draft.operations.__proto__.tags.push("reviewed");
-    draft.operations.__proto__.tags.pop();
-    draft.operations.__proto__.aliases.push("another");
-    draft.operations.__proto__.aliases.pop();
-    draft.dependencies.__proto__.kinds.push("x");
-    draft.dependencies.__proto__.kinds.pop();
-    const added = sdk.authorDocument(draft);
-    assert.equal(added.status, "authored");
+    document.setDescription("after");
+    document.setOperation("temporary", { input: { type: "integer" } });
+    document.set("/operations/__proto__/tags", ["reviewed"]);
+    document.set("/operations/__proto__/tags", []);
+    document.set("/operations/__proto__/aliases/-", "another");
+    document.remove("/operations/__proto__/aliases/1");
+    document.set("/dependencies/__proto__/kinds/-", "x");
+    document.remove("/dependencies/__proto__/kinds/0");
+    const found = document.resolveOperation("temporary");
+    assert.equal(found.status, "found");
+    found.operation.dispose();
+    document.remove("/operations/temporary");
+    const newValue = document.value(),
+      cursor = originalValue.members();
     try {
-      const found = added.document.resolveOperation("temporary");
-      assert.equal(found.status, "found");
-      found.operation.dispose();
-    } finally {
-      // Separate acquisition to cover ownership of selected handles.
-      const selected = added.document.resolveOperation("temporary");
-      if (selected.status === "found") selected.operation.dispose();
-      added.document.dispose();
-    }
-    delete draft.operations.temporary;
-    const result = sdk.authorDocument(draft);
-    assert.equal(result.status, "authored");
-    const newValue = result.document.value();
-    try {
-      const cursor = originalValue.members();
-      try {
-        for (const member of cursor) {
-          const name = member.name(),
-            before = member.value();
+      for (const member of cursor) {
+        const name = member.name(),
+          before = member.value();
+        try {
+          const decoded = name.toValue();
+          assert.equal(decoded.status, "converted");
+          if (decoded.value === "description") continue;
+          const after = newValue.get(decoded.value);
           try {
-            const decoded = name.toValue();
-            assert.equal(decoded.status, "converted");
-            if (decoded.value === "description") continue;
-            const after = newValue.get(decoded.value);
-            try {
-              assert.equal(before.equals(after), true, decoded.value);
-            } finally {
-              after.dispose();
-            }
+            assert.equal(before.equals(after), true, decoded.value);
           } finally {
-            name.dispose();
-            before.dispose();
-            member.dispose();
+            after.dispose();
           }
+        } finally {
+          name.dispose();
+          before.dispose();
+          member.dispose();
         }
-      } finally {
-        cursor.dispose();
       }
-      disposed(() => original.originalBytes);
+      disposed(() => original.toBytes());
     } finally {
+      cursor.dispose();
       newValue.dispose();
-      result.document.dispose();
     }
   } finally {
-    editing.dispose();
     originalValue.dispose();
-    original.dispose();
+    document.dispose();
   }
 });
 
-test("draft registry cleans removed/replaced leaves, retains explicit escapes, and never adopts external owners", () => {
+test("edits retain removed leaves and never adopt external owners", () => {
+  // DOC-1: every acquired exact value owns its revision independently.
   const baseline = testing.liveStorageOwners();
   const source = parsed(
     '{"openbindings":"0.2.0","operations":{"run":{"input":true}},"schemas":{"kept":9007199254740993}}',
   );
-  const converted = source.toDraft();
-  assert.equal(converted.status, "drafted");
-  const editing = converted.draft,
-    draft = editing.value;
-  const removed = draft.schemas.kept,
+  const root = source.value(),
+    removed = root.at("/schemas/kept"),
     retained = removed.retain(),
     external = exact("0.29000000000000001");
+  root.dispose();
+  source.remove("/schemas/kept");
+  source.setOperationInput("run", external);
+  const branch = source.retain();
   source.dispose();
-  delete draft.schemas.kept;
-  draft.operations.run.input = external;
-  const branch = sdk.authorDocument(draft);
-  assert.equal(branch.status, "authored");
-  const other = branch.document.toDraft();
-  assert.equal(other.status, "drafted");
-  branch.document.dispose();
-  editing.dispose();
   try {
-    disposed(() => removed.text);
-    disposed(() => editing.value);
-    disposed(() => sdk.authorDocument(draft));
+    disposed(() => source.setName("disposed"));
+    assert.equal(removed.text, "9007199254740993");
     assert.equal(retained.text, "9007199254740993");
     assert.equal(external.text, "0.29000000000000001");
-    assert.equal(
-      other.draft.value.operations.run.input.text,
-      "0.29000000000000001",
-    );
-    const plain = { ...draft, operations: {} };
-    const result = sdk.authorDocument(plain);
-    assert.equal(result.status, "authored");
-    result.document.dispose();
+    const value = branch.value(),
+      input = value.at("/operations/run/input");
+    try {
+      assert.equal(input.text, external.text);
+    } finally {
+      input.dispose();
+      value.dispose();
+    }
   } finally {
-    other.draft.dispose();
-    external.dispose();
+    branch.dispose();
+    removed.dispose();
     retained.dispose();
-    editing.dispose();
-    source.dispose();
+    external.dispose();
   }
   assert.equal(testing.liveStorageOwners(), baseline);
 });
 
-test("draft conversion errors are located native refusals, independent of conformance", () => {
-  for (const [text, code, pointer] of [
-    [
-      '{"openbindings":"0.2.0","operations":{},"description":17}',
-      "invalid-field",
-      "/description",
-    ],
-    [
-      '{"openbindings":"0.2.0","operations":{"\\ud800":{}}}',
-      "invalid-field",
-      null,
-    ],
-    [
-      '{"openbindings":"0.2.0","operations":{},"x":1,"x":2}',
-      "duplicate-members",
-      "",
-    ],
-    ['{"openbindings":"0.2.0"}', "invalid-field", ""],
+test("malformed documents stay inspectable and repairable independently of conformance", () => {
+  // DOC-1: typed read errors address current bytes; duplicates refuse editing.
+  const source = parsed(
+    '{"openbindings":"0.2.0","operations":{},"description":17}',
+  );
+  assert.throws(
+    () => source.description,
+    (e) => e.code === "interpretation" && e.location.pointer === "/description",
+  );
+  source.setDescription("repaired");
+  const proof = source.validate();
+  assert.equal(proof.status, "conformant");
+  proof.document.dispose();
+  source.dispose();
+  for (const text of [
+    '{"openbindings":"0.2.0","operations":{"\\ud800":{}}}',
+    '{"openbindings":"0.2.0"}',
   ]) {
-    const source = parsed(text);
-    try {
-      const result = source.toDraft();
-      assert.equal(result.status, "authoring-error");
-      assert.equal(result.error.code, code);
-      assert.equal(result.error.draftPointer, null);
-      assert.equal(result.error.sourceLocation.pointer, pointer);
-      assert.equal(typeof result.error.sourceLocation.byteOffset, "number");
-      assert.deepEqual(source.originalBytes, new TextEncoder().encode(text));
-    } finally {
-      source.dispose();
-    }
+    const document = parsed(text);
+    assert.equal(document.validate().status, "report");
+    if (!text.includes("operations"))
+      assert.throws(() => document.operations, sdk.SdkError);
+    assert.deepEqual(document.toBytes(), new TextEncoder().encode(text));
+    document.setOperations({});
+    const checked = document.validate();
+    assert.equal(checked.status, "conformant");
+    checked.document.dispose();
+    document.dispose();
   }
-  for (const [text, conclusion] of [
-    [
-      '{"openbindings":"0.2.0","operations":{"run":{"input":null}},"unexpected":{"value":9007199254740993}}',
-      "non-conformant",
-    ],
-    [
-      '{"openbindings":"0.2.0","operations":{"run":{"input":null}},"unexpected":{"\\ud800":9007199254740993}}',
-      // an opaque surrogate does not hide invalid input or an unknown member.
-      "non-conformant",
-    ],
+  const duplicate = parsed(
+    '{"openbindings":"0.2.0","operations":{},"x":1,"x":2}',
+  );
+  const before = duplicate.toBytes();
+  assert.throws(
+    () => duplicate.setName("refused"),
+    (e) => e.code === "duplicate-members",
+  );
+  assert.deepEqual(duplicate.toBytes(), before);
+  duplicate.dispose();
+  for (const text of [
+    '{"openbindings":"0.2.0","operations":{"run":{"input":null}},"unexpected":{"value":9007199254740993}}',
+    '{"openbindings":"0.2.0","operations":{"run":{"input":null}},"unexpected":{"\\ud800":9007199254740993}}',
   ]) {
-    const source = parsed(text);
-    const before = source.validate().report;
-    assert.equal(before.conclusion, conclusion);
-    const converted = source.toDraft();
-    assert.equal(converted.status, "drafted");
-    source.dispose();
-    try {
-      const result = sdk.authorDocument(converted.draft.value);
-      assert.equal(result.status, "authored");
-      try {
-        assert.equal(result.document.validate().report.conclusion, conclusion);
-      } finally {
-        result.document.dispose();
-      }
-    } finally {
-      converted.draft.dispose();
-    }
+    const document = parsed(text),
+      held = document.retain();
+    document.dispose();
+    held.setDescription("still a broken document");
+    assert.equal(held.validate().report.conclusion, "non-conformant");
+    held.dispose();
   }
 });
 
-test("draft transfer partial failures release taken and untaken exact roots", () => {
+test("failed edit encoding and native commits release temporary state", () => {
+  // DOC-1: no draft transfer graph or partially committed document escapes.
   const source = parsed(documentText),
-    baseline = testing.liveStorageOwners();
-  const proto = bridge.WasmDraft.prototype,
-    originalShape = proto.shape,
-    originalTake = proto.takeExact;
+    baseline = testing.liveStorageOwners(),
+    before = source.toBytes();
+  const original = bridge.WasmDocument.prototype.editEncoded;
   try {
-    for (const failure of ["shape", "decode", "second-leaf"]) {
-      let calls = 0;
-      proto.shape =
-        failure === "shape"
-          ? () => {
-              throw new Error("shape fault");
-            }
-          : failure === "decode"
-            ? () => "{"
-            : originalShape;
-      proto.takeExact = function (index) {
-        if (failure === "second-leaf" && ++calls === 2)
-          throw new Error("leaf fault");
-        return originalTake.call(this, index);
-      };
-      assert.throws(() => source.toDraft());
-      assert.equal(testing.liveStorageOwners(), baseline);
-    }
+    const sentinel = new Error("commit fault");
+    bridge.WasmDocument.prototype.editEncoded = () => {
+      throw sentinel;
+    };
+    assert.throws(
+      () => source.edit([{ op: "set", pointer: "/name", value: "new" }]),
+      (e) => e === sentinel,
+    );
+    assert.deepEqual(source.toBytes(), before);
+    assert.equal(testing.liveStorageOwners(), baseline);
   } finally {
-    proto.shape = originalShape;
-    proto.takeExact = originalTake;
+    bridge.WasmDocument.prototype.editEncoded = original;
+  }
+  try {
+    assert.throws(() =>
+      source.edit([
+        { op: "set", pointer: "/name", value: "new" },
+        { op: "set", pointer: "/bad", value: undefined },
+      ]),
+    );
+    assert.deepEqual(source.toBytes(), before);
+    assert.equal(testing.liveStorageOwners(), baseline);
+  } finally {
     source.dispose();
   }
 });

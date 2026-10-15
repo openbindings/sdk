@@ -16,9 +16,9 @@ the legacy implementation; a registry install alone does not select this API.
 | Legacy job | Rust-backed SDK |
 | --- | --- |
 | Go `ParseDocument(data)`, `ValidateDocument(data)` and `doc.Validate()` | `Document::parse` preserves input; `validate()` returns document validation; `conformant()` yields an owner only when conformance is established. `validate_document` is the bytes-to-validation convenience function. |
-| TypeScript `parseDocument(input)` returning `OBInterface`, and `validateDocument` / `validateInterface` throwing on invalid data | Await `initialize()`, narrow `parseDocument(input)` to `status === "parsed"`, then call `document.validated()` and narrow to `status === "validated"`. `validateDocument` returns a report outcome instead of an interface object. |
+| TypeScript `parseDocument(input)` returning `OBInterface`, and `validateDocument` / `validateInterface` throwing on invalid data | Await `initialize()`, narrow `Document.parse(input)` to `status === "parsed"`, then call `document.validate()` and narrow to `status === "conformant"`. `validateDocument` returns a report outcome instead of an interface object. |
 
-Parsing here is not a conformance gate. Keep parsed snapshots for editors; require
+Parsing here is not a conformance gate. Keep documents for editors; require
 a `Conformant<Document>` before creating value contracts or publishing a document.
 Handle unsupported-version refusal separately from non-conformant and undetermined
 reports. Use rule evidence and codes instead of matching diagnostic prose.
@@ -34,7 +34,7 @@ first-use guide shows an exact batched edit. See the TypeScript package guide fo
 
 | Legacy API | Replacement |
 | --- | --- |
-| Go `doc.Operations`, `doc.ResolveOperation(name)`, `doc.OperationBindings(key)` | `Conformant<Document>` operation reads and `resolve_operation(name)`; use the returned operation's `key()` and `bindings()`. Parsed lookup returns explicit found, missing or ambiguous selection. |
+| Go `doc.Operations`, `doc.ResolveOperation(name)`, `doc.OperationBindings(key)` | `Conformant<Document>` operation reads and `resolve_operation(name)`; use the returned operation's `key()` and `bindings()`. Document lookup returns explicit found, missing or ambiguous selection. |
 | TypeScript `iface.operations`, `resolveOperation(iface, name)`, `PreparedInterface.operation(name)` | `document.operations` metadata and `resolveOperation(name)`; narrow the selection before using its operation owner. Read schema owners with `input()` and `output()`. |
 
 Primary names and aliases resolve operations; dependency operation references are
@@ -46,9 +46,9 @@ plain data, while `schemas()` and schema access methods acquire new owners.
 
 | Legacy API | Replacement |
 | --- | --- |
-| Go `NewValueContractCompiler(evaluator, resources...)`, `Resolve(ctx, doc)`, `CompileInput` / `CompileOutput` | Select a `SchemaEvaluator`, create an immutable `ResourceSet`, call `validated.value_contracts`, then `prepare(name, Direction::Input)` or `Direction::Output`. |
+| Go `NewValueContractCompiler(evaluator, resources...)`, `Resolve(ctx, doc)`, `CompileInput` / `CompileOutput` | Select a `SchemaEvaluator`, create an immutable `ResourceSet`, call `conformant.value_contracts`, then `prepare(name, Direction::Input)` or `Direction::Output`. |
 | Go `ValueContract.Validate(ctx, value)` / `ValidateJSON(ctx, bytes)` and error classification | Admit ordinary data with `JsonValue::from_serializable` or exact bytes with `JsonValue::parse`; match `ValueOutcome::Satisfies`, `Fails`, `Undefined` or `NoVerdict`. |
-| TypeScript `compileOperationSchema(iface, name, position)` and `CompiledSchema.validate(value)` returning `valid` and failures | Create `validated.valueContracts()`, call `prepare(name, "input" / "output")`, narrow to ready, then call `valueContract.validate(value)`. Handle `satisfies`, `fails`, `undefined`, `no-verdict` and ordinary-input admission errors. |
+| TypeScript `compileOperationSchema(iface, name, position)` and `CompiledSchema.validate(value)` returning `valid` and failures | Create `conformant.valueContracts()`, call `prepare(name, "input" / "output")`, narrow to ready, then call `valueContract.validate(value)`. Handle `satisfies`, `fails`, `undefined`, `no-verdict` and ordinary-input admission errors. |
 
 Preparation has its own outcomes. An absent value contract is not success against
 an implicit schema. Retain a ready contract for reuse; preparation compiles anew.
@@ -78,7 +78,7 @@ jobs or move the integration to Rust.
 
 In Rust, implement `binding::BindingInvoker` or select a kind implementation that
 does. Use `binding::Invoker` for source and binding values, or
-`operation::Invoker::new(validated, provider)` for document operations. Select an
+`operation::Invoker::new(conformant, provider)` for document operations. Select an
 evaluator with `with_evaluator`, prepare an operation and invoke an `Attempt`.
 Read output through its terminal result and close input when finished. See the
 [invocation guide](invocation.md). Legacy `prepareOperation` is an advisory
@@ -94,7 +94,7 @@ Kind implementations and application context policy remain separate from core.
 | --- | --- |
 | Go `httpdiscovery.Client.Discover(ctx, origin)` | Rust `native::Client::discover` with the `native` feature, or portable `discover` with host transport and timer. |
 | Go `httpdiscovery.NewHandler(data, options)` | Rust `Publication::from_bytes` / `respond`, adapted to your HTTP server. |
-| TypeScript `fetchInterface(url)` or `OpenBindingsRuntime.resolve(url)` | `discover(origin, options)` from `@openbindings/sdk/http-discovery` for well-known discovery. `DiscoveryPublication` publishes validated bytes. |
+| TypeScript `fetchInterface(url)` or `OpenBindingsRuntime.resolve(url)` | `discover(origin, options)` from `@openbindings/sdk/http-discovery` for well-known discovery. `DiscoveryPublication` publishes conformant bytes. |
 
 Legacy TypeScript resolution tries direct fetching, discovery and optional
 synthesis. The new discovery call performs the well-known-origin job only;

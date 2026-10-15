@@ -134,8 +134,8 @@ console.log("Installed README TypeScript first-use block compiled and ran verbat
     join(temporary, "inspect-edit-example-cases.mjs"),
   );
   copyFileSync(
-    join(root, "test/validated-contracts.mjs"),
-    join(temporary, "validated-contracts.mjs"),
+    join(root, "test/conformant-contracts.mjs"),
+    join(temporary, "conformant-contracts.mjs"),
   );
   for (const name of [
     "api-quality",
@@ -178,7 +178,7 @@ assert(!Object.hasOwn(sdk, "liveStorageOwners"));
 assert(!Object.hasOwn(http, "liveStorageOwners"));
 assert.deepEqual(Object.keys(testing), ["liveStorageOwners"]);
 assert.throws(() => testing.liveStorageOwners(), { code: "not-initialized" });
-const { initialize, parseDocument } = sdk;
+const { initialize, Document } = sdk;
 const resolved = fileURLToPath(import.meta.resolve("@openbindings/sdk"));
 assert.equal(await realpath(resolved), resolved, "Package must not resolve through a workspace symlink");
 assert(resolved.startsWith(${JSON.stringify(join(temporary, "node_modules") + sep)}));
@@ -187,11 +187,11 @@ const first = initialize();
 assert.equal(first, initialize());
 await first;
 assert.equal(typeof testing.liveStorageOwners(), "number");
-const parsed = parseDocument('{"openbindings":"0.2.0","operations":{"run":{}}}');
+const parsed = Document.parse('{"openbindings":"0.2.0","operations":{"run":{}}}');
 assert.equal(parsed.status, "parsed");
 try {
-  const checked = parsed.value.validated();
-  assert.equal(checked.status, "validated");
+  const checked = parsed.value.validate();
+  assert.equal(checked.status, "conformant");
   checked.document.dispose();
 } finally {
   parsed.value.dispose();

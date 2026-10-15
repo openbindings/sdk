@@ -23,7 +23,7 @@ use std::sync::Arc;
 /// Use [`Conformant<Document>::value_contracts`] to share an evaluator, configure
 /// budgets or diagnostics, supply resources or select a custom evaluator.
 ///
-/// A parsed document must establish conformance before constructing value contracts:
+/// A document must establish conformance before constructing value contracts:
 /// ```compile_fail,E0308
 /// use openbindings::Document;
 /// use openbindings_json_schema_evaluator::value_contracts;

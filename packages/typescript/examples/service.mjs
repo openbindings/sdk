@@ -1,13 +1,13 @@
 // Application-owned service lifetime, shared by Node and workerd adapters.
-import { SchemaResources, parseDocument, parseJson } from "@openbindings/sdk";
+import { SchemaResources, Document, parseJson } from "@openbindings/sdk";
 
 export function prepareService(documentBytes, entries = []) {
-  const parsed = parseDocument(documentBytes);
+  const parsed = Document.parse(documentBytes);
   if (parsed.status !== "parsed") return parsed;
   let proof, resources, context;
   try {
-    const checked = parsed.value.validated();
-    if (checked.status !== "validated") return checked;
+    const checked = parsed.value.validate();
+    if (checked.status !== "conformant") return checked;
     proof = checked.document;
     resources = new SchemaResources(entries); // borrowed schema owners
     context = proof.valueContracts({ resources });

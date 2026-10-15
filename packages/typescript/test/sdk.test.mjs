@@ -1,5 +1,6 @@
+import { constructDocument } from "./construct-document.mjs";
 import * as testing from "../dist/testing.js";
-import { validatedContracts } from "./validated-contracts.mjs";
+import { conformantContracts } from "./conformant-contracts.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -18,7 +19,7 @@ const ready = (context, operation, direction) => {
 const text =
   ' {"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"},"aliases":["execute"]}}} ';
 const parsed = (input) => {
-  const result = sdk.parseDocument(input);
+  const result = sdk.Document.parse(input);
   assert.equal(result.status, "parsed");
   return result.value;
 };
@@ -29,7 +30,7 @@ const exact = (input) => {
 };
 test("author every normative object; absence/null and exact opaque values survive", () => {
   const large = exact("9007199254740993");
-  const result = sdk.authorDocument({
+  const document = constructDocument(sdk, {
     name: "example",
     description: undefined,
     operations: {
@@ -57,10 +58,9 @@ test("author every normative object; absence/null and exact opaque values surviv
     additionalFields: { "x-extra": { large } },
   });
   large.dispose();
-  assert.equal(result.status, "authored");
-  const validation = result.document.validated();
-  assert.equal(validation.status, "validated");
-  const value = result.document.value();
+  const validation = document.validate();
+  assert.equal(validation.status, "conformant");
+  const value = document.value();
   assert.equal(value.get("description"), undefined);
   for (const path of [
     "/sources/local/content",
@@ -76,23 +76,28 @@ test("author every normative object; absence/null and exact opaque values surviv
   preserved.dispose();
   value.dispose();
   validation.document.dispose();
-  result.document.dispose();
-  const collision = sdk.authorDocument({
-    operations: {},
-    additionalFields: { operations: {} },
-  });
-  assert.equal(collision.status, "authoring-error");
-  assert.equal(collision.error.code, "field-collision");
-  assert.equal(collision.error.draftPointer, "/additionalFields/operations");
-  const missing = sdk.authorDocument({
-    operations: {},
-    additionalFields: { "x-missing": undefined },
-  });
-  assert.equal(missing.status, "authoring-error");
-  assert.equal(missing.error.code, "unsupported-value");
-  assert.equal(missing.error.draftPointer, "/additionalFields/x-missing");
-  const bad = sdk.authorDocument({ operations: {}, description: null });
-  assert.equal(bad.status, "authoring-error");
+  document.dispose();
+  const edited = sdk.Document.create();
+  assert.throws(
+    () => edited.setOperation("run", { additionalFields: { input: {} } }),
+    (e) =>
+      e.code === "field-collision" &&
+      e.draftPointer === "/operations/run/additionalFields/input",
+  );
+  assert.throws(
+    () =>
+      edited.setOperation("run", {
+        additionalFields: { "x-missing": undefined },
+      }),
+    (e) =>
+      e.code === "unsupported-value" &&
+      e.draftPointer === "/operations/run/additionalFields/x-missing",
+  );
+  assert.throws(
+    () => edited.setOperation("run", { description: null }),
+    sdk.EditError,
+  );
+  edited.dispose();
 });
 test("ordinary conversion rejects lossy/side-effecting values and exact handles retain ownership", () => {
   let getter = 0;
@@ -135,7 +140,7 @@ test("ordinary conversion rejects lossy/side-effecting values and exact handles 
 });
 test("retained contracts and metadata support repeated native-feeling caller use", () => {
   const warmDocument = parsed(text),
-    warmContext = validatedContracts(warmDocument),
+    warmContext = conformantContracts(warmDocument),
     warmContract = ready(warmContext, "run", "input");
   warmContract.dispose();
   warmContext.dispose();
@@ -151,7 +156,7 @@ test("retained contracts and metadata support repeated native-feeling caller use
     assert.equal(op.key, "run");
     assert.deepEqual(op.bindings, []);
     op.dispose();
-    const context = validatedContracts(document);
+    const context = conformantContracts(document);
     const input = ready(context, "run", "input");
     const output = context.prepare("run", "output");
     context.dispose();
@@ -171,8 +176,8 @@ test("retained contracts and metadata support repeated native-feeling caller use
 });
 test("publication copies the snapshot and uses ordinary Fetch request/response values", async () => {
   const document = parsed(text),
-    valid = document.validated();
-  assert.equal(valid.status, "validated");
+    valid = document.validate();
+  assert.equal(valid.status, "conformant");
   const publication = new discovery.DiscoveryPublication(valid.document, {
     allowOrigin: "any",
   });
@@ -358,7 +363,7 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   assert.equal(references.references[0].resolution.outcome, "located");
   const control = new AbortController();
   control.abort();
-  const contracts = validatedContracts(document, { resources });
+  const contracts = conformantContracts(document, { resources });
   const cancelled = contracts.prepare("run", "input", {
     signal: control.signal,
   });
@@ -372,7 +377,7 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
     "cancelled",
   );
   assert.equal(healthy.validate(value).outcome, "satisfies");
-  const limited = validatedContracts(document, {
+  const limited = conformantContracts(document, {
       resources,
       limits: { evaluationSteps: 0 },
     }),
@@ -384,11 +389,11 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   assert.equal(partial.complete, false);
   assert.equal(partial.limitation.reason, "cancelled");
   assert.throws(
-    () => validatedContracts(document, { limits: { evaluationSteps: -1 } }),
+    () => conformantContracts(document, { limits: { evaluationSteps: -1 } }),
     (e) => e.code === "invalid-evaluator-limits",
   );
   assert.throws(
-    () => validatedContracts(document, { limits: { unknown: 1 } }),
+    () => conformantContracts(document, { limits: { unknown: 1 } }),
     (e) => e.code === "invalid-evaluator-limits",
   );
   assert.equal("raw" in document, false);
@@ -402,13 +407,16 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
 
 test("Wasm reports retain specification evidence without application policy", () => {
   const document = parsed('{"openbindings":"0.2.0"}');
-  assert.deepEqual(Object.keys(document.validate().report).sort(), [
-    "conclusion",
-    "evidence",
-    "findings",
-    "findingsTruncated",
-    "release",
-    "revision",
-  ]);
+  assert.deepEqual(
+    Object.keys(sdk.validateDocument(document.toBytes()).report).sort(),
+    [
+      "conclusion",
+      "evidence",
+      "findings",
+      "findingsTruncated",
+      "release",
+      "revision",
+    ],
+  );
   document.dispose();
 });

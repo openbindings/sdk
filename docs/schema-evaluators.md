@@ -8,7 +8,7 @@ The [Rust first-use example](rust-first-use.md) shows the complete path.
 ## Without an evaluator
 
 Core parses and preserves JSON, validates the fixed document rules, reads typed
-validated fields, authors documents, resolves operation names and inspects
+conformant fields, authors documents, resolves operation names and inspects
 references. Its fixed document-schema and meta-schema checks are included.
 They do not evaluate examples or runtime values against an operation's schemas.
 

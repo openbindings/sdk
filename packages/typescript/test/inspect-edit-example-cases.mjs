@@ -36,8 +36,8 @@ export function inspectEditExampleCases(sdk, example) {
   const edited = edit();
   assert.equal(edited.status, "edited");
   assert.equal(edited.report.conclusion, "conformant");
-  const before = sdk.parseDocument(text);
-  const after = sdk.parseDocument(edited.bytes);
+  const before = sdk.Document.parse(text);
+  const after = sdk.Document.parse(edited.bytes);
   assert.equal(before.status, "parsed");
   assert.equal(after.status, "parsed");
   try {
@@ -58,7 +58,7 @@ export function inspectEditExampleCases(sdk, example) {
           oldValue?.dispose();
         }
       }
-      assert.equal(new TextDecoder().decode(before.value.originalBytes), text);
+      assert.equal(new TextDecoder().decode(before.value.toBytes()), text);
       assert.deepEqual(after.value.operations[0].tags, ["read", "reviewed"]);
     } finally {
       revised.dispose();
@@ -83,7 +83,7 @@ export function inspectEditExampleCases(sdk, example) {
       "read",
       "x",
     ).status,
-    "authoring-error",
+    "edit-error",
   );
   const raw = sdk.parseJson(
     String.raw`{"a":900719925474099312345,"a":-0,"\ud800":true}`,
@@ -110,7 +110,9 @@ export function inspectEditExampleCases(sdk, example) {
   } finally {
     scalar.value.dispose();
   }
-  assert.equal(example.addTag({ operations: {} }, "toString", "x"), false);
+  const empty = sdk.Document.create();
+  assert.equal(example.addTag(empty, "toString", "x"), false);
+  empty.dispose();
   const opaque = String.raw`{"openbindings":"0.2.0","operations":{},"x-editor":{
     "annotation":null,"large":900719925474099312345,"tiny":1e-1000,
     "negative":-0,"é":1e500,"e\u0301":2,"__proto__":{"value":3.00}}}`;
@@ -123,7 +125,7 @@ export function inspectEditExampleCases(sdk, example) {
     );
     assert.equal(changed.status, "edited");
     assert.equal(changed.report.conclusion, "conformant");
-    const opened = sdk.parseDocument(changed.bytes);
+    const opened = sdk.Document.parse(changed.bytes);
     assert.equal(opened.status, "parsed");
     const root = opened.value.value();
     try {
@@ -194,42 +196,27 @@ export function inspectEditExampleCases(sdk, example) {
     example.editExtensionMember(opaque, "x-absent", "annotation", true).status,
     "extension-missing",
   );
-  // A built snapshot survives both its converted-draft owner and a newly
-  // composed caller-owned leaf. Replaced old leaves remain scope-owned.
-  const source = sdk.parseDocument(opaque);
-  assert.equal(source.status, "parsed");
-  const conversion = source.value.toDraft();
-  assert.equal(conversion.status, "drafted");
-  let built;
-  try {
-    const inserted = example.replaceExactObjectMember(
-      conversion.draft.value.additionalFields["x-editor"],
-      "annotation",
-      "Detached",
-    );
-    try {
-      conversion.draft.value.additionalFields["x-editor"] = inserted;
-      built = sdk.authorDocument(conversion.draft.value);
-    } finally {
-      inserted.dispose();
-    }
-  } finally {
-    conversion.draft.dispose();
-    source.value.dispose();
-  }
-  assert.equal(built.status, "authored");
-  const detached = built.document.value();
-  try {
-    const member = detached.at("/x-editor/annotation");
-    try {
-      assert.equal(member.text, '"Detached"');
-    } finally {
-      member.dispose();
-    }
-  } finally {
-    detached.dispose();
-    built.document.dispose();
-  }
+  // DOC-1: an edited owner survives its source and borrowed replacement value.
+  const source = sdk.Document.parse(opaque).value;
+  const built = source.retain();
+  const root = source.value(),
+    extension = root.get("x-editor");
+  const inserted = example.replaceExactObjectMember(
+    extension,
+    "annotation",
+    "Detached",
+  );
+  built.set("/x-editor", inserted);
+  inserted.dispose();
+  extension.dispose();
+  root.dispose();
+  source.dispose();
+  const detached = built.value(),
+    member = detached.at("/x-editor/annotation");
+  assert.equal(member.text, '"Detached"');
+  member.dispose();
+  detached.dispose();
+  built.dispose();
   assert.equal(testing.liveStorageOwners(), baseline);
   return {
     installedInspectionEditingExample: "passed",

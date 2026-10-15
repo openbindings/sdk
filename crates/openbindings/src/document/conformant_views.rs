@@ -4,7 +4,7 @@ use super::*;
 fn text<'a>(value: JsonRef<'a>, field: &str) -> Option<JsonStringRef<'a>> {
     value
         .get(field)
-        .map(|v| v.as_string().expect("validated string"))
+        .map(|v| v.as_string().expect("conformant string"))
 }
 fn texts<'a>(
     value: JsonRef<'a>,
@@ -12,17 +12,17 @@ fn texts<'a>(
 ) -> Option<impl ExactSizeIterator<Item = JsonStringRef<'a>>> {
     value.get(field).map(|v| {
         v.elements()
-            .expect("validated array")
-            .map(|v| v.as_string().expect("validated string"))
+            .expect("conformant array")
+            .map(|v| v.as_string().expect("conformant string"))
     })
 }
-macro_rules! validated_view {
-    ($name:ident, $parsed:ident) => {
-        #[doc = concat!("Retained ", stringify!($parsed), " with document conformance proof. Field reads are infallible; exact strings preserve unpaired UTF-16. Clones and views survive parent drop.")]
+macro_rules! conformant_view {
+    ($name:ident, $plain:ident) => {
+        #[doc = concat!("Retained ", stringify!($plain), " with document conformance proof. Field reads are infallible; exact strings preserve unpaired UTF-16. Clones and views survive parent drop.")]
         #[derive(Clone, Debug)]
         pub struct $name {
             _document: Conformant<Document>,
-            view: $parsed,
+            view: $plain,
         }
         impl $name {
             /// Borrow the declaration's primary key.
@@ -34,11 +34,11 @@ macro_rules! validated_view {
         }
     };
 }
-validated_view!(ValidatedOperationView, OperationView);
-validated_view!(ValidatedBindingView, BindingView);
-validated_view!(ValidatedSourceView, SourceView);
-validated_view!(ValidatedDependencyView, DependencyView);
-validated_view!(ValidatedExampleView, ExampleView);
+conformant_view!(ConformantOperationView, OperationView);
+conformant_view!(ConformantBindingView, BindingView);
+conformant_view!(ConformantSourceView, SourceView);
+conformant_view!(ConformantDependencyView, DependencyView);
+conformant_view!(ConformantExampleView, ExampleView);
 
 impl Conformant<Document> {
     /// Borrow the exact snapshot certified by this proof.
@@ -50,7 +50,7 @@ impl Conformant<Document> {
         self.value()
             .get("openbindings")
             .and_then(JsonRef::as_str)
-            .expect("validated declaration")
+            .expect("conformant declaration")
     }
     /// Read the optional exact interface name.
     pub fn name(&self) -> Option<JsonStringRef<'_>> {
@@ -67,32 +67,34 @@ impl Conformant<Document> {
     /// Borrow optional schema declarations in lexical order; no evaluation occurs.
     /// None means absent; Some(empty) means a present empty namespace.
     pub fn schemas(&self) -> Option<Vec<(&str, JsonRef<'_>)>> {
-        self.document.schemas().expect("validated schema namespace")
+        self.document
+            .schemas()
+            .expect("conformant schema namespace")
     }
     /// Borrow one exact object or boolean schema by primary key.
     pub fn schema(&self, name: &str) -> Option<JsonRef<'_>> {
         self.value().get("schemas").and_then(|v| v.get(name))
     }
     /// Retain all operations in lexical primary-key order, including an empty namespace.
-    pub fn operations(&self) -> Vec<ValidatedOperationView> {
+    pub fn operations(&self) -> Vec<ConformantOperationView> {
         self.document
             .operations()
-            .expect("validated operations")
+            .expect("conformant operations")
             .into_iter()
-            .map(|view| ValidatedOperationView {
+            .map(|view| ConformantOperationView {
                 _document: self.clone(),
                 view,
             })
             .collect()
     }
     /// Select a primary key or alias. OBI-05 excludes ambiguity; None means missing.
-    pub fn resolve_operation(&self, name: &str) -> Option<ValidatedOperationView> {
+    pub fn resolve_operation(&self, name: &str) -> Option<ConformantOperationView> {
         match self
             .document
             .resolve_operation(name)
-            .expect("validated operation namespace")
+            .expect("conformant operation namespace")
         {
-            OperationSelection::Found(view) => Some(ValidatedOperationView {
+            OperationSelection::Found(view) => Some(ConformantOperationView {
                 _document: self.clone(),
                 view,
             }),
@@ -104,7 +106,7 @@ impl Conformant<Document> {
     pub fn operation_bindings(&self, key: &str) -> Vec<String> {
         self.document
             .operation_bindings(key)
-            .expect("validated bindings")
+            .expect("conformant bindings")
     }
     /// Return None for an absent dependency; otherwise compare its exact kind filter.
     pub fn dependency_accepts_kind(&self, key: &str, kind: &str) -> Option<bool> {
@@ -119,33 +121,33 @@ macro_rules! namespace {
         impl Conformant<Document> {
             #[doc = concat!("Retain ", stringify!($many), " in lexical key order. None means absent; Some(empty) means present-empty.")]
             pub fn $many(&self) -> Option<Vec<$view>> {
-                self.document.$many().expect("validated namespace").map(|rows| rows.into_iter().map(|view| $view { _document: self.clone(), view }).collect())
+                self.document.$many().expect("conformant namespace").map(|rows| rows.into_iter().map(|view| $view { _document: self.clone(), view }).collect())
             }
             #[doc = concat!("Retain one ", stringify!($one), " by exact primary key; None means absent.")]
             pub fn $one(&self, key: &str) -> Option<$view> {
-                self.document.$one(key).expect("validated namespace").map(|view| $view { _document: self.clone(), view })
+                self.document.$one(key).expect("conformant namespace").map(|view| $view { _document: self.clone(), view })
             }
         }
     };
 }
-namespace!(bindings, binding, ValidatedBindingView);
-namespace!(sources, source, ValidatedSourceView);
-namespace!(dependencies, dependency, ValidatedDependencyView);
+namespace!(bindings, binding, ConformantBindingView);
+namespace!(sources, source, ConformantSourceView);
+namespace!(dependencies, dependency, ConformantDependencyView);
 
-impl ValidatedOperationView {
+impl ConformantOperationView {
     /// Read optional tags exactly, preserving absent versus present-empty.
     pub fn tags(&self) -> Option<impl ExactSizeIterator<Item = JsonStringRef<'_>>> {
         texts(self.value(), "tags")
     }
     /// Read optional scalar aliases, whose identifier spelling is proved by OBI-04.
     pub fn aliases(&self) -> Option<impl ExactSizeIterator<Item = &str>> {
-        texts(self.value(), "aliases").map(|v| v.map(|s| s.as_str().expect("validated alias")))
+        texts(self.value(), "aliases").map(|v| v.map(|s| s.as_str().expect("conformant alias")))
     }
     /// Read optional deprecation; absence is distinct from false.
     pub fn deprecated(&self) -> Option<bool> {
         self.value()
             .get("deprecated")
-            .map(|v| v.as_bool().expect("validated boolean"))
+            .map(|v| v.as_bool().expect("conformant boolean"))
     }
     /// Borrow the exact input schema. Absence, true, false and object remain distinct.
     pub fn input(&self) -> Option<JsonRef<'_>> {
@@ -160,13 +162,13 @@ impl ValidatedOperationView {
         self._document.operation_bindings(self.key())
     }
     /// Retain named examples in lexical order; no example truth is implied.
-    pub fn examples(&self) -> Option<Vec<ValidatedExampleView>> {
+    pub fn examples(&self) -> Option<Vec<ConformantExampleView>> {
         self.view
             .examples()
-            .expect("validated examples")
+            .expect("conformant examples")
             .map(|rows| {
                 rows.into_iter()
-                    .map(|view| ValidatedExampleView {
+                    .map(|view| ConformantExampleView {
                         _document: self._document.clone(),
                         view,
                     })
@@ -174,69 +176,69 @@ impl ValidatedOperationView {
             })
     }
     /// Retain one named example; None means absent.
-    pub fn example(&self, key: &str) -> Option<ValidatedExampleView> {
+    pub fn example(&self, key: &str) -> Option<ConformantExampleView> {
         self.view
             .example(key)
-            .expect("validated example")
-            .map(|view| ValidatedExampleView {
+            .expect("conformant example")
+            .map(|view| ConformantExampleView {
                 _document: self._document.clone(),
                 view,
             })
     }
 }
-impl ValidatedBindingView {
+impl ConformantBindingView {
     /// Read the primary operation key proved by OBI-06.
     pub fn operation(&self) -> &str {
         self.value()
             .get("operation")
             .and_then(JsonRef::as_str)
-            .expect("validated operation key")
+            .expect("conformant operation key")
     }
     /// Read the source key proved by OBI-07.
     pub fn source(&self) -> &str {
         self.value()
             .get("source")
             .and_then(JsonRef::as_str)
-            .expect("validated source key")
+            .expect("conformant source key")
     }
     /// Read the optional interoperable integer without assigning a default rank.
     pub fn preference(&self) -> Option<Preference> {
-        self.view.preference().expect("validated preference")
+        self.view.preference().expect("conformant preference")
     }
     /// Read optional idempotence; absence is distinct from false.
     pub fn idempotent(&self) -> Option<bool> {
         self.value()
             .get("idempotent")
-            .map(|v| v.as_bool().expect("validated boolean"))
+            .map(|v| v.as_bool().expect("conformant boolean"))
     }
     /// Read optional deprecation; absence is distinct from false.
     pub fn deprecated(&self) -> Option<bool> {
         self.value()
             .get("deprecated")
-            .map(|v| v.as_bool().expect("validated boolean"))
+            .map(|v| v.as_bool().expect("conformant boolean"))
     }
     /// Borrow opaque content, preserving present null separately from absence.
     pub fn content(&self) -> Option<JsonRef<'_>> {
         self.view.content()
     }
 }
-impl ValidatedSourceView {
+impl ConformantSourceView {
     /// Read the exact kind string without asserting provider support.
     pub fn kind(&self) -> JsonStringRef<'_> {
-        text(self.value(), "kind").expect("validated kind")
+        text(self.value(), "kind").expect("conformant kind")
     }
     /// Borrow opaque content, preserving present null separately from absence.
     pub fn content(&self) -> Option<JsonRef<'_>> {
         self.view.content()
     }
 }
-impl ValidatedDependencyView {
+impl ConformantDependencyView {
     /// Read the primary operation key proved by OBI-08.
     pub fn operation(&self) -> &str {
         self.value()
             .get("operation")
             .and_then(JsonRef::as_str)
-            .expect("validated operation key")
+            .expect("conformant operation key")
     }
     /// Read optional exact kind filters; absence accepts every kind.
     pub fn kinds(&self) -> Option<impl ExactSizeIterator<Item = JsonStringRef<'_>>> {
@@ -248,7 +250,7 @@ impl ValidatedDependencyView {
             .is_none_or(|mut kinds| kinds.any(|v| v == kind))
     }
 }
-impl ValidatedExampleView {
+impl ConformantExampleView {
     /// Borrow an example input, preserving present null separately from absence.
     pub fn input(&self) -> Option<JsonRef<'_>> {
         self.view.input()

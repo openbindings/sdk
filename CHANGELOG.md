@@ -4,15 +4,18 @@
 
 ### Added
 
-- Rust `value_contracts(&validated)` in the default evaluator companion,
+- Rust `value_contracts(&conformant)` in the default evaluator companion,
   `ValueContract::validate_json` for exact text admission, and
   `ValueContractPreparation::into_result` with a payload-preserving
   `ValueContractPreparationError` for error propagation.
 
-- Exact OpenBindings 0.2 document parsing, typed authoring and validation with
-  original source locations, bounded findings and per-rule evidence.
-- Validated document views, operation and alias lookup, exact schema access,
-  reference inspection and opaque kind comparison.
+- One exact OpenBindings 0.2 `Document` for parsing, inspection and in-place
+  editing: atomic JSON Pointer batches and typed field and part setters that keep
+  untouched bytes exact. Validation with original source locations, bounded
+  findings and per-rule evidence.
+- `Conformant<Document>` (TypeScript `ConformantDocument`), the proven state, with
+  infallible views, operation and alias lookup, exact schema access, reference
+  inspection and opaque kind comparison. It is the only route to value contracts.
 - Explicit immutable resources and reusable input/output value contracts, with
   distinct preparation results and satisfies, fails, undefined or no-verdict outcomes.
   Undefined results carry a code, message and optional original schema location;

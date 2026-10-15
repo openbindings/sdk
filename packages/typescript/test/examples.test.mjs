@@ -70,7 +70,7 @@ test("source editor requires conformance and retains prepared partial snapshots"
     assert.equal(accepted.status, "updated");
     assert.equal(accepted.result.outcome, "satisfies");
     retained = editor.snapshot();
-    assert.equal(new TextDecoder().decode(retained.originalBytes), corrected);
+    assert.equal(new TextDecoder().decode(retained.toBytes()), corrected);
     assert.equal(editor.update("{").status, "input-error");
     assert.equal(
       editor.update(
@@ -95,10 +95,7 @@ test("source editor requires conformance and retains prepared partial snapshots"
     );
     const current = editor.snapshot();
     try {
-      assert.equal(
-        new TextDecoder().decode(current.originalBytes),
-        partialText,
-      );
+      assert.equal(new TextDecoder().decode(current.toBytes()), partialText);
     } finally {
       current.dispose();
     }

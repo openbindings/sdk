@@ -12,8 +12,8 @@ let document = Document::parse(
 )?;
 let validation = document.validate()?;
 assert_eq!(validation.report().conclusion, Conformance::Conformant);
-let validated = validation.conformant().ok_or("document is not conformant")?;
-let operation = validated.resolve_operation("find").ok_or("operation is missing")?;
+let conformant = validation.conformant().ok_or("document is not conformant")?;
+let operation = conformant.resolve_operation("find").ok_or("operation is missing")?;
 assert_eq!(operation.key(), "lookup");
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
@@ -48,7 +48,7 @@ Document validation works without a caller-supplied schema evaluator. Its fixed
 normative schema checks are part of core. Operation value validation requires an
 explicit `SchemaEvaluator`, including for `true`, `false` and empty schemas.
 Select the optional `openbindings-json-schema-evaluator` or implement the trait.
-The companion's `value_contracts(&validated)` function supplies its default
+The companion's `value_contracts(&conformant)` function supplies its default
 budgets, coarse diagnostics and no extra resources. For shared or configured
 evaluators and supplied resources, pass an `Arc<dyn SchemaEvaluator>` and an
 immutable `ResourceSet` to `Conformant<Document>::value_contracts`. Core does not

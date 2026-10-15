@@ -10,9 +10,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let document = Document::parse(
         r#"{"openbindings":"0.2.0","operations":{"search":{"input":{"type":"string","pattern":"[A-Z]+[0-9]+"}}}}"#,
     )?;
-    let validated = document.validate()?.conformant().ok_or("invalid fixture")?;
+    let conformant = document.validate()?.conformant().ok_or("invalid fixture")?;
     let context =
-        validated.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
+        conformant.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
     let ValueContractPreparation::Ready(contract) = context.prepare("search", Direction::Input)
     else {
         return Err("pattern did not prepare".into());

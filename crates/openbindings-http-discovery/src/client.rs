@@ -496,7 +496,7 @@ pub enum DiscoveryOutcome {
     },
     /// A complete 200 body established at least one normative violation, including invalid JSON.
     NonConformant {
-        #[doc = "Report and parsed snapshot when input was admitted."]
+        #[doc = "Report and document snapshot when input was admitted."]
         validation: DocumentValidation,
     },
     /// A complete 200 body could not be proved conformant or nonconformant within supported limits/capabilities.

@@ -72,7 +72,7 @@ Use `.with_context(&context)` to forward one opaque object unchanged.
 
 `operation::Invoker::new` requires a `Conformant<Document>`, including when no evaluator
 is configured. Invalid documents are rejected before invocation construction;
-parsed editor reads still report malformed fields and ambiguous names.
+document editor reads still report malformed fields and ambiguous names.
 `with_evaluator` is infallible and performs no preparation. A non-scalar source kind
 cannot match a provider's scalar kind declaration. Other exact metadata that cannot
 fit a role carrier returns `ERR_REFUSED` before dispatch, with a local

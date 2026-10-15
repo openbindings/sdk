@@ -11,10 +11,10 @@ export async function discoveryPage(browser, pageOrigin) {
       new URL("../dist/wasm/openbindings_wasm_bg.wasm", import.meta.url),
     ),
   );
-  const parsed = sdk.parseDocument(
+  const parsed = sdk.Document.parse(
     '{"openbindings":"0.2.0","operations":{}}',
   ).value;
-  const proof = parsed.validated().document;
+  const proof = parsed.validate().document;
   const publication = new DiscoveryPublication(proof);
   let targetOrigin;
   const target = http.createServer(async (request, response) => {

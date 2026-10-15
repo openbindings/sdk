@@ -10,7 +10,7 @@ Use the locked dependencies and release profile to reproduce them.
 
 ## Prepared value contracts
 
-Retain a prepared `ValueContract` for repeated validation. Reusing a validated
+Retain a prepared `ValueContract` for repeated validation. Reusing a conformant
 document or `ValueContracts` context also saves work, but still prepares a fresh
 contract on each `prepare` call. The SDK does not transparently cache arbitrary
 custom evaluator results.
@@ -186,7 +186,7 @@ python3 tools/verify-diagnostics.py
 The probe checks 69 large generated documents and 300 admitted corpus documents,
 with three samples each; five corpus parse refusals remain recorded. Measurements
 are incremental live System allocations. Parsing and warmed compilation are
-excluded; complete validation uses fresh parsed owners. This measures neither RSS
+excluded; complete validation uses fresh document owners. This measures neither RSS
 nor Wasm capacity. Outputs are under `target/document-diagnostics`.
 
 | Region | Observed maximum | Fixture-specific regression threshold |

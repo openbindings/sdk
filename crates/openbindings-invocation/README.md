@@ -1,7 +1,7 @@
 # OpenBindings invocation
 
 Invoke a realization through a binding, or invoke an operation through its
-validated interface document. Implement `binding::BindingInvoker` for a kind;
+conformant interface document. Implement `binding::BindingInvoker` for a kind;
 `binding::Invoker` manages input, output and the terminal result. An operation
 invoker adds document selection and declared value-contract checks.
 

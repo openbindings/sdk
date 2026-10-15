@@ -53,6 +53,24 @@ Source positions describe current bytes. Retained views, reports and proofs keep
 their revision when another owner is edited. Duplicate members remain inspectable
 for diagnostics and are refused by typed interpretation, editing and proof.
 
+## TypeScript document lifecycle
+
+| Public item | Contract |
+| --- | --- |
+| `Document.parse(bytes)` | Returns the existing parse-result union; admits exact JSON, including broken documents. Typed reads may throw. |
+| `Document.create()` | Creates an empty OBI for construction through setters. |
+| `set`, `remove`, `edit(edits)` | Mutable pointer edits; a batch crosses the bridge once, including exact inputs, and preserves untouched bytes. Exact inputs are borrowed. Failure leaves bytes and caches unchanged. |
+| Typed field and whole-part setters | Accept typed part values; map setters commit bulk construction once. |
+| `Document.validate()` | Returns a union whose `conformant` branch owns an independent `ConformantDocument` and a plain report. |
+| `ConformantDocument` | Nominal, privately constructed proof with infallible typed reads and `valueContracts()`. It has no setters and does not inherit `Document`. |
+| `asDocument()`, `intoDocument()` | Acquire an independent editable owner, or consume the proof. Consumption revokes all JavaScript aliases of that proof; retained owners survive. |
+| `toBytes()`, `dispose()`, `Symbol.dispose`, `disposed` | Detached exact current bytes and the existing deterministic lifecycle. |
+
+A `parseJson` value used in an edit preserves decimal spelling. Views retain their
+revision independently, so editing an owner does not change an acquired view or
+proof. `EditError.code` reports stable editing refusals; typed-part input errors
+also expose `draftPointer` without inventing source coordinates.
+
 ## Rust value-contract conveniences
 
 | Public item | Contract |
@@ -97,7 +115,7 @@ futures and `Rc` providers are also supported.
 - Parsing and authoring create exact snapshots. Normative validation evaluates OBI
   document rules; only its conformant branch creates a `Conformant<Document>` proof.
   Only that proof constructs normative value contracts and an operation invoker.
-  Parsed snapshots retain fallible editor reads. Wasm owns the Rust proof; plain
+  Documents retain fallible editor reads. Wasm owns the Rust proof; plain
   TypeScript reports and forged wrappers cannot create it.
 - The semantic partitions `Evidence`, `Conformance`, `ValueOutcome`,
   `ValueContractPreparation` and `Direction` are closed, supporting exhaustive handling.
@@ -290,16 +308,16 @@ Raw parser admission codes `byte-limit`, `node-limit` and `depth-limit` remain
 | `openbindings()` | `&str`, proved supported SemVer |
 | `name()`, `version()`, `description()` | `Option<JsonStringRef>`, absence separate from non-scalar text |
 | `schemas()`, `schema(key)` | Optional exact object/boolean schema views; no preparation |
-| `operations()`, `resolve_operation(name)` | Retained `ValidatedOperationView` vector or optional selection |
-| `bindings()`, `sources()`, `dependencies()` and keyed reads | Optional retained `ValidatedBindingView`, `ValidatedSourceView`, `ValidatedDependencyView`; absent differs from present-empty |
-| Validated operation `examples()` and `example(key)` | Retained `ValidatedExampleView`; example truth is not implied |
+| `operations()`, `resolve_operation(name)` | Retained `ConformantOperationView` vector or optional selection |
+| `bindings()`, `sources()`, `dependencies()` and keyed reads | Optional retained `ConformantBindingView`, `ConformantSourceView`, `ConformantDependencyView`; absent differs from present-empty |
+| Conformant operation `examples()` and `example(key)` | Retained `ConformantExampleView`; example truth is not implied |
 
-Validated views expose the same normative fields as parsed views, with infallible
+Conformant views expose the same normative fields as document views, with infallible
 reads. Required names are scalar; descriptive text, tags and kinds use
 `JsonStringRef`. Its `as_str()` returns None only for non-scalar text;
 `utf16_units()` iterates without allocating, `json()` retains token/location access,
 and equality compares decoded UTF-16. `JsonRef::as_string()` returns None only for
-non-strings. The existing fallible view names remain unchanged; the `Validated`
+non-strings. The existing fallible view names remain unchanged; the `Conformant`
 prefix identifies proof on the individual view. The owning document state is `Conformant<Document>`.
 
 The [TypeScript guide](../packages/typescript/README.md) describes facade ownership,

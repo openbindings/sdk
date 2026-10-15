@@ -5,13 +5,13 @@ export function check(condition, message) {
 const utf8 = new TextEncoder();
 const bytes = (value) => utf8.encode(value).length;
 export function parsed(sdk, source, document = false) {
-  const result = document ? sdk.parseDocument(source) : sdk.parseJson(source);
+  const result = document ? sdk.Document.parse(source) : sdk.parseJson(source);
   check(result.status === "parsed", JSON.stringify(result));
   return result.value;
 }
 function valueContracts(document, options) {
-  const result = document.validated();
-  check(result.status === "validated", JSON.stringify(result));
+  const result = document.validate();
+  check(result.status === "conformant", JSON.stringify(result));
   try {
     return result.document.valueContracts(options);
   } finally {
@@ -109,7 +109,7 @@ export function runTier(sdk, testing, fixture, timed = true) {
   ];
   let last;
   function once() {
-    let document, context, contract, value, invalid;
+    let document, proof, context, contract, value, invalid;
     const row = {};
     const take = (name, run) => {
       const t = clock();
@@ -122,13 +122,10 @@ export function runTier(sdk, testing, fixture, timed = true) {
         parsed(sdk, fixture.document, true),
       );
       const assessment = take("assess", () => document.validate());
-      check(
-        assessment.status === "report" &&
-          assessment.report.conclusion === "conformant",
-        JSON.stringify(assessment),
-      );
+      check(assessment.status === "conformant", JSON.stringify(assessment));
+      proof = assessment.document;
       contract = take("contextAndPrepare", () => {
-        context = valueContracts(document);
+        context = proof.valueContracts();
         const result = context.prepare("check", "input");
         check(result.status === "ready", JSON.stringify(result));
         return result.valueContract;
@@ -160,6 +157,7 @@ export function runTier(sdk, testing, fixture, timed = true) {
         value?.dispose();
         contract?.dispose();
         context?.dispose();
+        proof?.dispose();
         document?.dispose();
       });
     }

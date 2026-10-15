@@ -1,5 +1,5 @@
 import * as testing from "../dist/testing.js";
-import { validatedContracts } from "./validated-contracts.mjs";
+import { conformantContracts } from "./conformant-contracts.mjs";
 // Internal fault injection complements the installed public-consumer checks.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -13,10 +13,10 @@ await sdk.initialize(
 );
 
 test("owned selection and preparation wrappers release untaken children on decode/take failure", () => {
-  const document = sdk.parseDocument(
+  const document = sdk.Document.parse(
     '{"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"}}}}',
   ).value;
-  const context = validatedContracts(document);
+  const context = conformantContracts(document);
   try {
     for (const [prototype, invoke, take] of [
       [
@@ -88,10 +88,10 @@ test("owned selection and preparation wrappers release untaken children on decod
 });
 
 test("ordinary admission maps only known engine limits and preserves unexpected exceptions", () => {
-  const document = sdk.parseDocument(
+  const document = sdk.Document.parse(
     '{"openbindings":"0.2.0","operations":{"run":{"input":true}}}',
   ).value;
-  const context = validatedContracts(document);
+  const context = conformantContracts(document);
   const setup = context.prepare("run", "input");
   assert.equal(setup.status, "ready");
   const prepared = setup.valueContract;

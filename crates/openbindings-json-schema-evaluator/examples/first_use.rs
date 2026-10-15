@@ -65,7 +65,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         operation.description().map(|s| s.json().text())
     );
     if let Some(schema) = operation.input() {
-        // Validated reads preserve presence; schema preparation remains separate.
+        // Conformant reads preserve presence; schema preparation remains separate.
         println!("input schema at {:?}", schema.location().pointer);
     }
     // Default budgets, coarse diagnostics and no extra resources.

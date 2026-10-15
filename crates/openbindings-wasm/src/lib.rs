@@ -194,7 +194,7 @@ impl WasmMember {
 }
 // Document-family wrappers deliberately share a representation. wasm-bindgen does
 // not check method receivers, so their JavaScript class is never proof authority.
-// Keep only the parsed snapshot here; every proof-producing/consuming entry derives
+// Keep only the document snapshot here; every proof-producing/consuming entry derives
 // a fresh core proof from that snapshot's cached validation at call time.
 struct DocumentHandle {
     document: Document,
@@ -235,6 +235,64 @@ impl WasmDocument {
                 handle: DocumentHandle::new(document),
             })
             .map_err(input_error)
+    }
+    /// Create an editable empty OBI.
+    pub fn create() -> WasmDocument {
+        Self {
+            handle: DocumentHandle::new(Document::new()),
+        }
+    }
+    /// One bridge call for ordinary fragments interleaved with exact values.
+    /// The facade temporarily transfers each distinct exact owner once. Every
+    /// outcome returns those owners, including refusals, before exposing errors.
+    #[wasm_bindgen(js_name=editEncoded)]
+    pub fn edit_encoded(
+        &mut self,
+        chunks: Vec<String>,
+        indices: Vec<u32>,
+        values: Vec<WasmJson>,
+        namespace: Option<String>,
+        key: Option<String>,
+    ) -> Vec<JsValue> {
+        let result = (|| {
+            if chunks.len() != indices.len() + 1 {
+                return Err(error("invalid-edit", "invalid exact fragment layout"));
+            }
+            let limit = JsonLimits::default().max_bytes;
+            let mut size = 0usize;
+            for length in chunks
+                .iter()
+                .map(String::len)
+                .chain(indices.iter().map(|index| {
+                    values
+                        .get(*index as usize)
+                        .map_or(usize::MAX, |value| value.value.text().len())
+                }))
+            {
+                size = size
+                    .checked_add(length)
+                    .filter(|size| *size <= limit)
+                    .ok_or_else(|| error("byte-limit", "edit input exceeds the JSON byte limit"))?;
+            }
+            // Preflight complete UTF-8 extent before allocating the joined input.
+            let mut text = String::with_capacity(size);
+            for (chunk, index) in chunks.iter().zip(&indices) {
+                text.push_str(chunk);
+                text.push_str(values[*index as usize].value.text());
+            }
+            text.push_str(chunks.last().expect("fragment layout was checked"));
+            match (namespace, key) {
+                (None, None) => self.edit(&text),
+                (Some(namespace), Some(key)) => self.set_part_at(&namespace, &key, &text),
+                _ => Err(error("invalid-edit", "incomplete part destination")),
+            }
+        })();
+        let mut output = Vec::with_capacity(values.len() + 1);
+        output.push(result.err().unwrap_or(JsValue::NULL));
+        for value in values {
+            output.push(JsValue::from(value));
+        }
+        output
     }
     /// Apply an atomic array of {op, pointer, value?} edits. Values stay exact JSON.
     pub fn edit(&mut self, edits: &str) -> Result<(), JsValue> {
@@ -683,6 +741,21 @@ impl WasmConformantDocument {
         self.as_document().references(resources, cancelled)
     }
 }
+impl WasmDocument {
+    fn set_part_at(&mut self, namespace: &str, key: &str, text: &str) -> Result<(), JsValue> {
+        let (pointer, text) = if self.handle.document.value().at(namespace).is_some() {
+            let key = key.replace('~', "~0").replace('/', "~1");
+            (format!("{namespace}/{key}"), text.to_owned())
+        } else {
+            (namespace.to_owned(), format!("{{{}:{text}}}", encoded(key)))
+        };
+        let value = JsonValue::parse(text).map_err(input_error)?;
+        self.handle
+            .document
+            .set(&pointer, &value)
+            .map_err(edit_error)
+    }
+}
 /// A private transfer wrapper. Dropping it drops an untaken operation owner.
 #[wasm_bindgen]
 pub struct WasmOperationSelection {
@@ -1122,9 +1195,7 @@ impl WasmPrepared {
 #[wasm_bindgen(js_name=validateBytes)]
 pub fn validate_bytes(bytes: &[u8]) -> String {
     match validate_document(bytes) {
-        Ok(a) => {
-            encoded(json!({"status":"report","report":a.report(),"parsed":a.document().is_some()}))
-        }
+        Ok(a) => encoded(json!({"status":"report","report":a.report()})),
         Err(e) => encoded(json!({"status":"version-refused","refusal":e})),
     }
 }

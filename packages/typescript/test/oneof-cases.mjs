@@ -1,5 +1,5 @@
 import * as testing from "../dist/testing.js";
-import { validatedContracts } from "./validated-contracts.mjs";
+import { conformantContracts } from "./conformant-contracts.mjs";
 // Shared Node/browser controls. Fixtures retain frozen independent expected truths.
 export function oneOfCases(sdk, fixtures) {
   let checks = 0;
@@ -15,7 +15,7 @@ export function oneOfCases(sdk, fixtures) {
     entries = {},
     options = {},
   ) => {
-    const parsed = sdk.parseDocument(text);
+    const parsed = sdk.Document.parse(text);
     check(parsed.status === "parsed", "oneOf document admitted");
     const values = Object.entries(entries).map(([uri, value]) => [
       uri,
@@ -24,7 +24,7 @@ export function oneOfCases(sdk, fixtures) {
     const resources = new sdk.SchemaResources(values);
     let context, contract, value;
     try {
-      context = validatedContracts(parsed.value, {
+      context = conformantContracts(parsed.value, {
         diagnostics: "upstream",
         ...options,
         resources,

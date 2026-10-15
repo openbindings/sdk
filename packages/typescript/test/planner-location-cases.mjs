@@ -1,13 +1,13 @@
 import * as testing from "../dist/testing.js";
-import { validatedContracts } from "./validated-contracts.mjs";
+import { conformantContracts } from "./conformant-contracts.mjs";
 // Shared Node/browser controls at real production caps; no test knobs.
 export function plannerLocationCases(sdk) {
   // Warm instance-lifetime meta-schema/evaluator storage before owner deltas.
-  const warm = sdk.parseDocument(
+  const warm = sdk.Document.parse(
     '{"openbindings":"0.2.0","operations":{"op":{"input":true}}}',
   ).value;
-  warm.validate();
-  const warmContext = validatedContracts(warm);
+  warm.validate().document?.dispose();
+  const warmContext = conformantContracts(warm);
   const warmPrepared = warmContext.prepare("op", "input");
   if (warmPrepared.status !== "ready") throw Error("warm preparation");
   warmPrepared.valueContract.validate(null);
@@ -25,7 +25,7 @@ export function plannerLocationCases(sdk) {
     checks++;
   };
   const run = (schema, entries, code, pointer, resource = null) => {
-    const parsed = sdk.parseDocument(
+    const parsed = sdk.Document.parse(
       JSON.stringify({
         openbindings: "0.2.0",
         operations: { op: { input: schema }, healthy: { input: true } },
@@ -37,7 +37,8 @@ export function plannerLocationCases(sdk) {
     let resources, context;
     try {
       check(
-        document.validate().report.conclusion === "conformant",
+        sdk.validateDocument(document.toBytes()).report.conclusion ===
+          "conformant",
         "conformant witness",
       );
       resources = new sdk.SchemaResources(
@@ -48,7 +49,7 @@ export function plannerLocationCases(sdk) {
           return [uri, parsed.value];
         }),
       );
-      context = validatedContracts(document, { resources });
+      context = conformantContracts(document, { resources });
       const cancelled = new AbortController();
       cancelled.abort();
       const stopped = context.prepare("op", "input", {

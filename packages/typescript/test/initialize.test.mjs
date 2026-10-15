@@ -34,7 +34,7 @@ test("initialization rejects unavailable entropy and invalid modules, then permi
   const first = sdk.initialize(bytes);
   assert.equal(first, sdk.initialize(bytes));
   await first;
-  const document = sdk.parseDocument(
+  const document = sdk.Document.parse(
     '{"openbindings":"0.2.0","operations":{}}',
   );
   assert.equal(document.status, "parsed");

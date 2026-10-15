@@ -1,3 +1,4 @@
+import { constructDocument } from "./construct-document.mjs";
 /** Public owner regression vectors, usable unchanged in Node/browser/workerd. */
 export async function runCases(sdk, ids, http) {
   const rows = [];
@@ -9,19 +10,25 @@ export async function runCases(sdk, ids, http) {
         throw Error(label);
     };
     const bad = (label, draft, code, draftPointer) => {
-      const result = sdk.authorDocument(draft);
-      equal(label + ": status", result.status, "authoring-error");
-      equal(label + ": code", result.error.code, code);
-      equal(label + ": draft pointer", result.error.draftPointer, draftPointer);
-      equal(label + ": no byte location", "byteOffset" in result.error, false);
-      equal(label + ": explained", result.error.message.length > 0, true);
-      return result.error;
+      let failure;
+      try {
+        constructDocument(sdk, draft).dispose();
+      } catch (error) {
+        failure = error;
+      }
+      equal(
+        label + ": structured refusal",
+        failure instanceof sdk.EditError,
+        true,
+      );
+      equal(label + ": code", failure.code, code);
+      equal(label + ": draft pointer", failure.draftPointer, draftPointer);
+      equal(label + ": no byte location", "byteOffset" in failure, false);
+      equal(label + ": explained", failure.message.length > 0, true);
+      return failure;
     };
-    const good = (draft = { operations: { run: {} } }) => {
-      const result = sdk.authorDocument(draft);
-      equal("author success", result.status, "authored");
-      return result.document;
-    };
+    const good = (fields = { operations: { run: {} } }) =>
+      constructDocument(sdk, fields);
     const content = (value) => ({
       operations: { run: {} },
       sources: { s: { kind: "test", content: value } },
@@ -41,9 +48,9 @@ export async function runCases(sdk, ids, http) {
         case "A01":
           bad(
             "root collision",
-            { operations: { run: {} }, additionalFields: { operations: {} } },
+            { operations: { run: { additionalFields: { input: {} } } } },
             "field-collision",
-            "/additionalFields/operations",
+            "/operations/run/additionalFields/input",
           );
           break;
         case "A02": {
@@ -134,8 +141,8 @@ export async function runCases(sdk, ids, http) {
             "/sources/s/content/loop",
           );
           const d = good();
-          const v = d.validated();
-          equal("healthy after cycle", v.status, "validated");
+          const v = d.validate();
+          equal("healthy after cycle", v.status, "conformant");
           v.document.dispose();
           d.dispose();
           break;
@@ -166,15 +173,17 @@ export async function runCases(sdk, ids, http) {
         case "A08": {
           let calls = 0;
           bad(
-            "typed root getter",
+            "typed map getter",
             {
-              get operations() {
-                calls++;
-                return { run: {} };
+              operations: {
+                get run() {
+                  calls++;
+                  return {};
+                },
               },
             },
             "accessor-property",
-            "/operations",
+            "/operations/run",
           );
           bad(
             "typed child getter",
@@ -210,18 +219,21 @@ export async function runCases(sdk, ids, http) {
           bad(
             "additional getter",
             {
-              operations: { run: {} },
-              additionalFields: {
-                "x/~a": {
-                  get hidden() {
-                    calls++;
-                    return "secret";
+              operations: {
+                run: {
+                  additionalFields: {
+                    "x/~a": {
+                      get hidden() {
+                        calls++;
+                        return "secret";
+                      },
+                    },
                   },
                 },
               },
             },
             "accessor-property",
-            "/additionalFields/x~1~0a/hidden",
+            "/operations/run/additionalFields/x~1~0a/hidden",
           );
           equal("opaque getter calls", calls, 0);
           break;
@@ -315,8 +327,8 @@ export async function runCases(sdk, ids, http) {
           for (const key of segments.slice(0, -1)) parent = parent[key];
           delete parent[segments.at(-1)];
           const d = good(draft);
-          const v = d.validated();
-          equal("editor retry", v.status, "validated");
+          const v = d.validate();
+          equal("editor retry", v.status, "conformant");
           v.document.dispose();
           d.dispose();
           break;
@@ -324,13 +336,13 @@ export async function runCases(sdk, ids, http) {
         case "P01": {
           const draft = { operations: { run: {} } };
           const d = good(draft);
-          const v = d.validated();
-          equal("narrow", v.status, "validated");
+          const v = d.validate();
+          equal("narrow", v.status, "conformant");
           const retained = v.document.retain();
           v.document.dispose();
-          const expected = Array.from(retained.originalBytes);
+          const expected = Array.from(retained.toBytes());
           const publication = new http.DiscoveryPublication(retained);
-          const changed = retained.originalBytes;
+          const changed = retained.toBytes();
           changed.fill(0);
           draft.operations = {};
           retained.dispose();
@@ -348,7 +360,7 @@ export async function runCases(sdk, ids, http) {
           break;
         }
         case "P02": {
-          const d = sdk.parseDocument('{"openbindings":"0.2.0"}');
+          const d = sdk.Document.parse('{"openbindings":"0.2.0"}');
           equal("unsafe route parses", d.status, "parsed");
           let code;
           try {
@@ -367,18 +379,23 @@ export async function runCases(sdk, ids, http) {
           break;
         }
         case "X01": {
-          bad("invalid root", null, "invalid-authoring-object", "");
+          bad(
+            "invalid part map",
+            null,
+            "invalid-authoring-object",
+            "/operations",
+          );
           bad(
             "typed Rust refusal",
-            { operations: { run: {} }, description: null },
-            "invalid-draft",
-            null,
+            { operations: { run: { description: null } } },
+            "invalid-authoring-object",
+            "/operations/run/description",
           );
           const exact = sdk.ExactJson.from(7);
           exact.dispose();
           let code;
           try {
-            sdk.authorDocument(content(exact));
+            constructDocument(sdk, content(exact));
           } catch (error) {
             equal("disposed structured", error instanceof sdk.SdkError, true);
             code = error.code;
@@ -387,7 +404,8 @@ export async function runCases(sdk, ids, http) {
           const error = new Error("proxy sentinel");
           let caught;
           try {
-            sdk.authorDocument(
+            constructDocument(
+              sdk,
               new Proxy(
                 {},
                 {
@@ -427,21 +445,25 @@ export async function runCases(sdk, ids, http) {
           bad(
             "duplicate field",
             {
-              operations: { run: {} },
-              additionalFields: { "x-extra": 1 },
-              "x-extra": 2,
+              operations: {
+                run: { additionalFields: { "x-extra": 1 }, "x-extra": 2 },
+              },
             },
             "duplicate-field",
-            "/x-extra",
+            "/operations/run/x-extra",
           );
           let deep = 0;
           for (let i = 0; i < 10002; i++) deep = [deep];
-          const limited = sdk.authorDocument(content(deep));
-          equal("depth limit status", limited.status, "authoring-error");
-          equal("depth limit code", limited.error.code, "authoring-limit");
+          let limited;
+          try {
+            constructDocument(sdk, content(deep)).dispose();
+          } catch (error) {
+            limited = error;
+          }
+          equal("depth limit code", limited.code, "authoring-limit");
           equal(
             "depth limit draft path",
-            limited.error.draftPointer.startsWith("/sources/s/content/0"),
+            limited.draftPointer.startsWith("/sources/s/content/0"),
             true,
           );
           break;

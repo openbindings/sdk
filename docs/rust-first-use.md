@@ -50,16 +50,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 `validate()` returns a document report or an unsupported-version refusal.
 A report can be conformant, non-conformant or undetermined. Only established
 conformance yields a `Conformant<Document>`. Its typed field reads are infallible;
-parsed editor reads remain fallible. Resolve primary names or aliases with
-`resolve_operation`. A validated lookup returns an optional operation; a parsed
+document editor reads remain fallible. Resolve primary names or aliases with
+`resolve_operation`. A conformant lookup returns an optional operation; a document
 lookup distinguishes found, missing and ambiguous.
 
 ## Validate values
 
-Create a context with `openbindings_json_schema_evaluator::value_contracts(&validated)`,
+Create a context with `openbindings_json_schema_evaluator::value_contracts(&conformant)`,
 then `prepare(name, Direction::Input)` or `Direction::Output`. The function uses the
 default evaluator budgets, coarse diagnostics and no extra resources. Creating the context performs no preparation. The SDK never acquires resources. Use the explicit
-`validated.value_contracts(evaluator, resources)` method for shared evaluators,
+`conformant.value_contracts(evaluator, resources)` method for shared evaluators,
 custom budgets or diagnostics, supplied resources or custom evaluators.
 
 Call `into_result()?` to retain a ready contract or propagate the full

@@ -1,4 +1,4 @@
-import { validatedContracts } from "./validated-contracts.mjs";
+import { conformantContracts } from "./conformant-contracts.mjs";
 /** Typed diagnostic mode parity, including removal of the old bounded-detail API. */
 export function diagnosticBudgetCases(sdk) {
   let assertions = 0;
@@ -6,7 +6,7 @@ export function diagnosticBudgetCases(sdk) {
     assertions++;
     if (!condition) throw Error(label);
   };
-  const parsed = sdk.parseDocument(
+  const parsed = sdk.Document.parse(
     JSON.stringify({
       openbindings: "0.2.0",
       operations: { op: { input: { allOf: [{ type: "string" }, false] } } },
@@ -14,7 +14,7 @@ export function diagnosticBudgetCases(sdk) {
   );
   try {
     for (const diagnostics of [undefined, "coarse", "upstream"]) {
-      const context = validatedContracts(parsed.value, { diagnostics });
+      const context = conformantContracts(parsed.value, { diagnostics });
       try {
         const setup = context.prepare("op", "input");
         check(setup.status === "ready", "ready");
@@ -46,7 +46,7 @@ export function diagnosticBudgetCases(sdk) {
       check(!(field in sdk.evaluatorLimits()), "retired default");
       let rejected = false;
       try {
-        validatedContracts(parsed.value, { limits: { [field]: 1 } });
+        conformantContracts(parsed.value, { limits: { [field]: 1 } });
       } catch {
         rejected = true;
       }
@@ -55,7 +55,7 @@ export function diagnosticBudgetCases(sdk) {
     for (const diagnostics of [true, false, "details", null]) {
       let rejected = false;
       try {
-        validatedContracts(parsed.value, { diagnostics });
+        conformantContracts(parsed.value, { diagnostics });
       } catch (e) {
         rejected = e.code === "invalid-diagnostics";
       }

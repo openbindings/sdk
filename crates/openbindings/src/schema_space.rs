@@ -217,7 +217,7 @@ impl Document {
 }
 
 impl Conformant<Document> {
-    /// Inspect references in the validated snapshot without acquiring resources.
+    /// Inspect references in the conformant document revision without acquiring resources.
     pub fn references(&self) -> ReferenceReport {
         self.references_with_resources(ResourceSet::default(), &crate::work_control::NeverCancelled)
     }

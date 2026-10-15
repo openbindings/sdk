@@ -64,21 +64,25 @@ export function fixedDiagnosticCases(sdk) {
       healthy: true,
     },
   ];
-  const warm = sdk.parseDocument(cases.at(-1).text);
+  const warm = sdk.Document.parse(cases.at(-1).text);
   check(warm.status === "parsed", "warm document parses");
   try {
-    warm.value.validate();
+    warm.value.validate().document?.dispose();
   } finally {
     warm.value.dispose();
   }
   const arenas = testing.liveStorageOwners();
   const results = [];
   for (const fixture of cases) {
-    const parsed = sdk.parseDocument(fixture.text);
+    const parsed = sdk.Document.parse(fixture.text);
     check(parsed.status === "parsed", `${fixture.name}: exact parse`);
     try {
       const assessment = parsed.value.validate();
-      check(assessment.status === "report", `${fixture.name}: assessment`);
+      assessment.document?.dispose();
+      check(
+        assessment.status !== "version-refused",
+        `${fixture.name}: assessment`,
+      );
       const { report } = assessment;
       check(
         report.conclusion ===
@@ -148,11 +152,11 @@ export function fixedDiagnosticCases(sdk) {
     );
   }
   {
-    const parsed = sdk.parseDocument(
+    const parsed = sdk.Document.parse(
       '{"openbindings":"0.2.0","operations":{"run":{"aliases":["valid",false,42],"description":0,"input":{"type":42}}}}',
     );
     try {
-      const report = parsed.value.validate().report;
+      const report = sdk.validateDocument(parsed.value.toBytes()).report;
       const fixed = report.findings.filter((f) => f.code === "schema-mismatch");
       check(
         JSON.stringify(fixed.map((f) => [f.rule, f.location.pointer])) ===
@@ -212,11 +216,11 @@ export function fixedDiagnosticCases(sdk) {
     const schemas = Object.fromEntries(
       Array.from({ length: count }, (_, i) => [`s${i}`, { minLength: -1 }]),
     );
-    const parsed = sdk.parseDocument(
+    const parsed = sdk.Document.parse(
       JSON.stringify({ openbindings: "0.2.0", operations: {}, schemas }),
     );
     try {
-      const report = parsed.value.validate().report;
+      const report = sdk.validateDocument(parsed.value.toBytes()).report;
       check(report.findings.length === 4096, "localized finding cap");
       check(report.findingsTruncated === count > 4096, "truthful truncation");
       check(
@@ -243,7 +247,7 @@ export function fixedDiagnosticCases(sdk) {
     ["x-" + "a".repeat(4096), 4096],
   ]) {
     const text = `{"openbindings":"0.2.0","operations":{},"x-pad":"${"p".repeat(128 * 1024)}",\n"${name}":{"k":0${',"k":0'.repeat(count)}}}`;
-    const parsed = sdk.parseDocument(text);
+    const parsed = sdk.Document.parse(text);
     check(parsed.status === "parsed", "duplicate input parses exactly");
     try {
       const assessed = parsed.value.validate();
@@ -301,7 +305,7 @@ export function fixedDiagnosticCases(sdk) {
       parsed.value.dispose();
     }
   }
-  const invalidName = sdk.parseDocument(
+  const invalidName = sdk.Document.parse(
     '{"openbindings":"0.2.0","operations":{"/private":{"aliases":[".private"],"examples":{"-private":{}}}}}',
   );
   check(invalidName.status === "parsed", "invalid names parse");

@@ -1,5 +1,5 @@
 import * as testing from "../dist/testing.js";
-import { validatedContracts } from "./validated-contracts.mjs";
+import { conformantContracts } from "./conformant-contracts.mjs";
 /** Public-API checks shared by repository and freshly installed host consumers. */
 export async function apiQualityCases(sdk, http) {
   let assertions = 0;
@@ -13,7 +13,7 @@ export async function apiQualityCases(sdk, http) {
     return value;
   };
   const parsed = (text) => {
-    const r = sdk.parseDocument(text);
+    const r = sdk.Document.parse(text);
     check(r.status === "parsed", "document admission");
     return own(r.value);
   };
@@ -37,11 +37,11 @@ export async function apiQualityCases(sdk, http) {
     check(error && predicate(error), label);
   };
   // Warm instance-lifetime meta-schema state before checking live storage deltas.
-  const warm = sdk.parseDocument(
+  const warm = sdk.Document.parse(
     '{"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"}}}}',
   );
-  warm.value.validate();
-  const warmContext = validatedContracts(warm.value);
+  warm.value.validate().document?.dispose();
+  const warmContext = conformantContracts(warm.value);
   const warmPrepared = warmContext.prepare("run", "input");
   if (warmPrepared.status !== "ready")
     throw new Error("Warmup did not prepare.");
@@ -56,7 +56,7 @@ export async function apiQualityCases(sdk, http) {
       "root HTTP removals",
     );
     check(
-      !("fromParsed" in sdk.ValidatedDocument),
+      !("fromParsed" in sdk.ConformantDocument),
       "proof constructor removal",
     );
     const document = parsed(
@@ -123,7 +123,7 @@ export async function apiQualityCases(sdk, http) {
         e.location?.pointer === "/operations/run/aliases",
       "malformed alias primary lookup",
     );
-    const context = own(validatedContracts(document));
+    const context = own(conformantContracts(document));
     check(
       context.prepare("empty", "input").status === "no-value-contract",
       "absent contract setup",
@@ -133,7 +133,7 @@ export async function apiQualityCases(sdk, http) {
       "missing operation setup",
     );
     check(
-      ambiguous.validated().status === "report",
+      ambiguous.validate().status === "report",
       "ambiguous documents cannot construct contracts",
     );
     const remote = context.prepare("remote", "input");
@@ -173,7 +173,7 @@ export async function apiQualityCases(sdk, http) {
       '{"openbindings":"0.2.0","operations":{"run":{"input":null}}}',
     );
     check(
-      nullDoc.validated().status === "report",
+      nullDoc.validate().status === "report",
       "null schema rejects the document; it is not absence",
     );
     check(input.validate(7).outcome === "satisfies", "ordinary validation");
@@ -309,15 +309,20 @@ export async function apiQualityCases(sdk, http) {
         depthRefusal.error.instancePointer === null,
       "aggregate limit truthful unknown pointer",
     );
-    const draftLimit = sdk.authorDocument({
-      operations: { run: {} },
-      additionalFields: { "x-deep": deep },
-    });
+    const editing = sdk.Document.create();
+    let editFailure;
+    try {
+      editing.set("/x-deep", deep);
+    } catch (error) {
+      editFailure = error;
+    } finally {
+      editing.dispose();
+    }
     check(
-      draftLimit.status === "authoring-error" &&
-        draftLimit.error.code === "authoring-limit" &&
-        draftLimit.error.draftPointer === null,
-      "real encoded draft limit",
+      editFailure instanceof sdk.EditError &&
+        editFailure.code === "depth-limit" &&
+        editFailure.draftPointer === null,
+      "real encoded edit limit",
     );
     check(
       deep.text.length === 20001,
@@ -336,8 +341,8 @@ export async function apiQualityCases(sdk, http) {
     const others = own(
       new sdk.SchemaResources([["https://schema.test/id", stringSchema]]),
     );
-    const first = own(validatedContracts(document, { resources }));
-    const second = own(validatedContracts(document, { resources: others }));
+    const first = own(conformantContracts(document, { resources }));
+    const second = own(conformantContracts(document, { resources: others }));
     const a = ready(first, "remote"),
       b = ready(second, "remote");
     check(
@@ -382,8 +387,8 @@ export async function apiQualityCases(sdk, http) {
     );
     check(testing.liveStorageOwners() === beforeBatch, "iterator cleanup");
     own(new sdk.SchemaResources([["https://schema.test/healthy", intSchema]]));
-    const checked = document.validated();
-    check(checked.status === "validated", "proof");
+    const checked = document.validate();
+    check(checked.status === "conformant", "proof");
     const proof = own(checked.document);
     const publication = own(new http.DiscoveryPublication(proof));
     proof.dispose();

@@ -384,7 +384,7 @@ impl std::fmt::Debug for SchemaRequest {
 }
 
 impl SchemaRequest {
-    /// Borrow the validated immutable snapshot owning this normative value contract.
+    /// Borrow the conformant document revision owning this normative value contract.
     pub fn document(&self) -> &Conformant<Document> {
         &self.document
     }
@@ -563,7 +563,7 @@ pub enum ValueContractPreparation {
     NoValueContract,
     /// No primary key or alias matches the request.
     OperationMissing,
-    /// Retained selection branch; conformant documents cannot produce it because OBI-05 proves unique names. Parsed editor selection reports ambiguity through OperationSelection.
+    /// Retained selection branch; conformant documents cannot produce it because OBI-05 proves unique names. Document selection reports ambiguity through OperationSelection.
     OperationAmbiguous {
         #[doc = "Distinct matching primary keys in lexical order; repeated aliases can yield one candidate key."]
         candidates: Vec<String>,
@@ -732,7 +732,7 @@ impl ValueContract {
 }
 impl Conformant<Document> {
     /// Select an evaluator and immutable supplied resources for normative value contracts.
-    /// Parsed snapshots cannot construct normative contracts:
+    /// Documents cannot construct normative contracts:
     /// ```compile_fail
     /// use openbindings::*;
     /// fn draft(doc: Document, evaluator: std::sync::Arc<dyn SchemaEvaluator>) {

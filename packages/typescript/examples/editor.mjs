@@ -1,4 +1,4 @@
-import { parseDocument } from "../dist/index.js";
+import { Document } from "../dist/index.js";
 import { createWorkerView } from "./worker-view.mjs";
 
 export const exampleDraft = `{
@@ -21,12 +21,12 @@ export const exampleDraft = `{
 export class DocumentEditor {
   #document;
   update(text, value = { id: 7 }, diagnostics = "coarse") {
-    const parsed = parseDocument(text);
+    const parsed = Document.parse(text);
     if (parsed.status !== "parsed") return parsed;
     let proof, context, input;
     try {
-      const checked = parsed.value.validated();
-      if (checked.status !== "validated") return checked;
+      const checked = parsed.value.validate();
+      if (checked.status !== "conformant") return checked;
       proof = checked.document;
       const operations = proof.operations;
       context = proof.valueContracts({ diagnostics });
@@ -42,7 +42,7 @@ export class DocumentEditor {
       input = setup.valueContract;
       const result = input.validate(value);
       const previous = this.#document;
-      this.#document = proof; // transfer the validated owner after successful setup
+      this.#document = proof; // transfer the conformant owner after successful setup
       proof = undefined;
       previous?.dispose();
       return { status: "updated", operations, result };

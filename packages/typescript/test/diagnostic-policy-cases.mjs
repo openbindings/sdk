@@ -1,4 +1,4 @@
-import { validatedContracts } from "./validated-contracts.mjs";
+import { conformantContracts } from "./conformant-contracts.mjs";
 /** Public diagnostic policy checks shared with a freshly installed package. */
 export function diagnosticPolicyCases(sdk) {
   let assertions = 0;
@@ -12,7 +12,7 @@ export function diagnosticPolicyCases(sdk) {
     return value;
   };
   const document = (value) => {
-    const parsed = sdk.parseDocument(
+    const parsed = sdk.Document.parse(
       typeof value === "string" ? value : JSON.stringify(value),
     );
     check(parsed.status === "parsed", "document admitted");
@@ -62,7 +62,7 @@ export function diagnosticPolicyCases(sdk) {
     ]) {
       const doc = document(text);
       check(
-        doc.validated().status === "report",
+        doc.validate().status === "report",
         "invalid document cannot construct contracts",
       );
       const raw = own(doc.value());
@@ -91,7 +91,7 @@ export function diagnosticPolicyCases(sdk) {
     );
     const duplicateError = thrown(() => duplicate.resolveOperation("op"));
     check(
-      duplicate.validated().status === "report",
+      duplicate.validate().status === "report",
       "duplicate document cannot construct contracts",
     );
     check(
@@ -119,7 +119,7 @@ export function diagnosticPolicyCases(sdk) {
       "draft metadata remains nonconformant",
     );
     check(
-      draft.validated().status === "report",
+      draft.validate().status === "report",
       "nonconformant metadata cannot construct contracts",
     );
     check(
@@ -127,7 +127,7 @@ export function diagnosticPolicyCases(sdk) {
       "parsed ambiguity remains visible",
     );
     const ctx = own(
-      validatedContracts(
+      conformantContracts(
         document({
           openbindings: "0.2.0",
           operations: { op: { input: false }, empty: {} },
@@ -168,7 +168,7 @@ export function diagnosticPolicyCases(sdk) {
       { anyOf: [true, { $ref: "#/operations/op/input" }] },
     ]) {
       const state = own(
-        validatedContracts(withSchema(schema), { diagnostics: "upstream" }),
+        conformantContracts(withSchema(schema), { diagnostics: "upstream" }),
       ).prepare("op", "input");
       check(
         state.status === "no-verdict" &&
@@ -205,7 +205,7 @@ export function diagnosticPolicyCases(sdk) {
           [{ $ref: patternUri }, { resources }, patternUri, ""],
         ]) {
           const state = own(
-            validatedContracts(withSchema(entry), options),
+            conformantContracts(withSchema(entry), options),
           ).prepare("op", "input");
           check(
             state.status === "no-verdict" &&
@@ -241,7 +241,7 @@ export function diagnosticPolicyCases(sdk) {
       );
       safe(report.references[0].resolution.detail.message);
       if (!qualified) {
-        const validation = doc.validated();
+        const validation = doc.validate();
         check(
           validation.status === "report" &&
             validation.report.evidence["OBI-11"] === "violated",
@@ -249,7 +249,7 @@ export function diagnosticPolicyCases(sdk) {
         );
         continue;
       }
-      const state = own(validatedContracts(doc)).prepare("op", "input");
+      const state = own(conformantContracts(doc)).prepare("op", "input");
       if (qualified) {
         check(state.status === "ready", "qualified missing reference prepares");
         const result = own(state.valueContract).validate(null);
@@ -322,7 +322,7 @@ export function diagnosticPolicyCases(sdk) {
       ],
     ]) {
       const state = own(
-        validatedContracts(withSchema(schema), { diagnostics: "upstream" }),
+        conformantContracts(withSchema(schema), { diagnostics: "upstream" }),
       ).prepare("op", "input");
       check(state.status === "ready", "type/message contract prepared");
       const outcome = own(state.valueContract).validate(instance);

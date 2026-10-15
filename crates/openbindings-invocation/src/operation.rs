@@ -12,8 +12,8 @@ use crate::{
     value::source_from_json,
 };
 use openbindings::{
-    Conformant, Direction, Document, JsonKind, JsonValue, NoVerdict, NoVerdictReason, ResourceSet,
-    SchemaEvaluator, Source, ValidatedBindingView, ValidatedOperationView, ValueContract,
+    Conformant, ConformantBindingView, ConformantOperationView, Direction, Document, JsonKind,
+    JsonValue, NoVerdict, NoVerdictReason, ResourceSet, SchemaEvaluator, Source, ValueContract,
     ValueContractPreparation, ValueContracts, ValueOutcome,
 };
 use std::{
@@ -439,7 +439,7 @@ impl<P: BindingInvoker> Invoker<P> {
     }
     fn gate(
         &self,
-        operation: &ValidatedOperationView,
+        operation: &ConformantOperationView,
         direction: Direction,
         external: &CancellationToken,
         prepared: Option<&ValueContract>,
@@ -452,17 +452,17 @@ impl<P: BindingInvoker> Invoker<P> {
             external: external.clone(),
         })
     }
-    fn operation(&self, name: &str) -> Result<ValidatedOperationView, InvocationError> {
+    fn operation(&self, name: &str) -> Result<ConformantOperationView, InvocationError> {
         self.document
             .resolve_operation(name)
             .ok_or_else(|| error("ERR_OPERATION_NOT_FOUND"))
     }
-    fn binding(&self, key: &str) -> Result<ValidatedBindingView, InvocationError> {
+    fn binding(&self, key: &str) -> Result<ConformantBindingView, InvocationError> {
         self.document
             .binding(key)
             .ok_or_else(|| error("ERR_BINDING_NOT_FOUND"))
     }
-    fn supported(&self, binding: &ValidatedBindingView) -> Result<bool, InvocationError> {
+    fn supported(&self, binding: &ConformantBindingView) -> Result<bool, InvocationError> {
         let source = self
             .document
             .source(binding.source())
@@ -646,7 +646,7 @@ impl<P: BindingInvoker> PreparedOperation<'_, P> {
 }
 type CarrierCache<T> = OnceLock<HashMap<String, OnceLock<Result<T, crate::BoundaryError>>>>;
 struct Resolved<'a> {
-    operation: ValidatedOperationView,
+    operation: ConformantOperationView,
     source: &'a Source,
     binding: &'a BindingValue,
 }

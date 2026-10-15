@@ -95,7 +95,7 @@ unbounded cancellation promise. No response cache or global client is installed.
 
 ## Publication
 
-Publication retains validated immutable bytes. GET serves those bytes; HEAD
+Publication retains conformant immutable bytes. GET serves those bytes; HEAD
 returns the same headers without a body. Other methods return 405 with
 `Allow: GET, HEAD`; other paths return 404. Pass the route path without query or
 fragment and do not decode a reserved `%2F` into `/`.

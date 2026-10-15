@@ -8,7 +8,7 @@ fn proof(text: &str) -> Conformant<Document> {
 }
 
 #[test]
-fn exact_strings_and_retained_validated_views_preserve_every_utf16_unit() {
+fn exact_strings_and_retained_conformant_views_preserve_every_utf16_unit() {
     let document = proof(
         r#"{"openbindings":"0.2.0","name":"\ud800","version":"\udc00","description":"\ud800","operations":{"run":{"description":"\ud800","tags":["\ud800","𝄞"],"aliases":["go"],"deprecated":false,"input":true,"output":false,"examples":{"e":{"description":"\ud800","input":null}}}},"sources":{"s":{"kind":"\ud800","description":"\udc00","content":null}},"bindings":{"b":{"operation":"run","source":"s","description":"\ud800","preference":0,"idempotent":false,"deprecated":false,"content":null}},"dependencies":{"d":{"operation":"run","kinds":["\uD800"],"description":"\ud800"}},"schemas":{"z":false,"a":{}}}"#,
     );

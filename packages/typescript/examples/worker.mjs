@@ -2,7 +2,7 @@
 import {
   initialize,
   validateDocument,
-  parseDocument,
+  Document,
   parseJson,
 } from "@openbindings/sdk";
 self.onmessage = async ({ data }) => {
@@ -29,7 +29,7 @@ self.onmessage = async ({ data }) => {
       });
       return;
     }
-    const parsed = parseDocument(new Uint8Array(bytes));
+    const parsed = Document.parse(new Uint8Array(bytes));
     if (parsed.status !== "parsed") {
       self.postMessage({ id, status: "input-error", error: parsed.error });
       return;

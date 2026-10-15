@@ -38,7 +38,7 @@ export function observe(sdk, request) {
         findings: assessment.report.findings.map(finding => ({ ...finding, status: finding.status === "met" ? "satisfied" : finding.status, code: ((["OBI-06", "OBI-08"].includes(finding.rule) && finding.code === "unknown-operation") || (finding.rule === "OBI-07" && finding.code === "unknown-source")) ? "missing-target" : finding.code })),
       };
     }
-    const doc = parsed(sdk.parseDocument(bytes));
+    const doc = parsed(sdk.Document.parse(bytes));
     if (request.action === "resolve-operation") {
       const selection = doc.resolveOperation(given.name);
       if (selection.status !== "found")
@@ -77,10 +77,10 @@ export function observe(sdk, request) {
       resources.dispose();
       resources = next;
     }
-    const validation = doc.validated();
-    if (validation.status !== "validated") throw new Error("Fixture document lacks conformance proof");
-    const validated = own(validation.document);
-    const context = own(validated.valueContracts({ resources }));
+    const validation = doc.validate();
+    if (validation.status !== "conformant") throw new Error("Fixture document lacks conformance proof");
+    const conformant = own(validation.document);
+    const context = own(conformant.valueContracts({ resources }));
     if (request.action === "validate-operation-values") {
       const preparation = context.prepare(given.operation, given.side);
       if (preparation.status !== "ready")

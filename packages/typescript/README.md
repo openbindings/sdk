@@ -18,7 +18,7 @@ The same workflow in TypeScript initializes the engine, validates a document,
 resolves an alias and checks two values:
 
 ```ts
-import { parseDocument, type JsonInput } from "@openbindings/sdk";
+import { Document, type JsonInput } from "@openbindings/sdk";
 import { initialize } from "@openbindings/sdk";
 
 await initialize();
@@ -31,11 +31,11 @@ const documentText = `{
 }`;
 
 function checkInput(input: JsonInput) {
-  const parsed = parseDocument(documentText);
+  const parsed = Document.parse(documentText);
   if (parsed.status !== "parsed") return parsed;
   using document = parsed.value;
-  const checked = document.validated();
-  if (checked.status !== "validated") return checked;
+  const checked = document.validate();
+  if (checked.status !== "conformant") return checked;
   using proof = checked.document;
   const operations = proof.operations;
   using context = proof.valueContracts();
@@ -54,9 +54,9 @@ For a browser, serve the installed package directory over HTTP and open
 include `ESNext.Disposable` in the compiler `lib` setting and target ES2022 for
 `using`. An older compiler minimum has not been qualified.
 
-Parsing retains an inspectable snapshot. `validated()` returns either a validated
-owner or a version refusal or conformance report. Only the validated owner creates
-value contracts. Preparation distinguishes a ready contract, an absent value
+`Document.parse` retains an inspectable, editable document. `validate()` returns a
+`conformant` branch carrying a `ConformantDocument`, or a version refusal or
+conformance report. Only a conformant document creates value contracts. Preparation distinguishes a ready contract, an absent value
 contract, a missing operation and no-verdict. Handle each setup result before
 validating a value. Value results distinguish `satisfies`, `fails`, `undefined`
 (the specification gives the value no defined validity), `no-verdict` (the SDK could
@@ -103,19 +103,30 @@ Use JSON text or UTF-8 bytes for exact numbers such as `9007199254740993`.
 cannot restore precision already lost to a JavaScript number. Nonfinite numbers,
 undefined opaque values, bigint, cycles, sparse arrays and accessors are refused.
 
-`authorDocument` builds a parsed snapshot from typed fields. To edit a document,
-call `toDraft()`, retain the returned editing scope, change `draft.value`, then
-call `authorDocument` and validate the result. Typed fields are re-encoded;
-opaque values retain exact tokens. Renaming an operation leaves reference updates
-to the caller.
+Edit a `Document` through `set(pointer, value)`, `remove(pointer)` or an atomic
+`edit([{ op: "set", pointer, value }, { op: "remove", pointer }])` batch. Paths use
+RFC 6901 and address the revision before the batch. A batch crosses the bridge
+once, including nested exact values, splices once and reads the result once. `parseJson` values
+keep exact decimal spellings. Untouched bytes, formatting and member order remain
+exact; sibling insertions coalesce with compact punctuation. `EditError.code`
+identifies a refusal and the document remains unchanged. Existing JSON limits
+apply. Renaming operations leaves reference updates to the caller.
 
-For a change inside an opaque object, use the tested
-[inspection and editing recipe](examples/inspect-edit.ts). It traverses `members()`,
-retains unchanged exact siblings, composes a replacement with `ExactJson.from`,
-then assigns it to the draft. It refuses duplicates, missing members and names it
-cannot represent. The changed object is encoded and parsed in full; formatting,
-member order and name escaping may change. Keep caller-created exact values live
-through the build and dispose them afterward.
+Use `Document.create()` and typed setters such as `setOperation(key, operation)`,
+`setSource`, `setBinding`, `setDependency` and `setExample` for construction.
+`setOperations(operations)` commits a complete operations map once for synthesis.
+The other namespaces have corresponding map setters. Typed parts keep the existing
+`OperationDraft`, `SourceDraft`, `BindingDraft`, `DependencyDraft` and `ExampleDraft`
+input types. Their opaque fields accept borrowed exact owners; callers retain and
+dispose those owners. `EditError.draftPointer` locates a refused typed part field.
+The [inspection/editing example](examples/inspect-edit.ts) demonstrates both pointer
+edits and typed reads without an intermediate document draft.
+
+`ConformantDocument` is a separate class with infallible reads and no setters.
+`asDocument()` creates an independent editable owner. `intoDocument()` consumes the
+proof: every alias of that proof becomes disposed and later reads fail lifecycle
+checks. Independently retained proofs and views keep their certified revision.
+`toBytes()` copies the current exact bytes. Dispose every acquired owner.
 
 ## Limits and diagnostics
 
@@ -132,7 +143,7 @@ to input and overflow the stack on deep values. Schema facts may disclose source
 operands and retain source snapshots. Messages are advisory; use result tags,
 codes and rule evidence for control flow.
 
-Document findings use original JSON Pointers and UTF-8 byte coordinates. Render
+Document findings use JSON Pointers and UTF-8 byte coordinates in the assessed revision. Render
 pointers as text and convert byte offsets before selecting text in a JavaScript
 editor. Findings are capped at 4,096 and 8 MiB of pointers; `findingsTruncated`
 leaves rule evidence available. The [editor example](examples/editor.html)
@@ -151,7 +162,7 @@ Import `discover` and `DiscoveryPublication` from
 `@openbindings/sdk/http-discovery`. Discovery uses Fetch with a default 1 MiB
 decoded body limit and thirty-second attempt deadline. Only 404 means absence;
 401 and 403 mean gated discovery. Dispose returned document owners. Publication
-copies validated bytes and defaults to CORS `*`; application middleware owns
+copies conformant document bytes and defaults to CORS `*`; application middleware owns
 authentication and credentialed CORS.
 
 See [HTTP policy](https://github.com/openbindings/sdk/blob/main/docs/http-discovery.md),

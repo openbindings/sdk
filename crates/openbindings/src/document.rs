@@ -9,7 +9,8 @@ use serde::Serialize;
 mod edit;
 mod read_views;
 pub use edit::{Edit, EditError};
-mod validated_views;
+mod conformant_views;
+pub use conformant_views::*;
 use read_views::NamespaceCache;
 pub use read_views::{BindingView, DependencyView, ExampleView, SourceView};
 use std::{
@@ -17,7 +18,6 @@ use std::{
     fmt,
     sync::{Arc, OnceLock},
 };
-pub use validated_views::*;
 
 /// Stable rule identifiers OBI-01 through OBI-13, in specification order.
 pub const DOCUMENT_RULES: [&str; 13] = [
@@ -187,7 +187,7 @@ impl fmt::Debug for Document {
     }
 }
 #[derive(Clone, Debug)]
-/// Normative evidence plus the parsed snapshot when one was admitted. Invalid JSON can still produce a report without a parsed document.
+/// Normative evidence plus the document snapshot when one was admitted. Invalid JSON can still produce a report without a document.
 /// Inspect the report or obtain a conformant document; unwrapping only checks the version.
 ///
 /// ```compile_fail

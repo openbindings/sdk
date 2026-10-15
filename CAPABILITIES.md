@@ -8,8 +8,9 @@ Start with a working example in the [Rust guide](docs/rust-first-use.md) or
 ## Documents and exact values
 
 Core checks OpenBindings 0.2 document rules and reports met, violated or
-inconclusive evidence where applicable. Parsing preserves an editor snapshot;
-conformance establishes a validated document. Unsupported specification versions
+inconclusive evidence where applicable. A parsed document keeps its exact bytes
+and can be edited in place; validation that establishes every rule yields a
+conformant document. Unsupported specification versions
 are refused separately. A document's conformance does not establish its author
 claims about examples, bindings, availability or dependencies.
 
@@ -62,7 +63,7 @@ the established value outcome.
 ## Discovery and kind implementations
 
 HTTP discovery acquires an interface document with bounded decoded bytes and an
-attempt deadline. Publication serves validated immutable bytes. Applications own
+attempt deadline. Publication serves a conformant document's immutable bytes. Applications own
 authentication, additional network policy and credentialed CORS. Browser Fetch
 limits what redirect and network facts the SDK can observe. See
 [HTTP policy](docs/http-discovery.md).

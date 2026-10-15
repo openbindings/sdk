@@ -1,31 +1,29 @@
 // Initialize @openbindings/sdk for your host before calling this editor example.
-import { authorDocument } from "@openbindings/sdk";
+import { Document, EditError } from "@openbindings/sdk";
 export function recoverAuthoringDraft() {
-  const draft = {
-    operations: { run: {} },
-    additionalFields: { operations: {} },
-  };
-  const first = authorDocument(draft);
-  if (first.status !== "authoring-error") {
-    first.document.dispose();
-    throw new Error("Expected the example's field collision.");
-  }
-  // An editor can focus this exact draft field; no message parsing or byte offset.
-  if (
-    first.error.code !== "field-collision" ||
-    first.error.draftPointer !== "/additionalFields/operations"
-  )
-    throw new Error("Unexpected example diagnostic.");
-  delete draft.additionalFields.operations;
-  const retried = authorDocument(draft);
-  if (retried.status !== "authored") throw new Error(retried.error.code);
+  const operation = { additionalFields: { input: {} } };
+  const document = Document.create();
   try {
-    const checked = retried.document.validated();
-    if (checked.status !== "validated")
+    let first;
+    try {
+      document.setOperation("run", operation);
+    } catch (error) {
+      if (!(error instanceof EditError)) throw error;
+      first = error;
+    }
+    if (
+      first?.code !== "field-collision" ||
+      first.draftPointer !== "/operations/run/additionalFields/input"
+    )
+      throw new Error("Expected the example's field collision.");
+    // Focus the caller's typed part field; no message parsing or byte offset.
+    delete operation.additionalFields.input;
+    document.setOperation("run", operation);
+    const checked = document.validate();
+    if (checked.status !== "conformant")
       throw new Error("Conformance was not established.");
-    // Caller owns the validated handle; the parsed source can now be disposed.
-    return { focus: first.error.draftPointer, document: checked.document };
+    return { focus: first.draftPointer, document: checked.document };
   } finally {
-    retried.document.dispose();
+    document.dispose();
   }
 }
