@@ -40,6 +40,13 @@ async fn standalone_and_shared_provider_consumers() {
     let work = borrowed.synthesize_with_coverage(&request);
     send(&work);
     let result = work.await.unwrap();
+    // DOC-1.4: this consumer fixture retains main 598ee82 emission bytes.
+    assert_eq!(
+        result.document().to_bytes(),
+        include_str!("fixtures/main-598ee82-consumer.json")
+            .trim_end()
+            .as_bytes()
+    );
     let control = CancellationToken::new();
     let strict = shared.synthesize_with_control(&request, &control);
     send(&strict);
@@ -454,4 +461,28 @@ async fn persisted_coverage_identifies_sources_after_request_and_provider_drop()
             .collect();
         assert_eq!(keys[1], first);
     }
+}
+
+#[test]
+fn construction_bytes_match_main_for_dependency_and_target_units() {
+    // DOC-1.4: exact main 598ee82 output from the independent review request.
+    let source = source(
+        r#"{"units":[{"id":"unit0","scope":"dependency"},{"id":"unit1","scope":"target"}]}"#,
+    );
+    let inputs = [SynthesisSource {
+        name: Some("catalog"),
+        source: &source,
+    }];
+    let request = SynthesisRequest {
+        sources: &inputs,
+        name: Some("example"),
+        ..Default::default()
+    };
+    let candidate = derive(&request, &CancellationToken::new(), false).unwrap();
+    assert_eq!(
+        candidate.document.to_bytes(),
+        include_str!("fixtures/main-598ee82-catalog.json")
+            .trim_end()
+            .as_bytes()
+    );
 }

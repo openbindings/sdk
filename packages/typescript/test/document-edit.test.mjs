@@ -297,3 +297,66 @@ test("an oversized exact batch returns borrowed owners without changing bytes", 
   document.dispose();
   assert.equal(liveStorageOwners(), baseline);
 });
+
+test("typed namespace construction and exact pointer edits share one atomic bridge call", () => {
+  // DOC-1.3: every prepared namespace commits once; failed typed input is atomic.
+  const document = sdk.Document.create();
+  const number = exact("1e+003");
+  const rawEdit = bridge.WasmDocument.prototype.editEncoded;
+  let calls = 0;
+  bridge.WasmDocument.prototype.editEncoded = function (...args) {
+    calls++;
+    return rawEdit.apply(this, args);
+  };
+  try {
+    document.edit([
+      {
+        op: "set-operations",
+        value: {
+          run: { input: true, additionalFields: { "x-number": number } },
+        },
+      },
+      { op: "set", pointer: "/name", value: "Batch" },
+      { op: "set-dependencies", value: { d: { operation: "run" } } },
+      { op: "set-sources", value: { s: { kind: "custom", content: number } } },
+      { op: "set-bindings", value: { b: { operation: "run", source: "s" } } },
+    ]);
+    assert.equal(calls, 1);
+    assert.match(
+      new TextDecoder().decode(document.toBytes()),
+      /"x-number":1e\+003/,
+    );
+    assert.equal(number.text, "1e+003");
+    const before = document.toBytes();
+    assert.throws(
+      () =>
+        document.edit([
+          { op: "set", pointer: "/name", value: "changed" },
+          {
+            op: "set-sources",
+            value: {
+              s: { kind: "custom", additionalFields: { kind: "shadow" } },
+            },
+          },
+        ]),
+      (e) =>
+        e.code === "field-collision" &&
+        e.partPointer === "/sources/s/additionalFields/kind",
+    );
+    assert.deepEqual(document.toBytes(), before);
+    assert.equal(calls, 1);
+    assert.throws(() =>
+      document.edit([
+        { op: "set-operations", value: {} },
+        { op: "remove", pointer: "/missing" },
+      ]),
+    );
+    assert.equal(calls, 2);
+    assert.deepEqual(document.toBytes(), before);
+    document.validate().document.dispose();
+  } finally {
+    bridge.WasmDocument.prototype.editEncoded = rawEdit;
+    number.dispose();
+    document.dispose();
+  }
+});

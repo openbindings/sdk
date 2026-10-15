@@ -1,5 +1,5 @@
 //! Code-defined test kind, with independent source analysis shared by two roles.
-use openbindings::{Binding, Dependency, Document, JsonValue, Operation, Source};
+use openbindings::{Binding, Dependency, Document, Edit, JsonValue, Operation, Source};
 use openbindings_interface_synthesis::CancellationToken;
 use openbindings_interface_synthesis::*;
 use openbindings_source_inspection as inspect;
@@ -116,20 +116,6 @@ pub fn derive(
         .map(|s| analyze(s.source))
         .collect::<Result<_, _>>()?;
     let mut doc = Document::new();
-    doc.set_openbindings(
-        request
-            .openbindings_version
-            .unwrap_or(openbindings::AUTHORING_VERSION),
-    )?;
-    if let Some(value) = request.name {
-        doc.set_name(value)?;
-    }
-    if let Some(value) = request.version {
-        doc.set_version(value)?;
-    }
-    if let Some(value) = request.description {
-        doc.set_description(value)?;
-    }
     let mut operations = BTreeMap::new();
     let mut sources = BTreeMap::new();
     let mut bindings = BTreeMap::new();
@@ -233,16 +219,43 @@ pub fn derive(
             entries.push(e);
         }
     }
-    doc.set_operations(&operations)?;
+    // DOC-1.3/4: one commit, with main's normative member emission order.
+    let text_fields = [
+        (
+            "/openbindings",
+            Some(
+                request
+                    .openbindings_version
+                    .unwrap_or(openbindings::AUTHORING_VERSION),
+            ),
+        ),
+        ("/name", request.name),
+        ("/version", request.version),
+        ("/description", request.description),
+    ]
+    .into_iter()
+    .filter_map(|(pointer, text)| text.map(|text| (pointer, text)))
+    .map(|(pointer, text)| JsonValue::string(text).map(|value| (pointer, value)))
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(openbindings::EditError::from)?;
+    let mut edits = vec![Edit::SetOperations { value: &operations }];
+    edits.extend(
+        text_fields
+            .iter()
+            .map(|(pointer, value)| Edit::Set { pointer, value }),
+    );
+    if !dependencies.is_empty() {
+        edits.push(Edit::SetDependencies {
+            value: &dependencies,
+        });
+    }
     if !sources.is_empty() {
-        doc.set_sources(&sources)?;
+        edits.push(Edit::SetSources { value: &sources });
     }
     if !bindings.is_empty() {
-        doc.set_bindings(&bindings)?;
+        edits.push(Edit::SetBindings { value: &bindings });
     }
-    if !dependencies.is_empty() {
-        doc.set_dependencies(&dependencies)?;
-    }
+    doc.edit(&edits)?;
     Ok(SynthesisCandidate {
         document: doc,
         coverage: CoverageDraft {

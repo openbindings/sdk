@@ -1,5 +1,5 @@
 //! Compiles without the inspection companion anywhere in its dependency graph.
-use openbindings::Document;
+use openbindings::{Document, Edit, JsonValue};
 use openbindings_interface_synthesis::CancellationToken;
 use openbindings_interface_synthesis::*;
 use std::future::{Ready, ready};
@@ -16,19 +16,28 @@ impl InterfaceSynthesizer for Skeleton {
     ) -> Self::Synthesis<'a> {
         ready((|| {
             let mut document = Document::new();
-            document.set_openbindings(
-                r.openbindings_version
-                    .unwrap_or(openbindings::AUTHORING_VERSION),
-            )?;
-            if let Some(value) = r.name {
-                document.set_name(value)?;
-            }
-            if let Some(value) = r.version {
-                document.set_version(value)?;
-            }
-            if let Some(value) = r.description {
-                document.set_description(value)?;
-            }
+            let fields = [
+                (
+                    "/openbindings",
+                    Some(
+                        r.openbindings_version
+                            .unwrap_or(openbindings::AUTHORING_VERSION),
+                    ),
+                ),
+                ("/name", r.name),
+                ("/version", r.version),
+                ("/description", r.description),
+            ]
+            .into_iter()
+            .filter_map(|(pointer, text)| text.map(|text| (pointer, text)))
+            .map(|(pointer, text)| JsonValue::string(text).map(|value| (pointer, value)))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(openbindings::EditError::from)?;
+            let edits: Vec<_> = fields
+                .iter()
+                .map(|(pointer, value)| Edit::Set { pointer, value })
+                .collect();
+            document.edit(&edits)?;
             Ok(SynthesisCandidate {
                 document,
                 coverage: CoverageDraft {

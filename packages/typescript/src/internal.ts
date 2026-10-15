@@ -655,6 +655,15 @@ function isExact(value: unknown): value is ExactJson {
 const jsonRaw = (owner: ExactJson) => handle<wasm.WasmJson>(owner);
 const documentRaw = (owner: DocumentReads) =>
   handle<wasm.WasmDocument | wasm.WasmConformantDocument>(owner);
+function editableRaw(owner: DocumentReads): wasm.WasmDocument {
+  const raw = handle<wasm.WasmDocument>(owner);
+  if (!(raw instanceof wasm.WasmDocument))
+    throw new SdkError(
+      "immutable-document",
+      "A conformant document cannot be edited.",
+    );
+  return raw;
+}
 function conformantRaw(
   owner: ConformantDocument,
   code = "document-conformance",
@@ -1116,7 +1125,7 @@ abstract class DocumentReads extends Managed {
     }
   }
 }
-/** One exact pointer edit. All pointers address the revision before the atomic batch. */
+/** One exact pointer edit or typed namespace replacement. All pointers address the revision before the atomic batch. */
 export type Edit =
   | {
       /** Replace or insert a JSON value at the specified pointer. */
@@ -1131,6 +1140,30 @@ export type Edit =
       op: "remove";
       /** RFC 6901 path; removing the root is refused. */
       pointer: string;
+    }
+  | {
+      /** Replace the complete operations map using typed parts. */
+      op: "set-operations";
+      /** Borrowed typed inputs; opaque exact values retain their spelling. */
+      value: Readonly<Record<string, Operation>>;
+    }
+  | {
+      /** Replace the complete sources map using typed parts. */
+      op: "set-sources";
+      /** Borrowed typed inputs; opaque exact values retain their spelling. */
+      value: Readonly<Record<string, Source>>;
+    }
+  | {
+      /** Replace the complete bindings map using typed parts. */
+      op: "set-bindings";
+      /** Borrowed typed inputs; opaque exact values retain their spelling. */
+      value: Readonly<Record<string, Binding>>;
+    }
+  | {
+      /** Replace the complete dependencies map using typed parts. */
+      op: "set-dependencies";
+      /** Borrowed typed inputs; opaque exact values retain their spelling. */
+      value: Readonly<Record<string, Dependency>>;
     };
 let adoptDocument: (raw: wasm.WasmDocument) => Document;
 const documentToken = Symbol("document owner");
@@ -1170,8 +1203,8 @@ export class Document extends DocumentReads {
   validate(): ValidationResult {
     return assessDocument(this);
   }
-  private commit(call: (raw: wasm.WasmDocument) => void): void {
-    const raw = handle<wasm.WasmDocument>(this);
+  #commit(call: (raw: wasm.WasmDocument) => void): void {
+    const raw = editableRaw(this);
     try {
       sdkCall(() => call(raw));
     } catch (error) {
@@ -1181,7 +1214,7 @@ export class Document extends DocumentReads {
     }
     this.invalidateMetadata();
   }
-  private encoded(
+  #encoded(
     value: unknown,
     context?: AuthorContext,
     destination?: { namespace: string; key: string },
@@ -1199,7 +1232,7 @@ export class Document extends DocumentReads {
     exact.chunks.push(tail + suffix);
     exact.chunks[0] = prefix + exact.chunks[0];
     const values = exact.owners.map(jsonRaw);
-    this.commit((raw) => {
+    this.#commit((raw) => {
       const result = raw.editEncoded(
         exact.chunks,
         new Uint32Array(exact.indices),
@@ -1217,21 +1250,22 @@ export class Document extends DocumentReads {
       if (result[0] !== null) throw result[0];
     });
   }
-  /** Atomically apply pointer edits in request order at shared insertion boundaries, with one bridge call including exact inputs. Untouched bytes stay exact. Invalid paths, duplicates, overlaps and admission limits throw EditError and leave the document unchanged. */
+  /** Atomically apply pointer edits and typed namespace replacements in request order at shared insertion boundaries, with one bridge call including exact inputs. Untouched bytes stay exact. Invalid paths, duplicates, overlaps and admission limits throw EditError and leave the document unchanged. */
   edit(edits: readonly Edit[]): void {
     handle(this);
-    this.encoded(edits);
+    editableRaw(this);
+    this.#encoded(edits, { origins: new WeakMap(), editBatch: true });
   }
   /** Replace or insert a value at an RFC 6901 pointer. Exact owners are borrowed; ordinary values are checked without invoking getters/toJSON. */
   set(pointer: string, value: JsonInput): void {
     scalar(pointer);
-    if (isExact(value)) this.commit((raw) => raw.set(pointer, jsonRaw(value)));
+    if (isExact(value)) this.#commit((raw) => raw.set(pointer, jsonRaw(value)));
     else this.edit([{ op: "set", pointer, value }]);
   }
   /** Remove an existing member/array element. Throws EditError on refusal; removing the root is not supported. */
   remove(pointer: string): void {
     scalar(pointer);
-    this.commit((raw) => raw.remove(pointer));
+    this.#commit((raw) => raw.remove(pointer));
   }
   /** Set the version declaration; conformance is assessed separately. */
   setOpenbindings(value: string): void {
@@ -1264,7 +1298,7 @@ export class Document extends DocumentReads {
   setOperationOutput(key: string, value: JsonInput): void {
     this.set(pointerChild("/operations", key) + "/output", value);
   }
-  private part(
+  #part(
     namespace: string,
     key: string,
     kind: AuthorKind,
@@ -1279,56 +1313,42 @@ export class Document extends DocumentReads {
       pointerChild("/" + namespace, key),
       context,
     );
-    this.encoded(object, context, { namespace: "/" + namespace, key });
+    this.#encoded(object, context, { namespace: "/" + namespace, key });
   }
-  private parts(namespace: string, kind: AuthorKind, values: unknown): void {
-    handle(this);
-    const context: AuthorContext = { origins: new WeakMap() };
-    const object = Object.fromEntries(
-      ownEntries(values, "/" + namespace).map(([key, value]) => [
-        key,
-        authorObject(value, kind, pointerChild("/" + namespace, key), context),
-      ]),
-    );
-    this.encoded(
-      object,
-      context,
-      undefined,
-      '[{"op":"set","pointer":' + JSON.stringify("/" + namespace) + ',"value":',
-      "}]",
-    );
+  #parts(namespace: string, values: unknown): void {
+    this.edit([{ op: "set-" + namespace, value: values } as Edit]);
   }
   /** Set a whole typed operation, creating its namespace if absent. Collisions and invalid typed input throw EditError with a logical partPointer. */
   setOperation(key: string, value: Operation): void {
-    this.part("operations", key, "operation", value);
+    this.#part("operations", key, "operation", value);
   }
   /** Commit a whole operations map once, for bulk synthesis. */
   setOperations(value: Readonly<Record<string, Operation>>): void {
-    this.parts("operations", "operation", value);
+    this.#parts("operations", value);
   }
   /** Set a whole typed binding, creating its namespace if absent. */
   setBinding(key: string, value: Binding): void {
-    this.part("bindings", key, "binding", value);
+    this.#part("bindings", key, "binding", value);
   }
   /** Commit a whole bindings map once. */
   setBindings(value: Readonly<Record<string, Binding>>): void {
-    this.parts("bindings", "binding", value);
+    this.#parts("bindings", value);
   }
   /** Set a whole typed source, creating its namespace if absent. */
   setSource(key: string, value: Source): void {
-    this.part("sources", key, "source", value);
+    this.#part("sources", key, "source", value);
   }
   /** Commit a whole sources map once. */
   setSources(value: Readonly<Record<string, Source>>): void {
-    this.parts("sources", "source", value);
+    this.#parts("sources", value);
   }
   /** Set a whole typed dependency, creating its namespace if absent. */
   setDependency(key: string, value: Dependency): void {
-    this.part("dependencies", key, "dependency", value);
+    this.#part("dependencies", key, "dependency", value);
   }
   /** Commit a whole dependencies map once. */
   setDependencies(value: Readonly<Record<string, Dependency>>): void {
-    this.parts("dependencies", "dependency", value);
+    this.#parts("dependencies", value);
   }
   /** Set a typed example on an existing operation, creating its examples map if absent. */
   setExample(operation: string, key: string, value: Example): void {
@@ -1342,7 +1362,7 @@ export class Document extends DocumentReads {
       pointerChild(pointerChild("/operations", operation) + "/examples", key),
       context,
     );
-    this.encoded(object, context, {
+    this.#encoded(object, context, {
       namespace: pointerChild("/operations", operation) + "/examples",
       key,
     });
@@ -2403,7 +2423,11 @@ function encodeOrdinary(
       active.delete(job.leave);
       continue;
     }
-    const { value, pointer } = job;
+    const { pointer } = job;
+    const value =
+      authoring?.editBatch && job.depth === 1
+        ? normalizeEdit(job.value, authoring)
+        : job.value;
     if (++nodes > 1_000_000 || job.depth > 10_000)
       reject(
         "authoring-limit",
@@ -2649,6 +2673,35 @@ class PartSerializationError extends EditError {
 }
 interface AuthorContext {
   origins: WeakMap<object, Map<string, string>>;
+  editBatch?: boolean;
+}
+function normalizeEdit(value: unknown, context: AuthorContext): unknown {
+  const entries = ownEntries(value, "");
+  const fields = Object.fromEntries(entries);
+  const namespaces: Record<string, AuthorKind> = {
+    "set-operations": "operation",
+    "set-sources": "source",
+    "set-bindings": "binding",
+    "set-dependencies": "dependency",
+  };
+  const kind =
+    typeof fields.op === "string" && Object.hasOwn(namespaces, fields.op)
+      ? namespaces[fields.op]
+      : undefined;
+  if (!kind) return value;
+  if (entries.some(([key]) => key !== "op" && key !== "value"))
+    throw new EditError(
+      "invalid-edits",
+      "Typed namespace edits accept op and value only.",
+    );
+  const pointer = "/" + (fields.op as string).slice(4);
+  const parts = Object.fromEntries(
+    ownEntries(fields.value, pointer).map(([key, part]) => [
+      key,
+      authorObject(part, kind, pointerChild(pointer, key), context),
+    ]),
+  );
+  return { op: "set", pointer, value: parts };
 }
 function pointerChild(parent: string, name: string): string {
   return parent + "/" + name.replace(/~/g, "~0").replace(/\//g, "~1");

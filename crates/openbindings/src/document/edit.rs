@@ -15,6 +15,26 @@ pub enum Edit<'a> {
         /// Exact replacement value. Duplicate members are refused.
         value: &'a JsonValue,
     },
+    /// Replace the complete operations map using checked typed parts.
+    SetOperations {
+        /// Borrowed parts, serialized once directly into the bounded splice buffer.
+        value: &'a BTreeMap<String, Operation>,
+    },
+    /// Replace the complete sources map using checked typed parts.
+    SetSources {
+        /// Borrowed parts, serialized once directly into the bounded splice buffer.
+        value: &'a BTreeMap<String, Source>,
+    },
+    /// Replace the complete bindings map using checked typed parts.
+    SetBindings {
+        /// Borrowed parts, serialized once directly into the bounded splice buffer.
+        value: &'a BTreeMap<String, Binding>,
+    },
+    /// Replace the complete dependencies map using checked typed parts.
+    SetDependencies {
+        /// Borrowed parts, serialized once directly into the bounded splice buffer.
+        value: &'a BTreeMap<String, Dependency>,
+    },
     /// Remove an existing member or array element, including an adjacent separator.
     Remove {
         /// RFC 6901 pointer. Removing the root is refused.
@@ -30,6 +50,12 @@ impl fmt::Debug for Edit<'_> {
                 .field("value", value)
                 .finish_non_exhaustive(),
             Self::Remove { .. } => f.debug_struct("Remove").finish_non_exhaustive(),
+            Self::SetOperations { .. } => f.debug_struct("SetOperations").finish_non_exhaustive(),
+            Self::SetSources { .. } => f.debug_struct("SetSources").finish_non_exhaustive(),
+            Self::SetBindings { .. } => f.debug_struct("SetBindings").finish_non_exhaustive(),
+            Self::SetDependencies { .. } => {
+                f.debug_struct("SetDependencies").finish_non_exhaustive()
+            }
         }
     }
 }
@@ -128,44 +154,64 @@ fn decode(s: &str) -> Result<String, EditError> {
     Ok(out)
 }
 
-// Serializers first visit a counter, then write directly into the one splice buffer.
-// No replacement byte buffer or replacement arena is allocated before preflight.
+// Exact inputs have a known byte extent. Typed parts stream once into the final
+// splice buffer; every write reserves the untouched bytes and known replacements
+// still to come, and refuses before growing beyond the final byte budget.
 trait WriteJson {
-    fn size(&self, max: usize) -> Result<usize, EditError>;
-    fn write(&self, out: &mut Vec<u8>);
+    fn size(&self) -> Result<Option<usize>, EditError> {
+        Ok(None)
+    }
+    fn write(&self, out: &mut BoundedWriter) -> Result<(), EditError>;
 }
 impl WriteJson for JsonValue {
-    fn size(&self, _: usize) -> Result<usize, EditError> {
+    fn size(&self) -> Result<Option<usize>, EditError> {
         if self.has_duplicate_names() {
             return Err(EditError::DuplicateMembers);
         }
-        Ok(self.bytes().len())
+        Ok(Some(self.bytes().len()))
     }
-    fn write(&self, out: &mut Vec<u8>) {
-        out.extend_from_slice(self.bytes());
+    fn write(&self, out: &mut BoundedWriter) -> Result<(), EditError> {
+        out.write_all(self.bytes()).map_err(|_| limit(out.limits))
     }
 }
 struct Typed<'a, T: ?Sized>(&'a T);
-struct Counter {
-    size: usize,
-    max: usize,
+struct BoundedWriter {
+    bytes: Vec<u8>,
+    reserved: usize,
+    limits: JsonLimits,
 }
-impl Write for Counter {
+impl Write for BoundedWriter {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        if bytes.len() > self.max.saturating_sub(self.size) {
+        let available = self.limits.max_bytes - self.reserved;
+        if bytes.len() > available.saturating_sub(self.bytes.len()) {
             return Err(std::io::Error::other("byte limit"));
         }
-        self.size += bytes.len();
+        let needed = self.bytes.len() + bytes.len();
+        if needed > self.bytes.capacity() {
+            let capacity = self
+                .bytes
+                .capacity()
+                .saturating_mul(2)
+                .max(needed)
+                .min(available);
+            self.bytes.reserve_exact(capacity - self.bytes.len());
+        }
+        self.bytes.extend_from_slice(bytes);
         Ok(bytes.len())
     }
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
     }
 }
+impl BoundedWriter {
+    fn known(&mut self, bytes: &[u8]) -> Result<(), EditError> {
+        self.reserved -= bytes.len();
+        self.write_all(bytes).map_err(|_| limit(self.limits))
+    }
+}
 impl<T: Serialize + ?Sized> WriteJson for Typed<'_, T> {
-    fn size(&self, max: usize) -> Result<usize, EditError> {
-        let mut count = Counter { size: 0, max };
-        serde_json::to_writer(&mut count, self.0).map_err(|error| {
+    fn write(&self, out: &mut BoundedWriter) -> Result<(), EditError> {
+        serde_json::to_writer(out, self.0).map_err(|error| {
             AuthoringError::plain(
                 if error.is_io() {
                     AuthoringErrorKind::Limit
@@ -174,11 +220,83 @@ impl<T: Serialize + ?Sized> WriteJson for Typed<'_, T> {
                 },
                 "part could not be serialized within the supported JSON profile",
             )
-        })?;
-        Ok(count.size)
+            .into()
+        })
     }
-    fn write(&self, out: &mut Vec<u8>) {
-        serde_json::to_writer(out, self.0).expect("preflight established typed serialization");
+}
+impl WriteJson for Edit<'_> {
+    fn size(&self) -> Result<Option<usize>, EditError> {
+        match self {
+            Self::Set { value, .. } => value.size(),
+            _ => Ok(None),
+        }
+    }
+    fn write(&self, out: &mut BoundedWriter) -> Result<(), EditError> {
+        match self {
+            Self::Set { value, .. } => value.write(out),
+            Self::SetOperations { value } => Typed(value).write(out),
+            Self::SetSources { value } => Typed(value).write(out),
+            Self::SetBindings { value } => Typed(value).write(out),
+            Self::SetDependencies { value } => Typed(value).write(out),
+            Self::Remove { .. } => Ok(()),
+        }
+    }
+}
+fn key_size(key: &str) -> usize {
+    2 + key
+        .bytes()
+        .map(|b| match b {
+            b'"' | b'\\' | b'\n' | b'\r' | b'\t' | 8 | 12 => 2,
+            0..=31 => 6,
+            _ => 1,
+        })
+        .sum::<usize>()
+}
+// DOC-1.2: build each parent's removal range index once per batch.
+struct RemovalIndex {
+    children: Vec<Range<usize>>,
+    by_end: HashMap<usize, usize>,
+}
+#[cfg(test)]
+thread_local! { static PLANNING_WORK: std::cell::Cell<(usize, usize, usize)> = const { std::cell::Cell::new((0, 0, 0)) }; }
+impl RemovalIndex {
+    fn new(parent: JsonRef<'_>) -> Result<Self, EditError> {
+        let children: Vec<_> = if let Some(members) = parent.members() {
+            members
+                .map(|m| backend::byte_range(m.name).start..backend::byte_range(m.value).end)
+                .collect()
+        } else if let Some(items) = parent.elements() {
+            items.map(backend::byte_range).collect()
+        } else {
+            return Err(EditError::NotContainer);
+        };
+        #[cfg(test)]
+        PLANNING_WORK.with(|work| {
+            let (p, c, l) = work.get();
+            work.set((p + 1, c + children.len(), l));
+        });
+        let by_end = children
+            .iter()
+            .enumerate()
+            .map(|(i, r)| (r.end, i))
+            .collect();
+        Ok(Self { children, by_end })
+    }
+    fn range(&self, end: usize) -> Result<Range<usize>, EditError> {
+        #[cfg(test)]
+        PLANNING_WORK.with(|work| {
+            let (p, c, l) = work.get();
+            work.set((p, c, l + 1));
+        });
+        let i = *self.by_end.get(&end).ok_or(EditError::MissingValue)?;
+        let children = &self.children;
+        Ok(if i + 1 < children.len() {
+            children[i].start..children[i + 1].start
+        } else if i > 0 {
+            children[i - 1].end..children[i].end
+        } else {
+            children[i].clone()
+        })
     }
 }
 struct Request<'a> {
@@ -232,7 +350,8 @@ impl Document {
     ///
     /// # Errors
     /// Invalid paths, duplicates, overlap and admission failures leave the document
-    /// unchanged. The final byte budget is checked before allocating replacement bytes.
+    /// unchanged. Known byte extents are preflighted; typed parts serialize once
+    /// into a bounded writer that reserves all remaining known bytes before growing.
     pub fn edit(&mut self, edits: &[Edit<'_>]) -> Result<(), EditError> {
         let limits = JsonLimits::default();
         if edits.len() > limits.max_nodes {
@@ -243,19 +362,36 @@ impl Document {
             }
             .into());
         }
-        let requests: Vec<_> = edits
-            .iter()
-            .map(|edit| match edit {
-                Edit::Set { pointer, value } => Request {
-                    pointer,
-                    value: Some(*value),
+        let mut requests = Vec::with_capacity(edits.len());
+        for edit in edits {
+            let pointer = match edit {
+                Edit::Set { pointer, .. } | Edit::Remove { pointer } => *pointer,
+                Edit::SetOperations { value } => {
+                    value.check(&["operations"])?;
+                    "/operations"
+                }
+                Edit::SetSources { value } => {
+                    value.check(&["sources"])?;
+                    "/sources"
+                }
+                Edit::SetBindings { value } => {
+                    value.check(&["bindings"])?;
+                    "/bindings"
+                }
+                Edit::SetDependencies { value } => {
+                    value.check(&["dependencies"])?;
+                    "/dependencies"
+                }
+            };
+            requests.push(Request {
+                pointer,
+                value: if matches!(edit, Edit::Remove { .. }) {
+                    None
+                } else {
+                    Some(edit)
                 },
-                Edit::Remove { pointer } => Request {
-                    pointer,
-                    value: None,
-                },
-            })
-            .collect();
+            });
+        }
         self.apply(&requests, limits)
     }
     fn apply(&mut self, edits: &[Request<'_>], limits: JsonLimits) -> Result<(), EditError> {
@@ -267,6 +403,7 @@ impl Document {
         }
         let mut splices = Vec::with_capacity(edits.len());
         let mut emptied = HashSet::new();
+        let mut removal_indexes = HashMap::new();
         for edit in edits {
             let pointer = edit.pointer;
             if pointer.len() > limits.max_bytes {
@@ -281,39 +418,26 @@ impl Document {
             }
             let size = edit
                 .value
-                .map(|v| v.size(limits.max_bytes))
+                .map(|v| v.size())
                 .transpose()?
+                .flatten()
                 .unwrap_or(0);
             if let Some(target) = self.value().at(pointer) {
                 let mut range = backend::byte_range(target);
                 if edit.value.is_none() {
                     let (parent, _) = pointer.rsplit_once('/').ok_or(EditError::InvalidPointer)?;
                     let parent = self.value().at(parent).ok_or(EditError::MissingParent)?;
-                    let children: Vec<_> = if let Some(members) = parent.members() {
-                        members
-                            .map(|m| {
-                                backend::byte_range(m.name).start..backend::byte_range(m.value).end
-                            })
-                            .collect()
-                    } else if let Some(items) = parent.elements() {
-                        items.map(backend::byte_range).collect()
-                    } else {
-                        return Err(EditError::NotContainer);
+                    let parent_range = backend::byte_range(parent);
+                    let index = match removal_indexes.entry(parent_range.start) {
+                        std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+                        std::collections::hash_map::Entry::Vacant(entry) => {
+                            entry.insert(RemovalIndex::new(parent)?)
+                        }
                     };
-                    if children.len() == 1 {
-                        emptied.insert(backend::byte_range(parent).end - 1);
+                    if index.children.len() == 1 {
+                        emptied.insert(parent_range.end - 1);
                     }
-                    let i = children
-                        .iter()
-                        .position(|c| c.end == range.end)
-                        .ok_or(EditError::MissingValue)?;
-                    range = if i + 1 < children.len() {
-                        children[i].start..children[i + 1].start
-                    } else if i > 0 {
-                        children[i - 1].end..children[i].end
-                    } else {
-                        children[i].clone()
-                    };
+                    range = index.range(range.end)?;
                 }
                 splices.push(Splice {
                     range,
@@ -334,10 +458,7 @@ impl Document {
                     _ => return Err(EditError::NotContainer),
                 };
                 let prefix = match &key {
-                    Some(key) => Typed(key)
-                        .size(limits.max_bytes)?
-                        .checked_add(1)
-                        .ok_or_else(|| limit(limits))?,
+                    Some(key) => key_size(key).checked_add(1).ok_or_else(|| limit(limits))?,
                     None => 0,
                 };
                 let size = size
@@ -401,26 +522,32 @@ impl Document {
             .try_fold(old.len() - removed, |n, s| n.checked_add(s.size))
             .filter(|&n| n <= limits.max_bytes)
             .ok_or_else(|| limit(limits))?;
-        let mut bytes = Vec::with_capacity(size);
+        let mut out = BoundedWriter {
+            bytes: Vec::with_capacity(size),
+            reserved: size,
+            limits,
+        };
         let mut from = 0;
         for splice in splices {
-            bytes.extend_from_slice(&old[from..splice.range.start]);
+            out.known(&old[from..splice.range.start])?;
+            out.reserved -= splice.size;
             if let Some(insert) = splice.insertion {
                 if insert.comma {
-                    bytes.push(b',');
+                    out.write_all(b",").map_err(|_| limit(limits))?;
                 }
                 if let Some(key) = insert.key {
-                    Typed(&key).write(&mut bytes);
-                    bytes.push(b':');
+                    Typed(&key).write(&mut out)?;
+                    out.write_all(b":").map_err(|_| limit(limits))?;
                 }
             }
             if let Some(value) = splice.value {
-                value.write(&mut bytes);
+                value.write(&mut out)?;
             }
             from = splice.range.end;
         }
-        bytes.extend_from_slice(&old[from..]);
-        let next = JsonValue::parse_with_limits(bytes, limits)?;
+        out.known(&old[from..])?;
+        debug_assert_eq!(out.reserved, 0);
+        let next = JsonValue::parse_with_limits(out.bytes, limits)?;
         if next.has_duplicate_names() {
             return Err(EditError::DuplicateMembers);
         }
@@ -505,8 +632,7 @@ impl Document {
     /// # Errors
     /// Returns an editing or typed-part error without changing the document.
     pub fn set_operations(&mut self, value: &BTreeMap<String, Operation>) -> Result<(), EditError> {
-        value.check(&["operations"])?;
-        self.set_typed("/operations", value)
+        self.edit(&[Edit::SetOperations { value }])
     }
     /// Set one whole binding, creating its namespace if absent.
     /// # Errors
@@ -546,19 +672,23 @@ impl Document {
 }
 
 macro_rules! set_namespace {
-    ($method:ident, $field:literal, $part:ty) => {
+    ($method:ident, $field:literal, $part:ty, $variant:ident) => {
         impl Document {
             #[doc = concat!("Commit a complete `", $field, "` map in one splice and parse.\n\n# Errors\nReturns an editing or typed-part error without changing the document.")]
             pub fn $method(&mut self, value: &BTreeMap<String, $part>) -> Result<(), EditError> {
-                value.check(&[$field])?;
-                self.set_typed(concat!("/", $field), value)
+                self.edit(&[Edit::$variant { value }])
             }
         }
     };
 }
-set_namespace!(set_bindings, "bindings", Binding);
-set_namespace!(set_sources, "sources", Source);
-set_namespace!(set_dependencies, "dependencies", Dependency);
+set_namespace!(set_bindings, "bindings", Binding, SetBindings);
+set_namespace!(set_sources, "sources", Source, SetSources);
+set_namespace!(
+    set_dependencies,
+    "dependencies",
+    Dependency,
+    SetDependencies
+);
 
 #[cfg(test)]
 mod tests {
@@ -567,13 +697,13 @@ mod tests {
 
     #[test]
     fn byte_budget_is_preflighted_before_writing_any_replacement() {
-        // DOC-1: refuse before allocation/encoding, including typed values.
+        // DOC-1: known extents refuse before encoding; typed writes stop at the budget.
         struct Witness(Cell<bool>);
         impl WriteJson for Witness {
-            fn size(&self, _: usize) -> Result<usize, EditError> {
-                Ok(100)
+            fn size(&self) -> Result<Option<usize>, EditError> {
+                Ok(Some(100))
             }
-            fn write(&self, _: &mut Vec<u8>) {
+            fn write(&self, _: &mut BoundedWriter) -> Result<(), EditError> {
                 self.0.set(true);
                 panic!("preflight must refuse");
             }
@@ -640,5 +770,115 @@ mod tests {
             assert!(matches!(error.code(), "node-limit" | "depth-limit"));
             assert_eq!(doc.to_bytes(), before);
         }
+    }
+    #[test]
+    fn removal_planning_indexes_each_parent_once() {
+        // DOC-1.2: count planner work, independent of machine timing.
+        for object in [false, true] {
+            let items: Vec<_> = (0..1000)
+                .map(|i| {
+                    if object {
+                        format!("\"k{i}\":{i}")
+                    } else {
+                        i.to_string()
+                    }
+                })
+                .collect();
+            let text = if object {
+                format!("{{{}}}", items.join(","))
+            } else {
+                format!("[{}]", items.join(","))
+            };
+            let mut document = Document::parse(text).unwrap();
+            let paths: Vec<_> = (0..1000)
+                .step_by(2)
+                .map(|i| {
+                    if object {
+                        format!("/k{i}")
+                    } else {
+                        format!("/{i}")
+                    }
+                })
+                .collect();
+            let edits: Vec<_> = paths
+                .iter()
+                .map(|pointer| Edit::Remove { pointer })
+                .collect();
+            PLANNING_WORK.with(|work| work.set((0, 0, 0)));
+            document.edit(&edits).unwrap();
+            assert_eq!(PLANNING_WORK.with(Cell::get), (1, 1000, 500));
+            let remaining = items
+                .iter()
+                .skip(1)
+                .step_by(2)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(",");
+            let expected = if object {
+                format!("{{{remaining}}}")
+            } else {
+                format!("[{remaining}]")
+            };
+            assert_eq!(document.to_bytes(), expected.as_bytes());
+        }
+    }
+    #[test]
+    fn typed_serialization_runs_once_and_stops_before_the_byte_budget() {
+        // DOC-1.3: no counting serialization pass and no over-budget write.
+        struct Witness {
+            calls: Cell<usize>,
+            fields: Cell<usize>,
+        }
+        impl Serialize for Witness {
+            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                use serde::ser::SerializeSeq;
+                self.calls.set(self.calls.get() + 1);
+                let mut seq = serializer.serialize_seq(Some(100))?;
+                for _ in 0..100 {
+                    self.fields.set(self.fields.get() + 1);
+                    seq.serialize_element("0123456789")?;
+                }
+                seq.end()
+            }
+        }
+        let witness = Witness {
+            calls: Cell::new(0),
+            fields: Cell::new(0),
+        };
+        let mut document = Document::new();
+        document.set_typed("/x", &witness).unwrap();
+        assert_eq!(witness.calls.get(), 1);
+        let before = document.to_bytes().to_vec();
+        witness.calls.set(0);
+        witness.fields.set(0);
+        let error = document
+            .apply(
+                &[Request {
+                    pointer: "/x",
+                    value: Some(&Typed(&witness)),
+                }],
+                JsonLimits {
+                    max_bytes: 100,
+                    ..Default::default()
+                },
+            )
+            .unwrap_err();
+        assert_eq!(error.code(), "byte-limit");
+        assert_eq!(witness.calls.get(), 1);
+        assert!(witness.fields.get() < 10);
+        assert_eq!(document.to_bytes(), before);
+        let limits = JsonLimits {
+            max_bytes: 7,
+            ..Default::default()
+        };
+        let mut writer = BoundedWriter {
+            bytes: Vec::new(),
+            reserved: 2,
+            limits,
+        };
+        writer.write_all(b"12345").unwrap();
+        assert!(writer.write_all(b"6").is_err());
+        assert_eq!(writer.bytes, b"12345");
+        assert!(writer.bytes.capacity() <= limits.max_bytes);
     }
 }

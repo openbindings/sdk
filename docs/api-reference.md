@@ -71,6 +71,16 @@ revision independently, so editing an owner does not change an acquired view or
 proof. `EditError.code` reports stable editing refusals; typed-part input errors
 also expose `partPointer` without inventing source coordinates.
 
+For construction, Rust's `Edit::SetOperations`, `SetDependencies`, `SetSources`
+and `SetBindings` variants each borrow a typed map through their `value` field.
+They can share an `edit(&[Edit])` batch with `Set` and `Remove`. This extends the
+existing enum and whole-map setters without a separate builder or unrestricted
+serialization API. TypeScript mirrors them as `set-operations`, `set-dependencies`,
+`set-sources` and `set-bindings` discriminants with a `value` map. One batch crosses
+the bridge once and commits one revision. Known byte extents are preflighted;
+typed parts serialize once into a bounded writer that reserves all remaining
+known bytes and stops before exceeding the budget. A refusal discards that buffer.
+
 ## Rust value-contract conveniences
 
 | Public item | Contract |

@@ -115,7 +115,21 @@ apply. Renaming operations leaves reference updates to the caller.
 Use `Document.create()` and typed setters such as `setOperation(key, operation)`,
 `setSource`, `setBinding`, `setDependency` and `setExample` for construction.
 `setOperations(operations)` commits a complete operations map once for synthesis.
-The other namespaces have corresponding map setters. Typed parts keep the existing
+The other namespaces have corresponding map setters. To construct several namespaces
+with one bridge call, splice and parse, include typed maps in the same batch:
+
+```typescript
+document.edit([
+  { op: "set-operations", value: { run: { input: true } } },
+  { op: "set-dependencies", value: { dep: { operation: "run" } } },
+  { op: "set-sources", value: { local: { kind: "custom" } } },
+  { op: "set-bindings", value: { local: { operation: "run", source: "local" } } },
+  { op: "set", pointer: "/name", value: "Example" },
+]);
+```
+
+Each typed map receives the same input checks as its standalone setter. A failed
+batch leaves the document unchanged. All pointers address the original revision. Typed parts keep the existing
 `Operation`, `Source`, `Binding`, `Dependency` and `Example`
 input types. Their opaque fields accept borrowed exact owners; callers retain and
 dispose those owners. `EditError.partPointer` locates a refused typed part field.

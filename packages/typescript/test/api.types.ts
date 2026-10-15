@@ -376,3 +376,23 @@ declare const partError: import("../dist/index.js").EditError;
 partError.partPointer satisfies string | null;
 // @ts-expect-error retired pointer name has no alias
 partError.draftPointer;
+
+// DOC-1.3: typed maps and exact pointer edits share the existing batch API.
+function typedBatch(
+  document: Document,
+  operation: Operation,
+  source: Source,
+  binding: Binding,
+  dependency: Dependency,
+) {
+  document.edit([
+    { op: "set-operations", value: { run: operation } },
+    { op: "set-sources", value: { local: source } },
+    { op: "set-bindings", value: { binding } },
+    { op: "set-dependencies", value: { dependency } },
+    { op: "set", pointer: "/name", value: "Batch" },
+  ]);
+  // @ts-expect-error typed source kind is required in a batch, too
+  document.edit([{ op: "set-sources", value: { local: {} } }]);
+}
+void typedBatch;

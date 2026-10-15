@@ -533,3 +533,89 @@ fn every_typed_part_setter_matches_an_exact_reference_sequence() {
     };
     assert!(!format!("{edit:?}").contains("private-token"));
 }
+
+#[test]
+fn typed_namespace_batch_preserves_exact_bytes_and_is_atomic() {
+    // DOC-1.3: typed maps and pointer edits share a single atomic revision.
+    let mut document =
+        Document::parse(" {\n\"openbindings\":\"0.2.0\",\"operations\":{},\"x-keep\": 1e+00 } ")
+            .unwrap();
+    let operations = BTreeMap::from([(
+        "run".into(),
+        Operation {
+            input: Some(exact("true")),
+            additional_fields: BTreeMap::from([("x-number".into(), exact("1e+003"))]),
+            ..Default::default()
+        },
+    )]);
+    let sources = BTreeMap::from([(
+        "s".into(),
+        Source {
+            kind: "custom".into(),
+            content: Some(exact("9007199254740993")),
+            ..Default::default()
+        },
+    )]);
+    let bindings = BTreeMap::from([(
+        "b".into(),
+        Binding {
+            operation: "run".into(),
+            source: "s".into(),
+            ..Default::default()
+        },
+    )]);
+    let dependencies = BTreeMap::from([(
+        "d".into(),
+        Dependency {
+            operation: "run".into(),
+            ..Default::default()
+        },
+    )]);
+    let name = exact("\"Batch\"");
+    document
+        .edit(&[
+            Edit::SetOperations { value: &operations },
+            Edit::Set {
+                pointer: "/name",
+                value: &name,
+            },
+            Edit::SetDependencies {
+                value: &dependencies,
+            },
+            Edit::SetSources { value: &sources },
+            Edit::SetBindings { value: &bindings },
+        ])
+        .unwrap();
+    assert!(document.validate().unwrap().conformant().is_some());
+    let expected = " {\n\"openbindings\":\"0.2.0\",\"operations\":{\"run\":{\"input\":true,\"x-number\":1e+003}},\"x-keep\": 1e+00 ,\"name\":\"Batch\",\"dependencies\":{\"d\":{\"operation\":\"run\"}},\"sources\":{\"s\":{\"kind\":\"custom\",\"content\":9007199254740993}},\"bindings\":{\"b\":{\"operation\":\"run\",\"source\":\"s\"}}} ";
+    assert_eq!(document.to_bytes(), expected.as_bytes());
+    let before = document.to_bytes().to_vec();
+    assert!(
+        document
+            .edit(&[
+                Edit::SetOperations {
+                    value: &BTreeMap::new()
+                },
+                Edit::Remove {
+                    pointer: "/missing"
+                }
+            ])
+            .is_err()
+    );
+    assert_eq!(document.to_bytes(), before);
+    let invalid = BTreeMap::from([(
+        "run".into(),
+        Operation {
+            additional_fields: BTreeMap::from([("input".into(), exact("true"))]),
+            ..Default::default()
+        },
+    )]);
+    assert_eq!(
+        document
+            .edit(&[Edit::SetOperations { value: &invalid }])
+            .unwrap_err()
+            .code(),
+        "field-collision"
+    );
+    assert_eq!(document.to_bytes(), before);
+}

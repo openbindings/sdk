@@ -462,10 +462,13 @@ pub(crate) trait Part: Serialize {
 }
 impl<T: Part> Part for BTreeMap<String, T> {
     fn check(&self, path: &[&str]) -> Result<(), AuthoringError> {
+        // DOC-1.3: reuse one diagnostic path for the entire namespace.
+        let mut child = Vec::with_capacity(path.len() + 1);
+        child.extend_from_slice(path);
         for (key, value) in self {
-            let mut child = path.to_vec();
             child.push(key);
             value.check(&child)?;
+            child.pop();
         }
         Ok(())
     }
