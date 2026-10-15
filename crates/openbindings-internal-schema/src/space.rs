@@ -27,9 +27,6 @@ pub struct Resource {
     pub anchors: BTreeMap<String, Vec<(usize, bool)>>,
     pub origin: ResourceOrigin,
     pub eligible: bool,
-    // Only queries authored in this resource are cached here. All target
-    // identities and resolution still belong to the complete immutable space.
-    inspection: std::sync::OnceLock<library::Targets>,
 }
 impl std::fmt::Debug for Resource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -68,6 +65,7 @@ pub struct SchemaSpace {
     pub resources: Vec<Resource>,
     pub sources: Vec<Source>,
     names: BTreeMap<String, NameSelection>,
+    inspection: std::sync::OnceLock<library::Inspection>,
 }
 impl std::fmt::Debug for SchemaSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -147,6 +145,7 @@ impl SchemaSpace {
             resources: Vec::new(),
             sources: Vec::new(),
             names: BTreeMap::new(),
+            inspection: std::sync::OnceLock::new(),
         };
         out.add_source(
             None,
@@ -224,7 +223,6 @@ impl SchemaSpace {
             anchors: BTreeMap::new(),
             origin,
             eligible: true,
-            inspection: std::sync::OnceLock::new(),
         });
         if retrieval.is_some() {
             self.resources[initial].dialect = declared_dialect(value.view(), Some(DIALECT));
@@ -256,7 +254,6 @@ impl SchemaSpace {
                     anchors: BTreeMap::new(),
                     origin,
                     eligible: true,
-                    inspection: std::sync::OnceLock::new(),
                 });
                 id
             };
@@ -1020,77 +1017,6 @@ mod projection_tests {
         backend::{self, FlatJson},
         numeric,
     };
-    #[test]
-    fn inspection_is_lazy_per_referring_resource_and_replays_missing_evidence() {
-        let document = RawDocument::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://resource.test/a"}}},"schemas":{"a":{"$id":"https://resource.test/a","$ref":"https://resource.test/absent"},"b":{"$id":"https://resource.test/b","$ref":"https://resource.test/other"}}}"#).unwrap();
-        let space = SchemaSpace::new(document, Supplied::default());
-        let entry = space
-            .document_node(
-                &space
-                    .document
-                    .value()
-                    .at("/operations/op/input")
-                    .unwrap()
-                    .to_owned(),
-            )
-            .unwrap();
-        assert!(space.resources.iter().all(|r| r.inspection.get().is_none()));
-        let target = space.resolve(entry, "https://resource.test/a").unwrap();
-        assert_eq!(
-            space
-                .resources
-                .iter()
-                .filter(|r| r.inspection.get().is_some())
-                .count(),
-            1
-        );
-        // Resolving a carrier does not inspect the references authored inside it.
-        assert!(
-            space.resources[space.nodes[target.node].resource]
-                .inspection
-                .get()
-                .is_none()
-        );
-        for _ in 0..2 {
-            let mut missing = Vec::new();
-            let failure = space
-                .resolve_with_missing(target.node, "https://resource.test/absent", &mut |uri| {
-                    missing.push(uri.to_owned())
-                })
-                .unwrap_err();
-            assert_eq!(missing, ["https://resource.test/absent"]);
-            assert_eq!(failure.location.unwrap().pointer, "/schemas/a");
-        }
-        assert_eq!(
-            space
-                .resources
-                .iter()
-                .filter(|r| r.inspection.get().is_some())
-                .count(),
-            2
-        );
-        assert!(
-            space
-                .resources
-                .iter()
-                .filter(|r| r.origin == ResourceOrigin::Standard)
-                .all(|r| r.inspection.get().is_none())
-        );
-        std::thread::scope(|scope| {
-            for _ in 0..4 {
-                scope.spawn(|| {
-                    assert_eq!(
-                        space
-                            .resolve(entry, "https://resource.test/a")
-                            .unwrap()
-                            .node,
-                        target.node
-                    )
-                });
-            }
-        });
-    }
-
     #[test]
     fn malformed_reached_shapes_refuse_before_projection() {
         let control = std::sync::atomic::AtomicBool::new(false);

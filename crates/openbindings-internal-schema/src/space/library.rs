@@ -5,7 +5,7 @@ use jsonschema::{Draft, Registry, Retrieve, Uri};
 use serde_json::Value;
 use std::{
     borrow::Cow,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, OnceLock},
 };
 
 #[derive(Clone)]
@@ -31,7 +31,31 @@ impl Refusal {
         self
     }
 }
-pub(super) type Targets = HashMap<(usize, String), Result<Target, Refusal>>;
+type Key = (usize, String);
+type Targets = HashMap<Key, Result<Target, Refusal>>;
+type Query = (usize, String, String, String);
+enum Route {
+    Carrier(usize),
+    Absent,
+    Refused(Refusal),
+}
+struct Carrier {
+    queries: Vec<Query>,
+    targets: OnceLock<Targets>,
+    #[cfg(test)]
+    preparations: std::sync::atomic::AtomicUsize,
+}
+// Build the association index once for the immutable space. A requested
+// reference initializes only its target carrier (or the missing-resource batch).
+// Every referrer then shares that carrier's single copy and library preparation.
+// Cache owned lookup results, so no borrowed registry outlives its inspection
+// tree and no library implementation details are needed to retain identities.
+pub(super) struct Inspection {
+    routes: HashMap<Key, Route>,
+    carriers: BTreeMap<usize, Carrier>,
+    absent: Vec<(Key, String)>,
+    missing: OnceLock<Targets>,
+}
 
 #[derive(Clone, Default)]
 struct Recording {
@@ -198,15 +222,35 @@ impl SchemaSpace {
         reference: &str,
         missing: &mut impl FnMut(&str),
     ) -> Result<Target, Failure> {
-        let referring_resource = self.nodes[holder].resource;
-        match self.resources[referring_resource]
-            .inspection
-            .get_or_init(|| self.inspect_library(referring_resource))
-            .get(&(holder, reference.to_owned()))
-        {
+        let index = self.inspection.get_or_init(|| self.index_inspection());
+        let key = (holder, reference.to_owned());
+        let result = match index.routes.get(&key) {
+            Some(Route::Carrier(id)) => {
+                let carrier = &index.carriers[id];
+                carrier
+                    .targets
+                    .get_or_init(|| {
+                        #[cfg(test)]
+                        carrier
+                            .preparations
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        self.inspect_carrier(*id, &carrier.queries)
+                    })
+                    .get(&key)
+                    .cloned()
+            }
+            Some(Route::Absent) => index
+                .missing
+                .get_or_init(|| self.inspect_missing(&index.absent))
+                .get(&key)
+                .cloned(),
+            Some(Route::Refused(refusal)) => Some(Err(refusal.clone())),
+            None => None,
+        };
+        match result {
             Some(Ok(target)) => {
                 self.check_resource(self.nodes[target.node].resource, holder)?;
-                Ok(target.clone())
+                Ok(target)
             }
             Some(Err(refusal)) => {
                 if let Some(uri) = &refusal.missing {
@@ -225,20 +269,15 @@ impl SchemaSpace {
             )),
         }
     }
-    fn inspect_library(&self, referring_resource: usize) -> Targets {
-        let mut targets = Targets::new();
+    fn index_inspection(&self) -> Inspection {
+        let mut routes = HashMap::new();
         let uri_registry = Registry::new()
             .retriever(Recording::default())
             .prepare()
             .expect("empty registry");
-        let mut groups: BTreeMap<usize, Vec<(usize, String, String, String)>> = BTreeMap::new();
+        let mut groups: BTreeMap<usize, Vec<Query>> = BTreeMap::new();
         let mut absent = Vec::new();
         for (holder, node) in self.nodes.iter().enumerate() {
-            // Defer unrelated queries, including those in packaged standards.
-            // Do not restrict the carrier registry or change library resolution.
-            if node.resource != referring_resource {
-                continue;
-            }
             let resource = &self.resources[node.resource];
             for keyword in ["$ref", "$dynamicRef"] {
                 let Some(reference) = node.value.get(keyword).and_then(|v| v.as_str()) else {
@@ -268,9 +307,9 @@ impl SchemaSpace {
                         ));
                         continue;
                     }
-                    targets.insert(
+                    routes.insert(
                         key,
-                        Err(Refusal::invalid(
+                        Route::Refused(Refusal::invalid(
                             "invalid-reference",
                             "reference is not a well-formed URI reference",
                         )),
@@ -302,12 +341,12 @@ impl SchemaSpace {
                     Some(NameSelection {
                         carrier: Some(_), ..
                     }) => {
-                        targets.insert(key,Err(Refusal::invalid("resource-identity-conflict","the reached resource is not the selected carrier of its canonical identifier")));
+                        routes.insert(key,Route::Refused(Refusal::invalid("resource-identity-conflict","the reached resource is not the selected carrier of its canonical identifier")));
                     }
                     Some(_) => {
-                        targets.insert(
+                        routes.insert(
                             key,
-                            Err(Refusal::invalid(
+                            Route::Refused(Refusal::invalid(
                                 "ambiguous-resource",
                                 "more than one resource carries the referenced identifier",
                             )),
@@ -319,6 +358,36 @@ impl SchemaSpace {
                 }
             }
         }
+        for (&id, queries) in &groups {
+            for (holder, reference, _, _) in queries {
+                routes.insert((*holder, reference.clone()), Route::Carrier(id));
+            }
+        }
+        for (key, _) in &absent {
+            routes.insert(key.clone(), Route::Absent);
+        }
+        Inspection {
+            routes,
+            carriers: groups
+                .into_iter()
+                .map(|(id, queries)| {
+                    (
+                        id,
+                        Carrier {
+                            queries,
+                            targets: OnceLock::new(),
+                            #[cfg(test)]
+                            preparations: std::sync::atomic::AtomicUsize::new(0),
+                        },
+                    )
+                })
+                .collect(),
+            absent,
+            missing: OnceLock::new(),
+        }
+    }
+    fn inspect_missing(&self, absent: &[(Key, String)]) -> Targets {
+        let mut targets = Targets::new();
         // Ask the retriever through preparation, including every distinct absent
         // resource. No absent resource can be mistaken for a resolved schema.
         if !absent.is_empty() {
@@ -344,12 +413,12 @@ impl SchemaSpace {
                 .prepare();
             let recorded = recording.requested.lock().unwrap();
             for (key, name) in absent {
-                let refusal = if recorded.contains(&name) {
+                let refusal = if recorded.contains(name) {
                     Refusal {
                         reason: FailureReason::ResourceUnavailable,
                         code: "resource-unavailable",
                         message: "static preparation requires a resource that was not supplied",
-                        missing: Some(name),
+                        missing: Some(name.clone()),
                         defect: None,
                     }
                 } else {
@@ -358,173 +427,319 @@ impl SchemaSpace {
                         "the inspection registry could not identify the referenced resource",
                     )
                 };
-                targets.insert(key, Err(refusal));
+                targets.insert(key.clone(), Err(refusal));
             }
         }
-        for (resource_id, queries) in groups {
-            let resource = &self.resources[resource_id];
-            let Some(root) = resource.root else { continue };
-            let original = &self.nodes[root].value;
-            let (mut tree, identity) = copy(
-                original,
-                &self.sources[self.nodes[root].source].positions,
-                |id| self.malformed_reference_scope(id),
-            );
-            let canonical = resource.base.as_ref().unwrap_or(&queries[0].2).clone();
-            // Registering a detached nested resource must preserve its already
-            // established base. This only changes the root registration identity;
-            // nested references and identifiers are interpreted by the library.
-            if let Some(id) = tree.0.get_mut("$id") {
-                *id = Value::String(canonical.clone());
+        targets
+    }
+    fn inspect_carrier(&self, resource_id: usize, queries: &[Query]) -> Targets {
+        let mut targets = Targets::new();
+
+        let resource = &self.resources[resource_id];
+        let Some(root) = resource.root else {
+            return targets;
+        };
+        let original = &self.nodes[root].value;
+        let (mut tree, identity) = copy(
+            original,
+            &self.sources[self.nodes[root].source].positions,
+            |id| self.malformed_reference_scope(id),
+        );
+        let canonical = resource.base.as_ref().unwrap_or(&queries[0].2).clone();
+        // Registering a detached nested resource must preserve its already
+        // established base. This only changes the root registration identity;
+        // nested references and identifiers are interpreted by the library.
+        if let Some(id) = tree.0.get_mut("$id") {
+            *id = Value::String(canonical.clone());
+        }
+        let recording = Recording::default();
+        let builder = Registry::new()
+            .draft(Draft::Draft202012)
+            .retriever(recording);
+        let names: HashSet<_> = queries
+            .iter()
+            .map(|(_, _, name, _)| name.as_str())
+            .chain(std::iter::once(canonical.as_str()))
+            .collect();
+        let registry = builder
+            .extend(names.into_iter().map(|name| (name, &*tree.0)))
+            .and_then(|b| b.prepare());
+        for (holder, reference, _, fragment) in queries {
+            let key = (*holder, reference.clone());
+            if !uri::valid(&key.1) {
+                let mut refusal = Refusal::invalid(
+                    "invalid-reference",
+                    "reference is not a well-formed URI reference",
+                );
+                if registry.is_ok() && resource.eligible {
+                    refusal = refusal.semantic(StaticReferenceDefect::MalformedReference);
+                }
+                targets.insert(key, Err(refusal));
+                continue;
             }
-            let recording = Recording::default();
-            let builder = Registry::new()
-                .draft(Draft::Draft202012)
-                .retriever(recording);
-            let names: HashSet<_> = queries
-                .iter()
-                .map(|(_, _, name, _)| name.as_str())
-                .chain(std::iter::once(canonical.as_str()))
-                .collect();
-            let registry = builder
-                .extend(names.into_iter().map(|name| (name, &*tree.0)))
-                .and_then(|b| b.prepare());
-            for (holder, reference, _, fragment) in queries {
-                let key = (holder, reference);
-                if !uri::valid(&key.1) {
-                    let mut refusal = Refusal::invalid(
-                        "invalid-reference",
-                        "reference is not a well-formed URI reference",
-                    );
-                    if registry.is_ok() && resource.eligible {
-                        refusal = refusal.semantic(StaticReferenceDefect::MalformedReference);
-                    }
-                    targets.insert(key, Err(refusal));
-                    continue;
+            // §7.4 declaration evidence. Ambiguity is not
+            // repaired by accepting the library's choice of one declaration.
+            if !fragment.is_empty()
+                && !fragment.starts_with('/')
+                && resource.anchors.get(fragment).is_some_and(|a| a.len() > 1)
+            {
+                let mut refusal = Refusal::invalid(
+                    "ambiguous-anchor",
+                    "resource declares this plain name more than once",
+                );
+                // Declaration evidence alone cannot isolate an unsupported
+                // carrier defect, such as a malformed sibling identifier.
+                if registry.is_ok() {
+                    refusal = refusal.semantic(StaticReferenceDefect::DuplicatePlainName);
                 }
-                // §7.4 declaration evidence. Ambiguity is not
-                // repaired by accepting the library's choice of one declaration.
-                if !fragment.is_empty()
-                    && !fragment.starts_with('/')
-                    && resource.anchors.get(&fragment).is_some_and(|a| a.len() > 1)
-                {
-                    let mut refusal = Refusal::invalid(
-                        "ambiguous-anchor",
-                        "resource declares this plain name more than once",
-                    );
-                    // Declaration evidence alone cannot isolate an unsupported
-                    // carrier defect, such as a malformed sibling identifier.
-                    if registry.is_ok() {
-                        refusal = refusal.semantic(StaticReferenceDefect::DuplicatePlainName);
-                    }
-                    targets.insert(key, Err(refusal));
-                    continue;
-                }
-                let result = match &registry {
-                    Ok(registry) => {
-                        // RFC 6901 syntax only: never interpret pointer tokens
-                        // or select a target independently of the library.
-                        if fragment.starts_with('/')
-                            && uri::decode_fragment(&fragment).is_some_and(|decoded| {
-                                let mut bytes = decoded.bytes();
-                                while let Some(byte) = bytes.next() {
-                                    if byte == b'~' && !matches!(bytes.next(), Some(b'0' | b'1')) {
-                                        return true;
-                                    }
+                targets.insert(key, Err(refusal));
+                continue;
+            }
+            let result = match &registry {
+                Ok(registry) => {
+                    // RFC 6901 syntax only: never interpret pointer tokens
+                    // or select a target independently of the library.
+                    if fragment.starts_with('/')
+                        && uri::decode_fragment(fragment).is_some_and(|decoded| {
+                            let mut bytes = decoded.bytes();
+                            while let Some(byte) = bytes.next() {
+                                if byte == b'~' && !matches!(bytes.next(), Some(b'0' | b'1')) {
+                                    return true;
                                 }
-                                false
-                            })
+                            }
+                            false
+                        })
+                    {
+                        targets.insert(
+                            key,
+                            Err(Refusal::invalid(
+                                "non-schema-target",
+                                "resource pointer has an invalid escape",
+                            )
+                            .semantic(StaticReferenceDefect::PointerToNoSchema)),
+                        );
+                        continue;
+                    }
+                    // A fresh resolver has no dynamic history. This is the
+                    // initial static target, never a runtime dynamic winner.
+                    let base = self.resources[self.nodes[*holder].resource]
+                        .base
+                        .as_deref()
+                        .unwrap_or("urn:openbindings:anonymous-inspection");
+                    let resolved = registry
+                        .resolver(Uri::parse(base.to_owned()).expect("admitted base URI"))
+                        .lookup(&presented_reference(&key.1));
+                    match resolved {
+                        Ok(resolved) => match identity
+                            .get(&(std::ptr::from_ref(resolved.contents()) as usize))
                         {
-                            targets.insert(
-                                key,
-                                Err(Refusal::invalid(
-                                    "non-schema-target",
-                                    "resource pointer has an invalid escape",
-                                )
-                                .semantic(StaticReferenceDefect::PointerToNoSchema)),
-                            );
-                            continue;
-                        }
-                        // A fresh resolver has no dynamic history. This is the
-                        // initial static target, never a runtime dynamic winner.
-                        let base = self.resources[self.nodes[holder].resource]
-                            .base
-                            .as_deref()
-                            .unwrap_or("urn:openbindings:anonymous-inspection");
-                        let resolved = registry
-                            .resolver(Uri::parse(base.to_owned()).expect("admitted base URI"))
-                            .lookup(&presented_reference(&key.1));
-                        match resolved {
-                            Ok(resolved) => match identity
-                                .get(&(std::ptr::from_ref(resolved.contents()) as usize))
-                            {
-                                Some(&node) => Ok(Target {
-                                    node,
-                                    dynamic_name: (!fragment.is_empty()
-                                        && self.nodes[node]
-                                            .value
-                                            .get("$dynamicAnchor")
-                                            .and_then(|v| v.as_str())
-                                            == Some(fragment.as_str()))
-                                    .then_some(fragment.clone()),
-                                }),
-                                None => {
-                                    let refusal = Refusal::invalid(
-                                        "non-schema-target",
-                                        "resource pointer does not identify an indexed schema",
-                                    );
-                                    Err(if fragment.starts_with('/') {
-                                        refusal.semantic(StaticReferenceDefect::PointerToNoSchema)
-                                    } else {
-                                        refusal
-                                    })
-                                }
-                            },
-                            Err(error) => Err(if fragment.starts_with('/') {
+                            Some(&node) => Ok(Target {
+                                node,
+                                dynamic_name: (!fragment.is_empty()
+                                    && self.nodes[node]
+                                        .value
+                                        .get("$dynamicAnchor")
+                                        .and_then(|v| v.as_str())
+                                        == Some(fragment.as_str()))
+                                .then_some(fragment.clone()),
+                            }),
+                            None => {
                                 let refusal = Refusal::invalid(
                                     "non-schema-target",
                                     "resource pointer does not identify an indexed schema",
                                 );
-                                match error {
-                                    jsonschema::ReferencingError::PointerToNowhere { .. }
-                                    | jsonschema::ReferencingError::InvalidArrayIndex { .. }
-                                    | jsonschema::ReferencingError::InvalidPercentEncoding {
-                                        ..
-                                    } => refusal.semantic(StaticReferenceDefect::PointerToNoSchema),
-                                    _ => refusal,
-                                }
-                            } else {
-                                let refusal = Refusal::invalid(
-                                    "anchor-missing",
-                                    "resource declares no such plain name",
-                                );
-                                // Encoded spellings follow the library, but its
-                                // refusal is not proof that the decoded name is
-                                // absent. Only literal plain names qualify.
-                                if crate::schema_index::plain_name(&fragment)
-                                    && matches!(
-                                        error,
-                                        jsonschema::ReferencingError::NoSuchAnchor { .. }
-                                    )
-                                {
-                                    refusal.semantic(StaticReferenceDefect::MissingPlainName)
+                                Err(if fragment.starts_with('/') {
+                                    refusal.semantic(StaticReferenceDefect::PointerToNoSchema)
                                 } else {
                                     refusal
+                                })
+                            }
+                        },
+                        Err(error) => Err(if fragment.starts_with('/') {
+                            let refusal = Refusal::invalid(
+                                "non-schema-target",
+                                "resource pointer does not identify an indexed schema",
+                            );
+                            match error {
+                                jsonschema::ReferencingError::PointerToNowhere { .. }
+                                | jsonschema::ReferencingError::InvalidArrayIndex { .. }
+                                | jsonschema::ReferencingError::InvalidPercentEncoding { .. } => {
+                                    refusal.semantic(StaticReferenceDefect::PointerToNoSchema)
                                 }
-                            }),
-                        }
+                                _ => refusal,
+                            }
+                        } else {
+                            let refusal = Refusal::invalid(
+                                "anchor-missing",
+                                "resource declares no such plain name",
+                            );
+                            // Encoded spellings follow the library, but its
+                            // refusal is not proof that the decoded name is
+                            // absent. Only literal plain names qualify.
+                            if crate::schema_index::plain_name(fragment)
+                                && matches!(
+                                    error,
+                                    jsonschema::ReferencingError::NoSuchAnchor { .. }
+                                )
+                            {
+                                refusal.semantic(StaticReferenceDefect::MissingPlainName)
+                            } else {
+                                refusal
+                            }
+                        }),
                     }
-                    // The documented preparation API processes the carrier,
-                    // including unused malformed $id siblings. These remain
-                    // outside the static-reference fragment.
-                    Err(_) => Err(Refusal::invalid(
-                        "resource-inspection",
-                        "the resource could not be prepared for static inspection",
-                    )),
-                };
-                targets.insert(key, result);
-            }
+                }
+                // The documented preparation API processes the carrier,
+                // including unused malformed $id siblings. These remain
+                // outside the static-reference fragment.
+                Err(_) => Err(Refusal::invalid(
+                    "resource-inspection",
+                    "the resource could not be prepared for static inspection",
+                )),
+            };
+            targets.insert(key, result);
         }
         targets
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    fn preparations(space: &SchemaSpace) -> usize {
+        space.inspection.get().map_or(0, |index| {
+            index
+                .carriers
+                .values()
+                .map(|carrier| carrier.preparations.load(Ordering::Relaxed))
+                .sum()
+        })
+    }
+
+    #[test]
+    fn requested_carrier_is_lazy_and_missing_evidence_replays() {
+        let document = RawDocument::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"allOf":[{"$ref":"https://resource.test/a"},{"$ref":"https://resource.test/b"}]}}},"schemas":{"a":{"$id":"https://resource.test/a","$ref":"https://resource.test/absent"},"b":{"$id":"https://resource.test/b","$ref":"https://resource.test/other"}}}"#).unwrap();
+        let space = SchemaSpace::new(document, Supplied::default());
+        let entry = space
+            .document_node(
+                &space
+                    .document
+                    .value()
+                    .at("/operations/op/input/allOf/0")
+                    .unwrap()
+                    .to_owned(),
+            )
+            .unwrap();
+        assert!(space.inspection.get().is_none());
+        let target = space.resolve(entry, "https://resource.test/a").unwrap();
+        assert_eq!(preparations(&space), 1);
+        let index = space.inspection.get().unwrap();
+        // Even another reference authored in the same resource stays lazy.
+        assert!(
+            index
+                .carriers
+                .iter()
+                .filter(|(id, _)| **id != space.nodes[target.node].resource)
+                .all(|(_, carrier)| carrier.targets.get().is_none())
+        );
+        // Preparing a carrier does not inspect references authored inside it.
+        assert!(index.missing.get().is_none());
+        for _ in 0..2 {
+            let mut missing = Vec::new();
+            let failure = space
+                .resolve_with_missing(target.node, "https://resource.test/absent", &mut |uri| {
+                    missing.push(uri.to_owned())
+                })
+                .unwrap_err();
+            assert_eq!(missing, ["https://resource.test/absent"]);
+            assert_eq!(failure.location.unwrap().pointer, "/schemas/a");
+        }
+        assert_eq!(preparations(&space), 1);
+        assert!(index.missing.get().is_some());
+    }
+
+    #[test]
+    fn fan_in_prepares_one_carrier_and_preserves_parent_checkpoints() {
+        for callers in [1, 10, 100] {
+            let refs: Vec<_> = (0..callers)
+                .map(|i| {
+                    serde_json::json!({
+                        "$id":format!("https://scale.test/caller/{i}"),
+                        "$ref":"https://scale.test/target"
+                    })
+                })
+                .collect();
+            let document = RawDocument::parse(
+                serde_json::json!({
+                    "openbindings":"0.2.0", "operations":{"op":{"input":{"allOf":refs}}}
+                })
+                .to_string(),
+            )
+            .unwrap();
+            let definitions: serde_json::Map<_, _> = (0..5000)
+                .map(|i| (format!("p{i}"), serde_json::json!({"type":"integer"})))
+                .collect();
+            let target = JsonValue::parse(
+                serde_json::json!({
+                    "$id":"https://scale.test/target", "type":"integer", "$defs":definitions
+                })
+                .to_string(),
+            )
+            .unwrap();
+            let space = SchemaSpace::new(
+                document,
+                Supplied::new([ProjectedResource {
+                    uri: "https://scale.test/target".into(),
+                    document: target,
+                }])
+                .unwrap(),
+            );
+            let entry = space
+                .document_node(
+                    &space
+                        .document
+                        .value()
+                        .at("/operations/op/input")
+                        .unwrap()
+                        .to_owned(),
+                )
+                .unwrap();
+            let checks = AtomicUsize::new(0);
+            let control = || {
+                checks.fetch_add(1, Ordering::Relaxed);
+                false
+            };
+            let program = space.program(entry, &control).unwrap();
+            assert_eq!(program.resources.len(), callers + 2);
+            // The parent's traversal, work charges and cancellation boundaries
+            // are unchanged. Carrier sharing must not bypass any traversal step.
+            assert_eq!(checks.load(Ordering::Relaxed), 6 * callers + 7);
+            assert_eq!(preparations(&space), 1);
+            // Reusing the immutable space across threads cannot multiply copies
+            // or preparations, even when each thread starts with a cold cache.
+            let cold = SchemaSpace::new(space.document.clone(), space.supplied.clone());
+            std::thread::scope(|scope| {
+                for _ in 0..4 {
+                    let cold = &cold;
+                    scope.spawn(move || {
+                        for (id, node) in
+                            cold.nodes.iter().enumerate().filter(|(_, n)| n.source == 0)
+                        {
+                            if let Some(reference) = node.value.get("$ref").and_then(|v| v.as_str())
+                            {
+                                let target = cold.resolve(id, reference).unwrap();
+                                assert_eq!(
+                                    cold.location(target.node).resource.as_deref(),
+                                    Some("https://scale.test/target")
+                                );
+                            }
+                        }
+                    });
+                }
+            });
+            assert_eq!(preparations(&cold), 1);
+        }
     }
 }

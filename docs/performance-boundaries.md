@@ -16,45 +16,61 @@ contract on each `prepare` call. The SDK does not transparently cache arbitrary
 custom evaluator results.
 
 On 2026-10-15, paired release measurements against revision `7013a36` on macOS
-arm64 / Rust 1.99.0 produced the following medians. Preparation includes schema
-parsing, minimal document proof, resource contexts, compilation and destruction;
-evaluation retains the contract and parsed value. Twelve adjacent randomized
-pairs used adaptive batches of at least 80 ms targeting 120 ms. Ratio intervals
-are 95% paired bootstrap intervals within this session, not portable budgets.
+arm64 / Rust 1.99.0 produced the following medians, including shared target-carrier
+inspection. Preparation includes schema parsing, minimal document proof, resource
+contexts, compilation and destruction; evaluation retains the contract and parsed
+value. Twelve adjacent randomized pairs used adaptive batches of at least 80 ms
+targeting 120 ms. Ratio intervals are 95% paired bootstrap intervals within this
+session, not portable budgets.
 
 | Workload | Preparation before → after µs | Evaluation before → after µs | Evaluation ratio (95% interval) |
 | --- | ---: | ---: | --- |
-| scalar | 399.68 → 84.66 | 0.584 → 0.083 | 0.142 (0.142–0.144) |
-| object | 466.50 → 138.15 | 0.805 → 0.560 | 0.696 (0.690–0.697) |
-| array | 402.33 → 89.65 | 5,557.058 → 371.109 | 0.067 (0.066–0.067) |
-| refs | 471.79 → 163.61 | 14.952 → 10.000 | 0.669 (0.666–0.677) |
-| large-object | 397.90 → 90.24 | 7,653.244 → 1,004.910 | 0.131 (0.130–0.132) |
+| scalar | 393.21 → 120.29 | 0.572 → 0.084 | 0.146 (0.146–0.148) |
+| object | 443.20 → 171.73 | 0.812 → 0.563 | 0.694 (0.692–0.695) |
+| array | 387.73 → 124.56 | 5,720.786 → 393.659 | 0.069 (0.068–0.069) |
+| refs | 464.92 → 194.99 | 14.994 → 10.063 | 0.672 (0.669–0.675) |
+| large-object | 384.22 → 121.55 | 7,517.312 → 991.782 | 0.132 (0.131–0.133) |
 
 The direct SDK/jsonschema-rs 0.58.6 geometric mean over the original five
-workloads × four modes (prepare, evaluate, parse, full) fell from **12.62× to
-4.47×**. The peer supplies a two-outcome engine-cost reference with different
+workloads × four modes (prepare, evaluate, parse, full) fell from **12.49× to
+4.98×**. The peer supplies a two-outcome engine-cost reference with different
 number and resource semantics. This aggregate is not the earlier 13.1× comparison
 against the faster of two peers. Exact decimal-array evaluation changed by
-+0.4% (ratio interval 1.002–1.008); these integer optimizations do not remove
-its general arithmetic costs. Parsing is effectively unchanged.
++0.7% (ratio interval 0.996–1.012); integer shortcuts retain its general
+arithmetic costs.
+
+A fan-in workload has 100 distinct referring resources pointing to one supplied
+integer schema with 5,000 unused definitions. Twelve adjacent fresh-child pairs
+measure public `ValueContracts::prepare` alone, after context construction:
+
+| Referrers | Public preparation before → after ms | Ratio (95% interval) |
+| --- | ---: | --- |
+| 1 | 6.245 → 5.965 | 0.958 (0.932–0.971) |
+| 10 | 6.162 → 5.892 | 0.955 (0.941–0.961) |
+| 100 | 7.811 → 7.564 | 0.972 (0.957–0.979) |
+
+Reference associations are indexed once per schema space. A requested reference
+prepares its target carrier once, sharing the copy and library preparation across
+all referring resources. Other target carriers remain lazy. A counted regression
+test requires one preparation for this workload and preserves the parent's 607
+cancellation checks for projection; it does not assert wall-clock timing.
 
 Requested System heap was measured in twelve fresh-child pairs separately from
 time. Peaks below include protocol, retained owners and process caches; they
 are not incremental evaluation scratch or RSS. Identical repeated counts give
 degenerate intervals. Cached standard indexes add roughly 30 KiB to retained
-process memory.
-The original six array/object parse/evaluate/full RSS pairs were effectively
-unchanged: the SDK/jsonschema-rs geometric mean was 2.065× before and 2.069×
-after (twelve fresh-child pairs, no baseline subtraction).
+process memory. The earlier six array/object parse/evaluate/full RSS pairs were
+effectively unchanged (SDK/jsonschema-rs geometric mean 2.065× before and 2.069×
+after); that RSS aggregate was not remeasured for this carrier-sharing correction.
 
 | Workload | Preparation peak before → after KiB | Evaluation peak before → after KiB |
 | --- | ---: | ---: |
-| scalar | 2,268.7 → 2,266.2 | 2,168.7 → 2,198.2 |
-| object | 2,274.9 → 2,299.4 | 2,182.0 → 2,211.6 |
-| array | 2,503.5 → 2,506.4 | 5,326.3 → 5,355.8 |
-| refs | 2,298.8 → 2,325.6 | 2,284.1 → 2,313.6 |
-| large-object | 4,100.9 → 4,103.2 | 18,186.1 → 18,215.7 |
-| unique-array | 2,502.4 → 2,498.8 | 7,511.6 → 7,093.1 |
+| scalar | 2,268.7 → 2,281.8 | 2,168.7 → 2,198.2 |
+| object | 2,274.9 → 2,315.0 | 2,182.0 → 2,211.6 |
+| array | 2,503.5 → 2,522.0 | 5,326.3 → 5,355.8 |
+| refs | 2,298.8 → 2,340.9 | 2,284.1 → 2,313.6 |
+| large-object | 4,100.9 → 4,118.8 | 18,186.1 → 18,215.7 |
+| unique-array | 2,502.4 → 2,514.4 | 7,511.6 → 7,093.1 |
 
 Exact integer shortcuts only apply where the original tokens prove the result;
 all other tokens retain decimal arithmetic. Lazy reference inspection still uses
@@ -65,11 +81,13 @@ original-source diagnostics remain in force.
 
 The separate [benchmark harness](../tools/evaluator-bench/README.md) and
 [advisory workflow](../.github/workflows/performance.yml) record outcomes before
-timing and keep allocation instrumentation separate. After calibration, shared
-runners will require a confirmed >20% paired regression above the absolute floor
-and a lower 95% bound >1.20; dedicated runners use >10% / >1.10. Heap thresholds
-are >10% and >128 KiB, allocation counts >5% and >32/op. Noise requests a rerun.
-See the harness for exact floors, confirmation and promotion policy.
+timing and keep allocation instrumentation separate. The fan-in fixture includes
+cold, compile, retained-context preparation, evaluation and full modes. After
+calibration, shared runners will require a confirmed >20% paired regression above
+the absolute floor and a lower 95% bound >1.20; dedicated runners use >10% / >1.10.
+Heap thresholds are >10% and >128 KiB, allocation counts >5% and >32/op. Noise
+requests a rerun. See the harness for exact floors, confirmation and promotion
+policy.
 
 ## Document validation
 

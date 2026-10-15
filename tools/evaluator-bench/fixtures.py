@@ -35,6 +35,14 @@ def fixtures():
     add('late-invalid', dict(type='array', items=dict(type='integer', minimum=0)), array[:-1]+',-1]', 'fails', modes=('eval', 'parse', 'full'))
     add('one-of', dict(oneOf=[dict(const=i) for i in range(128)]), '127')
     add('explicit-resource', {'$ref': 'https://benchmark.invalid/item'}, '1', resources={'https://benchmark.invalid/item': '{"type":"integer"}'}, modes=ordinary)
+    # Many independent referring resources share one large supplied carrier.
+    # context isolates public ValueContracts::prepare from input construction.
+    add('reference-fan-in', {'allOf': [
+        {'$id': f'https://scale.test/caller/{i}', '$ref': 'https://scale.test/target'}
+        for i in range(100)]}, '1', resources={'https://scale.test/target': compact({
+            '$id': 'https://scale.test/target', 'type': 'integer',
+            '$defs': {f'p{i}': {'type': 'integer'} for i in range(5000)}})},
+        modes=('cold', 'compile', 'context', 'eval', 'full'))
     add('missing-resource', {'$ref': 'https://benchmark.invalid/missing'}, '1', 'no-verdict', modes=('cold', 'compile', 'context', 'eval', 'full'))
     add('missing-independent', {'anyOf': [True, {'$ref': 'https://benchmark.invalid/missing'}]}, '1')
     # Known static defects retain a separate undefined outcome.

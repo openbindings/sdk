@@ -24,6 +24,10 @@ checks expected outcomes before timing (cold first use checks immediately after
 its single timed preparation). Complete baseline/candidate observations must
 agree, including refusal codes and original diagnostic locations. Every timed
 iteration counts its actual outcome. A new refusal cannot pass as throughput.
+The `reference-fan-in` fixture sends 100 distinct referring resources to one
+supplied carrier with 5,000 unused definitions. Its `context` mode measures
+public contract preparation; a counted unit test also requires one carrier
+preparation and the unchanged traversal cancellation checkpoints.
 Hash collisions are forced by the adapter's unit test; random benchmark hashes
 are never treated as a deterministic collision fixture.
 
