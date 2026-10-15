@@ -1,3 +1,4 @@
+import * as testing from "../dist/testing.js";
 import { validatedContracts } from "./validated-contracts.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -59,7 +60,7 @@ test("author every normative object; absence/null and exact opaque values surviv
   assert.equal(result.status, "authored");
   const validation = result.document.validated();
   assert.equal(validation.status, "validated");
-  const value = result.document.value;
+  const value = result.document.value();
   assert.equal(value.get("description"), undefined);
   for (const path of [
     "/sources/local/content",
@@ -139,7 +140,7 @@ test("retained contracts and metadata support repeated native-feeling caller use
   warmContract.dispose();
   warmContext.dispose();
   warmDocument.dispose();
-  const before = sdk.liveStorageOwners();
+  const before = testing.liveStorageOwners();
   for (let i = 0; i < 1000; i++) {
     const document = parsed(text);
     assert.equal(document.operations, document.operations);
@@ -166,7 +167,7 @@ test("retained contracts and metadata support repeated native-feeling caller use
     bad.dispose();
     input.dispose();
   }
-  assert.equal(sdk.liveStorageOwners(), before);
+  assert.equal(testing.liveStorageOwners(), before);
 });
 test("publication copies the snapshot and uses ordinary Fetch request/response values", async () => {
   const document = parsed(text),

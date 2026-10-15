@@ -1,3 +1,4 @@
+import * as testing from "../dist/testing.js";
 import { validatedContracts } from "./validated-contracts.mjs";
 // Shared Node/browser tests: the facade keeps the same context → prepare → validate workflow.
 export function partialResourceCases(sdk) {
@@ -73,7 +74,7 @@ export function partialResourceCases(sdk) {
   };
   // Warm instance-lifetime meta-schema owners before measuring release.
   run({ type: "integer" }, 7, "satisfies");
-  const initial = sdk.liveStorageOwners();
+  const initial = testing.liveStorageOwners();
   run(hole, null, "no-verdict");
   run({ allOf: [hole] }, 1, "no-verdict");
   run({ anyOf: [true, hole] }, { x: 1 }, "satisfies");
@@ -236,6 +237,6 @@ export function partialResourceCases(sdk) {
     doc.dispose();
   }
   // Phase migration must not create leaked bridge owners.
-  check(sdk.liveStorageOwners() === initial, "partial owners released");
+  check(testing.liveStorageOwners() === initial, "partial owners released");
   return { checks: count };
 }

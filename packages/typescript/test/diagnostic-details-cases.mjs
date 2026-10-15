@@ -1,3 +1,4 @@
+import * as testing from "../dist/testing.js";
 import { validatedContracts } from "./validated-contracts.mjs";
 /** Public-package detail/privacy/retention controls; portable across Node and browsers. */
 export function diagnosticDetailsCases(sdk) {
@@ -152,12 +153,12 @@ export function diagnosticDetailsCases(sdk) {
   // Warm all process-global schema arenas before comparing application retention.
   let warm = fromResource(resourceText, "coarse");
   warm.dispose();
-  const baseline = sdk.liveStorageOwners();
+  const baseline = testing.liveStorageOwners();
   const defaultContract = fromResource(resourceText, "coarse");
-  const defaultArenas = sdk.liveStorageOwners();
+  const defaultArenas = testing.liveStorageOwners();
   defaultContract.dispose();
   const old = fromResource(resourceText, "upstream");
-  const optInArenas = sdk.liveStorageOwners();
+  const optInArenas = testing.liveStorageOwners();
   const newer = fromResource(replacementText, "upstream");
   try {
     const oldResult = old.validate({ "a/~": 6 }),
@@ -177,7 +178,7 @@ export function diagnosticDetailsCases(sdk) {
     old.dispose();
     newer.dispose();
   }
-  const released = sdk.liveStorageOwners();
+  const released = testing.liveStorageOwners();
   check(released === baseline, "all application owners released");
   check(optInArenas > defaultArenas, "opt-in source retention observable");
   const probe = sdk.parseDocument(doc("true"));
@@ -197,7 +198,7 @@ export function diagnosticDetailsCases(sdk) {
     probe.value.dispose();
   }
   check(
-    sdk.liveStorageOwners() === baseline,
+    testing.liveStorageOwners() === baseline,
     "invalid options release all owners",
   );
   return {

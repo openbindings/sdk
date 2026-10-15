@@ -38,6 +38,7 @@ class ControlledFinalizationRegistry {
 }
 globalThis.FinalizationRegistry = ControlledFinalizationRegistry;
 const sdk = await import("../dist/index.js");
+const testing = await import("../dist/testing.js");
 await sdk.initialize(
   await readFile(
     new URL("../dist/wasm/openbindings_wasm_bg.wasm", import.meta.url),
@@ -54,7 +55,7 @@ function deliver(record) {
   return true;
 }
 test("abandoning an editing scope cannot finalize reachable exact leaves", () => {
-  const baseline = sdk.liveStorageOwners();
+  const baseline = testing.liveStorageOwners();
   const escaped = (() => {
     const parsed = sdk.parseDocument(
       '{"openbindings":"0.2.0","operations":{"run":{"input":9007199254740993}},"schemas":{"removed":false}}',
@@ -90,7 +91,7 @@ test("abandoning an editing scope cannot finalize reachable exact leaves", () =>
   // still-reachable leaf. A fresh arena must be releasable in either implementation.
   deliver(escaped.removedRecord);
   escaped.subtree.input.dispose();
-  const arenasReleased = sdk.liveStorageOwners() === baseline;
+  const arenasReleased = testing.liveStorageOwners() === baseline;
   const output = {
     scopeCallbackDelivered,
     reachableLeafDisposed,

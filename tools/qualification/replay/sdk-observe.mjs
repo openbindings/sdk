@@ -55,7 +55,7 @@ export function observe(sdk, request) {
       };
     }
     if (request.action === "check-dependency-kind") {
-      const root = own(doc.value);
+      const root = own(doc.value());
       const bindings = own(root.get("bindings"));
       const binding = own(bindings.get(given.binding));
       const source = own(binding.get("source"));
@@ -111,7 +111,7 @@ export function observe(sdk, request) {
       if (selection.status !== "found")
         throw new Error("Example operation selection: " + selection.status);
       const op = own(selection.operation);
-      const opValue = own(op.value);
+      const opValue = own(op.value());
       const examples = own(opValue.get("examples"));
       const results = [];
       if (examples) {

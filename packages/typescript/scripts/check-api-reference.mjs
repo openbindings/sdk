@@ -8,7 +8,12 @@ const root =
   process.env.OPENBINDINGS_REFERENCE_PACKAGE_ROOT ??
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const output = process.argv[2];
-const entries = ["index.d.ts", "http-discovery.d.ts", "wasm-module.d.ts"];
+const entries = [
+  "index.d.ts",
+  "http-discovery.d.ts",
+  "testing.d.ts",
+  "wasm-module.d.ts",
+];
 const program = ts.createProgram(
   entries.map((entry) => path.join(root, "dist", entry)),
   {

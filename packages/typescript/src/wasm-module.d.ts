@@ -1,5 +1,5 @@
 /** Raw Wasm asset. Compiled-module hosts such as workerd provide this import.
- * Other hosts should load the exported asset URL/bytes and pass them to initialize.
+ * Node and browsers can call initialize() for default loading, or pass explicit bytes.
  */
 declare const module: WebAssembly.Module;
 export default module;

@@ -1,3 +1,4 @@
+import * as testing from "../dist/testing.js";
 import { validatedContracts } from "./validated-contracts.mjs";
 /** Public-API checks shared by repository and freshly installed host consumers. */
 export async function apiQualityCases(sdk, http) {
@@ -48,7 +49,7 @@ export async function apiQualityCases(sdk, http) {
   warmPrepared.valueContract.dispose();
   warmContext.dispose();
   warm.value.dispose();
-  const baseline = sdk.liveStorageOwners();
+  const baseline = testing.liveStorageOwners();
   try {
     check(
       !("discover" in sdk) && !("DiscoveryPublication" in sdk),
@@ -109,7 +110,7 @@ export async function apiQualityCases(sdk, http) {
           Number.isInteger(e.location.byteOffset),
         "located structure refusal",
       );
-      const raw = own(invalid.value);
+      const raw = own(invalid.value());
       check(raw.text === text, "raw invalid evidence preserved");
     }
     const aliases = parsed(
@@ -149,7 +150,7 @@ export async function apiQualityCases(sdk, http) {
     );
     const cancelled = new AbortController();
     cancelled.abort();
-    const beforeCancel = sdk.liveStorageOwners();
+    const beforeCancel = testing.liveStorageOwners();
     const cancelledSetup = context.prepare("run", "input", {
       signal: cancelled.signal,
     });
@@ -159,7 +160,7 @@ export async function apiQualityCases(sdk, http) {
       "setup cancellation",
     );
     check(
-      sdk.liveStorageOwners() === beforeCancel,
+      testing.liveStorageOwners() === beforeCancel,
       "no ready owner on cancellation",
     );
     const input = ready(context, "run");
@@ -240,7 +241,7 @@ export async function apiQualityCases(sdk, http) {
     );
     const large = exact("9007199254740993");
     const object = ready(context, "object");
-    const beforeValue = sdk.liveStorageOwners();
+    const beforeValue = testing.liveStorageOwners();
     check(
       object.validate({ n: large }).outcome === "satisfies",
       "nested exact token",
@@ -255,7 +256,7 @@ export async function apiQualityCases(sdk, http) {
       "partial ordinary refusal",
     );
     check(
-      sdk.liveStorageOwners() === beforeValue,
+      testing.liveStorageOwners() === beforeValue,
       "ordinary temporary cleanup",
     );
     const dead = exact("7");
@@ -270,7 +271,10 @@ export async function apiQualityCases(sdk, http) {
       (e) => e.code === "disposed-handle",
       "nested misuse",
     );
-    check(sdk.liveStorageOwners() === beforeValue, "nested refusal cleanup");
+    check(
+      testing.liveStorageOwners() === beforeValue,
+      "nested refusal cleanup",
+    );
     const during = new AbortController();
     const duringProxy = new Proxy(
       { n: large },
@@ -287,14 +291,14 @@ export async function apiQualityCases(sdk, http) {
       "post admission control check",
     );
     check(
-      sdk.liveStorageOwners() === beforeValue,
+      testing.liveStorageOwners() === beforeValue,
       "post admission cancellation cleanup",
     );
     // The bridge's actual pinned input-error kind is "Limit" (capital L).
     // A large exact fragment is admitted by itself; embedding it can exceed the
     // aggregate parse limit even though the ordinary encoder borrows its tokens.
     const deep = exact("[".repeat(10000) + "0" + "]".repeat(10000));
-    const beforeDepthRefusal = sdk.liveStorageOwners();
+    const beforeDepthRefusal = testing.liveStorageOwners();
     const depthRefusal = input.validate({ nested: deep });
     check(
       depthRefusal.outcome === "input-error",
@@ -320,7 +324,7 @@ export async function apiQualityCases(sdk, http) {
       "supplied exact owner survives aggregate limit",
     );
     check(
-      sdk.liveStorageOwners() === beforeDepthRefusal,
+      testing.liveStorageOwners() === beforeDepthRefusal,
       "aggregate limit cleanup",
     );
     check(input.validate(8).outcome === "satisfies", "healthy reuse");
@@ -341,7 +345,7 @@ export async function apiQualityCases(sdk, http) {
         b.validate(7).outcome === "fails",
       "same URI isolation",
     );
-    const beforeBatch = sdk.liveStorageOwners();
+    const beforeBatch = testing.liveStorageOwners();
     for (const entries of [
       [
         ["https://schema.test/id", intSchema],
@@ -361,7 +365,10 @@ export async function apiQualityCases(sdk, http) {
         () => true,
         "batch refusal",
       );
-      check(sdk.liveStorageOwners() === beforeBatch, "atomic resource cleanup");
+      check(
+        testing.liveStorageOwners() === beforeBatch,
+        "atomic resource cleanup",
+      );
       check(intSchema.text === '{"type":"integer"}', "input schema survives");
     }
     function* throwing() {
@@ -373,7 +380,7 @@ export async function apiQualityCases(sdk, http) {
       (e) => e === trap,
       "iterator exception preserved",
     );
-    check(sdk.liveStorageOwners() === beforeBatch, "iterator cleanup");
+    check(testing.liveStorageOwners() === beforeBatch, "iterator cleanup");
     own(new sdk.SchemaResources([["https://schema.test/healthy", intSchema]]));
     const checked = document.validated();
     check(checked.status === "validated", "proof");
@@ -384,7 +391,7 @@ export async function apiQualityCases(sdk, http) {
     context.dispose();
     resources.dispose();
     check(operation.key === "run", "retained selected owner");
-    const child = own(operation.value);
+    const child = own(operation.value());
     operation.dispose();
     check(child.text.includes("execute"), "retained exact child");
     check(a.validate(7).outcome === "satisfies", "retained ready resource");
@@ -417,8 +424,8 @@ export async function apiQualityCases(sdk, http) {
   } finally {
     for (const owner of owners.reverse()) owner.dispose();
     check(
-      sdk.liveStorageOwners() === baseline,
-      `complete owner cleanup: ${sdk.liveStorageOwners()} vs ${baseline}`,
+      testing.liveStorageOwners() === baseline,
+      `complete owner cleanup: ${testing.liveStorageOwners()} vs ${baseline}`,
     );
   }
 }

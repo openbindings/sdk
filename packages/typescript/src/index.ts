@@ -54,7 +54,6 @@ export {
   validateDocument,
   versionPolicy,
   checkVersion,
-  liveStorageOwners,
   ParsedDocument,
   ValidationResult,
   ValidatedDocument,

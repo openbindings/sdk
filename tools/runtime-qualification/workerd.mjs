@@ -22,19 +22,20 @@ await fs.writeFile(
   path.join(runRoot, "worker.mjs"),
   `import module from 'asset';
 import * as sdk from 'sdk/index.js';
+import * as testing from 'sdk/testing.js';
 import {runTier,lifetime,prepare,parsed,describe,amplification,invalidSerializedBatch} from './workloads.mjs';
 let contract,valid,invalid;
 export default {async fetch(request){
  if(new URL(request.url).pathname==='/health')return new Response('ready');
  try { await sdk.initialize(module); const job=await request.json();
  if(job.kind==='amplification')return Response.json(amplification(sdk,job.fixture,false));
- if(job.kind==='check')return Response.json({tier:runTier(sdk,job.fixture,false)});
- if(job.kind==='lifetime')return Response.json(lifetime(sdk,job.fixture,false));
- if(job.kind==='prepare'){contract?.dispose();valid?.dispose();invalid?.dispose();contract=prepare(sdk,job.fixture.document);valid=parsed(sdk,job.fixture.valid);invalid=parsed(sdk,job.fixture.invalid);return Response.json({ready:true,owners:sdk.liveStorageOwners()});}
+ if(job.kind==='check')return Response.json({tier:runTier(sdk,testing,job.fixture,false)});
+ if(job.kind==='lifetime')return Response.json(lifetime(sdk,testing,job.fixture,false));
+ if(job.kind==='prepare'){contract?.dispose();valid?.dispose();invalid?.dispose();contract=prepare(sdk,job.fixture.document);valid=parsed(sdk,job.fixture.valid);invalid=parsed(sdk,job.fixture.invalid);return Response.json({ready:true,owners:testing.liveStorageOwners()});}
  if(job.kind==='invalid'){const batch=invalidSerializedBatch(contract,invalid,job.repetitions,()=>0);return Response.json(describe(batch.lastResult));}
  if(job.kind==='hot'){let result;for(let n=0;n<job.repetitions;n++){result=contract.validate(valid);if(result.outcome!==job.expectedOutcome)throw Error('retained batch changed verdict');}return Response.json(describe(result));}
- if(job.kind==='dispose'){contract?.dispose();valid?.dispose();invalid?.dispose();contract=valid=invalid=undefined;return Response.json({owners:sdk.liveStorageOwners()});}
- return Response.json({initialized:true,owners:sdk.liveStorageOwners()});
+ if(job.kind==='dispose'){contract?.dispose();valid?.dispose();invalid?.dispose();contract=valid=invalid=undefined;return Response.json({owners:testing.liveStorageOwners()});}
+ return Response.json({initialized:true,owners:testing.liveStorageOwners()});
  }catch(error){return Response.json({error:String(error),stack:error.stack},{status:500});}
 }};`,
 );
@@ -43,7 +44,7 @@ const modules = [
   `(name="worker",esModule=embed "worker.mjs")`,
   `(name="workloads.mjs",esModule=embed "workloads.mjs")`,
   `(name="asset",wasm=embed ${quote(path.join(packageRoot, "dist/wasm/openbindings_wasm_bg.wasm"))})`,
-  ...["index.js", "internal.js", "wasm/openbindings_wasm.js"].map(
+  ...["index.js", "testing.js", "internal.js", "wasm/openbindings_wasm.js"].map(
     (name) =>
       `(name=${JSON.stringify("sdk/" + name)},esModule=embed ${quote(path.join(packageRoot, "dist", name))})`,
   ),

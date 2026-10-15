@@ -10,12 +10,12 @@ export type WasmInput =
   | string;
 let initialization: Promise<void> | undefined;
 let ready = false;
-/** Initialize this module instance once before using SDK APIs. Concurrent calls share one promise; a failed attempt can be retried. Requires host crypto.getRandomValues (request-scoped hosts should call inside a request). Throws SdkError for initialization/entropy failures. Supplying compiled bytes/module avoids a default asset fetch. */
+/** Initialize this module instance once before using SDK APIs. Concurrent calls share one promise; a failed attempt can be retried. Requires host crypto.getRandomValues (request-scoped hosts should call inside a request). Throws SdkError for initialization/entropy failures. Without input, Node reads the installed Wasm asset from disk; browsers fetch the module-relative asset. Supplying bytes/module bypasses default loading in every host. */
 export function initialize(
   input?: WasmInput | Promise<WasmInput>,
 ): Promise<void> {
   return (initialization ??= (async () => {
-    const module = await input;
+    let module = await input;
     // Check before entering Rust: the engine's randomized hash tables require
     // host entropy, and some hosts only permit it inside a request handler.
     try {
@@ -24,6 +24,21 @@ export function initialize(
       throw new SdkError(
         "host-entropy-unavailable",
         "The host must permit crypto.getRandomValues during initialization. In request-scoped hosts such as workerd, call initialize() inside a request handler.",
+      );
+    }
+    if (
+      module === undefined &&
+      (globalThis as { process?: { versions?: { node?: string } } }).process
+        ?.versions?.node
+    ) {
+      // Keep Node loading lazy so browsers and explicit-input hosts need no
+      // Node builtins. Resolve from this installed module, never the caller's cwd.
+      const builtin = "node:fs/promises";
+      const { readFile } = (await import(builtin)) as {
+        readFile(path: URL): Promise<Uint8Array<ArrayBuffer>>;
+      };
+      module = await readFile(
+        new URL("./wasm/openbindings_wasm_bg.wasm", import.meta.url),
       );
     }
     await init(module === undefined ? undefined : { module_or_path: module });
@@ -39,7 +54,8 @@ export function initialize(
     );
   }));
 }
-function requireReady(): void {
+/** @internal */
+export function requireReady(): void {
   if (!ready)
     throw new SdkError(
       "not-initialized",
@@ -728,11 +744,11 @@ export class ExactMember extends Managed {
     return handle<wasm.WasmMember>(this).index();
   }
   /** Acquire a NEW exact string owner, preserving escaped unpaired code units and original location. */
-  get name(): ExactJson {
+  name(): ExactJson {
     return new ExactJson(handle<wasm.WasmMember>(this).name());
   }
   /** Acquire a NEW exact value owner, independent of this entry/source/cursor. */
-  get value(): ExactJson {
+  value(): ExactJson {
     return new ExactJson(handle<wasm.WasmMember>(this).value());
   }
   /** Acquire another independently disposable owner for this occurrence. */
@@ -917,19 +933,7 @@ export function checkVersion(
   scalar(version);
   return wasm.checkVersion(version) as ReturnType<typeof checkVersion>;
 }
-/**
- * Count live exact-JSON storage arenas in this initialized Wasm instance.
- * Retained handles and views can share one arena, so this is not a handle count.
- * Fixed evaluator arenas can initialize lazily and live for the instance's lifetime.
- * For cleanup checks, record startup retention separately and compare release
- * baselines after warming the complete parse/prepare/validate job. The count is
- * not a byte measurement and does not describe allocator RSS or Wasm capacity.
- */
-export function liveStorageOwners(): number {
-  requireReady();
-  return wasm.liveStorageOwners();
-}
-/** Disposable immutable exact snapshot without normative proof. retain() creates an independent owner. Validation may be cached in Rust; operations caches frozen plain metadata. Owner-producing properties create fresh handles on every access and require separate disposal. */
+/** Disposable immutable exact snapshot without normative proof. retain() creates an independent owner. Validation may be cached in Rust; operations caches frozen plain metadata. Owner-producing methods create fresh handles on every call and require separate disposal. */
 export class ParsedDocument extends Managed {
   #operations?: readonly OperationMetadata[];
   #bindings?: readonly BindingMetadata[] | null;
@@ -948,8 +952,8 @@ export class ParsedDocument extends Managed {
   get originalBytes(): Uint8Array {
     return handle<wasm.WasmDocument>(this).originalBytes();
   }
-  /** Return a NEW independently disposable ExactJson owner on every access. Cache it locally and dispose it; disposing this document does not release that separate owner. */
-  get value(): ExactJson {
+  /** Return a NEW independently disposable ExactJson owner on every call. Cache it locally and dispose it; disposing this document does not release that separate owner. */
+  value(): ExactJson {
     return new ExactJson(handle<wasm.WasmDocument>(this).value());
   }
   /** Return plain normative evidence or version refusal; no proof owner is created and no result needs disposal. */
@@ -993,8 +997,8 @@ export class ParsedDocument extends Managed {
       undefined
     );
   }
-  /** Acquire a NEW independent ExactJson owner for each declared schema on every read. Dispose each value. Undefined means absent; an empty map means present-empty. */
-  get schemas(): ReadonlyMap<string, ExactJson> | undefined {
+  /** Acquire a NEW independent ExactJson owner for each declared schema on every call. Dispose each value. Undefined means absent; an empty map means present-empty. */
+  schemas(): ReadonlyMap<string, ExactJson> | undefined {
     const raw = documentRaw(this);
     const names = decode<string[] | null>(sdkCall(() => raw.schemaNames()));
     if (names === null) return undefined;
@@ -1244,17 +1248,17 @@ export class OperationView extends Managed {
   get key(): string {
     return handle<wasm.WasmOperation>(this).key();
   }
-  /** Return a NEW independently disposable ExactJson owner on every access. It survives operation/document disposal and can retain the original arena. */
-  get value(): ExactJson {
+  /** Return a NEW independently disposable ExactJson owner on every call. It survives operation/document disposal and can retain the original arena. */
+  value(): ExactJson {
     return new ExactJson(handle<wasm.WasmOperation>(this).value());
   }
   /** Acquire a NEW independently disposable input value; undefined means absent, including on parsed documents. JSON null, true, false and objects remain present values. */
-  get input(): ExactJson | undefined {
+  input(): ExactJson | undefined {
     const raw = handle<wasm.WasmOperation>(this).input();
     return raw ? new ExactJson(raw) : undefined;
   }
   /** Acquire a NEW independently disposable output value; undefined means absent. */
-  get output(): ExactJson | undefined {
+  output(): ExactJson | undefined {
     const raw = handle<wasm.WasmOperation>(this).output();
     return raw ? new ExactJson(raw) : undefined;
   }
@@ -1286,7 +1290,7 @@ export class OperationView extends Managed {
   }
 }
 const resourceToken = Symbol("retained resource set");
-/** Retained binding declaration view. Metadata is plain; each exact getter acquires a separate owner. Neither reading nor retaining establishes conformance. */
+/** Retained binding declaration view. Metadata is plain; each exact method acquires a separate owner. Neither reading nor retaining establishes conformance. */
 export class BindingView extends Managed {
   #metadata?: BindingMetadata;
   private constructor(raw: wasm.WasmBinding) {
@@ -1307,16 +1311,16 @@ export class BindingView extends Managed {
     ));
   }
   /** Acquire a NEW independent exact owner for the complete declaration, including unknown fields. */
-  get value(): ExactJson {
+  value(): ExactJson {
     return new ExactJson(handle<wasm.WasmBinding>(this).value());
   }
   /** Acquire a NEW exact content owner; undefined means absent, while present null remains an exact value. */
-  get content(): ExactJson | undefined {
+  content(): ExactJson | undefined {
     const raw = handle<wasm.WasmBinding>(this).content();
     return raw ? new ExactJson(raw) : undefined;
   }
 }
-/** Retained source declaration view. Metadata is plain; each exact getter acquires a separate owner. Neither reading nor retaining establishes conformance. */
+/** Retained source declaration view. Metadata is plain; each exact method acquires a separate owner. Neither reading nor retaining establishes conformance. */
 export class SourceView extends Managed {
   #metadata?: SourceMetadata;
   private constructor(raw: wasm.WasmSource) {
@@ -1337,16 +1341,16 @@ export class SourceView extends Managed {
     ));
   }
   /** Acquire a NEW independent exact owner for the complete declaration, including unknown fields. */
-  get value(): ExactJson {
+  value(): ExactJson {
     return new ExactJson(handle<wasm.WasmSource>(this).value());
   }
   /** Acquire a NEW exact content owner; undefined means absent, while present null remains an exact value. */
-  get content(): ExactJson | undefined {
+  content(): ExactJson | undefined {
     const raw = handle<wasm.WasmSource>(this).content();
     return raw ? new ExactJson(raw) : undefined;
   }
 }
-/** Retained dependency declaration view. Metadata is plain; each exact getter acquires a separate owner. Neither reading nor retaining establishes conformance. */
+/** Retained dependency declaration view. Metadata is plain; each exact method acquires a separate owner. Neither reading nor retaining establishes conformance. */
 export class DependencyView extends Managed {
   #metadata?: DependencyMetadata;
   private constructor(raw: wasm.WasmDependency) {
@@ -1367,11 +1371,11 @@ export class DependencyView extends Managed {
     ));
   }
   /** Acquire a NEW independent exact owner for the complete declaration, including unknown fields. */
-  get value(): ExactJson {
+  value(): ExactJson {
     return new ExactJson(handle<wasm.WasmDependency>(this).value());
   }
 }
-/** Retained example declaration view. Metadata is plain; each exact getter acquires a separate owner. Neither reading nor retaining establishes conformance. */
+/** Retained example declaration view. Metadata is plain; each exact method acquires a separate owner. Neither reading nor retaining establishes conformance. */
 export class ExampleView extends Managed {
   #metadata?: ExampleMetadata;
   private constructor(raw: wasm.WasmExample) {
@@ -1392,16 +1396,16 @@ export class ExampleView extends Managed {
     ));
   }
   /** Acquire a NEW independent exact owner for the complete declaration, including unknown fields. */
-  get value(): ExactJson {
+  value(): ExactJson {
     return new ExactJson(handle<wasm.WasmExample>(this).value());
   }
   /** Acquire a NEW exact input owner; undefined means absent, while present null remains an exact value. */
-  get input(): ExactJson | undefined {
+  input(): ExactJson | undefined {
     const raw = handle<wasm.WasmExample>(this).input();
     return raw ? new ExactJson(raw) : undefined;
   }
   /** Acquire a NEW exact output owner; undefined means absent, while present null remains an exact value. */
-  get output(): ExactJson | undefined {
+  output(): ExactJson | undefined {
     const raw = handle<wasm.WasmExample>(this).output();
     return raw ? new ExactJson(raw) : undefined;
   }

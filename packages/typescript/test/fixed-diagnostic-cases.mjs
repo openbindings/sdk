@@ -1,3 +1,4 @@
+import * as testing from "../dist/testing.js";
 // Shared public-API controls for Node, installed-package and browser checks.
 // Explanatory wording can evolve; test useful information and safety boundaries.
 export function fixedDiagnosticCases(sdk) {
@@ -70,7 +71,7 @@ export function fixedDiagnosticCases(sdk) {
   } finally {
     warm.value.dispose();
   }
-  const arenas = sdk.liveStorageOwners();
+  const arenas = testing.liveStorageOwners();
   const results = [];
   for (const fixture of cases) {
     const parsed = sdk.parseDocument(fixture.text);
@@ -142,7 +143,7 @@ export function fixedDiagnosticCases(sdk) {
       parsed.value.dispose();
     }
     check(
-      sdk.liveStorageOwners() === arenas,
+      testing.liveStorageOwners() === arenas,
       `${fixture.name}: released document storage`,
     );
   }
@@ -325,7 +326,7 @@ export function fixedDiagnosticCases(sdk) {
     invalidName.value.dispose();
   }
   check(
-    sdk.liveStorageOwners() === arenas,
+    testing.liveStorageOwners() === arenas,
     "all expanded diagnostic storage released",
   );
   return results;

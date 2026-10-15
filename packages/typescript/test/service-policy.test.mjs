@@ -1,7 +1,8 @@
+import { liveStorageOwners } from "../dist/testing.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { initialize, liveStorageOwners } from "../dist/index.js";
+import { initialize } from "../dist/index.js";
 import { prepareService, ValidationService } from "../examples/service.mjs";
 await initialize(
   await readFile(

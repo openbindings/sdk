@@ -37,6 +37,7 @@ execFileSync(
   [
     "--target",
     "web",
+    "--remove-name-section",
     "--out-dir",
     output,
     path.join(target, "wasm32-unknown-unknown/release/openbindings_wasm.wasm"),
