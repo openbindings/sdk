@@ -245,14 +245,14 @@ test("validated text and retained reads preserve exact UTF-16 and presence", () 
   assert.equal(proof.dependencies[0].kinds[0].charCodeAt(0), 0xd800);
   assert.equal(proof.bindings[0].description.charCodeAt(0), 0xd800);
   assert.equal(proof.dependencyAcceptsKind("d", "\ud800"), true);
-  const schemas = proof.schemas;
+  const schemas = proof.schemas();
   assert.deepEqual([...schemas.keys()], ["f", "o", "t"]);
   const operation = proof.resolveOperation("go").operation;
   const example = operation.example("e");
-  const input = operation.input,
-    output = operation.output;
-  const exampleInput = example.input;
-  assert.equal(example.output, undefined);
+  const input = operation.input(),
+    output = operation.output();
+  const exampleInput = example.input();
+  assert.equal(example.output(), undefined);
   assert.equal(example.metadata.description.charCodeAt(0), 0xd800);
   example.dispose();
   operation.dispose();
@@ -274,7 +274,7 @@ test("validated text and retained reads preserve exact UTF-16 and presence", () 
         `{"openbindings":"0.2.0","operations":{"run":{"description":"x"${field}}}}`,
       ).value;
       const op = doc.resolveOperation("run").operation;
-      const acquired = op[direction];
+      const acquired = op[direction]();
       assert.equal(acquired?.text, value);
       assert.equal(
         op.metadata[direction === "input" ? "hasInput" : "hasOutput"],
@@ -293,7 +293,7 @@ test("validated text and retained reads preserve exact UTF-16 and presence", () 
       `{"openbindings":"0.2.0","operations":{}${fields}}`,
     ).value;
     const proof = doc.validated().document;
-    assert.equal(proof.schemas?.size, expected);
+    assert.equal(proof.schemas()?.size, expected);
     assert.equal(proof.name, undefined);
     proof.dispose();
     doc.dispose();

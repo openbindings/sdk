@@ -1,3 +1,4 @@
+import * as testing from "../dist/testing.js";
 import { validatedContracts } from "./validated-contracts.mjs";
 // Shared Node/browser controls. Fixtures retain frozen independent expected truths.
 export function oneOfCases(sdk, fixtures) {
@@ -67,7 +68,7 @@ export function oneOfCases(sdk, fixtures) {
     });
   // Warm the shared metadata owners, then require the baseline after all cases.
   run(fixtures.c22, "2x.thumbnail", "output", "false");
-  const initial = sdk.liveStorageOwners();
+  const initial = testing.liveStorageOwners();
   // Uniform FF/TT completions satisfy, mixed completions fail: no fixed verdict.
   const nested = doc({
     oneOf: [
@@ -251,6 +252,6 @@ export function oneOfCases(sdk, fixtures) {
       "advancing recursive polarity",
     );
   }
-  check(sdk.liveStorageOwners() === initial, "oneOf final-owner release");
+  check(testing.liveStorageOwners() === initial, "oneOf final-owner release");
   return { checks };
 }

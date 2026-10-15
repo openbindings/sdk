@@ -34,20 +34,21 @@ if (mode === "cold") {
   console.log(JSON.stringify(setup));
   process.exit(0);
 }
+const testing = await import(pathToFileURL(path.resolve(packageRoot, "dist/testing.js")));
 const { fixtures, manifest, adversarial } = await fixtureSet(fixtureRoot);
 const before = process.memoryUsage();
 const tiers = Object.fromEntries(
   Object.entries(fixtures).map(([tier, fixture]) => {
-    const result = runTier(sdk, fixture, timed);
+    const result = runTier(sdk, testing, fixture, timed);
     if (timed) result.summary = summaries(result.samplesMs);
     return [tier, result];
   }),
 );
-const retained = lifetime(sdk, fixtures.representative, timed);
+const retained = lifetime(sdk, testing, fixtures.representative, timed);
 const http = await import(
   pathToFileURL(path.resolve(packageRoot, "dist/http-discovery.js"))
 );
-const found = await discovery(sdk, http, fixtures, timed);
+const found = await discovery(sdk, testing, http, fixtures, timed);
 const witness = amplification(sdk, adversarial, timed);
 const cold = [];
 if (timed)

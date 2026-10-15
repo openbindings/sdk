@@ -1,3 +1,4 @@
+import * as testing from "../dist/testing.js";
 import { validatedContracts } from "./validated-contracts.mjs";
 // Internal fault injection complements the installed public-consumer checks.
 import test from "node:test";
@@ -36,7 +37,7 @@ test("owned selection and preparation wrappers release untaken children on decod
         "throw-take",
         "missing-take",
       ]) {
-        const baseline = sdk.liveStorageOwners();
+        const baseline = testing.liveStorageOwners();
         const result = prototype.result,
           originalTake = prototype[take],
           free = prototype.free;
@@ -62,7 +63,7 @@ test("owned selection and preparation wrappers release untaken children on decod
           assert.throws(invoke);
           assert.equal(freed, 1, fault + ": wrapper freed once");
           assert.equal(
-            sdk.liveStorageOwners(),
+            testing.liveStorageOwners(),
             baseline,
             fault + ": no leaked child storage",
           );
@@ -96,7 +97,7 @@ test("ordinary admission maps only known engine limits and preserves unexpected 
   const prepared = setup.valueContract;
   const parse = bridge.WasmJson.parseText;
   try {
-    const before = sdk.liveStorageOwners();
+    const before = testing.liveStorageOwners();
     bridge.WasmJson.parseText = () => {
       throw '{"kind":"Limit","message":"fixture admission limit"}';
     };
@@ -116,7 +117,7 @@ test("ordinary admission maps only known engine limits and preserves unexpected 
       () => prepared.validate(7),
       (error) => error === unexpected,
     );
-    assert.equal(sdk.liveStorageOwners(), before);
+    assert.equal(testing.liveStorageOwners(), before);
   } finally {
     bridge.WasmJson.parseText = parse;
     prepared.dispose();

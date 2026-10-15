@@ -24,6 +24,7 @@ const launchOptions = {
 const files = new Map();
 for (const name of [
   "index.js",
+  "testing.js",
   "internal.js",
   "http-discovery.js",
   "wasm/openbindings_wasm.js",
@@ -51,18 +52,19 @@ files.set(
 files.set(
   "/qualification-worker.mjs",
   `import {runTier,lifetime,discovery,amplification} from '/workloads.mjs';
-let sdk; self.onmessage=async({data})=>{try {
+let sdk,testing; self.onmessage=async({data})=>{try {
  if(data.kind==='initialize') {
   const t=data.timed?()=>performance.now():()=>0; const setup={}; let s=t();
   sdk=await import('/dist/index.js'); setup.moduleImport=t()-s;
   s=t(); const bytes=await(await fetch('/dist/wasm/openbindings_wasm_bg.wasm')).arrayBuffer();setup.loopbackAssetFetch=t()-s;
   s=t(); const module=await WebAssembly.compile(bytes);setup.compile=t()-s;
   s=t();await sdk.initialize(module);setup.instantiateAndInitialize=t()-s;
+  testing=await import('/dist/testing.js');
   setup.total=Object.values(setup).reduce((a,b)=>a+b,0);postMessage({setup});
- } else if(data.kind==='tier')postMessage(runTier(sdk,data.fixture,data.timed));
+ } else if(data.kind==='tier')postMessage(runTier(sdk,testing,data.fixture,data.timed));
  else if(data.kind==='amplification')postMessage(amplification(sdk,data.fixture,data.timed));
- else if(data.kind==='lifetime')postMessage(lifetime(sdk,data.fixture,data.timed));
- else if(data.kind==='discovery')postMessage(await discovery(sdk,await import('/dist/http-discovery.js'),data.fixtures,data.timed,self.location.origin));
+ else if(data.kind==='lifetime')postMessage(lifetime(sdk,testing,data.fixture,data.timed));
+ else if(data.kind==='discovery')postMessage(await discovery(sdk,testing,await import('/dist/http-discovery.js'),data.fixtures,data.timed,self.location.origin));
 } catch(error){postMessage({error:String(error),stack:error.stack});}};`,
 );
 const server = http.createServer((req, res) => {

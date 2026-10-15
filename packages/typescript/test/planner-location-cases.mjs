@@ -1,3 +1,4 @@
+import * as testing from "../dist/testing.js";
 import { validatedContracts } from "./validated-contracts.mjs";
 // Shared Node/browser controls at real production caps; no test knobs.
 export function plannerLocationCases(sdk) {
@@ -13,7 +14,7 @@ export function plannerLocationCases(sdk) {
   warmPrepared.valueContract.dispose();
   warmContext.dispose();
   warm.dispose();
-  const initial = sdk.liveStorageOwners();
+  const initial = testing.liveStorageOwners();
   const U = "https://absent.invalid/U";
   const R = "https://known.invalid/R";
   const input = "/operations/op/input";
@@ -145,6 +146,6 @@ export function plannerLocationCases(sdk) {
     );
     run(schema, [[U, true]], "schema-node-limit", input + "/allOf/99998");
   }
-  check(sdk.liveStorageOwners() === initial, "planner owners released");
+  check(testing.liveStorageOwners() === initial, "planner owners released");
   return { checks, observations };
 }

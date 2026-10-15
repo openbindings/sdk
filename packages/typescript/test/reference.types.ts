@@ -17,7 +17,7 @@ export async function referenceExample(wasmBytes: Uint8Array, source: string) {
   if (parsed.status !== "parsed") return parsed.error;
   using document = parsed.value;
   // Every access returns its own owner; this one is scoped independently.
-  using original = document.value;
+  using original = document.value();
   const copy: Uint8Array = original.bytes;
   const proof: ValidationResult = document.validated();
   if (proof.status !== "validated") return proof;

@@ -9,11 +9,20 @@ export function parsed(sdk, source, document = false) {
   check(result.status === "parsed", JSON.stringify(result));
   return result.value;
 }
+function valueContracts(document, options) {
+  const result = document.validated();
+  check(result.status === "validated", JSON.stringify(result));
+  try {
+    return result.document.valueContracts(options);
+  } finally {
+    result.document.dispose();
+  }
+}
 export function prepare(sdk, source) {
   const document = parsed(sdk, source, true);
   let context;
   try {
-    context = document.valueContracts();
+    context = valueContracts(document);
     const result = context.prepare("check", "input");
     check(result.status === "ready", JSON.stringify(result));
     return result.valueContract;
@@ -82,7 +91,7 @@ export function invalidSerializedBatch(contract, value, repetitions, clock) {
     serializedCodeUnits: lastWire.length,
   };
 }
-export function runTier(sdk, fixture, timed = true) {
+export function runTier(sdk, testing, fixture, timed = true) {
   const clock = timed ? () => performance.now() : () => 0;
   const stages = [
     "parseDocument",
@@ -119,7 +128,7 @@ export function runTier(sdk, fixture, timed = true) {
         JSON.stringify(assessment),
       );
       contract = take("contextAndPrepare", () => {
-        context = document.valueContracts();
+        context = valueContracts(document);
         const result = context.prepare("check", "input");
         check(result.status === "ready", JSON.stringify(result));
         return result.valueContract;
@@ -166,7 +175,7 @@ export function runTier(sdk, fixture, timed = true) {
   // Full job warms lazy process-global fixed schema owners before comparison.
   once();
   once();
-  const warmedOwners = sdk.liveStorageOwners();
+  const warmedOwners = testing.liveStorageOwners();
   const samples = Object.fromEntries(stages.map((stage) => [stage, []]));
   const repetitions = timed ? fixture.repetitions : 1;
   for (let sample = 0; sample < (timed ? 7 : 1); sample++) {
@@ -177,7 +186,7 @@ export function runTier(sdk, fixture, timed = true) {
     }
     for (const stage of stages) samples[stage].push(sums[stage] / repetitions);
     check(
-      sdk.liveStorageOwners() === warmedOwners,
+      testing.liveStorageOwners() === warmedOwners,
       "tier cleanup must match fully warmed owners",
     );
   }
@@ -205,7 +214,7 @@ export function runTier(sdk, fixture, timed = true) {
     hotValue.dispose();
     hotContract.dispose();
   }
-  check(sdk.liveStorageOwners() === warmedOwners, "retained batch cleanup");
+  check(testing.liveStorageOwners() === warmedOwners, "retained batch cleanup");
   const invalidContract = prepare(sdk, fixture.document);
   let invalidValue;
   const invalidBatchTotalsMs = [];
@@ -230,12 +239,12 @@ export function runTier(sdk, fixture, timed = true) {
     invalidValue?.dispose();
     invalidContract.dispose();
   }
-  check(sdk.liveStorageOwners() === warmedOwners, "diagnostic batch cleanup");
+  check(testing.liveStorageOwners() === warmedOwners, "diagnostic batch cleanup");
   return {
     samplesMs: timed ? samples : null,
     repetitions,
     observation: last,
-    owners: { warmed: warmedOwners, released: sdk.liveStorageOwners() },
+    owners: { warmed: warmedOwners, released: testing.liveStorageOwners() },
     concurrency: 1,
     hotCallsPerSecond: timed ? samples.hot.map(callsPerSecond) : null,
     hotBatchRepetitions: fixture.hotBatchRepetitions,
@@ -255,7 +264,7 @@ export function runTier(sdk, fixture, timed = true) {
         : "resource refusals, not successful validations",
   };
 }
-export function lifetime(sdk, fixture, timed = true) {
+export function lifetime(sdk, testing, fixture, timed = true) {
   const clock = timed ? () => performance.now() : () => 0;
   // Warm resource path, including preparation errors and exact value admissions.
   const uri = "https://qualification.invalid/schema";
@@ -281,7 +290,7 @@ export function lifetime(sdk, fixture, timed = true) {
     );
     let context;
     try {
-      context = document.valueContracts({ resources });
+      context = valueContracts(document, { resources });
       const result = context.prepare("run", "input");
       check(result.status === "ready", JSON.stringify(result));
       for (let n = 0; n < 6; n++) {
@@ -303,7 +312,7 @@ export function lifetime(sdk, fixture, timed = true) {
   const contract = prepare(sdk, fixture.document);
   contract.validate([1]);
   contract.dispose();
-  const warmed = sdk.liveStorageOwners();
+  const warmed = testing.liveStorageOwners();
   let active = make("integer", 0);
   const checkpoints = [],
     replacementSamples = [];
@@ -336,10 +345,10 @@ export function lifetime(sdk, fixture, timed = true) {
         active.dispose();
         checkpoints.push({
           replacements: n,
-          releasedOwners: sdk.liveStorageOwners(),
+          releasedOwners: testing.liveStorageOwners(),
         });
         check(
-          sdk.liveStorageOwners() === warmed,
+          testing.liveStorageOwners() === warmed,
           "replacement owner accumulation",
         );
         active = make(n % 2 ? "string" : "integer", n);
@@ -370,21 +379,21 @@ export function lifetime(sdk, fixture, timed = true) {
   } finally {
     active.dispose();
   }
-  check(sdk.liveStorageOwners() === warmed, "final owner cleanup");
+  check(testing.liveStorageOwners() === warmed, "final owner cleanup");
   return {
     hotCalls: 1000,
     replacements: 200,
     checkpoints,
     warmedOwners: warmed,
-    releasedOwners: sdk.liveStorageOwners(),
+    releasedOwners: testing.liveStorageOwners(),
     replacementSamplesMs: timed ? replacementSamples : null,
   };
 }
-export async function discovery(sdk, http, fixtures, timed = true, origin) {
+export async function discovery(sdk, testing, http, fixtures, timed = true, origin) {
   const rows = {};
   for (const [tier, fixture] of Object.entries(fixtures)) {
     const samples = [];
-    const warmed = sdk.liveStorageOwners();
+    const warmed = testing.liveStorageOwners();
     for (let n = 0; n < (timed ? 9 : 1); n++) {
       const start = timed ? performance.now() : 0;
       const result = await http.discover(
@@ -406,7 +415,7 @@ export async function discovery(sdk, http, fixtures, timed = true, origin) {
         result.document.dispose();
       }
       if (n >= 2) samples.push(performance.now() - start);
-      check(sdk.liveStorageOwners() === warmed, "discovery cleanup");
+      check(testing.liveStorageOwners() === warmed, "discovery cleanup");
     }
     rows[tier] = {
       samplesMs: timed ? samples : null,

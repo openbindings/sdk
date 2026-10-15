@@ -28,9 +28,10 @@ export async function editorPage(browser, url) {
     assert.match(initial, /UTF-8 byte column \d+, byte offset \d+/);
     assert.equal(page.workers().length, 1);
     const mainInitialization = await page.evaluate(async (sdkUrl) => {
+      const testing = await import("/dist/testing.js");
       const sdk = await import(sdkUrl);
       try {
-        sdk.liveStorageOwners();
+        testing.liveStorageOwners();
         return "initialized";
       } catch (e) {
         return e.code;

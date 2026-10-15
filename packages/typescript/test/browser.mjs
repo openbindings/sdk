@@ -30,6 +30,7 @@ const files = new Map();
 await usingExampleFiles(packageRoot, files);
 for (const name of [
   "index.js",
+  "testing.js",
   "internal.js",
   "http-discovery.js",
   "wasm/openbindings_wasm.js",

@@ -1,3 +1,4 @@
+import * as testing from "../dist/testing.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -161,7 +162,7 @@ test("caller cancellation and timeout remain distinct with deterministic ties", 
 // checking monotonic time catches elapsed validation even with a blocked event loop.
 test("over-deadline synchronous validation releases handles and retains complete bytes", async () => {
   const original = performance.now.bind(performance);
-  const before = sdk.liveStorageOwners();
+  const before = testing.liveStorageOwners();
   let now = 0;
   Object.defineProperty(performance, "now", {
     configurable: true,
@@ -186,7 +187,7 @@ test("over-deadline synchronous validation releases handles and retains complete
     });
     assert.equal(timed.status, "timeout");
     assert.equal(new TextDecoder().decode(timed.body), text);
-    assert.equal(sdk.liveStorageOwners(), before);
+    assert.equal(testing.liveStorageOwners(), before);
   } finally {
     Object.defineProperty(performance, "now", {
       configurable: true,

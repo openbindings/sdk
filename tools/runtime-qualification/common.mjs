@@ -40,6 +40,7 @@ export async function identity(packageRoot) {
   const assets = {};
   for (const name of [
     "dist/index.js",
+    "dist/testing.js",
     "dist/internal.js",
     "dist/http-discovery.js",
     "dist/wasm/openbindings_wasm.js",

@@ -173,14 +173,14 @@ import {
   type ExactIterator,
 } from "../dist/index.js";
 function roundOneTypes(document: ParsedDocument) {
-  using root = document.value;
+  using root = document.value();
   using members = root.members();
   if (members) {
     members satisfies ExactIterator<ExactMember>;
     members.return() satisfies IteratorResult<ExactMember, undefined>;
     for (using member of members) {
-      using name = member.name;
-      using value = member.value;
+      using name = member.name();
+      using value = member.value();
       member.index satisfies number;
       name.text satisfies string;
       value.metadata.kind satisfies string;
@@ -200,7 +200,7 @@ function roundOneTypes(document: ParsedDocument) {
   using dependency = document.dependency("d");
   if (source) {
     source.metadata.kind satisfies string;
-    using content = source.content;
+    using content = source.content();
   }
   if (binding) {
     binding.metadata.preference satisfies number | null;
@@ -212,7 +212,7 @@ function roundOneTypes(document: ParsedDocument) {
     using operation = selected.operation;
     using example = operation.example("example");
     if (example) {
-      using value = example.input;
+      using value = example.input();
       example.metadata.hasInput satisfies boolean;
     }
   }
@@ -329,17 +329,22 @@ function validatedReads(proof: ValidatedDocument, parsed: ParsedDocument) {
   proof.name satisfies string | undefined;
   proof.version satisfies string | undefined;
   proof.description satisfies string | undefined;
-  const schemas: ReadonlyMap<string, ExactJson> | undefined = proof.schemas;
+  const schemas: ReadonlyMap<string, ExactJson> | undefined = proof.schemas();
   for (const value of schemas?.values() ?? []) value.dispose();
   using editor = proof.parsed();
   const selection = parsed.resolveOperation("run");
   if (selection.status === "found") {
     using operation = selection.operation;
-    using input = operation.input;
-    using output = operation.output;
+    using input = operation.input();
+    using output = operation.output();
     input satisfies ExactJson | undefined;
     output satisfies ExactJson | undefined;
   }
   return editor.name;
 }
 void validatedReads;
+
+import { liveStorageOwners } from "../dist/testing.js";
+// @ts-expect-error Test bookkeeping is available only through the testing entry.
+import { liveStorageOwners as productionCounter } from "../dist/index.js";
+liveStorageOwners() satisfies number;

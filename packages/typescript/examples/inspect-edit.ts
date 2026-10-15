@@ -79,8 +79,8 @@ export function previewMembers(value: ExactJson, limit = 8) {
   const rows: { index: number; name: string; value: string }[] = [];
   if (limit === 0) return rows;
   for (using member of members) {
-    using name = member.name;
-    using child = member.value;
+    using name = member.name();
+    using child = member.value();
     rows.push({ index: member.index, name: name.text, value: child.text });
     if (rows.length === limit) break;
   }
@@ -110,7 +110,7 @@ export function replaceExactObjectMember(
   let found = false;
   try {
     for (using member of members) {
-      using name = member.name;
+      using name = member.name();
       const decoded = name.toValue();
       if (decoded.status !== "converted" || typeof decoded.value !== "string")
         throw new TypeError(
@@ -120,7 +120,7 @@ export function replaceExactObjectMember(
         entries.push([decoded.value, replacement]);
         found = true;
       } else {
-        const child = member.value;
+        const child = member.value();
         children.push(child);
         entries.push([decoded.value, child]);
       }

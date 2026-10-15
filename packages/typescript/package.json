@@ -26,6 +26,10 @@
     "./openbindings.wasm": {
       "types": "./dist/wasm-module.d.ts",
       "default": "./dist/wasm/openbindings_wasm_bg.wasm"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
     }
   },
   "scripts": {

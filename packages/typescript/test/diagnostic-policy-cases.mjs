@@ -65,7 +65,7 @@ export function diagnosticPolicyCases(sdk) {
         doc.validated().status === "report",
         "invalid document cannot construct contracts",
       );
-      const raw = own(doc.value);
+      const raw = own(doc.value());
       const source = own(raw.at(pointer));
       for (const call of [() => doc.resolveOperation("op")]) {
         const error = thrown(call);

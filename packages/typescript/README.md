@@ -179,12 +179,12 @@ if (parsed.status === 'parsed') {
 }
 ```
 
-Node ESM can read the included asset without a Rust toolchain:
+Node ESM reads the included asset relative to the installed package, regardless of
+the working directory. No Rust toolchain or fetch is needed:
 
 ```ts
-import { readFile } from 'node:fs/promises';
 import { initialize } from '@openbindings/sdk';
-await initialize(await readFile(new URL(import.meta.resolve('@openbindings/sdk/openbindings.wasm'))));
+await initialize(); // reads the installed package asset; no fetch
 ```
 
 Hosts that provide compiled Wasm imports, including workerd, can import
@@ -374,14 +374,14 @@ casts; the brand is not a substitute for runtime checks.
 `exact.members()` and `exact.elements()` return lazy disposable iterators, or
 `undefined` for the wrong container kind. Object members retain source order,
 duplicate occurrences and exact name tokens. Each yielded member/value is an
-owner; a member's `name` and `value` getters each acquire another owner.
+owner; a member's `name()` and `value()` methods each acquire another owner.
 
 ```ts
 using members = exact.members();
 if (members) {
   for (using member of members) {
-    using name = member.name;
-    using value = member.value;
+    using name = member.name();
+    using value = member.value();
     console.log(name.text, value.text);
     break; // closes the cursor; the using scopes release the yielded owners
   }
@@ -401,8 +401,8 @@ The shipped [prefix preview](examples/inspect-edit.ts) handles cleanup explicitl
 ordinary metadata. Optional namespaces distinguish missing (`null`) from present
 empty arrays. Keyed `binding(key)`, `source(key)` and `dependency(key)` return an
 independent disposable view or `undefined`; a selected operation has `metadata`,
-`examples` and `example(key)`. Exact `value`, `content`, `input` and `output`
-getters acquire separate owners. Missing exact fields are `undefined`; present
+`examples` and `example(key)`. Exact `value()`, `content()`, `input()` and `output()`
+methods acquire separate owners. Missing exact fields are `undefined`; present
 JSON null is an exact value. Keep each owner in its own `using` scope.
 
 A keyed view interprets its selected row's metadata when requested. A malformed
@@ -488,20 +488,26 @@ marks even when live owners have been released.
 | Returned owner                                                     | Lifetime                                                                                                                           |
 | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
 | Parsed or validated document, exact value/view | Dispose each returned handle; `retain()` creates an independent owner.                                                             |
-| Selected operation (`OperationView`) | Dispose the independently returned selection. It has no `retain()` method; its `value` getter returns a separate owned `ExactJson`. |
-| Binding, source, dependency or example view | Dispose each acquired view. Metadata is plain data; exact getters acquire separate owners. `retain()` retains the view. |
+| Selected operation (`OperationView`) | Dispose the independently returned selection. It has no `retain()` method; its `value()` method returns a separate owned `ExactJson`. |
+| Binding, source, dependency or example view | Dispose each acquired view. Metadata is plain data; exact methods acquire separate owners. `retain()` retains the view. |
 | Exact iterator/member | Dispose the cursor and every yielded owner. Early iteration closure releases the cursor only. |
 | Owned editable draft | Dispose after the edit/build transaction. Converted exact leaves belong to this scope; independently retain leaves that must outlive it. |
 | Resource set or contract context                                   | Dispose after setup when only the prepared contract is needed. Supplied resource handles are borrowed and remain caller-owned.     |
 | Ready prepared contract                                            | Retain for repeated validation; it survives disposal of setup owners. Acquire a request's retained owner before its first `await`. |
 
-`liveStorageOwners()` counts live exact-JSON **storage arenas** in the initialized
+For cleanup assertions, import the optional testing entry:
+
+```ts
+import { liveStorageOwners } from '@openbindings/sdk/testing';
+```
+
+The production entries export no test bookkeeping. `liveStorageOwners()` counts live exact-JSON **storage arenas** in the initialized
 Wasm instance. Retained handles and views can share an arena, so this is not a total
 of facade handles. Fixed evaluator arenas may initialize lazily and remain for the
 instance's lifetime. Record that startup retention separately; for a cleanup check,
 warm the complete parse/prepare/validate job, release its application owners, then
 compare later release counts with that baseline. No particular baseline number is
-an API guarantee. The counter is not a byte measurement, and neither it nor disposal
+an API guarantee. The testing counter is not a byte measurement, and neither it nor disposal
 establishes allocator RSS or shrinking Wasm memory.
 
 Run the complete replacement example after installation:
@@ -598,12 +604,12 @@ Only a `ValidatedDocument` has `valueContracts()`: acquire proof through
 `parsed.validated()` and handle nonconformance, uncertainty or version refusal.
 The Wasm bridge owns this proof; a plain report cannot manufacture it.
 
-Both documents expose `openbindings`, `name`, `version`, `description` and `schemas`.
+Both documents expose `openbindings`, `name`, `version`, `description` and `schemas()`.
 Text preserves JavaScript UTF-16 exactly, including lone units; optional text is
 undefined when absent. Validated field reads cannot fail on document shape.
-`schemas` returns undefined for absence or a lexical map whose values are NEW
-independently disposable `ExactJson` owners on every read. The operation view's
-`input` and `output` getters likewise acquire independent owners; undefined means
+`schemas()` returns undefined for absence or a lexical map whose values are NEW
+independently disposable `ExactJson` owners on every call. The operation view's
+`input()` and `output()` methods likewise acquire independent owners; undefined means
 absent, while null, true, false and objects remain exact values. Dispose every
 acquired schema/value. `validated.parsed()` acquires an independent parsed owner.
 

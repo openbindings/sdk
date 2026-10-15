@@ -27,7 +27,7 @@ export async function runCases(sdk, ids, http) {
       sources: { s: { kind: "test", content: value } },
     });
     const field = (document, pointer, text) => {
-      const root = document.value;
+      const root = document.value();
       const child = root.at(pointer);
       try {
         equal(pointer, child?.text, text);

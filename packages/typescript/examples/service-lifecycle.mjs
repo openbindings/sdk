@@ -1,8 +1,9 @@
+import { liveStorageOwners } from "@openbindings/sdk/testing";
 // node node_modules/@openbindings/sdk/examples/service-lifecycle.mjs
 // The application retains ready owners and handles no-verdict at validation.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { initialize, liveStorageOwners, parseJson } from "@openbindings/sdk";
+import { initialize, parseJson } from "@openbindings/sdk";
 import { prepareService, ValidationService } from "./service.mjs";
 
 await initialize(

@@ -1,3 +1,4 @@
+import * as testing from "../dist/testing.js";
 import { validatedContracts } from "./validated-contracts.mjs";
 import * as sdk from "@openbindings/sdk";
 
@@ -12,7 +13,7 @@ check(
   "bootstrap replaced a native symbol",
 );
 await sdk.initialize();
-const coldOwners = sdk.liveStorageOwners();
+const coldOwners = testing.liveStorageOwners();
 // DocumentValidation/preparation retain instance-lifetime meta-schema state. Establish
 // that fixed baseline before checking whether the examples release their owners.
 const warm = sdk.parseDocument(
@@ -36,7 +37,7 @@ try {
 } finally {
   warm.value.dispose();
 }
-const baseline = sdk.liveStorageOwners();
+const baseline = testing.liveStorageOwners();
 const results = [];
 const log = console.log;
 try {
@@ -48,7 +49,7 @@ try {
 check(results.length === 2, "README must produce both results");
 check(results[0].result.outcome === "satisfies", "README passing value");
 check(results[1].result.outcome === "fails", "README failing value");
-check(sdk.liveStorageOwners() === baseline, "README owners not released");
+check(testing.liveStorageOwners() === baseline, "README owners not released");
 
 const example = await import("./inspect-edit.js");
 const text = String.raw`{"openbindings":"0.2.0","operations":{},"x-editor":{
@@ -65,7 +66,7 @@ for (let cycle = 0; cycle < 25; cycle++) {
   check(changed.report.conclusion === "conformant", "edit conformance");
   const parsed = sdk.parseDocument(changed.bytes);
   check(parsed.status === "parsed", "reopening edited document");
-  const root = parsed.value.value;
+  const root = parsed.value.value();
   try {
     for (const [key, token] of [
       ["large", "900719925474099312345"],
@@ -104,7 +105,7 @@ for (let cycle = 0; cycle < 25; cycle++) {
     }
   }
   check(
-    sdk.liveStorageOwners() === baseline,
+    testing.liveStorageOwners() === baseline,
     `owners retained after cycle ${cycle}`,
   );
 }
@@ -114,7 +115,7 @@ globalThis.usingResult = {
   editCycles: 25,
   coldOwners,
   liveOwnersBefore: baseline,
-  liveOwnersAfter: sdk.liveStorageOwners(),
+  liveOwnersAfter: testing.liveStorageOwners(),
   nativeDisposePreserved: globalThis.originalDispose === Symbol.dispose,
   suppliedDisposeSymbol: globalThis.originalDispose === undefined,
 };

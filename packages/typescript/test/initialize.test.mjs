@@ -41,3 +41,35 @@ test("initialization rejects unavailable entropy and invalid modules, then permi
   assert.equal(document.value.validate().report.conclusion, "conformant");
   document.value.dispose();
 });
+
+test("browser default initialization still fetches the module-relative asset", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      `
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+const asset = new URL("../dist/wasm/openbindings_wasm_bg.wasm", ${JSON.stringify(import.meta.url)});
+const bytes = await readFile(asset);
+const sdk = await import(new URL("../dist/index.js", ${JSON.stringify(import.meta.url)}));
+delete globalThis.process;
+let fetches = 0;
+globalThis.fetch = async (url) => {
+  fetches++;
+  assert.equal(String(url), asset.href);
+  return new Response(bytes, { headers: { "Content-Type": "application/wasm" } });
+};
+await sdk.initialize();
+assert.equal(fetches, 1);
+const parsed = sdk.parseJson("7");
+assert.equal(parsed.value.text, "7");
+parsed.value.dispose();
+`,
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, result.stderr);
+});

@@ -1,3 +1,4 @@
+import * as testing from "../dist/testing.js";
 import assert from "node:assert/strict";
 
 // Runs against exports from the installed package and its verbatim TS example.
@@ -16,7 +17,7 @@ export function inspectEditExampleCases(sdk, example) {
   const edit = () => example.editMetadata(text, "Reviewed", "read", "reviewed");
   inspect();
   edit(); // warm fixed conformance state before observing released arenas
-  const baseline = sdk.liveStorageOwners();
+  const baseline = testing.liveStorageOwners();
   const inventory = inspect();
   assert.equal(inventory.status, "inspected");
   assert.equal(inventory.operation.key, "read");
@@ -40,8 +41,8 @@ export function inspectEditExampleCases(sdk, example) {
   assert.equal(before.status, "parsed");
   assert.equal(after.status, "parsed");
   try {
-    const original = before.value.value;
-    const revised = after.value.value;
+    const original = before.value.value();
+    const revised = after.value.value();
     try {
       for (const pointer of [
         "/x-tokens",
@@ -124,7 +125,7 @@ export function inspectEditExampleCases(sdk, example) {
     assert.equal(changed.report.conclusion, "conformant");
     const opened = sdk.parseDocument(changed.bytes);
     assert.equal(opened.status, "parsed");
-    const root = opened.value.value;
+    const root = opened.value.value();
     try {
       for (const [key, token] of [
         ["large", "900719925474099312345"],
@@ -187,7 +188,7 @@ export function inspectEditExampleCases(sdk, example) {
     } finally {
       unpaired.value.dispose();
     }
-    assert.equal(sdk.liveStorageOwners(), baseline);
+    assert.equal(testing.liveStorageOwners(), baseline);
   }
   assert.equal(
     example.editExtensionMember(opaque, "x-absent", "annotation", true).status,
@@ -217,7 +218,7 @@ export function inspectEditExampleCases(sdk, example) {
     source.value.dispose();
   }
   assert.equal(built.status, "authored");
-  const detached = built.document.value;
+  const detached = built.document.value();
   try {
     const member = detached.at("/x-editor/annotation");
     try {
@@ -229,7 +230,7 @@ export function inspectEditExampleCases(sdk, example) {
     detached.dispose();
     built.document.dispose();
   }
-  assert.equal(sdk.liveStorageOwners(), baseline);
+  assert.equal(testing.liveStorageOwners(), baseline);
   return {
     installedInspectionEditingExample: "passed",
     releasedArenas: baseline,

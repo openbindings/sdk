@@ -15,6 +15,7 @@ for a complete job; use the definitions for exact result, ownership and limit co
 | Rust binding and operation invocation roles | [`openbindings-invocation`](../crates/openbindings-invocation/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-invocation` |
 | Shared Rust cancellation definitions | [`openbindings-internal-cancellation`](../crates/openbindings-internal-cancellation/src/lib.rs), reexported by all four async companions | `cargo doc --locked --no-deps -p openbindings-internal-cancellation` |
 | TypeScript core and HTTP discovery | [`internal.ts`](../packages/typescript/src/internal.ts), as exported by the two entry points | Build the package, then run `node packages/typescript/scripts/check-api-reference.mjs target/api-reference` |
+| TypeScript testing | [`testing.ts`](../packages/typescript/src/testing.ts), exported by `@openbindings/sdk/testing` | Included in the TypeScript reference renderer |
 | Compiled Wasm asset import | [`wasm-module.d.ts`](../packages/typescript/src/wasm-module.d.ts) | Host import type documented alongside `initialize` |
 
 The TypeScript renderer reads emitted declarations, follows reexports, and includes
@@ -70,9 +71,9 @@ and its associated future is Send; local futures and Rc providers remain support
   arbitrary-string or unknown-outcome branch. Public report/problem records remain
   constructible by custom evaluator authors.
 - Rust borrowed views do not create new owners. Rust clones and TypeScript `retain()`
-  share immutable state. TypeScript `ParsedDocument.value`, `OperationView.value`,
+  share immutable state. TypeScript `ParsedDocument.value()`, `OperationView.value()`,
   `ExactJson.get()` and `ExactJson.at()` create **new disposable owners** on each call.
-  New binding/source/dependency/example views follow this same exact-getter rule;
+  New binding/source/dependency/example views follow this same owner-acquisition method rule;
   their frozen metadata is plain data. A traversal cursor and each yielded owner
   have independent lifetimes. Scoped editable drafts own their converted exact
   leaves; caller-inserted exact handles stay caller-owned. Explicit draft disposal
@@ -280,10 +281,15 @@ inherit exact editor reads and add `valueContracts()` and `parsed()`. Top-level
 text is exact JavaScript UTF-16; optional text uses undefined for absence.
 Each top-level text getter checks only its own field, preserving valid siblings
 and absence when another metadata field is malformed.
-`schemas` creates a new ExactJson owner for each map value on every access.
-`OperationView.input` and `.output` each create a new independent ExactJson owner,
+`schemas()` creates a new ExactJson owner for each map value on every call.
+`OperationView.input()` and `.output()` each create a new independent ExactJson owner,
 preserving undefined separately from null, false, true and objects. Dispose each
-acquisition; these getters keep the established ownership convention.
+acquisition; these methods make acquisition explicit. Plain text, metadata and editable draft
+`value` properties remain getters. `initialize()` reads the installed Wasm asset
+on Node without fetch; browsers retain module-relative loading. Explicit bytes
+or a compiled module bypass default loading in either host. Cleanup assertions
+import `liveStorageOwners` from `@openbindings/sdk/testing`; production entries
+export no test bookkeeping.
 
 The raw bridge transfers proof with `WasmDocument.validate()` returning
 `WasmDocumentValidation`; `report()` returns evidence and `takeValidated()` takes

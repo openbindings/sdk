@@ -1,6 +1,7 @@
+import { liveStorageOwners } from "../dist/testing.js";
 // A single component owns this Worker, its current proved snapshot and Wasm realm.
 // Relative package URLs run directly when the installed examples directory is served.
-import { initialize, parseJson, liveStorageOwners } from "../dist/index.js";
+import { initialize, parseJson } from "../dist/index.js";
 import { DocumentEditor } from "./editor.mjs";
 const editor = new DocumentEditor();
 self.onmessage = async ({ data }) => {

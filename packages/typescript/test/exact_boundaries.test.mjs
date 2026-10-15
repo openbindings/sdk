@@ -1,3 +1,4 @@
+import * as testing from "../dist/testing.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -30,7 +31,7 @@ const interpretation = (call) =>
   );
 
 test("raw member cursor preserves source order, duplicates, escaped/unpaired names and independent ownership", () => {
-  const baseline = sdk.liveStorageOwners();
+  const baseline = testing.liveStorageOwners();
   const root = exact(
     '{"z":9007199254740993,"\\ud800":null,"z":0.29000000000000001,"a/~":false}',
   );
@@ -40,8 +41,8 @@ test("raw member cursor preserves source order, duplicates, escaped/unpaired nam
     retained = [];
   try {
     for (const member of cursor) {
-      const name = member.name,
-        value = member.value,
+      const name = member.name(),
+        value = member.value(),
         again = member.retain();
       try {
         rows.push([
@@ -53,7 +54,7 @@ test("raw member cursor preserves source order, duplicates, escaped/unpaired nam
         retained.push(value.retain());
         member.dispose();
         assert.equal(again.index, rows.length - 1);
-        const repeatedName = again.name;
+        const repeatedName = again.name();
         try {
           assert.equal(repeatedName.text, name.text);
         } finally {
@@ -85,11 +86,11 @@ test("raw member cursor preserves source order, duplicates, escaped/unpaired nam
     retained.forEach((v) => v.dispose());
     root.dispose();
   }
-  assert.equal(sdk.liveStorageOwners(), baseline);
+  assert.equal(testing.liveStorageOwners(), baseline);
 });
 
 test("member/element cursors preserve the first terminal reason for every closing order", () => {
-  const baseline = sdk.liveStorageOwners();
+  const baseline = testing.liveStorageOwners();
   for (const source of ["{}", "[]"]) {
     const root = exact(source),
       iterator = source === "{}" ? root.members() : root.elements();
@@ -121,11 +122,11 @@ test("member/element cursors preserve the first terminal reason for every closin
     disposed(() => root.members());
     disposed(() => root.elements());
   }
-  assert.equal(sdk.liveStorageOwners(), baseline);
+  assert.equal(testing.liveStorageOwners(), baseline);
 });
 
 test("array iteration is shallow, supports early break/throw and retained children after parent release", () => {
-  const baseline = sdk.liveStorageOwners();
+  const baseline = testing.liveStorageOwners();
   const root = exact("[9007199254740993,[[[null]]],0.29000000000000001]");
   const iterator = root.elements();
   root.dispose();
@@ -165,11 +166,11 @@ test("array iteration is shallow, supports early break/throw and retained childr
   assert.equal(members.disposed, true);
   assert.equal(members.next().done, true);
   members.dispose();
-  assert.equal(sdk.liveStorageOwners(), baseline);
+  assert.equal(testing.liveStorageOwners(), baseline);
 });
 
 test("cursor failure closes only cursor; metadata-only prefix never acquires unvisited child owners", () => {
-  const baseline = sdk.liveStorageOwners();
+  const baseline = testing.liveStorageOwners();
   const root = exact('{"first":1,"second":2}'),
     iterator = root.members();
   root.dispose();
@@ -207,7 +208,7 @@ test("cursor failure closes only cursor; metadata-only prefix never acquires unv
     proto.next = next;
     prefix.dispose();
   }
-  assert.equal(sdk.liveStorageOwners(), baseline);
+  assert.equal(testing.liveStorageOwners(), baseline);
 });
 
 const documentText =
@@ -215,7 +216,7 @@ const documentText =
 
 test("native parsed-to-editable draft roundtrip, direct edits and prototype-sensitive names preserve exact unrelated values", () => {
   const original = parsed(documentText),
-    originalValue = original.value;
+    originalValue = original.value();
   const converted = original.toDraft();
   assert.equal(converted.status, "drafted");
   const editing = converted.draft,
@@ -253,13 +254,13 @@ test("native parsed-to-editable draft roundtrip, direct edits and prototype-sens
     delete draft.operations.temporary;
     const result = sdk.authorDocument(draft);
     assert.equal(result.status, "authored");
-    const newValue = result.document.value;
+    const newValue = result.document.value();
     try {
       const cursor = originalValue.members();
       try {
         for (const member of cursor) {
-          const name = member.name,
-            before = member.value;
+          const name = member.name(),
+            before = member.value();
           try {
             const decoded = name.toValue();
             assert.equal(decoded.status, "converted");
@@ -292,7 +293,7 @@ test("native parsed-to-editable draft roundtrip, direct edits and prototype-sens
 });
 
 test("draft registry cleans removed/replaced leaves, retains explicit escapes, and never adopts external owners", () => {
-  const baseline = sdk.liveStorageOwners();
+  const baseline = testing.liveStorageOwners();
   const source = parsed(
     '{"openbindings":"0.2.0","operations":{"run":{"input":true}},"schemas":{"kept":9007199254740993}}',
   );
@@ -333,7 +334,7 @@ test("draft registry cleans removed/replaced leaves, retains explicit escapes, a
     editing.dispose();
     source.dispose();
   }
-  assert.equal(sdk.liveStorageOwners(), baseline);
+  assert.equal(testing.liveStorageOwners(), baseline);
 });
 
 test("draft conversion errors are located native refusals, independent of conformance", () => {
@@ -401,7 +402,7 @@ test("draft conversion errors are located native refusals, independent of confor
 
 test("draft transfer partial failures release taken and untaken exact roots", () => {
   const source = parsed(documentText),
-    baseline = sdk.liveStorageOwners();
+    baseline = testing.liveStorageOwners();
   const proto = bridge.WasmDraft.prototype,
     originalShape = proto.shape,
     originalTake = proto.takeExact;
@@ -422,7 +423,7 @@ test("draft transfer partial failures release taken and untaken exact roots", ()
         return originalTake.call(this, index);
       };
       assert.throws(() => source.toDraft());
-      assert.equal(sdk.liveStorageOwners(), baseline);
+      assert.equal(testing.liveStorageOwners(), baseline);
     }
   } finally {
     proto.shape = originalShape;
@@ -462,9 +463,9 @@ test("new metadata is narrow/frozen/lexical; exact views retain after document r
         hasOutput: true,
       },
     ]);
-    const content = sourceView.content,
-      input = example.input,
-      output = example.output,
+    const content = sourceView.content(),
+      input = example.input(),
+      output = example.output(),
       retained = binding.retain();
     source.dispose();
     operation.dispose();

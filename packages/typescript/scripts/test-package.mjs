@@ -137,6 +137,21 @@ console.log("Installed README TypeScript first-use block compiled and ran verbat
     join(root, "test/validated-contracts.mjs"),
     join(temporary, "validated-contracts.mjs"),
   );
+  for (const name of [
+    "api-quality",
+    "fixed-diagnostic",
+    "diagnostic-details",
+    "inspect-edit-example",
+  ]) {
+    const filename = join(temporary, name + "-cases.mjs");
+    writeFileSync(
+      filename,
+      readFileSync(filename, "utf8").replaceAll(
+        "../dist/testing.js",
+        "@openbindings/sdk/testing",
+      ),
+    );
+  }
   const declaration = readFileSync(
     join(installed, "dist/internal.d.ts"),
     "utf8",
@@ -147,10 +162,11 @@ console.log("Installed README TypeScript first-use block compiled and ran verbat
     join(temporary, "consumer.mjs"),
     `
 import assert from "node:assert/strict";
-import { readFile, realpath } from "node:fs/promises";
+import { realpath } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import * as sdk from "@openbindings/sdk";
 import * as http from "@openbindings/sdk/http-discovery";
+import * as testing from "@openbindings/sdk/testing";
 import { apiQualityCases } from "./api-quality-cases.mjs";
 import { fixedDiagnosticCases } from "./fixed-diagnostic-cases.mjs";
 import { diagnosticPolicyCases } from "./diagnostic-policy-cases.mjs";
@@ -158,11 +174,19 @@ import { diagnosticBudgetCases } from "./diagnostic-budget-cases.mjs";
 import { diagnosticDetailsCases } from "./diagnostic-details-cases.mjs";
 import { inspectEditExampleCases } from "./inspect-edit-example-cases.mjs";
 import * as inspectionEditing from "./readme-build/inspect-edit.js";
+assert(!Object.hasOwn(sdk, "liveStorageOwners"));
+assert(!Object.hasOwn(http, "liveStorageOwners"));
+assert.deepEqual(Object.keys(testing), ["liveStorageOwners"]);
+assert.throws(() => testing.liveStorageOwners(), { code: "not-initialized" });
 const { initialize, parseDocument } = sdk;
 const resolved = fileURLToPath(import.meta.resolve("@openbindings/sdk"));
 assert.equal(await realpath(resolved), resolved, "Package must not resolve through a workspace symlink");
 assert(resolved.startsWith(${JSON.stringify(join(temporary, "node_modules") + sep)}));
-await initialize(await readFile(new URL(import.meta.resolve("@openbindings/sdk/openbindings.wasm"))));
+globalThis.fetch = () => { throw new Error("Node default initialization must not fetch"); };
+const first = initialize();
+assert.equal(first, initialize());
+await first;
+assert.equal(typeof testing.liveStorageOwners(), "number");
 const parsed = parseDocument('{"openbindings":"0.2.0","operations":{"run":{}}}');
 assert.equal(parsed.status, "parsed");
 try {
