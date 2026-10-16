@@ -149,10 +149,16 @@ def main():
                     continue
                 original = manifest.parent / ("Cargo.toml" if str(relative) == "Cargo.toml.orig" else relative)
                 require(original.is_file() and original.read_bytes() == archive.extractfile(member).read(), f"Archive/source mismatch: {name}/{relative}")
-            # Every package must deliver the Apache-2.0 terms it declares, and its notice.
+            # Every package must deliver the license terms it declares. The SDK's own
+            # packages inherit Apache-2.0 and carry the root text and a notice; forks keep
+            # their upstream license files.
             delivered = {str(Path(m.name).relative_to(m.name.split("/")[0])) for m in archive.getmembers() if m.isfile()}
-            require({"LICENSE", "NOTICE"} <= delivered, f"Archive omits LICENSE or NOTICE: {name}")
-            require((source / "LICENSE").read_bytes() == (ROOT / "LICENSE").read_bytes(), f"Archive license text differs: {name}")
+            if spec.get("license") == {"workspace": True}:
+                require({"LICENSE", "NOTICE"} <= delivered, f"Archive omits LICENSE or NOTICE: {name}")
+                require((source / "LICENSE").read_bytes() == (ROOT / "LICENSE").read_bytes(), f"Archive license text differs: {name}")
+            else:
+                require(any(Path(member).name.upper().startswith("LICENSE") for member in delivered),
+                        f"Archive omits its license text: {name}")
         normalized = tomllib.loads((source / "Cargo.toml").read_text())
         for section in [normalized, *normalized.get("target", {}).values()]:
             for kind in ["dependencies", "dev-dependencies", "build-dependencies"]:
