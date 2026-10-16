@@ -182,11 +182,15 @@ async fn source_preservation_is_exact_structural_and_panic_free() {
             r#"{ "b": [null,true], "a": 9007199254740993 }"#,
             true,
         ),
-        // equivalent surrogate spellings preserve opaque source content.
-        (r#""\uD800""#, r#""\ud800""#, true),
-        (r#""\uD800""#, r#""\"\\uD800\"""#, false),
+        // Equivalent surrogate-pair spellings preserve opaque source content.
+        (r#""\uD800\uDC00""#, r#""\ud800\udc00""#, true),
+        (r#""\uD800\uDC00""#, r#""\"\\uD800\\uDC00\"""#, false),
         // opaque member names also compare as exact UTF-16 units.
-        (r#"{"\uD800":1,"a":2}"#, r#"{"a":2,"\ud800":1}"#, true),
+        (
+            r#"{"\uD800\uDC00":1,"a":2}"#,
+            r#"{"a":2,"\ud800\udc00":1}"#,
+            true,
+        ),
         ("9007199254740993", "9007199254740992", false),
         ("1.0", "1", true),
         (r#"{"x":1,"x":2}"#, r#"{"x":2,"x":1}"#, false),
@@ -201,7 +205,7 @@ async fn source_preservation_is_exact_structural_and_panic_free() {
     assert!(deliver(&absent, candidate(&null)).await.is_err());
     let s = source(None);
     let mut c = candidate(&s);
-    c.document=Document::parse(r#"{"openbindings":"0.2.0","operations":{},"sources":{"\ud800":{"kind":"example.coverage@1"}}}"#).unwrap();
+    c.document=Document::parse(r#"{"openbindings":"0.2.0","operations":{},"sources":{"\ud800\udc00":{"kind":"example.coverage@1"}}}"#).unwrap();
     assert!(deliver(&s, c).await.is_err());
 }
 
@@ -602,24 +606,34 @@ fn cancellation_wakes_and_drops_both_pending_calls() {
 }
 
 #[tokio::test]
-async fn undetermined_conformance_is_not_upgraded() {
+async fn unpaired_source_content_cannot_be_published_as_a_conformant_document() {
     let s = source(Some(r#""\ud800""#));
-    // opaque source content now establishes conformance without refusal.
-    let result = deliver(&s, candidate(&s)).await.unwrap();
+    let error = deliver(&s, candidate(&s)).await.unwrap_err();
+    assert_eq!(error.kind(), SynthesisErrorKind::InvalidResult);
+    let rejected = error.rejected().unwrap();
+    let validation = rejected.validation.as_ref().unwrap();
     assert_eq!(
-        result
-            .document()
-            .as_document()
-            .validate()
-            .unwrap()
-            .report()
-            .conclusion,
-        openbindings::Conformance::Conformant
+        validation.report().conclusion,
+        openbindings::Conformance::NonConformant
+    );
+    assert_eq!(
+        validation.report().evidence["OBI-01"],
+        openbindings::Evidence::Violated
+    );
+    assert_eq!(
+        validation.report().evidence["OBI-02"],
+        openbindings::Evidence::NotApplicable
+    );
+    let finding = &validation.report().findings[0];
+    assert_eq!(finding.rule, "OBI-01");
+    assert_eq!(
+        finding.location.as_ref().unwrap().pointer.as_deref(),
+        Some("/sources/api/content")
     );
     assert!(
-        result
-            .document()
-            .as_document()
+        rejected
+            .candidate
+            .document
             .value()
             .text()
             .contains("\\ud800")

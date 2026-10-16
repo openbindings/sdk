@@ -258,10 +258,14 @@ validation provides a `Conformant<Document>` proof.
 Admission precedes version selection. Until the complete JSON text is admitted,
 no version declaration has been established. An admission refusal leaves every
 rule inconclusive, even if an initial fragment appears to name another specification
-line. After admission, version-refusal and OBI-01 priority are unchanged. Document
-validation checks admitted schemas locally at any depth and carries escaped lone
-surrogates exactly; native namespace and primary-reference comparisons use UTF-16
-units. A violation established by any rule makes the document non-conformant.
+line. After admission, version selection follows §8.1 before applying this line's
+OBI-01 exclusions. An escape denoting an unpaired surrogate in any member name or
+string value violates OBI-01, including opaque content and embedded schemas. Its
+finding locates the original token; OBI-02 through OBI-13 are not applicable.
+Escaped surrogate pairs and noncharacters remain permitted. Exact parsing still
+retains unpaired units for draft inspection, caller values and supplied resources.
+Document validation checks admitted schemas locally at any depth. A violation
+established by any applicable rule makes the document non-conformant.
 
 ### Finding-code catalog
 
@@ -291,6 +295,7 @@ code-based Display representation.
 | `escape` | OBI-01 | A JSON string escape is invalid. |
 | `unicode-escape` | OBI-01 | A Unicode escape lacks four hexadecimal digits. |
 | `duplicate-member` | OBI-01 | An object repeats a decoded member name. |
+| `unpaired-surrogate` | OBI-01 | A member name or string value holds an escape denoting an unpaired surrogate. |
 | `schema-mismatch` | OBI-02, OBI-10 | A constraint in the derived schema or meta-schemas failed. The fixed message is `value violates the fixed normative schema`; locations identify deepest checked document positions or the checked schema node. |
 | `fixed-schema-limit-or-failure` | OBI-02, OBI-10 | Fixed-schema checking could not complete within its capability or work limit. |
 | `semver` | OBI-03 | The openbindings value is not a SemVer string. |
@@ -320,17 +325,18 @@ Raw parser admission codes `byte-limit`, `node-limit` and `depth-limit` remain
 | Rust read | Result and presence |
 | --- | --- |
 | `openbindings()` | `&str`, proved supported SemVer |
-| `name()`, `version()`, `description()` | `Option<JsonStringRef>`, absence separate from non-scalar text |
+| `name()`, `version()`, `description()` | `Option<JsonStringRef>`, absence separate from present scalar text |
 | `schemas()`, `schema(key)` | Optional exact object/boolean schema views; no preparation |
 | `operations()`, `resolve_operation(name)` | Retained `ConformantOperationView` vector or optional selection |
 | `bindings()`, `sources()`, `dependencies()` and keyed reads | Optional retained `ConformantBindingView`, `ConformantSourceView`, `ConformantDependencyView`; absent differs from present-empty |
 | Conformant operation `examples()` and `example(key)` | Retained `ConformantExampleView`; example truth is not implied |
 
 Conformant views expose the same normative fields as document views, with infallible
-reads. Required names are scalar; descriptive text, tags and kinds use
-`JsonStringRef`. Its `as_str()` returns None only for non-scalar text;
-`utf16_units()` iterates without allocating, `json()` retains token/location access,
-and equality compares decoded UTF-16. `JsonRef::as_string()` returns None only for
+reads. OBI-01 establishes scalar text for every string in a conformant document.
+Descriptive text, tags and kinds still use `JsonStringRef`; their `as_str()` is
+always Some. For exact strings from drafts or caller values, `as_str()` can return
+None for an unpaired UTF-16 unit. `utf16_units()` iterates without allocating,
+`json()` retains token/location access, and equality compares decoded UTF-16. `JsonRef::as_string()` returns None only for
 non-strings. The existing fallible view names remain unchanged; the `Conformant`
 prefix identifies proof on the individual view. The owning document state is `Conformant<Document>`.
 

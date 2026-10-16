@@ -665,6 +665,20 @@ pub fn has_unpaired(value: &crate::JsonValue) -> bool {
         span.start <= inner.start && inner.end <= span.end
     })
 }
+
+/// Borrow string and member-name tokens containing unpaired UTF-16 units.
+/// The exact parser retains these for values and draft inspection; document
+/// conformance applies its own OBI-01 exclusion at the original token locations.
+pub fn unpaired_strings(value: &crate::JsonValue) -> impl Iterator<Item = crate::JsonRef<'_>> {
+    let span = &value.owner.nodes[value.id].span;
+    value.owner.unpaired.iter().filter_map(move |&id| {
+        let inner = &value.owner.nodes[id].span;
+        (span.start <= inner.start && inner.end <= span.end).then_some(crate::JsonRef {
+            owner: &value.owner,
+            id,
+        })
+    })
+}
 /// Stack-safe exact comparison, charged to the enclosing evaluator work scope.
 pub fn equals(left: View<'_>, right: View<'_>) -> bool {
     let mut stack = vec![(left, right)];

@@ -10,19 +10,19 @@ fn proof(text: &str) -> Conformant<Document> {
 #[test]
 fn exact_strings_and_retained_conformant_views_preserve_every_utf16_unit() {
     let document = proof(
-        r#"{"openbindings":"0.2.0","name":"\ud800","version":"\udc00","description":"\ud800","operations":{"run":{"description":"\ud800","tags":["\ud800","𝄞"],"aliases":["go"],"deprecated":false,"input":true,"output":false,"examples":{"e":{"description":"\ud800","input":null}}}},"sources":{"s":{"kind":"\ud800","description":"\udc00","content":null}},"bindings":{"b":{"operation":"run","source":"s","description":"\ud800","preference":0,"idempotent":false,"deprecated":false,"content":null}},"dependencies":{"d":{"operation":"run","kinds":["\uD800"],"description":"\ud800"}},"schemas":{"z":false,"a":{}}}"#,
+        r#"{"openbindings":"0.2.0","name":"\ud800\udc00","version":"\uffff","description":"\ud800\udc00","operations":{"run":{"description":"\ud800\udc00","tags":["\ud800\udc00","𝄞"],"aliases":["go"],"deprecated":false,"input":true,"output":false,"examples":{"e":{"description":"\ud800\udc00","input":null}}}},"sources":{"s":{"kind":"\ud800\udc00","description":"\uffff","content":null}},"bindings":{"b":{"operation":"run","source":"s","description":"\ud800\udc00","preference":0,"idempotent":false,"deprecated":false,"content":null}},"dependencies":{"d":{"operation":"run","kinds":["\uD800\uDC00"],"description":"\ud800\udc00"}},"schemas":{"z":false,"a":{}}}"#,
     );
     assert_eq!(document.openbindings(), "0.2.0");
     let name = document.name().unwrap();
-    assert_eq!(name.as_str(), None);
-    assert_eq!(name.utf16_units().collect::<Vec<_>>(), [0xd800]);
+    assert_eq!(name.as_str(), Some("𐀀"));
+    assert_eq!(name.utf16_units().collect::<Vec<_>>(), [0xd800, 0xdc00]);
     assert_eq!(
         document
             .version()
             .unwrap()
             .utf16_units()
             .collect::<Vec<_>>(),
-        [0xdc00]
+        [0xffff]
     );
     assert_eq!(name, document.description().unwrap());
     assert!(!name.eq_str("�"));

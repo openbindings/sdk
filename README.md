@@ -79,7 +79,7 @@ provisional. TypeScript does not expose these APIs.
 Read [capabilities and limits](CAPABILITIES.md), [host support](docs/support.md),
 [performance measurements](docs/performance-boundaries.md) and the
 [API reference](docs/api-reference.md). This SDK applies OpenBindings 0.2.
-Applied specification revision: `2f7d754dc2da374058cd517064c17e50f7d95d99`.
+Applied specification revision: `30416ef1ca626e58eb8c383a0c71422a68f9243f`.
 Package and specification versions are independent.
 
 Repository build and verification instructions are in

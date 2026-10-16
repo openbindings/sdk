@@ -17,7 +17,7 @@ pub const ACCEPT: &str = "application/vnd.openbindings+json, application/json";
 /// Applied HTTP discovery companion version, independent of the SDK crate version.
 pub const COMPANION_VERSION: &str = "0.1.0";
 /// Exact specification revision defining this companion's behavior.
-pub const APPLIED_COMPANION_REVISION: &str = "2f7d754dc2da374058cd517064c17e50f7d95d99";
+pub const APPLIED_COMPANION_REVISION: &str = "30416ef1ca626e58eb8c383a0c71422a68f9243f";
 /// Default decoded discovery-body limit: 1 MiB (1,048,576 bytes).
 pub const DEFAULT_MAX_DOCUMENT_BYTES: usize = 1 << 20;
 

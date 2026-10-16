@@ -288,13 +288,42 @@ fn inconsistent_advisory_list_is_rejected() {
 fn exact_encoding_budgets_and_opaque_values_are_preserved() {
     let mut item = target();
     // Neither a duplicate name nor a lone UTF-16 surrogate in opaque binding
-    // content is normalized by this interface. Kind semantics decide interpretation.
+    // content is normalized by this carrier. A completed document must meet OBI-01.
     let content = r#"{"same":1,"same":2,"surrogate":"\uD800","huge":9007199254740993}"#;
     item.binding.content = Some(JsonValue::parse(content).unwrap());
     let result = SourceInspection::complete(vec![item]);
     let wire = result.to_json().unwrap();
     assert!(wire.text().contains(content));
     assert!(wire.has_duplicate_names());
+    let binding = result.targets[0].binding.clone().bind("op", "s").unwrap();
+    // Parse the completed carriage so duplicate evidence is retained; the editor
+    // correctly refuses inserting an ambiguous object through a typed setter.
+    let document = openbindings::Document::parse(format!(
+        r#"{{"openbindings":"0.2.0","operations":{{"op":{{}}}},"sources":{{"s":{{"kind":"urn:example:echo"}}}},"bindings":{{"b":{}}}}}"#,
+        serde_json::to_string(&binding).unwrap()
+    )).unwrap();
+    let validation = document.validate().unwrap();
+    assert!(validation.conformant().is_none());
+    assert_eq!(
+        validation.report().evidence["OBI-01"],
+        openbindings::Evidence::Violated
+    );
+    assert_eq!(
+        validation.report().evidence["OBI-02"],
+        openbindings::Evidence::NotApplicable
+    );
+    let finding = validation
+        .report()
+        .findings
+        .iter()
+        .find(|f| f.code == "unpaired-surrogate")
+        .unwrap();
+    assert_eq!(finding.rule, "OBI-01");
+    assert_eq!(
+        finding.location.as_ref().unwrap().pointer.as_deref(),
+        Some("/bindings/b/content/surrogate")
+    );
+
     let limits = openbindings::JsonLimits {
         max_bytes: wire.text().len(),
         ..Default::default()

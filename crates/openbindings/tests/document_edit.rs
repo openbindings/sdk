@@ -370,7 +370,7 @@ fn generated_edit_sequences_over_every_corpus_document_match_reparsed_text() {
     let mut corpus = Vec::new();
     corpus_documents(&root.join("document"), &mut corpus);
     corpus_documents(&root.join("scenarios"), &mut corpus);
-    assert_eq!(corpus.len(), 435);
+    assert_eq!(corpus.len(), 440);
     let mut admitted = 0;
     let mut seed = 0x67cd_f829_302a_19e5u64;
     for bytes in corpus {

@@ -2,7 +2,7 @@ OpenBindings Rust SDK
 Copyright 2026 The OpenBindings Authors
 
 Applies the OpenBindings 0.2 specification working draft at
-2f7d754dc2da374058cd517064c17e50f7d95d99.
+30416ef1ca626e58eb8c383a0c71422a68f9243f.
 The optional HTTP discovery companion is version 0.1.0 at that revision.
 The implementation was informed by the Apache-2.0 Go SDK at
 c5c6076fcf6bcf30a428c70c00bb4f3cbf6447df; it is not a source-identical port.

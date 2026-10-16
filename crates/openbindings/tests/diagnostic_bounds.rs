@@ -112,9 +112,14 @@ fn duplicate_under_unpaired_ancestor_keeps_original_byte_coordinates() {
     let source = r#"{"openbindings":"0.2.0","operations":{},"x":{"\ud800":{"k":0,"k":1}}}"#;
     let validation = validate_document(source).unwrap();
     let report = validation.report();
-    assert_eq!(report.findings.len(), 1);
+    assert_eq!(report.findings.len(), 2);
     assert!(!report.findings_truncated);
-    let at = report.findings[0].location.as_ref().unwrap();
+    let duplicate = report
+        .findings
+        .iter()
+        .find(|f| f.code == "duplicate-member")
+        .unwrap();
+    let at = duplicate.location.as_ref().unwrap();
     assert_eq!(at.pointer, None);
     assert_eq!(at.byte_offset, source.rfind("\"k\"").unwrap());
 }

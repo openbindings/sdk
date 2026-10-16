@@ -20,12 +20,20 @@ fn fixture(schema: &str, reference: &str, supplied: bool) -> (Document, Resource
     };
     let reference = serde_json::to_string(reference).unwrap();
     let doc = Document::parse(format!(r#"{{"openbindings":"0.2.0","schemas":{schemas},"operations":{{"op":{{"input":{{"$ref":{reference}}}}}}}}}"#)).unwrap();
-    assert!(doc.validate().unwrap().conformant().is_some());
+    let validation = doc.validate().unwrap();
+    if !supplied && schema.contains(r"\ud800") {
+        assert_eq!(validation.report().evidence["OBI-01"], Evidence::Violated);
+        assert!(validation.conformant().is_none());
+    } else {
+        assert!(validation.conformant().is_some());
+    }
     (doc, resources)
 }
 
 #[test]
-fn contained_and_supplied_surrogate_collision_preserves_each_original_target() {
+fn contained_draft_and_supplied_surrogate_collision_preserves_each_original_target() {
+    // The collision remains an evaluator test through an external resource;
+    // the same text inside a document is now excluded by OBI-01.
     for supplied in [false, true] {
         for reverse in [false, true] {
             for (suffix, fragment) in [
@@ -76,6 +84,12 @@ fn contained_and_supplied_surrogate_collision_preserves_each_original_target() {
                         if target.pointer == expected_target && target.resource.as_deref() == supplied.then_some(BASE)),
                         "{found:?}"
                     );
+                    // Retain draft reference inspection above. Evaluation uses
+                    // the same exact schema as a supplied resource in both cases.
+                    let (doc, resources) = fixture(&schema, &reference, true);
+                    let literal_pointer = literal_pointer
+                        .strip_prefix("/schemas/R")
+                        .unwrap_or(&literal_pointer);
                     let validation = doc.validate().unwrap();
                     let context = validation.conformant().unwrap().value_contracts(
                         Arc::new(DefaultEvaluator::new().with_diagnostics(
@@ -102,7 +116,7 @@ fn contained_and_supplied_surrogate_collision_preserves_each_original_target() {
                             .schema_location
                             .as_ref()
                             .is_some_and(|at| at.pointer == format!("{literal_pointer}/type")
-                                && at.resource.as_deref() == supplied.then_some(BASE))),
+                                && at.resource.as_deref() == Some(BASE))),
                         "{problems:?}"
                     );
                 }

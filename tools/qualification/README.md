@@ -1,6 +1,15 @@
 # Pinned qualification fixtures
 
-The specification corpus is copied from revision 2f7d754dc2da374058cd517064c17e50f7d95d99. The immutable inventory contains 435 cases. The observer uses public SDK APIs; the Python judge is independent and includes deliberately incorrect-result controls. These files support repository CI and replay, not runtime SDK features. Generated observations are ignored. The reusable evaluator kit separately preserves 1,566 case IDs with its own provenance: 1,564 evaluator observations and two core rejection cases.
+The specification corpus is copied from revision 30416ef1ca626e58eb8c383a0c71422a68f9243f. The immutable inventory contains 440 cases. The observer uses public SDK APIs; the Python judge is independent and includes deliberately incorrect-result controls. These files support repository CI and replay, not runtime SDK features. Generated observations are ignored. The reusable evaluator kit separately preserves 1,566 case IDs with its own provenance: 1,564 evaluator observations and two core rejection cases.
+
+For a specification re-pin, replace only the files already present in
+`inputs/spec/` with the same paths from the selected checkout. Rebuild
+`inputs/blueprint/case-inventory.json` from `conformance/manifest.json`: for each
+`files` entry enumerate `path#/tests/index`; for each `scenarioFiles` entry collect
+its scenario `id` values. Sort the combined IDs, check uniqueness and the manifest
+counts, and update `spec_commit`, `count` and this README's revision/count sentence.
+`replay/corpus.py` independently reconciles that inventory during replay. Verify
+the snapshot with `node tools/verify-spec.mjs . SPEC_CHECKOUT FULL_REVISION --self-test`.
 
 The inputs directory contains only the pinned specification snapshot and inventory,
 plus the independent container-finding regression cases. Historical migration

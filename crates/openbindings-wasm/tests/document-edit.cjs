@@ -34,3 +34,43 @@ const resources = new wasm.WasmResources();
 assert.throws(() => wasm.WasmConformantDocument.prototype.valueContracts.call(invalid, resources, '{}', 'coarse'));
 for (const handle of [document, assessment, plain, editable, duplicate, invalid, resources]) handle.free();
 console.log('Wasm document editing, retained proof, consumption and raw receiver checks passed');
+
+// OBI-01's five surrogate fixtures and CONFORMANCE-06 cross the raw Wasm API.
+for (const [token, member, conforms] of [
+  ['"\\ud800"', false, false],
+  ['"\\udc00"', true, false],
+  ['"\\ude00\\ud83d"', false, false],
+  ['"\\ud83d\\ude00"', false, true],
+  ['"\\uffff"', false, true],
+  ['"\\ud800"', false, false],
+]) {
+  const text = member
+    ? `{"openbindings":"0.2.0","operations":{"op":{"input":{"type":"object","properties":{${token}:{}}}}}}`
+    : `{"openbindings":"0.2.0","description":${token},"operations":{}}`;
+  const draft = parse(text);
+  const checked = draft.validate();
+  const report = JSON.parse(checked.report()).report;
+  assert.equal(report.conclusion, conforms ? 'conformant' : 'non-conformant');
+  assert.equal(decode(draft), text);
+  const proof = checked.takeConformant();
+  if (conforms) {
+    assert.ok(proof);
+    assert.deepEqual(report.findings, []);
+    proof.free();
+  } else {
+    assert.equal(proof, undefined);
+    assert.equal(report.evidence['OBI-01'], 'violated');
+    assert.ok(Object.entries(report.evidence).every(([rule, state]) => rule === 'OBI-01' || state === 'not-applicable'));
+    assert.equal(report.findings.length, 1);
+    const finding = report.findings[0];
+    assert.equal(finding.rule, 'OBI-01');
+    assert.equal(finding.code, 'unpaired-surrogate');
+    assert.equal(finding.location.pointer, member ? null : '/description');
+    assert.equal(finding.location.byte_offset, text.indexOf(token));
+    assert.equal(finding.location.line, 1);
+    assert.equal(finding.location.byte_column, text.indexOf(token) + 1);
+  }
+  checked.free();
+  draft.free();
+}
+console.log('Wasm surrogate document boundary: six cases passed');
