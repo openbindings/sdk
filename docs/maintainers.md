@@ -29,6 +29,15 @@ network access, including repository URLs that name this checkout. Remote URLs
 are reported as unchecked. See [release preparation](release-candidate.md) for
 archive and source-identity checks and [API reference](api-reference.md) for rendering.
 
+On pull requests and pushes to `main`, the [CI workflow](../.github/workflows/ci.yml)
+also runs the workspace advisory check with all features and the locked graph.
+Vulnerabilities and yanked versions fail the `advisories` job, which is required
+by the aggregate `ci` check alongside native, browser and MSRV jobs.
+See [advisory policy](../DEPENDENCY-MAINTENANCE.md#advisory-policy) for the local
+command and the required advisory ID and reason for every exception. This check
+needs network access; `tools/verify-advisory-policy.py --self-test` checks only
+the repository policy offline.
+
 ## Resolver implementation
 
 The bundled resolver and default evaluator give a unique contained declared ID

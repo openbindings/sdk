@@ -252,7 +252,7 @@ fn key_size(key: &str) -> usize {
         })
         .sum::<usize>()
 }
-// DOC-1.2: build each parent's removal range index once per batch.
+// Build each parent's removal range index once per batch.
 struct RemovalIndex {
     children: Vec<Range<usize>>,
     by_end: HashMap<usize, usize>,
@@ -697,7 +697,7 @@ mod tests {
 
     #[test]
     fn byte_budget_is_preflighted_before_writing_any_replacement() {
-        // DOC-1: known extents refuse before encoding; typed writes stop at the budget.
+        // Known extents refuse before encoding; typed writes stop at the budget.
         struct Witness(Cell<bool>);
         impl WriteJson for Witness {
             fn size(&self) -> Result<Option<usize>, EditError> {
@@ -744,7 +744,7 @@ mod tests {
 
     #[test]
     fn final_parse_charges_node_and_depth_limits_atomically() {
-        // DOC-1: the same parser limits govern the committed revision.
+        // The same parser limits govern the committed revision.
         for limits in [
             JsonLimits {
                 max_nodes: 6,
@@ -773,7 +773,7 @@ mod tests {
     }
     #[test]
     fn removal_planning_indexes_each_parent_once() {
-        // DOC-1.2: count planner work, independent of machine timing.
+        // Count planner work, independent of machine timing.
         for object in [false, true] {
             let items: Vec<_> = (0..1000)
                 .map(|i| {
@@ -824,7 +824,7 @@ mod tests {
     }
     #[test]
     fn typed_serialization_runs_once_and_stops_before_the_byte_budget() {
-        // DOC-1.3: no counting serialization pass and no over-budget write.
+        // No counting serialization pass and no over-budget write.
         struct Witness {
             calls: Cell<usize>,
             fields: Cell<usize>,

@@ -40,10 +40,10 @@ async fn standalone_and_shared_provider_consumers() {
     let work = borrowed.synthesize_with_coverage(&request);
     send(&work);
     let result = work.await.unwrap();
-    // DOC-1.4: this consumer fixture retains main 598ee82 emission bytes.
+    // Stable member order produces these exact consumer document bytes.
     assert_eq!(
         result.document().to_bytes(),
-        include_str!("fixtures/main-598ee82-consumer.json")
+        include_str!("fixtures/consumer-emission.json")
             .trim_end()
             .as_bytes()
     );
@@ -464,8 +464,8 @@ async fn persisted_coverage_identifies_sources_after_request_and_provider_drop()
 }
 
 #[test]
-fn construction_bytes_match_main_for_dependency_and_target_units() {
-    // DOC-1.4: exact main 598ee82 output from the independent review request.
+fn construction_bytes_preserve_member_order_for_dependency_and_target_units() {
+    // Dependency and target units preserve stable member order and exact bytes.
     let source = source(
         r#"{"units":[{"id":"unit0","scope":"dependency"},{"id":"unit1","scope":"target"}]}"#,
     );
@@ -481,7 +481,7 @@ fn construction_bytes_match_main_for_dependency_and_target_units() {
     let candidate = derive(&request, &CancellationToken::new(), false).unwrap();
     assert_eq!(
         candidate.document.to_bytes(),
-        include_str!("fixtures/main-598ee82-catalog.json")
+        include_str!("fixtures/catalog-emission.json")
             .trim_end()
             .as_bytes()
     );

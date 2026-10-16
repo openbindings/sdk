@@ -55,7 +55,7 @@ function deliver(record) {
   return true;
 }
 test("finalizing an editable document preserves separately acquired exact owners", () => {
-  // DOC-1: independently acquired leaves keep their own finalizers.
+  // Independently acquired leaves keep their own finalizers.
   const baseline = testing.liveStorageOwners();
   const document = sdk.Document.parse(
     '{"openbindings":"0.2.0","operations":{"run":{"input":9007199254740993}},"schemas":{"removed":false}}',
@@ -80,7 +80,7 @@ test("finalizing an editable document preserves separately acquired exact owners
   assert.equal(testing.liveStorageOwners(), baseline);
 });
 
-// DOC-1: temporary exact transfer reattaches a finalizer even after refusal.
+// Temporary exact transfer reattaches a finalizer even after refusal.
 test("a returned exact owner is finalized once after a failed edit", () => {
   const baseline = testing.liveStorageOwners();
   const document = sdk.Document.create(),

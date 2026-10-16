@@ -97,15 +97,21 @@ for every hash collision. Work, depth, regex and cancellation allowances and
 original-source diagnostics remain in force.
 
 The separate [benchmark harness](../tools/evaluator-bench/README.md) and
-[advisory workflow](../.github/workflows/performance.yml) record outcomes before
+[performance workflow](../.github/workflows/performance.yml) record outcomes before
 timing and keep allocation instrumentation separate. The fan-in fixture includes
 cold, compile, retained-context preparation, evaluation and full modes. The two
-reference-text fixtures also qualify preparation heap. After
-calibration, shared runners will require a confirmed >20% paired regression above
-the absolute floor and a lower 95% bound >1.20; dedicated runners use >10% / >1.10.
-Heap thresholds are >10% and >128 KiB, allocation counts >5% and >32/op. Noise
-requests a rerun. See the harness for exact floors, confirmation and promotion
-policy.
+reference-text fixtures also qualify preparation heap. Outcome checks, requested
+heap and allocation counts enforce now: failed checks or a heap/count flag fail
+the job. Heap flags require both >10% and >128 KiB for retained baseline, total
+peak, incremental peak or requested bytes/op; count flags require both >5% and
+>32/op. A pair made incomparable by an API change passes with a report.
+
+Timing remains advisory until about 20 calibration runs show stable noise and
+enforcement is explicitly reviewed. Shared runners report a confirmed >20%
+paired regression above the absolute floor and a lower 95% bound >1.20;
+dedicated runners use >10% / >1.10. Timing regressions, inconclusive timing and
+RSS verification flags do not fail the job. Noise requests a rerun. See the
+harness for exact floors, confirmation and calibration policy.
 
 ## Document validation
 

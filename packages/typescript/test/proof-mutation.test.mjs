@@ -1,4 +1,4 @@
-// DOC-1.1: the independent review's proof-mutation.mjs attack, plus raw Wasm receivers.
+// Proof mutation and raw Wasm receivers cannot bypass document conformance.
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as sdk from "../dist/index.js";

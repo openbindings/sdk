@@ -13,13 +13,13 @@ lockfile**, saving separate binaries before the next build:
 cargo build --release --locked --manifest-path tools/evaluator-bench/Cargo.toml
 cargo build --release --locked --features allocations --manifest-path tools/evaluator-bench/Cargo.toml
 python3 tools/evaluator-bench/test_policy.py
-python3 tools/evaluator-bench/compare.py --baseline /path/base --candidate /path/candidate --baseline-alloc /path/base-alloc --candidate-alloc /path/candidate-alloc --output /path/results
+python3 tools/evaluator-bench/compare.py --baseline /path/base --candidate /path/candidate --baseline-alloc /path/base-alloc --candidate-alloc /path/candidate-alloc --output /path/results --enforce
 ```
 
 Use `--workloads array` to replay a single workload. Use an unused output directory.
 When a change alters the public API the instrument calls, the candidate's
 instrument cannot build against the merge base; the workflow then reports the
-pair as not comparable and makes no timing comparison.
+pair as not comparable, passes the job and makes no comparison.
 One fresh child reads one JSON request and emits one JSON-line observation. The
 saved `fixtures.json` contains complete replay requests; add `mode` and
 `iterations` from `commands.jsonl` to feed one directly to a binary. Every case
@@ -59,24 +59,29 @@ baseline, total peak and incremental operation peak are all visible. RSS uses
 three separate uninstrumented children and `wait4` where available; it includes
 runtime and fixture carriage, not just evaluator memory.
 
-The separate workflow is **advisory throughout calibration**: observations and
-regressions are recorded without failing the build. Ordinary CI still requires
-correctness tests. Promotion requires explicit review of runner noise and false
-positives, removing job `continue-on-error`, adding `--enforce`, and making the
-job required. Threshold/fixture edits require performance review; the driver
-never updates accepted expectations automatically.
+The separate workflow **enforces outcome checks, requested heap and allocation
+counts now**, using `--enforce`. Outcome mismatches, failed checks and heap/count
+flags fail the job. Timing decisions and RSS remain advisory, including timing
+regressions and inconclusive measurements. Omitting `--enforce` gives a local
+advisory report without failing on outcome errors or heap/count flags.
+Timing enforcement requires explicit review after about 20 calibration runs
+show stable runner noise and acceptable false positives. Threshold/fixture edits
+require performance review; the driver never updates accepted expectations
+automatically.
 
-Once promoted, shared runners use >20% median regression, lower 95% bound >1.20,
+Advisory timing decisions on shared runners use >20% median regression, lower 95% bound >1.20,
 and an absolute increase >20 ns for small cases, >2 µs for preparation, or >10 µs
 for large cases, confirmed in both independent batches. MAD/median >10%, an
 interval spanning the threshold, or inconsistent batches is **inconclusive** and
-requires a clean rerun. Stable dedicated Linux x86-64 and arm64 runners can use
+requests a clean rerun without failing the job. Stable dedicated Linux x86-64 and arm64 runners can use
 `--dedicated` for >10% / lower bound >1.10 after separate calibration. Dedicated
 runner provisioning is outside this shared-runner workflow.
 
-Requested heap flags require >10% **and** >128 KiB; allocation counts require
->5% **and** >32 per operation. RSS >15% **and** >1 MiB requests dedicated
-verification. Heap and count flags become required on promotion; RSS remains
-advisory. Ratchet improvements per workload against the accepted revision.
+Requested heap flags require >10% **and** >128 KiB for any of retained baseline,
+total peak, incremental operation peak or requested bytes per operation;
+allocation counts require >5% **and** >32 per operation. Both thresholds must be
+exceeded for the same metric. These flags fail enforced runs. RSS >15% **and**
+>1 MiB requests dedicated verification and remains advisory. Ratchet improvements
+per workload against the accepted revision.
 Geometric means and SDK/peer ratios are dashboards, never substitutes for
 per-workload gates or safe refusals. Do not run CPU-heavy tests beside timing.

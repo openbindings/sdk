@@ -1,4 +1,4 @@
-// DOC-1: the one-document facade admits the corpus and runs both evaluator modes.
+// The Document API admits the corpus and runs both evaluator modes.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";

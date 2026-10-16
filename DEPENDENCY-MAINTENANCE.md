@@ -19,6 +19,21 @@ Refresh both attribution inventories and notices offline with
 omitted license is retained as a hash-verified supplement from the same pinned
 upstream revision, not dropped when its fork disappears.
 
+## Advisory policy
+
+The required `advisories` job in [CI](.github/workflows/ci.yml) runs
+`cargo deny --workspace --all-features --locked check advisories` on pull requests
+and pushes to `main`. It checks the workspace lockfile, including optional native
+TLS dependencies. Vulnerabilities fail cargo-deny's advisory check; [deny.toml](deny.toml)
+also denies yanked versions. The aggregate `ci` check requires this job to pass.
+
+There are no ignored advisories. Any exception must identify a RustSec advisory
+and include a written justification in an `{ id = "...", reason = "..." } entry.
+Bare IDs and crate/version ignores are forbidden. CI and the local source replay
+enforce that format with `python3 tools/verify-advisory-policy.py --self-test`.
+The advisory check needs network access to current RustSec and registry data;
+offline policy validation does not establish that dependencies are advisory-free.
+
 ## Numeric ownership and consumer features
 
 Exact Decimal arithmetic belongs to `openbindings-internal-json/src/decimal.rs`.

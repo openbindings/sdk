@@ -1,4 +1,4 @@
-//! DOC-1: editing, exactness and retained proof regressions.
+//! Document edits preserve exact bytes and retained proof ownership.
 use openbindings::*;
 use std::{collections::BTreeMap, ops::Range, path::Path};
 
@@ -448,7 +448,7 @@ fn generated_edit_sequences_over_every_corpus_document_match_reparsed_text() {
 
 #[test]
 fn removing_the_only_child_and_inserting_siblings_uses_one_separator_group() {
-    // DOC-1: comma planning depends on the batch, not just the old map.
+    // Comma planning depends on the batch, not just the old map.
     for (source, removed, inserted, expected) in [
         (r#"{"a":1 }"#, "/a", "/b", r#"{ "b":2}"#),
         ("[1 ]", "/0", "/-", "[ 2]"),
@@ -469,7 +469,7 @@ fn removing_the_only_child_and_inserting_siblings_uses_one_separator_group() {
 
 #[test]
 fn every_typed_part_setter_matches_an_exact_reference_sequence() {
-    // DOC-1: exercise all construction namespaces with escaped keys.
+    // Exercise all construction namespaces with escaped keys.
     let mut seed = 0x9876_5432u64;
     let mut document = Document::new();
     let mut expected = String::from_utf8(document.to_bytes().to_vec()).unwrap();
@@ -536,7 +536,7 @@ fn every_typed_part_setter_matches_an_exact_reference_sequence() {
 
 #[test]
 fn typed_namespace_batch_preserves_exact_bytes_and_is_atomic() {
-    // DOC-1.3: typed maps and pointer edits share a single atomic revision.
+    // Typed maps and pointer edits share a single atomic revision.
     let mut document =
         Document::parse(" {\n\"openbindings\":\"0.2.0\",\"operations\":{},\"x-keep\": 1e+00 } ")
             .unwrap();
