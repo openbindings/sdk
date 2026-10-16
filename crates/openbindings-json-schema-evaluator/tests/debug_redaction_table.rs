@@ -3,8 +3,8 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Diagnostics};
 use std::fmt::Debug;
 use std::sync::Arc;
-// Keep the independent review's exact credential and pointer probe value.
-const SECRET: &str = "REVIEW-BEARER-TOKEN-7391";
+// A credential-shaped probe value; Debug output must never contain it.
+const SECRET: &str = "PROBE-BEARER-TOKEN-7391";
 const NUMBER: &str = "739173917391";
 
 struct Row {
@@ -61,7 +61,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
         rows.push(row("actual evaluator outcome", &result));
     }
 
-    // Keep all three Upstream probes from the independent review, including their operands.
+    // Three Upstream-mode probes, including their operands.
     let mut rendered = Vec::new();
     for (code, schema, instance) in [
         ("type", serde_json::json!({"type":"string"}), "7"),

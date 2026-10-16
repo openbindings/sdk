@@ -1,8 +1,8 @@
 //! Debug is structural. Explicit display/accessors/serialization retain payloads.
 use openbindings_internal_json::*;
 use std::fmt::Debug;
-// Keep the independent review's exact credential and pointer probe value.
-const SECRET: &str = "REVIEW-BEARER-TOKEN-7391";
+// A credential-shaped probe value; Debug output must never contain it.
+const SECRET: &str = "PROBE-BEARER-TOKEN-7391";
 const NUMBER: &str = "739173917391";
 
 struct Row {
@@ -94,7 +94,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
     ] {
         record_error(&mut rows, JsonValue::parse(input).unwrap_err(), code);
     }
-    // These are the reviewer's exact limit probes; byte/depth failures share offset zero.
+    // Limit probes for each JSON limit; byte and depth failures share offset zero.
     for (code, limits) in [
         (
             "byte-limit",
@@ -129,7 +129,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
         &InputError {
             kind: InputErrorKind::Limit,
             byte_offset: 0,
-            code: "byte-limit-REVIEW-BEARER-TOKEN-7391",
+            code: "byte-limit-PROBE-BEARER-TOKEN-7391",
         },
         &[("code", "<redacted>")],
     ));

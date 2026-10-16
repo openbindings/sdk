@@ -6,7 +6,7 @@ fn checked(text: &str) -> DocumentValidation {
 
 #[test]
 fn independent_violations_survive_unpaired_and_deep_opaque_data() {
-    // every row of the review's evidence table.
+    // Each row pairs a document with the rules it independently violates.
     for (text, rules) in [
         (r#"{"openbindings":"0.2.0","description":"\ud800"}"#.to_owned(), vec!["OBI-02"]),
         (r#"{"openbindings":"0.2.0","operations":{"-bad":{}},"description":"\ud800"}"#.into(), vec!["OBI-02", "OBI-04"]),
