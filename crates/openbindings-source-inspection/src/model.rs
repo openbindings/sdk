@@ -221,7 +221,7 @@ pub struct SourceInspection {
     pub targets: Vec<BindableTarget>,
     /// Whether every admitted target was reported.
     pub exhaustive: bool,
-    /// Required for an incomplete inventory. The role also permits evidence on a
+    /// Required for an incomplete inventory. The interface also permits evidence on a
     /// complete result; consumers use `exhaustive` as the completeness signal.
     pub limitation: Option<InspectionLimitation>,
 }

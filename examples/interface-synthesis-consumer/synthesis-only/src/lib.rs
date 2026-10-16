@@ -40,10 +40,7 @@ impl InterfaceSynthesizer for Skeleton {
             document.edit(&edits)?;
             Ok(SynthesisCandidate {
                 document,
-                coverage: CoverageDraft {
-                    exhaustive: true,
-                    ..Default::default()
-                },
+                coverage: CoverageClaim::complete(Vec::new()),
             })
         })())
     }

@@ -1596,14 +1596,14 @@ mod tests {
             "properties": {"name": {"type": "string"}},
             "required": ["name"]
         });
-        let role_schema = json!({
+        let permission_schema = json!({
             "type": "string",
             "enum": ["admin", "user", "guest"]
         });
         let registry = crate::Registry::new()
             .add("https://example.com/user.json", &user_schema)
             .expect("valid resource")
-            .add("https://example.com/role.json", &role_schema)
+            .add("https://example.com/role.json", &permission_schema)
             .expect("valid resource")
             .prepare()
             .expect("registry build failed");
@@ -1663,14 +1663,14 @@ mod tests {
             "properties": {"name": {"type": "string"}},
             "required": ["name"]
         });
-        let role_schema = json!({
+        let permission_schema = json!({
             "type": "string",
             "enum": ["admin", "user", "guest"]
         });
         let registry = crate::Registry::new()
             .add("https://example.com/user.json", &user_schema)
             .expect("valid resource")
-            .add("https://example.com/role.json", &role_schema)
+            .add("https://example.com/role.json", &permission_schema)
             .expect("valid resource")
             .prepare()
             .expect("registry build failed");

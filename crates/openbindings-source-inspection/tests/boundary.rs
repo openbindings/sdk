@@ -288,7 +288,7 @@ fn inconsistent_advisory_list_is_rejected() {
 fn exact_encoding_budgets_and_opaque_values_are_preserved() {
     let mut item = target();
     // Neither a duplicate name nor a lone UTF-16 surrogate in opaque binding
-    // content is normalized by this role. Kind semantics decide interpretation.
+    // content is normalized by this interface. Kind semantics decide interpretation.
     let content = r#"{"same":1,"same":2,"surrogate":"\uD800","huge":9007199254740993}"#;
     item.binding.content = Some(JsonValue::parse(content).unwrap());
     let result = SourceInspection::complete(vec![item]);

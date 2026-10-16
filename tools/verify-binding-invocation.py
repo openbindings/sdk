@@ -164,8 +164,8 @@ def main():
         run("typescript", ["node", args.tsc.resolve(), "--strict", "--target", "ES2022", "--module", "commonjs", "--lib", "ES2022,DOM,ESNext.Disposable", host / "wasm-probe.ts"])
         run("wasm-host", ["node", host / "wasm-probe.js"])
 
-    role = sources["openbindings-invocation"] / "src/lib.rs"
-    pin = re.search(r'APPLIED_ROLE_REVISION: &str =\s*"([0-9a-f]{40})"', role.read_text())
+    interface = sources["openbindings-invocation"] / "src/lib.rs"
+    pin = re.search(r'APPLIED_INTERFACE_REVISION: &str =\s*"([0-9a-f]{40})"', interface.read_text())
     if pin is None:
         raise SystemExit("Invocation authority revision is not pinned")
     if input_hashes() != input_snapshot:

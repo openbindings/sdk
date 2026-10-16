@@ -28,10 +28,7 @@ pub fn candidate(s: &Source) -> SynthesisCandidate {
     .unwrap();
     SynthesisCandidate {
         document: b.clone(),
-        coverage: CoverageDraft {
-            exhaustive: true,
-            ..Default::default()
-        },
+        coverage: CoverageClaim::complete(Vec::new()),
     }
 }
 pub struct Fixed {
@@ -131,7 +128,7 @@ pub fn entry(v: JsonRef<'_>) -> CoverageEntry {
 pub fn from_case(v: JsonRef<'_>) -> SynthesisCandidate {
     SynthesisCandidate {
         document: Document::parse(v.get("interface").unwrap().text()).unwrap(),
-        coverage: CoverageDraft {
+        coverage: CoverageClaim {
             entries: v
                 .get("entries")
                 .unwrap()

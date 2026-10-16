@@ -19,14 +19,14 @@ use std::{
     },
 };
 
-const ROLE: &str = include_str!("fixtures/binding-invoker-0.1.json");
+const INTERFACE: &str = include_str!("fixtures/binding-invoker-0.1.json");
 const OPEN: &str = r#"{"kind":"open","input":{"source":{"kind":"fixture.frames"},"binding":{}}}"#;
 
 fn json(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
 }
 
-// These envelopes match the pinned role shapes. The mapper's malformed-frame
+// These envelopes match the pinned interface shapes. The mapper's malformed-frame
 // classification, admission order and lifecycle traces are this SDK's policy;
 // interface adoption does not prescribe these internal choices.
 fn fields(kind: &str, output: bool) -> Option<&'static [&'static str]> {
@@ -305,13 +305,13 @@ async fn start_native(frame: &JsonValue, provider: &Fixture) -> Result<(), Invoc
 }
 
 #[test]
-fn pinned_role_has_the_complete_closed_frame_envelopes_used_by_the_mapper() {
-    let role = json(ROLE);
+fn pinned_interface_has_the_complete_closed_frame_envelopes_used_by_the_mapper() {
+    let interface = json(INTERFACE);
     for (schema, output) in [
         ("BindingInvokerInputFrame", false),
         ("BindingInvokerOutputFrame", true),
     ] {
-        let variants = role.at(&format!("/schemas/{schema}/oneOf")).unwrap();
+        let variants = interface.at(&format!("/schemas/{schema}/oneOf")).unwrap();
         assert_eq!(variants.len(), Some(if output { 4 } else { 3 }));
         for variant in variants.elements().unwrap() {
             assert_eq!(variant.get("type").unwrap().as_str(), Some("object"));
@@ -679,7 +679,7 @@ fn malformed_output_and_invalid_safe_challenges_are_not_portable_successes() {
 }
 
 #[test]
-fn operation_role_reuses_the_same_closed_frame_protocol() {
+fn operation_interface_reuses_the_same_closed_frame_protocol() {
     use serde_json::Value;
     // Ignore explanatory annotations, retaining every executable schema keyword.
     fn executable(value: &mut Value) {
@@ -699,7 +699,7 @@ fn operation_role_reuses_the_same_closed_frame_protocol() {
             _ => (),
         }
     }
-    let mut binding: Value = serde_json::from_str(ROLE).unwrap();
+    let mut binding: Value = serde_json::from_str(INTERFACE).unwrap();
     let mut operation: Value =
         serde_json::from_str(include_str!("fixtures/operation-invoker-0.1.json")).unwrap();
     executable(&mut binding);

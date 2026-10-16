@@ -10,7 +10,7 @@ use std::{
     task::Poll,
 };
 
-/// Implementer seam for the Source Inspector role. Consumers use [`Inspector`].
+/// Implementer seam for the Source Inspector interface. Consumers use [`Inspector`].
 ///
 /// Each implementation owns kind semantics, source acquisition and any host
 /// handles. Checks must be pure and deterministic for its version/configuration.
@@ -80,7 +80,7 @@ forward_inspector!(&P, std::sync::Arc<P>, std::rc::Rc<P>);
 /// Checked consumer entry point around a source-inspection provider.
 ///
 /// Own one per provider configuration and reuse it. Wrap `&P`, `Arc<P>` or `Rc<P>`
-/// to reuse an existing provider and its state across independent roles.
+/// to reuse an existing provider and its state across independent interfaces.
 /// This is not a registry or a
 /// transport. The source is borrowed during work; returned inventories own their
 /// values and remain valid after the source/provider are dropped.
@@ -90,7 +90,7 @@ pub struct Inspector<P> {
 }
 
 impl<P: SourceInspector> Inspector<P> {
-    /// Wrap a provider with role boundary checks.
+    /// Wrap a provider with interface boundary checks.
     pub fn new(provider: P) -> Self {
         Self { provider }
     }

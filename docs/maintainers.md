@@ -121,7 +121,7 @@ bridge, not a released TypeScript API or browser deployment. Run
 
 Context provisioning and protocol transports remain application responsibilities.
 The SDK supplies no kind-specific instances. The separate
-[OpenAPI project](https://github.com/openbindings/openapi) implements the roles. Operation consumer and cancellation tests, the shared
+[OpenAPI project](https://github.com/openbindings/openapi) implements the interfaces. Operation consumer and cancellation tests, the shared
 Catalog pipeline, and the expanded Node/Wasm probe qualify the operation layer.
 The resource probe records warmed binding-versus-operation overhead and owner
 release; it does not claim HTTP parity, browser memory bounds, or arbitrary schema

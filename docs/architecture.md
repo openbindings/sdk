@@ -32,15 +32,15 @@ caller-provided transport and immutable publication from its optional native HTT
 client. The TypeScript companion uses ordinary Fetch callbacks. No acquisition URL
 is injected into document/schema interpretation.
 
-`openbindings-source-inspection` is a separate optional Rust role companion. Kind
+`openbindings-source-inspection` is a separate optional Rust interface companion. Kind
 providers implement an associated-future trait; callers use a checked `Inspector`.
-It reuses core authoring values while enforcing the role's narrower carrier rules.
+It reuses core authoring values while enforcing the interface's narrower carrier rules.
 Acquisition stays in providers. Binding fragments omit author-owned keys. It adds
-no dependency from core to role behavior; its narrow Wasm probe does not extend the
-published TypeScript surface. See the [role mapping](../crates/openbindings-source-inspection/README.md).
+no dependency from core to interface behavior; its narrow Wasm probe does not extend the
+published TypeScript surface. See the [interface mapping](../crates/openbindings-source-inspection/README.md).
 
 `openbindings-wasm` is a private bridge behind the first-class TypeScript facade,
-separate from the Rust role companions.
+separate from the Rust interface companions.
 Rust owns semantic work and exact values. The facade exposes discriminated outcomes,
 checked JS conveniences, immutable resource sets and disposable retained handles.
 Repeated UI metadata reads use cached JS snapshots. It performs no second schema
@@ -53,7 +53,7 @@ not sample applications to be migrated. Arbitrary
 JavaScript evaluator callbacks, a Node native addon, source retrieval and CLI/Panjir
 migration remain separate design work.
 
-`openbindings-interface-synthesis` is a separate optional role companion, with no
+`openbindings-interface-synthesis` is a separate optional interface companion, with no
 dependency on inspection. Providers return editable candidates; the `Synthesizer`
 facade checks core conformance, source preservation and coverage correspondence
 before delivering immutable results. Strict refusal retains the checked document
@@ -66,13 +66,13 @@ without inspection, synthesis, HTTP or a mandatory runtime. Caller polling
 drives bounded I/O; source interpretation and external effects remain provider
 responsibilities. `operation::Invoker` adds explicit document-based selection and
 per-value validation through a caller-selected evaluator, returning that same
-lifecycle. Context provisioning and remote role transports remain separate work.
+lifecycle. Context provisioning and remote interface transports remain separate work.
 The invocation companion's
 [public guide](../crates/openbindings-invocation/README.md) describes both entry
 points and the maintained lifecycle tests.
 
-The SDK supplies the three role contracts and checked caller APIs without
+The SDK supplies the three interface contracts and checked caller APIs without
 kind-specific instances. Providers own source interpretation, kind soundness and
 external effects. [openbindings/openapi](https://github.com/openbindings/openapi)
-is a separate project that implements these roles using the independent client.
+is a separate project that implements these interfaces using the independent client.
 It depends on the SDK; the SDK workspace, tools and examples do not depend on it.

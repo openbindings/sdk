@@ -19,7 +19,7 @@ It is a qualification fixture, not a public binding specification. Content requi
 `units`, an array with unique `(scope, id)` pairs and nonempty Unicode scalar IDs.
 Omitted scope means `target`; omitted status means `represented`. Supported scopes
 are target, alternative, projection and dependency; supported statuses are the
-five role dispositions. Unknown/non-string identifiers and unknown scope/status
+five interface dispositions. Unknown/non-string identifiers and unknown scope/status
 labels refuse as wholly unreadable. The optional `unknownRemainder: true` declares
 that the observed inventory cannot establish completeness.
 
@@ -57,7 +57,7 @@ source names with equal carriers may share the emitted source; both input indice
 still have distinct coverage. A single-source provider refuses arity before analysis.
 
 Inspection lists target-scope admitted units, including a synthesis-unsupported
-unit; projection limitations do not hide inspectable targets. Neither role calls
+unit; projection limitations do not hide inspectable targets. Neither interface calls
 the other. The core SDK remains independent of this source semantics.
 
 ## Recovery and persistence

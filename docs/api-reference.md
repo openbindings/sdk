@@ -10,9 +10,9 @@ for a complete job; use the definitions for exact result, ownership and limit co
 | Rust default evaluator | [`openbindings-json-schema-evaluator`](../crates/openbindings-json-schema-evaluator/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-json-schema-evaluator` |
 | Rust evaluator contract kit | [`openbindings-schema-evaluator-test-support`](../crates/openbindings-schema-evaluator-test-support/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-schema-evaluator-test-support` |
 | Rust HTTP discovery | [`openbindings-http-discovery`](../crates/openbindings-http-discovery/src/lib.rs), including native adapter | `cargo doc --locked --no-deps -p openbindings-http-discovery --features native` |
-| Rust source inspection role | [`openbindings-source-inspection`](../crates/openbindings-source-inspection/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-source-inspection` |
-| Rust interface synthesis role | [`openbindings-interface-synthesis`](../crates/openbindings-interface-synthesis/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-interface-synthesis` |
-| Rust binding and operation invocation roles | [`openbindings-invocation`](../crates/openbindings-invocation/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-invocation` |
+| Rust source inspection interface | [`openbindings-source-inspection`](../crates/openbindings-source-inspection/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-source-inspection` |
+| Rust interface synthesis interface | [`openbindings-interface-synthesis`](../crates/openbindings-interface-synthesis/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-interface-synthesis` |
+| Rust binding and operation invocation interfaces | [`openbindings-invocation`](../crates/openbindings-invocation/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-invocation` |
 | Shared Rust cancellation definitions | [`openbindings-internal-cancellation`](../crates/openbindings-internal-cancellation/src/lib.rs), reexported by all four async companions | `cargo doc --locked --no-deps -p openbindings-internal-cancellation` |
 | TypeScript core and HTTP discovery | [`internal.ts`](../packages/typescript/src/internal.ts), as exported by the two entry points | Build the package, then run `node packages/typescript/scripts/check-api-reference.mjs target/api-reference` |
 | TypeScript testing | [`testing.ts`](../packages/typescript/src/testing.ts), exported by `@openbindings/sdk/testing` | Included in the TypeScript reference renderer |
@@ -41,6 +41,7 @@ under `# Errors`; validation outcomes (including `DocumentValidation`) and confi
 | Public item | Contract |
 | --- | --- |
 | `Document::parse`, `Document::from_json` | Admit exact JSON without a conformance claim, including malformed documents. |
+| `is_valid_name` | Tests the specification's ASCII name grammar without normalizing the name. |
 | `Document::new` | Create an empty OBI declaring the authoring version. |
 | `Document::set`, `remove`, `edit(&[Edit])` | Require a mutable borrow. One atomic splice and parse per batch, exact untouched bytes, compact insertions, default JSON limits. |
 | Typed field and part setters | Edit descriptions, names, versions, operation schemas and typed operations, bindings, sources, dependencies and examples. Map setters support bulk construction. |
@@ -101,15 +102,18 @@ fixed preparation codes. It redacts candidate keys, custom codes, messages and
 original schema text and locations. Display and the error source can expose
 custom evaluator messages; callers choose their disclosure policy.
 
-## Optional Rust role APIs
+## Optional Rust companion APIs
 
 Source inspection uses `SourceInspector` and `Inspector`; interface synthesis uses
 `InterfaceSynthesizer` and `Synthesizer`. Invocation uses `binding::BindingInvoker`
-with `binding::Invoker` or `operation::Invoker`. These provisional roles have no
-public TypeScript role API.
+with `binding::Invoker` or `operation::Invoker`. These provisional companion APIs
+are not exported by the TypeScript facade.
 
 | Public item | Contract |
 | --- | --- |
+| `INTERFACE_VERSION`, `APPLIED_INTERFACE_REVISION` | In invocation, source inspection and interface synthesis: the published interface version implemented, independent of the crate's own version, and the revision of the interfaces repository applied. HTTP discovery keeps its separate companion constants. |
+| `CoverageClaim::complete(entries)` | Claims an exhaustive inventory with no limitation; the synthesis facade checks correspondence before returning `SynthesisCoverage`. |
+| `ProviderInput: futures_core::Stream<Item = JsonValue>` | Poll-based input delivery sharing the inherent `next` implementation; preserves backpressure, cancellation, validation failure suspension and terminal ordering. `close` discards unread input. |
 | `binding::BindingPreflight` | Optional provider trait extending `BindingInvoker`; its `Preflight<'a>` associated future and `preflight` method report advisory context requirements or no prediction. |
 | `binding::Invoker::preflight_with_provider`, `operation::Invoker::preflight_with_provider` | Opt into the provider hook after checked admission; require `P: BindingPreflight`. |
 | `binding::Invoker::preflight_with_provider_and_control`, `operation::Invoker::preflight_with_provider_and_control` | The same provider preflight with caller cancellation, isolated from sibling attempts. |
