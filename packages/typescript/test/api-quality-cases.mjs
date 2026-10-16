@@ -51,6 +51,72 @@ export async function apiQualityCases(sdk, http) {
   warm.value.dispose();
   const baseline = testing.liveStorageOwners();
   try {
+    // OBI-01's five new cases plus CONFORMANCE-06, also run after npm packing.
+    for (const [token, member, conforms] of [
+      [String.raw`"\ud800"`, false, false],
+      [String.raw`"\udc00"`, true, false],
+      [String.raw`"\ude00\ud83d"`, false, false],
+      [String.raw`"\ud83d\ude00"`, false, true],
+      [String.raw`"\uffff"`, false, true],
+      [String.raw`"\ud800"`, false, false],
+    ]) {
+      const text = member
+        ? `{"openbindings":"0.2.0","operations":{"op":{"input":{"type":"object","properties":{${token}:{}}}}}}`
+        : `{"openbindings":"0.2.0","description":${token},"operations":{}}`;
+      const document = parsed(text);
+      const checked = document.validate();
+      if (checked.status === "conformant") own(checked.document);
+      check(
+        (checked.status === "conformant") === conforms,
+        "surrogate proof boundary",
+      );
+      check(
+        new TextDecoder().decode(document.toBytes()) === text,
+        "exact draft bytes",
+      );
+      for (const validation of [checked, sdk.validateDocument(text)]) {
+        check(validation.status !== "version-refused", "supported version");
+        const report = validation.report;
+        check(
+          report.conclusion === (conforms ? "conformant" : "non-conformant"),
+          "surrogate conclusion",
+        );
+        check(
+          report.findings.length === (conforms ? 0 : 1),
+          "surrogate findings count",
+        );
+        for (const [rule, evidence] of Object.entries(report.evidence))
+          check(
+            evidence ===
+              (conforms
+                ? "met"
+                : rule === "OBI-01"
+                  ? "violated"
+                  : "not-applicable"),
+            "rule prerequisites",
+          );
+        if (!conforms) {
+          const finding = report.findings[0];
+          check(
+            finding.rule === "OBI-01" && finding.code === "unpaired-surrogate",
+            "surrogate rule and code",
+          );
+          check(
+            finding.location.pointer === (member ? null : "/description"),
+            "surrogate pointer",
+          );
+          check(
+            finding.location.byteOffset === text.indexOf(token),
+            "surrogate token offset",
+          );
+          check(
+            finding.location.line === 1 &&
+              finding.location.byteColumn === text.indexOf(token) + 1,
+            "surrogate line and column",
+          );
+        }
+      }
+    }
     check(
       !("discover" in sdk) && !("DiscoveryPublication" in sdk),
       "root HTTP removals",

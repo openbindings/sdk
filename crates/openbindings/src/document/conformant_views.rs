@@ -18,7 +18,7 @@ fn texts<'a>(
 }
 macro_rules! conformant_view {
     ($name:ident, $plain:ident) => {
-        #[doc = concat!("Retained ", stringify!($plain), " with document conformance proof. Field reads are infallible; exact strings preserve unpaired UTF-16. Clones and views survive parent drop.")]
+        #[doc = concat!("Retained ", stringify!($plain), " with document conformance proof. Field reads are infallible; OBI-01 establishes scalar text while exact strings retain original tokens. Clones and views survive parent drop.")]
         #[derive(Clone, Debug)]
         pub struct $name {
             _document: Conformant<Document>,

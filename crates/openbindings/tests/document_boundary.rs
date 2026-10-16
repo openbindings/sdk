@@ -69,11 +69,11 @@ fn deep_carriage_and_deeper_grammar_have_distinct_limits() {
     }
 }
 #[test]
-fn lone_surrogates_remain_exact_and_are_not_syntax_errors() {
+fn lone_surrogates_remain_exact_but_violate_document_conformance() {
     let text = r#"{"openbindings":"0.2.0","operations":{},"x-data":"\ud800"}"#;
     let checked = validation(text);
-    assert_eq!(checked.report().conclusion, Conformance::Conformant);
-    assert_eq!(checked.report().evidence["OBI-01"], Evidence::Met);
+    assert_eq!(checked.report().conclusion, Conformance::NonConformant);
+    assert_eq!(checked.report().evidence["OBI-01"], Evidence::Violated);
     assert_eq!(checked.document().unwrap().to_bytes(), text.as_bytes());
     let duplicate = validation(r#"{"openbindings":"0.2.0","operations":{},"\ud800":1,"\ud800":2}"#);
     assert_eq!(duplicate.report().evidence["OBI-01"], Evidence::Violated);

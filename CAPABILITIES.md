@@ -18,7 +18,11 @@ Exact JSON retains numeric tokens, escaped UTF-16, duplicate-member evidence,
 unknown fields and original source locations. Typed authoring preserves opaque
 values while re-encoding typed fields. Checked conversion of ordinary application
 data refuses unsupported or inexact representations. Conversion cannot restore
-precision already lost by the application.
+precision already lost by the application. Document conformance rejects an escaped
+unpaired surrogate in any member name or string value as OBI-01, including opaque
+content and embedded schemas. OBI-02 through OBI-13 then do not apply. Escaped
+surrogate pairs and noncharacters remain permitted. Draft inspection, caller
+values and supplied schema resources still retain unpaired UTF-16 units exactly.
 
 Default parsing admits 64 MiB, 10,000 container levels and 1,000,000 nodes.
 Ordinary Rust Serde conversion has a 128-container ceiling. Document reports

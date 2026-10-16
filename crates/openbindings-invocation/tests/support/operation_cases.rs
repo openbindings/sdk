@@ -887,49 +887,50 @@ fn invalid_binding_targets_are_rejected_before_invoker_construction() {
     }
 }
 
-#[tokio::test]
-async fn exact_metadata_refuses_lossy_interface_handoff_before_effects() {
+#[test]
+fn unpaired_metadata_is_rejected_before_invoker_construction() {
     let provider = Provider::new(Mode::Empty);
-    let non_scalar_kind = doc(
-        r#"{"echo":{}}"#,
-        r#"{"b":{"operation":"echo","source":"s"}}"#,
-        r#"{"s":{"kind":"\ud800"}}"#,
-    )
-    .validate()
-    .unwrap()
-    .conformant()
-    .unwrap();
-    let invoker = Invoker::new(non_scalar_kind, &provider);
-    assert_code(
-        outcome(&invoker, Request::binding("b")).await,
-        "ERR_BINDING_NOT_FOUND",
-    );
+    // These drafts cannot produce the proof required by Invoker::new. The
+    // former lossy handoff path is now rejected at document conformance.
     for (bindings, sources, path) in [
         (
             r#"{"b":{"operation":"echo","source":"s"}}"#,
+            r#"{"s":{"kind":"\ud800"}}"#,
+            "/sources/s/kind",
+        ),
+        (
+            r#"{"b":{"operation":"echo","source":"s"}}"#,
             r#"{"s":{"kind":"fixture","description":"\ud800"}}"#,
-            "/source/description",
+            "/sources/s/description",
         ),
         (
             r#"{"b":{"operation":"echo","source":"s","description":"\ud800"}}"#,
             r#"{"s":{"kind":"fixture"}}"#,
-            "/binding/description",
+            "/bindings/b/description",
         ),
     ] {
-        let proof = doc(r#"{"echo":{}}"#, bindings, sources)
-            .validate()
-            .unwrap()
-            .conformant()
-            .unwrap();
-        let invoker = Invoker::new(proof, &provider);
-        let mut call = invoker.invoke(Request::binding("b"));
-        call.close();
+        let validation = doc(r#"{"echo":{}}"#, bindings, sources).validate().unwrap();
+        assert!(validation.conformant().is_none());
         assert_eq!(
-            call.next().await.unwrap().unwrap_err().code(),
-            "ERR_REFUSED"
+            validation.report().conclusion,
+            openbindings::Conformance::NonConformant
         );
-        assert_eq!(call.boundary_error().unwrap().path(), path);
-        assert_eq!(call.boundary_error().unwrap().code(), "unpaired-string");
+        assert_eq!(
+            validation.report().evidence["OBI-01"],
+            openbindings::Evidence::Violated
+        );
+        assert_eq!(
+            validation.report().evidence["OBI-02"],
+            openbindings::Evidence::NotApplicable
+        );
+        assert_eq!(validation.report().findings.len(), 1);
+        let finding = &validation.report().findings[0];
+        assert_eq!(finding.rule, "OBI-01");
+        assert_eq!(
+            finding.location.as_ref().unwrap().pointer.as_deref(),
+            Some(path)
+        );
+        assert_eq!(finding.code, "unpaired-surrogate");
         assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
     }
 }

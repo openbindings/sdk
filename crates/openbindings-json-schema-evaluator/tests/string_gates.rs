@@ -3,16 +3,22 @@ use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::sync::Arc;
 
 fn prepare(schema: &str, extra: &str) -> ValueContract {
-    let text = format!(
-        r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema},"examples":{{"e":{{"input":"\ud800"}}}}}}}}{extra}}}"#
-    );
-    let document = Document::parse(&text).unwrap();
+    // Schema text and opaque examples live in a supplied resource. OBI-01
+    // governs the interface document, not supplied schemas or caller values.
+    let text = r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://strings.invalid/schema#/$defs/target"}}}}"#;
+    let resource = format!(r#"{{"$defs":{{"target":{schema}}},"examples":["\ud800"]{extra}}}"#);
+    let resources = ResourceSet::new([SchemaResource {
+        uri: "https://strings.invalid/schema".into(),
+        document: JsonValue::parse(resource).unwrap(),
+    }])
+    .unwrap();
+    let document = Document::parse(text).unwrap();
     let contracts = document
         .validate()
         .unwrap()
         .conformant()
         .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
+        .value_contracts(Arc::new(DefaultEvaluator::new()), resources);
     let ValueContractPreparation::Ready(contract) = contracts.prepare("op", Direction::Input)
     else {
         panic!("{text}")
@@ -24,7 +30,7 @@ fn outcome(schema: &str, value: &str) -> ValueOutcome {
 }
 #[test]
 fn uninterpreted_surrogates_do_not_disable_contracts() {
-    // description, example and source content, plus reached annotations.
+    // Supplied resource metadata and opaque content, plus reached annotations.
     for extra in [
         r#", "description":"cut \ud83d""#,
         r#", "sources":{"s":{"kind":"k","content":"\ud800"}}"#,

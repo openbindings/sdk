@@ -257,8 +257,16 @@ fn ambiguous_json_refusals_are_not_replaced_by_field_guidance() {
     );
     let unpaired =
         validate_document(r#"{"openbindings":"0.2.0","operations":{},"\ud800":0}"#).unwrap();
-    assert_eq!(unpaired.report().evidence["OBI-02"], Evidence::Violated);
-    assert_eq!(unpaired.report().findings[0].message, UNEXPECTED);
+    assert_eq!(unpaired.report().evidence["OBI-01"], Evidence::Violated);
+    assert_eq!(
+        unpaired.report().evidence["OBI-02"],
+        Evidence::NotApplicable
+    );
+    assert_eq!(unpaired.report().findings[0].code, "unpaired-surrogate");
+    assert_eq!(
+        unpaired.report().findings[0].message,
+        "member name or string value holds an unpaired surrogate escape"
+    );
     assert_eq!(
         unpaired.report().findings[0]
             .location
@@ -272,7 +280,7 @@ fn ambiguous_json_refusals_are_not_replaced_by_field_guidance() {
 #[test]
 fn fixed_messages_are_value_free_and_property_names_locate_original_tokens() {
     // Findings use validity and original tokens, never library error payloads.
-    let text = r#"{"openbindings":"0.2.0","operations":{"-secret":{},".private":{},"\ud800":{}},"dependencies":{"d":{"operation":"-secret","kinds":[]}},"schemas":{"s":{"$anchor":"1private","minLength":-1}}}"#;
+    let text = r#"{"openbindings":"0.2.0","operations":{"-secret":{},".private":{},"\ud83d\ude00":{}},"dependencies":{"d":{"operation":"-secret","kinds":[]}},"schemas":{"s":{"$anchor":"1private","minLength":-1}}}"#;
     let validation = validate_document(text).unwrap();
     for (fragment, pointer) in [
         (
@@ -295,7 +303,7 @@ fn fixed_messages_are_value_free_and_property_names_locate_original_tokens() {
             "{pointer}"
         );
     }
-    for token in [r#""-secret""#, r#"".private""#, r#""\ud800""#] {
+    for token in [r#""-secret""#, r#"".private""#, r#""\ud83d\ude00""#] {
         assert!(
             validation
                 .report()

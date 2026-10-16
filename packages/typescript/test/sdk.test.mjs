@@ -274,7 +274,7 @@ test("Fetch discovery keeps assessment and transport distinctions with complete 
   for (const [body, expected] of [
     ["{", "non-conformant"],
     ['{"openbindings":"8.0.0"}', "version-refused"],
-    // a lone surrogate does not hide the invalid extension name "x".
+    // OBI-01 excludes the surrogate before later document rules apply.
     [
       '{"openbindings":"0.2.0","operations":{},"x":"\\ud800"}',
       "non-conformant",

@@ -291,7 +291,7 @@ async fn complete_bad_body_and_version_priority_survive_with_metadata() {
         DEFAULT_MAX_DOCUMENT_BYTES,
     )
     .await;
-    // a lone surrogate does not hide the invalid extension name "x".
+    // OBI-01 excludes the surrogate before later document rules apply.
     assert!(matches!(r.outcome, DiscoveryOutcome::NonConformant { .. }));
     assert!(r.body.is_some());
 }
@@ -487,13 +487,30 @@ fn publication_refuses_every_unestablished_conformance_state() {
         ),
         Err(PublicationError::VersionRefused(_))
     ));
-    // publication accepts a conformant document with an opaque surrogate.
-    assert!(
-        Publication::from_bytes(
-            br#"{"openbindings":"0.2.0","operations":{},"x-value":"\ud800"}"#,
-            PublicationOptions::default()
-        )
-        .is_ok()
+    // Publication applies the core document boundary, including opaque content.
+    let error = Publication::from_bytes(
+        br#"{"openbindings":"0.2.0","operations":{},"x-value":"\ud800"}"#,
+        PublicationOptions::default(),
+    )
+    .unwrap_err();
+    let PublicationError::NonConformant(validation) = error else {
+        panic!("expected OBI-01 rejection")
+    };
+    let report = validation.report();
+    assert_eq!(report.evidence["OBI-01"], openbindings::Evidence::Violated);
+    assert_eq!(
+        report.evidence["OBI-02"],
+        openbindings::Evidence::NotApplicable
+    );
+    assert_eq!(report.findings[0].rule, "OBI-01");
+    assert_eq!(
+        report.findings[0]
+            .location
+            .as_ref()
+            .unwrap()
+            .pointer
+            .as_deref(),
+        Some("/x-value")
     );
 }
 

@@ -10,7 +10,7 @@ PROFILE = {
     'recursive-references': True, 'document-resource-dynamic-scope': True,
     'supplied-resources': True, 'repeated-member-detection': True,
     'exact-numbers': True, 'ecma262-unicode-property-escapes': False,
-    'draft-07-dialect': False, 'exact-lone-surrogate-strings': False,
+    'draft-07-dialect': False,
 }
 
 class Number(str):
@@ -111,7 +111,7 @@ def reconcile(cases,results):
 
 def controls():
     cases=load(); valid=[{'id':c['id'],'executed':True} for c in cases]
-    checks={'all_435_accounted':not reconcile(cases,valid),
+    checks={'all_cases_accounted':not reconcile(cases,valid),
             'reject_missing':bool(reconcile(cases,valid[1:])),
             'reject_duplicate':bool(reconcile(cases,valid+[valid[0]])),
             'reject_unexpected':bool(reconcile(cases,valid+[{'id':'fabricated','executed':True}])),
