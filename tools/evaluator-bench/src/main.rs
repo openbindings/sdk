@@ -1,13 +1,12 @@
 //! One JSON request per fresh child; one JSON-line observation on stdout.
-use openbindings::*;
-use openbindings_json_schema_evaluator::{DefaultEvaluator, Diagnostics, Limits};
+mod sdk;
+use sdk::ROOT;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
     hint::black_box,
     io::{self, Read},
-    sync::Arc,
     time::Instant,
 };
 #[cfg(feature = "allocations")]
@@ -15,10 +14,13 @@ mod allocations;
 #[cfg(feature = "allocations")]
 #[global_allocator]
 static ALLOCATOR: allocations::Counter = allocations::Counter;
-const ROOT: &str = "https://benchmark.invalid/root";
 #[derive(Deserialize)]
 struct Request {
+    #[serde(default)]
+    document: String,
+    #[serde(default)]
     schema: String,
+    #[serde(default)]
     value: String,
     expected: Value,
     #[serde(default)]
@@ -28,7 +30,7 @@ struct Request {
     #[serde(default)]
     cancelled: bool,
     #[serde(default)]
-    limits: Limits,
+    limits: sdk::Limits,
     #[serde(default = "sdk")]
     engine: String,
     #[serde(default = "eval")]
@@ -45,76 +47,19 @@ fn eval() -> String {
 fn one() -> usize {
     1
 }
-fn context(r: &Request) -> ValueContracts {
-    let document = Document::parse(format!(
-        r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{{"$ref":"{ROOT}"}}}}}}}}"#
-    ))
-    .unwrap();
-    let validation = document.validate().unwrap();
-    let mut resources: Vec<_> = r
-        .resources
-        .iter()
-        .map(|(uri, text)| SchemaResource {
-            uri: uri.clone(),
-            document: JsonValue::parse(text).unwrap(),
-        })
-        .collect();
-    resources.push(SchemaResource {
-        uri: ROOT.into(),
-        document: JsonValue::parse(&r.schema).unwrap(),
-    });
-    validation.conformant().unwrap().value_contracts(
-        Arc::new(
-            DefaultEvaluator::with_limits(r.limits.clone()).with_diagnostics(if r.upstream {
-                Diagnostics::Upstream
-            } else {
-                Diagnostics::Coarse
-            }),
-        ),
-        ResourceSet::new(resources).unwrap(),
+fn context(r: &Request) -> sdk::Context {
+    sdk::context(
+        &r.schema,
+        &r.resources,
+        &r.limits,
+        r.upstream || r.mode == "explain",
     )
 }
-fn prepare(r: &Request) -> ValueContractPreparation {
-    context(r).prepare("op", Direction::Input)
+fn prepare(r: &Request) -> sdk::Prepared {
+    context(r).prepare_input()
 }
-fn outcome(p: &ValueContractPreparation, value: &JsonValue, cancelled: bool) -> ValueOutcome {
-    match p {
-        ValueContractPreparation::Ready(contract) => {
-            contract.validate_with_control(value, &std::sync::atomic::AtomicBool::new(cancelled))
-        }
-        other => panic!("fixture did not prepare: {other:?}"),
-    }
-}
-fn status(result: &ValueOutcome) -> &'static str {
-    match result {
-        ValueOutcome::Satisfies => "satisfies",
-        ValueOutcome::Fails { .. } => "fails",
-        ValueOutcome::Undefined { .. } => "undefined",
-        ValueOutcome::NoVerdict { .. } => "no-verdict",
-    }
-}
-fn observation(result: &ValueOutcome) -> Value {
-    let mut value = json!({"status":status(result)});
-    match result {
-        ValueOutcome::NoVerdict { detail } => {
-            value["code"] = json!(detail.code);
-            value["detail"] = serde_json::to_value(detail).unwrap();
-        }
-        ValueOutcome::Undefined { detail } => {
-            value["code"] = json!(detail.code);
-            value["detail"] = serde_json::to_value(detail).unwrap();
-        }
-        ValueOutcome::Fails {
-            problems,
-            problems_complete,
-            ..
-        } => {
-            value["problems"] = serde_json::to_value(problems).unwrap();
-            value["problems_complete"] = json!(problems_complete);
-        }
-        _ => {}
-    }
-    value
+fn outcome(p: &sdk::Prepared, value: &sdk::ParsedValue, cancelled: bool) -> sdk::Outcome {
+    p.validate(value, cancelled)
 }
 fn assert_expected(actual: &Value, expected: &Value) {
     for (key, value) in expected.as_object().expect("expected object") {
@@ -174,30 +119,62 @@ fn bench(r: &Request) -> Value {
         #[cfg(not(feature = "allocations"))]
         let memory = Value::Null;
         let observed = if let Some(p) = sdk {
-            observation(&outcome(
-                &p,
-                &JsonValue::parse(&r.value).unwrap(),
-                r.cancelled,
-            ))
+            outcome(&p, &sdk::parse_value(&r.value), r.cancelled).observation()
         } else {
             json!({"status":if rs.unwrap().is_valid(&parse_peer(&r.value)) {"satisfies"} else {"fails"}})
         };
         assert_expected(&observed, &r.expected);
         return json!({"nanoseconds":nanos,"iterations":1,"observation":observed,"outcomes":{"prepared":1},"memory":memory});
     }
+    if matches!(r.mode.as_str(), "document" | "read") {
+        assert_eq!(r.engine, "sdk");
+        let document = sdk::validate_document_bytes(r.document.as_bytes());
+        let mut observed = document.observation();
+        if r.mode == "read" {
+            observed["reads"] = serde_json::to_value(document.read()).unwrap();
+        }
+        assert_expected(&observed, &r.expected);
+        let operation = || {
+            if r.mode == "document" {
+                black_box(sdk::validate_document_bytes(black_box(
+                    r.document.as_bytes(),
+                )))
+                .status()
+            } else {
+                black_box(document.read());
+                "read"
+            }
+        };
+        return measure(r, observed, operation);
+    }
     let context = (r.engine == "sdk").then(|| context(r));
-    let prepared = context.as_ref().map(|c| c.prepare("op", Direction::Input));
-    let value = (r.engine == "sdk").then(|| JsonValue::parse(&r.value).unwrap());
+    let prepared = context.as_ref().map(|c| c.prepare_input());
+    let value = (r.engine == "sdk").then(|| sdk::parse_value(&r.value));
     let rs = (r.engine == "jsonschema-rs").then(|| peer(r));
     let pv = (r.engine == "jsonschema-rs").then(|| parse_peer(&r.value));
-    let observed = if let Some(p) = &prepared {
-        observation(&outcome(p, value.as_ref().unwrap(), r.cancelled))
+    let mut observed = if let Some(p) = &prepared {
+        if r.mode == "explain" {
+            p.explain(value.as_ref().unwrap(), r.cancelled)
+                .observation()
+        } else {
+            outcome(p, value.as_ref().unwrap(), r.cancelled).observation()
+        }
     } else {
         json!({"status":if rs.as_ref().unwrap().is_valid(pv.as_ref().unwrap()) {"satisfies"} else {"fails"}})
     };
+    if r.mode == "explain" {
+        let problems = observed["problems"]
+            .as_array()
+            .expect("explain requires failure");
+        let count = problems.len();
+        let first = problems
+            .first()
+            .expect("explain requires a problem")
+            .clone();
+        observed["problem_count"] = json!(count);
+        observed["first_problem"] = first;
+    }
     assert_expected(&observed, &r.expected);
-    let mut outcomes = BTreeMap::<&str, usize>::new();
-    let expected_status = observed["status"].as_str().unwrap();
     let operation = || -> &'static str {
         if r.engine == "sdk" {
             match r.mode.as_str() {
@@ -206,33 +183,36 @@ fn bench(r: &Request) -> Value {
                     "baseline"
                 }
                 "parse" => {
-                    drop(black_box(JsonValue::parse(black_box(&r.value)).unwrap()));
+                    drop(black_box(sdk::parse_value(black_box(&r.value))));
                     "parsed"
                 }
                 "compile" => {
-                    assert!(matches!(
-                        black_box(prepare(black_box(r))),
-                        ValueContractPreparation::Ready(_)
-                    ));
+                    assert!(black_box(prepare(black_box(r))).is_ready());
                     "prepared"
                 }
                 "context" => {
-                    assert!(matches!(
-                        black_box(context.as_ref().unwrap().prepare("op", Direction::Input)),
-                        ValueContractPreparation::Ready(_)
-                    ));
+                    assert!(black_box(context.as_ref().unwrap().prepare_input()).is_ready());
                     "prepared"
                 }
-                "eval" => status(&black_box(outcome(
+                "explain" => black_box(
+                    prepared
+                        .as_ref()
+                        .unwrap()
+                        .explain(black_box(value.as_ref().unwrap()), r.cancelled),
+                )
+                .status(),
+                "eval" => black_box(outcome(
                     prepared.as_ref().unwrap(),
                     black_box(value.as_ref().unwrap()),
                     r.cancelled,
-                ))),
-                "full" => status(&black_box(outcome(
+                ))
+                .status(),
+                "full" => black_box(outcome(
                     &prepare(black_box(r)),
-                    &JsonValue::parse(black_box(&r.value)).unwrap(),
+                    &sdk::parse_value(black_box(&r.value)),
                     r.cancelled,
-                ))),
+                ))
+                .status(),
                 _ => panic!("unknown mode"),
             }
         } else {
@@ -271,6 +251,11 @@ fn bench(r: &Request) -> Value {
             }
         }
     };
+    measure(r, observed, operation)
+}
+fn measure(r: &Request, observed: Value, operation: impl Fn() -> &'static str) -> Value {
+    let mut outcomes = BTreeMap::<&str, usize>::new();
+    let expected_status = observed["status"].as_str().unwrap();
     for _ in 0..3 {
         black_box(operation());
     }
@@ -286,6 +271,11 @@ fn bench(r: &Request) -> Value {
     ] {
         outcomes.insert(key, 0);
     }
+    if matches!(r.mode.as_str(), "document" | "read") {
+        for key in ["conformant", "non-conformant", "read"] {
+            outcomes.insert(key, 0);
+        }
+    }
     #[cfg(feature = "allocations")]
     let memory_start = allocations::start();
     let start = Instant::now();
@@ -298,7 +288,7 @@ fn bench(r: &Request) -> Value {
     #[cfg(not(feature = "allocations"))]
     let memory = Value::Null;
     outcomes.retain(|_, count| *count > 0);
-    if matches!(r.mode.as_str(), "eval" | "full") {
+    if matches!(r.mode.as_str(), "eval" | "full" | "explain" | "document") {
         assert_eq!(outcomes.get(expected_status), Some(&r.iterations));
     }
     json!({"nanoseconds":nanos,"iterations":r.iterations,"observation":observed,"outcomes":outcomes,"memory":memory})
