@@ -137,7 +137,7 @@ def main():
 
     receipt = {
         "head": run("head", ["git", "rev-parse", "HEAD"]).strip(),
-        "interfacesRevision": re.search(r'APPLIED_ROLE_REVISION: &str =\s*"([0-9a-f]{40})"',
+        "interfacesRevision": re.search(r'APPLIED_INTERFACE_REVISION: &str =\s*"([0-9a-f]{40})"',
             (ROOT / "crates/openbindings-interface-synthesis/src/lib.rs").read_text()).group(1),
         "dirty": bool(run("status", ["git", "status", "--porcelain"]).strip()),
         "archives": hashes, "wasmProbe": args.wasm, "performance": args.performance,

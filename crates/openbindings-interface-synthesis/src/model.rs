@@ -130,7 +130,7 @@ pub struct CoverageEntry {
     pub requirements: Option<Vec<String>>,
     /// Exact structured evidence.
     pub details: Option<BTreeMap<String, JsonValue>>,
-    /// Additional evidence permitted by this open role object. Cannot shadow fields.
+    /// Additional evidence permitted by this open object. Cannot shadow fields.
     pub additional_fields: BTreeMap<String, JsonValue>,
 }
 impl std::fmt::Debug for CoverageEntry {
@@ -178,7 +178,7 @@ pub struct CoverageLimitation {
     pub message: String,
     /// Optional exact evidence.
     pub details: Option<BTreeMap<String, JsonValue>>,
-    /// Additional role evidence; cannot shadow known fields.
+    /// Additional evidence; cannot shadow known fields.
     pub additional_fields: BTreeMap<String, JsonValue>,
 }
 impl std::fmt::Debug for CoverageLimitation {
@@ -189,7 +189,7 @@ impl std::fmt::Debug for CoverageLimitation {
 
 /// Provider-authored report before request/document correspondence checks.
 #[derive(Clone, Default)]
-pub struct CoverageDraft {
+pub struct CoverageClaim {
     /// One disposition per observed unit identity.
     pub entries: Vec<CoverageEntry>,
     /// Whether the complete inventory has been established.
@@ -199,9 +199,21 @@ pub struct CoverageDraft {
     /// Additional report evidence; cannot shadow known fields.
     pub additional_fields: BTreeMap<String, JsonValue>,
 }
-impl std::fmt::Debug for CoverageDraft {
+impl CoverageClaim {
+    /// Claim an exhaustive inventory of the supplied dispositions, with no limitation.
+    ///
+    /// The facade still checks this claim against the request and candidate document.
+    pub fn complete(entries: Vec<CoverageEntry>) -> Self {
+        Self {
+            entries,
+            exhaustive: true,
+            ..Self::default()
+        }
+    }
+}
+impl std::fmt::Debug for CoverageClaim {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CoverageDraft")
+        f.debug_struct("CoverageClaim")
             .field("entries", &self.entries)
             .field("exhaustive", &self.exhaustive)
             .field("limitation", &self.limitation)
@@ -215,18 +227,18 @@ pub struct SynthesisCandidate {
     /// Editable exact candidate document to validate.
     pub document: Document,
     /// Editable coverage claim.
-    pub coverage: CoverageDraft,
+    pub coverage: CoverageClaim,
 }
 /// Checked immutable report. Its flags express evidence, not proof of provider honesty.
 #[derive(Clone)]
 pub struct SynthesisCoverage {
-    pub(crate) draft: CoverageDraft,
+    pub(crate) claim: CoverageClaim,
     pub(crate) source_keys: Vec<String>,
 }
 impl std::fmt::Debug for SynthesisCoverage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SynthesisCoverage")
-            .field("draft", &self.draft)
+            .field("claim", &self.claim)
             .finish_non_exhaustive()
     }
 }
@@ -241,11 +253,11 @@ impl SynthesisCoverage {
     }
     /// Borrow all dispositions in provider order.
     pub fn entries(&self) -> &[CoverageEntry] {
-        &self.draft.entries
+        &self.claim.entries
     }
     /// Whether the provider established its complete inventory.
     pub fn exhaustive(&self) -> bool {
-        self.draft.exhaustive
+        self.claim.exhaustive
     }
     /// Derived full upstream representation, distinct from strict eligibility.
     pub fn fully_represented(&self) -> bool {
@@ -267,11 +279,11 @@ impl SynthesisCoverage {
     }
     /// Evidence for an unknown remainder, if provided.
     pub fn limitation(&self) -> Option<&CoverageLimitation> {
-        self.draft.limitation.as_ref()
+        self.claim.limitation.as_ref()
     }
     /// Additional exact report evidence.
     pub fn additional_fields(&self) -> &BTreeMap<String, JsonValue> {
-        &self.draft.additional_fields
+        &self.claim.additional_fields
     }
 }
 /// Conformant document and checked coverage derived from the same provider call.

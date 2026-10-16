@@ -211,12 +211,12 @@ impl<P: BindingInvoker> Invoker<P> {
     /// synchronously prepares schemas, without selecting a binding or calling the
     /// provider. Absent schemas need no evaluator; a declared schema without one
     /// returns `ERR_SCHEMA_UNRESOLVED`. Missing names return
-    /// `ERR_OPERATION_NOT_FOUND`. Unrepresentable role metadata returns `ERR_REFUSED`.
+    /// `ERR_OPERATION_NOT_FOUND`. Unrepresentable metadata returns `ERR_REFUSED`.
     /// Preparation refusal returns `ERR_SCHEMA_UNRESOLVED` and retains no handle.
     /// Ready means prepared, not that every value will receive a verdict.
     ///
     /// # Errors
-    /// Returns `ERR_OPERATION_NOT_FOUND` for a missing operation, `ERR_REFUSED` for unrepresentable role metadata, or `ERR_SCHEMA_UNRESOLVED` when a declared value contract cannot be prepared. Cooperative cancellation returns `ERR_CANCELLED`.
+    /// Returns `ERR_OPERATION_NOT_FOUND` for a missing operation, `ERR_REFUSED` for unrepresentable metadata, or `ERR_SCHEMA_UNRESOLVED` when a declared value contract cannot be prepared. Cooperative cancellation returns `ERR_CANCELLED`.
     pub fn prepare(&self, operation: &str) -> Result<PreparedOperation<'_, P>, InvocationError> {
         self.prepare_with_control(operation, &CancellationToken::new())
     }
@@ -225,7 +225,7 @@ impl<P: BindingInvoker> Invoker<P> {
     /// A failed call stores nothing in this invoker; a fresh call prepares anew.
     ///
     /// # Errors
-    /// Returns `ERR_OPERATION_NOT_FOUND` for a missing operation, `ERR_REFUSED` for unrepresentable role metadata, or `ERR_SCHEMA_UNRESOLVED` when a declared value contract cannot be prepared. Cooperative cancellation returns `ERR_CANCELLED`.
+    /// Returns `ERR_OPERATION_NOT_FOUND` for a missing operation, `ERR_REFUSED` for unrepresentable metadata, or `ERR_SCHEMA_UNRESOLVED` when a declared value contract cannot be prepared. Cooperative cancellation returns `ERR_CANCELLED`.
     pub fn prepare_with_control(
         &self,
         operation: &str,
@@ -363,7 +363,7 @@ impl<P: BindingInvoker> Invoker<P> {
     /// path prepares schemas, consumes values, dispatches, or pins selection.
     ///
     /// # Errors
-    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. A missing operation returns `ERR_OPERATION_NOT_FOUND`; unrepresentable role metadata returns `ERR_REFUSED`.
+    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. A missing operation returns `ERR_OPERATION_NOT_FOUND`; unrepresentable metadata returns `ERR_REFUSED`.
     pub async fn preflight(
         &self,
         request: Request<'_>,
@@ -374,7 +374,7 @@ impl<P: BindingInvoker> Invoker<P> {
     /// Advisory preflight with cancellation, isolated from sibling attempts.
     ///
     /// # Errors
-    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. A missing operation returns `ERR_OPERATION_NOT_FOUND`; unrepresentable role metadata returns `ERR_REFUSED`.
+    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. A missing operation returns `ERR_OPERATION_NOT_FOUND`; unrepresentable metadata returns `ERR_REFUSED`.
     pub async fn preflight_with_control(
         &self,
         request: Request<'_>,
@@ -399,7 +399,7 @@ impl<P: BindingInvoker> Invoker<P> {
     /// permits generic callers to require `P::Preflight<'a>: Send`.
     ///
     /// # Errors
-    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. A missing operation returns `ERR_OPERATION_NOT_FOUND`; unrepresentable role metadata returns `ERR_REFUSED`. Provider refusals and malformed provider challenges also return an error.
+    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. A missing operation returns `ERR_OPERATION_NOT_FOUND`; unrepresentable metadata returns `ERR_REFUSED`. Provider refusals and malformed provider challenges also return an error.
     pub async fn preflight_with_provider(
         &self,
         request: Request<'_>,
@@ -413,7 +413,7 @@ impl<P: BindingInvoker> Invoker<P> {
     /// Call the optional provider preflight hook with caller cancellation.
     ///
     /// # Errors
-    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. A missing operation returns `ERR_OPERATION_NOT_FOUND`; unrepresentable role metadata returns `ERR_REFUSED`. Provider refusals and malformed provider challenges also return an error.
+    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. A missing operation returns `ERR_OPERATION_NOT_FOUND`; unrepresentable metadata returns `ERR_REFUSED`. Provider refusals and malformed provider challenges also return an error.
     pub async fn preflight_with_provider_and_control(
         &self,
         request: Request<'_>,

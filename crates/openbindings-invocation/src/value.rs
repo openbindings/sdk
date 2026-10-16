@@ -44,7 +44,7 @@ pub struct BindingValue {
 }
 
 impl BindingValue {
-    /// Read a role binding without collapsing duplicate or unknown members.
+    /// Read a by-value binding without collapsing duplicate or unknown members.
     ///
     /// Opaque content and extension values retain exact snapshots, including
     /// duplicate names, number spelling and escaped unpaired UTF-16 units.
@@ -55,7 +55,7 @@ impl BindingValue {
         Self::from_json_ref(value.view())
     }
 
-    /// Read a borrowed role binding, retaining owners only for opaque values.
+    /// Read a borrowed by-value binding, retaining owners only for opaque values.
     ///
     /// # Errors
     /// Returns a boundary error for a malformed carrier: invalid field types, missing required fields, duplicate members, or unsupported fields. Opaque payloads are preserved.

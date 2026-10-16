@@ -16,7 +16,7 @@ use std::{
 
 fn source() -> Source {
     Source {
-        kind: "example.roles".into(),
+        kind: "example.interfaces".into(),
         ..Default::default()
     }
 }
@@ -29,7 +29,7 @@ fn request<'a>(source: &'a Source, binding: &'a BindingValue) -> BindingRequest<
 }
 fn document(operation: &str) -> Document {
     Document::parse(format!(
-        r#"{{"openbindings":"0.2.0","operations":{{"run":{operation}}},"sources":{{"s":{{"kind":"example.roles"}},"unsupported":{{"kind":"other"}}}},"bindings":{{"b":{{"operation":"run","source":"s"}},"u":{{"operation":"run","source":"unsupported"}}}}}}"#
+        r#"{{"openbindings":"0.2.0","operations":{{"run":{operation}}},"sources":{{"s":{{"kind":"example.interfaces"}},"unsupported":{{"kind":"other"}}}},"bindings":{{"b":{{"operation":"run","source":"s"}},"u":{{"operation":"run","source":"unsupported"}}}}}}"#
     )).unwrap()
 }
 
@@ -37,7 +37,7 @@ struct InvokeOnly;
 impl BindingInvoker for InvokeOnly {
     type Invocation<'a> = Ready<Result<(), InvocationError>>;
     fn supports_kind(&self, kind: &str) -> bool {
-        kind == "example.roles"
+        kind == "example.interfaces"
     }
     fn invoke<'a>(
         &'a self,
@@ -221,7 +221,7 @@ impl BindingPreflight for LocalProvider {
 }
 
 // Rc configuration is held across both local future types. the
-// role's forwarding implementations must preserve both hooks without boxing.
+// interface's forwarding implementations must preserve both hooks without boxing.
 #[tokio::test]
 async fn local_rc_preflight_and_forwarding_preserve_hooks() {
     let calls = Rc::new(Cell::new(0));

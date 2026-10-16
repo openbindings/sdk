@@ -104,7 +104,7 @@ promote an OpenBindings project cohort.
 
 The internal cancellation delivery package is included in the Rust archive closure
 for all four async companions. Its Apache-2.0 license and notice ship in its archive;
-its token and future are imported through the companion roles. The default core
+its token and future are imported through the companion interfaces. The default core
 and evaluator graphs do not depend on this package.
 
 For local checks before committing, add `--preview` to `build-reference.py` after

@@ -51,7 +51,7 @@ operation returns `ERR_OPERATION_NOT_FOUND` before provider work. Attempt Debug
 output redacts binding choices and context contents. Absent directions need no
 evaluator.
 Preparation returns `ERR_OPERATION_NOT_FOUND` for an unknown operation, `ERR_REFUSED`
-for role metadata it cannot represent, and `ERR_SCHEMA_UNRESOLVED` when a declared
+for metadata it cannot represent, and `ERR_SCHEMA_UNRESOLVED` when a declared
 value contract cannot be prepared; each releases partial work. `prepare_with_control`
 returns `ERR_CANCELLED` when cancelled, leaving no handle.
 A ready contract can still return no verdict or an undefined result for a
@@ -75,7 +75,7 @@ is configured. Invalid documents are rejected before invocation construction;
 document editor reads still report malformed fields and ambiguous names.
 `with_evaluator` is infallible and performs no preparation. A non-scalar source kind
 cannot match a provider's scalar kind declaration. Other exact metadata that cannot
-fit a role carrier returns `ERR_REFUSED` before dispatch, with a local
+fit a interface carrier returns `ERR_REFUSED` before dispatch, with a local
 `boundary_error()` identifying the field. `preflight` uses the same selection rules
 and never prepares value contracts.
 
@@ -175,7 +175,7 @@ erroneous provider `Err(CONTEXT_REQUIRED)` becomes `ERR_EXECUTION_FAILED`.
 
 `Invoker::new` starts with **one queued input, four queued outputs, 1 MiB per value
 and 64 KiB per encoded error/advisory challenge**. These are native policy defaults,
-not role requirements. `Invoker::with_limits` makes a different finite policy
+not interface requirements. `Invoker::with_limits` makes a different finite policy
 explicit. Value limits are checked before admission; an oversized caller value
 is a local `WriteError` and does not redefine an active invocation's terminal.
 Oversized provider output terminates unsuccessfully without emitting the value.
@@ -193,7 +193,7 @@ this is a copy with a cost, not the default handoff.
 The shared interfaces define operation meanings; this SDK defines native
 ownership, queue and cancellation policy.
 
-| Role concept | Native API / responsibility |
+| Interface concept | Native API / responsibility |
 | --- | --- |
 | `checkKindSupport`, `listSupportedKinds` | `Invoker::check_kind_support`, `list_supported_kinds`; exact, pure, job-specific. |
 | Initial by-value payload | `BindingInvocationInput` / borrowed `BindingRequest`, checked before provider work. |

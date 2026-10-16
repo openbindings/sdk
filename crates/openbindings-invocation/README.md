@@ -39,7 +39,7 @@ impl BindingInvoker for Echo<'_> {
 let kind = String::from("urn:example:echo:v1");
 let invoker = Invoker::new(Echo { kind: &kind });
 let source = Source { kind: kind.clone(), ..Default::default() };
-let binding = BindingValue::default(); // A role binding may be {}.
+let binding = BindingValue::default(); // A by-value binding may be {}.
 let request = BindingRequest { source: &source, binding: &binding, context: None };
 let (mut input, mut output) = invoker.invoke(request).split();
 
@@ -65,6 +65,13 @@ write_result?;
 # Ok(())
 # }
 ```
+
+Providers can split `ProviderIo` into `ProviderInput` and `ProviderOutput`.
+`ProviderInput` implements `futures_core::Stream<Item = JsonValue>` for manually
+polled state machines and retains its inherent async `next` and `close` methods.
+Both receive paths preserve backpressure, input order and cancellation. A failed
+input value contract suspends the provider until its job is dropped, so validation
+failure never appears as clean end of input.
 
 The same input/output lifetime supports empty, unary and streaming interactions.
 For document calls, create `operation::Invoker` with a `Conformant<Document>` and

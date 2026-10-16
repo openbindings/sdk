@@ -206,7 +206,7 @@ async fn dependency_attribution_is_optional_and_many_to_one() {
     }
 }
 
-// independently packaged roles retain private helpers. Forwarding and
+// independently packaged interfaces retain private helpers. Forwarding and
 // byte-budget behavior must agree across borrowed, shared and local handles.
 #[tokio::test]
 async fn forwarded_synthesizers_preserve_exact_encoding_and_byte_limits() {

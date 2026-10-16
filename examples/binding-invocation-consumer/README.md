@@ -31,7 +31,7 @@ chooses by array order. The optional unit `interaction` field adds explicit test
 `count` counts inputs and returns one count; `empty` closes input and completes
 with zero outputs. These are fixture semantics, not an OpenAPI kind definition.
 The shared [fixture authority](../interface-synthesis-consumer/README.md#fixture-authority)
-requires all four role operations (inspection, strict/coverage synthesis and
+requires all four interface operations (inspection, strict/coverage synthesis and
 invocation) to refuse wrong-typed or unknown interactions throughout the artifact.
 Maintained consumer cases cover those refusals and all six omitted/explicit mode
 choices across represented/lossy target, alternative and projection bindings.
@@ -40,7 +40,7 @@ choices across represented/lossy target, alternative and projection bindings.
 dependency. The full consumer separately qualifies borrowed non-Clone providers,
 conditionally Send native invocation, and local Rc across a real Pending boundary.
 
-The Node/Wasm bridge is qualification plumbing, not a released TypeScript role
+The Node/Wasm bridge is qualification plumbing, not a released TypeScript interface
 package or a browser claim. One scoped Rust host task owns the provider, request
 and borrowed SDK halves. It has one command slot in each direction; all operation
 values flow through the same bounded SDK lifecycle. This host task solves the

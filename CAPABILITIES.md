@@ -73,7 +73,7 @@ companions. They define provider traits and checked callers. Kind implementation
 supply source interpretation, binding behavior and acquisition policy in separate
 projects. Applications choose providers; kinds remain exact opaque strings in core.
 No fixed registry or universal kind-support claim follows from installing the SDK.
-Public TypeScript role APIs are not provided.
+TypeScript does not expose inspection, synthesis or invocation APIs.
 
 ## Runtime qualifications
 

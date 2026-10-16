@@ -16,7 +16,7 @@ use std::{
 /// Exact code-defined kind for a local catalog of interactions.
 pub const CATALOG_KIND: &str = "urn:example:inspection-catalog:v1";
 
-/// An inspector-only provider; no other SDK role is implemented.
+/// An inspector-only provider; no other SDK interface is implemented.
 pub struct CatalogInspector;
 
 impl SourceInspector for CatalogInspector {

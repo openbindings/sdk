@@ -66,7 +66,7 @@ bytes 1.12.1. The relocated arithmetic uses num-bigint 0.4.8 and num-traits
 0.2.19; both floors are included in consumer resolution checks. SDK packages, retained forks, jsonschema-value and wasm-bindgen
 remain exact at their declared versions. The workspace lock fixes qualification.
 `tools/verify-consumer-compat.py` checks twelve configurations: baseline/AP,
-core/AP, evaluator/AP, portable discovery, all three roles, and native discovery/AP.
+core/AP, evaluator/AP, portable discovery, all three interfaces, and native discovery/AP.
 It asserts one serde identity using actual normal/build feature trees and records
 package counts. Run its `--resolution minimum` and `--resolution latest` modes for
 dependency updates, retaining `--output` receipts. Offline latest means newest
@@ -76,7 +76,7 @@ cached resolvable graph, not a crates.io-head claim.
 
 Upstream revision: `55ac1664384793c5d3b20745d3f9c169dfe2c06f`.
 Applied package: `openbindings-internal-jsonschema 0.58.6-ob.1`.
-The complete remaining Rust delta is **+300/-14 lines in ten files** against the
+The complete remaining Rust delta is **+305/-19 lines in eleven files** against the
 0.58.6 archive (physical added/removed lines, including comments and blanks):
 
 | File under src/ | Added | Removed | Why retained |
@@ -85,12 +85,13 @@ The complete remaining Rust delta is **+300/-14 lines in ten files** against the
 | compiler.rs | 3 | 3 | Cache and compile that same matcher, preserving authored pattern syntax. |
 | keywords/additional_properties.rs | 2 | 2 | Route both specialized patternProperties/additionalProperties paths through ECMA matching. |
 | keywords/unevaluated_properties.rs | 1 | 1 | Keep annotation matching on the same ECMA engine. |
-| lib.rs | 5 | 0 | Export private adapter work and regex controls. |
+| lib.rs | 6 | 1 | Export private adapter work and regex controls; align explanatory vocabulary. |
 | node.rs | 38 | 1 | Charge schema entries/depth and signal detected cycles; the outer adapter refuses any stopped result. |
 | ob_ecma.rs | 117 | 0 | Select regress ES2020 Unicode behavior, scoped regex work, and the qualified Unicode-property refusal. |
 | ob_work.rs | 127 | 0 | Scoped work/depth/cycle/arithmetic stop accounting, including nested scope restoration. |
 | properties.rs | 1 | 1 | Use the same matcher type for property validators. |
 | regex.rs | 4 | 4 | Route the library's internal matcher/builder through regress. |
+| validator.rs | 4 | 4 | Rename test-local identifiers while preserving upstream fixture values. |
 
 These guards have no complete equivalent in documented upstream APIs. All
 ordinary resolution, compilation, applicators and error construction remain the

@@ -1,4 +1,4 @@
-//! Independent wire-shape oracle: the pinned published role document, not a
+//! Independent wire-shape oracle: the pinned published interface document, not a
 //! schema recreated from this implementation's native types.
 use openbindings::{
     Direction, Document, JsonValue, ResourceSet, ValueContractPreparation, ValueOutcome,
@@ -8,7 +8,7 @@ use openbindings_source_inspection::*;
 use std::sync::Arc;
 
 #[test]
-fn inventories_validate_against_pinned_role_output_contract() {
+fn inventories_validate_against_pinned_interface_output_contract() {
     let document = Document::parse(include_bytes!("fixtures/source-inspector-0.1.json")).unwrap();
     let context = document
         .validate()
@@ -20,7 +20,7 @@ fn inventories_validate_against_pinned_role_output_contract() {
         "openbindings.source-inspector.inspectSource",
         Direction::Output,
     ) else {
-        panic!("role output contract did not prepare")
+        panic!("interface output contract did not prepare")
     };
     let target = BindableTarget {
         source_ref: "空.🚲".into(),
@@ -75,7 +75,7 @@ fn duplicate_recovery_is_sdk_policy_not_an_interface_requirement() {
         "openbindings.source-inspector.inspectSource",
         Direction::Output,
     ) else {
-        panic!("role output contract did not prepare")
+        panic!("interface output contract did not prepare")
     };
     // A consumer can retain repeated evidence or deduplicate it. Neither result
     // shape prescribes the consumer's recovery policy.
@@ -126,7 +126,7 @@ fn limitation_additional_evidence_matches_the_published_interface() {
         "openbindings.source-inspector.inspectSource",
         Direction::Output,
     ) else {
-        panic!("role contract failed")
+        panic!("interface contract failed")
     };
     let mut limitation = InspectionLimitation {
         code: "example.remaining".into(),

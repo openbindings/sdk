@@ -180,11 +180,12 @@ fn name_guidance_describes_the_existing_grammar_for_every_name_position() {
         assert!(finding.message.contains("dots or hyphens"));
         assert!(!finding.message.contains("private"));
     }
+    // CA-5: the public name predicate keeps the specification grammar.
     for name in ["1", "_", "A", "a-b.c_1"] {
-        assert!(valid_name(name));
+        assert!(is_valid_name(name));
     }
     for name in ["", ".a", "-a", "é", "a/b"] {
-        assert!(!valid_name(name));
+        assert!(!is_valid_name(name));
     }
 }
 

@@ -16,6 +16,32 @@ use std::{
 use support::*;
 
 #[tokio::test]
+async fn complete_claim_still_requires_facade_correspondence_checks() {
+    // CA-3: complete claims an exhaustive inventory without bypassing validation.
+    let s = source(None);
+    let mut c = candidate(&s);
+    c.coverage = CoverageClaim::complete(Vec::new());
+    assert!(c.coverage.exhaustive);
+    assert!(c.coverage.limitation.is_none());
+    assert!(c.coverage.additional_fields.is_empty());
+    let checked = deliver(&s, c.clone()).await.unwrap();
+    assert!(checked.coverage().exhaustive());
+    assert!(checked.coverage().entries().is_empty());
+    assert!(checked.coverage().limitation().is_none());
+
+    c.coverage = CoverageClaim::complete(vec![CoverageEntry::new(
+        0,
+        "missing-path",
+        CoverageScope::Target,
+        CoverageStatus::Represented,
+    )]);
+    assert_eq!(c.coverage.entries.len(), 1);
+    assert_eq!(c.coverage.entries[0].source_ref, "missing-path");
+    let error = deliver(&s, c).await.unwrap_err();
+    assert_eq!(error.kind(), SynthesisErrorKind::InvalidResult);
+}
+
+#[tokio::test]
 async fn admission_is_lazy_and_precedes_provider_work() {
     let s = source(None);
     let c = candidate(&s);
