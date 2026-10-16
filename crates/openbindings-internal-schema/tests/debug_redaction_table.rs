@@ -2,8 +2,8 @@
 use openbindings_internal_schema::{self as schema, JsonValue};
 use std::fmt::Debug;
 use std::{collections::BTreeMap, sync::Arc};
-// Keep the independent review's exact credential and pointer probe value.
-const SECRET: &str = "REVIEW-BEARER-TOKEN-7391";
+// A credential-shaped probe value; Debug output must never contain it.
+const SECRET: &str = "PROBE-BEARER-TOKEN-7391";
 const NUMBER: &str = "739173917391";
 
 struct Row {

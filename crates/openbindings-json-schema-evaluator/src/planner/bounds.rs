@@ -1289,7 +1289,7 @@ mod tests {
                 .bounds(entry, &std::sync::atomic::AtomicBool::new(false))
                 .unwrap(),
         );
-        assert_eq!(base, 1273); // Frozen independent review witness.
+        assert_eq!(base, 1273); // Fixed witness value for this schema.
         let largest = (TEXT_LIMIT - base) / 4;
         for (n, admitted) in [
             (largest, true),

@@ -6,8 +6,8 @@ use std::{
     collections::BTreeMap,
     future::{Ready, ready},
 };
-// Keep the independent review's exact credential and pointer probe value.
-const SECRET: &str = "REVIEW-BEARER-TOKEN-7391";
+// A credential-shaped probe value; Debug output must never contain it.
+const SECRET: &str = "PROBE-BEARER-TOKEN-7391";
 const NUMBER: &str = "739173917391";
 
 struct Row {
@@ -135,7 +135,7 @@ async fn synthesis_rows(source: &Source, parsed: &Document) -> Vec<Row> {
             },
         ),
     ];
-    // The review also used a secret key with a nonsecret null value.
+    // A secret-named key with a nonsecret null value.
     let mut key_only = entry;
     key_only.details = Some(BTreeMap::from([(
         format!("credential-{SECRET}"),

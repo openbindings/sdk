@@ -1,4 +1,4 @@
-// Regression probes derived from independent lifecycle review.
+// Cancellation and lifecycle regressions for the operation invoker.
 #[cfg(test)]
 mod tests {
     use openbindings::{

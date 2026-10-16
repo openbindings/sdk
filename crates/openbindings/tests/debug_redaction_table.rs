@@ -5,8 +5,8 @@ use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
 };
-// Keep the independent review's exact credential and pointer probe value.
-const SECRET: &str = "REVIEW-BEARER-TOKEN-7391";
+// A credential-shaped probe value; Debug output must never contain it.
+const SECRET: &str = "PROBE-BEARER-TOKEN-7391";
 const NUMBER: &str = "739173917391";
 
 struct Row {
@@ -48,7 +48,7 @@ fn preparation_errors_redact_payloads_like_no_verdict() {
         "resource-unavailable",
         "schema-pattern-compilation",
         SECRET,
-        "caller-cancelled-REVIEW-BEARER-TOKEN-7391",
+        "caller-cancelled-PROBE-BEARER-TOKEN-7391",
     ] {
         let mut detail = refusal();
         detail.code = code.into();
@@ -432,7 +432,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
         ));
     }
 
-    // Keep the reviewer's real missing-binding-reference document and both findings.
+    // A binding whose operation and source are both missing yields both findings.
     let decision = validate_document(r#"{"openbindings":"0.2.0","operations":{},"bindings":{"b":{"operation":"missing","source":"missing"}}}"#).unwrap();
     assert_eq!(
         decision
@@ -503,7 +503,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
             &[("rule", rule), ("code", "schema-mismatch")],
         ));
     }
-    for rule in ["OBI-14", "OBI-01-REVIEW-BEARER-TOKEN-7391"] {
+    for rule in ["OBI-14", "OBI-01-PROBE-BEARER-TOKEN-7391"] {
         let finding = Finding {
             rule,
             code: "schema-mismatch",
