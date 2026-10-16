@@ -59,11 +59,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let operation = proof
         .resolve_operation("find")
         .ok_or("operation is missing")?;
-    println!(
-        "{:?}: {:?}",
-        operation.key(),
-        operation.description().map(|s| s.json().text())
-    );
+    println!("{:?}: {:?}", operation.key(), operation.description());
     if let Some(schema) = operation.input() {
         // Conformant reads preserve presence; schema preparation remains separate.
         println!("input schema at {:?}", schema.location().pointer);

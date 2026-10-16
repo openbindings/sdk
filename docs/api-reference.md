@@ -325,7 +325,11 @@ Raw parser admission codes `byte-limit`, `node-limit` and `depth-limit` remain
 | Rust read | Result and presence |
 | --- | --- |
 | `openbindings()` | `&str`, proved supported SemVer |
-| `name()`, `version()`, `description()` | `Option<JsonStringRef>`, absence separate from present scalar text |
+| `name()`, `version()`, `description()` | `Option<&str>`, absence separate from present decoded text |
+| Conformant view `description()` | `Option<&str>` |
+| Conformant operation `tags()`, dependency `kinds()` | Optional exact-size iterators of `&str`; absent differs from present-empty |
+| Conformant source `kind()` | `&str`; provider support is not implied |
+| Conformant dependency `accepts_kind(kind)` | Takes `&str` and compares decoded text, independent of escape spelling |
 | `schemas()`, `schema(key)` | Optional exact object/boolean schema views; no preparation |
 | `operations()`, `resolve_operation(name)` | Retained `ConformantOperationView` vector or optional selection |
 | `bindings()`, `sources()`, `dependencies()` and keyed reads | Optional retained `ConformantBindingView`, `ConformantSourceView`, `ConformantDependencyView`; absent differs from present-empty |
@@ -333,8 +337,10 @@ Raw parser admission codes `byte-limit`, `node-limit` and `depth-limit` remain
 
 Conformant views expose the same normative fields as document views, with infallible
 reads. OBI-01 establishes scalar text for every string in a conformant document.
-Descriptive text, tags and kinds still use `JsonStringRef`; their `as_str()` is
-always Some. For exact strings from drafts or caller values, `as_str()` can return
+Descriptive text, tags and kinds borrow decoded `&str`. Original spelling and
+locations remain available through each view's `value()`: for example,
+`operation.value().get("description").unwrap().location()` locates its description.
+For exact strings from drafts or caller values, `JsonStringRef::as_str()` can return
 None for an unpaired UTF-16 unit. `utf16_units()` iterates without allocating,
 `json()` retains token/location access, and equality compares decoded UTF-16. `JsonRef::as_string()` returns None only for
 non-strings. The existing fallible view names remain unchanged; the `Conformant`

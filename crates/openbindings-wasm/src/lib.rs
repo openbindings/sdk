@@ -722,16 +722,22 @@ impl WasmConformantDocument {
         self.as_document().validate()
     }
     pub fn openbindings(&self) -> Result<String, JsValue> {
-        self.as_document().openbindings()
+        Ok(encoded(
+            self.handle.proof("document-conformance")?.openbindings(),
+        ))
     }
     pub fn name(&self) -> Result<String, JsValue> {
-        self.as_document().name()
+        Ok(encoded(self.handle.proof("document-conformance")?.name()))
     }
     pub fn version(&self) -> Result<String, JsValue> {
-        self.as_document().version()
+        Ok(encoded(
+            self.handle.proof("document-conformance")?.version(),
+        ))
     }
     pub fn description(&self) -> Result<String, JsValue> {
-        self.as_document().description()
+        Ok(encoded(
+            self.handle.proof("document-conformance")?.description(),
+        ))
     }
     #[wasm_bindgen(js_name=schemaNames)]
     pub fn schema_names(&self) -> Result<String, JsValue> {
@@ -771,7 +777,21 @@ impl WasmConformantDocument {
         dependency: &str,
         kind: &str,
     ) -> Result<Option<bool>, JsValue> {
-        self.as_document().dependency_accepts_kind(dependency, kind)
+        let exact = JsonValue::parse(kind).map_err(input_error)?;
+        let kind = exact
+            .view()
+            .as_string()
+            .ok_or_else(|| error("invalid-kind", "kind must be an encoded JSON string"))?;
+        Ok(self
+            .handle
+            .proof("document-conformance")?
+            .dependency(dependency)
+            .map(|view| {
+                // Caller-supplied JS strings may still contain an unpaired unit.
+                // They cannot match a conformant filter, but an absent filter accepts all.
+                kind.as_str()
+                    .map_or_else(|| view.kinds().is_none(), |kind| view.accepts_kind(kind))
+            }))
     }
     pub fn references(
         &self,
