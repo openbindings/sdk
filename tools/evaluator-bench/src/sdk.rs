@@ -173,13 +173,12 @@ impl CheckedDocument {
             }
             if let Some(description) = operation.description() {
                 reads.descriptions += 1;
-                reads.text_bytes +=
-                    black_box(description.as_str().expect("scalar fixture text")).len();
+                reads.text_bytes += black_box(description).len();
             }
             if let Some(tags) = operation.tags() {
                 for tag in tags {
                     reads.tags += 1;
-                    reads.text_bytes += black_box(tag.as_str().expect("scalar fixture text")).len();
+                    reads.text_bytes += black_box(tag).len();
                 }
             }
             reads.inputs += usize::from(black_box(operation.input()).is_some());
