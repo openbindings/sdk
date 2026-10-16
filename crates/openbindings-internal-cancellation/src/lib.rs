@@ -16,7 +16,7 @@ use std::{
 /// Executor-independent cooperative cancellation. Clones share permanent state.
 /// Use a fresh token for each independent retry. Cancellation wakes every registered
 /// waiter synchronously, outside the registry lock; it does not schedule a task.
-/// Import this type through the async companion whose role you use.
+/// Import this type through the async companion whose interface you use.
 ///
 /// ```
 /// use openbindings_internal_cancellation::CancellationToken;

@@ -1,4 +1,4 @@
-//! Code-defined test kind, with independent source analysis shared by two roles.
+//! Code-defined test kind, with independent source analysis shared by two interfaces.
 use openbindings::{Binding, Dependency, Document, Edit, JsonValue, Operation, Source};
 use openbindings_interface_synthesis::CancellationToken;
 use openbindings_interface_synthesis::*;
@@ -72,7 +72,7 @@ fn analyze(source: &Source) -> Result<(Vec<Unit>, bool), SynthesisError> {
             "implementation-unsupported" => CoverageStatus::ImplementationUnsupported,
             _ => return Err(unreadable()),
         };
-        // All roles admit the same artifact, even when a unit is not emitted.
+        // All interfaces admit the same artifact, even when a unit is not emitted.
         // Keep this authoring reader independent of the execution oracle.
         let interaction = match u.get("interaction") {
             Some(value) => value.as_str().ok_or_else(unreadable)?,
@@ -258,7 +258,7 @@ pub fn derive(
     doc.edit(&edits)?;
     Ok(SynthesisCandidate {
         document: doc,
-        coverage: CoverageDraft {
+        coverage: CoverageClaim {
             entries,
             exhaustive,
             limitation: (!exhaustive).then(|| CoverageLimitation {

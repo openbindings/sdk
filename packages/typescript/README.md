@@ -4,6 +4,10 @@ Parse, validate and author OpenBindings interface documents, inspect operations
 and validate their caller-facing values. This package includes the Rust engine as
 WebAssembly. Applications need no Rust toolchain.
 
+Source inspection, interface synthesis and binding/operation invocation are Rust
+companion APIs. Their coverage claims and provider streams are not exported by
+this TypeScript facade; the facade exposes document operations and HTTP discovery.
+
 ## First useful result
 
 This `0.2.0-alpha.1` package is unpublished. Install a locally built archive;

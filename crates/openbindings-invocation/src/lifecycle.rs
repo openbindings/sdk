@@ -660,6 +660,7 @@ impl ProviderIo {
                 shared: shared.clone(),
                 gate: input,
                 failed: false,
+                waiter: Waiter::new(shared.provider_read.clone()),
             },
             output: ProviderOutput {
                 shared,
@@ -689,10 +690,15 @@ impl ProviderIo {
     }
 }
 /// Provider input owner. Closing or dropping discards unread input and stops writes.
+///
+/// Implements `futures_core::Stream<Item = JsonValue>` for provider state machines.
+/// Both receive APIs preserve input order and backpressure. Validation failure
+/// suspends the provider until the invocation driver drops it; it never yields EOF.
 pub struct ProviderInput {
     shared: Arc<Shared>,
     gate: Option<Gate>,
     failed: bool,
+    waiter: Waiter,
 }
 impl std::fmt::Debug for ProviderInput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -703,53 +709,73 @@ impl std::fmt::Debug for ProviderInput {
 impl ProviderInput {
     /// Receive one accepted input, or None after input closes and drains.
     pub async fn next(&mut self) -> Option<JsonValue> {
+        // A scoped receive supersedes any earlier stream-poll registration.
+        self.waiter.clear();
         let mut waiter = Waiter::new(self.shared.provider_read.clone());
         poll_fn(|cx| {
             waiter.register(cx.waker());
-            if self.failed {
-                return Poll::Pending;
-            }
-            let result = {
-                let mut s = self.shared.state.lock().unwrap();
-                if s.provider_closed {
-                    Poll::Ready(None)
-                } else if let Some(value) = s.input.pop_front() {
-                    Poll::Ready(Some(value))
-                } else if s.caller_closed {
-                    Poll::Ready(None)
-                } else {
-                    Poll::Pending
-                }
-            };
-            // Evaluator callbacks run without any lifecycle lock. A rejected
-            // value is never a clean EOF: suspend this job so the driver can
-            // drop it on its now-settled terminal before provider code resumes.
-            if let Poll::Ready(Some(value)) = &result {
-                if let Some(gate) = &mut self.gate
-                    && let Err((error, failure)) = gate.check(value, &self.shared.local)
-                {
-                    self.failed = true;
-                    self.shared.fail_validation(error, failure);
-                    return Poll::Pending;
-                }
-                if self.shared.outcome().is_some() {
-                    return Poll::Pending;
-                }
-            }
-            if result.is_ready() {
-                self.shared.signal.notify();
-            }
-            result
+            self.poll_receive()
         })
         .await
     }
+    fn poll_receive(&mut self) -> Poll<Option<JsonValue>> {
+        if self.failed {
+            return Poll::Pending;
+        }
+        let result = {
+            let mut s = self.shared.state.lock().unwrap();
+            if s.provider_closed {
+                Poll::Ready(None)
+            } else if let Some(value) = s.input.pop_front() {
+                Poll::Ready(Some(value))
+            } else if s.caller_closed {
+                Poll::Ready(None)
+            } else {
+                Poll::Pending
+            }
+        };
+        // Evaluator callbacks run without any lifecycle lock. A rejected
+        // value is never a clean EOF: suspend this job so the driver can
+        // drop it on its now-settled terminal before provider code resumes.
+        if let Poll::Ready(Some(value)) = &result {
+            if let Some(gate) = &mut self.gate
+                && let Err((error, failure)) = gate.check(value, &self.shared.local)
+            {
+                self.failed = true;
+                self.shared.fail_validation(error, failure);
+                return Poll::Pending;
+            }
+            if self.shared.outcome().is_some() {
+                return Poll::Pending;
+            }
+        }
+        if result.is_ready() {
+            self.shared.signal.notify();
+        }
+        result
+    }
     /// Stop input delivery and discard unread queued inputs.
     pub fn close(&mut self) {
+        self.waiter.clear();
         self.shared.close_input(true);
+    }
+}
+/// Poll-based receive seam for provider state machines, sharing next's gates.
+impl Stream for ProviderInput {
+    type Item = JsonValue;
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+        this.waiter.register(cx.waker());
+        let result = this.poll_receive();
+        if result.is_ready() {
+            this.waiter.clear();
+        }
+        result
     }
 }
 impl Drop for ProviderInput {
     fn drop(&mut self) {
+        self.waiter.clear();
         self.shared.close_input(true);
     }
 }
@@ -951,45 +977,141 @@ mod driver_tests {
         }
     }
     #[test]
+    fn stream_receiver_replaces_and_releases_waiters() {
+        // CA-4: polling owns one waiter; ready, close, drop, and next release it.
+        for finish in ["ready", "close", "drop", "next"] {
+            let shared = Shared::new(InvocationLimits::default());
+            let (mut reader, _writer) = ProviderIo::new(shared.clone()).split();
+            let first = Arc::new(WakeCount(AtomicUsize::new(0)));
+            let second = Arc::new(WakeCount(AtomicUsize::new(0)));
+            for count in [&first, &second] {
+                let waker = Waker::from(count.clone());
+                for _ in 0..100 {
+                    assert!(
+                        Pin::new(&mut reader)
+                            .poll_next(&mut Context::from_waker(&waker))
+                            .is_pending()
+                    );
+                }
+                assert_eq!(shared.provider_read.waiters.lock().unwrap().len(), 1);
+            }
+            shared.provider_read.notify();
+            assert_eq!(first.0.load(Ordering::SeqCst), 0);
+            assert_eq!(second.0.load(Ordering::SeqCst), 1);
+            match finish {
+                "ready" => {
+                    shared.state.lock().unwrap().input.push_back(json("7"));
+                    assert_eq!(
+                        Pin::new(&mut reader)
+                            .poll_next(&mut Context::from_waker(Waker::noop()))
+                            .map(|v| v.unwrap().text().to_owned()),
+                        Poll::Ready("7".into())
+                    );
+                }
+                "close" => {
+                    reader.close();
+                    assert!(matches!(
+                        Pin::new(&mut reader).poll_next(&mut Context::from_waker(Waker::noop())),
+                        Poll::Ready(None)
+                    ));
+                }
+                "drop" => drop(reader),
+                "next" => {
+                    let mut next = pin!(reader.next());
+                    assert!(poll(next.as_mut()).is_pending());
+                    assert_eq!(shared.provider_read.waiters.lock().unwrap().len(), 1);
+                }
+                _ => unreachable!(),
+            }
+            assert!(shared.provider_read.waiters.lock().unwrap().is_empty());
+        }
+    }
+    #[test]
+    fn pending_stream_receive_is_dropped_on_cancellation_or_abandonment() {
+        // CA-4: cancellation drops a suspended reader without resuming it as EOF.
+        for abandon in [false, true] {
+            let shared = Shared::new(InvocationLimits::default());
+            let (mut reader, mut writer) = ProviderIo::new(shared.clone()).split();
+            let job = async move {
+                writer.emit(json("1")).await?;
+                poll_fn(|cx| Pin::new(&mut reader).poll_next(cx)).await;
+                panic!("cancelled provider resumed");
+                #[allow(unreachable_code)]
+                Ok(())
+            };
+            let (_input, mut output) = Invocation::new(shared.clone(), job).split();
+            assert!(matches!(
+                poll(pin!(output.next()).as_mut()),
+                Poll::Ready(Some(Ok(_)))
+            ));
+            assert!(poll(pin!(output.next()).as_mut()).is_pending());
+            assert_eq!(shared.provider_read.waiters.lock().unwrap().len(), 1);
+            if abandon {
+                drop(output);
+            } else {
+                output.control().cancel();
+                assert!(matches!(
+                    poll(pin!(output.next()).as_mut()),
+                    Poll::Ready(Some(Err(error))) if error.code() == "ERR_CANCELLED"
+                ));
+                assert!(matches!(
+                    poll(pin!(output.next()).as_mut()),
+                    Poll::Ready(None)
+                ));
+            }
+            assert!(shared.provider_read.waiters.lock().unwrap().is_empty());
+        }
+    }
+    #[test]
     fn provider_endpoints_notify_their_own_task_wakers() {
-        let shared = Shared::new(InvocationLimits::default());
-        let (mut reader, mut writer) = ProviderIo::new(shared.clone()).split();
-        let job = async {
-            pending::<()>().await;
-            Ok(())
-        };
-        let (mut input, mut output) = Invocation::new(shared, job).split();
-        let reads = Arc::new(WakeCount(AtomicUsize::new(0)));
-        let read_waker = Waker::from(reads.clone());
-        {
-            let mut next = pin!(reader.next());
+        // CA-4: both input receive APIs wake the provider's own task.
+        for stream in [false, true] {
+            let shared = Shared::new(InvocationLimits::default());
+            let (mut reader, mut writer) = ProviderIo::new(shared.clone()).split();
+            let job = async {
+                pending::<()>().await;
+                Ok(())
+            };
+            let (mut input, mut output) = Invocation::new(shared, job).split();
+            let reads = Arc::new(WakeCount(AtomicUsize::new(0)));
+            let read_waker = Waker::from(reads.clone());
+            {
+                let mut next = pin!(async {
+                    if stream {
+                        poll_fn(|cx| Pin::new(&mut reader).poll_next(cx)).await
+                    } else {
+                        reader.next().await
+                    }
+                });
+                assert!(
+                    next.as_mut()
+                        .poll(&mut Context::from_waker(&read_waker))
+                        .is_pending()
+                );
+                let mut write = pin!(input.write(json("7")));
+                assert!(matches!(poll(write.as_mut()), Poll::Ready(Ok(()))));
+                assert!(reads.0.load(Ordering::SeqCst) > 0);
+                assert!(matches!(poll(next.as_mut()), Poll::Ready(Some(_))));
+            }
+            for _ in 0..4 {
+                let mut emit = pin!(writer.emit(json("8")));
+                assert!(matches!(poll(emit.as_mut()), Poll::Ready(Ok(()))));
+            }
+            let writes = Arc::new(WakeCount(AtomicUsize::new(0)));
+            let write_waker = Waker::from(writes.clone());
+            let mut emit = pin!(writer.emit(json("9")));
             assert!(
-                next.as_mut()
-                    .poll(&mut Context::from_waker(&read_waker))
+                emit.as_mut()
+                    .poll(&mut Context::from_waker(&write_waker))
                     .is_pending()
             );
-            let mut write = pin!(input.write(json("7")));
-            assert!(matches!(poll(write.as_mut()), Poll::Ready(Ok(()))));
-            assert!(reads.0.load(Ordering::SeqCst) > 0);
-            assert!(matches!(poll(next.as_mut()), Poll::Ready(Some(_))));
-        }
-        for _ in 0..4 {
-            let mut emit = pin!(writer.emit(json("8")));
+            let mut next = pin!(output.next());
+            assert!(matches!(poll(next.as_mut()), Poll::Ready(Some(Ok(_)))));
+            assert!(writes.0.load(Ordering::SeqCst) > 0);
             assert!(matches!(poll(emit.as_mut()), Poll::Ready(Ok(()))));
         }
-        let writes = Arc::new(WakeCount(AtomicUsize::new(0)));
-        let write_waker = Waker::from(writes.clone());
-        let mut emit = pin!(writer.emit(json("9")));
-        assert!(
-            emit.as_mut()
-                .poll(&mut Context::from_waker(&write_waker))
-                .is_pending()
-        );
-        let mut next = pin!(output.next());
-        assert!(matches!(poll(next.as_mut()), Poll::Ready(Some(Ok(_)))));
-        assert!(writes.0.load(Ordering::SeqCst) > 0);
-        assert!(matches!(poll(emit.as_mut()), Poll::Ready(Ok(()))));
     }
+
     struct Reenter<F: Future<Output = Outcome> + Send + 'static> {
         engine: Weak<Engine<F>>,
         calls: AtomicUsize,

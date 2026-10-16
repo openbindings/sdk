@@ -1,4 +1,4 @@
-//! Independent three-role fixture; invocation does not reuse the authoring oracle.
+//! Independent three-interface fixture; invocation does not reuse the authoring oracle.
 use openbindings::{JsonRef, JsonValue, Source};
 use openbindings_interface_synthesis as synthesis;
 use openbindings_invocation::CancellationToken;

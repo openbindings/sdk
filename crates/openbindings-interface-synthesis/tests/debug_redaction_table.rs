@@ -88,7 +88,7 @@ async fn synthesis_rows(source: &Source, parsed: &Document) -> Vec<Row> {
         details: Some(evidence()),
         additional_fields: evidence(),
     };
-    let coverage = synthesis::CoverageDraft {
+    let coverage = synthesis::CoverageClaim {
         entries: vec![entry.clone()],
         exhaustive: false,
         limitation: Some(limitation.clone()),
@@ -123,7 +123,7 @@ async fn synthesis_rows(source: &Source, parsed: &Document) -> Vec<Row> {
         ),
         row("CoverageEntry", &entry),
         row("CoverageLimitation", &limitation),
-        row("CoverageDraft", &coverage),
+        row("CoverageClaim", &coverage),
         row("SynthesisCandidate", &candidate),
         row("SynthesisFinding", &finding),
         row(
@@ -156,7 +156,7 @@ async fn synthesis_rows(source: &Source, parsed: &Document) -> Vec<Row> {
     document.set_source(SECRET, source).unwrap();
     let candidate = synthesis::SynthesisCandidate {
         document: document.clone(),
-        coverage: synthesis::CoverageDraft {
+        coverage: synthesis::CoverageClaim {
             exhaustive: false,
             limitation: Some(limitation),
             additional_fields: evidence(),

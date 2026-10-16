@@ -6,8 +6,9 @@ use std::sync::Arc;
 use support::*;
 #[tokio::test]
 async fn sdk_policy_cases_and_interface_output_shapes_are_distinct() {
-    let role = Document::parse(include_bytes!("fixtures/interface-synthesizer-0.2.json")).unwrap();
-    let context = role
+    let interface =
+        Document::parse(include_bytes!("fixtures/interface-synthesizer-0.2.json")).unwrap();
+    let context = interface
         .validate()
         .unwrap()
         .conformant()
@@ -17,7 +18,7 @@ async fn sdk_policy_cases_and_interface_output_shapes_are_distinct() {
         "openbindings.interface-synthesizer.synthesizeInterfaceWithCoverage",
         Direction::Output,
     ) else {
-        panic!("role contract failed")
+        panic!("interface contract failed")
     };
     let corpus = corpus();
     let mut total = 0;
@@ -114,8 +115,9 @@ fn sdk_policy_fixture_file_satisfies_its_local_schema() {
 
 #[test]
 fn independent_interface_examples_allow_variation_beyond_sdk_policy() {
-    let role = Document::parse(include_bytes!("fixtures/interface-synthesizer-0.2.json")).unwrap();
-    let context = role
+    let interface =
+        Document::parse(include_bytes!("fixtures/interface-synthesizer-0.2.json")).unwrap();
+    let context = interface
         .validate()
         .unwrap()
         .conformant()
@@ -125,7 +127,7 @@ fn independent_interface_examples_allow_variation_beyond_sdk_policy() {
         "openbindings.interface-synthesizer.synthesizeInterfaceWithCoverage",
         Direction::Output,
     ) else {
-        panic!("role output contract failed")
+        panic!("interface output contract failed")
     };
     let examples = json(include_str!("fixtures/interface-output-cases.json"));
     for case in examples.get("tests").unwrap().elements().unwrap() {

@@ -990,7 +990,7 @@ impl<'a> Checks<'a> {
 }
 const NAME_GRAMMAR_MESSAGE: &str = "a name must be a nonempty ASCII string: start with a letter, digit or underscore; then use letters, digits, underscores, dots or hyphens";
 /// Test the normative name grammar: ASCII letter, digit or underscore first, followed by ASCII letters, digits, underscores, dots or hyphens. No Unicode normalization or case folding is performed.
-pub fn valid_name(name: &str) -> bool {
+pub fn is_valid_name(name: &str) -> bool {
     !name.is_empty()
         && name.bytes().enumerate().all(|(i, c)| {
             c.is_ascii_alphanumeric() || c == b'_' || (i > 0 && (c == b'-' || c == b'.'))
@@ -1041,7 +1041,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
     ] {
         if let Some(entries) = value.get(map).and_then(|v| v.members()) {
             for entry in entries {
-                if !entry.name.as_str().is_some_and(valid_name) {
+                if !entry.name.as_str().is_some_and(is_valid_name) {
                     c.violation(3, entry.name, "name-grammar", NAME_GRAMMAR_MESSAGE);
                 }
             }
@@ -1058,7 +1058,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
         for entry in entries {
             if let Some(aliases) = entry.value.get("aliases").and_then(|v| v.elements()) {
                 for alias in aliases {
-                    if !alias.as_str().is_some_and(valid_name) {
+                    if !alias.as_str().is_some_and(is_valid_name) {
                         c.violation(3, alias, "name-grammar", NAME_GRAMMAR_MESSAGE);
                     }
                     let Some(name) = alias.utf16_units() else {
@@ -1076,7 +1076,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
             }
             if let Some(examples) = entry.value.get("examples").and_then(|v| v.members()) {
                 for example in examples {
-                    if !example.name.as_str().is_some_and(valid_name) {
+                    if !example.name.as_str().is_some_and(is_valid_name) {
                         c.violation(3, example.name, "name-grammar", NAME_GRAMMAR_MESSAGE);
                     }
                 }

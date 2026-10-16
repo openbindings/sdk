@@ -73,7 +73,8 @@ Rust requires 1.88. The 256 KiB document stack regression is qualified on the
 development toolchain; older supported compilers may need larger debug stacks.
 TypeScript owners require explicit disposal for timely release. Long synchronous
 Wasm work belongs in a Worker when the caller needs responsive cancellation.
-Rust role APIs are provisional; public TypeScript role APIs are not provided.
+The Rust APIs for source inspection, interface synthesis and invocation are
+provisional. TypeScript does not expose these APIs.
 
 Read [capabilities and limits](CAPABILITIES.md), [host support](docs/support.md),
 [performance measurements](docs/performance-boundaries.md) and the

@@ -49,8 +49,8 @@ assert set(internal['dependencies']) == {'openbindings'}
 assert internal['dependencies']['openbindings'] == {
     'version': '=0.2.0-alpha.1', 'path': '../openbindings',
 }
-for role in ['http-discovery', 'invocation', 'source-inspection', 'interface-synthesis']:
-    package = root / 'crates' / ('openbindings-' + role)
+for interface in ['http-discovery', 'invocation', 'source-inspection', 'interface-synthesis']:
+    package = root / 'crates' / ('openbindings-' + interface)
     manifest = tomllib.loads((package / 'Cargo.toml').read_text())
     assert manifest['dependencies'][cancellation] == {
         'version': '=0.2.0-alpha.1', 'path': '../' + cancellation,

@@ -198,7 +198,7 @@ pub(crate) fn admit(request: &SynthesisRequest<'_>) -> Result<(), SynthesisError
     for input in request.sources {
         if input
             .name
-            .is_some_and(|name| !openbindings::valid_name(name))
+            .is_some_and(|name| !openbindings::is_valid_name(name))
         {
             return Err(SynthesisError::simple(
                 SynthesisErrorKind::InvalidInput,
@@ -605,7 +605,7 @@ pub(crate) fn validate(
     Ok(Synthesis {
         document,
         coverage: SynthesisCoverage {
-            draft: candidate.coverage,
+            claim: candidate.coverage,
             source_keys,
         },
     })
@@ -700,7 +700,7 @@ mod numeric_tests {
                     .unwrap();
                 let candidate = SynthesisCandidate {
                     document: draft.clone(),
-                    coverage: CoverageDraft {
+                    coverage: CoverageClaim {
                         exhaustive: true,
                         ..Default::default()
                     },
