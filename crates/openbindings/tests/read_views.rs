@@ -7,6 +7,26 @@ fn document(fields: &str) -> Document {
     ))
     .unwrap()
 }
+
+#[test]
+fn draft_text_reads_retain_unpaired_utf16_units() {
+    let doc = Document::parse(r#"{"openbindings":"0.2.0","name":"\ud800","operations":{"op":{"description":"\udc00","tags":["\ud800"]}},"sources":{"s":{"kind":"\udc00"}},"dependencies":{"d":{"operation":"op","kinds":["\ud800"]}}}"#).unwrap();
+    let op = doc.operations().unwrap().remove(0);
+    let source = doc.source("s").unwrap().unwrap();
+    let dep = doc.dependency("d").unwrap().unwrap();
+    for (read, unit) in [
+        (doc.name().unwrap().unwrap(), 0xd800),
+        (op.description().unwrap().unwrap(), 0xdc00),
+        (op.tags().unwrap().unwrap().next().unwrap(), 0xd800),
+        (source.kind().unwrap(), 0xdc00),
+        (dep.kinds().unwrap().unwrap().next().unwrap(), 0xd800),
+    ] {
+        let read: JsonStringRef<'_> = read;
+        assert_eq!(read.as_str(), None);
+        assert_eq!(read.utf16_units().collect::<Vec<_>>(), [unit]);
+    }
+    assert!(doc.validate().unwrap().conformant().is_none());
+}
 fn location(error: InterpretationError, code: &str, pointer: &str) {
     assert_eq!(error.code(), code);
     assert_eq!(

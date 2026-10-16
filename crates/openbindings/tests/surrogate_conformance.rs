@@ -83,7 +83,7 @@ fn escaped_pairs_and_noncharacters_remain_conformant() {
         assert!(validation.report().findings.is_empty());
         let proof = validation.conformant().unwrap();
         assert_eq!(proof.to_bytes(), text.as_bytes());
-        let at = proof.description().unwrap().json().location();
+        let at = proof.value().get("description").unwrap().location();
         assert_eq!(at.pointer.as_deref(), Some("/description"));
         assert_eq!(at.byte_offset, text.find(token).unwrap());
     }

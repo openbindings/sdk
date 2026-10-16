@@ -1,24 +1,21 @@
 //! Reads whose field shapes are established by the retained document proof.
 use super::*;
 
-fn text<'a>(value: JsonRef<'a>, field: &str) -> Option<JsonStringRef<'a>> {
+fn text<'a>(value: JsonRef<'a>, field: &str) -> Option<&'a str> {
     value
         .get(field)
-        .map(|v| v.as_string().expect("conformant string"))
+        .map(|v| v.as_str().expect("conformant text"))
 }
-fn texts<'a>(
-    value: JsonRef<'a>,
-    field: &str,
-) -> Option<impl ExactSizeIterator<Item = JsonStringRef<'a>>> {
+fn texts<'a>(value: JsonRef<'a>, field: &str) -> Option<impl ExactSizeIterator<Item = &'a str>> {
     value.get(field).map(|v| {
         v.elements()
             .expect("conformant array")
-            .map(|v| v.as_string().expect("conformant string"))
+            .map(|v| v.as_str().expect("conformant text"))
     })
 }
 macro_rules! conformant_view {
     ($name:ident, $plain:ident) => {
-        #[doc = concat!("Retained ", stringify!($plain), " with document conformance proof. Field reads are infallible; OBI-01 establishes scalar text while exact strings retain original tokens. Clones and views survive parent drop.")]
+        #[doc = concat!("Retained ", stringify!($plain), " with document conformance proof. Field reads are infallible; OBI-01 establishes scalar text. Original tokens and locations remain available through value(). Clones and views survive parent drop.")]
         #[derive(Clone, Debug)]
         pub struct $name {
             _document: Conformant<Document>,
@@ -29,8 +26,8 @@ macro_rules! conformant_view {
             pub fn key(&self) -> &str { self.view.key() }
             /// Borrow the exact original object without evaluating its schemas or examples.
             pub fn value(&self) -> JsonRef<'_> { self.view.value() }
-            /// Read optional exact descriptive text. None means absence.
-            pub fn description(&self) -> Option<JsonStringRef<'_>> { text(self.value(), "description") }
+            /// Borrow decoded descriptive text. None means absence.
+            pub fn description(&self) -> Option<&str> { text(self.value(), "description") }
         }
     };
 }
@@ -52,16 +49,16 @@ impl Conformant<Document> {
             .and_then(JsonRef::as_str)
             .expect("conformant declaration")
     }
-    /// Read the optional exact interface name.
-    pub fn name(&self) -> Option<JsonStringRef<'_>> {
+    /// Borrow the optional decoded interface name.
+    pub fn name(&self) -> Option<&str> {
         text(self.value(), "name")
     }
-    /// Read the optional exact interface version label, distinct from openbindings.
-    pub fn version(&self) -> Option<JsonStringRef<'_>> {
+    /// Borrow the optional decoded interface version label, distinct from openbindings.
+    pub fn version(&self) -> Option<&str> {
         text(self.value(), "version")
     }
-    /// Read optional exact descriptive text.
-    pub fn description(&self) -> Option<JsonStringRef<'_>> {
+    /// Borrow optional decoded descriptive text.
+    pub fn description(&self) -> Option<&str> {
         text(self.value(), "description")
     }
     /// Borrow optional schema declarations in lexical order; no evaluation occurs.
@@ -108,12 +105,9 @@ impl Conformant<Document> {
             .operation_bindings(key)
             .expect("conformant bindings")
     }
-    /// Return None for an absent dependency; otherwise compare its exact kind filter.
+    /// Return None for an absent dependency; otherwise compare its decoded kind filter.
     pub fn dependency_accepts_kind(&self, key: &str, kind: &str) -> Option<bool> {
-        self.dependency(key).map(|v| {
-            v.kinds()
-                .is_none_or(|mut kinds| kinds.any(|v| v.eq_str(kind)))
-        })
+        self.dependency(key).map(|v| v.accepts_kind(kind))
     }
 }
 macro_rules! namespace {
@@ -135,13 +129,13 @@ namespace!(sources, source, ConformantSourceView);
 namespace!(dependencies, dependency, ConformantDependencyView);
 
 impl ConformantOperationView {
-    /// Read optional tags exactly, preserving absent versus present-empty.
-    pub fn tags(&self) -> Option<impl ExactSizeIterator<Item = JsonStringRef<'_>>> {
+    /// Borrow decoded tags, preserving absent versus present-empty.
+    pub fn tags(&self) -> Option<impl ExactSizeIterator<Item = &str>> {
         texts(self.value(), "tags")
     }
     /// Read optional scalar aliases, whose identifier spelling is proved by OBI-04.
     pub fn aliases(&self) -> Option<impl ExactSizeIterator<Item = &str>> {
-        texts(self.value(), "aliases").map(|v| v.map(|s| s.as_str().expect("conformant alias")))
+        texts(self.value(), "aliases")
     }
     /// Read optional deprecation; absence is distinct from false.
     pub fn deprecated(&self) -> Option<bool> {
@@ -223,8 +217,8 @@ impl ConformantBindingView {
     }
 }
 impl ConformantSourceView {
-    /// Read the exact kind string without asserting provider support.
-    pub fn kind(&self) -> JsonStringRef<'_> {
+    /// Borrow the decoded kind string without asserting provider support.
+    pub fn kind(&self) -> &str {
         text(self.value(), "kind").expect("conformant kind")
     }
     /// Borrow opaque content, preserving present null separately from absence.
@@ -240,12 +234,12 @@ impl ConformantDependencyView {
             .and_then(JsonRef::as_str)
             .expect("conformant operation key")
     }
-    /// Read optional exact kind filters; absence accepts every kind.
-    pub fn kinds(&self) -> Option<impl ExactSizeIterator<Item = JsonStringRef<'_>>> {
+    /// Borrow decoded kind filters; absence accepts every kind.
+    pub fn kinds(&self) -> Option<impl ExactSizeIterator<Item = &str>> {
         texts(self.value(), "kinds")
     }
-    /// Compare a kind by decoded UTF-16 equality; absence of a filter accepts all.
-    pub fn accepts_kind(&self, kind: JsonStringRef<'_>) -> bool {
+    /// Compare kind text independent of escape spelling; absence accepts all.
+    pub fn accepts_kind(&self, kind: &str) -> bool {
         self.kinds()
             .is_none_or(|mut kinds| kinds.any(|v| v == kind))
     }

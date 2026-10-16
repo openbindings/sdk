@@ -467,11 +467,7 @@ impl<P: BindingInvoker> Invoker<P> {
             .document
             .source(binding.source())
             .expect("OBI-07 proves source existence");
-        // OBI-01 establishes scalar kinds; provider support still compares them exactly.
-        Ok(source
-            .kind()
-            .as_str()
-            .is_some_and(|kind| self.binding.provider.supports_kind(kind)))
+        Ok(self.binding.provider.supports_kind(source.kind()))
     }
     fn resolve(
         &self,

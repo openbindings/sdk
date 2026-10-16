@@ -228,7 +228,7 @@ test("top-level editor reads preserve field-local errors, exact text and absence
   }
 });
 
-test("validated text and retained reads preserve exact UTF-16 and presence", () => {
+test("validated text and retained reads preserve decoded text and presence", () => {
   const unproven = sdk.Document.parse(text).value;
   const result = unproven.validate();
   assert.equal(result.status, "conformant");
@@ -298,6 +298,31 @@ test("validated text and retained reads preserve exact UTF-16 and presence", () 
     assert.equal(proof.name, undefined);
     proof.dispose();
     doc.dispose();
+  }
+});
+
+test("conformant kind filters compare decoded text and handle unpaired caller strings", () => {
+  const parsed = sdk.Document.parse(
+    String.raw`{"openbindings":"0.2.0","name":"caf\u00e9","description":"\ud834\udd1e","version":"\uffff","operations":{"run":{}},"sources":{"s":{"kind":"caf\u00e9\ud834\udd1e"}},"dependencies":{"escaped":{"operation":"run","kinds":["caf\u00e9\uD834\uDD1E"]},"literal":{"operation":"run","kinds":["café𝄞"]},"all":{"operation":"run"}}}`,
+  ).value;
+  const checked = parsed.validate();
+  assert.equal(checked.status, "conformant");
+  const proof = checked.document;
+  try {
+    assert.equal(proof.name, "café");
+    assert.equal(proof.description, "𝄞");
+    assert.equal(proof.version, "\uffff");
+    assert.equal(proof.sources[0].kind, "café𝄞");
+    for (const key of ["escaped", "literal", "all"]) {
+      assert.equal(proof.dependencyAcceptsKind(key, "café𝄞"), true);
+    }
+    assert.equal(proof.dependencyAcceptsKind("escaped", "cafe𝄞"), false);
+    assert.equal(proof.dependencyAcceptsKind("literal", "\ud800"), false);
+    assert.equal(proof.dependencyAcceptsKind("all", "\ud800"), true);
+    assert.equal(proof.dependencyAcceptsKind("missing", "café𝄞"), undefined);
+  } finally {
+    proof.dispose();
+    parsed.dispose();
   }
 });
 
