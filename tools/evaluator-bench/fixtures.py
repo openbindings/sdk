@@ -70,4 +70,42 @@ def fixtures():
         code='maximum', details=dict(bound='9223372036854775807', kind='numeric-bound'), instance_pointer='',
         message='number exceeds the inclusive upper bound; inspect maximum at the schema location',
         schema_location=dict(pointer='/maximum', resource='https://benchmark.invalid/root'))])
+    # Fixed text includes escaped Unicode so conformant text access does work.
+    for count in [1, 50, 1000]:
+        operations = {}
+        for i in range(count):
+            op = dict(aliases=[f'alias{i:04d}', f'legacy{i:04d}'],
+                      description=f'Operation {i}: café \u2603', tags=['api', f'group{i % 7}'])
+            if i % 3 != 1:
+                op['input'] = {'$ref': '#/schemas/shared/$defs/item'} if count == 1000 else {'type': 'integer'}
+            if i % 3 != 2:
+                op['output'] = {'$ref': '#/schemas/shared/$defs/item'} if count == 1000 else True
+            operations[f'op{i:04d}'] = op
+        document = dict(openbindings='0.2.0', operations=operations)
+        if count == 1000:
+            document['schemas'] = {'shared': {'$defs': {'item': {
+                'type': 'object', 'properties': {'id': {'type': 'integer'}, 'label': {'type': 'string'}}}}}}
+        reads = dict(operations=count, aliases=2*count, descriptions=count, tags=2*count,
+                     inputs=sum('input' in op for op in operations.values()),
+                     outputs=sum('output' in op for op in operations.values()),
+                     text_bytes=sum(len(text.encode()) for key, op in operations.items()
+                                    for text in [key, *op['aliases'], op['description'], *op['tags']]))
+        rows[f'document-{count}'] = dict(document=compact(document),
+            expected=dict(status='conformant', finding_count=0), modes=['document'])
+        rows[f'read-{count}'] = dict(document=compact(document),
+            expected=dict(status='conformant', finding_count=0, reads=reads), modes=['read'])
+    rows['document-invalid'] = dict(document=compact(dict(openbindings='0.2.0', operations={
+        'bad name': {'input': None, 'tags': 42},
+        'other': {'aliases': ['same']}, 'third': {'aliases': ['same']}})),
+        expected=dict(status='non-conformant', finding_count=6), modes=['document'])
+    add('explain-one', {'type': 'array', 'items': {'type': 'integer'}}, '["bad"]',
+        'fails', modes=('explain',))['expected'].update(problem_count=1, problems_complete=False,
+        first_problem=dict(code='type', instance_pointer='/0',
+            schema_location=dict(pointer='/items/type', resource='https://benchmark.invalid/root'),
+            message='expected JSON type: integer', details=dict(kind='type', expected=['integer'])))
+    # Sixty-four independent violations exercise a broad failing value. The
+    # current evaluator reports its first problem only, never a fabricated list.
+    add('explain-many', {'type': 'array', 'items': {'type': 'integer'}},
+        compact(['bad'] * 64), 'fails', modes=('explain',))['expected'].update(
+            rows['explain-one']['expected'])
     return rows

@@ -1,25 +1,51 @@
 # Evaluator benchmark
 
 This isolated executable compares SDK revisions with the same pinned release
-compiler, profile, fixture generator and instrument lockfile. Its optional
+compiler, profile and fixture generator. Ordinary pairs share an instrument
+lockfile; cross-API pairs may change only SDK-owned lock entries. Its optional
 unmodified jsonschema-rs 0.58.6 peer is an engine-cost reference: it does not
 provide the SDK's exact decimal, four-outcome or bounded-work contract. The peer
 and allocator instrumentation never enter the SDK dependency graph.
 
-Build each revision with the **candidate's identical instrument directory and
-lockfile**, saving separate binaries before the next build:
+All SDK calls and SDK types live in `src/sdk.rs`. Opaque owners expose a fixed
+internal interface for value parsing, byte document validation and proof,
+conformant reads, a reusable preparation context, input preparation, cheap
+validation and explanation. Fixtures, checks, timers, the peer and allocation
+accounting use only that interface and ordinary Rust/JSON data.
+
+Build both release variants before measuring. The build driver first builds the
+candidate's identical instrument and lockfile against both source trees:
 
 ```sh
-cargo build --release --locked --manifest-path tools/evaluator-bench/Cargo.toml
-cargo build --release --locked --features allocations --manifest-path tools/evaluator-bench/Cargo.toml
 python3 tools/evaluator-bench/test_policy.py
-python3 tools/evaluator-bench/compare.py --baseline /path/base --candidate /path/candidate --baseline-alloc /path/base-alloc --candidate-alloc /path/candidate-alloc --output /path/results --enforce
+python3 tools/evaluator-bench/compare.py build --baseline-source /path/base-source --candidate-source /path/candidate-source --output /path/results --binaries /path/bin --target /path/build
+python3 tools/evaluator-bench/compare.py --baseline /path/bin/baseline --candidate /path/bin/candidate --baseline-alloc /path/bin/baseline-alloc --candidate-alloc /path/bin/candidate-alloc --output /path/results --enforce
 ```
 
-Use `--workloads array` to replay a single workload. Use an unused output directory.
-When a change alters the public API the instrument calls, the candidate's
-instrument cannot build against the merge base; the workflow then reports the
-pair as not comparable, passes the job and makes no comparison.
+Use clean source snapshots at the same pinned compiler. Each snapshot's SDK
+sources must be at their usual relative paths. Direct release builds remain
+available with `cargo build --release --locked --manifest-path
+tools/evaluator-bench/Cargo.toml`, adding `--features allocations` for the separate
+memory instrument. `cargo test --locked --manifest-path
+tools/evaluator-bench/Cargo.toml` checks the executable's observations.
+
+If either identical baseline release variant fails, separate instruments are
+allowed **only** when the entire instrument diff is confined to `src/sdk.rs` and
+`Cargo.lock` package blocks for the SDK's own workspace crates. Third-party lock
+entries, lock metadata, fixtures, timing, checks, manifests, allocation code and
+all other instrument edits prohibit that fallback. Each side then builds its
+own instrument and lockfile. The driver saves `instrument.diff`, its SHA-256,
+both lock hashes and the `cross-API` label in `instrument-pair.json` and carries
+that record into `comparison.json`. Cross-API pairs use exactly the ordinary
+outcome, heap, allocation-count and timing policy. Other instrument differences
+remain **not comparable** if the identical build fails; no measurements run.
+Candidate build failures and failures of an authorized baseline fallback fail
+the job. Only the root `target`/`__pycache__` directories and `.pyc` files inside
+Python cache directories are excluded. Similarly named source paths and standalone
+bytecode files remain part of the diff.
+
+Use `--workloads array` to replay a single workload. Use an unused output directory
+(or the directory just populated by the build driver).
 One fresh child reads one JSON request and emits one JSON-line observation. The
 saved `fixtures.json` contains complete replay requests; add `mode` and
 `iterations` from `commands.jsonl` to feed one directly to a binary. Every case
@@ -47,6 +73,27 @@ untimed operations. `baseline` carries the same fixture and retained owners but
 only touches the value text. `--empty` measures an empty process without reading a fixture; its heap and RSS
 replicates are retained alongside workload-carrying baselines. No baseline is
 silently subtracted.
+
+`document` validates the fixture bytes into a report and acquires the conformant
+proof when available, including destruction on every operation. `read` retains
+the proof outside timing and walks all operations, reading each key, alias,
+description, tag and input/output presence. It counts fields and UTF-8 text
+bytes, checked against independent fixture expectations before timing.
+`explain` retains the prepared diagnostic contract and parsed failing value,
+then requests full available diagnostics per iteration; serialization stays
+outside timing. Its precheck includes reported problem count, first problem
+code and original instance/schema locations, as well as the full observation.
+On the current SDK the shim selects `Diagnostics::Upstream` at preparation.
+
+Deterministic document fixtures contain 1, 50 and 1,000 operations. The largest
+shares a schema's `$defs` through references; all have aliases, escaped Unicode
+descriptions, tags and varying contract presence. A non-conformant fixture has
+six findings across shape, name, alias and schema rules. Explain fixtures have
+one and 64 independent type violations. The current evaluator returns only the
+first problem, so both expect **one reported problem**, with incomplete
+diagnostics. The many-violation case does not measure producing a 64-problem
+list. Supporting that list requires a separate evaluator change and revised
+expectations.
 
 The driver runs three warmup children, adapts each variant to at least 200 ms,
 then takes 20 adjacent randomized pairs per batch, twice. Cold first use always

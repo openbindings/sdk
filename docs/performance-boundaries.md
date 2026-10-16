@@ -104,7 +104,26 @@ reference-text fixtures also qualify preparation heap. Outcome checks, requested
 heap and allocation counts enforce now: failed checks or a heap/count flag fail
 the job. Heap flags require both >10% and >128 KiB for retained baseline, total
 peak, incremental peak or requested bytes/op; count flags require both >5% and
->32/op. A pair made incomparable by an API change passes with a report.
+>32/op.
+
+The harness isolates SDK calls in `tools/evaluator-bench/src/sdk.rs`. It also
+measures document validation directly from bytes (including the conformant
+proof), conformant operation/text reads and full available failure diagnostics.
+Document scales are 1, 50 and 1,000 operations, with shared `$defs` references in
+the largest, plus a document with six findings. Explain inputs contain one and
+64 independent violations; today's evaluator reports only the first problem.
+Checks cover that count and its original code and instance/schema locations.
+The many-violation input does not qualify the cost of returning many problems.
+
+The workflow first tries the candidate's identical instrument against both SDK
+revisions. If the baseline fails to build, it may build each revision's own
+instrument only when their complete instrument diff changes `src/sdk.rs` and
+SDK-owned workspace package blocks in the instrument's `Cargo.lock` exclusively.
+Any fixture, timing, check, allocator, manifest, third-party lock or other
+instrument change prohibits that fallback. Such pairs remain not comparable
+and pass with a report. Authorized pairs are marked `cross-API`, retain the
+instrument diff and SHA-256 plus lock hashes, and face the same outcome, heap,
+allocation-count and timing policy as identical-instrument pairs.
 
 Timing remains advisory until about 20 calibration runs show stable noise and
 enforcement is explicitly reviewed. Shared runners report a confirmed >20%
