@@ -295,12 +295,15 @@ impl PreparedSchema for Compiled {
         let valid = verdict_pass(&self.limits, || {
             Ok(self.validator.is_valid(backend::view(value)))
         });
-        match valid.and_then(|valid| {
-            control.check()?;
-            Ok(valid)
-        }) {
+        match valid {
             Err(detail) => ValueOutcome::NoVerdict { detail },
-            Ok(true) => ValueOutcome::Satisfies,
+            Ok(true) => match control.check() {
+                Ok(()) => ValueOutcome::Satisfies,
+                Err(detail) => ValueOutcome::NoVerdict {
+                    detail: detail.into(),
+                },
+            },
+            // An established failure survives interruption of optional diagnostics.
             Ok(false) => self.diagnostics(value, control, false),
         }
     }
@@ -418,10 +421,11 @@ fn bounded_decision(
     control: &dyn WorkControl,
 ) -> Result<Option<bool>, NoVerdict> {
     let upper = upper();
-    control.check()?;
+    // An established upper failure survives interruption of later optional work.
     if !upper {
         return Ok(Some(false));
     }
+    control.check()?;
     let lower = lower();
     control.check()?;
     Ok(lower.then_some(true))
