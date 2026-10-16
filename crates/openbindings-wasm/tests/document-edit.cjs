@@ -1,4 +1,4 @@
-// DOC-1: run against wasm-bindgen's Node output, without the TS facade.
+// Document editing preserves exact bytes and ownership through the Node Wasm API.
 // node crates/openbindings-wasm/tests/document-edit.cjs /absolute/path/openbindings_wasm.js
 const assert = require('node:assert/strict');
 const wasm = require(require('node:path').resolve(process.argv[2]));

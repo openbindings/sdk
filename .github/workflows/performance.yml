@@ -13,9 +13,8 @@ concurrency:
 
 jobs:
   compare:
-    # Calibration is advisory, including infrastructure and allocation reports.
-    # Correctness remains required by the ordinary CI tests and kit replays.
-    continue-on-error: true
+    # Outcomes and requested heap/allocation counts enforce now.
+    # Timing and RSS remain advisory while runner noise is calibrated.
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -80,7 +79,7 @@ jobs:
           sha256sum tools/evaluator-bench/Cargo.lock > "$RUNNER_TEMP/evaluator-results/instrument-lock.sha256"
           uname -a > "$RUNNER_TEMP/evaluator-results/host.txt"
           lscpu >> "$RUNNER_TEMP/evaluator-results/host.txt"
-      - name: Check policy and run serial advisory pairs
+      - name: Check policy and enforce outcomes and memory on serial pairs
         if: steps.build.outputs.comparable != 'false'
         run: |
           python tools/evaluator-bench/test_policy.py
@@ -89,14 +88,14 @@ jobs:
             --candidate "$RUNNER_TEMP/evaluator-bin/candidate" \
             --baseline-alloc "$RUNNER_TEMP/evaluator-bin/baseline-alloc" \
             --candidate-alloc "$RUNNER_TEMP/evaluator-bin/candidate-alloc" \
-            --output "$RUNNER_TEMP/evaluator-results"
-      - name: Publish advisory summary
+            --output "$RUNNER_TEMP/evaluator-results" --enforce
+      - name: Publish benchmark summary
         if: always()
         run: |
           if [ -f "$RUNNER_TEMP/evaluator-results/summary.md" ]; then
             cat "$RUNNER_TEMP/evaluator-results/summary.md" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo 'Advisory benchmark did not complete; inspect build logs.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Benchmark did not complete; inspect build logs.' >> "$GITHUB_STEP_SUMMARY"
           fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()

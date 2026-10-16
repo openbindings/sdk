@@ -196,7 +196,7 @@ export function inspectEditExampleCases(sdk, example) {
     example.editExtensionMember(opaque, "x-absent", "annotation", true).status,
     "extension-missing",
   );
-  // DOC-1: an edited owner survives its source and borrowed replacement value.
+  // An edited owner survives its source and borrowed replacement value.
   const source = sdk.Document.parse(opaque).value;
   const built = source.retain();
   const root = source.value(),

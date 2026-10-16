@@ -96,7 +96,7 @@ new DiscoveryPublication(parsedOnly);
 // @ts-expect-error parsed is not nominally validated
 const invalidAssignment: ConformantDocument = parsedOnly;
 void invalidAssignment;
-// DOC-1: proof is nominal and has no editing or unchecked construction surface.
+// Proof is nominal and has no editing or unchecked construction surface.
 declare const proofOnly: ConformantDocument;
 // @ts-expect-error a proof cannot be edited
 proofOnly.setDescription("changed");
@@ -341,7 +341,7 @@ function exhaustiveValueOutcome(value: ValueOutcome): string {
   }
 }
 
-// DOC-1: part names match the specification vocabulary, with no retired aliases.
+// Part names match the specification vocabulary, with no retired aliases.
 import type {
   Operation,
   Binding,
@@ -377,7 +377,7 @@ partError.partPointer satisfies string | null;
 // @ts-expect-error retired pointer name has no alias
 partError.draftPointer;
 
-// DOC-1.3: typed maps and exact pointer edits share the existing batch API.
+// Typed maps and exact pointer edits share the existing batch API.
 function typedBatch(
   document: Document,
   operation: Operation,

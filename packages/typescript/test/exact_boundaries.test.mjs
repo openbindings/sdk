@@ -215,7 +215,7 @@ const documentText =
   '{"openbindings":"0.2.0","description":"before","operations":{"__proto__":{"tags":[],"aliases":["alias"],"input":{"const":9007199254740993},"examples":{"constructor":{"input":9007199254740993,"output":null,"x-exact":0.29000000000000001}}},"constructor":{}},"schemas":{"__proto__":{"enum":[9007199254740992,9007199254740993]},"constructor":true},"sources":{"toString":{"kind":"local","content":null}},"bindings":{"constructor":{"operation":"__proto__","source":"toString","content":{"large":1000000000000000128},"preference":-1,"deprecated":false}},"dependencies":{"__proto__":{"operation":"__proto__","kinds":[]}},"x-exact":1000000000000000128,"additionalFields":false}';
 
 test("document edits and prototype-sensitive names preserve exact unrelated values", () => {
-  // DOC-1: edits operate directly on exact documents.
+  // Edits operate directly on exact documents.
   const original = parsed(documentText),
     originalValue = original.value();
   const document = original.retain();
@@ -267,7 +267,7 @@ test("document edits and prototype-sensitive names preserve exact unrelated valu
 });
 
 test("edits retain removed leaves and never adopt external owners", () => {
-  // DOC-1: every acquired exact value owns its revision independently.
+  // Every acquired exact value owns its revision independently.
   const baseline = testing.liveStorageOwners();
   const source = parsed(
     '{"openbindings":"0.2.0","operations":{"run":{"input":true}},"schemas":{"kept":9007199254740993}}',
@@ -304,7 +304,7 @@ test("edits retain removed leaves and never adopt external owners", () => {
 });
 
 test("malformed documents stay inspectable and repairable independently of conformance", () => {
-  // DOC-1: typed read errors address current bytes; duplicates refuse editing.
+  // Typed read errors address current bytes; duplicates refuse editing.
   const source = parsed(
     '{"openbindings":"0.2.0","operations":{},"description":17}',
   );
@@ -356,7 +356,7 @@ test("malformed documents stay inspectable and repairable independently of confo
 });
 
 test("failed edit encoding and native commits release temporary state", () => {
-  // DOC-1: failure leaves the document unchanged and releases temporary owners.
+  // Failure leaves the document unchanged and releases temporary owners.
   const source = parsed(documentText),
     baseline = testing.liveStorageOwners(),
     before = source.toBytes();

@@ -99,7 +99,7 @@ async fn get(status: u16, bytes: &[u8], limit: usize) -> (DiscoveryResult, Rc<Re
     (result, counts)
 }
 #[test]
-fn hd_1_hd_5_origins_normalize_hosts_and_reject_non_loopback_http() {
+fn origins_normalize_hosts_and_reject_non_loopback_http() {
     for (origin, expected) in [
         (
             "https://example.test",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Serial adjacent-pair benchmarks. Advisory until explicitly promoted."""
+"""Serial adjacent-pair benchmarks with outcome and memory gates; timing is advisory."""
 import argparse
 import hashlib
 import json
@@ -58,6 +58,13 @@ def memory_regression(row, relative, absolute):
     return row['candidate'] > row['base'] * relative and row['difference'] > absolute
 
 
+def enforcement_fails(report):
+    return bool(report['errors']) or any(
+        row.get('heap_regression') or row.get('allocation_regression')
+        for row in report['rows']
+    )
+
+
 def invoke(binary, request, log, rss=False):
     command = [str(binary.resolve())]
     if request["mode"] == "empty-process": command.append("--empty")
@@ -98,7 +105,7 @@ def main():
     parser.add_argument('--seconds', type=float, default=.2)
     parser.add_argument('--workloads', help='Comma-separated subset for one-command replay')
     parser.add_argument('--dedicated', action='store_true')
-    parser.add_argument('--enforce', action='store_true', help='Promote only after runner calibration')
+    parser.add_argument('--enforce', action='store_true', help='Fail on outcome errors and heap/count flags; timing and RSS remain advisory')
     args = parser.parse_args()
     assert args.pairs >= 2 and args.batches >= 1 and args.seconds > 0
     if args.enforce:
@@ -111,7 +118,7 @@ def main():
     if args.workloads:
         selected = {name:selected[name] for name in args.workloads.split(',')}
     rng = random.Random(20261015)
-    report = dict(advisory=not args.enforce, host=dict(platform=platform.platform(), machine=platform.machine(), processor=platform.processor()),
+    report = dict(advisory=not args.enforce, timing_advisory=True, host=dict(platform=platform.platform(), machine=platform.machine(), processor=platform.processor()),
                   policy=dict(pairs=args.pairs, batches=args.batches, seconds=args.seconds, time_ratio=1.10 if args.dedicated else 1.20,
                               heap_ratio=1.10, heap_bytes=128*1024, allocation_ratio=1.05, allocation_count=32, rss_ratio=1.15, rss_bytes=1024*1024),
                   binaries={key:dict(path=str(getattr(args,key).resolve()), sha256=digest(getattr(args,key))) for key in ['baseline','candidate','baseline_alloc','candidate_alloc']},
@@ -172,7 +179,7 @@ def main():
                                      for metric in ['baseline_live_bytes','peak_live_bytes','incremental_peak_bytes','allocations_per_op','requested_bytes_per_op']}
                     # Gate incremental operation memory; keep the retained owner
                     # and total peak visible so baseline increases cannot hide.
-                    row['heap_regression'] = any(memory_regression(row['memory'][key],1.10,128*1024) for key in ['baseline_live_bytes','peak_live_bytes','incremental_peak_bytes'])
+                    row['heap_regression'] = any(memory_regression(row['memory'][key],1.10,128*1024) for key in ['baseline_live_bytes','peak_live_bytes','incremental_peak_bytes','requested_bytes_per_op'])
                     row['allocation_regression'] = memory_regression(row['memory']['allocations_per_op'],1.05,32)
                     row['rss_samples'] = []
                     for _ in range(3):
@@ -189,8 +196,8 @@ def main():
                     report['errors'].append(dict(workload=name,mode=mode,error=str(error)))
                     print(name,mode,'ERROR',error,flush=True)
                 result_path.write_text(json.dumps(report,indent=2)+'\n')
-    failures = report['errors'] or any(r.get('time_decision') != 'within-threshold' or r.get('heap_regression') or r.get('allocation_regression') for r in report['rows'])
-    (args.output/'summary.md').write_text('# Evaluator performance\n\n'+('Advisory: no build failures during calibration.\n\n' if not args.enforce else 'Enforced paired thresholds.\n\n')+
+    failures = enforcement_fails(report)
+    (args.output/'summary.md').write_text('# Evaluator performance\n\n'+('Advisory run: outcome errors and heap/count flags are reported without failing.\n\n' if not args.enforce else 'Outcome checks and requested heap/allocation-count thresholds are enforced. Timing and RSS remain advisory.\n\n')+
         '| Workload | Mode | Candidate/base | Time decision | Heap/count flag |\n| --- | --- | ---: | --- | --- |\n'+''.join(
             f"| {r['workload']} | {r['mode']} | {r['batches'][-1]['ratio']:.3f} | {r.get('time_decision','error')} | {bool(r.get('heap_regression') or r.get('allocation_regression'))} |\n" if r['batches'] else f"| {r['workload']} | {r['mode']} | — | error | — |\n" for r in report['rows']))
     if args.enforce and failures: raise SystemExit(1)

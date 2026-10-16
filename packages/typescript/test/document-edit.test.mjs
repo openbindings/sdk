@@ -1,4 +1,4 @@
-// DOC-1: document states, native atomic editing and proof ownership.
+// Document states, native atomic editing and proof ownership.
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as sdk from "../dist/index.js";
@@ -234,7 +234,7 @@ test("released edited owners and consumed proofs release their arenas", () => {
   assert.equal(liveStorageOwners(), baseline);
 });
 
-// DOC-1: exact owner transfer is invisible on native batch refusal and aliases.
+// Exact owner transfer is invisible on native batch refusal and aliases.
 test("exact owners survive failed batches, repeated references and whole-part setters", () => {
   const baseline = liveStorageOwners(),
     document = sdk.Document.create(),
@@ -278,7 +278,7 @@ test("exact owners survive failed batches, repeated references and whole-part se
   assert.equal(liveStorageOwners(), baseline);
 });
 
-// DOC-1: exact input byte preflight includes repeated occurrences before joining.
+// Exact input byte preflight includes repeated occurrences before joining.
 test("an oversized exact batch returns borrowed owners without changing bytes", () => {
   const baseline = liveStorageOwners(),
     document = sdk.Document.create();
@@ -299,7 +299,7 @@ test("an oversized exact batch returns borrowed owners without changing bytes", 
 });
 
 test("typed namespace construction and exact pointer edits share one atomic bridge call", () => {
-  // DOC-1.3: every prepared namespace commits once; failed typed input is atomic.
+  // Every prepared namespace commits once; failed typed input is atomic.
   const document = sdk.Document.create();
   const number = exact("1e+003");
   const rawEdit = bridge.WasmDocument.prototype.editEncoded;

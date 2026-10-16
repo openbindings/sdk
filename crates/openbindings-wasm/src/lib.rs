@@ -1368,7 +1368,7 @@ mod proof_mutation_tests {
     use super::*;
     #[test]
     fn proof_revision_has_no_mutable_document_even_in_an_editor_wrapper() {
-        // DOC-1.1: the shared ABI layout does not grant editing authority.
+        // The shared ABI layout does not grant editing authority.
         let document =
             Document::parse(r#"{"openbindings":"0.2.0","name":"certified","operations":{}}"#)
                 .unwrap();

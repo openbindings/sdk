@@ -1,0 +1,6 @@
+[advisories]
+# Vulnerabilities fail cargo-deny's advisory check by default.
+yanked = "deny"
+# Exceptions must use { id = "RUSTSEC-YYYY-NNNN", reason = "..." } with a
+# written justification. Bare IDs and crate/version ignores are not permitted.
+ignore = []

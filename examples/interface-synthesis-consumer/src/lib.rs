@@ -219,7 +219,7 @@ pub fn derive(
             entries.push(e);
         }
     }
-    // DOC-1.3/4: one commit, with main's normative member emission order.
+    // Commit once, preserving stable member order and serialized bytes.
     let text_fields = [
         (
             "/openbindings",
