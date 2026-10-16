@@ -90,6 +90,7 @@ impl std::fmt::Debug for Finding {
             | "schema-mismatch"
             | "fixed-schema-limit-or-failure"
             | "duplicate-member"
+            | "unpaired-surrogate"
             | "semver"
             | "missing-version"
             | "name-grammar"
@@ -1002,9 +1003,19 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
         return Err(refusal);
     }
     let mut c = Checks::new();
+    // Version declaration follows §8.1's JSON grammar, independently of this
+    // line's OBI-01 exclusions. OBI-02 through OBI-13 require OBI-01 (§10).
+    for at in backend::unpaired_strings(value).take(MAX_FINDINGS + 1) {
+        c.violation(
+            0,
+            at,
+            "unpaired-surrogate",
+            "member name or string value holds an unpaired surrogate escape",
+        );
+    }
     let duplicates = backend::duplicate_member_names(value);
     if duplicates.len() != 0 {
-        c.truncated = duplicates.len() > MAX_FINDINGS;
+        c.truncated |= duplicates.len() > MAX_FINDINGS.saturating_sub(c.findings.len());
         for at in duplicates.take(MAX_FINDINGS) {
             c.mark_at(
                 0,
@@ -1014,6 +1025,8 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
                 "object repeats a decoded member name",
             );
         }
+    }
+    if c.evidence[0] == Evidence::Violated {
         c.not_applicable_after_json();
         return Ok(c.finish());
     }

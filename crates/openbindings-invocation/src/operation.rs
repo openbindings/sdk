@@ -467,7 +467,7 @@ impl<P: BindingInvoker> Invoker<P> {
             .document
             .source(binding.source())
             .expect("OBI-07 proves source existence");
-        // Providers declare scalar kinds. Exact non-scalar kinds cannot match them.
+        // OBI-01 establishes scalar kinds; provider support still compares them exactly.
         Ok(source
             .kind()
             .as_str()

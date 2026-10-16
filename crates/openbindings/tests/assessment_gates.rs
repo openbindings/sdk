@@ -5,7 +5,7 @@ fn checked(text: &str) -> DocumentValidation {
 }
 
 #[test]
-fn independent_violations_survive_unpaired_and_deep_opaque_data() {
+fn later_rules_require_scalar_document_strings_but_allow_deep_opaque_data() {
     // Each row pairs a document with the rules it independently violates.
     for (text, rules) in [
         (r#"{"openbindings":"0.2.0","description":"\ud800"}"#.to_owned(), vec!["OBI-02"]),
@@ -18,13 +18,23 @@ fn independent_violations_survive_unpaired_and_deep_opaque_data() {
     ] {
         let validation = checked(&text);
         assert_eq!(validation.report().conclusion, Conformance::NonConformant, "{rules:?}");
+        if text.contains(r"\ud") {
+            assert_eq!(validation.report().evidence["OBI-01"], Evidence::Violated);
+            for rule in &DOCUMENT_RULES[1..] {
+                assert_eq!(validation.report().evidence[rule], Evidence::NotApplicable);
+            }
+        }
+        // A permitted pair restores the prerequisite, exposing every original
+        // independent violation rather than dropping those regression checks.
+        let repaired = text.replace(r"\ud800", r"\ud83d\ude00");
+        let validation = checked(&repaired);
         for rule in rules { assert_eq!(validation.report().evidence[rule], Evidence::Violated, "{rule}"); }
     }
 }
 
 #[test]
-fn opaque_and_fixed_schema_strings_are_lossless() {
-    // scalar conversion is unnecessary for opaque data and ASCII constraints.
+fn unpaired_document_strings_are_lossless_drafts_without_conformance() {
+    // OBI-01 covers opaque content and schemas as well as defined fields.
     for fields in [
         r#""description":"cut \ud83d""#,
         r#""name":"\ud800","version":"\ud800""#,
@@ -37,11 +47,11 @@ fn opaque_and_fixed_schema_strings_are_lossless() {
         let validation = checked(&text);
         assert_eq!(
             validation.report().conclusion,
-            Conformance::Conformant,
+            Conformance::NonConformant,
             "{fields}: {:?}",
             validation.report().findings
         );
-        assert_eq!(validation.conformant().unwrap().to_bytes(), text.as_bytes());
+        assert_eq!(validation.document().unwrap().to_bytes(), text.as_bytes());
     }
     for (field, rule) in [
         (
@@ -55,9 +65,14 @@ fn opaque_and_fixed_schema_strings_are_lossless() {
         (r#""schemas":{"s":{"$anchor":"\ud800"}}"#, "OBI-10"),
         (r#""schemas":{"s":{"$id":"x\ud800#bad"}}"#, "OBI-10"),
     ] {
-        let validation = checked(&format!(
-            r#"{{"openbindings":"0.2.0","operations":{{"op":{{}}}},{field}}}"#
-        ));
+        let text = format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{}}}},{field}}}"#);
+        let validation = checked(&text);
+        assert_eq!(validation.report().evidence["OBI-01"], Evidence::Violated);
+        assert_eq!(validation.report().evidence[rule], Evidence::NotApplicable);
+        let repaired = text
+            .replace(r"\ud800", r"\ud83d\ude00")
+            .replace(r"\uD800", r"\uD83D\uDE00");
+        let validation = checked(&repaired);
         assert_eq!(
             validation.report().evidence[rule],
             Evidence::Violated,
@@ -67,10 +82,10 @@ fn opaque_and_fixed_schema_strings_are_lossless() {
 }
 
 #[test]
-fn native_names_compare_utf16_units_even_when_grammar_is_violated() {
+fn native_names_compare_decoded_pairs_even_when_grammar_is_violated() {
     // invalid names still participate in exact namespace/reference rules.
     let validation = checked(
-        r#"{"openbindings":"0.2.0","operations":{"\ud800":{"aliases":["\uD800"]}},"sources":{"\udc00":{"kind":"k"}},"bindings":{"b":{"operation":"\uD800","source":"\uDC00"}},"dependencies":{"d":{"operation":"\ud800"}}}"#,
+        r#"{"openbindings":"0.2.0","operations":{"\ud83d\ude00":{"aliases":["\uD83D\uDE00"]}},"sources":{"\uffff":{"kind":"k"}},"bindings":{"b":{"operation":"\uD83D\uDE00","source":"\uFFFF"}},"dependencies":{"d":{"operation":"\ud83d\ude00"}}}"#,
     );
     let evidence = &validation.report().evidence;
     assert_eq!(evidence["OBI-04"], Evidence::Violated);

@@ -1,7 +1,7 @@
 {
   "format": "openbindings.rust-migration-cases@1",
-  "spec_commit": "2f7d754dc2da374058cd517064c17e50f7d95d99",
-  "count": 435,
+  "spec_commit": "30416ef1ca626e58eb8c383a0c71422a68f9243f",
+  "count": 440,
   "ids": [
     "CONFORMANCE-01",
     "CONFORMANCE-02",
@@ -145,6 +145,11 @@
     "document/OBI-01.json#/tests/2",
     "document/OBI-01.json#/tests/20",
     "document/OBI-01.json#/tests/21",
+    "document/OBI-01.json#/tests/22",
+    "document/OBI-01.json#/tests/23",
+    "document/OBI-01.json#/tests/24",
+    "document/OBI-01.json#/tests/25",
+    "document/OBI-01.json#/tests/26",
     "document/OBI-01.json#/tests/3",
     "document/OBI-01.json#/tests/4",
     "document/OBI-01.json#/tests/5",

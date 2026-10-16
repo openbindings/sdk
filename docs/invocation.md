@@ -73,10 +73,11 @@ Use `.with_context(&context)` to forward one opaque object unchanged.
 `operation::Invoker::new` requires a `Conformant<Document>`, including when no evaluator
 is configured. Invalid documents are rejected before invocation construction;
 document editor reads still report malformed fields and ambiguous names.
-`with_evaluator` is infallible and performs no preparation. A non-scalar source kind
-cannot match a provider's scalar kind declaration. Other exact metadata that cannot
-fit a interface carrier returns `ERR_REFUSED` before dispatch, with a local
-`boundary_error()` identifying the field. `preflight` uses the same selection rules
+`with_evaluator` is infallible and performs no preparation. An unpaired-surrogate
+escape in a source kind or other document metadata violates OBI-01, so that draft
+cannot supply the proof required by the invoker. Other interface carrier failures
+return `ERR_REFUSED` before dispatch, with a local `boundary_error()` identifying
+the field. `preflight` uses the same selection rules
 and never prepares value contracts.
 
 Input is validated before delivery to the provider; successful output is validated

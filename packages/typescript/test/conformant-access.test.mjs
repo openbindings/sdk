@@ -8,7 +8,7 @@ await sdk.initialize(
     new URL("../dist/wasm/openbindings_wasm_bg.wasm", import.meta.url),
   ),
 );
-const text = String.raw`{"openbindings":"0.2.0","name":"\ud800","version":"\udc00","description":"\ud800","schemas":{"t":true,"f":false,"o":{}},"operations":{"run":{"aliases":["go"],"description":"\ud800","tags":["\ud800"],"input":true,"output":false,"examples":{"e":{"description":"\ud800","input":null}}}},"sources":{"s":{"kind":"\ud800","description":"\ud800","content":null}},"dependencies":{"d":{"operation":"run","kinds":["\ud800"],"description":"\ud800"}},"bindings":{"b":{"source":"s","operation":"run","description":"\ud800"}}}`;
+const text = String.raw`{"openbindings":"0.2.0","name":"\ud800\udc00","version":"\uffff","description":"\ud800\udc00","schemas":{"t":true,"f":false,"o":{}},"operations":{"run":{"aliases":["go"],"description":"\ud800\udc00","tags":["\ud800\udc00"],"input":true,"output":false,"examples":{"e":{"description":"\ud800\udc00","input":null}}}},"sources":{"s":{"kind":"\ud800\udc00","description":"\ud800\udc00","content":null}},"dependencies":{"d":{"operation":"run","kinds":["\ud800\udc00"],"description":"\ud800\udc00"}},"bindings":{"b":{"source":"s","operation":"run","description":"\ud800\udc00"}}}`;
 
 test("Rust proof transfer is single-use and unavailable to parsed or forged handles", () => {
   const parsed = bridge.WasmDocument.parseBytes(new TextEncoder().encode(text));
@@ -235,7 +235,7 @@ test("validated text and retained reads preserve exact UTF-16 and presence", () 
   const proof = result.document;
   assert.equal(proof.openbindings, "0.2.0");
   assert.equal(proof.name.charCodeAt(0), 0xd800);
-  assert.equal(proof.version.charCodeAt(0), 0xdc00);
+  assert.equal(proof.version.charCodeAt(0), 0xffff);
   assert.equal(proof.description.charCodeAt(0), 0xd800);
   const parsed = proof.asDocument();
   assert.equal(parsed.name.charCodeAt(0), 0xd800);
@@ -245,7 +245,7 @@ test("validated text and retained reads preserve exact UTF-16 and presence", () 
   assert.equal(proof.sources[0].kind.charCodeAt(0), 0xd800);
   assert.equal(proof.dependencies[0].kinds[0].charCodeAt(0), 0xd800);
   assert.equal(proof.bindings[0].description.charCodeAt(0), 0xd800);
-  assert.equal(proof.dependencyAcceptsKind("d", "\ud800"), true);
+  assert.equal(proof.dependencyAcceptsKind("d", "\ud800\udc00"), true);
   const schemas = proof.schemas();
   assert.deepEqual([...schemas.keys()], ["f", "o", "t"]);
   const operation = proof.resolveOperation("go").operation;

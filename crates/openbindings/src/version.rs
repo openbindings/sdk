@@ -8,7 +8,7 @@ pub const AUTHORING_VERSION: &str = "0.2.0";
 /// Specification release whose document rules this build applies.
 pub const APPLIED_SPEC_RELEASE: &str = "0.2.0";
 /// Exact applied specification Git revision; identifies the rules behind validation.
-pub const APPLIED_SPEC_REVISION: &str = "2f7d754dc2da374058cd517064c17e50f7d95d99";
+pub const APPLIED_SPEC_REVISION: &str = "30416ef1ca626e58eb8c383a0c71422a68f9243f";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]

@@ -89,9 +89,9 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: openbindings/spec
-          ref: 2f7d754dc2da374058cd517064c17e50f7d95d99
+          ref: 30416ef1ca626e58eb8c383a0c71422a68f9243f
           path: .ci-spec
-      - run: node tools/verify-spec.mjs . .ci-spec 2f7d754dc2da374058cd517064c17e50f7d95d99 --self-test
+      - run: node tools/verify-spec.mjs . .ci-spec 30416ef1ca626e58eb8c383a0c71422a68f9243f --self-test
       - name: Remove temporary specification checkout before clean-candidate checks
         run: python -c "import shutil; shutil.rmtree('.ci-spec')"
       - run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
