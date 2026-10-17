@@ -29,6 +29,13 @@ Default parsing admits 64 MiB, 10,000 container levels and 1,000,000 nodes.
 Ordinary Rust Serde conversion has a 128-container ceiling. Document reports
 retain at most 4,096 findings and 8 MiB of pointers. Truncation leaves rule evidence
 intact. See [performance and allocation boundaries](docs/performance-boundaries.md).
+OBI-02's whole-document check may spend 80 evaluator steps per admitted node and
+64 pattern steps per source byte, so every document the admission limits admit,
+default or caller-selected, gets an OBI-02 verdict, with work linear in those
+limits. A near miss of the SemVer pattern is the costliest input, at about 20
+pattern steps per byte. Each embedded schema's OBI-10 meta-schema check keeps a
+fixed allowance of 2,000,000 steps; it takes at most 2 per node, so no schema the
+default limits admit reaches it.
 
 ## Value validation
 

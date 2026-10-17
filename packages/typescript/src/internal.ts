@@ -1131,7 +1131,7 @@ export type Edit =
   | {
       /** Replace or insert a JSON value at the specified pointer. */
       op: "set";
-      /** RFC 6901 path into the revision before the batch. */
+      /** RFC 6901 path into the revision before the batch; a segment may hold an unpaired UTF-16 unit, as a finding's pointer can. */
       pointer: string;
       /** Borrowed exact or checked ordinary JSON; never consumed. */
       value: JsonInput;
@@ -1139,7 +1139,7 @@ export type Edit =
   | {
       /** Remove an existing member or array element. */
       op: "remove";
-      /** RFC 6901 path; removing the root is refused. */
+      /** RFC 6901 path, which may hold an unpaired UTF-16 unit; removing the root is refused. */
       pointer: string;
     }
   | {
@@ -1286,16 +1286,18 @@ export class Document extends DocumentReads {
     editableRaw(this);
     this.#encoded(edits, { origins: new WeakMap(), editBatch: true });
   }
-  /** Replace or insert a value at an RFC 6901 pointer. Exact owners are borrowed; ordinary values are checked without invoking getters/toJSON. */
+  /** Replace or insert a value at an RFC 6901 pointer. A segment may hold an unpaired UTF-16 unit, so a finding's pointer addresses the member it reports. Exact owners are borrowed; ordinary values are checked without invoking getters/toJSON. */
   set(pointer: string, value: JsonInput): void {
-    scalar(pointer);
-    if (isExact(value)) this.#commit((raw) => raw.set(pointer, jsonRaw(value)));
+    // Only a pointer holding an unpaired unit needs the batch route, whose JSON
+    // escapes keep it exact across the bridge.
+    if (isExact(value) && wellFormed(pointer))
+      this.#commit((raw) => raw.set(pointer, jsonRaw(value)));
     else this.edit([{ op: "set", pointer, value }]);
   }
-  /** Remove an existing member/array element. Throws EditError on refusal; removing the root is not supported. */
+  /** Remove an existing member/array element at an RFC 6901 pointer, which may hold an unpaired UTF-16 unit as a finding's can. Throws EditError on refusal; removing the root is not supported. */
   remove(pointer: string): void {
-    scalar(pointer);
-    this.#commit((raw) => raw.remove(pointer));
+    if (wellFormed(pointer)) this.#commit((raw) => raw.remove(pointer));
+    else this.edit([{ op: "remove", pointer }]);
   }
   /** Set the version declaration; conformance is assessed separately. */
   setOpenbindings(value: string): void {

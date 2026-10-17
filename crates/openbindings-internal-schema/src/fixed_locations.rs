@@ -6,6 +6,8 @@ use jsonschema::{Validator, ValidatorMap};
 use openbindings_internal_json::backend::{self, FlatJson};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, HashSet};
+// Guidance runs inside the whole-document check and spends its allowance.
+const ENCLOSING: super::fixed_schema::Allowance = super::fixed_schema::Allowance::ENCLOSING;
 
 struct Shape {
     pointer: String,
@@ -307,7 +309,7 @@ impl LocationMap {
 
     fn valid(&self, id: usize, at: JsonRef<'_>) -> Result<bool, ()> {
         let validator = self.validators.get(&self.shapes[id].pointer).ok_or(())?;
-        super::fixed_schema::bounded_valid(validator, at).map_err(|_| ())
+        super::fixed_schema::bounded_valid(validator, at, ENCLOSING).map_err(|_| ())
     }
 
     fn frame<'a>(&self, at: JsonRef<'a>, seeds: Vec<usize>) -> Result<Frame<'a>, ()> {
@@ -333,7 +335,7 @@ impl LocationMap {
                 .containers
                 .get(&self.shapes[id].container_pointer)
                 .ok_or(())?;
-            if !super::fixed_schema::bounded_valid(validator, at).map_err(|_| ())? {
+            if !super::fixed_schema::bounded_valid(validator, at, ENCLOSING).map_err(|_| ())? {
                 container_failed = true;
                 break;
             }
@@ -394,7 +396,7 @@ impl LocationMap {
                             candidates.push(property);
                         }
                         for (matcher, target) in &shape.patterns {
-                            if super::fixed_schema::bounded_valid(matcher, member.name)
+                            if super::fixed_schema::bounded_valid(matcher, member.name, ENCLOSING)
                                 .map_err(|_| ())?
                             {
                                 matched = true;

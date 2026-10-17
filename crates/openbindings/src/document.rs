@@ -8,7 +8,7 @@ use openbindings_internal_json::backend;
 use serde::Serialize;
 mod edit;
 mod read_views;
-pub use edit::{Edit, EditError};
+pub use edit::{Edit, EditError, PointerRef};
 mod conformant_views;
 use crate::{contracts::ResourceSetInner, schema_space::SchemaSpace};
 pub use conformant_views::*;

@@ -239,11 +239,10 @@ pub fn derive(
     .collect::<Result<Vec<_>, _>>()
     .map_err(openbindings::EditError::from)?;
     let mut edits = vec![Edit::SetOperations { value: &operations }];
-    edits.extend(
-        text_fields
-            .iter()
-            .map(|(pointer, value)| Edit::Set { pointer, value }),
-    );
+    edits.extend(text_fields.iter().map(|(pointer, value)| Edit::Set {
+        pointer: (*pointer).into(),
+        value,
+    }));
     if !dependencies.is_empty() {
         edits.push(Edit::SetDependencies {
             value: &dependencies,

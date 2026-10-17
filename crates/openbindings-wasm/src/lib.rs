@@ -405,8 +405,15 @@ impl WasmDocument {
         for row in rows {
             let pointer = row
                 .get("pointer")
-                .and_then(|v| v.as_str())
+                .filter(|v| v.kind() == JsonKind::String)
                 .ok_or_else(|| error("invalid-pointer", "expected a pointer string"))?;
+            // A pointer through a member name with an unpaired unit, as a
+            // finding reports one, arrives as a JSON escape and stays exact.
+            let pointer = match pointer.as_str() {
+                Some(text) => Ok(text),
+                None => Err(openbindings_internal_json::backend::string_pointer(pointer)
+                    .ok_or_else(|| edit_error(EditError::InvalidPointer))?),
+            };
             let value = match row.get("op").and_then(|v| v.as_str()) {
                 Some("set") => Some(
                     row.get("value")
@@ -422,9 +429,15 @@ impl WasmDocument {
         let edits: Vec<_> = paths
             .iter()
             .zip(&values)
-            .map(|(pointer, value)| match value {
-                Some(value) => Edit::Set { pointer, value },
-                None => Edit::Remove { pointer },
+            .map(|(pointer, value)| {
+                let pointer = match pointer {
+                    Ok(text) => PointerRef::from(*text),
+                    Err(exact) => PointerRef::from(exact),
+                };
+                match value {
+                    Some(value) => Edit::Set { pointer, value },
+                    None => Edit::Remove { pointer },
+                }
             })
             .collect();
         self.handle.editable()?.edit(&edits).map_err(edit_error)

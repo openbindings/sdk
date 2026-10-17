@@ -20,37 +20,37 @@ fn atomic_failure_keeps_bytes_caches_views_and_proof() {
     for edits in [
         vec![
             Edit::Set {
-                pointer: "/name",
+                pointer: "/name".into(),
                 value: &value,
             },
             Edit::Remove {
-                pointer: "/missing",
+                pointer: "/missing".into(),
             },
         ],
         vec![
             Edit::Set {
-                pointer: "/operations",
+                pointer: "/operations".into(),
                 value: &value,
             },
             Edit::Remove {
-                pointer: "/operations/go",
+                pointer: "/operations/go".into(),
             },
         ],
         vec![
             Edit::Set {
-                pointer: "/new",
+                pointer: "/new".into(),
                 value: &value,
             },
             Edit::Set {
-                pointer: "/new",
+                pointer: "/new".into(),
                 value: &value,
             },
         ],
         vec![Edit::Set {
-            pointer: "/~2",
+            pointer: "/~2".into(),
             value: &value,
         }],
-        vec![Edit::Remove { pointer: "" }],
+        vec![Edit::Remove { pointer: "".into() }],
     ] {
         assert!(doc.edit(&edits).is_err());
         assert_eq!(doc.as_bytes(), bytes);
@@ -81,11 +81,11 @@ fn sibling_insertions_coalesce_in_batch_order_and_escape_keys() {
         let mut doc = Document::parse(input).unwrap();
         doc.edit(&[
             Edit::Set {
-                pointer: "/a~1b",
+                pointer: "/a~1b".into(),
                 value: &exact("1e+03"),
             },
             Edit::Set {
-                pointer: "/c~0d",
+                pointer: "/c~0d".into(),
                 value: &exact("-0"),
             },
         ])
@@ -95,11 +95,11 @@ fn sibling_insertions_coalesce_in_batch_order_and_escape_keys() {
     let mut doc = Document::parse("[ ]").unwrap();
     doc.edit(&[
         Edit::Set {
-            pointer: "/-",
+            pointer: "/-".into(),
             value: &exact("1"),
         },
         Edit::Set {
-            pointer: "/-",
+            pointer: "/-".into(),
             value: &exact("2"),
         },
     ])
@@ -112,7 +112,7 @@ fn sibling_insertions_coalesce_in_batch_order_and_escape_keys() {
         &pointers
             .iter()
             .map(|pointer| Edit::Set {
-                pointer,
+                pointer: pointer.into(),
                 value: &value,
             })
             .collect::<Vec<_>>(),
@@ -456,9 +456,11 @@ fn removing_the_only_child_and_inserting_siblings_uses_one_separator_group() {
         let mut document = Document::parse(source).unwrap();
         document
             .edit(&[
-                Edit::Remove { pointer: removed },
+                Edit::Remove {
+                    pointer: removed.into(),
+                },
                 Edit::Set {
-                    pointer: inserted,
+                    pointer: inserted.into(),
                     value: &exact("2"),
                 },
             ])
@@ -507,7 +509,7 @@ fn removing_any_set_of_siblings_in_one_batch_matches_removing_them_one_at_a_time
                     let mut edits: Vec<_> = removed
                         .iter()
                         .map(|&i| Edit::Remove {
-                            pointer: children[i],
+                            pointer: children[i].into(),
                         })
                         .collect();
                     if reversed {
@@ -516,7 +518,7 @@ fn removing_any_set_of_siblings_in_one_batch_matches_removing_them_one_at_a_time
                     let five = exact("5");
                     if insert {
                         edits.push(Edit::Set {
-                            pointer: append,
+                            pointer: append.into(),
                             value: &five,
                         });
                     }
@@ -534,8 +536,12 @@ fn removing_any_set_of_siblings_in_one_batch_matches_removing_them_one_at_a_time
     let mut document = Document::parse(r#"{"a":1,"b":2,"c":3}"#).unwrap();
     document
         .edit(&[
-            Edit::Remove { pointer: "/b" },
-            Edit::Remove { pointer: "/c" },
+            Edit::Remove {
+                pointer: "/b".into(),
+            },
+            Edit::Remove {
+                pointer: "/c".into(),
+            },
         ])
         .unwrap();
     assert_eq!(document.as_bytes(), br#"{"a":1}"#);
@@ -547,39 +553,57 @@ fn overlapping_edits_are_refused_without_changing_bytes() {
     let source = r#"{"a":{"b":1,"c":2},"d":3}"#;
     for edits in [
         vec![
-            Edit::Remove { pointer: "/d" },
-            Edit::Remove { pointer: "/d" },
+            Edit::Remove {
+                pointer: "/d".into(),
+            },
+            Edit::Remove {
+                pointer: "/d".into(),
+            },
         ],
         vec![
-            Edit::Remove { pointer: "/a/b" },
-            Edit::Remove { pointer: "/a" },
+            Edit::Remove {
+                pointer: "/a/b".into(),
+            },
+            Edit::Remove {
+                pointer: "/a".into(),
+            },
         ],
         vec![
-            Edit::Remove { pointer: "/a" },
-            Edit::Remove { pointer: "/a/b" },
-            Edit::Remove { pointer: "/a/c" },
+            Edit::Remove {
+                pointer: "/a".into(),
+            },
+            Edit::Remove {
+                pointer: "/a/b".into(),
+            },
+            Edit::Remove {
+                pointer: "/a/c".into(),
+            },
         ],
         vec![
-            Edit::Remove { pointer: "/d" },
+            Edit::Remove {
+                pointer: "/d".into(),
+            },
             Edit::Set {
-                pointer: "/d",
+                pointer: "/d".into(),
                 value: &two,
             },
         ],
         vec![
-            Edit::Remove { pointer: "/a" },
+            Edit::Remove {
+                pointer: "/a".into(),
+            },
             Edit::Set {
-                pointer: "/a/b",
+                pointer: "/a/b".into(),
                 value: &two,
             },
         ],
         vec![
             Edit::Set {
-                pointer: "/z",
+                pointer: "/z".into(),
                 value: &two,
             },
             Edit::Set {
-                pointer: "/z",
+                pointer: "/z".into(),
                 value: &two,
             },
         ],
@@ -653,7 +677,7 @@ fn every_typed_part_setter_matches_an_exact_reference_sequence() {
         expected = next;
     }
     let edit = Edit::Remove {
-        pointer: "/private-token",
+        pointer: "/private-token".into(),
     };
     assert!(!format!("{edit:?}").contains("private-token"));
 }
@@ -700,7 +724,7 @@ fn typed_namespace_batch_preserves_exact_bytes_and_is_atomic() {
         .edit(&[
             Edit::SetOperations { value: &operations },
             Edit::Set {
-                pointer: "/name",
+                pointer: "/name".into(),
                 value: &name,
             },
             Edit::SetDependencies {
@@ -721,7 +745,7 @@ fn typed_namespace_batch_preserves_exact_bytes_and_is_atomic() {
                     value: &BTreeMap::new()
                 },
                 Edit::Remove {
-                    pointer: "/missing"
+                    pointer: "/missing".into()
                 }
             ])
             .is_err()
@@ -742,4 +766,107 @@ fn typed_namespace_batch_preserves_exact_bytes_and_is_atomic() {
         "field-collision"
     );
     assert_eq!(document.as_bytes(), before);
+}
+
+#[test]
+fn a_finding_pointer_through_an_unpaired_name_edits_the_member_it_reports() {
+    // No Rust text spells this member's name; its OBI-01 finding's exact
+    // pointer addresses it, alone or in a batch, and repairs the document.
+    let text = r#"{"openbindings":"0.2.0","operations":{},"x-a":{"\ud800":1,"k":2}}"#;
+    let document = Document::parse(text).unwrap();
+    let validation = document.validate().unwrap();
+    let finding = &validation.report().findings[0];
+    assert_eq!(
+        (finding.rule, finding.code),
+        ("OBI-01", "unpaired-surrogate")
+    );
+    let pointer = finding.location.as_ref().unwrap().pointer.clone().unwrap();
+    assert_eq!(pointer.as_str(), None);
+    let conclusion = |doc: &Document| doc.validate().unwrap().report().conclusion;
+
+    let mut removed = document.clone();
+    removed.remove(&pointer).unwrap();
+    assert_eq!(
+        removed.as_bytes(),
+        br#"{"openbindings":"0.2.0","operations":{},"x-a":{"k":2}}"#
+    );
+    assert_eq!(conclusion(&removed), Conformance::Conformant);
+
+    let mut replaced = document.clone();
+    replaced.set(&pointer, &exact("[3]")).unwrap();
+    assert_eq!(
+        replaced.as_bytes(),
+        br#"{"openbindings":"0.2.0","operations":{},"x-a":{"\ud800":[3],"k":2}}"#
+    );
+    let inside = Pointer::from_utf16(
+        &pointer
+            .utf16_units()
+            .chain("/0".encode_utf16())
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    replaced.set(&inside, &exact("4")).unwrap();
+    assert_eq!(replaced.value().at_pointer(&inside).unwrap().text(), "4");
+
+    let mut renamed = document.clone();
+    let value = exact("1");
+    renamed
+        .edit(&[
+            Edit::Remove {
+                pointer: (&pointer).into(),
+            },
+            Edit::Set {
+                pointer: "/x-a/fixed".into(),
+                value: &value,
+            },
+        ])
+        .unwrap();
+    assert_eq!(
+        renamed.as_bytes(),
+        br#"{"openbindings":"0.2.0","operations":{},"x-a":{"k":2,"fixed":1}}"#
+    );
+    assert_eq!(conclusion(&renamed), Conformance::Conformant);
+    assert_eq!(document.as_bytes(), text.as_bytes());
+}
+
+#[test]
+fn an_exact_pointer_inserts_and_appends_like_its_text() {
+    let units = |text: &str| text.encode_utf16().collect::<Vec<_>>();
+    let exact_pointer = |parts: &[&[u16]]| Pointer::from_utf16(&parts.concat()).unwrap();
+    let mut doc = Document::parse(r#"{"x":{"\ud800":{"list":[]}}}"#).unwrap();
+    let lone = [0xd800];
+    // A missing name with an unpaired unit, decoded from its escapes, is
+    // written as a JSON escape; its own pointer then finds it.
+    let inserted = exact_pointer(&[&units("/x/"), &lone, &units("~0~1y")]);
+    doc.set(&inserted, &exact("true")).unwrap();
+    let appended = exact_pointer(&[&units("/x/"), &lone, &units("/list/-")]);
+    doc.set(&appended, &exact("5")).unwrap();
+    assert_eq!(
+        doc.as_bytes(),
+        br#"{"x":{"\ud800":{"list":[5]},"\ud800~/y":true}}"#
+    );
+    assert_eq!(doc.value().at_pointer(&inserted).unwrap().text(), "true");
+    // An exact pointer whose units all pair is the same as its text.
+    let paired: Pointer = "/x/plain".parse().unwrap();
+    doc.set(&paired, &exact("0")).unwrap();
+    assert_eq!(doc.value().at("/x/plain").unwrap().text(), "0");
+    // Its refusals match the text form's.
+    let missing = exact_pointer(&[&units("/none/"), &lone]);
+    assert_eq!(
+        doc.set(&missing, &exact("0")),
+        Err(EditError::MissingParent)
+    );
+    assert_eq!(doc.remove(&missing), Err(EditError::MissingValue));
+    let into_array = exact_pointer(&[&units("/x/"), &lone, &units("/list/"), &lone]);
+    assert_eq!(
+        doc.set(&into_array, &exact("0")),
+        Err(EditError::InvalidPointer)
+    );
+    let duplicate = exact_pointer(&[&units("/x/"), &lone, &units("/n")]);
+    let value = exact("1");
+    let twice = Edit::Set {
+        pointer: (&duplicate).into(),
+        value: &value,
+    };
+    assert_eq!(doc.edit(&[twice, twice]), Err(EditError::Overlap));
 }

@@ -933,6 +933,15 @@ pub fn duplicate_member_names(
         })
 }
 
+/// Count a value's nodes, including itself and its member-name tokens: the
+/// measure [`crate::JsonLimits::max_nodes`] admits. A subtree's ids are
+/// contiguous in source order, so this is one logarithmic search.
+pub fn node_count(value: crate::JsonRef<'_>) -> usize {
+    let nodes = &value.owner.nodes[value.id..];
+    let end = nodes[0].span.end;
+    nodes.partition_point(|node| node.span.start < end)
+}
+
 pub fn depth(value: &crate::JsonValue) -> usize {
     let span = &value.owner.nodes[value.id].span;
     let end = value
