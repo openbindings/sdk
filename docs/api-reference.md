@@ -103,8 +103,8 @@ dependency. Use `JsonValue::parse_with_limits` and `PreparedContract::validate`
 for custom admission limits or retained exact values; `validate_with_control`
 accepts cooperative cancellation. Each preparation still compiles independently.
 A `ResourceSet` indexes its resource identities once, and clones share it. A
-resolution space is assembled only when an evaluator requests the core projection,
-once per live revision and set; repeated or alternating preparation reuses it. The
+resolution space is assembled when the default evaluator prepares or another
+evaluator requests the core projection, once per live revision and set; repeated or alternating preparation reuses it. The
 space without supplied resources stays with the revision, and a space with a set
 stays with that set until the set or the revision is dropped, so a prepared
 contract never retains a space for resources it did not receive.

@@ -527,6 +527,11 @@ pub fn view(value: &crate::JsonValue) -> View<'_> {
 pub fn pointer(value: &crate::JsonValue) -> Option<String> {
     value.owner.pointer(value.id)
 }
+/// Append the JSON Pointer [`pointer()`] builds to `out` without another
+/// allocation; `false`, appending nothing, when it is unavailable.
+pub fn pointer_into(value: &crate::JsonValue, out: &mut Vec<u8>) -> bool {
+    value.owner.pointer_into(value.id, out)
+}
 /// Measure separately owned decoded UTF-8 strings in a borrowed exact subtree,
 /// including member names. Raw source bytes are excluded. Unescaped strings borrow
 /// their source; escaped scalar strings own their complete decoded value. This

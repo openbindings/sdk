@@ -152,9 +152,9 @@ their original snapshots. An application can prepare a candidate before replacin
 its active contract and keep serving old work if preparation fails.
 
 A `ResourceSet` indexes its resource identities once when it is built, and clones
-share that index. Evaluators that request the core projection reuse one resolution
-space per live document revision and set, including when preparations alternate
-between sets. The space without supplied resources stays with the revision; a
+share that index. The default evaluator, and evaluators that request the core
+projection, reuse one resolution space per live document revision and set,
+including when preparations alternate between sets. The space without supplied resources stays with the revision; a
 space with a set stays with that set and is released when the set or the revision
 is dropped. A prepared contract retains at most its own document and resources,
 and only when its evaluator keeps them; the default evaluator's keeps neither.

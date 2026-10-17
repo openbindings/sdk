@@ -6,29 +6,47 @@ use embedding::schema_index::SchemaIndex;
 use embedding::{
     Control as WorkControl, Failure as NoVerdict, FailureReason as NoVerdictReason,
     Location as SchemaLocation, Program as EvaluationProgram, ProjectedResource as SchemaResource,
-    RawDocument as Document, Supplied as ResourceSet,
 };
+#[cfg(test)]
+use embedding::{RawDocument as Document, Supplied as ResourceSet};
 use openbindings_internal_json::backend::node_id;
 use openbindings_internal_schema::{self as embedding, *};
+#[cfg(test)]
+use std::ops::DerefMut;
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
-    ops::{Deref, DerefMut},
+    ops::Deref,
 };
-pub(super) struct SchemaSpace(embedding::SchemaSpace);
+// The resolution space a preparation plans in: the core's, kept for the live
+// document revision and resource set, or one a test assembles.
+pub(super) enum SchemaSpace {
+    Shared(openbindings::ResolutionSpace),
+    #[cfg(test)]
+    Owned(Box<embedding::SchemaSpace>),
+}
+#[cfg(test)]
 impl SchemaSpace {
     fn new(document: Document, supplied: ResourceSet) -> Self {
-        Self(embedding::SchemaSpace::new(document, supplied))
+        Self::Owned(Box::new(embedding::SchemaSpace::new(document, supplied)))
     }
 }
 impl Deref for SchemaSpace {
     type Target = embedding::SchemaSpace;
     fn deref(&self) -> &Self::Target {
-        &self.0
+        match self {
+            Self::Shared(space) => space,
+            #[cfg(test)]
+            Self::Owned(space) => space,
+        }
     }
 }
+#[cfg(test)]
 impl DerefMut for SchemaSpace {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        match self {
+            Self::Owned(space) => space,
+            Self::Shared(_) => unreachable!("tests extend only spaces they assemble"),
+        }
     }
 }
 /// Paired, owned JSON Schema validity bounds for one immutable resource snapshot.
@@ -89,19 +107,13 @@ impl EvaluationBounds {
     }
 }
 
+// The core assembles one resolution space per live document revision and
+// resource set and keeps it with them; preparations of either reuse it.
 pub(super) fn space(request: &openbindings::SchemaRequest) -> (SchemaSpace, usize) {
-    let space = SchemaSpace::new(
-        Document::new(request.document().as_document().value().clone()),
-        embedding::Supplied::new(request.supplied_resources().iter().map(|r| SchemaResource {
-            uri: r.uri.clone(),
-            document: r.document.clone(),
-        }))
-        .expect("admitted resources"),
-    );
-    let entry = space
-        .document_node(request.entry())
-        .expect("validated entry is a schema");
-    (space, entry)
+    let space =
+        request.default_evaluator_space(embedding::DefaultEvaluatorLink::for_default_evaluator());
+    let entry = space.entry();
+    (SchemaSpace::Shared(space), entry)
 }
 #[cfg(test)]
 mod location_budget_tests {

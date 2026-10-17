@@ -4,7 +4,9 @@ use crate::{
     schema_index::{DIALECT, SchemaIndex},
     uri, *,
 };
-use openbindings_internal_json::backend::{has_unpaired, node_id, pointer, pointer_size};
+use openbindings_internal_json::backend::{
+    has_unpaired, node_id, pointer, pointer_into, pointer_size,
+};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 pub struct SpaceNode {
@@ -58,6 +60,24 @@ impl std::fmt::Debug for Source {
     }
 }
 
+const PROGRAM_NAMESPACE: &str = "https://sdk-program.openbindings.invalid/";
+/// A projection without its location map, with the node each definition of
+/// each projected resource came from, in `$defs` order.
+pub struct UnmappedProgram {
+    pub program: Program,
+    pub definitions: Vec<Vec<usize>>,
+}
+impl std::fmt::Debug for UnmappedProgram {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UnmappedProgram").finish_non_exhaustive()
+    }
+}
+// One empty map shared by every unmapped program, so none allocates one.
+fn unmapped() -> std::sync::Arc<BTreeMap<String, crate::ProgramOrigin>> {
+    static EMPTY: std::sync::OnceLock<std::sync::Arc<BTreeMap<String, crate::ProgramOrigin>>> =
+        std::sync::OnceLock::new();
+    EMPTY.get_or_init(Default::default).clone()
+}
 /// How a projected schema keyword holds its subschemas. A projection writes each
 /// child position as `{"$ref": <generated child address>}`; every other keyword
 /// value is copied from the original source unchanged.
@@ -410,6 +430,32 @@ impl SchemaSpace {
     pub fn document_node(&self, value: &JsonValue) -> Option<usize> {
         self.sources[0].positions.get(&node_id(value)).copied()
     }
+    /// Append a node's original pointer, exactly as [`Self::location`] gives it,
+    /// to `out`, using `scratch` for its source's own pointer, and return the
+    /// source's URI (`None` for the document).
+    pub fn location_into(
+        &self,
+        node: usize,
+        out: &mut Vec<u8>,
+        scratch: &mut Vec<u8>,
+    ) -> Option<&str> {
+        let node = &self.nodes[node];
+        let source = &self.sources[node.source];
+        scratch.clear();
+        if !pointer_into(&source.value, scratch) {
+            scratch.clear();
+        }
+        let start = out.len();
+        pointer_into(&node.value, out);
+        if !scratch.is_empty() && out[start..].starts_with(scratch) {
+            out.drain(start..start + scratch.len());
+        }
+        source.uri.as_deref()
+    }
+    /// The URI of a node's source, as [`Self::location`] gives it.
+    pub fn source_uri(&self, node: usize) -> Option<&str> {
+        self.sources[self.nodes[node].source].uri.as_deref()
+    }
     pub fn location(&self, node: usize) -> Location {
         let node = &self.nodes[node];
         let source = &self.sources[node.source];
@@ -577,18 +623,30 @@ impl SchemaSpace {
         let reach = self.reach(entry, control)?;
         self.project(entry, &reach, control)
     }
+    /// The same projection as [`Self::program`] without its location map, for a
+    /// caller that writes origins itself: each definition's node, per projected
+    /// resource in `$defs` order, whose origin [`Self::location_into`] gives.
+    pub fn program_unmapped(
+        &self,
+        entry: usize,
+        control: &dyn Control,
+    ) -> Result<UnmappedProgram, Failure> {
+        control.check()?;
+        let reach = self.reach(entry, control)?;
+        let (program, definitions) =
+            self.projection(entry, &reach, control, PROGRAM_NAMESPACE, false)?;
+        Ok(UnmappedProgram {
+            program,
+            definitions,
+        })
+    }
     pub fn project(
         &self,
         entry: usize,
         reach: &Reach,
         control: &dyn Control,
     ) -> Result<Program, Failure> {
-        self.project_with_namespace(
-            entry,
-            reach,
-            control,
-            "https://sdk-program.openbindings.invalid/",
-        )
+        self.project_with_namespace(entry, reach, control, PROGRAM_NAMESPACE)
     }
     pub fn project_with_namespace(
         &self,
@@ -597,13 +655,26 @@ impl SchemaSpace {
         control: &dyn Control,
         namespace: &str,
     ) -> Result<Program, Failure> {
+        self.projection(entry, reach, control, namespace, true)
+            .map(|(program, _)| program)
+    }
+    // With `mapped`, the program maps every definition to its origin; without,
+    // it maps nothing and the nodes of each resource's definitions are returned.
+    fn projection(
+        &self,
+        entry: usize,
+        reach: &Reach,
+        control: &dyn Control,
+        namespace: &str,
+        mapped: bool,
+    ) -> Result<(Program, Vec<Vec<usize>>), Failure> {
         let resource_uri = |resource: usize| format!("{namespace}r{resource}");
         let address =
             |node: usize| format!("{}#/$defs/n{node}", resource_uri(self.nodes[node].resource));
         let reference = |node: usize| format!("{{\"$ref\":{}}}", quoted(&address(node)));
         // Reach admits every node through check_known_node before projection.
         // Its meta-schema and scalar-name checks establish the shapes below.
-        let mut definitions: BTreeMap<usize, BTreeMap<String, String>> = BTreeMap::new();
+        let mut definitions: BTreeMap<usize, BTreeMap<String, (String, usize)>> = BTreeMap::new();
         let mut locations = BTreeMap::new();
         let mut byte_count = 0usize;
         let mut nodes: Vec<_> = reach.nodes.iter().copied().collect();
@@ -706,18 +777,28 @@ impl SchemaSpace {
                     "schema projection exceeds 64 MiB",
                 ));
             }
-            locations.insert(address(id), crate::ProgramOrigin::Prefix(self.location(id)));
+            if mapped {
+                locations.insert(address(id), crate::ProgramOrigin::Prefix(self.location(id)));
+            }
             definitions
                 .entry(node.resource)
                 .or_default()
-                .insert(format!("n{id}"), transformed);
+                .insert(format!("n{id}"), (transformed, id));
         }
         let entry_resource = self.nodes[entry].resource;
         let entry_uri = resource_uri(entry_resource);
+        let mut nodes = Vec::new();
+        if !mapped {
+            nodes.reserve_exact(definitions.len());
+        }
         let resources = definitions
             .into_iter()
             .map(|(id, defs)| {
                 let uri = resource_uri(id);
+                if !mapped {
+                    nodes.push(defs.values().map(|&(_, node)| node).collect());
+                }
+                let defs = defs.into_iter().map(|(name, (text, _))| (name, text));
                 let mut fields = BTreeMap::from([
                     ("$id".into(), quoted(&uri)),
                     ("$schema".into(), quoted(DIALECT)),
@@ -739,11 +820,17 @@ impl SchemaSpace {
                     })
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Program {
+        let locations = if mapped {
+            std::sync::Arc::new(locations)
+        } else {
+            unmapped()
+        };
+        let program = Program {
             entry_uri,
             resources,
-            locations: std::sync::Arc::new(locations),
-        })
+            locations,
+        };
+        Ok((program, nodes))
     }
     pub fn check_known_node(&self, id: usize) -> Result<(), Failure> {
         let node = &self.nodes[id];
@@ -970,7 +1057,7 @@ impl SchemaSpace {
 pub fn quoted(text: &str) -> String {
     serde_json::to_string(text).expect("a Rust string serializes as JSON")
 }
-pub fn object(fields: BTreeMap<String, String>) -> String {
+pub fn object(fields: impl IntoIterator<Item = (String, String)>) -> String {
     format!(
         "{{{}}}",
         fields
@@ -1135,6 +1222,67 @@ mod projection_tests {
             })
             .collect();
         (valid, paths)
+    }
+    #[test]
+    fn unmapped_programs_are_the_same_projection_and_name_every_origin() {
+        // A document schema, a supplied resource, an embedded resource and
+        // names needing pointer escapes.
+        let document = RawDocument::parse(
+            r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"allOf":[{"$ref":"#/schemas/a~1b"},{"$ref":"https://example.invalid/tree"}]}}},"schemas":{"a/b":{"properties":{"~x":{"$id":"https://example.invalid/inner","minimum":1}}}}}"##,
+        )
+        .unwrap();
+        let resources = Supplied::new([ProjectedResource {
+            uri: "https://example.invalid/tree".into(),
+            document: JsonValue::parse(r#"{"items":{"type":"string"},"prefixItems":[true]}"#)
+                .unwrap(),
+        }])
+        .unwrap();
+        let space = SchemaSpace::new(document, resources);
+        let entry = space
+            .document_node(
+                &space
+                    .document
+                    .value()
+                    .at("/operations/op/input")
+                    .unwrap()
+                    .to_owned(),
+            )
+            .unwrap();
+        let control = std::sync::atomic::AtomicBool::new(false);
+        let mapped = space.program(entry, &control).unwrap();
+        let unmapped = space.program_unmapped(entry, &control).unwrap();
+        assert!(unmapped.program.locations.is_empty());
+        assert_eq!(mapped.entry_uri, unmapped.program.entry_uri);
+        assert_eq!(mapped.resources.len(), unmapped.definitions.len());
+        let (mut out, mut scratch) = (Vec::new(), Vec::new());
+        let mut checked = 0;
+        for ((resource, other), nodes) in mapped
+            .resources
+            .iter()
+            .zip(&unmapped.program.resources)
+            .zip(&unmapped.definitions)
+        {
+            assert_eq!(resource.uri, other.uri);
+            assert_eq!(resource.document.text(), other.document.text());
+            let names = resource.document.get("$defs").unwrap().members().unwrap();
+            assert_eq!(names.len(), nodes.len());
+            for (definition, &node) in names.zip(nodes) {
+                let key = format!(
+                    "{}#/$defs/{}",
+                    resource.uri,
+                    definition.name.as_str().unwrap()
+                );
+                let ProgramOrigin::Prefix(at) = &mapped.locations[&key] else {
+                    panic!("strict projections map prefix origins")
+                };
+                out.clear();
+                let source = space.location_into(node, &mut out, &mut scratch);
+                assert_eq!(source, at.resource.as_deref(), "{key}");
+                assert_eq!(std::str::from_utf8(&out).unwrap(), at.pointer, "{key}");
+                checked += 1;
+            }
+        }
+        assert_eq!(checked, mapped.locations.len());
     }
     #[test]
     fn generated_name_changes_preserve_dynamic_scope_annotations_opaque_strings_and_locations() {
