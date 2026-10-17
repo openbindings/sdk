@@ -23,7 +23,7 @@ fn assert_unpaired(text: &str, token: &str, pointer: &str) {
             assert_eq!(report.evidence[rule], Evidence::NotApplicable, "{rule}");
         }
         assert!(validation.conformant().is_none());
-        assert_eq!(validation.document().unwrap().to_bytes(), text.as_bytes());
+        assert_eq!(validation.document().unwrap().as_bytes(), text.as_bytes());
         assert_eq!(report.findings.len(), 1);
         assert!(!report.findings_truncated);
         let finding = &report.findings[0];
@@ -90,7 +90,7 @@ fn escaped_pairs_and_noncharacters_remain_conformant() {
         );
         assert!(validation.report().findings.is_empty());
         let proof = validation.conformant().unwrap();
-        assert_eq!(proof.to_bytes(), text.as_bytes());
+        assert_eq!(proof.as_bytes(), text.as_bytes());
         let at = proof.value().get("description").unwrap().location();
         assert_eq!(
             at.pointer.as_ref().and_then(openbindings::Pointer::as_str),

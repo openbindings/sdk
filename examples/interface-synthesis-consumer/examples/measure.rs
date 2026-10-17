@@ -59,7 +59,7 @@ async fn main() {
         };
         let control = CancellationToken::new();
         let seed = derive(&request, &control, false).unwrap();
-        let bytes = seed.document.to_bytes().len();
+        let bytes = seed.document.as_bytes().len();
         let mut derive_times = Vec::new();
         let mut checked = Vec::new();
         let mut warm_validation = Vec::new();
@@ -77,7 +77,7 @@ async fn main() {
             let result = facade.synthesize_with_coverage(&request).await.unwrap();
             checked.push(t.elapsed().as_nanos());
             assert_eq!(result.coverage().entries().len(), size);
-            let fresh = Document::parse(seed.document.to_bytes()).unwrap();
+            let fresh = Document::parse(seed.document.as_bytes()).unwrap();
             let t = Instant::now();
             black_box(fresh.validate().unwrap().conformant().unwrap());
             cold_assessment.push(t.elapsed().as_nanos());

@@ -59,7 +59,7 @@ impl SchemaLocation {
         Self { resource, pointer }
     }
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 /// Structured explanation for why no schema verdict was established. Custom
 /// evaluators build one with [`Self::new`] and [`Self::with_location`]. Later
 /// versions may add fields: read them by name and match with `..`.
@@ -99,6 +99,7 @@ impl NoVerdict {
         }
     }
     /// Attach an established original schema location.
+    #[must_use]
     pub fn with_location(mut self, location: SchemaLocation) -> Self {
         self.location = Some(location);
         self
@@ -111,7 +112,7 @@ impl fmt::Display for NoVerdict {
 }
 impl std::error::Error for NoVerdict {}
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 /// An established undefined result under the value-contract rules. Custom
 /// evaluators build one with [`Self::new`] and [`Self::with_location`] when
 /// semantic provenance and disagreeing completions are proved. Later versions
@@ -135,6 +136,7 @@ impl UndefinedResult {
         }
     }
     /// Attach an established original schema location.
+    #[must_use]
     pub fn with_location(mut self, location: SchemaLocation) -> Self {
         self.location = Some(location);
         self
@@ -152,7 +154,7 @@ impl fmt::Debug for UndefinedResult {
             .finish_non_exhaustive()
     }
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 #[non_exhaustive]
 /// Optional schema facts. Treat source operands as sensitive; none contain a
@@ -186,7 +188,7 @@ pub enum ValueProblemDetails {
     },
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 /// One established instance failure, located in the value and in the schema.
 /// Custom evaluators build one with [`Self::new`] and [`Self::with_details`].
 /// Later versions may add fields: read them by name and match with `..`.
@@ -295,12 +297,13 @@ impl ValueProblem {
         }
     }
     /// Attach established schema facts.
+    #[must_use]
     pub fn with_details(mut self, details: ValueProblemDetails) -> Self {
         self.details = Some(details);
         self
     }
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
 /// Closed result partition for the selected schema and instance: satisfies, fails, undefined, or no verdict. No value outcome proves that the surrounding OpenBindings document conforms.
 ///

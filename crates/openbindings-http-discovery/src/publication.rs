@@ -100,7 +100,7 @@ impl Publication {
     ) -> Result<Self, ConfigurationError> {
         validate_allow_origin(&options.allow_origin)?;
         Ok(Self {
-            body: Arc::from(document.as_document().to_bytes()),
+            body: Arc::from(document.as_document().as_bytes()),
             allow_origin: options.allow_origin,
         })
     }

@@ -450,7 +450,7 @@ export interface OperationMetadata {
 export interface BindingMetadata {
   /** Binding declaration key. */ readonly key: string;
   /** Declared primary operation key. */ readonly operation: string;
-  /** Declared source key; its target may be missing. */ readonly source: string;
+  /** Declared key into the `sources` map; no source need be present under it. */ readonly source: string;
   /** Declared description or null for absence. */ readonly description:
     | string
     | null;

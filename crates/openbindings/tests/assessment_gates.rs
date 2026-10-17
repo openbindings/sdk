@@ -51,7 +51,7 @@ fn unpaired_document_strings_are_lossless_drafts_without_conformance() {
             "{fields}: {:?}",
             validation.report().findings
         );
-        assert_eq!(validation.document().unwrap().to_bytes(), text.as_bytes());
+        assert_eq!(validation.document().unwrap().as_bytes(), text.as_bytes());
     }
     for (field, rule) in [
         (

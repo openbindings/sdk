@@ -49,7 +49,7 @@ pub enum Conformance {
     /// No violation was established, but evidence is insufficient to prove conformance.
     Undetermined,
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 /// One explanatory normative-rule finding. Findings may be bounded; the report's independent rule evidence determines its conclusion. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 ///
 /// Only validation builds findings. Later versions may add fields: read them by
@@ -137,7 +137,7 @@ impl std::fmt::Debug for Finding {
     }
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 /// Assessment of all normative document rules at the pinned specification revision. At most 4096 findings and 8 MiB of aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate) are retained. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 ///
 /// Only validation builds reports. Later versions may add fields: read them by
@@ -408,7 +408,7 @@ impl Document {
         &self.inner.value
     }
     /// Borrow the current revision's exact bytes, including surrounding whitespace.
-    pub fn to_bytes(&self) -> &[u8] {
+    pub fn as_bytes(&self) -> &[u8] {
         self.value().original_source()
     }
     /// Assess every document rule, retaining findings at original source locations.
@@ -807,8 +807,8 @@ impl Conformant<Document> {
         self.document
     }
     /// Borrow the exact bytes certified by this proof, including original formatting.
-    pub fn to_bytes(&self) -> &[u8] {
-        self.document.to_bytes()
+    pub fn as_bytes(&self) -> &[u8] {
+        self.document.as_bytes()
     }
 }
 /// Assess bytes even when parsing fails. A version refusal is never conformance evidence.

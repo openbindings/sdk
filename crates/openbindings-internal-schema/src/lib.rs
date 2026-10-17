@@ -1,4 +1,6 @@
 #![doc = include_str!("../README.md")]
+// A method that returns `Self` is a builder step; dropping its result loses the change.
+#![warn(clippy::return_self_not_must_use)]
 pub use openbindings_internal_json::{JsonKind, JsonRef, JsonValue};
 pub mod fixed_locations;
 pub mod fixed_schema;
@@ -105,6 +107,7 @@ impl Failure {
             reference_defect: None,
         }
     }
+    #[must_use]
     pub fn located(mut self, at: Location) -> Self {
         self.location = Some(at);
         self

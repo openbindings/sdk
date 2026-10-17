@@ -542,7 +542,7 @@ impl Document {
                 return Err(EditError::Overlap);
             }
         }
-        let old = self.to_bytes();
+        let old = self.as_bytes();
         // Subtract all removed bytes first, so a replacement does not temporarily
         // charge both revisions or depend on the order of requests.
         let removed: usize = splices.iter().map(|s| s.range.len()).sum();
@@ -738,7 +738,7 @@ mod tests {
             }
         }
         let mut document = Document::new();
-        let original = document.to_bytes().to_vec();
+        let original = document.as_bytes().to_vec();
         let witness = Witness(Cell::new(false));
         let error = document
             .apply(
@@ -754,7 +754,7 @@ mod tests {
             .unwrap_err();
         assert_eq!(error.code(), "byte-limit");
         assert!(!witness.0.get());
-        assert_eq!(document.to_bytes(), original);
+        assert_eq!(document.as_bytes(), original);
         let error = document
             .apply(
                 &[Request {
@@ -768,7 +768,7 @@ mod tests {
             )
             .unwrap_err();
         assert_eq!(error.code(), "byte-limit");
-        assert_eq!(document.to_bytes(), original);
+        assert_eq!(document.as_bytes(), original);
     }
 
     #[test]
@@ -785,7 +785,7 @@ mod tests {
             },
         ] {
             let mut doc = Document::new();
-            let before = doc.to_bytes().to_vec();
+            let before = doc.as_bytes().to_vec();
             let value = JsonValue::parse("[[[1]]]").unwrap();
             let error = doc
                 .apply(
@@ -797,7 +797,7 @@ mod tests {
                 )
                 .unwrap_err();
             assert!(matches!(error.code(), "node-limit" | "depth-limit"));
-            assert_eq!(doc.to_bytes(), before);
+            assert_eq!(doc.as_bytes(), before);
         }
     }
     #[test]
@@ -848,7 +848,7 @@ mod tests {
             } else {
                 format!("[{remaining}]")
             };
-            assert_eq!(document.to_bytes(), expected.as_bytes());
+            assert_eq!(document.as_bytes(), expected.as_bytes());
         }
     }
     #[test]
@@ -877,7 +877,7 @@ mod tests {
         let mut document = Document::new();
         document.set_typed("/x", &witness).unwrap();
         assert_eq!(witness.calls.get(), 1);
-        let before = document.to_bytes().to_vec();
+        let before = document.as_bytes().to_vec();
         witness.calls.set(0);
         witness.fields.set(0);
         let error = document
@@ -895,7 +895,7 @@ mod tests {
         assert_eq!(error.code(), "byte-limit");
         assert_eq!(witness.calls.get(), 1);
         assert!(witness.fields.get() < 10);
-        assert_eq!(document.to_bytes(), before);
+        assert_eq!(document.as_bytes(), before);
         let limits = JsonLimits {
             max_bytes: 7,
             ..Default::default()

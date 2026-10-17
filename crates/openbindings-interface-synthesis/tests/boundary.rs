@@ -447,7 +447,7 @@ async fn exact_persistence_budgets_and_editing_do_not_reassign_evidence() {
     );
     let mut edited = doc.clone();
     edited.set("/sources/api/content", &json("null")).unwrap();
-    assert_ne!(edited.to_bytes(), doc.to_bytes());
+    assert_ne!(edited.as_bytes(), doc.as_bytes());
     assert!(
         result
             .to_json()

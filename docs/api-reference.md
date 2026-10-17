@@ -60,8 +60,9 @@ construction: typed authoring parts and `BindingFragment`, `SchemaResource`,
 `JsonLimits`, evaluator `Limits`, kit `Options`, discovery `ClientOptions`,
 `PublicationOptions`, `HttpResponse`, synthesis requests, invocation carriers and
 `InvocationLimits`. Add `..Default::default()` where a record implements
-`Default`. `JsonMember` and discovery's `Header` are each a name and a value, built
-on both sides, and stay exhaustive.
+`Default`. Discovery's `Header`, a name and a value built on both sides, stays
+exhaustive. So does `JsonMember`, which only the SDK builds: a JSON member is
+exactly a name and a value, so it has no field to gain.
 
 Closed partitions stay exhaustive, so a `match` can name every variant:
 `Evidence`, `Conformance`, `ValueOutcome`, `VersionDecision`, `JsonKind`,
@@ -90,7 +91,7 @@ kind union.
 | `DocumentValidation::document`, `conformant` | Borrow an admitted document or obtain proof only when every applicable rule is established. |
 | `Conformant<Document>` | Private proof, infallible reads, sole route to value contracts. No unchecked constructor, deserialization, dereference or mutable borrow. |
 | `as_document`, `into_inner` | Explicit plain reads, or consume proof to edit again. |
-| `Document::to_bytes`, `EditError::code` | Exact current bytes and stable kebab-case editing failure codes. |
+| `Document::as_bytes`, `EditError::code` | Exact current bytes and stable kebab-case editing failure codes. |
 
 Source positions describe current bytes. Retained views, reports and proofs keep
 their revision when another owner is edited. Duplicate members remain inspectable

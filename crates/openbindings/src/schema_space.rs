@@ -99,7 +99,7 @@ pub enum ReferenceRefusalReason {
 
 /// A reference-inspection refusal, separate from a value outcome.
 /// Later versions may add fields: read them by name and match with `..`.
-#[derive(Clone, serde::Serialize)]
+#[derive(Clone, PartialEq, Eq, serde::Serialize)]
 #[non_exhaustive]
 pub struct ReferenceRefusal {
     /// Broad refusal category.
@@ -152,7 +152,7 @@ fn reference_refusal(f: embedding::Failure) -> ReferenceRefusal {
         location: f.location.map(crate::contracts::original_location),
     }
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
 /// Static reference inspection outcome. Located dynamic references still require evaluation-time scope resolution.
 pub enum ReferenceResolution {
@@ -169,7 +169,7 @@ pub enum ReferenceResolution {
         detail: ReferenceRefusal,
     },
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 /// One `$ref` or `$dynamicRef` encountered in supported schema positions; opaque JSON content is not traversed as schema.
 /// Later versions may add fields: read them by name and match with `..`.
 #[non_exhaustive]
@@ -191,7 +191,7 @@ impl std::fmt::Debug for Reference {
             .finish_non_exhaustive()
     }
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 /// Bounded original-context reference inspection, not conformance proof or successful schema preparation.
 /// Later versions may add fields: read them by name and match with `..`.
 #[non_exhaustive]

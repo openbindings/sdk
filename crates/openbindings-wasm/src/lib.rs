@@ -478,7 +478,7 @@ impl WasmDocument {
     }
     #[wasm_bindgen(js_name=toBytes)]
     pub fn to_bytes(&self) -> Vec<u8> {
-        self.handle.document().to_bytes().into()
+        self.handle.document().as_bytes().into()
     }
     pub fn validate(&self) -> WasmDocumentValidation {
         let _ = self.handle.document().validate();
