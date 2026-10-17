@@ -40,7 +40,8 @@ fn retained(count: usize, width: usize) -> (usize, usize) {
     let (target, peak, _) = measured(|| space.resolve(holder, &reference).unwrap());
     let retained = LIVE.load(Relaxed).saturating_sub(before);
     assert_eq!(
-        space.nodes[target.node]
+        space
+            .node(target.node)
             .value
             .get("type")
             .and_then(|v| v.as_str()),

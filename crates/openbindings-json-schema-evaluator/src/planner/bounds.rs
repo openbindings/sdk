@@ -251,12 +251,29 @@ impl Plan {
     }
 }
 impl SchemaSpace {
+    // Generated names number nodes and resources densely (`node_number`).
+    fn resource_uri(
+        &self,
+        sink: &mut impl Write,
+        namespace: usize,
+        resource: usize,
+    ) -> fmt::Result {
+        write!(
+            sink,
+            "{NAMESPACE}{namespace}/r{}",
+            self.resource_number(resource)
+        )
+    }
+    fn address(&self, sink: &mut impl Write, namespace: usize, node: usize) -> fmt::Result {
+        self.resource_uri(sink, namespace, self.node(node).resource)?;
+        write!(sink, "#/$defs/n{}", self.node_number(node))
+    }
     // Refusal locations are retained independently of a successful paired plan.
     // Measure the full pointer before location() allocates it (including a
     // supplied value's stripped prefix), and account for a keyword suffix too.
     fn bounds_location(&self, id: usize, suffix: &str, cap: Admission) -> Option<SchemaLocation> {
-        let node = &self.nodes[id];
-        let source = &self.sources[node.source];
+        let node = self.node(id);
+        let source = self.source(node.source);
         let full = location_pointer_size(node.value.view(), cap.scratch)?;
         if full.checked_add(suffix.len())? > cap.scratch
             || source.uri.as_ref().is_some_and(|s| s.len() > cap.scratch)
@@ -292,11 +309,12 @@ impl SchemaSpace {
     // Scratch guard is separate from retained text. Resolver errors allocate
     // original locations; measure before calling the unchanged strict resolver.
     fn bounds_scratch(&self, id: usize, reference: &str, cap: Admission) -> Result<(), NoVerdict> {
-        let node = &self.nodes[id];
-        let base = self.resources[node.resource].base.as_deref().unwrap_or("");
+        let node = self.node(id);
+        let base = self.resource(node.resource).base.as_deref().unwrap_or("");
         if reference.len().saturating_add(base.len()) > cap.scratch
             || pointer_size(node.value.view(), cap.scratch).is_none()
-            || self.sources[node.source]
+            || self
+                .source(node.source)
                 .uri
                 .as_ref()
                 .is_some_and(|s| s.len() > cap.scratch)
@@ -337,7 +355,7 @@ impl SchemaSpace {
             self.bounds_scratch(id, "", cap)
                 .map_err(|detail| self.bounds_failure(detail, id, "", Some(entry), cap))?;
             self.check_known_node(id)?;
-            let node = &self.nodes[id];
+            let node = self.node(id);
             out.reach.resources.insert(node.resource);
             let has_if = node.value.get("if").is_some();
             for member in node.value.view().members().into_iter().flatten() {
@@ -451,7 +469,8 @@ impl SchemaSpace {
                     continue;
                 };
                 let mut child = |value: JsonRef<'_>| -> Result<(), NoVerdict> {
-                    let target = self.sources[node.source]
+                    let target = self
+                        .source(node.source)
                         .positions
                         .get(&node_id(&value.to_owned()))
                         .copied()
@@ -497,8 +516,8 @@ impl SchemaSpace {
         Ok(out)
     }
     fn location_bytes(&self, id: usize) -> Result<usize, NoVerdict> {
-        let node = &self.nodes[id];
-        let source = &self.sources[node.source];
+        let node = self.node(id);
+        let source = self.source(node.source);
         let full = pointer_size(node.value.view(), TEXT_LIMIT).ok_or_else(text_limit)?;
         let prefix = pointer_size(source.value.view(), TEXT_LIMIT).ok_or_else(text_limit)?;
         Ok(full
@@ -549,11 +568,11 @@ impl SchemaSpace {
         for &id in &nodes {
             control.check()?;
             let mut count = Sink::count(cap.text);
-            address(&mut count, plan.namespace, self.nodes[id].resource, id)
+            self.address(&mut count, plan.namespace, id)
                 .map_err(|_| text_limit())?;
             add_bytes(&mut total, count.size, cap.text)?;
             add_bytes(&mut total, self.location_bytes(id)?, cap.text)?;
-            groups.entry(self.nodes[id].resource).or_default().push(id);
+            groups.entry(self.node(id).resource).or_default().push(id);
         }
         if let Some(id) = plan.first_hole {
             add_bytes(&mut total, self.location_bytes(id)?, cap.text)?;
@@ -566,7 +585,7 @@ impl SchemaSpace {
         let mut sizes = [Vec::new(), Vec::new()];
         for (pass, lower) in [true, false].into_iter().enumerate() {
             let mut entry_count = Sink::count(cap.text);
-            resource_uri(&mut entry_count, plan.namespace, self.nodes[entry].resource)
+            self.resource_uri(&mut entry_count, plan.namespace, self.node(entry).resource)
                 .map_err(|_| text_limit())?;
             add_bytes(&mut total, entry_count.size, cap.text)?;
             for (&resource, ids) in &groups {
@@ -576,7 +595,8 @@ impl SchemaSpace {
                 add_bytes(&mut total, count.size + count.decoded, cap.text)?;
                 sizes[pass].push((count.size, count.decoded));
                 let mut uri_count = Sink::count(cap.text);
-                resource_uri(&mut uri_count, plan.namespace, resource).map_err(|_| text_limit())?;
+                self.resource_uri(&mut uri_count, plan.namespace, resource)
+                    .map_err(|_| text_limit())?;
                 add_bytes(&mut total, uri_count.size, cap.text)?;
             }
             if !plan.holes.is_empty() {
@@ -593,7 +613,8 @@ impl SchemaSpace {
         for id in nodes {
             control.check()?;
             let mut uri = String::new();
-            address(&mut uri, plan.namespace, self.nodes[id].resource, id).expect("String writer");
+            self.address(&mut uri, plan.namespace, id)
+                .expect("String writer");
             locations.insert(uri, ProgramOrigin::Prefix(self.location(id)));
         }
         let locations = Arc::new(locations);
@@ -615,7 +636,8 @@ impl SchemaSpace {
                 self.write_resource(&mut sink, resource, ids, entry, &plan, control)
                     .map_err(|_| output_failure(control))?;
                 let mut uri = String::new();
-                resource_uri(&mut uri, plan.namespace, resource).expect("String writer");
+                self.resource_uri(&mut uri, plan.namespace, resource)
+                    .expect("String writer");
                 let document = JsonValue::parse(sink.finish(control)?).map_err(|_| {
                     limit(
                         "program-json-limit",
@@ -632,7 +654,7 @@ impl SchemaSpace {
                 });
             }
             let mut entry_uri = String::new();
-            resource_uri(&mut entry_uri, plan.namespace, self.nodes[entry].resource)
+            self.resource_uri(&mut entry_uri, plan.namespace, self.node(entry).resource)
                 .expect("String writer");
             programs.push(EvaluationProgram {
                 entry_uri,
@@ -659,7 +681,7 @@ impl SchemaSpace {
         control: &dyn WorkControl,
     ) -> fmt::Result {
         sink.write_str("{\"$id\":\"")?;
-        resource_uri(sink, plan.namespace, resource)?;
+        self.resource_uri(sink, plan.namespace, resource)?;
         sink.write_str("\",\"$schema\":")?;
         quote(sink, DIALECT)?;
         sink.write_str(",\"$defs\":{")?;
@@ -670,13 +692,13 @@ impl SchemaSpace {
             if index != 0 {
                 sink.write_char(',')?;
             }
-            write!(sink, "\"n{id}\":")?;
+            write!(sink, "\"n{}\":", self.node_number(id))?;
             self.write_node(sink, id, plan)?;
         }
         sink.write_char('}')?;
-        if resource == self.nodes[entry].resource {
+        if resource == self.node(entry).resource {
             sink.write_str(",\"$ref\":\"")?;
-            address(sink, plan.namespace, resource, entry)?;
+            self.address(sink, plan.namespace, entry)?;
             sink.write_char('"')?;
         }
         sink.write_char('}')
@@ -688,13 +710,13 @@ impl SchemaSpace {
         source: usize,
         value: JsonRef<'_>,
     ) -> fmt::Result {
-        let target = self.sources[source].positions[&node_id(&value.to_owned())];
+        let target = self.source(source).positions[&node_id(&value.to_owned())];
         sink.write_str("{\"$ref\":\"")?;
-        address(sink, namespace, self.nodes[target].resource, target)?;
+        self.address(sink, namespace, target)?;
         sink.write_str("\"}")
     }
     fn write_node(&self, sink: &mut Sink, id: usize, plan: &Plan) -> fmt::Result {
-        let node = &self.nodes[id];
+        let node = self.node(id);
         if node.value.kind() == JsonKind::Boolean {
             return sink.write_str(node.value.text());
         }
@@ -728,12 +750,7 @@ impl SchemaSpace {
                     write!(sink, "{NAMESPACE}{}/hole", plan.namespace)?;
                 } else {
                     let target = &plan.reach.targets[&(id, "$ref".into())];
-                    address(
-                        sink,
-                        plan.namespace,
-                        self.nodes[target.node].resource,
-                        target.node,
-                    )?;
+                    self.address(sink, plan.namespace, target.node)?;
                 }
                 sink.write_char('"')?;
             } else if let Some(policy) = policy(keyword, has_if) {
@@ -804,13 +821,6 @@ fn valid_unknown_fragment(fragment: &str) -> bool {
         }
     }
     true
-}
-fn resource_uri(sink: &mut impl Write, namespace: usize, resource: usize) -> fmt::Result {
-    write!(sink, "{NAMESPACE}{namespace}/r{resource}")
-}
-fn address(sink: &mut impl Write, namespace: usize, resource: usize, node: usize) -> fmt::Result {
-    resource_uri(sink, namespace, resource)?;
-    write!(sink, "#/$defs/n{node}")
 }
 fn quote(sink: &mut Sink, text: &str) -> fmt::Result {
     // The parser owns a complete decoded string if any emitted character is
@@ -1393,9 +1403,9 @@ mod tests {
         let key = "~/".repeat(64);
         let (space, entry) = space(&format!(r#"{{"properties":{{"{key}":true}}}}"#));
         let child = space
-            .nodes
-            .iter()
-            .position(|node| node.value.kind() == JsonKind::Boolean)
+            .nodes()
+            .find(|(_, node)| node.value.kind() == JsonKind::Boolean)
+            .map(|(id, _)| id)
             .unwrap();
         let cap = Admission {
             scratch: 32,
@@ -1404,7 +1414,7 @@ mod tests {
         // This full escaped pointer cannot pass admission. bounds_location
         // returns before location() can copy it; no clipped pointer is made.
         assert_eq!(
-            pointer_size(space.nodes[child].value.view(), cap.scratch),
+            pointer_size(space.node(child).value.view(), cap.scratch),
             None
         );
         assert!(space.bounds_location(child, "", cap).is_none());
@@ -1459,7 +1469,7 @@ mod tests {
     #[test]
     fn internal_small_caps_measure_suffix_uri_and_full_supplied_prefix_before_copy() {
         let (space, entry) = space(r#"{"$ref":"https://absent.invalid/U#/~2"}"#);
-        let size = pointer_size(space.nodes[entry].value.view(), usize::MAX).unwrap();
+        let size = pointer_size(space.node(entry).value.view(), usize::MAX).unwrap();
         let cap = Admission {
             scratch: size,
             ..Admission::default()
@@ -1478,22 +1488,25 @@ mod tests {
         );
         let value = JsonValue::parse(text).unwrap();
         let nested = value.get(&"x".repeat(64)).unwrap().to_owned();
-        let doc = Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":true}}}"#)
+        // A supplied source whose value is that subtree.
+        let with_source = |uri: String| {
+            let doc =
+                Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":true}}}"#)
+                    .unwrap();
+            let resources = ResourceSet::new([SchemaResource {
+                uri,
+                document: nested.clone(),
+            }])
             .unwrap();
-        let mut supplied = SchemaSpace::new(doc, ResourceSet::default());
-        let source = supplied.sources.len();
-        let index = SchemaIndex::supplied(&nested, "https://known.invalid/R");
-        supplied.add_source(
-            Some("https://known.invalid/R".into()),
-            nested,
-            &index,
-            ResourceOrigin::Supplied,
-        );
-        let id = supplied
-            .nodes
-            .iter()
-            .position(|node| node.source == source)
-            .unwrap();
+            let space = SchemaSpace::new(doc, resources);
+            let id = space
+                .nodes()
+                .find(|(_, node)| node.source == 1)
+                .map(|(id, _)| id)
+                .unwrap();
+            (space, id)
+        };
+        let (supplied, id) = with_source("https://known.invalid/R".into());
         assert!(
             supplied
                 .bounds_location(id, "", Admission { scratch: 32, ..cap })
@@ -1512,7 +1525,7 @@ mod tests {
                 .is_none()
         );
         // An overlong source URI also omits optional text without copying it.
-        supplied.sources[source].uri = Some("r".repeat(129));
+        let (supplied, id) = with_source(format!("https://known.invalid/{}", "r".repeat(107)));
         assert!(
             supplied
                 .bounds_location(

@@ -23,9 +23,22 @@
   Undefined results carry a code, message and optional original schema location;
   no-verdict describes inability to answer.
 - An optional JSON Schema 2020-12 evaluator with exact numeric semantics,
-  cooperative cancellation, declared work limits and selectable diagnostics.
-- An evaluator integration trait and a reusable qualification suite for custom
-  implementations.
+  cooperative cancellation and declared work limits.
+- Cheap checks and explanations are chosen per call. `PreparedContract::validate`
+  (and `validate_with_control`, `validate_json`) reports a failure without
+  problems; `explain` and `explain_with_control` return the same verdict with the
+  library's first error, redacted, with original schema facts. TypeScript
+  `PreparedContract` gains `explain` beside `validate`. A prepared contract keeps a
+  compact copy of the keywords it compiled, with their original locations, and no
+  longer keeps its document or supplied resources; it keeps a location map only for
+  schemas beneath a member name holding an unpaired surrogate.
+- `operation::Invoker::with_validation_detail(Detail::Explain)` asks the invoker to
+  explain a rejected value before withholding it, so `ValidationFailure::outcome()`
+  carries the evaluator's problems; by default it carries the verdict only.
+- An evaluator integration trait, whose `PreparedSchema::validate` receives the
+  call's `Detail` (`Outcome` or `Explain`), and a reusable qualification suite
+  that checks and explains every value, including explanations interrupted by
+  cancellation.
 - HTTP discovery and publication with bounded bodies, attempt deadlines and
   explicit host-policy responsibilities.
 - Provisional Rust provider traits and checked callers for source inspection,

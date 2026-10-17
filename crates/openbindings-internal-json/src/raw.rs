@@ -471,33 +471,48 @@ impl Arena {
         // Measure first: an unrepresentable ancestor makes the whole pointer
         // unavailable before anything is copied, and the pointer then takes one
         // exact allocation, written from its last segment back.
-        let escaped =
-            |name: &str| name.len() + name.bytes().filter(|&b| b == b'~' || b == b'/').count();
-        let edges = |mut current: Id| {
-            std::iter::from_fn(move || {
-                (current != root).then(|| {
-                    let (parent, edge) =
-                        self.nodes[current].parent.expect("an ancestor of the node");
-                    current = parent;
-                    edge
-                })
-            })
+        let size = self.pointer_len(id, root)?;
+        let mut bytes = vec![0u8; size];
+        self.fill_pointer(id, root, &mut bytes);
+        Some(String::from_utf8(bytes).expect("segments are UTF-8"))
+    }
+    /// Append this node's pointer to `out`, as [`Self::pointer`] spells it;
+    /// `false`, appending nothing, when it is unavailable.
+    pub fn pointer_into(&self, id: Id, out: &mut Vec<u8>) -> bool {
+        let Some(size) = self.pointer_len(id, 0) else {
+            return false;
         };
-        if id == root {
-            return Some(String::new());
-        }
+        let start = out.len();
+        out.resize(start + size, 0);
+        self.fill_pointer(id, 0, &mut out[start..]);
+        true
+    }
+    // The edges from `id` up to its ancestor `root`, last segment first.
+    fn edges(&self, mut current: Id, root: Id) -> impl Iterator<Item = Edge> + '_ {
+        std::iter::from_fn(move || {
+            (current != root).then(|| {
+                let (parent, edge) = self.nodes[current].parent.expect("an ancestor of the node");
+                current = parent;
+                edge
+            })
+        })
+    }
+    fn pointer_len(&self, id: Id, root: Id) -> Option<usize> {
         let mut size = 0usize;
-        for edge in edges(id) {
+        for edge in self.edges(id, root) {
             size += 1 + match edge {
                 Edge::Index(index) => index
                     .checked_ilog10()
                     .map_or(1, |digits| digits as usize + 1),
-                Edge::Key(key) => escaped(self.string(key)?),
+                Edge::Key(key) => escaped_len(self.string(key)?),
             };
         }
-        let mut bytes = vec![0u8; size];
-        let mut end = size;
-        for edge in edges(id) {
+        Some(size)
+    }
+    // Write a measured pointer into `bytes`, from its last segment back.
+    fn fill_pointer(&self, id: Id, root: Id, bytes: &mut [u8]) {
+        let mut end = bytes.len();
+        for edge in self.edges(id, root) {
             match edge {
                 Edge::Index(mut index) => loop {
                     end -= 1;
@@ -509,7 +524,7 @@ impl Arena {
                 },
                 Edge::Key(key) => {
                     let name = self.string(key).expect("measured segment");
-                    let start = end - escaped(name);
+                    let start = end - escaped_len(name);
                     if start + name.len() == end {
                         bytes[start..end].copy_from_slice(name.as_bytes());
                     } else {
@@ -537,7 +552,6 @@ impl Arena {
             bytes[end] = b'/';
         }
         debug_assert_eq!(end, 0);
-        Some(String::from_utf8(bytes).expect("segments are UTF-8"))
     }
     /// The exact pointer, including segments whose names hold unpaired units.
     pub fn exact_pointer(&self, id: Id) -> crate::Pointer {
@@ -838,6 +852,10 @@ impl Parser {
     }
 }
 
+// A pointer segment's length once `~` and `/` are escaped.
+fn escaped_len(name: &str) -> usize {
+    name.len() + name.bytes().filter(|&b| b == b'~' || b == b'/').count()
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1455,6 +1473,19 @@ mod tests {
             assert_eq!(
                 pointer.utf16_units().collect::<Vec<_>>(),
                 exact(id),
+                "node {id}"
+            );
+            // Appending writes the same pointer after what the buffer holds.
+            let mut out = b"held".to_vec();
+            assert_eq!(
+                a.pointer_into(id, &mut out),
+                expected.is_some(),
+                "node {id}"
+            );
+            assert_eq!(&out[..4], b"held");
+            assert_eq!(
+                out[4..],
+                *expected.unwrap_or_default().as_bytes(),
                 "node {id}"
             );
         }

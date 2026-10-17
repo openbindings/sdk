@@ -8,9 +8,7 @@ extern crate self as openbindings_json_schema_evaluator;
 mod planner;
 use openbindings::*;
 use openbindings_internal_json::backend::{self, FlatJson};
-use openbindings_internal_schema::{
-    Program as EvaluationProgram, ProjectedResource as SchemaResource,
-};
+use openbindings_internal_schema::Program as EvaluationProgram;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -117,8 +115,21 @@ impl SchemaEvaluator for DefaultEvaluator {
         control.check()?;
         let (space, entry) = planner::space(request);
         let cancellation = || control.is_cancelled();
-        match space.program(entry, &cancellation) {
-            Ok(program) => Ok(Arc::new(self.compile(program, true, control)?)),
+        // The explanation writes each definition's origin from the space, so
+        // the projection builds no location map for it.
+        match space.program_unmapped(entry, &cancellation) {
+            Ok(unmapped) => {
+                let origins = Origins::Space {
+                    space: &space,
+                    definitions: &unmapped.definitions,
+                };
+                Ok(Arc::new(self.compile(
+                    unmapped.program,
+                    origins,
+                    true,
+                    control,
+                )?))
+            }
             Err(detail)
                 if (detail.reason
                     == openbindings_internal_schema::FailureReason::ResourceUnavailable
@@ -137,10 +148,10 @@ impl SchemaEvaluator for DefaultEvaluator {
                     semantic_completions,
                 } = bounds;
                 let unavailable = unavailable.map(projection_failure);
-                let upper = self.compile(upper, true, control)?;
+                let upper = self.compile(upper, Origins::Map, true, control)?;
                 control.check()?;
                 // Explanations never read lower-bound failures.
-                let lower = self.compile(lower, false, control)?;
+                let lower = self.compile(lower, Origins::Map, false, control)?;
                 control.check()?;
                 Ok(Arc::new(PartialCompiled {
                     upper,
@@ -175,18 +186,63 @@ fn recover_partial_decline(strict: NoVerdict, planner: NoVerdict) -> NoVerdict {
     );
     if optional_decline { strict } else { planner }
 }
+// Where a compiled program's definitions came from: its own location map, or
+// the space it was projected from, with each projected resource's definition
+// nodes in `$defs` order.
+#[derive(Clone, Copy)]
+enum Origins<'a> {
+    Map,
+    Space {
+        space: &'a openbindings_internal_schema::SchemaSpace,
+        definitions: &'a [Vec<usize>],
+    },
+}
+impl Origins<'_> {
+    // The original location of a keyword of a projected definition.
+    fn keyword(
+        self,
+        program: &EvaluationProgram,
+        resource: usize,
+        definition: usize,
+        keyword: &str,
+    ) -> Option<SchemaLocation> {
+        let projected = &program.resources[resource];
+        match self {
+            Origins::Map => {
+                let name = projected
+                    .document
+                    .get("$defs")
+                    .and_then(|defs| {
+                        openbindings_internal_json::backend::member_at(defs, definition)
+                    })?
+                    .name
+                    .as_str()?
+                    .to_owned();
+                program
+                    .original_location(&format!("{}#/$defs/{name}/{keyword}", projected.uri))
+                    .map(original_location)
+            }
+            Origins::Space { space, definitions } => {
+                let mut at = space.location(*definitions.get(resource)?.get(definition)?);
+                backend::push_pointer(&mut at.pointer, &format!("/{keyword}"));
+                Some(original_location(at))
+            }
+        }
+    }
+}
 impl DefaultEvaluator {
     fn compile(
         &self,
         mut program: EvaluationProgram,
+        origins: Origins<'_>,
         explains: bool,
         control: &dyn WorkControl,
     ) -> Result<Compiled, NoVerdict> {
         let mut registry = jsonschema::Registry::new().retriever(NoRetrieval);
         let mut literals = operands::Operands::default();
-        for resource in &program.resources {
+        for (index, resource) in program.resources.iter().enumerate() {
             control.check()?;
-            check_patterns(resource, &program, &self.limits, control)?;
+            check_patterns(index, &program, origins, &self.limits, control)?;
             let value = literals.resource(&resource.document, &self.limits, control)?;
             // Transfer each private projection into the registry. Holding a
             // second serde tree until compilation unnecessarily raises peak RSS.
@@ -236,7 +292,12 @@ impl DefaultEvaluator {
         // holds every location, the program's location map. Compiled exact
         // const/enum subviews can still retain projection arenas.
         let explanation = explains
-            .then(|| details::Explanation::new(&program, control))
+            .then(|| match origins {
+                Origins::Map => details::Explanation::new(&program, control),
+                Origins::Space { space, definitions } => {
+                    details::Explanation::projected(&mut program, space, definitions, control)
+                }
+            })
             .transpose()?
             .flatten();
         program.resources = Vec::new();
@@ -462,16 +523,18 @@ fn verdict_pass<T>(
 }
 
 fn check_patterns(
-    resource: &SchemaResource,
+    index: usize,
     program: &EvaluationProgram,
+    origins: Origins<'_>,
     limits: &Limits,
     control: &dyn WorkControl,
 ) -> Result<(), NoVerdict> {
+    let resource = &program.resources[index];
     // Only schema pattern positions count; opaque values are not interpreted.
     let Some(definitions) = resource.document.get("$defs").and_then(|v| v.members()) else {
         return Ok(());
     };
-    for definition in definitions {
+    for (position, definition) in definitions.enumerate() {
         control.check()?;
         let schema = definition.value;
         let mut patterns = Vec::new();
@@ -524,13 +587,7 @@ fn check_patterns(
                     "schema-pattern-compilation",
                     format!("the schema {keyword} regular expression could not be compiled"),
                 );
-                detail.location = program
-                    .original_location(&format!(
-                        "{}#/$defs/{}/{keyword}",
-                        resource.uri,
-                        definition.name.as_str().expect("projected definition name")
-                    ))
-                    .map(original_location);
+                detail.location = origins.keyword(program, index, position, keyword);
                 return Err(detail);
             }
         }

@@ -527,6 +527,11 @@ pub fn view(value: &crate::JsonValue) -> View<'_> {
 pub fn pointer(value: &crate::JsonValue) -> Option<String> {
     value.owner.pointer(value.id)
 }
+/// Append the JSON Pointer [`pointer()`] builds to `out` without another
+/// allocation; `false`, appending nothing, when it is unavailable.
+pub fn pointer_into(value: &crate::JsonValue, out: &mut Vec<u8>) -> bool {
+    value.owner.pointer_into(value.id, out)
+}
 /// Build only the exact JSON Pointer from the source's root, without line and
 /// column, including names that hold unpaired units.
 pub fn exact_pointer(value: crate::JsonRef<'_>) -> crate::Pointer {

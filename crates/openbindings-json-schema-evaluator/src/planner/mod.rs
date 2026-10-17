@@ -1,8 +1,6 @@
 //! Evaluator-private bounded preparation. No product API exposes this graph.
 mod bounds;
 use embedding::schema_index::DIALECT;
-#[cfg(test)]
-use embedding::schema_index::SchemaIndex;
 use embedding::{
     Control as WorkControl, Failure as NoVerdict, FailureReason as NoVerdictReason,
     Location as SchemaLocation, Program as EvaluationProgram, ProjectedResource as SchemaResource,
@@ -12,7 +10,7 @@ use openbindings_internal_json::backend::node_id;
 use openbindings_internal_schema::{self as embedding, *};
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
-    ops::{Deref, DerefMut},
+    ops::Deref,
 };
 pub(super) struct SchemaSpace(embedding::SchemaSpace);
 impl SchemaSpace {
@@ -24,11 +22,6 @@ impl Deref for SchemaSpace {
     type Target = embedding::SchemaSpace;
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-impl DerefMut for SchemaSpace {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 /// Paired, owned JSON Schema validity bounds for one immutable resource snapshot.

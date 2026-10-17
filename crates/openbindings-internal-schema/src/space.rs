@@ -5,7 +5,7 @@ use crate::{
     uri, *,
 };
 use openbindings_internal_json::backend::{
-    has_unpaired, location_pointer_size, node_id, push_pointer, relative_pointer,
+    has_unpaired, location_pointer_size, node_id, pointer_into, push_pointer, relative_pointer,
 };
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
@@ -28,7 +28,8 @@ pub struct Resource {
     pub dialect: Option<String>,
     pub anchors: BTreeMap<String, Vec<(usize, bool)>>,
     pub origin: ResourceOrigin,
-    pub eligible: bool,
+    // Read through `SchemaSpace::eligible`, which accounts for local claims.
+    eligible: bool,
 }
 impl std::fmt::Debug for Resource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -44,6 +45,7 @@ pub enum ResourceOrigin {
     Supplied,
     Standard,
 }
+#[derive(Clone, Copy)]
 struct NameSelection {
     origin: ResourceOrigin,
     // None denotes multiple carriers at the winning priority, never absence.
@@ -60,6 +62,24 @@ impl std::fmt::Debug for Source {
     }
 }
 
+const PROGRAM_NAMESPACE: &str = "https://sdk-program.openbindings.invalid/";
+/// A projection without its location map, with the node each definition of
+/// each projected resource came from, in `$defs` order.
+pub struct UnmappedProgram {
+    pub program: Program,
+    pub definitions: Vec<Vec<usize>>,
+}
+impl std::fmt::Debug for UnmappedProgram {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UnmappedProgram").finish_non_exhaustive()
+    }
+}
+// One empty map shared by every unmapped program, so none allocates one.
+fn unmapped() -> std::sync::Arc<BTreeMap<String, crate::ProgramOrigin>> {
+    static EMPTY: std::sync::OnceLock<std::sync::Arc<BTreeMap<String, crate::ProgramOrigin>>> =
+        std::sync::OnceLock::new();
+    EMPTY.get_or_init(Default::default).clone()
+}
 /// How a projected schema keyword holds its subschemas. A projection writes each
 /// child position as `{"$ref": <generated child address>}`; every other keyword
 /// value is copied from the original source unchanged.
@@ -96,11 +116,27 @@ pub fn child_shape(keyword: &str) -> Option<ChildShape> {
 pub struct SchemaSpace {
     pub document: RawDocument,
     pub supplied: Supplied,
-    pub nodes: Vec<SpaceNode>,
-    pub resources: Vec<Resource>,
-    pub sources: Vec<Source>,
-    names: BTreeMap<String, NameSelection>,
+    // The document and the supplied resources, in that order. The packaged
+    // meta-schemas follow them as one immutable layer that every space in the
+    // process shares.
+    local: Layer,
+    packaged: &'static Layer,
     inspection: std::sync::OnceLock<library::Inspection>,
+}
+// The packaged layer numbers its nodes, resources and sources from here, so
+// its entries hold their final identifiers in every space. Local identifiers
+// stay below it; [`SchemaSpace::node_number`] gives the dense numbering.
+const PACKAGED: usize = 1 << (usize::BITS - 1);
+// The nodes, resources and sources of one layer, with the names they declare.
+#[derive(Default)]
+struct Layer {
+    base: usize,
+    nodes: Vec<SpaceNode>,
+    resources: Vec<Resource>,
+    sources: Vec<Source>,
+    names: BTreeMap<String, NameSelection>,
+    // How inspection reaches each reference's carrier, for the packaged layer.
+    lookups: std::sync::OnceLock<Vec<library::PackagedLookup>>,
 }
 impl std::fmt::Debug for SchemaSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -171,82 +207,31 @@ pub struct ReferenceReport {
 }
 use serde::Serialize;
 
-impl SchemaSpace {
-    pub fn new(document: RawDocument, supplied: Supplied) -> Self {
-        let mut out = Self {
-            document: document.clone(),
-            supplied: supplied.clone(),
-            nodes: Vec::new(),
-            resources: Vec::new(),
-            sources: Vec::new(),
-            names: BTreeMap::new(),
-            inspection: std::sync::OnceLock::new(),
-        };
-        out.add_source(
-            None,
-            document.value().clone(),
-            document.schema_index(),
-            ResourceOrigin::Contained,
-        );
-        for resource in supplied.iter() {
-            let index = SchemaIndex::supplied(&resource.document, &resource.uri);
-            out.add_source(
-                Some(resource.uri.clone()),
-                resource.document.clone(),
-                &index,
-                ResourceOrigin::Supplied,
-            );
-        }
-        // Canonical/retrieval associations and protected standard identities
-        // originate in the immutable supplied-resource input policy.
-        for (name, holders) in &supplied.policy.names {
-            for &(source, node) in holders {
-                if let Some(id) = out.sources[source + 1].positions.get(&node) {
-                    let resource = out.nodes[*id].resource;
-                    out.add_name(name.clone(), resource);
-                }
-            }
-        }
-        // These documents and their URIs are pinned, immutable process-wide
-        // inputs. Cache only their SDK indexes, never a caller's URI or result.
-        // add_source and eligibility checks still run in each new space.
-        static INDEXES: std::sync::OnceLock<Vec<SchemaIndex>> = std::sync::OnceLock::new();
-        let indexes = INDEXES.get_or_init(|| {
-            embedded_resources()
-                .iter()
-                .map(|resource| SchemaIndex::supplied(&resource.document, &resource.uri))
-                .collect()
-        });
-        for (resource, index) in embedded_resources().iter().zip(indexes) {
-            out.add_source(
-                Some(resource.uri.clone()),
-                resource.document.clone(),
-                index,
-                ResourceOrigin::Standard,
-            );
-        }
-        // Finalize once, after every alias and canonical association is known.
-        // An independently named child does not inherit its parent's eligibility.
-        for (id, resource) in out.resources.iter_mut().enumerate() {
-            if !resource.anonymous
-                && let Some(base) = &resource.base
-            {
-                resource.eligible = out.names.get(base).and_then(|name| name.carrier) == Some(id);
-            }
-        }
-        out
+impl Layer {
+    fn resource(&self, id: usize) -> &Resource {
+        &self.resources[id - self.base]
     }
-    pub fn add_source(
+    fn resource_mut(&mut self, id: usize) -> &mut Resource {
+        &mut self.resources[id - self.base]
+    }
+    fn nodes(&self) -> impl Iterator<Item = (usize, &SpaceNode)> {
+        (self.base..).zip(&self.nodes)
+    }
+    fn resources(&self) -> impl Iterator<Item = (usize, &Resource)> {
+        (self.base..).zip(&self.resources)
+    }
+    fn add_source(
         &mut self,
         retrieval: Option<String>,
         value: JsonValue,
         index: &SchemaIndex,
         origin: ResourceOrigin,
+        protected: &HashSet<String>,
     ) {
-        let source = self.sources.len();
+        let source = self.base + self.sources.len();
         let start = self.nodes.len();
         let mut resources = HashMap::new();
-        let initial = self.resources.len();
+        let initial = self.base + self.resources.len();
         resources.insert(0, initial);
         self.resources.push(Resource {
             root: None,
@@ -260,30 +245,33 @@ impl SchemaSpace {
             eligible: true,
         });
         if retrieval.is_some() {
-            self.resources[initial].dialect = declared_dialect(value.view(), Some(DIALECT));
+            self.resource_mut(initial).dialect = declared_dialect(value.view(), Some(DIALECT));
         }
-        let mut positions = HashMap::new();
+        // Every indexed node becomes one space node with one position.
+        self.nodes.reserve(index.nodes.len());
+        let mut positions = HashMap::with_capacity(index.nodes.len());
         for node in &index.nodes {
             let resource = if let Some(&id) = resources.get(&node.resource) {
                 id
             } else {
                 let parent = *resources.get(&node.parent_resource).unwrap_or(&initial);
-                let id = self.resources.len();
+                let id = self.base + self.resources.len();
                 resources.insert(node.resource, id);
                 let dialect =
-                    declared_dialect(node.value.view(), self.resources[parent].dialect.as_deref());
+                    declared_dialect(node.value.view(), self.resource(parent).dialect.as_deref());
+                let base = node
+                    .value
+                    .get("$id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|id| {
+                        crate::input_policy::resolve_identifier(
+                            self.resource(parent).base.as_deref(),
+                            id,
+                        )
+                    });
                 self.resources.push(Resource {
-                    root: Some(self.nodes.len()),
-                    base: node
-                        .value
-                        .get("$id")
-                        .and_then(|v| v.as_str())
-                        .and_then(|id| {
-                            crate::input_policy::resolve_identifier(
-                                self.resources[parent].base.as_deref(),
-                                id,
-                            )
-                        }),
+                    root: Some(self.base + self.nodes.len()),
+                    base,
                     anonymous: false,
                     dialect,
                     anchors: BTreeMap::new(),
@@ -292,7 +280,7 @@ impl SchemaSpace {
                 });
                 id
             };
-            let id = self.nodes.len();
+            let id = self.base + self.nodes.len();
             positions.insert(node_id(&node.value), id);
             self.nodes.push(SpaceNode {
                 value: node.value.clone(),
@@ -307,7 +295,7 @@ impl SchemaSpace {
                     .and_then(|v| v.as_str())
                     .filter(|s| crate::schema_index::plain_name(s))
                 {
-                    self.resources[resource]
+                    self.resource_mut(resource)
                         .anchors
                         .entry(name.into())
                         .or_default()
@@ -317,19 +305,19 @@ impl SchemaSpace {
         }
         if retrieval.is_some() && start < self.nodes.len() {
             let root_resource = self.nodes[start].resource;
-            self.resources[root_resource].root = Some(start);
+            self.resource_mut(root_resource).root = Some(self.base + start);
             if origin != ResourceOrigin::Supplied
                 && let Some(retrieval) = &retrieval
             {
-                self.add_name(retrieval.clone(), root_resource);
+                self.add_name(retrieval.clone(), root_resource, protected);
             }
         }
         for &id in resources.values() {
             if origin != ResourceOrigin::Supplied
-                && let Some(base) = self.resources[id].base.clone()
-                && self.resources[id].root.is_some()
+                && let Some(base) = self.resource(id).base.clone()
+                && self.resource(id).root.is_some()
             {
-                self.add_name(base, id);
+                self.add_name(base, id, protected);
             }
         }
         self.sources.push(Source {
@@ -338,13 +326,13 @@ impl SchemaSpace {
             positions,
         });
     }
-    fn add_name(&mut self, name: String, resource: usize) {
+    fn add_name(&mut self, name: String, resource: usize, protected: &HashSet<String>) {
         let Some(name) = crate::input_policy::canonical_uri(&name) else {
             return;
         };
-        let origin = self.resources[resource].origin;
+        let origin = self.resource(resource).origin;
         if origin == ResourceOrigin::Supplied
-            && self.supplied.policy.protected.contains(&name)
+            && protected.contains(&name)
             && self
                 .names
                 .get(&name)
@@ -386,8 +374,185 @@ impl SchemaSpace {
                 carrier: Some(resource),
             });
     }
+    // Finalize once, after every alias and canonical association is known.
+    // An independently named child does not inherit its parent's eligibility.
+    fn finalize(
+        &mut self,
+        select: impl Fn(&BTreeMap<String, NameSelection>, &str) -> Option<NameSelection>,
+    ) {
+        let Self {
+            base,
+            resources,
+            names,
+            ..
+        } = self;
+        for (id, resource) in (*base..).zip(resources.iter_mut()) {
+            if !resource.anonymous
+                && let Some(name) = &resource.base
+            {
+                resource.eligible = select(names, name).and_then(|name| name.carrier) == Some(id);
+            }
+        }
+    }
+}
+// The packaged meta-schemas as one layer, built once per process from their
+// pinned, immutable documents and URIs. It holds no caller URI or result.
+// Resource eligibility here is among the packaged resources alone; a space
+// withdraws it from a packaged resource whose identifier a local one claims.
+fn packaged() -> &'static Layer {
+    static LAYER: std::sync::OnceLock<Layer> = std::sync::OnceLock::new();
+    LAYER.get_or_init(|| {
+        let mut layer = Layer {
+            base: PACKAGED,
+            ..Layer::default()
+        };
+        let unprotected = HashSet::new();
+        for resource in embedded_resources() {
+            let index = SchemaIndex::supplied_nodes(&resource.document);
+            layer.add_source(
+                Some(resource.uri.clone()),
+                resource.document.clone(),
+                &index,
+                ResourceOrigin::Standard,
+                &unprotected,
+            );
+        }
+        layer.finalize(|names, name| names.get(name).copied());
+        layer
+    })
+}
+// A name's selection in a space. The packaged names count as added after
+// every local name, under `Layer::add_name`'s rules: a local contained
+// carrier keeps the name, and a supplied claim to a packaged name leaves it
+// without a single carrier.
+fn select(
+    local: &BTreeMap<String, NameSelection>,
+    packaged: &Layer,
+    name: &str,
+) -> Option<NameSelection> {
+    match (local.get(name), packaged.names.get(name)) {
+        (Some(selected), Some(_)) if selected.origin == ResourceOrigin::Supplied => {
+            Some(NameSelection {
+                origin: ResourceOrigin::Supplied,
+                carrier: None,
+            })
+        }
+        (Some(selected), _) => Some(*selected),
+        (None, packaged) => packaged.copied(),
+    }
+}
+
+impl SchemaSpace {
+    pub fn new(document: RawDocument, supplied: Supplied) -> Self {
+        let packaged = packaged();
+        let mut local = Layer::default();
+        let protected = &supplied.policy.protected;
+        local.add_source(
+            None,
+            document.value().clone(),
+            document.schema_index(),
+            ResourceOrigin::Contained,
+            protected,
+        );
+        for resource in supplied.iter() {
+            let index = SchemaIndex::supplied_nodes(&resource.document);
+            local.add_source(
+                Some(resource.uri.clone()),
+                resource.document.clone(),
+                &index,
+                ResourceOrigin::Supplied,
+                protected,
+            );
+        }
+        // Canonical/retrieval associations and protected standard identities
+        // originate in the immutable supplied-resource input policy.
+        for (name, holders) in &supplied.policy.names {
+            for &(source, node) in holders {
+                if let Some(&id) = local.sources[source + 1].positions.get(&node) {
+                    let resource = local.nodes[id].resource;
+                    local.add_name(name.clone(), resource, protected);
+                }
+            }
+        }
+        local.finalize(|names, name| select(names, packaged, name));
+        Self {
+            document,
+            supplied,
+            local,
+            packaged,
+            inspection: std::sync::OnceLock::new(),
+        }
+    }
+    // Local identifiers index the local layer directly; any other identifier
+    // is the packaged layer's.
+    /// The schema node with this identifier.
+    #[inline]
+    pub fn node(&self, id: usize) -> &SpaceNode {
+        match self.local.nodes.get(id) {
+            Some(node) => node,
+            None => &self.packaged.nodes[id - PACKAGED],
+        }
+    }
+    /// The resource with this identifier.
+    #[inline]
+    pub fn resource(&self, id: usize) -> &Resource {
+        match self.local.resources.get(id) {
+            Some(resource) => resource,
+            None => &self.packaged.resources[id - PACKAGED],
+        }
+    }
+    /// The source with this identifier.
+    #[inline]
+    pub fn source(&self, id: usize) -> &Source {
+        match self.local.sources.get(id) {
+            Some(source) => source,
+            None => &self.packaged.sources[id - PACKAGED],
+        }
+    }
+    /// Every schema node with its identifier: the document's, each supplied
+    /// resource's, then the packaged meta-schemas', in identifier order.
+    pub fn nodes(&self) -> impl Iterator<Item = (usize, &SpaceNode)> {
+        self.local.nodes().chain(self.packaged.nodes())
+    }
+    /// Every resource with its identifier, in identifier order.
+    pub fn resources(&self) -> impl Iterator<Item = (usize, &Resource)> {
+        self.local.resources().chain(self.packaged.resources())
+    }
+    /// A node's position in [`Self::nodes`], as generated names number it.
+    pub fn node_number(&self, id: usize) -> usize {
+        if id < PACKAGED {
+            id
+        } else {
+            self.local.nodes.len() + (id - PACKAGED)
+        }
+    }
+    /// A resource's position in [`Self::resources`], as generated names number it.
+    pub fn resource_number(&self, id: usize) -> usize {
+        if id < PACKAGED {
+            id
+        } else {
+            self.local.resources.len() + (id - PACKAGED)
+        }
+    }
+    /// Whether a resource is the selected carrier of its canonical identifier.
+    pub fn eligible(&self, id: usize) -> bool {
+        let resource = self.resource(id);
+        if id < PACKAGED || !resource.eligible || resource.anonymous {
+            return resource.eligible;
+        }
+        resource
+            .base
+            .as_ref()
+            .is_none_or(|name| !self.local.names.contains_key(name))
+    }
+    fn name(&self, name: &str) -> Option<NameSelection> {
+        select(&self.local.names, self.packaged, name)
+    }
+    fn has_name(&self, name: &str) -> bool {
+        self.local.names.contains_key(name) || self.packaged.names.contains_key(name)
+    }
     pub fn check_resource(&self, resource: usize, at: usize) -> Result<(), Failure> {
-        if self.resources[resource].eligible {
+        if self.eligible(resource) {
             return Ok(());
         }
         let mut detail = Failure::new(
@@ -398,8 +563,8 @@ impl SchemaSpace {
         // Refusal is independent of optional diagnostic text. Measure original
         // pointers and retrieval provenance before any location allocation.
         const LOCATION_BYTES: usize = 64 * 1024;
-        let node = &self.nodes[at];
-        let source = &self.sources[node.source];
+        let node = self.node(at);
+        let source = self.source(node.source);
         let uri_bytes = source.uri.as_ref().map_or(0, String::len);
         if let Some(remaining) = LOCATION_BYTES.checked_sub(uri_bytes)
             && location_pointer_size(node.value.view(), remaining).is_some()
@@ -409,11 +574,38 @@ impl SchemaSpace {
         Err(detail)
     }
     pub fn document_node(&self, value: &JsonValue) -> Option<usize> {
-        self.sources[0].positions.get(&node_id(value)).copied()
+        self.local.sources[0]
+            .positions
+            .get(&node_id(value))
+            .copied()
+    }
+    /// Append a node's original pointer, exactly as [`Self::location`] gives it,
+    /// to `out`, using `scratch` for its source's own pointer. `false`,
+    /// appending nothing, when the pointer passes through a name holding
+    /// unpaired units, which only [`Self::location`] can hold.
+    pub fn location_into(&self, node: usize, out: &mut Vec<u8>, scratch: &mut Vec<u8>) -> bool {
+        let node = self.node(node);
+        let source = self.source(node.source);
+        scratch.clear();
+        if !pointer_into(&source.value, scratch) {
+            scratch.clear();
+        }
+        let start = out.len();
+        if !pointer_into(&node.value, out) {
+            return false;
+        }
+        if !scratch.is_empty() && out[start..].starts_with(scratch) {
+            out.drain(start..start + scratch.len());
+        }
+        true
+    }
+    /// The URI of a node's source, as [`Self::location`] gives it.
+    pub fn source_uri(&self, node: usize) -> Option<&str> {
+        self.source(self.node(node).source).uri.as_deref()
     }
     pub fn location(&self, node: usize) -> Location {
-        let node = &self.nodes[node];
-        let source = &self.sources[node.source];
+        let node = self.node(node);
+        let source = self.source(node.source);
         // Exact from the source's own root, including names with unpaired units.
         Location {
             resource: source.uri.clone(),
@@ -433,11 +625,11 @@ impl SchemaSpace {
         self.resolve_with_missing(holder, reference, &mut |_| {})
     }
     fn malformed_reference_scope(&self, holder: usize) -> bool {
-        let resource = &self.resources[self.nodes[holder].resource];
+        let resource = self.resource(self.node(holder).resource);
         resource.base.is_some()
             && resource
                 .root
-                .is_some_and(|root| self.nodes[root].value.get("$id").is_some())
+                .is_some_and(|root| self.node(root).value.get("$id").is_some())
     }
     pub fn resolve_with_missing(
         &self,
@@ -445,8 +637,8 @@ impl SchemaSpace {
         reference: &str,
         missing: &mut impl FnMut(&str),
     ) -> Result<Target, Failure> {
-        let at = &self.nodes[holder];
-        let resource = &self.resources[at.resource];
+        let at = self.node(holder);
+        let resource = self.resource(at.resource);
         let fail = |code: &str, message: String| {
             self.failure(
                 holder,
@@ -485,7 +677,7 @@ impl SchemaSpace {
                             "target is outside the schema index".into(),
                         )
                     })?;
-                    self.check_resource(self.nodes[node].resource, holder)?;
+                    self.check_resource(self.node(node).resource, holder)?;
                     let name =
                         uri::decode_fragment(reference.strip_prefix('#').unwrap_or(reference))
                             .filter(|s| !s.is_empty() && !s.starts_with('/'));
@@ -513,7 +705,7 @@ impl SchemaSpace {
             complete: true,
             limitation: None,
         };
-        for (id, node) in self.nodes.iter().enumerate().filter(|(_, n)| n.source == 0) {
+        for (id, node) in self.local.nodes().filter(|(_, n)| n.source == 0) {
             if let Err(reason) = control.check() {
                 report.complete = false;
                 report.limitation = Some(reason);
@@ -572,18 +764,48 @@ impl SchemaSpace {
         let reach = self.reach(entry, control)?;
         self.project(entry, &reach, control)
     }
+    /// The same projection as [`Self::program`] without its location map, for a
+    /// caller that writes origins itself: each definition's node, per projected
+    /// resource in `$defs` order, whose origin [`Self::location_into`] gives.
+    pub fn program_unmapped(
+        &self,
+        entry: usize,
+        control: &dyn Control,
+    ) -> Result<UnmappedProgram, Failure> {
+        control.check()?;
+        let reach = self.reach(entry, control)?;
+        let (program, definitions) =
+            self.projection(entry, &reach, control, PROGRAM_NAMESPACE, false)?;
+        Ok(UnmappedProgram {
+            program,
+            definitions,
+        })
+    }
+    /// The location map [`Self::program`] builds, for the projection
+    /// [`Self::program_unmapped`] returned with these definition nodes.
+    pub fn definition_locations(
+        &self,
+        program: &Program,
+        definitions: &[Vec<usize>],
+    ) -> std::sync::Arc<BTreeMap<String, crate::ProgramOrigin>> {
+        let mut locations = BTreeMap::new();
+        for (resource, nodes) in program.resources.iter().zip(definitions) {
+            for &node in nodes {
+                locations.insert(
+                    format!("{}#/$defs/n{}", resource.uri, self.node_number(node)),
+                    crate::ProgramOrigin::Prefix(self.location(node)),
+                );
+            }
+        }
+        std::sync::Arc::new(locations)
+    }
     pub fn project(
         &self,
         entry: usize,
         reach: &Reach,
         control: &dyn Control,
     ) -> Result<Program, Failure> {
-        self.project_with_namespace(
-            entry,
-            reach,
-            control,
-            "https://sdk-program.openbindings.invalid/",
-        )
+        self.project_with_namespace(entry, reach, control, PROGRAM_NAMESPACE)
     }
     pub fn project_with_namespace(
         &self,
@@ -592,20 +814,40 @@ impl SchemaSpace {
         control: &dyn Control,
         namespace: &str,
     ) -> Result<Program, Failure> {
-        let resource_uri = |resource: usize| format!("{namespace}r{resource}");
-        let address =
-            |node: usize| format!("{}#/$defs/n{node}", resource_uri(self.nodes[node].resource));
+        self.projection(entry, reach, control, namespace, true)
+            .map(|(program, _)| program)
+    }
+    // With `mapped`, the program maps every definition to its origin; without,
+    // it maps nothing and the nodes of each resource's definitions are returned.
+    fn projection(
+        &self,
+        entry: usize,
+        reach: &Reach,
+        control: &dyn Control,
+        namespace: &str,
+        mapped: bool,
+    ) -> Result<(Program, Vec<Vec<usize>>), Failure> {
+        // Generated names number nodes and resources densely (`node_number`).
+        let resource_uri =
+            |resource: usize| format!("{namespace}r{}", self.resource_number(resource));
+        let address = |node: usize| {
+            format!(
+                "{}#/$defs/n{}",
+                resource_uri(self.node(node).resource),
+                self.node_number(node)
+            )
+        };
         let reference = |node: usize| format!("{{\"$ref\":{}}}", quoted(&address(node)));
         // Reach admits every node through check_known_node before projection.
         // Its meta-schema and scalar-name checks establish the shapes below.
-        let mut definitions: BTreeMap<usize, BTreeMap<String, String>> = BTreeMap::new();
+        let mut definitions: BTreeMap<usize, BTreeMap<String, (String, usize)>> = BTreeMap::new();
         let mut locations = BTreeMap::new();
         let mut byte_count = 0usize;
         let mut nodes: Vec<_> = reach.nodes.iter().copied().collect();
         nodes.sort_unstable();
         for id in nodes {
             control.check()?;
-            let node = &self.nodes[id];
+            let node = self.node(id);
             let transformed = if node.value.kind() == JsonKind::Boolean {
                 node.value.text().to_owned()
             } else {
@@ -639,7 +881,7 @@ impl SchemaSpace {
                         let target = &reach.targets[&(id, keyword.into())];
                         let uri = if keyword == "$dynamicRef" {
                             if let Some(name) = &target.dynamic_name {
-                                format!("{}#{name}", resource_uri(self.nodes[target.node].resource))
+                                format!("{}#{name}", resource_uri(self.node(target.node).resource))
                             } else {
                                 address(target.node)
                             }
@@ -650,7 +892,8 @@ impl SchemaSpace {
                         continue;
                     }
                     let child_reference = |value: JsonRef<'_>| -> Result<String, Failure> {
-                        let target = self.sources[node.source]
+                        let target = self
+                            .source(node.source)
                             .positions
                             .get(&node_id(&value.to_owned()))
                             .copied()
@@ -701,18 +944,28 @@ impl SchemaSpace {
                     "schema projection exceeds 64 MiB",
                 ));
             }
-            locations.insert(address(id), crate::ProgramOrigin::Prefix(self.location(id)));
+            if mapped {
+                locations.insert(address(id), crate::ProgramOrigin::Prefix(self.location(id)));
+            }
             definitions
                 .entry(node.resource)
                 .or_default()
-                .insert(format!("n{id}"), transformed);
+                .insert(format!("n{}", self.node_number(id)), (transformed, id));
         }
-        let entry_resource = self.nodes[entry].resource;
+        let entry_resource = self.node(entry).resource;
         let entry_uri = resource_uri(entry_resource);
+        let mut nodes = Vec::new();
+        if !mapped {
+            nodes.reserve_exact(definitions.len());
+        }
         let resources = definitions
             .into_iter()
             .map(|(id, defs)| {
                 let uri = resource_uri(id);
+                if !mapped {
+                    nodes.push(defs.values().map(|&(_, node)| node).collect());
+                }
+                let defs = defs.into_iter().map(|(name, (text, _))| (name, text));
                 let mut fields = BTreeMap::from([
                     ("$id".into(), quoted(&uri)),
                     ("$schema".into(), quoted(DIALECT)),
@@ -734,15 +987,21 @@ impl SchemaSpace {
                     })
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Program {
+        let locations = if mapped {
+            std::sync::Arc::new(locations)
+        } else {
+            unmapped()
+        };
+        let program = Program {
             entry_uri,
             resources,
-            locations: std::sync::Arc::new(locations),
-        })
+            locations,
+        };
+        Ok((program, nodes))
     }
     pub fn check_known_node(&self, id: usize) -> Result<(), Failure> {
-        let node = &self.nodes[id];
-        let resource = &self.resources[node.resource];
+        let node = self.node(id);
+        let resource = self.resource(node.resource);
         if node.depth > 256 {
             return Err(self.failure(
                 id,
@@ -821,8 +1080,8 @@ impl SchemaSpace {
                 ));
             }
             self.check_known_node(id)?;
-            let node = &self.nodes[id];
-            let resource = &self.resources[node.resource];
+            let node = self.node(id);
+            let resource = self.resource(node.resource);
             if out.resources.insert(node.resource) {
                 for (name, holders) in &out.dynamic {
                     if let Some(declarations) = resource.anchors.get(name) {
@@ -863,7 +1122,7 @@ impl SchemaSpace {
                             out.dynamic.entry(name.clone()).or_default().push(id);
                             for &resource_id in &out.resources {
                                 if let Some(declarations) =
-                                    self.resources[resource_id].anchors.get(&name)
+                                    self.resource(resource_id).anchors.get(&name)
                                 {
                                     if declarations.len() > 1 {
                                         return Err(self.failure(id,FailureReason::ConservativePreparation,"ambiguous-dynamic-anchor","a dynamically looked-up name has multiple declarations"));
@@ -907,7 +1166,8 @@ impl SchemaSpace {
                     }
                     let children = keyword_children(keyword, member.value);
                     for child in children {
-                        if let Some(&target) = self.sources[node.source]
+                        if let Some(&target) = self
+                            .source(node.source)
                             .positions
                             .get(&node_id(&child.to_owned()))
                         {
@@ -965,7 +1225,7 @@ impl SchemaSpace {
 pub fn quoted(text: &str) -> String {
     serde_json::to_string(text).expect("a Rust string serializes as JSON")
 }
-pub fn object(fields: BTreeMap<String, String>) -> String {
+pub fn object(fields: impl IntoIterator<Item = (String, String)>) -> String {
     format!(
         "{{{}}}",
         fields
@@ -1041,6 +1301,7 @@ mod projection_tests {
         backend::{self, FlatJson},
         numeric,
     };
+    use std::collections::BTreeSet;
     #[test]
     fn malformed_reached_shapes_refuse_before_projection() {
         let control = std::sync::atomic::AtomicBool::new(false);
@@ -1130,6 +1391,397 @@ mod projection_tests {
             })
             .collect();
         (valid, paths)
+    }
+    impl SchemaSpace {
+        // The space as assembled before the packaged layer was shared: the
+        // meta-schemas added to every space as sources after the supplied
+        // resources' names, with eligibility finalized over all of them.
+        fn flat(document: RawDocument, supplied: Supplied) -> Self {
+            static NONE: std::sync::OnceLock<Layer> = std::sync::OnceLock::new();
+            let packaged = NONE.get_or_init(|| Layer {
+                base: PACKAGED,
+                ..Layer::default()
+            });
+            let mut local = Layer::default();
+            let protected = &supplied.policy.protected;
+            local.add_source(
+                None,
+                document.value().clone(),
+                document.schema_index(),
+                ResourceOrigin::Contained,
+                protected,
+            );
+            for resource in supplied.iter() {
+                let index = SchemaIndex::supplied(&resource.document, &resource.uri);
+                local.add_source(
+                    Some(resource.uri.clone()),
+                    resource.document.clone(),
+                    &index,
+                    ResourceOrigin::Supplied,
+                    protected,
+                );
+            }
+            for (name, holders) in &supplied.policy.names {
+                for &(source, node) in holders {
+                    if let Some(&id) = local.sources[source + 1].positions.get(&node) {
+                        let resource = local.nodes[id].resource;
+                        local.add_name(name.clone(), resource, protected);
+                    }
+                }
+            }
+            for resource in embedded_resources() {
+                let index = SchemaIndex::supplied(&resource.document, &resource.uri);
+                local.add_source(
+                    Some(resource.uri.clone()),
+                    resource.document.clone(),
+                    &index,
+                    ResourceOrigin::Standard,
+                    protected,
+                );
+            }
+            local.finalize(|names, name| names.get(name).copied());
+            Self {
+                document,
+                supplied,
+                local,
+                packaged,
+                inspection: std::sync::OnceLock::new(),
+            }
+        }
+    }
+    fn program_text(result: Result<Program, Failure>) -> String {
+        match result {
+            Ok(program) => {
+                let mut text = format!("entry {}\n", program.entry_uri);
+                for resource in &program.resources {
+                    text.push_str(&format!("{} {}\n", resource.uri, resource.document.text()));
+                }
+                for (uri, origin) in program.locations.iter() {
+                    text.push_str(&format!("{uri} {origin:?}\n"));
+                }
+                text
+            }
+            Err(failure) => format!(
+                "refused {}",
+                serde_json::to_string(&failure).expect("failure serializes")
+            ),
+        }
+    }
+    #[test]
+    fn the_shared_packaged_layer_assembles_the_flat_space() {
+        const META: &str = "https://json-schema.org/draft/2020-12/schema";
+        const CORE: &str = "https://json-schema.org/draft/2020-12/meta/core";
+        let resource = |uri: &str, text: &str| ProjectedResource {
+            uri: uri.into(),
+            document: JsonValue::parse(text).unwrap(),
+        };
+        let document = |input: &str, schemas: &str| {
+            format!(
+                r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{input}}}}},"schemas":{{{schemas}}}}}"#
+            )
+        };
+        let cases: Vec<(String, Vec<ProjectedResource>)> = vec![
+            (document(r#"{"type":"string"}"#, ""), vec![]),
+            // The meta-schema as a value's schema, and a dynamic reference into it.
+            (document(&format!(r#"{{"$ref":"{META}"}}"#), ""), vec![]),
+            (
+                document(
+                    &format!(
+                        r##"{{"$dynamicRef":"{META}#meta","properties":{{"t":{{"$ref":"https://json-schema.org/draft/2020-12/meta/validation#/$defs/simpleTypes"}}}}}}"##
+                    ),
+                    "",
+                ),
+                vec![],
+            ),
+            // A contained resource claiming a packaged identifier keeps it.
+            (
+                document(
+                    &format!(r#"{{"allOf":[{{"$ref":"{CORE}"}},{{"$ref":"{META}"}}]}}"#),
+                    &format!(r#""core":{{"$id":"{CORE}","type":"object"}}"#),
+                ),
+                vec![],
+            ),
+            // A supplied resource claiming a packaged identifier, by retrieval
+            // URI and by a nested identifier, leaves it without one carrier.
+            (
+                document(&format!(r#"{{"$ref":"{META}"}}"#), ""),
+                vec![resource(META, r#"{"type":"integer"}"#)],
+            ),
+            (
+                document(
+                    &format!(
+                        r#"{{"allOf":[{{"$ref":"https://supplied.test/a"}},{{"$ref":"{CORE}"}}]}}"#
+                    ),
+                    "",
+                ),
+                vec![resource(
+                    "https://supplied.test/a",
+                    &format!(r#"{{"$defs":{{"c":{{"$id":"{CORE}"}}}},"$ref":"{META}"}}"#),
+                )],
+            ),
+            // Supplied resources before the packaged ones, with anchors and a
+            // dynamic anchor the meta-schemas also declare.
+            (
+                document(
+                    &format!(
+                        r##"{{"anyOf":[{{"$ref":"https://supplied.test/b#x"}},{{"$ref":"https://supplied.test/c"}},{{"$ref":"{META}"}}]}}"##
+                    ),
+                    r#""s":{"type":"string"}"#,
+                ),
+                vec![
+                    resource(
+                        "https://supplied.test/b",
+                        r##"{"$defs":{"x":{"$anchor":"x","$dynamicAnchor":"meta","type":"null"}},"$ref":"#x"}"##,
+                    ),
+                    resource(
+                        "https://supplied.test/c",
+                        &format!(
+                            r##"{{"$dynamicRef":"{META}#meta","$defs":{{"d":{{"$id":"https://supplied.test/d"}}}}}}"##
+                        ),
+                    ),
+                ],
+            ),
+            // Two supplied claims to one identifier, a missing resource and a cycle.
+            (
+                document(r#"{"$ref":"https://supplied.test/b"}"#, ""),
+                vec![
+                    resource("https://supplied.test/b", r#"{"type":"null"}"#),
+                    resource(
+                        "https://supplied.test/other",
+                        r#"{"$id":"https://supplied.test/b"}"#,
+                    ),
+                ],
+            ),
+            (document(r#"{"$ref":"https://absent.test/c"}"#, ""), vec![]),
+            (
+                document(
+                    r##"{"$ref":"#/schemas/loop"}"##,
+                    r##""loop":{"allOf":[{"$ref":"#/schemas/loop"}]}"##,
+                ),
+                vec![],
+            ),
+        ];
+        let control = std::sync::atomic::AtomicBool::new(false);
+        let (mut programs, mut projected_packaged) = (0, 0);
+        for (text, resources) in cases {
+            let space = |flat: bool| {
+                let document = RawDocument::parse(&text).unwrap();
+                let supplied = Supplied::new(resources.clone()).unwrap();
+                if flat {
+                    SchemaSpace::flat(document, supplied)
+                } else {
+                    SchemaSpace::new(document, supplied)
+                }
+            };
+            let (layered, flat) = (space(false), space(true));
+            // Identifiers correspond through the dense numbering.
+            assert_eq!(layered.nodes().count(), flat.nodes().count(), "{text}");
+            for ((id, node), (number, original)) in layered.nodes().zip(flat.nodes()) {
+                assert_eq!(layered.node_number(id), number);
+                assert_eq!(node_id(&node.value), node_id(&original.value));
+                assert_eq!(layered.resource_number(node.resource), original.resource);
+                assert_eq!(node.depth, original.depth);
+                let (source, other) = (layered.source(node.source), flat.source(original.source));
+                assert_eq!(source.uri, other.uri);
+                assert_eq!(node_id(&source.value), node_id(&other.value));
+                assert_eq!(
+                    source.positions.get(&node_id(&node.value)).copied(),
+                    Some(id)
+                );
+            }
+            assert_eq!(layered.resources().count(), flat.resources().count());
+            for ((id, resource), (number, original)) in layered.resources().zip(flat.resources()) {
+                assert_eq!(layered.resource_number(id), number);
+                assert_eq!(resource.root.map(|n| layered.node_number(n)), original.root);
+                assert_eq!(resource.base, original.base);
+                assert_eq!(resource.anonymous, original.anonymous);
+                assert_eq!(resource.dialect, original.dialect);
+                assert_eq!(resource.origin, original.origin);
+                let anchors = |space: &SchemaSpace, r: &Resource| {
+                    r.anchors
+                        .iter()
+                        .map(|(name, at)| {
+                            let at: Vec<_> =
+                                at.iter().map(|&(n, d)| (space.node_number(n), d)).collect();
+                            (name.clone(), at)
+                        })
+                        .collect::<Vec<_>>()
+                };
+                assert_eq!(anchors(&layered, resource), anchors(&flat, original));
+                assert_eq!(
+                    layered.eligible(id),
+                    flat.eligible(number),
+                    "{text} {:?}",
+                    resource.base
+                );
+            }
+            let names: BTreeSet<_> = layered
+                .local
+                .names
+                .keys()
+                .chain(layered.packaged.names.keys())
+                .collect();
+            assert!(names.iter().copied().eq(flat.local.names.keys()));
+            for name in flat.local.names.keys() {
+                let (selected, original) = (layered.name(name).unwrap(), flat.name(name).unwrap());
+                assert_eq!(selected.origin, original.origin, "{name}");
+                assert_eq!(
+                    selected.carrier.map(|r| layered.resource_number(r)),
+                    original.carrier,
+                    "{name}"
+                );
+                assert!(layered.has_name(name));
+            }
+            // Every document schema projects identically, refusals included.
+            assert_eq!(
+                serde_json::to_string(&layered.references(&control)).unwrap(),
+                serde_json::to_string(&flat.references(&control)).unwrap()
+            );
+            for (id, _) in layered.local.nodes().filter(|(_, n)| n.source == 0) {
+                let projected = program_text(layered.program(id, &control));
+                assert_eq!(
+                    projected,
+                    program_text(flat.program(id, &control)),
+                    "{text} {id}"
+                );
+                programs += 1;
+                projected_packaged += usize::from(projected.contains("json-schema.org"));
+            }
+        }
+        assert!(
+            programs >= 20 && projected_packaged >= 4,
+            "{programs} {projected_packaged}"
+        );
+    }
+    #[test]
+    fn unmapped_programs_are_the_same_projection_and_name_every_origin() {
+        // A document schema, a supplied resource, an embedded resource and
+        // names needing pointer escapes.
+        let document = RawDocument::parse(
+            r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"allOf":[{"$ref":"#/schemas/a~1b"},{"$ref":"https://example.invalid/tree"}]}}},"schemas":{"a/b":{"properties":{"~x":{"$id":"https://example.invalid/inner","minimum":1}}}}}"##,
+        )
+        .unwrap();
+        let resources = Supplied::new([ProjectedResource {
+            uri: "https://example.invalid/tree".into(),
+            document: JsonValue::parse(r#"{"items":{"type":"string"},"prefixItems":[true]}"#)
+                .unwrap(),
+        }])
+        .unwrap();
+        let space = SchemaSpace::new(document, resources);
+        let entry = space
+            .document_node(
+                &space
+                    .document
+                    .value()
+                    .at("/operations/op/input")
+                    .unwrap()
+                    .to_owned(),
+            )
+            .unwrap();
+        let control = std::sync::atomic::AtomicBool::new(false);
+        let mapped = space.program(entry, &control).unwrap();
+        let unmapped = space.program_unmapped(entry, &control).unwrap();
+        assert!(unmapped.program.locations.is_empty());
+        assert_eq!(mapped.entry_uri, unmapped.program.entry_uri);
+        assert_eq!(mapped.resources.len(), unmapped.definitions.len());
+        let (mut out, mut scratch) = (Vec::new(), Vec::new());
+        let mut checked = 0;
+        for ((resource, other), nodes) in mapped
+            .resources
+            .iter()
+            .zip(&unmapped.program.resources)
+            .zip(&unmapped.definitions)
+        {
+            assert_eq!(resource.uri, other.uri);
+            assert_eq!(resource.document.text(), other.document.text());
+            let names = resource.document.get("$defs").unwrap().members().unwrap();
+            assert_eq!(names.len(), nodes.len());
+            for (definition, &node) in names.zip(nodes) {
+                let key = format!(
+                    "{}#/$defs/{}",
+                    resource.uri,
+                    definition.name.as_str().unwrap()
+                );
+                let ProgramOrigin::Prefix(at) = &mapped.locations[&key] else {
+                    panic!("strict projections map prefix origins")
+                };
+                out.clear();
+                assert!(space.location_into(node, &mut out, &mut scratch), "{key}");
+                assert_eq!(space.source_uri(node), at.resource.as_deref(), "{key}");
+                assert_eq!(at.pointer, std::str::from_utf8(&out).unwrap(), "{key}");
+                checked += 1;
+            }
+        }
+        assert_eq!(checked, mapped.locations.len());
+        assert_same_map(
+            &space.definition_locations(&unmapped.program, &unmapped.definitions),
+            &mapped.locations,
+        );
+    }
+    fn assert_same_map(
+        built: &BTreeMap<String, ProgramOrigin>,
+        mapped: &BTreeMap<String, ProgramOrigin>,
+    ) {
+        assert!(built.keys().eq(mapped.keys()));
+        for (key, origin) in built {
+            let (ProgramOrigin::Prefix(built), ProgramOrigin::Prefix(mapped)) =
+                (origin, &mapped[key])
+            else {
+                panic!("strict projections map prefix origins")
+            };
+            assert!(built == mapped, "{key}");
+        }
+    }
+    #[test]
+    fn unmapped_origins_through_unpaired_names_are_left_to_the_map() {
+        // An anchor reaches a schema beneath a name no reference can spell.
+        let document = RawDocument::parse(
+            r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://loc.test/r#an"}}}}"#,
+        )
+        .unwrap();
+        let resources = Supplied::new([ProjectedResource {
+            uri: "https://loc.test/r".into(),
+            document: JsonValue::parse(
+                r#"{"minimum":0,"$defs":{"\ud800/":{"$anchor":"an","minimum":3}}}"#,
+            )
+            .unwrap(),
+        }])
+        .unwrap();
+        let space = SchemaSpace::new(document, resources);
+        let entry = space
+            .document_node(
+                &space
+                    .document
+                    .value()
+                    .at("/operations/op/input")
+                    .unwrap()
+                    .to_owned(),
+            )
+            .unwrap();
+        let control = std::sync::atomic::AtomicBool::new(false);
+        let mapped = space.program(entry, &control).unwrap();
+        let unmapped = space.program_unmapped(entry, &control).unwrap();
+        let (mut out, mut scratch) = (b"held".to_vec(), Vec::new());
+        let mut declined = 0;
+        for &node in unmapped.definitions.iter().flatten() {
+            let at = space.location(node);
+            if space.location_into(node, &mut out, &mut scratch) {
+                assert_eq!(at.pointer, std::str::from_utf8(&out[4..]).unwrap());
+            } else {
+                // Nothing is appended, and the location keeps every unit.
+                assert_eq!(out, b"held");
+                assert!(at.pointer.as_str().is_none());
+                assert_eq!(at.resource.as_deref(), Some("https://loc.test/r"));
+                assert_eq!(at.pointer.to_string(), "/$defs/\\ud800~1");
+                declined += 1;
+            }
+            out.truncate(4);
+        }
+        assert_eq!(declined, 1);
+        assert_same_map(
+            &space.definition_locations(&unmapped.program, &unmapped.definitions),
+            &mapped.locations,
+        );
     }
     #[test]
     fn generated_name_changes_preserve_dynamic_scope_annotations_opaque_strings_and_locations() {

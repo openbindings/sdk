@@ -21,7 +21,11 @@ sets never share an implicit registry. A set indexes its resource identities onc
 A resolution space is assembled only when an evaluator requests the core
 projection, once per live document revision and resource set: the space without
 supplied resources stays with the revision, and a space with a set stays with
-that set until either the set or the revision is dropped. The schema-space compiler builds a
+that set until either the set or the revision is dropped. The default evaluator
+assembles its own space for each preparation and drops it afterwards. Every space
+places the packaged 2020-12 meta-schemas after the document and supplied resources
+as one immutable layer, built once per process and shared, so assembly does not
+re-add them. The schema-space compiler builds a
 private graph/projection preserving resource boundaries and dynamic scope. Only
 private generated names change; error locations resolve to original sources.
 

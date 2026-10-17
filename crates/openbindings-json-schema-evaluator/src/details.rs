@@ -18,7 +18,7 @@ use jsonschema::error::{TypeKind, ValidationErrorKind as Kind};
 use openbindings::*;
 use openbindings_internal_json::{backend, text::TextValue};
 use openbindings_internal_schema::{
-    ChildShape, Program, ProgramOrigin, ProjectedResource, child_shape,
+    ChildShape, Program, ProgramOrigin, ProjectedResource, SchemaSpace, child_shape,
 };
 
 fn work(control: &dyn WorkControl, units: usize) -> bool {
@@ -201,20 +201,19 @@ fn kept(keyword: &str) -> Option<Kept> {
         _ => return None,
     })
 }
-// Whether the library reports every name of a `required` array exactly as the
-// original spells it. Its view presents names holding the presentation's
-// marker character otherwise (`openbindings_internal_json::backend`), so those
-// arrays keep their names; names with unpaired surrogates are refused before
-// projection, and the meta-schema check makes every element a string. A name
-// can hold the marker only through its UTF-8 lead byte or an escape, so most
-// arrays are decided by two byte searches of their text.
-fn reported_exactly(names: JsonRef<'_>) -> bool {
-    let text = names.text().as_bytes();
-    if !text.contains(&b'\\') && !text.contains(&0xee) {
-        return true;
-    }
-    names.elements().is_some_and(|mut names| {
-        names.all(|name| name.as_str().is_some_and(|name| !name.contains('\u{e000}')))
+// Whether a `dependentRequired` map names a list with a key spelled as an
+// array index. The library reports a failed list at the keyword followed by an
+// index, so such a key, which the location walk then reaches, must keep its
+// list for the membership check main makes there.
+fn index_named(lists: JsonRef<'_>) -> bool {
+    lists.members().is_some_and(|mut lists| {
+        lists.any(|list| {
+            list.name.as_str().is_some_and(|name| {
+                !name.is_empty()
+                    && name.bytes().all(|b| b.is_ascii_digit())
+                    && (name == "0" || !name.starts_with('0'))
+            })
+        })
     })
 }
 fn standard(uri: &str) -> bool {
@@ -259,6 +258,19 @@ impl Sink for String {
     fn len(&self) -> usize {
         String::len(self)
     }
+}
+// Where the text takes each definition's origin from: the program's location
+// map, or the space it was projected from, with each projected resource's
+// definition nodes and their original pointers, built once for both passes:
+// definition `k`'s pointer ends at `ends[k]` in `pointers`.
+enum Origins<'a> {
+    Map(&'a std::collections::BTreeMap<String, ProgramOrigin>),
+    Space {
+        space: &'a SchemaSpace,
+        definitions: &'a [Vec<usize>],
+        pointers: Vec<u8>,
+        ends: Vec<usize>,
+    },
 }
 // Slots the filling pass writes: resources from 0, definitions from
 // `definitions`, keywords from `keywords`.
@@ -587,6 +599,98 @@ impl<W: Sink> Writer<'_, W> {
         // Every entry belongs to one program resource.
         Ok(written == locations.len())
     }
+    // Write every definition with its origin; `Ok(false)` when the program's
+    // map holds an entry this text cannot carry.
+    fn write(
+        &mut self,
+        resources: &[ProjectedResource],
+        origins: &mut Origins<'_>,
+        control: &dyn WorkControl,
+    ) -> Result<bool, NoVerdict> {
+        match origins {
+            Origins::Map(locations) => self.located(resources, locations, control),
+            Origins::Space {
+                space,
+                definitions,
+                pointers,
+                ends,
+            } => {
+                self.projected(resources, space, definitions, pointers, ends, control)?;
+                Ok(true)
+            }
+        }
+    }
+    // Every projected definition with its node's origin in the space it was
+    // projected from: a prefix origin in its resource's source, which every
+    // definition of one projected resource shares.
+    fn projected(
+        &mut self,
+        resources: &[ProjectedResource],
+        space: &SchemaSpace,
+        definitions: &[Vec<usize>],
+        pointers: &[u8],
+        ends: &[usize],
+        control: &dyn WorkControl,
+    ) -> Result<(), NoVerdict> {
+        self.begin(resources);
+        // A projection places each child at its parent's pointer, keyword and
+        // name, so a child's own origin names it.
+        self.unnamed = true;
+        let mut next = 0;
+        for (resource, nodes) in resources.iter().zip(definitions) {
+            let first_node = next;
+            next += nodes.len();
+            let (Some(&first), Some(members)) = (
+                nodes.first(),
+                resource.document.get("$defs").and_then(|d| d.members()),
+            ) else {
+                continue;
+            };
+            let source = space.source_uri(first);
+            if self.resources != 0 {
+                self.put_char(',');
+            }
+            let key = self.name(&resource.uri[self.prefix..]);
+            self.put(":[");
+            self.put(if source.is_some_and(standard) {
+                "true,"
+            } else {
+                "false,"
+            });
+            match source {
+                Some(source) => self.escaped(source),
+                None => self.put("null"),
+            }
+            self.put(",{");
+            let first_definition = self.definitions;
+            let mut arena = None;
+            for (k, (definition, &node)) in members.zip(nodes).enumerate() {
+                control.check()?;
+                let Some(name) = definition.name.as_str() else {
+                    continue;
+                };
+                debug_assert_eq!(space.source_uri(node), source);
+                let k = first_node + k;
+                let pointer = &pointers[k.checked_sub(1).map_or(0, |k| ends[k])..ends[k]];
+                if self.definitions != first_definition {
+                    self.put_char(',');
+                }
+                let at = self.name(name);
+                self.put(":[");
+                self.escaped(std::str::from_utf8(pointer).expect("pointers are UTF-8"));
+                self.put_char(',');
+                let schema_at = self.out.len();
+                let first_keyword = self.keywords;
+                self.schema(resource, definition.value, &mut arena);
+                self.put_char(']');
+                self.definition_slot(at, schema_at, first_keyword);
+            }
+            self.put("}]");
+            self.resource_slot(key, first_definition);
+        }
+        self.put("}]");
+        Ok(())
+    }
     // Every projected definition without origins, in projected order.
     fn unlocated(
         &mut self,
@@ -706,35 +810,27 @@ impl<W: Sink> Writer<'_, W> {
                     self.put_char(']');
                 }
                 Kept::Placeholder => self.put("\"\""),
-                Kept::Names => self.names(field.value),
+                // The library reports the missing member exactly as the
+                // original spells it, so a list keeps only that it exists.
+                Kept::Names => self.put("true"),
                 Kept::NameLists => match field.value.members() {
-                    Some(lists) => {
+                    Some(lists) if !index_named(field.value) => {
                         self.put_char('{');
                         for (i, list) in lists.enumerate() {
                             if i != 0 {
                                 self.put_char(',');
                             }
                             self.put(list.name.text());
-                            self.put_char(':');
-                            self.names(list.value);
+                            self.put(":true");
                         }
                         self.put_char('}');
                     }
-                    None => self.put(field.value.text()),
+                    _ => self.put(field.value.text()),
                 },
                 Kept::Copied => self.put(field.value.text()),
             }
         }
         self.put_char('}');
-    }
-    // A `required` array: `true` when the library reports its names exactly,
-    // otherwise its original text.
-    fn names(&mut self, names: JsonRef<'_>) {
-        if reported_exactly(names) {
-            self.put("true");
-        } else {
-            self.put(names.text());
-        }
     }
     // A child position written by the projection as `{"$ref":<address>}`, its
     // only member.
@@ -799,6 +895,54 @@ impl Explanation {
         program: &Program,
         control: &dyn WorkControl,
     ) -> Result<Option<Self>, NoVerdict> {
+        Self::build(program, Origins::Map(&program.locations), control)
+    }
+    /// The same text for a program projected without a location map, its
+    /// origins written from `space`: `definitions` holds each projected
+    /// resource's definition nodes in `$defs` order. When an origin passes
+    /// through a name holding unpaired units, which the text cannot carry, the
+    /// program takes the map [`SchemaSpace::program`] builds and the
+    /// explanation is [`Self::new`]'s, reading that map.
+    pub(crate) fn projected(
+        program: &mut Program,
+        space: &SchemaSpace,
+        definitions: &[Vec<usize>],
+        control: &dyn WorkControl,
+    ) -> Result<Option<Self>, NoVerdict> {
+        // Each pointer is built once, for both passes.
+        let mut ends = Vec::with_capacity(definitions.iter().map(Vec::len).sum());
+        let (mut pointers, mut scratch) = (Vec::new(), Vec::new());
+        for &node in definitions.iter().flatten() {
+            control.check()?;
+            if !space.location_into(node, &mut pointers, &mut scratch) {
+                return Self::mapped(program, space, definitions, control);
+            }
+            ends.push(pointers.len());
+        }
+        let origins = Origins::Space {
+            space,
+            definitions,
+            pointers,
+            ends,
+        };
+        Self::build(program, origins, control)
+    }
+    #[cold]
+    #[inline(never)]
+    fn mapped(
+        program: &mut Program,
+        space: &SchemaSpace,
+        definitions: &[Vec<usize>],
+        control: &dyn WorkControl,
+    ) -> Result<Option<Self>, NoVerdict> {
+        program.locations = space.definition_locations(program, definitions);
+        Self::new(program, control)
+    }
+    fn build(
+        program: &Program,
+        mut origins: Origins<'_>,
+        control: &dyn WorkControl,
+    ) -> Result<Option<Self>, NoVerdict> {
         let resources = &program.resources;
         let mut prefix = resources.first().map_or(0, |r| r.uri.len());
         for resource in resources {
@@ -828,7 +972,7 @@ impl Explanation {
             unnamed: false,
         };
         let mut count = writer(Count(0));
-        let locates = count.located(resources, &program.locations, control)?;
+        let locates = count.write(resources, &mut origins, control)?;
         if !locates {
             count = writer(Count(0));
             count.unlocated(resources, control)?;
@@ -860,7 +1004,7 @@ impl Explanation {
             unnamed: false,
         };
         if locates {
-            fill.located(resources, &program.locations, control)?;
+            fill.write(resources, &mut origins, control)?;
         } else {
             fill.unlocated(resources, control)?;
         }
@@ -1051,7 +1195,13 @@ impl Explanation {
                 continue;
             };
             let slot = self.slots[definition.index as usize];
-            let Some(pointer) = self.at(slot.name + slot.len + 3).string() else {
+            // A prefix origin is the pointer itself; the array form holds it second.
+            let origin = self.at(slot.name + slot.len + 3);
+            let origin = match origin.kind() {
+                JsonKind::Array => origin.elements().nth(1),
+                _ => Some(origin),
+            };
+            let Some(pointer) = origin.and_then(TextValue::string) else {
                 continue;
             };
             if !work(control, pointer.len().saturating_add(token.len())) {
@@ -2078,14 +2228,16 @@ mod tests {
         for (suffix, expected) in [
             ("/type/1", "/type/1"),
             ("/type/2", "/type"),
-            ("/dependentRequired/a~1~0b", "/dependentRequired/a~1~0b"),
             ("/dependentRequired/c", "/dependentRequired"),
-            // Lists of names the library reports exactly keep no names: a path
-            // into one stops at the list. Library errors name only the keyword.
-            ("/dependentRequired/a~1~0b/1", "/dependentRequired/a~1~0b"),
+            // A key spelled as an index keeps every list whole.
+            ("/dependentRequired/a~1~0b/1", "/dependentRequired/a~1~0b/1"),
+            ("/dependentRequired/a~1~0b/2", "/dependentRequired/a~1~0b"),
             ("/dependentRequired/0/0", "/dependentRequired/0"),
             // Percent-encoded generated paths are decoded first.
-            ("/dependentRequired/a~1~0%62", "/dependentRequired/a~1~0b"),
+            (
+                "/dependentRequired/a~1~0%62/0",
+                "/dependentRequired/a~1~0b/0",
+            ),
             // No library error can name a keyword the validator never compiled.
             ("/description", ""),
             ("/x-data/k", ""),
@@ -2105,17 +2257,105 @@ mod tests {
         assert!(
             projection
                 .text
-                .contains(r#""dependentRequired":{"a/~b":true,"0":true}"#)
+                .contains(r#""dependentRequired":{"a/~b":["x","y"],"0":[]}"#)
         );
     }
 
     #[test]
-    fn names_the_library_presents_otherwise_are_kept() {
-        // An unpaired surrogate unit and the presentation's marker character.
+    fn origins_from_the_space_write_the_text_the_map_writes() {
+        for schema in [
+            r#"{"type":"object","properties":{"a/b":{"minimum":1},"~c":{"items":{"type":"string"}}},"required":["a/b"]}"#,
+            r##"{"allOf":[{"$ref":"#/operations/op/input/$defs/x"},{"$id":"https://embedded.test/e","oneOf":[{"const":1},{"enum":[2,3]}]}],"$defs":{"x":{"pattern":"^a","dependentRequired":{"a":["b"]}}}}"##,
+            r#"{"properties":{"q\"\\\n":{"maximum":2}},"$dynamicAnchor":"n"}"#,
+        ] {
+            #[derive(Default)]
+            struct Capture(std::sync::Mutex<Option<SchemaRequest>>);
+            impl SchemaEvaluator for Capture {
+                fn prepare(
+                    &self,
+                    request: &SchemaRequest,
+                    control: &dyn WorkControl,
+                ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+                    *self.0.lock().unwrap() = Some(request.clone());
+                    DefaultEvaluator::new().prepare(request, control)
+                }
+            }
+            let capture = Capture::default();
+            let document = Document::parse(format!(
+                r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
+            ))
+            .unwrap();
+            let document = document.validate().unwrap().conformant().unwrap();
+            let operation = document.resolve_operation("op").unwrap();
+            assert!(operation.input().unwrap().prepare(&capture).is_ok());
+            let request = capture.0.lock().unwrap().take().unwrap();
+            let (space, entry) = crate::planner::space(&request);
+            let control = std::sync::atomic::AtomicBool::new(false);
+            let mapped = space.program(entry, &|| false).unwrap();
+            let mut unmapped = space.program_unmapped(entry, &|| false).unwrap();
+            let from_map = Explanation::new(&mapped, &control).unwrap().unwrap();
+            let from_space = Explanation::projected(
+                &mut unmapped.program,
+                &space,
+                &unmapped.definitions,
+                &control,
+            )
+            .unwrap()
+            .unwrap();
+            assert_eq!(from_map.text, from_space.text, "{schema}");
+            assert!(!from_space.needs_locations());
+        }
+    }
+
+    #[test]
+    fn name_lists_keep_names_only_where_the_location_walk_reads_them() {
+        // The library reports names, the marker character included, exactly.
         let (_, projection) =
-            projected(r#"{"required":["a","b"],"properties":{"y":{"required":["\ue000"]}}}"#);
+            projected(r#"{"required":["a",""],"dependentRequired":{"a":["b"],"01":["c"]}}"#);
         assert!(projection.text.contains(r#""required":true"#));
-        assert!(projection.text.contains(r#""required":["\ue000"]"#));
+        assert!(
+            projection
+                .text
+                .contains(r#""dependentRequired":{"a":true,"01":true}"#)
+        );
+        // A failed list is reported at the keyword and an index, so a key
+        // spelled as an index keeps every list for the membership check there.
+        let explain = |schema: &str, value: &str| {
+            let document = Document::parse(format!(
+                r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
+            ))
+            .unwrap();
+            let document = document.validate().unwrap().conformant().unwrap();
+            let contract = document
+                .resolve_operation("op")
+                .unwrap()
+                .input()
+                .unwrap()
+                .prepare(&DefaultEvaluator::new())
+                .unwrap();
+            let ValueOutcome::Fails { problems, .. } =
+                contract.explain(&JsonValue::parse(value).unwrap())
+            else {
+                panic!("expected a failure")
+            };
+            let problem = problems.into_iter().next().unwrap();
+            (problem.schema.pointer, problem.details)
+        };
+        let (pointer, details) = explain(
+            r#"{"dependentRequired":{"a":["0"],"0":["1"]}}"#,
+            r#"{"a":1}"#,
+        );
+        assert_eq!(pointer, "/operations/op/input/dependentRequired/0");
+        assert!(details.is_none());
+        let (pointer, details) = explain(
+            r#"{"dependentRequired":{"a":["0"],"0":["0"]}}"#,
+            r#"{"a":1}"#,
+        );
+        assert_eq!(pointer, "/operations/op/input/dependentRequired/0");
+        assert!(matches!(details, Some(ValueProblemDetails::Required { member }) if member == "0"));
+        let (pointer, details) = explain(r#"{"dependentRequired":{"a":["b"]}}"#, r#"{"a":1}"#);
+        assert_eq!(pointer, "/operations/op/input/dependentRequired");
+        assert!(details.is_none());
     }
 
     #[test]
