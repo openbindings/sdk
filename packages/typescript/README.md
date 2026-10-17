@@ -116,7 +116,8 @@ undefined opaque values, bigint, cycles, sparse arrays and accessors are refused
 
 Edit a `Document` through `set(pointer, value)`, `remove(pointer)` or an atomic
 `edit([{ op: "set", pointer, value }, { op: "remove", pointer }])` batch. Paths use
-RFC 6901 and address the revision before the batch. A batch crosses the bridge
+RFC 6901 and address the revision before the batch. A path may hold an unpaired
+UTF-16 unit, so a finding's pointer addresses the member it reports. A batch crosses the bridge
 once, including nested exact values, splices once and reads the result once. `parseJson` values
 keep exact decimal spellings. Untouched bytes, formatting and member order remain
 exact; sibling insertions coalesce with compact punctuation. `EditError.code`

@@ -170,3 +170,46 @@ fn parse_findings_explain_the_syntax_failure() {
         assert!(finding.location.is_some());
     }
 }
+
+#[test]
+fn the_whole_document_check_reaches_a_verdict_at_every_admitted_size() {
+    // The OBI-02 work allowance grows with the admitted document. These
+    // documents sit well inside the default limits and beyond any allowance
+    // fixed at two million steps, which left them undetermined.
+    let entries = |head: &str, count: usize, entry: fn(usize) -> String, tail: &str| {
+        let mut text = String::from(head);
+        text.push_str(&(0..count).map(entry).collect::<Vec<_>>().join(","));
+        text + tail
+    };
+    let schemas = entries(
+        r#"{"openbindings":"0.2.0","operations":{},"schemas":{"#,
+        300_000,
+        |i| format!(r#""s{i}":true"#),
+        "}}",
+    );
+    let aliases = entries(
+        r#"{"openbindings":"0.2.0","operations":{"o":{"aliases":["#,
+        350_000,
+        |i| format!(r#""a{i}""#),
+        "]}}}",
+    );
+    for text in [schemas, aliases] {
+        let validation = checked(&text);
+        assert_eq!(validation.report().conclusion, Conformance::Conformant);
+    }
+    // A long near miss of the costliest pattern takes the work its length
+    // needs, beyond the engine's default of a million steps for one match.
+    let version = format!(
+        r#"{{"openbindings":"0.0.0-{}!","operations":{{}}}}"#,
+        "1".repeat(60_000)
+    );
+    let validation = checked(&version);
+    assert_eq!(validation.report().evidence["OBI-02"], Evidence::Violated);
+    assert!(
+        validation
+            .report()
+            .findings
+            .iter()
+            .all(|finding| finding.code != "fixed-schema-limit-or-failure")
+    );
+}

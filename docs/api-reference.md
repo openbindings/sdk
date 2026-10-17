@@ -89,7 +89,7 @@ kind union.
 | `Document::parse`, `Document::from_json` | Admit exact JSON without a conformance claim, including documents with missing or mistyped fields. `parse` returns `InputError` for invalid UTF-8, a byte order mark, a JSON syntax error or an exceeded admission limit. |
 | `is_valid_name` | Tests the specification's ASCII name grammar without normalizing the name. |
 | `Document::new` | Create an empty OBI declaring the authoring version. |
-| `Document::set`, `remove`, `edit(&[Edit])` | Require a mutable borrow. One atomic splice and parse per batch, exact untouched bytes, compact insertions, default JSON limits. |
+| `Document::set`, `remove`, `edit(&[Edit])` | Require a mutable borrow. One atomic splice and parse per batch, exact untouched bytes, compact insertions, default JSON limits. A pointer is a `PointerRef`, converted from escaped text (`&str`, `&String`) or an exact `&Pointer`, so a finding's pointer through a member name with an unpaired UTF-16 unit addresses that member. |
 | Typed field and part setters | Edit descriptions, names, versions, operation schemas and typed operations, bindings, sources, dependencies and examples. Map setters support bulk construction. |
 | `DocumentValidation::document`, `conformant` | Borrow an admitted document or obtain proof only when every applicable rule is established. |
 | `Conformant<Document>` | Private proof, infallible reads, sole route to value contracts. No unchecked constructor, deserialization, dereference or mutable borrow. |
@@ -106,7 +106,7 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 | --- | --- |
 | `Document.parse(bytes)` | Returns the existing parse-result union; admits exact JSON without a conformance claim, including documents with missing or mistyped fields, and returns `input-error` for an encoding or JSON syntax error or an exceeded admission limit. Typed reads may throw. |
 | `Document.create()` | Creates an empty OBI for construction through setters. |
-| `set`, `remove`, `edit(edits)` | Mutable pointer edits; a batch crosses the bridge once, including exact inputs, and preserves untouched bytes. Exact inputs are borrowed. Failure leaves bytes and caches unchanged. |
+| `set`, `remove`, `edit(edits)` | Mutable pointer edits; a batch crosses the bridge once, including exact inputs, and preserves untouched bytes. Exact inputs are borrowed. A pointer may hold an unpaired UTF-16 unit, as a finding's can, and addresses that member. Failure leaves bytes and caches unchanged. |
 | Typed field and whole-part setters | Accept typed part values; map setters commit bulk construction once. |
 | `Document.validate()` | Returns a union whose `conformant` branch owns an independent `ConformantDocument` and a plain report. |
 | `ConformantDocument` | Nominal, privately constructed proof with infallible typed reads. `resolveOperation(name)` returns a `ConformantOperationView` or `undefined`. It has no setters and does not inherit `Document`. |
@@ -336,6 +336,21 @@ retains unpaired units for draft inspection, caller values and supplied resource
 Document validation checks admitted schemas locally at any depth. A violation
 established by any applicable rule makes the document non-conformant.
 
+OBI-02 applies the derived schema to the whole document under a work allowance
+that grows with the admitted document: 80 evaluator steps per node and 64 pattern
+steps per source byte. Each step enters one position of the unrolled derived
+schema for one node, which meets each of its 80 positions at most once, and every
+derived pattern is anchored and unambiguous, so its matching is linear in the
+string; a SemVer near miss, the costliest, takes about 20 pattern steps per byte.
+Any document the admission limits admit, default or caller-selected, therefore
+gets an OBI-02 verdict, and the check's work is linear in those limits. Location
+guidance spends the rest of the allowance; if it ran out, the report would mark
+findings truncated. OBI-10 checks each embedded schema object against the
+meta-schema, its subschemas separately, with a fixed allowance of 2,000,000 steps.
+At most 2 steps per node, it is not reached by any schema the default limits admit.
+An exhausted allowance leaves its rule inconclusive with
+`fixed-schema-limit-or-failure`.
+
 ### Finding-code catalog
 
 These are stable `Finding.code` values for document validation. Messages are human
@@ -494,7 +509,8 @@ carry an optional `SchemaLocation` of the same shape.
 `Pointer` holds RFC 6901 segments exactly. `as_str()` returns `None` for a
 pointer through a member name with an unpaired UTF-16 unit, `utf16_units()` reads
 it exactly, `from_utf16` builds one from units and `FromStr` parses escaped text;
-`JsonValue::at_pointer` resolves one as `at` resolves text. `Display` writes such a
+`JsonValue::at_pointer` resolves one as `at` resolves text, and `Document` edits
+address one through `PointerRef`. `Display` writes such a
 unit as `\uXXXX`, and serialization writes it as a JSON escape, which JavaScript
 keeps as the same string; like an exact `JsonValue` holding one, such a record
 (a report, finding, outcome, problem or location) serializes to JSON text but not
