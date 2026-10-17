@@ -91,3 +91,78 @@ fn incorrect_expected_outcomes_abort_instead_of_producing_timings() {
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("unexpected status"));
 }
+#[test]
+fn each_mode_times_its_own_operation_and_counts_every_iteration() {
+    let modes = [
+        ("cold", 1, "prepared"),
+        ("baseline", 3, "baseline"),
+        ("parse", 3, "parsed"),
+        ("compile", 3, "prepared"),
+        ("context", 3, "prepared"),
+        ("eval", 3, "satisfies"),
+        ("full", 3, "satisfies"),
+    ];
+    for engine in ["sdk", "jsonschema-rs"] {
+        for (mode, iterations, outcome) in modes {
+            if engine == "jsonschema-rs" && mode == "context" {
+                continue;
+            }
+            let output = run(
+                json!({"engine":engine, "mode":mode, "iterations":iterations,
+                "schema":r#"{"type":"integer","minimum":0}"#, "value":"42",
+                "expected":{"status":"satisfies"}}),
+            );
+            assert!(
+                output.status.success(),
+                "{engine} {mode}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let observed: Value = serde_json::from_slice(&output.stdout).unwrap();
+            assert_eq!(
+                observed["outcomes"],
+                json!({outcome: iterations}),
+                "{engine} {mode}"
+            );
+        }
+        // A failing value is counted as a failure, not as the mode's name.
+        for mode in ["eval", "full"] {
+            let output = run(json!({"engine":engine, "mode":mode, "iterations":3,
+                "schema":r#"{"type":"integer","minimum":0}"#, "value":"-1",
+                "expected":{"status":"fails"}}));
+            let observed: Value = serde_json::from_slice(&output.stdout).unwrap();
+            assert_eq!(observed["outcomes"], json!({"fails": 3}), "{engine} {mode}");
+        }
+    }
+}
+#[test]
+fn unsupported_modes_abort_without_measuring() {
+    for (engine, mode, message) in [
+        ("sdk", "evaluate", "unknown mode"),
+        ("jsonschema-rs", "context", "unsupported peer mode"),
+    ] {
+        let output = run(
+            json!({"engine":engine, "mode":mode, "schema":"true", "value":"1",
+            "expected":{"status":"satisfies"}}),
+        );
+        assert!(!output.status.success(), "{engine} {mode}");
+        assert!(output.stdout.is_empty());
+        assert!(String::from_utf8_lossy(&output.stderr).contains(message));
+    }
+}
+#[test]
+fn provenance_reports_the_embedded_source_digests() {
+    let output = Command::new(env!("CARGO_BIN_EXE_openbindings-evaluator-bench"))
+        .arg("--provenance")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let reported: Value = serde_json::from_slice(&output.stdout).unwrap();
+    for key in ["instrument", "sdk"] {
+        let digest = reported[key].as_str().unwrap();
+        assert_eq!(digest.len(), 16, "{key}: {digest}");
+        assert!(
+            digest.bytes().all(|b| b.is_ascii_hexdigit()),
+            "{key}: {digest}"
+        );
+    }
+}

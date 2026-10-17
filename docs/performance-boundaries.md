@@ -126,6 +126,25 @@ the largest, plus a document with six findings. Explain inputs contain one and
 Checks cover that count and its original code and instance/schema locations.
 The many-violation input does not qualify the cost of returning many problems.
 
+Each mode's operation is selected before timing and runs in its own non-inlined
+timed loop, so a change cannot recompile the loop of a mode it does not reach,
+and no timed iteration compares mode names. Code placement still couples modes:
+growing one loop moves every later one, and SDK changes move code the same way.
+Layout effects cannot be removed entirely, so timing stays advisory on shared
+runners.
+
+On 2026-10-17 (macOS arm64, Rust 1.99.0, paired runs of 40 pairs per row on a
+loaded host), removing per-iteration dispatch lowered the `baseline` floor from
+5.1 to 2.9 ns and small evaluations by 1.3 to 3.9 ns; larger rows kept a median
+ratio of 1.000. One extra `black_box` in the read loop moved every later loop by
+120 bytes. The other non-cold rows then moved by a median of 0.17% (90th
+percentile 0.57%), against 0.10% (0.48%) for two identical binaries; `one-of`
+evaluation moved 1.7% and 1.9% in two runs. The previous single-function
+structure, which this edit grew by exactly 64 bytes, moved by 0.14% (0.40%).
+The `reference-text` evaluations run at two or three distinct speeds per
+process and moved by up to 14% between differently laid out binaries in either
+structure.
+
 The workflow first tries the candidate's identical instrument against both SDK
 revisions. If the baseline fails to build, it may build each revision's own
 instrument only when their complete instrument diff changes `src/sdk.rs` and
@@ -134,7 +153,12 @@ Any fixture, timing, check, allocator, manifest, third-party lock or other
 instrument change prohibits that fallback. Such pairs remain not comparable
 and pass with a report. Authorized pairs are marked `cross-API`, retain the
 instrument diff and SHA-256 plus lock hashes, and face the same outcome, heap,
-allocation-count and timing policy as identical-instrument pairs.
+allocation-count and timing policy as identical-instrument pairs. Every build
+uses its own new target directory, because Cargo can judge archived sources fresh
+and reuse another tree's binary from a shared one. Each binary embeds digests of
+the instrument and SDK sources it was compiled from; a mismatch with the claimed
+trees fails the job, and the pair record keeps each build's digests and binary
+hash.
 
 Timing remains advisory until about 20 calibration runs show stable noise and
 enforcement is explicitly reviewed. Shared runners report a confirmed >20%
