@@ -44,10 +44,7 @@ impl BindingInvoker for Corpus {
     fn supported_kinds(&self) -> Vec<binding::SupportedKind> {
         self.listed
             .iter()
-            .map(|kind| binding::SupportedKind {
-                kind: kind.clone(),
-                description: None,
-            })
+            .map(|kind| binding::SupportedKind::new(kind.clone()))
             .collect()
     }
     fn invoke<'a>(

@@ -26,10 +26,7 @@ impl SourceInspector for Corpus {
     fn supported_kinds(&self) -> Vec<SupportedKind> {
         self.listed
             .iter()
-            .map(|kind| SupportedKind {
-                kind: kind.clone(),
-                description: None,
-            })
+            .map(|kind| SupportedKind::new(kind.clone()))
             .collect()
     }
     fn inspect<'a>(&'a self, _: &'a Source, _: CancellationToken) -> Self::Inspection<'a> {

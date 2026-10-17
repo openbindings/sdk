@@ -2,8 +2,8 @@
 //! synthesis facade. The cases are a verbatim snapshot; `fixtures/README.md`
 //! records provenance.
 use openbindings_interface_synthesis::{
-    CancellationToken, InterfaceSynthesizer, KindSupportVerdict, SupportedKind, SynthesisCandidate,
-    SynthesisError, SynthesisRequest, Synthesizer,
+    CancellationToken, InterfaceSynthesizer, SupportedKind, SynthesisCandidate, SynthesisError,
+    SynthesisRequest, Synthesizer,
 };
 use serde_json::Value;
 use std::{collections::HashSet, future::Ready};
@@ -23,10 +23,7 @@ impl InterfaceSynthesizer for Corpus {
     fn supported_kinds(&self) -> Vec<SupportedKind> {
         self.listed
             .iter()
-            .map(|kind| SupportedKind {
-                kind: kind.clone(),
-                description: None,
-            })
+            .map(|kind| SupportedKind::new(kind.clone()))
             .collect()
     }
     fn synthesize<'a>(
@@ -69,16 +66,20 @@ fn published_kind_support_cases_hold_for_the_synthesis_facade() {
             .as_array()
             .unwrap()
             .iter()
-            .map(|verdict| KindSupportVerdict {
-                kind: verdict["kind"].as_str().unwrap().to_owned(),
-                supported: verdict["supported"].as_bool().unwrap(),
+            .map(|verdict| {
+                (
+                    verdict["kind"].as_str().unwrap().to_owned(),
+                    verdict["supported"].as_bool().unwrap(),
+                )
             })
             .collect();
-        assert_eq!(
-            facade.check_kind_support(strings(&case["kinds"])).unwrap(),
-            expected,
-            "{description}"
-        );
+        let actual: Vec<_> = facade
+            .check_kind_support(strings(&case["kinds"]))
+            .unwrap()
+            .into_iter()
+            .map(|verdict| (verdict.kind, verdict.supported))
+            .collect();
+        assert_eq!(actual, expected, "{description}");
         let advisory: Vec<_> = facade
             .list_supported_kinds()
             .unwrap()

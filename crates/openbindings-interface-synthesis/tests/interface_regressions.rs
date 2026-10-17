@@ -289,10 +289,10 @@ async fn sdk_policies_refuse_repeated_evidence_and_dropped_unused_sources() {
         name: Some("api"),
         source: &used,
     }];
-    let repeated = SynthesisCandidate {
-        document: document.clone(),
-        coverage: CoverageClaim::complete(vec![entry(), entry()]),
-    };
+    let repeated = SynthesisCandidate::new(
+        document.clone(),
+        CoverageClaim::complete(vec![entry(), entry()]),
+    );
     let result = Synthesizer::new(Fixed::new(repeated))
         .synthesize_with_coverage(&SynthesisRequest {
             sources: &one,
@@ -310,10 +310,7 @@ async fn sdk_policies_refuse_repeated_evidence_and_dropped_unused_sources() {
             source: &unused,
         },
     ];
-    let dropped = SynthesisCandidate {
-        document,
-        coverage: CoverageClaim::complete(vec![entry()]),
-    };
+    let dropped = SynthesisCandidate::new(document, CoverageClaim::complete(vec![entry()]));
     let result = Synthesizer::new(Fixed::new(dropped))
         .synthesize_with_coverage(&SynthesisRequest {
             sources: &two,
