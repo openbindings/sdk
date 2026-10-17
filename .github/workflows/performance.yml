@@ -64,13 +64,19 @@ jobs:
           cargo test --locked --manifest-path tools/evaluator-bench/Cargo.toml
       - name: Enforce outcomes and memory on serial pairs
         if: steps.build.outputs.comparable != 'false'
+        # Diagnostic only: pin glibc's dynamic mmap and trim thresholds so both
+        # sides' allocation history cannot change how large blocks are served.
+        env:
+          MALLOC_MMAP_THRESHOLD_: "33554432"
+          MALLOC_TRIM_THRESHOLD_: "134217728"
         run: |
           python tools/evaluator-bench/compare.py \
             --baseline "$RUNNER_TEMP/evaluator-bin/baseline" \
             --candidate "$RUNNER_TEMP/evaluator-bin/candidate" \
             --baseline-alloc "$RUNNER_TEMP/evaluator-bin/baseline-alloc" \
             --candidate-alloc "$RUNNER_TEMP/evaluator-bin/candidate-alloc" \
-            --output "$RUNNER_TEMP/evaluator-results" --enforce
+            --output "$RUNNER_TEMP/evaluator-results" --enforce \
+            --workloads large-object,unique-objects,object,array,scalar
       - name: Publish benchmark summary
         if: always()
         run: |
