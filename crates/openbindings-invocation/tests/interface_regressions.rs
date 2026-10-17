@@ -2,7 +2,7 @@ use openbindings::{Document, JsonValue, ResourceSet, Source};
 use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
     BindingRequest, BindingValue, ContextChallenge, InvocationError, ProviderIo,
-    binding::{BindingInvoker, BindingPreflight, Invoker},
+    binding::{BindingInvoker, Invoker},
     operation::{self, Request},
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
@@ -49,7 +49,7 @@ impl BindingInvoker for InvokeOnly {
     }
 }
 
-// all selection paths and both advisory paths use the specific code.
+// all selection paths and the advisory path use the specific code.
 #[tokio::test]
 async fn unsupported_explicit_and_ordered_bindings_are_not_found() {
     let facade = operation::Invoker::new(
@@ -72,21 +72,18 @@ async fn unsupported_explicit_and_ordered_bindings_are_not_found() {
             facade.preflight(selection).await.unwrap_err().code(),
             "ERR_BINDING_NOT_FOUND"
         );
-        assert_eq!(
-            facade
-                .preflight_with_provider(selection)
-                .await
-                .unwrap_err()
-                .code(),
-            "ERR_BINDING_NOT_FOUND"
-        );
     }
 }
 
+// The hook's job is the provider's invocation future, so the same bound makes
+// a generic default preflight Send.
 fn send_default<'a, P: BindingInvoker + Sync>(
     facade: &'a Invoker<P>,
     request: BindingRequest<'a>,
-) -> impl Future<Output = Result<Option<ContextChallenge>, InvocationError>> + Send + 'a {
+) -> impl Future<Output = Result<Option<ContextChallenge>, InvocationError>> + Send + 'a
+where
+    for<'b> P::Invocation<'b>: Send,
+{
     facade.preflight(request)
 }
 #[expect(
@@ -99,21 +96,14 @@ fn send_provider<'a, P>(
     request: BindingRequest<'a>,
 ) -> impl Future<Output = ()> + Send + 'a
 where
-    P: BindingPreflight + Sync,
-    for<'b> P::Preflight<'b>: Send,
+    P: BindingInvoker + Send + Sync,
     for<'b> P::Invocation<'b>: Send,
 {
     async move {
-        assert!(
-            binding
-                .preflight_with_provider(request)
-                .await
-                .unwrap()
-                .is_none()
-        );
+        assert!(binding.preflight(request).await.unwrap().is_none());
         assert!(
             operation
-                .preflight_with_provider(Request::binding("b"))
+                .preflight(Request::binding("b"))
                 .await
                 .unwrap()
                 .is_none()
@@ -141,11 +131,12 @@ impl BindingInvoker for SendProvider {
     ) -> Self::Invocation<'a> {
         ready(Ok(()))
     }
-}
-impl BindingPreflight for SendProvider {
-    type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
-    fn preflight<'a>(&'a self, _: BindingRequest<'a>, _: CancellationToken) -> Self::Preflight<'a> {
-        ready(Ok(None))
+    fn preflight<'a>(
+        &'a self,
+        _: BindingRequest<'a>,
+        _: CancellationToken,
+    ) -> Option<Self::Invocation<'a>> {
+        Some(ready(Ok(())))
     }
 }
 
@@ -191,6 +182,67 @@ async fn generic_send_preflight_and_invoke_only_default() {
     .await;
 }
 
+struct Challenging;
+impl BindingInvoker for Challenging {
+    type Invocation<'a> = Ready<Result<(), InvocationError>>;
+    fn supports_kind(&self, kind: &str) -> bool {
+        InvokeOnly.supports_kind(kind)
+    }
+    fn invoke<'a>(
+        &'a self,
+        _: BindingRequest<'a>,
+        _: ProviderIo,
+        _: CancellationToken,
+    ) -> Self::Invocation<'a> {
+        ready(Ok(()))
+    }
+    fn preflight<'a>(
+        &'a self,
+        _: BindingRequest<'a>,
+        _: CancellationToken,
+    ) -> Option<Self::Invocation<'a>> {
+        let challenge = ContextChallenge::new(
+            JsonValue::parse(
+                r#"{"target":"example.target","alternatives":[{"requirements":[{"type":"auth.bearer"}]}]}"#,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        Some(ready(Err(InvocationError::challenge(challenge))))
+    }
+}
+
+// Every preflight entry point runs the SDK's checks and then asks the
+// provider's hook; none answers for a provider that has one.
+#[tokio::test]
+async fn preflight_returns_the_provider_hook_challenge_on_both_facades() {
+    let source = source();
+    let value = BindingValue::default();
+    let binding = Invoker::new(Challenging);
+    let operation = operation::Invoker::new(
+        document("{}")
+            .validate()
+            .unwrap()
+            .conformant()
+            .expect("conformant invocation document"),
+        Challenging,
+    );
+    let control = CancellationToken::new();
+    let challenges = [
+        binding.preflight(request(&source, &value)).await,
+        binding
+            .preflight_with_control(request(&source, &value), &control)
+            .await,
+        operation.preflight(Request::binding("b")).await,
+        operation
+            .preflight_with_control(Request::operation("run"), &control)
+            .await,
+    ];
+    for challenge in challenges {
+        assert_eq!(challenge.unwrap().unwrap().target(), "example.target");
+    }
+}
+
 struct LocalProvider(Rc<Cell<usize>>);
 impl BindingInvoker for LocalProvider {
     type Invocation<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
@@ -208,15 +260,15 @@ impl BindingInvoker for LocalProvider {
             Ok(())
         })
     }
-}
-impl BindingPreflight for LocalProvider {
-    type Preflight<'a> =
-        Pin<Box<dyn Future<Output = Result<Option<ContextChallenge>, InvocationError>> + 'a>>;
-    fn preflight<'a>(&'a self, _: BindingRequest<'a>, _: CancellationToken) -> Self::Preflight<'a> {
-        Box::pin(async move {
+    fn preflight<'a>(
+        &'a self,
+        _: BindingRequest<'a>,
+        _: CancellationToken,
+    ) -> Option<Self::Invocation<'a>> {
+        Some(Box::pin(async move {
             self.0.set(self.0.get() + 1);
-            Ok(None)
-        })
+            Ok(())
+        }))
     }
 }
 
@@ -239,14 +291,14 @@ async fn local_rc_preflight_and_forwarding_preserve_hooks() {
     let value = BindingValue::default();
     assert!(
         binding
-            .preflight_with_provider(request(&source, &value))
+            .preflight(request(&source, &value))
             .await
             .unwrap()
             .is_none()
     );
     assert!(
         operation
-            .preflight_with_provider(Request::binding("b"))
+            .preflight(Request::binding("b"))
             .await
             .unwrap()
             .is_none()
@@ -275,16 +327,171 @@ async fn local_rc_preflight_and_forwarding_preserve_hooks() {
 }
 
 // codes are diagnostic facts; portable application data stays private.
+// Display shows every code. Debug is structural: it shows the codes the
+// invoker interfaces govern and redacts application-defined codes.
 #[test]
-fn error_display_and_debug_show_code_and_redact_data() {
-    let error = InvocationError::new(
+fn display_shows_every_code_and_debug_shows_only_governed_codes() {
+    let governed = InvocationError::new(
         "ERR_OPERATION_VALIDATION_FAILED",
         Some(JsonValue::parse(r#""secret-data""#).unwrap()),
     )
     .unwrap();
-    for text in [error.to_string(), format!("{error:?}")] {
+    for text in [governed.to_string(), format!("{governed:?}")] {
         assert!(text.contains("ERR_OPERATION_VALIDATION_FAILED"));
         assert!(!text.contains("secret-data"));
+    }
+    let application = InvocationError::new("ACME_QUOTA", None).unwrap();
+    assert!(application.to_string().contains("ACME_QUOTA"));
+    assert_eq!(
+        format!("{application:?}"),
+        r#"InvocationError { code: "<redacted>", data_present: false }"#
+    );
+}
+
+// Once an invocation settles, a provider emission reports that terminal
+// error, not a cancellation it did not suffer.
+#[tokio::test]
+async fn emit_after_settlement_reports_the_terminal_error() {
+    struct EmitTwice {
+        values: [String; 2],
+        refusals: std::sync::Mutex<Vec<String>>,
+    }
+    impl BindingInvoker for EmitTwice {
+        type Invocation<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
+        fn supports_kind(&self, kind: &str) -> bool {
+            InvokeOnly.supports_kind(kind)
+        }
+        fn invoke<'a>(
+            &'a self,
+            _: BindingRequest<'a>,
+            mut io: ProviderIo,
+            _: CancellationToken,
+        ) -> Self::Invocation<'a> {
+            Box::pin(async move {
+                for value in &self.values {
+                    let error = io
+                        .emit(JsonValue::parse(value.as_str()).unwrap())
+                        .await
+                        .unwrap_err();
+                    self.refusals.lock().unwrap().push(error.code().to_owned());
+                }
+                Ok(())
+            })
+        }
+    }
+    let invalid = || "\"bad\"".to_owned();
+    let oversized = || format!("\"{}\"", "x".repeat(300));
+    let integer = r#"{"output":{"type":"integer"}}"#;
+    // The first emission settles the terminal; the second must report it.
+    for (operation, values, code) in [
+        (
+            integer,
+            [invalid(), invalid()],
+            "ERR_OPERATION_VALIDATION_FAILED",
+        ),
+        (
+            integer,
+            [invalid(), oversized()],
+            "ERR_OPERATION_VALIDATION_FAILED",
+        ),
+        ("{}", [oversized(), "1".to_owned()], "ERR_EXECUTION_FAILED"),
+    ] {
+        let provider = EmitTwice {
+            values,
+            refusals: std::sync::Mutex::default(),
+        };
+        let invoker = operation::Invoker::new(
+            document(operation)
+                .validate()
+                .unwrap()
+                .conformant()
+                .expect("conformant invocation document"),
+            &provider,
+        )
+        .with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
+        .with_limits(openbindings_invocation::InvocationLimits {
+            max_value_bytes: 256,
+            ..Default::default()
+        })
+        .unwrap();
+        let mut call = invoker.invoke(Request::binding("b"));
+        call.close();
+        assert_eq!(call.next().await.unwrap().unwrap_err().code(), code);
+        assert_eq!(*provider.refusals.lock().unwrap(), [code, code]);
+    }
+}
+
+// One detail setting explains caller input and provider output alike, and
+// an explanation locates the failure by the value's own member names.
+#[tokio::test]
+async fn explain_detail_covers_both_directions_and_names_value_members() {
+    struct EmitMember;
+    impl BindingInvoker for EmitMember {
+        type Invocation<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
+        fn supports_kind(&self, kind: &str) -> bool {
+            InvokeOnly.supports_kind(kind)
+        }
+        fn invoke<'a>(
+            &'a self,
+            _: BindingRequest<'a>,
+            mut io: ProviderIo,
+            _: CancellationToken,
+        ) -> Self::Invocation<'a> {
+            Box::pin(async move {
+                while io.next().await.is_some() {}
+                io.emit(JsonValue::parse(r#"{"provider-member":7}"#).unwrap())
+                    .await
+            })
+        }
+    }
+    let strings = r#"{"type":"object","additionalProperties":{"type":"string"}}"#;
+    for (detail, explained) in [
+        (openbindings::Detail::Outcome, false),
+        (openbindings::Detail::Explain, true),
+    ] {
+        for (direction, operation, member) in [
+            (
+                operation::Direction::Input,
+                format!(r#"{{"input":{strings}}}"#),
+                "/caller-member",
+            ),
+            (
+                operation::Direction::Output,
+                format!(r#"{{"output":{strings}}}"#),
+                "/provider-member",
+            ),
+        ] {
+            let invoker = operation::Invoker::new(
+                document(&operation)
+                    .validate()
+                    .unwrap()
+                    .conformant()
+                    .expect("conformant invocation document"),
+                EmitMember,
+            )
+            .with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
+            .with_validation_detail(detail);
+            let mut call = invoker.invoke(Request::binding("b"));
+            call.write(JsonValue::parse(r#"{"caller-member":7}"#).unwrap())
+                .await
+                .unwrap();
+            call.close();
+            assert_eq!(
+                call.next().await.unwrap().unwrap_err().code(),
+                "ERR_OPERATION_VALIDATION_FAILED"
+            );
+            let failure = call.validation_failure().unwrap();
+            assert_eq!(failure.direction(), direction);
+            let openbindings::ValueOutcome::Fails { problems, .. } = failure.outcome() else {
+                panic!("established failure expected")
+            };
+            let instances: Vec<_> = problems.iter().map(|p| p.instance.to_string()).collect();
+            if explained {
+                assert_eq!(instances, [member]);
+            } else {
+                assert!(instances.is_empty());
+            }
+        }
     }
 }
 
@@ -336,13 +543,16 @@ impl BindingInvoker for Failure {
             InvocationError::new(self.0, Some(JsonValue::null())).unwrap()
         ))
     }
-}
-impl BindingPreflight for Failure {
-    type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
-    fn preflight<'a>(&'a self, _: BindingRequest<'a>, _: CancellationToken) -> Self::Preflight<'a> {
-        ready(Err(
-            InvocationError::new(self.0, Some(JsonValue::null())).unwrap()
-        ))
+    fn preflight<'a>(
+        &'a self,
+        _: BindingRequest<'a>,
+        _: CancellationToken,
+    ) -> Option<Self::Invocation<'a>> {
+        Some(ready(Err(InvocationError::new(
+            self.0,
+            Some(JsonValue::null()),
+        )
+        .unwrap())))
     }
 }
 
@@ -389,11 +599,11 @@ async fn reserved_provider_invocation_and_preflight_codes_are_rejected() {
         assert!(operation_call.validation_failure().is_none());
         for error in [
             binding
-                .preflight_with_provider(request(&source, &value))
+                .preflight(request(&source, &value))
                 .await
                 .unwrap_err(),
             operation
-                .preflight_with_provider(Request::binding("b"))
+                .preflight(Request::binding("b"))
                 .await
                 .unwrap_err(),
         ] {
@@ -404,7 +614,7 @@ async fn reserved_provider_invocation_and_preflight_codes_are_rejected() {
     let binding = Invoker::new(Failure("example.application"));
     assert_eq!(
         binding
-            .preflight_with_provider(request(&source, &value))
+            .preflight(request(&source, &value))
             .await
             .unwrap_err()
             .code(),

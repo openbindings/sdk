@@ -123,24 +123,12 @@ impl BindingInvoker for Provider<'_> {
             Ok(())
         })
     }
-}
-impl openbindings_invocation::binding::BindingPreflight for Provider<'_> {
-    type Preflight<'a>
-        = Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        Option<openbindings_invocation::ContextChallenge>,
-                        InvocationError,
-                    >,
-                > + Send
-                + 'a,
-        >,
-    >
-    where
-        Self: 'a;
-    fn preflight<'a>(&'a self, _: BindingRequest<'a>, _: CancellationToken) -> Self::Preflight<'a> {
-        Box::pin(async move { Ok(challenge().context_required()) })
+    fn preflight<'a>(
+        &'a self,
+        _: BindingRequest<'a>,
+        _: CancellationToken,
+    ) -> Option<Self::Invocation<'a>> {
+        Some(Box::pin(async move { Err(challenge()) }))
     }
 }
 
@@ -235,7 +223,7 @@ async fn names_ordered_choices_and_explicit_bindings_do_not_invent_policy() {
     assert_eq!(p.calls.load(Ordering::SeqCst), 2);
     assert_eq!(
         invoke
-            .preflight_with_provider(Request::ordered("say", &["a", "absent"]))
+            .preflight(Request::ordered("say", &["a", "absent"]))
             .await
             .unwrap_err()
             .code(),
@@ -243,7 +231,7 @@ async fn names_ordered_choices_and_explicit_bindings_do_not_invent_policy() {
     );
     assert!(
         invoke
-            .preflight_with_provider(Request::binding("a"))
+            .preflight(Request::binding("a"))
             .await
             .unwrap()
             .is_some()
@@ -384,7 +372,7 @@ async fn preparation_is_lazy_absence_is_not_true_and_no_verdict_is_not_failure()
     );
     outcome(&i, Request::operation("echo")).await.unwrap();
     assert!(
-        i.preflight_with_provider(Request::operation("echo"))
+        i.preflight(Request::operation("echo"))
             .await
             .unwrap()
             .is_some()
@@ -771,7 +759,7 @@ async fn shared_prepared_attempts_keep_selection_context_and_cancellation_separa
     let mut wrong = prepared.invoke(Attempt::binding("foreign"));
     assert_eq!(
         wrong.next().await.unwrap().unwrap_err().code(),
-        "ERR_OPERATION_NOT_FOUND"
+        "ERR_BINDING_NOT_FOUND"
     );
     // A failing attempt's evidence cannot leak into another attempt or the handle.
     let mut invalid = prepared.invoke(Attempt::binding("a").with_context(&first_context));
@@ -791,7 +779,7 @@ async fn shared_prepared_attempts_keep_selection_context_and_cancellation_separa
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn prepared_foreign_exact_binding_is_refused_before_any_provider_work() {
+async fn prepared_foreign_exact_binding_is_not_found_before_any_provider_work() {
     struct NoProviderWork;
     impl BindingInvoker for NoProviderWork {
         type Invocation<'a> = std::future::Ready<Result<(), InvocationError>>;
@@ -819,11 +807,12 @@ async fn prepared_foreign_exact_binding_is_refused_before_any_provider_work() {
         .expect("conformant invocation document"),
         NoProviderWork,
     );
+    // The prepared operation resolved; the key names no binding of it.
     let prepared = i.prepare("say").unwrap();
     let mut call = prepared.invoke(Attempt::binding("foreign"));
     assert_eq!(
         call.next().await.unwrap().unwrap_err().code(),
-        "ERR_OPERATION_NOT_FOUND"
+        "ERR_BINDING_NOT_FOUND"
     );
     assert!(call.next().await.is_none());
     assert!(call.validation_failure().is_none());

@@ -76,7 +76,7 @@ impl std::fmt::Debug for SupportedKind {
 
 /// Authoritative answer for this provider's synthesis job.
 /// Later versions may add fields: read them by name and match with `..`.
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 #[non_exhaustive]
 pub struct KindSupportVerdict {
     /// Unchanged kind label.

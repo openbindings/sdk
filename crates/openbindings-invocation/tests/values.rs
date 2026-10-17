@@ -207,6 +207,109 @@ fn preferences_use_exact_integer_math_and_the_interoperable_range() {
     }
 }
 
+// The by-value carrier keeps its own exact preference reader; it must accept
+// and read every spelling exactly as core's document validation does.
+#[test]
+fn binding_value_preference_reads_numbers_as_core_documents_do() {
+    fn core(token: &str) -> Option<i64> {
+        let text = format!(
+            r#"{{"openbindings":"0.2.0","operations":{{"o":{{}}}},"sources":{{"s":{{"kind":"k"}}}},"bindings":{{"b":{{"operation":"o","source":"s","preference":{token}}}}}}}"#
+        );
+        let proof = openbindings::Document::parse(text)
+            .ok()?
+            .validate()
+            .ok()?
+            .conformant()?;
+        proof.binding("b")?.preference().map(Preference::get)
+    }
+    fn carrier(token: &str) -> Option<i64> {
+        let value = JsonValue::parse(format!(r#"{{"preference":{token}}}"#)).ok()?;
+        BindingValue::from_json(&value)
+            .ok()?
+            .preference
+            .map(Preference::get)
+    }
+    let mut tokens: Vec<String> = [
+        "0",
+        "-0",
+        "1",
+        "1.0",
+        "1e0",
+        "1E+0",
+        "10e-1",
+        "100e-2",
+        "0.5",
+        "1.5",
+        "-1.0",
+        "9007199254740991",
+        "-9007199254740991",
+        "9007199254740992",
+        "-9007199254740992",
+        "9007199254740991.0",
+        "90071992547409910e-1",
+        "9.007199254740991e15",
+        "9.0071992547409910e15",
+        "0.9007199254740991e16",
+        "1e15",
+        "1e16",
+        "9e15",
+        "1e-0",
+        "0e5",
+        "0.0e-5",
+        "0.000e999",
+        "1e00000000000000000000000000000000000002",
+        "100000000000000000000e-20",
+        "0.00000000000000000001e20",
+        "1e-1",
+        "10000000000000000e-1",
+        "1000000000000000000e-3",
+        "12345678901234567890e-4",
+        "5e-324",
+        "1e400",
+        "123.4560e3",
+        "123.456e2",
+        "-0.0e0",
+        "0.1e1",
+        "0.10e1",
+        "0.01e2",
+        "-0.000e99999999999999999999999999",
+        "0e-99999999999999999999999999",
+        "9007199254740991.0000000001",
+        "1e100000",
+        "1e-100000",
+    ]
+    .map(str::to_owned)
+    .to_vec();
+    for digits in [
+        "9007199254740991",
+        "1",
+        "42",
+        "9007199254740990",
+        "1000000000000000",
+    ] {
+        for shift in 0..25 {
+            tokens.push(format!("0.{digits}e{}", digits.len()));
+            tokens.push(format!("{digits}{}e-{shift}", "0".repeat(shift)));
+            tokens.push(format!("{digits}.{}", "0".repeat(shift + 1)));
+            tokens.push(format!("-{digits}{}e-{shift}", "0".repeat(shift)));
+            if shift > 0 {
+                tokens.push(format!("{digits}e{shift}"));
+                tokens.push(format!("{digits}e-{shift}"));
+            }
+        }
+    }
+    let mut accepted = 0;
+    for token in &tokens {
+        let expected = core(token);
+        assert_eq!(carrier(token), expected, "{token}");
+        accepted += usize::from(expected.is_some());
+    }
+    assert!(
+        accepted > tokens.len() / 2,
+        "the comparison covers accepted spellings"
+    );
+}
+
 #[test]
 fn unknown_requirement_families_and_durable_presence_are_preserved() {
     for flag in ["", ",\"durable\":false", ",\"durable\":true"] {

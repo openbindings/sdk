@@ -88,22 +88,50 @@ pub trait BindingInvoker {
         io: ProviderIo,
         control: CancellationToken,
     ) -> Self::Invocation<'a>;
-}
-
-/// Optional advisory preparation for a binding provider. Invocation never calls
-/// this hook. Providers may return local futures or futures that implement Send.
-pub trait BindingPreflight: BindingInvoker {
-    /// Borrowed advisory job; generic consumers can place bounds on this future.
-    type Preflight<'a>: Future<Output = Result<Option<ContextChallenge>, InvocationError>>
-    where
-        Self: 'a;
-    /// Predict context requirements without input/output, dispatch or approval
-    /// spending. `Ok(None)` makes no prediction.
+    /// The provider's advisory preflight hook; none by default.
+    ///
+    /// Return a job that predicts what invoking this request would require,
+    /// from the source and the supplied context, or `None` to make no
+    /// prediction. The facades' `preflight` always runs its own admission and
+    /// support checks first, then runs the job, without input, output or
+    /// dispatch, under the preflight's cancellation. Complete it with `Ok(())`
+    /// for no prediction, with the `CONTEXT_REQUIRED` challenge invocation would
+    /// raise to report requirements, or with another error when the hook cannot
+    /// answer; `ERR_REFUSED` means invocation would refuse the same request.
+    /// The job is a [`Self::Invocation`], so a bound a caller places on that
+    /// future, such as `Send`, covers preflight too. Invocation never calls this
+    /// hook.
+    ///
+    /// ```
+    /// # use openbindings_invocation::{BindingRequest, CancellationToken, ContextChallenge, InvocationError, ProviderIo, binding::BindingInvoker};
+    /// # use std::future::{Ready, ready};
+    /// struct Bearer;
+    /// impl BindingInvoker for Bearer {
+    ///     type Invocation<'a> = Ready<Result<(), InvocationError>>;
+    ///     fn supports_kind(&self, kind: &str) -> bool { kind == "urn:example:bearer:v1" }
+    ///     fn invoke<'a>(&'a self, _: BindingRequest<'a>, _: ProviderIo, _: CancellationToken)
+    ///         -> Self::Invocation<'a> { ready(Ok(())) }
+    ///     fn preflight<'a>(&'a self, request: BindingRequest<'a>, _: CancellationToken)
+    ///         -> Option<Self::Invocation<'a>>
+    ///     {
+    ///         // Without context, invocation would ask for a bearer token.
+    ///         request.context.is_none().then(|| {
+    ///             let challenge = ContextChallenge::new(openbindings::JsonValue::parse(
+    ///                 r#"{"target":"api","alternatives":[{"requirements":[{"type":"auth.bearer"}]}]}"#,
+    ///             ).unwrap()).unwrap();
+    ///             ready(Err(InvocationError::challenge(challenge)))
+    ///         })
+    ///     }
+    /// }
+    /// ```
     fn preflight<'a>(
         &'a self,
         request: BindingRequest<'a>,
         control: CancellationToken,
-    ) -> Self::Preflight<'a>;
+    ) -> Option<Self::Invocation<'a>> {
+        let _ = (request, control);
+        None
+    }
 }
 
 macro_rules! forward { ($($wrapper:ty),+) => { $(
@@ -112,10 +140,7 @@ impl<P: BindingInvoker + ?Sized> BindingInvoker for $wrapper {
     fn supports_kind(&self, kind: &str) -> bool { (**self).supports_kind(kind) }
     fn supported_kinds(&self) -> Vec<SupportedKind> { (**self).supported_kinds() }
     fn invoke<'a>(&'a self, request: BindingRequest<'a>, io: ProviderIo, control: CancellationToken) -> Self::Invocation<'a> { (**self).invoke(request, io, control) }
-}
-impl<P: BindingPreflight + ?Sized> BindingPreflight for $wrapper {
-    type Preflight<'a> = P::Preflight<'a> where Self: 'a;
-    fn preflight<'a>(&'a self, request: BindingRequest<'a>, control: CancellationToken) -> Self::Preflight<'a> { (**self).preflight(request, control) }
+    fn preflight<'a>(&'a self, request: BindingRequest<'a>, control: CancellationToken) -> Option<Self::Invocation<'a>> { (**self).preflight(request, control) }
 }
 )+ }; }
 forward!(&P, std::sync::Arc<P>, std::rc::Rc<P>);
@@ -224,11 +249,12 @@ impl<P: BindingInvoker> Invoker<P> {
         );
         Invocation::new(shared, future)
     }
-    /// Admit advisory preflight and make no prediction. This default path needs
-    /// only an invoke provider; use `preflight_with_provider` to opt into its hook.
+    /// Admit an advisory preflight, then ask the provider's hook when it has
+    /// one; a provider without a hook makes no prediction. The future is Send
+    /// when the provider is Sync and its Invocation future is Send.
     ///
     /// # Errors
-    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation.
+    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. Provider refusals and malformed provider challenges also return an error.
     pub async fn preflight(
         &self,
         request: BindingRequest<'_>,
@@ -239,110 +265,79 @@ impl<P: BindingInvoker> Invoker<P> {
     /// Advisory preflight with caller cancellation, isolated from sibling attempts.
     ///
     /// # Errors
-    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation.
+    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. Provider refusals and malformed provider challenges also return an error.
     pub async fn preflight_with_control(
         &self,
         request: BindingRequest<'_>,
         control: &CancellationToken,
     ) -> Result<Option<ContextChallenge>, InvocationError> {
-        self.check_preflight(request, control, |_| std::future::ready(Ok(None)))
-            .await
+        preflight(&self.provider, self.limits, request, control).await
     }
-    /// Call the optional provider preflight hook after checked admission.
-    /// The future is Send when the provider is Sync and its Preflight is Send.
-    ///
-    /// # Errors
-    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. Provider refusals and malformed provider challenges also return an error.
-    pub async fn preflight_with_provider(
-        &self,
-        request: BindingRequest<'_>,
-    ) -> Result<Option<ContextChallenge>, InvocationError>
-    where
-        P: BindingPreflight,
-    {
-        self.preflight_with_provider_and_control(request, &CancellationToken::new())
-            .await
+}
+
+// The binding and operation facades share checked admission, the scoped
+// cancellation relay and the bounded relay of the provider hook's answer.
+pub(crate) async fn preflight<P: BindingInvoker>(
+    provider: &P,
+    limits: InvocationLimits,
+    request: BindingRequest<'_>,
+    control: &CancellationToken,
+) -> Result<Option<ContextChallenge>, InvocationError> {
+    if control.is_cancelled() {
+        return Err(InvocationError::cancelled());
     }
-    /// Call the optional provider preflight hook with caller cancellation.
-    ///
-    /// # Errors
-    /// Returns an invocation error for malformed request fields, unsupported or missing binding selection, or caller cancellation. Provider refusals and malformed provider challenges also return an error.
-    pub async fn preflight_with_provider_and_control(
-        &self,
-        request: BindingRequest<'_>,
-        control: &CancellationToken,
-    ) -> Result<Option<ContextChallenge>, InvocationError>
-    where
-        P: BindingPreflight,
-    {
-        self.check_preflight(request, control, |local| {
-            self.provider.preflight(request, local)
-        })
-        .await
+    request.admit().map_err(|_| InvocationError::refused())?;
+    if !provider.supports_kind(&request.source.kind) {
+        return Err(InvocationError::refused());
     }
-    async fn check_preflight<F>(
-        &self,
-        request: BindingRequest<'_>,
-        control: &CancellationToken,
-        start: impl FnOnce(CancellationToken) -> F,
-    ) -> Result<Option<ContextChallenge>, InvocationError>
-    where
-        F: Future<Output = Result<Option<ContextChallenge>, InvocationError>>,
-    {
+    let local = CancellationToken::new();
+    let _relay = cancellation_relay(control, &local);
+    let mut cancelled = pin!(control.cancelled());
+    let mut job = pin!(provider.preflight(request, local.clone()));
+    let result = poll_fn(|cx| {
+        if cancelled.as_mut().poll(cx).is_ready() {
+            local.cancel();
+            return Poll::Ready(Err(InvocationError::cancelled()));
+        }
+        // A provider without a hook makes no prediction.
+        let result = match job.as_mut().as_pin_mut() {
+            Some(job) => job.poll(cx),
+            None => Poll::Ready(Ok(())),
+        };
         if control.is_cancelled() {
-            return Err(InvocationError::cancelled());
-        }
-        request.admit().map_err(|_| InvocationError::refused())?;
-        if !self.provider.supports_kind(&request.source.kind) {
-            return Err(InvocationError::refused());
-        }
-        let local = CancellationToken::new();
-        let _relay = cancellation_relay(control, &local);
-        let mut cancelled = pin!(control.cancelled());
-        let mut job = pin!(start(local.clone()));
-        let result = poll_fn(|cx| {
-            if cancelled.as_mut().poll(cx).is_ready() {
-                local.cancel();
-                return Poll::Ready(Err(InvocationError::cancelled()));
-            }
-            let result = job.as_mut().poll(cx);
-            if control.is_cancelled() {
-                local.cancel();
-                Poll::Ready(Err(InvocationError::cancelled()))
-            } else {
-                // this branch alone has provider provenance.
-                result.map(|r| {
-                    r.map_err(|e| {
-                        e.admit_provider_code()
-                            .unwrap_or_else(|_| InvocationError::execution_failed())
-                    })
-                })
-            }
-        })
-        .await;
-        // Preflight reports requirements as its successful result, never as an
-        // invocation CONTEXT_REQUIRED terminal (which carries a retry path).
-        if result
-            .as_ref()
-            .err()
-            .is_some_and(|e| e.code() == "CONTEXT_REQUIRED")
-        {
-            return Err(InvocationError::execution_failed());
-        }
-        let limits = openbindings::JsonLimits {
-            max_bytes: self.limits.max_error_bytes,
-            ..Default::default()
-        };
-        let within_limit = match &result {
-            Ok(Some(challenge)) => challenge.to_json_with_limits(limits).is_ok(),
-            Err(error) => error.to_json_with_limits(limits).is_ok(),
-            Ok(None) => true,
-        };
-        if within_limit {
-            result
+            local.cancel();
+            Poll::Ready(Err(InvocationError::cancelled()))
         } else {
-            Err(InvocationError::execution_failed())
+            // this branch alone has provider provenance.
+            result.map(|r| {
+                r.map_err(|e| {
+                    e.admit_provider_code()
+                        .unwrap_or_else(|_| InvocationError::execution_failed())
+                })
+            })
         }
+    })
+    .await;
+    // The hook reports requirements as the challenge invocation would raise;
+    // preflight returns them as its successful result, never as an invocation
+    // CONTEXT_REQUIRED terminal (which carries a retry path).
+    let result = match result {
+        Ok(()) => Ok(None),
+        Err(error) => error.context_required().map(Some).ok_or(error),
+    };
+    let limits = openbindings::JsonLimits {
+        max_bytes: limits.max_error_bytes,
+        ..Default::default()
+    };
+    let within_limit = match &result {
+        Ok(Some(challenge)) => challenge.to_json_with_limits(limits).is_ok(),
+        Err(error) => error.to_json_with_limits(limits).is_ok(),
+        Ok(None) => true,
+    };
+    if within_limit {
+        result
+    } else {
+        Err(InvocationError::execution_failed())
     }
 }
 

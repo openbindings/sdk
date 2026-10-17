@@ -601,6 +601,8 @@ fn unique_object(value: JsonRef<'_>, path: &'static str) -> Result<(), BoundaryE
     Ok(())
 }
 
+// Reads a preference exactly as core's private document reader does; the
+// differential test in tests/values.rs holds the two aligned.
 fn preference(value: JsonRef<'_>) -> Result<Preference, BoundaryError> {
     let invalid = || BoundaryError::new("invalid-preference", "/binding/preference");
     let text = value.number_text().ok_or_else(invalid)?;
@@ -656,6 +658,7 @@ fn preference(value: JsonRef<'_>) -> Result<Preference, BoundaryError> {
 }
 
 /// Serialize without building an unbounded output buffer or exposing error text.
+/// Inspection and synthesis keep the same bounded writer for their own errors.
 pub(crate) fn encode<T: Serialize>(
     value: &T,
     limits: JsonLimits,

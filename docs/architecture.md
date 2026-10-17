@@ -80,6 +80,17 @@ The invocation companion's
 [public guide](../crates/openbindings-invocation/README.md) describes both entry
 points and the maintained lifecycle tests.
 
+The three companions deliberately keep a few small parallel definitions, because
+sharing them would need a new internal crate or new public core API. Each defines
+its own `SupportedKind` and `KindSupportVerdict` pair and refuses an empty requested
+kind as `empty-kind` in its own code namespace. Each keeps a bounded JSON
+writer mapped to its own error type. Invocation's by-value `BindingValue` reads
+`preference` with its own exact parser, since core's document reader is private.
+Tests hold the copies aligned: the published kind-support cases run through all
+three facades, each facade's empty-kind code is pinned, the writers share
+byte-limit tests, and a differential test compares the preference parser with
+core's document reading. Change the copies together.
+
 The SDK supplies the three interface contracts and checked caller APIs without
 kind-specific instances. Providers own source interpretation, kind soundness and
 external effects. [openbindings/openapi](https://github.com/openbindings/openapi)

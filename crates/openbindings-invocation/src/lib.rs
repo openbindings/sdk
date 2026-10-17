@@ -28,7 +28,8 @@ pub use openbindings_internal_cancellation::{Cancellation, CancellationToken};
 mod interface_metadata_tests {
     #[test]
     fn published_interface_metadata_is_independent_of_the_crate_version() {
-        // CA-2: public metadata keeps the applied interface values across the rename.
+        // The published interface version and applied revision are separate from
+        // the crate version, so a crate release cannot silently change them.
         assert_eq!(super::INTERFACE_VERSION, "0.1.0");
         assert_eq!(
             super::APPLIED_INTERFACE_REVISION,
