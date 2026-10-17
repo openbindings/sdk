@@ -267,7 +267,7 @@ Rust deadline and outcome items are defined in
 | `DiscoveryTimer::{now, sleep_until}` | Host monotonic time and a wake-capable absolute timer in the same epoch, expressed as `Duration`. Dropping the timer releases it; local futures are supported. |
 | `discover(origin, &options, &control, &timer, transport)` | Races one host timer and caller `CancellationToken` while invoking a repeatable one-hop callback. The callback must dispatch the normalized URL, expose redirects, deliver decoded bytes or a typed refusal, and release acquisition on drop. It is called again for each admitted redirect, including a cross-origin one, and scopes credentials to the URL it is given. Connection-time DNS, peer and proxy policy belongs to the host. `final_url` is the URL the SDK last dispatched. |
 | `DEFAULT_TIMEOUT_SECONDS` | Thirty-second SDK default. |
-| `MAX_REDIRECTS` | Ten followed redirects on native and portable checked paths. Browser Fetch owns its hidden redirect limit. |
+| `MAX_REDIRECTS` | Ten followed redirects on native and portable checked paths, and in TypeScript where the host exposes redirects. Browser Fetch owns its hidden redirect limit. |
 | `native::Client::new(ClientBuilder, ClientOptions)` | Installs SDK redirect policy last and builds the client, retaining application TLS, resolver, proxy, credential and decoding choices. Refuses downgrade and credential-replay hops before dispatch. Owns one Tokio attempt timer, so it requires a Tokio runtime with timers enabled. Credential headers other than reqwest's four standard ones follow cross-origin hops. |
 | `native::Client::with_delegated_policy(Client, ClientOptions)` | Accepts an already-built client through explicit host policy delegation. The application owns per-hop admission, the ten-redirect limit and credential handling. SDK deadline and cancellation handling still apply. |
 | `DiscoveryOutcome::Timeout` | SDK or identified transport deadline expired; distinct from caller `Cancelled`. Caller cancellation wins when both are ready at the same poll. Observed metadata and complete bounded body, if available, remain in the receipt. |
@@ -299,11 +299,20 @@ original request headers while reqwest 0.13.5 strips credentials only when the n
 origin differs from the immediately preceding one. Applications requiring such
 chains use `with_delegated_policy` and own credentials across all hops.
 
-TypeScript Fetch uses `redirect: "follow"`, checks final URL admission and refuses
-an observable HTTPS-to-HTTP downgrade. A visible 301, 302, 303, 307 or 308 with
+TypeScript Fetch requests `redirect: "manual"`. Where the host exposes the redirect
+response, as Node does, the SDK checks each hop as the portable path does: it refuses
+every downgrade and refused destination before dispatch, follows at most ten
+redirects, calls the Fetch callback once per hop with only Accept so the callback
+scopes credentials to the URL it is given, and reports the URL it last dispatched as
+`finalUrl`. The callback must scope any credentials it adds by that URL; the SDK
+cannot strip headers the callback adds itself. An opaqueredirect shows the transport
+hides hops, as browser fetch does; the SDK then repeats the request with
+`redirect: "follow"`, remembers that for the transport so later discoveries follow
+directly, checks final URL admission and refuses
+an observable HTTPS-to-HTTP downgrade, and a visible 301, 302, 303, 307 or 308 with
 Location was left unfollowed and is `"redirect-policy"`, as in Rust. Browser mixed-content blocking in secure
-contexts and private-network rules govern hidden hops; the SDK cannot observe them.
-Opaque/opaqueredirect responses mean policy cannot be established. Timers remain
+contexts and private-network rules govern those hidden hops; the SDK cannot observe them.
+Opaque responses mean policy cannot be established. Timers remain
 cooperative at blocking polls and synchronous validation boundaries.
 
 Publication uses typed `AllowOrigin` choices: Rust `Any` (default), `Omit`, `Null`,

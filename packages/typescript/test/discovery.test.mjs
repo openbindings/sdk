@@ -19,18 +19,22 @@ function responseUrl(response, url, type = "default") {
 }
 
 // admission and requested metadata use the normalized client URL.
-test("normalized literal loopback admission and Fetch automatic following", async () => {
+test("normalized literal loopback admission and manual redirect dispatch", async () => {
   for (const host of ["2130706433", "0x7f.1", "%31%32%37.0.0.1", "127.1"]) {
     const result = await discovery.discover(`http://${host}`, {
       fetch: async (url, init) => {
         assert.equal(url, "http://127.0.0.1/.well-known/openbindings");
-        assert.equal(init.redirect, "follow");
-        return responseUrl(new Response(text), "https://example.test/final");
+        assert.equal(init.redirect, "manual");
+        return responseUrl(new Response(text), url);
       },
     });
     assert.equal(result.status, "found");
     assert.equal(
       result.metadata.requestedUrl,
+      "http://127.0.0.1/.well-known/openbindings",
+    );
+    assert.equal(
+      result.metadata.finalUrl,
       "http://127.0.0.1/.well-known/openbindings",
     );
     result.document.dispose();
@@ -53,6 +57,83 @@ test("normalized literal loopback admission and Fetch automatic following", asyn
   }
 });
 
+// A transport answering by URL; each call is recorded with its redirect mode and headers.
+function transport(routes) {
+  const calls = [];
+  const fetch = async (url, init) => {
+    calls.push({ url, redirect: init.redirect, headers: init.headers });
+    const route = routes[url];
+    if (!route) throw Error("unexpected dispatch " + url);
+    return route(init);
+  };
+  return { calls, fetch };
+}
+const redirectTo = (location, status = 302) =>
+  new Response(null, { status, headers: { location } });
+// What a browser returns for a redirect it hides under redirect: "manual".
+const hidden = () =>
+  responseUrl(new Response(null, { status: 200 }), "", "opaqueredirect");
+
+// a host that hides redirects keeps the final-URL check it is limited to.
+test("a host hiding redirects is followed by the host and its final URL checked", async () => {
+  const { calls, fetch } = transport({
+    "https://example.test/.well-known/openbindings": (init) =>
+      init.redirect === "manual"
+        ? hidden()
+        : responseUrl(new Response(text), "https://moved.test/final"),
+  });
+  const result = await discovery.discover("https://example.test", { fetch });
+  assert.equal(result.status, "found");
+  assert.equal(result.metadata.finalUrl, "https://moved.test/final");
+  assert.deepEqual(
+    calls.map((call) => call.redirect),
+    ["manual", "follow"],
+  );
+  result.document.dispose();
+});
+
+// one observed opaqueredirect makes later discoveries through that transport follow directly.
+test("a transport seen hiding redirects is followed directly afterwards, others keep hop checks", async () => {
+  const modes = [];
+  let final = "https://moved.test/final";
+  const hiding = async (url, init) => {
+    modes.push(init.redirect);
+    return init.redirect === "manual"
+      ? hidden()
+      : responseUrl(new Response(text), final);
+  };
+  for (const expected of [["manual", "follow"], ["follow"]]) {
+    modes.length = 0;
+    const result = await discovery.discover("https://example.test", {
+      fetch: hiding,
+    });
+    assert.equal(result.status, "found");
+    assert.deepEqual(modes, expected);
+    result.document.dispose();
+  }
+  // Following directly keeps the final-URL checks.
+  modes.length = 0;
+  final = "http://127.0.0.1/final";
+  const downgraded = await discovery.discover("https://example.test", {
+    fetch: hiding,
+  });
+  assert.deepEqual(modes, ["follow"]);
+  assert.equal(downgraded.status, "transport-error");
+  assert.equal(downgraded.error.kind, "redirect-policy");
+  // Another transport that exposes hops is not affected by that observation.
+  const { calls, fetch } = transport({
+    "https://example.test/.well-known/openbindings": () =>
+      redirectTo("http://127.0.0.1/downgrade"),
+  });
+  const refused = await discovery.discover("https://example.test", { fetch });
+  assert.equal(refused.status, "transport-error");
+  assert.equal(refused.error.kind, "redirect-policy");
+  assert.deepEqual(
+    calls.map((call) => call.redirect),
+    ["manual"],
+  );
+});
+
 // final downgrade and opaque visibility are acquisition policy failures.
 test("final HTTPS downgrade and opaque responses cannot establish policy", async () => {
   for (const type of ["default", "opaque", "opaqueredirect"]) {
@@ -68,9 +149,15 @@ test("final HTTPS downgrade and opaque responses cannot establish policy", async
       "http://127.0.0.1/final",
       type,
     );
+    const modes = [];
     const result = await discovery.discover("https://example.test", {
-      fetch: async () => response,
+      // The host hides the first redirect, then follows to the final response.
+      fetch: async (url, init) => {
+        modes.push(init.redirect);
+        return init.redirect === "manual" ? hidden() : response;
+      },
     });
+    assert.deepEqual(modes, ["manual", "follow"]);
     assert.equal(result.status, "transport-error");
     assert.equal(result.error.kind, "redirect-policy");
     assert.equal(result.body, undefined);
@@ -82,20 +169,22 @@ test("final HTTPS downgrade and opaque responses cannot establish policy", async
   }
 });
 
-// Fetch follows the five redirect statuses, so a visible Location was left unfollowed.
+// A following host follows the five redirect statuses, so a visible Location was left unfollowed.
 test("unfollowed visible redirect is a redirect-policy refusal", async () => {
   for (const status of [301, 302, 303, 307, 308]) {
     let cancelled = false;
     const result = await discovery.discover("https://example.test", {
-      fetch: async () =>
-        new Response(
-          new ReadableStream({
-            cancel() {
-              cancelled = true;
-            },
-          }),
-          { status, headers: { location: "https://example.test/moved" } },
-        ),
+      fetch: async (url, init) =>
+        init.redirect === "manual"
+          ? hidden()
+          : new Response(
+              new ReadableStream({
+                cancel() {
+                  cancelled = true;
+                },
+              }),
+              { status, headers: { location: "https://example.test/moved" } },
+            ),
     });
     assert.equal(result.status, "transport-error");
     assert.equal(result.error.kind, "redirect-policy");
@@ -115,6 +204,159 @@ test("unfollowed visible redirect is a redirect-policy refusal", async () => {
     assert.equal(result.status, "http-status");
     assert.equal(result.metadata.status, status);
   }
+});
+
+// visible redirects are checked hops: fresh requests to resolved, admitted URLs.
+test("checked hops follow the five redirect statuses with relative Locations", async () => {
+  for (const status of [301, 302, 303, 307, 308]) {
+    let released = false;
+    const { calls, fetch } = transport({
+      "https://example.test/.well-known/openbindings": () =>
+        new Response(
+          new ReadableStream({
+            cancel() {
+              released = true;
+            },
+          }),
+          { status, headers: { location: "../a/b?x#fragment" } },
+        ),
+      "https://example.test/a/b?x": () => redirectTo("//other.test/c", status),
+      "https://other.test/c": () => new Response(text),
+    });
+    const result = await discovery.discover("https://example.test", { fetch });
+    assert.equal(result.status, "found");
+    assert.equal(result.metadata.finalUrl, "https://other.test/c");
+    assert.equal(result.metadata.status, 200);
+    assert.ok(released, "redirect body is released before the next hop");
+    for (const call of calls) {
+      assert.equal(call.redirect, "manual");
+      assert.deepEqual(Object.keys(call.headers), ["Accept"]);
+    }
+    assert.equal(calls.length, 3);
+    result.document.dispose();
+  }
+  // HTTP literal loopback may move to other loopback spellings and upgrade to HTTPS.
+  const { calls, fetch } = transport({
+    "http://127.0.0.1/.well-known/openbindings": () =>
+      redirectTo("http://[0:0:0:0:0:0:0:1]:8080/x"),
+    "http://[::1]:8080/x": () => redirectTo("https://example.test/y"),
+    "https://example.test/y": () => new Response(text),
+  });
+  const upgraded = await discovery.discover("http://127.0.0.1", { fetch });
+  assert.equal(upgraded.status, "found");
+  assert.equal(calls.length, 3);
+  upgraded.document.dispose();
+});
+
+// every refused Location is a policy refusal before anything is dispatched to it.
+test("refused redirect destinations are never dispatched", async () => {
+  for (const [origin, location] of [
+    ["https://example.test", "http://127.0.0.1/downgrade"],
+    ["https://example.test", "http://[::1]/downgrade"],
+    ["http://127.0.0.1", "http://localhost/x"],
+    ["http://127.0.0.1", "http://10.0.0.1/x"],
+    ["https://example.test", "https://user:pass@example.test/x"],
+    ["https://example.test", "https://user@example.test/x"],
+    ["https://example.test", "ftp://example.test/x"],
+    ["https://example.test", "data:,x"],
+    ["https://example.test", "file:///etc/passwd"],
+    ["https://example.test", "http://[::1"],
+    ["https://example.test", "https://example.test/a b"],
+    ["https://example.test", "https://example.test\\x"],
+    ["https://example.test", "https://bücher.example/"],
+    ["https://example.test", "https://example.test/\u0001"],
+  ]) {
+    let released = false;
+    const { calls, fetch } = transport({
+      [`${origin}/.well-known/openbindings`]: () =>
+        new Response(
+          new ReadableStream({
+            cancel() {
+              released = true;
+            },
+          }),
+          { status: 302, headers: { location } },
+        ),
+    });
+    const result = await discovery.discover(origin, { fetch });
+    assert.equal(result.status, "transport-error", location);
+    assert.equal(result.error.kind, "redirect-policy");
+    assert.equal(result.metadata.status, 302);
+    assert.equal(
+      result.metadata.finalUrl,
+      `${origin}/.well-known/openbindings`,
+    );
+    assert.equal(calls.length, 1, location);
+    assert.ok(released);
+  }
+});
+
+// the eleventh redirect is refused and its destination is never dispatched.
+test("checked hops stop at ten redirects", async () => {
+  for (const hops of [10, 11]) {
+    const routes = {
+      "https://example.test/.well-known/openbindings": () => redirectTo("/1"),
+    };
+    for (let hop = 1; hop <= hops; hop++)
+      routes[`https://example.test/${hop}`] = () =>
+        hop < hops ? redirectTo(`/${hop + 1}`) : new Response(text);
+    const { calls, fetch } = transport(routes);
+    const result = await discovery.discover("https://example.test", { fetch });
+    assert.equal(calls.length, 11);
+    assert.equal(result.metadata.finalUrl, "https://example.test/10");
+    if (hops === 10) {
+      assert.equal(result.status, "found");
+      result.document.dispose();
+    } else {
+      assert.equal(result.status, "transport-error");
+      assert.equal(result.error.kind, "redirect-policy");
+    }
+  }
+});
+
+// a transport asked not to follow must not report a different, followed response.
+test("hidden following by a manual transport is a redirect-policy refusal", async () => {
+  for (const response of [
+    responseUrl(new Response(text), "https://elsewhere.test/final"),
+    Object.defineProperty(new Response(text), "redirected", { value: true }),
+  ]) {
+    const result = await discovery.discover("https://example.test", {
+      fetch: async () => response,
+    });
+    assert.equal(result.status, "transport-error");
+    assert.equal(result.error.kind, "redirect-policy");
+    assert.equal(result.body, undefined);
+    assert.equal(
+      result.metadata.finalUrl,
+      response.url || "https://example.test/.well-known/openbindings",
+    );
+  }
+  // A host that exposed one redirect cannot hide the next one.
+  const { calls, fetch } = transport({
+    "https://example.test/.well-known/openbindings": () => redirectTo("/next"),
+    "https://example.test/next": () => hidden(),
+  });
+  const result = await discovery.discover("https://example.test", { fetch });
+  assert.equal(result.status, "transport-error");
+  assert.equal(result.error.kind, "redirect-policy");
+  assert.equal(result.metadata.finalUrl, null);
+  assert.deepEqual(
+    calls.map((call) => call.redirect),
+    ["manual", "manual"],
+  );
+});
+
+// a failed later hop is acquisition failure, keeping the redirect's metadata.
+test("a later hop's network failure is a transport error", async () => {
+  const result = await discovery.discover("https://example.test", {
+    fetch: async (url) => {
+      if (url.endsWith("/next")) throw new TypeError("fetch failed");
+      return redirectTo("/next");
+    },
+  });
+  assert.equal(result.status, "transport-error");
+  assert.equal(result.error.kind, "network");
+  assert.equal(result.metadata.status, 302);
 });
 
 // one deadline covers never-ready headers and body, independent of caller signals.
