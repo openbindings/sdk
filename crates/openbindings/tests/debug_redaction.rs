@@ -68,15 +68,16 @@ fn evaluator_requests_and_resources_redact_original_snapshots_and_identifiers() 
         document: JsonValue::parse(format!(r#"{{"const":"{SECRET}"}}"#)).unwrap(),
     };
     redacted(&resource);
-    let contracts = document.value_contracts(
-        Arc::new(PrivateEvaluator),
-        ResourceSet::new([resource]).unwrap(),
+    let resources = ResourceSet::new([resource]).unwrap();
+    redacted(&resources);
+    let operation = document.resolve_operation("op").unwrap();
+    let contract = operation.input().unwrap();
+    redacted(&contract);
+    assert!(
+        contract
+            .prepare_with_control(&PrivateEvaluator, &resources, &AtomicBool::new(false))
+            .is_err()
     );
-    redacted(&contracts);
-    assert!(matches!(
-        contracts.prepare_with_control("op", Direction::Input, &AtomicBool::new(false)),
-        ValueContractPreparation::NoVerdict { .. }
-    ));
     redacted(&ValueProblemDetails::Enum {
         choices: vec![format!("\"{SECRET}\"")],
     });

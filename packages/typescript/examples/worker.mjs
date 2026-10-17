@@ -13,7 +13,7 @@ self.onmessage = async ({ data }) => {
     direction = "input",
     value,
   } = data;
-  let document, context, prepared, input;
+  let document, proof, selected, contract, prepared, input;
   try {
     await initialize(); // retryable if a previous attempt failed
     if (data.kind === "initialize") {
@@ -41,13 +41,35 @@ self.onmessage = async ({ data }) => {
       return;
     }
     input = parsedValue.value;
-    context = document.valueContracts();
-    const setup = context.prepare(operation, direction);
+    if (direction !== "input" && direction !== "output")
+      throw new TypeError("direction must be input or output.");
+    const checked = document.validate();
+    if (checked.status !== "conformant") {
+      self.postMessage({ id, status: "report", assessment: checked });
+      return;
+    }
+    proof = checked.document;
+    selected = proof.resolveOperation(operation); // primary name or alias
+    if (!selected) {
+      self.postMessage({ id, status: "operation-missing", operation });
+      return;
+    }
+    contract = direction === "input" ? selected.input() : selected.output();
+    if (!contract) {
+      self.postMessage({
+        id,
+        status: "no-value-contract",
+        operation,
+        direction,
+      });
+      return;
+    }
+    const setup = contract.prepare();
     if (setup.status !== "ready") {
       self.postMessage({ id, status: "preparation", preparation: setup });
       return;
     }
-    prepared = setup.valueContract;
+    prepared = setup.contract;
     self.postMessage({
       id,
       status: "evaluated",
@@ -66,7 +88,9 @@ self.onmessage = async ({ data }) => {
   } finally {
     input?.dispose();
     prepared?.dispose();
-    context?.dispose();
+    contract?.dispose();
+    selected?.dispose();
+    proof?.dispose();
     document?.dispose();
   }
 };

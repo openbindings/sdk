@@ -1,8 +1,7 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
-use std::sync::Arc;
 
-fn prepare(schema: &str, extra: &str) -> ValueContract {
+fn prepare(schema: &str, extra: &str) -> PreparedContract {
     // Schema text and opaque examples live in a supplied resource. OBI-01
     // governs the interface document, not supplied schemas or caller values.
     let text = r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://strings.invalid/schema#/$defs/target"}}}}"#;
@@ -13,13 +12,18 @@ fn prepare(schema: &str, extra: &str) -> ValueContract {
     }])
     .unwrap();
     let document = Document::parse(text).unwrap();
-    let contracts = document
+    let document = document
         .validate()
         .unwrap()
         .conformant()
-        .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::new()), resources);
-    let ValueContractPreparation::Ready(contract) = contracts.prepare("op", Direction::Input)
+        .expect("conformant document");
+    let operation = document
+        .resolve_operation("op")
+        .expect("declared operation");
+    let Ok(contract) = operation
+        .input()
+        .expect("declared input")
+        .prepare_with(&DefaultEvaluator::new(), &resources)
     else {
         panic!("{text}")
     };

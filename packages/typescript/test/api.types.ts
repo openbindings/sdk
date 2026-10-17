@@ -43,16 +43,17 @@ async function caller(
     const proof = document.validate();
     if (proof.status !== "conformant") return undefined;
     using validated = proof.document;
-    using contracts = validated.valueContracts({
+    using operation = validated.resolveOperation("run");
+    using contract = operation?.input();
+    if (!contract) return undefined;
+    const prepared = contract.prepare({
       resources,
       diagnostics: "upstream",
       limits: { evaluationSteps: 2000000 },
-    });
-    const prepared = contracts.prepare("run", "input", {
       signal: new AbortController().signal,
     });
     if (prepared.status !== "ready") return undefined;
-    using input = prepared.valueContract;
+    using input = prepared.contract;
     using value = ExactJson.from(7);
     const result: ValueOutcome = input.validate(value);
     if (result.outcome === "fails") {
@@ -115,7 +116,7 @@ ConformantDocument.fromParsed(parsedOnly);
 // @ts-expect-error root no longer exports the HTTP companion
 import { discover as rootDiscovery } from "../dist/index.js";
 
-declare const preparedContract: import("../dist/index.js").ValueContract;
+declare const preparedContract: import("../dist/index.js").PreparedContract;
 declare const exactInput: ExactJson;
 const exactOutcome: ValueOutcome = preparedContract.validate(exactInput);
 const ordinaryOutcome: import("../dist/index.js").ValueCheck =
@@ -250,10 +251,10 @@ void roundOneTypes;
 void inaccessibleConstructors;
 
 function preparedResources(
-  valueContract: import("../dist/index.js").ValueContract,
+  prepared: import("../dist/index.js").PreparedContract,
 ) {
   // @ts-expect-error Evaluator completeness metadata is no longer a product API.
-  void valueContract.resourceCompleteness;
+  void prepared.resourceCompleteness;
   // @ts-expect-error The planner's metadata type is not exported under a new name.
   type Removed = import("../dist/index.js").ResourceCompleteness;
 }
@@ -282,8 +283,13 @@ const omittedAllowOrigin: import("../dist/http-discovery.js").AllowOrigin =
 const oldAllowOrigin: import("../dist/http-discovery.js").AllowOrigin = "*";
 void [exactAllowOrigin, omittedAllowOrigin, oldAllowOrigin];
 
+declare const parsedOperation: import("../dist/index.js").OperationView;
 // @ts-expect-error unproven documents cannot construct normative value contracts
-parsedOnly.valueContracts();
+parsedOperation.input()?.prepare();
+// @ts-expect-error a parsed operation view is not a conformant operation view
+const forgedOperation: import("../dist/index.js").ConformantOperationView =
+  parsedOperation;
+void forgedOperation;
 
 function validatedReads(proof: ConformantDocument, parsed: Document) {
   proof.openbindings satisfies string;
@@ -293,6 +299,13 @@ function validatedReads(proof: ConformantDocument, parsed: Document) {
   const schemas: ReadonlyMap<string, ExactJson> | undefined = proof.schemas();
   for (const value of schemas?.values() ?? []) value.dispose();
   using editor = proof.asDocument();
+  // Conformance excludes ambiguity: selection is the view or undefined.
+  using conformantOperation = proof.resolveOperation("run");
+  using contract = conformantOperation?.input();
+  using schema = contract?.schema();
+  schema satisfies ExactJson | undefined;
+  // @ts-expect-error the contract already names its field; prepare takes options only
+  contract?.prepare("input");
   const selection = parsed.resolveOperation("run");
   if (selection.status === "found") {
     using operation = selection.operation;

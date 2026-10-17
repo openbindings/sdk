@@ -1,5 +1,6 @@
-//! Context-local identity admission. RI numbers map the frozen 34-case policy
-//! matrix and SOL supplements; source regressions do not qualify a package.
+//! Identity admission local to each preparation's document and resource set.
+//! RI numbers map the frozen 34-case policy matrix and SOL supplements; source
+//! regressions do not qualify a package.
 use crate::planner::BoundsRequest;
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
@@ -33,24 +34,54 @@ fn resources(rows: &[(&str, Value)]) -> ResourceSet {
     }))
     .unwrap()
 }
-fn context(doc: &Document, supplied: &ResourceSet) -> ValueContracts {
+fn conformant(doc: &Document) -> Conformant<Document> {
     doc.validate()
         .unwrap()
         .conformant()
         .expect("conformant document")
-        .value_contracts(
-            Arc::new(
-                DefaultEvaluator::new()
-                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-            ),
-            supplied.clone(),
-        )
 }
-fn ready(ctx: &ValueContracts, operation: &str) -> ValueContract {
-    match ctx.prepare(operation, Direction::Input) {
-        ValueContractPreparation::Ready(contract) => contract,
-        other => panic!("expected ready {operation}: {other:?}"),
+fn upstream() -> DefaultEvaluator {
+    DefaultEvaluator::new()
+        .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream)
+}
+/// Prepare the input contract of the named operation.
+fn prepare_with(
+    proof: &Conformant<Document>,
+    supplied: &ResourceSet,
+    operation: &str,
+    evaluator: &dyn SchemaEvaluator,
+) -> Result<PreparedContract, NoVerdict> {
+    proof
+        .resolve_operation(operation)
+        .unwrap_or_else(|| panic!("declared operation {operation}"))
+        .input()
+        .expect("declared input")
+        .prepare_with(evaluator, supplied)
+}
+fn prepare(
+    proof: &Conformant<Document>,
+    supplied: &ResourceSet,
+    operation: &str,
+) -> Result<PreparedContract, NoVerdict> {
+    prepare_with(proof, supplied, operation, &upstream())
+}
+fn ready_with(
+    proof: &Conformant<Document>,
+    supplied: &ResourceSet,
+    operation: &str,
+    evaluator: &dyn SchemaEvaluator,
+) -> PreparedContract {
+    match prepare_with(proof, supplied, operation, evaluator) {
+        Ok(contract) => contract,
+        Err(detail) => panic!("expected ready {operation}: {detail:?}"),
     }
+}
+fn ready(
+    proof: &Conformant<Document>,
+    supplied: &ResourceSet,
+    operation: &str,
+) -> PreparedContract {
+    ready_with(proof, supplied, operation, &upstream())
 }
 fn label(result: ValueOutcome) -> &'static str {
     match result {
@@ -60,7 +91,7 @@ fn label(result: ValueOutcome) -> &'static str {
         ValueOutcome::NoVerdict { .. } => "no-verdict",
     }
 }
-fn verdicts(contract: &ValueContract, cases: &[(&str, &str)]) {
+fn verdicts(contract: &PreparedContract, cases: &[(&str, &str)]) {
     for (text, expected) in cases {
         assert_eq!(label(contract.validate(&value(text))), *expected, "{text}");
     }
@@ -90,39 +121,27 @@ impl SchemaEvaluator for Project {
 }
 fn helpers_ready(doc: &Document, supplied: &ResourceSet, operation: &str) {
     for bounds in [false, true] {
-        let ctx = doc
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant document")
-            .value_contracts(Arc::new(Project(bounds)), supplied.clone());
-        ready(&ctx, operation);
+        ready_with(&conformant(doc), supplied, operation, &Project(bounds));
     }
 }
-fn refusal(prepared: ValueContractPreparation) -> NoVerdict {
+fn refusal(prepared: Result<PreparedContract, NoVerdict>) -> NoVerdict {
     match prepared {
-        ValueContractPreparation::NoVerdict { detail } => detail,
-        other => panic!("expected setup refusal: {other:?}"),
+        Err(detail) => detail,
+        other => panic!("expected preparation refusal: {other:?}"),
     }
 }
 fn identity_refusal(doc: &Document, supplied: &ResourceSet, operation: &str) {
-    let mut engines: Vec<Arc<dyn SchemaEvaluator>> = vec![
-        Arc::new(
-            DefaultEvaluator::new()
-                .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-        ),
-        Arc::new(Project(false)),
-        Arc::new(Project(true)),
-    ];
-    for evaluator in engines.drain(..) {
-        let detail = refusal(
-            doc.validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant document")
-                .value_contracts(evaluator, supplied.clone())
-                .prepare(operation, Direction::Input),
-        );
+    for evaluator in [
+        &upstream() as &dyn SchemaEvaluator,
+        &Project(false),
+        &Project(true),
+    ] {
+        let detail = refusal(prepare_with(
+            &conformant(doc),
+            supplied,
+            operation,
+            evaluator,
+        ));
         assert_eq!(
             detail.reason,
             NoVerdictReason::ConservativePreparation,
@@ -182,7 +201,7 @@ fn unresolved_identity(doc: &Document, supplied: &ResourceSet, pointer: &str) {
         other => panic!("{other:?}"),
     }
 }
-fn failed_location(contract: &ValueContract, text: &str) -> SchemaLocation {
+fn failed_location(contract: &PreparedContract, text: &str) -> SchemaLocation {
     let ValueOutcome::Fails { problems, .. } = contract.validate(&value(text)) else {
         panic!("expected failure")
     };
@@ -217,26 +236,29 @@ fn ri01_03_exact_b32_original_and_edited_resources() {
         ),
     ] {
         let doc = Document::parse(text).unwrap();
-        let local = context(&doc, &ResourceSet::default());
-        let external = context(&doc, &supplied);
+        let proof = conformant(&doc);
+        let evaluator = upstream();
+        let local = ResourceSet::default();
         for case in expectations["valueCases"].as_array().unwrap() {
-            let ctx = if case["setup"] == "runner-result-supplied" {
-                &external
+            let resources = if case["setup"] == "runner-result-supplied" {
+                &supplied
             } else {
                 &local
             };
-            let direction = if case["side"] == "input" {
-                Direction::Input
+            let operation = proof
+                .resolve_operation(case["operation"].as_str().unwrap())
+                .unwrap_or_else(|| panic!("{} edited={edited}: missing operation", case["id"]));
+            let contract = if case["side"] == "input" {
+                operation.input()
             } else {
-                Direction::Output
+                operation.output()
             };
-            let result = ctx.prepare(case["operation"].as_str().unwrap(), direction);
-            let actual = match result {
-                ValueContractPreparation::Ready(contract) => {
+            let actual = match contract.map(|c| c.prepare_with(&evaluator, resources)) {
+                Some(Ok(contract)) => {
                     label(contract.validate(&value(case["valueText"].as_str().unwrap())))
                 }
-                ValueContractPreparation::NoValueContract => "no-contract",
-                other => panic!("{} edited={edited}: {other:?}", case["id"]),
+                None => "no-contract",
+                Some(Err(detail)) => panic!("{} edited={edited}: {detail:?}", case["id"]),
             };
             let expected = match (edited, case["id"].as_str().unwrap()) {
                 (true, "B32-V21") => "satisfies",
@@ -250,12 +272,16 @@ fn ri01_03_exact_b32_original_and_edited_resources() {
             .at("/operations/run_job/examples/finished/output")
             .unwrap()
             .to_owned();
-        for (ctx, expected) in [
-            (&external, "satisfies"),
+        let run_job = proof
+            .resolve_operation("run_job")
+            .expect("declared operation");
+        for (resources, expected) in [
+            (&supplied, "satisfies"),
             (&local, if edited { "satisfies" } else { "no-verdict" }),
         ] {
-            let ValueContractPreparation::Ready(contract) =
-                ctx.prepare("run_job", Direction::Output)
+            let Some(Ok(contract)) = run_job
+                .output()
+                .map(|c| c.prepare_with(&evaluator, resources))
             else {
                 panic!("finished example setup")
             };
@@ -299,13 +325,12 @@ fn ri04_05_contained_authority_ignores_supplied_body_and_keeps_raw_catalog() {
             document: value(text),
         }])
         .unwrap();
-        let ctx = doc
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant document")
-            .value_contracts(Arc::new(Catalog(observed.clone())), supplied.clone());
-        let contract = ready(&ctx, "op");
+        let contract = ready_with(
+            &conformant(&doc),
+            &supplied,
+            "op",
+            &Catalog(observed.clone()),
+        );
         verdicts(
             &contract,
             &[("2", "satisfies"), ("0", "fails"), (r#""x""#, "fails")],
@@ -348,7 +373,7 @@ fn ri06_duplicate_contained_owners_refuse_lookup_and_direct_entry() {
 fn ri07_external_references_back_use_contained_target() {
     let doc = one(owner(), json!({"$ref":A}));
     let supplied = resources(&[(A, json!({"$id":V,"$ref":U})), (U, json!(false))]);
-    let contract = ready(&context(&doc, &supplied), "op");
+    let contract = ready(&conformant(&doc), &supplied, "op");
     verdicts(&contract, &[("2", "satisfies"), ("0", "fails")]);
     assert_eq!(
         failed_location(&contract, "0").pointer,
@@ -370,12 +395,12 @@ fn ri08_12_aliases_cannot_bypass_canonical_conflicts() {
             json!({"owner":{"input":{"$ref":U}},"alias":{"input":{"$ref":A}},"dynamic":{"input":{"$dynamicRef":format!("{A}#node")}}}),
         );
         verdicts(
-            &ready(&context(&doc, &supplied), "owner"),
+            &ready(&conformant(&doc), &supplied, "owner"),
             &[("2", "satisfies")],
         );
         identity_refusal(&doc, &supplied, "alias");
         unresolved_identity(&doc, &supplied, "/operations/alias/input/$ref");
-        let detail = refusal(context(&doc, &supplied).prepare("dynamic", Direction::Input));
+        let detail = refusal(prepare(&conformant(&doc), &supplied, "dynamic"));
         assert_eq!(detail.code, "resource-identity-conflict");
         unresolved_identity(&doc, &supplied, "/operations/dynamic/input/$dynamicRef");
     }
@@ -415,9 +440,9 @@ fn ri09_10_distinct_canonical_identity_preserves_alias_provenance_and_base() {
                 json!({"type":"string"}),
             ),
         ]);
-        let ctx = context(&doc, &supplied);
+        let proof = conformant(&doc);
         verdicts(
-            &ready(&ctx, "canonical"),
+            &ready(&proof, &supplied, "canonical"),
             &[(r#""x""#, "satisfies"), ("2", "fails")],
         );
         located(
@@ -441,13 +466,16 @@ fn ri09_10_distinct_canonical_identity_preserves_alias_provenance_and_base() {
         // A selected root's own failures keep the retrieval source, even when U lookup selects E.
         let own = resources(&[(retrieval, json!({"$id":canonical,"type":"string"}))]);
         assert_eq!(
-            failed_location(&ready(&context(&doc, &own), "canonical"), "2")
+            failed_location(&ready(&proof, &own, "canonical"), "2")
                 .resource
                 .as_deref(),
             Some(retrieval)
         );
         if retrieval == A {
-            verdicts(&ready(&ctx, "alias"), &[(r#""x""#, "satisfies")]);
+            verdicts(
+                &ready(&proof, &supplied, "alias"),
+                &[(r#""x""#, "satisfies")],
+            );
         }
     }
 }
@@ -500,7 +528,7 @@ fn ri13_15_unused_collisions_are_isolated_but_pointer_targets_refuse() {
         json!({"type":"string","$defs":{"child":{"$id":U,"type":"boolean"}}}),
     )]);
     verdicts(
-        &ready(&context(&doc, &supplied), "parent"),
+        &ready(&conformant(&doc), &supplied, "parent"),
         &[(r#""x""#, "satisfies"), ("2", "fails")],
     );
     helpers_ready(&doc, &supplied, "parent");
@@ -548,7 +576,7 @@ fn ri16_17_unique_nested_resources_survive_losing_lexical_ancestors() {
         owner(),
         json!({"direct":{"input":{"$ref":nested_id}},"pointer":{"input":{"$ref":format!("{A}#/$defs/child")}}}),
     );
-    let contract = ready(&context(&doc, &under_loser), "direct");
+    let contract = ready(&conformant(&doc), &under_loser, "direct");
     verdicts(&contract, &[("true", "satisfies"), ("2", "fails")]);
     helpers_ready(&doc, &under_loser, "direct");
     located(
@@ -567,7 +595,7 @@ fn ri16_17_unique_nested_resources_survive_losing_lexical_ancestors() {
         json!({"pointer":{"input":{"$ref":format!("{V}#/$defs/loser/$defs/child")}},"loser":{"input":{"$ref":format!("{V}#/$defs/loser")}}}),
     );
     verdicts(
-        &ready(&context(&doc, &under_healthy), "pointer"),
+        &ready(&conformant(&doc), &under_healthy, "pointer"),
         &[("true", "satisfies"), ("2", "fails")],
     );
     helpers_ready(&doc, &under_healthy, "pointer");
@@ -595,7 +623,7 @@ fn obi13_keeps_host_spelling_while_resolution_uses_library_identity() {
     let validation = doc.validate().unwrap();
     assert_eq!(validation.report().evidence["OBI-13"], Evidence::Met);
     assert!(validation.conformant().is_some());
-    let detail = refusal(context(&doc, &ResourceSet::default()).prepare("op", Direction::Input));
+    let detail = refusal(prepare(&conformant(&doc), &ResourceSet::default(), "op"));
     assert_eq!(detail.code, "ambiguous-resource");
     assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
     assert!(matches!(
@@ -622,7 +650,7 @@ fn supplied_normalized_identity_peers_remain_ambiguous() {
             json!({"type":"integer"}),
         ),
     ]);
-    let detail = refusal(context(&doc, &supplied).prepare("op", Direction::Input));
+    let detail = refusal(prepare(&conformant(&doc), &supplied, "op"));
     assert_eq!(detail.code, "ambiguous-resource");
     assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
 }
@@ -639,7 +667,7 @@ fn ri18_19_uri_resolution_follows_the_library_and_contained_identity_wins() {
         let doc = one(schemas.clone(), json!({"$ref":uri}));
         let supplied = resources(&[(child, json!(false))]);
         verdicts(
-            &ready(&context(&doc, &supplied), "op"),
+            &ready(&conformant(&doc), &supplied, "op"),
             &[("2", "satisfies")],
         );
         helpers_ready(&doc, &supplied, "op");
@@ -666,7 +694,7 @@ fn ri18_19_uri_resolution_follows_the_library_and_contained_identity_wins() {
         );
         let supplied = resources(&[(external, json!({"type":"string"}))]);
         verdicts(
-            &ready(&context(&doc, &supplied), "op"),
+            &ready(&conformant(&doc), &supplied, "op"),
             &[("2", "satisfies"), (r#""x""#, "fails")],
         );
         helpers_ready(&doc, &supplied, "op");
@@ -693,7 +721,7 @@ fn ri20_34_missing_winner_fragments_never_fall_back_to_loser() {
     ] {
         let doc = one(owner(), json!({keyword:format!("{U}#{fragment}")}));
         let code = if keyword == "$ref" {
-            let contract = ready(&context(&doc, &supplied), "op");
+            let contract = ready(&conformant(&doc), &supplied, "op");
             let ValueOutcome::Undefined { detail } =
                 contract.validate(&JsonValue::parse("null").unwrap())
             else {
@@ -701,7 +729,7 @@ fn ri20_34_missing_winner_fragments_never_fall_back_to_loser() {
             };
             detail.code
         } else {
-            let detail = refusal(context(&doc, &supplied).prepare("op", Direction::Input));
+            let detail = refusal(prepare(&conformant(&doc), &supplied, "op"));
             assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
             detail.code
         };
@@ -710,13 +738,7 @@ fn ri20_34_missing_winner_fragments_never_fall_back_to_loser() {
             ReferenceResolution::Unresolved { .. }
         ));
         if keyword == "$ref" {
-            let ctx = doc
-                .validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant document")
-                .value_contracts(Arc::new(Project(true)), supplied.clone());
-            ready(&ctx, "op");
+            ready_with(&conformant(&doc), &supplied, "op", &Project(true));
             assert_eq!(code, "static-reference-defect");
         }
     }
@@ -738,9 +760,9 @@ fn ri21_sol02_winning_anchor_kind_controls_dynamic_dispatch_and_retained_owner()
             None,
             dynamic,
         );
-        let ctx = context(&doc, &supplied);
-        let contract = ready(&ctx, "op");
-        drop(ctx);
+        let proof = conformant(&doc);
+        let contract = ready(&proof, &supplied, "op");
+        drop(proof);
         drop(doc);
         let expected = if dynamic {
             [("2", "fails"), (r#""x""#, "satisfies")]
@@ -770,26 +792,17 @@ fn ri22_23_original_dialect_follows_selected_resource() {
         json!({"owner":{"input":{"$ref":U}},"alias":{"input":{"$ref":A}},"nested":{"input":{"$ref":W}}}),
     );
     verdicts(
-        &ready(&context(&doc, &supplied), "owner"),
+        &ready(&conformant(&doc), &supplied, "owner"),
         &[("2", "satisfies")],
     );
     helpers_ready(&doc, &supplied, "owner");
     identity_refusal(&doc, &supplied, "alias");
     for engine in [
-        Arc::new(
-            DefaultEvaluator::new()
-                .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-        ) as Arc<dyn SchemaEvaluator>,
-        Arc::new(Project(false)),
-        Arc::new(Project(true)),
+        &upstream() as &dyn SchemaEvaluator,
+        &Project(false),
+        &Project(true),
     ] {
-        let ctx = doc
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant document")
-            .value_contracts(engine, supplied.clone());
-        let detail = refusal(ctx.prepare("nested", Direction::Input));
+        let detail = refusal(prepare_with(&conformant(&doc), &supplied, "nested", engine));
         assert_eq!(detail.reason, NoVerdictReason::UnsupportedCapability);
         assert_eq!(detail.code, "schema-dialect");
         assert_eq!(
@@ -816,13 +829,13 @@ fn ri22_23_original_dialect_follows_selected_resource() {
         json!({}),
         json!({"old":{"input":{"$ref":"https://identity.example.invalid/old/child"}},"new":{"input":{"$ref":"https://identity.example.invalid/new/child"}}}),
     );
-    let ctx = context(&doc, &supplied);
+    let proof = conformant(&doc);
     assert_eq!(
-        refusal(ctx.prepare("old", Direction::Input)).reason,
+        refusal(prepare(&proof, &supplied, "old")).reason,
         NoVerdictReason::UnsupportedCapability
     );
     verdicts(
-        &ready(&ctx, "new"),
+        &ready(&proof, &supplied, "new"),
         &[("2", "satisfies"), (r#""x""#, "fails")],
     );
 }
@@ -845,7 +858,7 @@ fn ri24_user_standard_names_do_not_replace_trusted_assessment() {
             json!({"$ref":uri}),
         );
         verdicts(
-            &ready(&context(&valid, &supplied), "op"),
+            &ready(&conformant(&valid), &supplied, "op"),
             &[("2", "satisfies"), (r#""x""#, "fails")],
         );
         helpers_ready(&valid, &supplied, "op");
@@ -863,9 +876,11 @@ fn ri24_user_standard_names_do_not_replace_trusted_assessment() {
     let standard = "https://json-schema.org/draft/2020-12/schema";
     let doc = one(json!({}), json!({"$ref":standard}));
     assert_eq!(
-        refusal(
-            context(&doc, &resources(&[(standard, json!(false))])).prepare("op", Direction::Input)
-        )
+        refusal(prepare(
+            &conformant(&doc),
+            &resources(&[(standard, json!(false))]),
+            "op"
+        ))
         .code,
         "ambiguous-resource"
     );
@@ -883,7 +898,7 @@ fn sol01_supplied_alias_and_canonical_names_are_strict_peers() {
     }
     let doc = one(json!({}), json!({"$ref":W}));
     verdicts(
-        &ready(&context(&doc, &supplied), "op"),
+        &ready(&conformant(&doc), &supplied, "op"),
         &[("2", "satisfies"), (r#""x""#, "fails")],
     );
     helpers_ready(&doc, &supplied, "op");
@@ -897,18 +912,18 @@ fn sol01_supplied_alias_and_canonical_names_are_strict_peers() {
     );
 }
 #[test]
-fn ri25_27_contexts_and_retained_owners_are_independent() {
+fn ri25_27_preparations_and_retained_owners_are_independent() {
     let supplied = resources(&[(U, json!({"type":"string"}))]);
     let old = one(json!({}), json!({"$ref":U}));
     let d1 = one(owner(), json!({"$ref":U}));
     let d2 = one(json!({"E":{"$id":U,"type":"boolean"}}), json!({"$ref":U}));
-    let old_ctx = context(&old, &supplied);
-    let old_owner = ready(&old_ctx, "op");
-    let c1 = context(&d1, &supplied);
-    let first = ready(&c1, "op");
-    let c2 = context(&d2, &supplied);
-    let second = ready(&c2, "op");
-    drop((old_ctx, c1, c2, old, d1, d2));
+    let old_proof = conformant(&old);
+    let old_owner = ready(&old_proof, &supplied, "op");
+    let p1 = conformant(&d1);
+    let first = ready(&p1, &supplied, "op");
+    let p2 = conformant(&d2);
+    let second = ready(&p2, &supplied, "op");
+    drop((old_proof, p1, p2, old, d1, d2));
     verdicts(&old_owner, &[(r#""x""#, "satisfies"), ("2", "fails")]);
     verdicts(&first, &[("2", "satisfies"), (r#""x""#, "fails")]);
     verdicts(&second, &[("true", "satisfies"), ("2", "fails")]);
@@ -923,21 +938,12 @@ fn ri25_27_contexts_and_retained_owners_are_independent() {
     );
     let mut retained = Vec::new();
     for kind in ["integer", "string"] {
-        let ctx =
-            doc.validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant document")
-                .value_contracts(
-                    Arc::new(DefaultEvaluator::new().with_diagnostics(
-                        openbindings_json_schema_evaluator::Diagnostics::Upstream,
-                    )),
-                    resources(&[(V, json!({"type":kind}))]),
-                );
-        retained.push(ready(&ctx, "op"));
-        ready(&ctx, "other");
-        ready(&ctx, "op");
-        drop(ctx);
+        let proof = conformant(&doc);
+        let snapshot = resources(&[(V, json!({"type":kind}))]);
+        retained.push(ready(&proof, &snapshot, "op"));
+        ready(&proof, &snapshot, "other");
+        ready(&proof, &snapshot, "op");
+        drop((proof, snapshot));
     }
     drop(doc);
     verdicts(&retained[0], &[("2", "satisfies"), (r#""x""#, "fails")]);
@@ -958,27 +964,15 @@ fn ri28_29_conflicts_do_not_poison_healthy_preparation_or_become_holes() {
         owner(),
         json!({"healthy":{"input":{"$ref":U}},"conflict":{"input":{"$ref":A}},"mixed":{"input":{"allOf":[{"$ref":"https://identity.example.invalid/missing"},{"$ref":A}]}}}),
     );
-    let ctx = context(&doc, &supplied);
+    let proof = conformant(&doc);
     for _ in 0..3 {
-        verdicts(&ready(&ctx, "healthy"), &[("2", "satisfies")]);
+        verdicts(&ready(&proof, &supplied, "healthy"), &[("2", "satisfies")]);
         identity_refusal(&doc, &supplied, "conflict");
     }
     // Strict preparation first sees a real absent resource; bounds subsequently
     // must propagate the conflict rather than creating an incomplete owner.
-    for engine in [
-        Arc::new(
-            DefaultEvaluator::new()
-                .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-        ) as Arc<dyn SchemaEvaluator>,
-        Arc::new(Project(true)),
-    ] {
-        let ctx = doc
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant document")
-            .value_contracts(engine, supplied.clone());
-        let detail = refusal(ctx.prepare("mixed", Direction::Input));
+    for engine in [&upstream() as &dyn SchemaEvaluator, &Project(true)] {
+        let detail = refusal(prepare_with(&conformant(&doc), &supplied, "mixed", engine));
         assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
         assert_eq!(detail.code, "resource-identity-conflict");
     }
@@ -987,19 +981,26 @@ fn ri28_29_conflicts_do_not_poison_healthy_preparation_or_become_holes() {
 fn ri30_precancellation_and_fresh_retry_preserve_identity_policy() {
     let doc = one(owner(), json!({"$ref":U}));
     let supplied = resources(&[(U, json!(false))]);
-    let ctx = context(&doc, &supplied);
+    let proof = conformant(&doc);
+    let operation = proof.resolve_operation("op").expect("declared operation");
     let control = std::sync::atomic::AtomicBool::new(false);
     control.store(true, std::sync::atomic::Ordering::Release);
     assert_eq!(
-        refusal(ctx.prepare_with_control("op", Direction::Input, &control)).reason,
+        refusal(
+            operation
+                .input()
+                .expect("declared input")
+                .prepare_with_control(&upstream(), &supplied, &control)
+        )
+        .reason,
         NoVerdictReason::Cancelled
     );
     assert!(
-        !doc.references_with_resources(supplied, &control)
+        !doc.references_with_resources(supplied.clone(), &control)
             .unwrap()
             .complete
     );
-    verdicts(&ready(&ctx, "op"), &[("2", "satisfies")]);
+    verdicts(&ready(&proof, &supplied, "op"), &[("2", "satisfies")]);
 }
 #[test]
 fn ri30_oversized_supplied_closure_keeps_limits_and_healthy_catalog_entries() {
@@ -1020,25 +1021,17 @@ fn ri30_oversized_supplied_closure_keeps_limits_and_healthy_catalog_entries() {
         json!({"healthy":{"input":{"$ref":U}},"deep":{"input":{"$ref":A}}}),
     );
     for evaluator in [
-        Arc::new(
-            DefaultEvaluator::new()
-                .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-        ) as Arc<dyn SchemaEvaluator>,
-        Arc::new(Project(false)),
-        Arc::new(Project(true)),
+        &upstream() as &dyn SchemaEvaluator,
+        &Project(false),
+        &Project(true),
     ] {
-        let ctx = doc
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant document")
-            .value_contracts(evaluator, supplied.clone());
-        ready(&ctx, "healthy");
+        let proof = conformant(&doc);
+        ready_with(&proof, &supplied, "healthy", evaluator);
         assert_eq!(
-            refusal(ctx.prepare("deep", Direction::Input)).reason,
+            refusal(prepare_with(&proof, &supplied, "deep", evaluator)).reason,
             NoVerdictReason::LimitExceeded
         );
-        ready(&ctx, "healthy");
+        ready_with(&proof, &supplied, "healthy", evaluator);
     }
 }
 #[test]
@@ -1048,21 +1041,11 @@ fn identity_refusal_location_is_optional_and_measured_before_copy() {
         let supplied = resources(&[(V, json!({"properties":{key:{"$id":U}}}))]);
         let doc = one(owner(), json!({"$ref":V}));
         for engine in [
-            Arc::new(
-                DefaultEvaluator::new()
-                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-            ) as Arc<dyn SchemaEvaluator>,
-            Arc::new(Project(false)),
-            Arc::new(Project(true)),
+            &upstream() as &dyn SchemaEvaluator,
+            &Project(false),
+            &Project(true),
         ] {
-            let detail = refusal(
-                doc.validate()
-                    .unwrap()
-                    .conformant()
-                    .expect("conformant document")
-                    .value_contracts(engine, supplied.clone())
-                    .prepare("op", Direction::Input),
-            );
+            let detail = refusal(prepare_with(&conformant(&doc), &supplied, "op", engine));
             assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
             assert_eq!(detail.code, "resource-identity-conflict");
             // Source URI bytes share the same allowance as the full pointer.
@@ -1103,14 +1086,14 @@ fn ri33_anonymous_document_has_no_acquisition_or_generated_identity() {
     ] {
         let doc = one(json!({"E":{"type":"integer"}}), json!({"$ref":uri}));
         let supplied = ResourceSet::default();
-        let strict = doc
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant document")
-            .value_contracts(Arc::new(Project(false)), supplied.clone());
         assert_eq!(
-            refusal(strict.prepare("op", Direction::Input)).reason,
+            refusal(prepare_with(
+                &conformant(&doc),
+                &supplied,
+                "op",
+                &Project(false)
+            ))
+            .reason,
             NoVerdictReason::ResourceUnavailable
         );
         assert!(matches!(
@@ -1149,13 +1132,13 @@ fn ri28_unused_contained_and_supplied_peer_conflicts_are_local() {
             unresolved_identity(&doc, &supplied, "/operations/conflict/input/$ref");
             continue;
         }
-        let ctx = context(&doc, &supplied);
+        let proof = conformant(&doc);
         for _ in 0..3 {
             verdicts(
-                &ready(&ctx, "healthy"),
+                &ready(&proof, &supplied, "healthy"),
                 &[("true", "satisfies"), ("2", "fails")],
             );
-            let detail = refusal(ctx.prepare("conflict", Direction::Input));
+            let detail = refusal(prepare(&proof, &supplied, "conflict"));
             assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
             assert_eq!(detail.code, "ambiguous-resource");
         }
@@ -1170,7 +1153,7 @@ fn ri16_nested_resource_does_not_invent_losing_parent_dynamic_scope() {
         json!({"$id":U,"$dynamicAnchor":"node","type":"string","$defs":{"Child":{"$id":W,"$dynamicRef":"#node","$defs":{"Node":{"$dynamicAnchor":"node","type":"integer"}}}}}),
     )]);
     let doc = one(owner(), json!({"$ref":W}));
-    let contract = ready(&context(&doc, &supplied), "op");
+    let contract = ready(&conformant(&doc), &supplied, "op");
     verdicts(&contract, &[("2", "satisfies"), (r#""x""#, "fails")]);
     assert_eq!(
         failed_location(&contract, r#""x""#),
@@ -1189,7 +1172,7 @@ fn inherited_conservative_policy_case_has_both_value_controls() {
         json!({"$ref":uri}),
     );
     let supplied = resources(&[(uri, json!({"type":"string"}))]);
-    let contract = ready(&context(&doc, &supplied), "op");
+    let contract = ready(&conformant(&doc), &supplied, "op");
     verdicts(&contract, &[("1", "satisfies"), (r#""x""#, "fails")]);
     assert_eq!(
         failed_location(&contract, r#""x""#),
@@ -1246,38 +1229,33 @@ fn collision_policy_matrix_used_and_unused() {
                 unresolved_identity(&doc, &supplied, "/operations/used/input/$ref");
                 continue;
             }
-            let ctx = context(&doc, &supplied);
+            let proof = conformant(&doc);
             verdicts(
-                &ready(&ctx, "unused"),
+                &ready(&proof, &supplied, "unused"),
                 &[("true", "satisfies"), ("2", "fails")],
             );
             helpers_ready(&doc, &supplied, "unused");
             let contained = origins.iter().filter(|&&o| o == Contained).count();
             if contained == 1 {
                 verdicts(
-                    &ready(&ctx, "used"),
+                    &ready(&proof, &supplied, "used"),
                     &[("2", "satisfies"), (r#""x""#, "fails")],
                 );
                 helpers_ready(&doc, &supplied, "used");
             } else if origins == [Standard, Standard] {
                 // Both references designate the one packaged carrier.
-                verdicts(&ready(&ctx, "used"), &[("{}", "satisfies"), ("2", "fails")]);
+                verdicts(
+                    &ready(&proof, &supplied, "used"),
+                    &[("{}", "satisfies"), ("2", "fails")],
+                );
             } else {
                 for engine in [
-                    Arc::new(DefaultEvaluator::new().with_diagnostics(
-                        openbindings_json_schema_evaluator::Diagnostics::Upstream,
-                    )) as Arc<dyn SchemaEvaluator>,
-                    Arc::new(Project(false)),
-                    Arc::new(Project(true)),
+                    &upstream() as &dyn SchemaEvaluator,
+                    &Project(false),
+                    &Project(true),
                 ] {
-                    let detail = refusal(
-                        doc.validate()
-                            .unwrap()
-                            .conformant()
-                            .expect("conformant document")
-                            .value_contracts(engine, supplied.clone())
-                            .prepare("used", Direction::Input),
-                    );
+                    let detail =
+                        refusal(prepare_with(&conformant(&doc), &supplied, "used", engine));
                     assert_eq!(detail.code, "ambiguous-resource", "{left:?}/{right:?}");
                     assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
                 }
@@ -1305,13 +1283,16 @@ fn packaged_retrieval_aliases_conflict_even_with_a_different_declared_id() {
                 json!({}),
                 json!({"used":{"input":{"$ref":uri}},"unused":{"input":true}}),
             );
-            let ctx = context(&doc, &supplied);
+            let proof = conformant(&doc);
             assert_eq!(
-                refusal(ctx.prepare("used", Direction::Input)).code,
+                refusal(prepare(&proof, &supplied, "used")).code,
                 "ambiguous-resource",
                 "{uri}"
             );
-            verdicts(&ready(&ctx, "unused"), &[("null", "satisfies")]);
+            verdicts(
+                &ready(&proof, &supplied, "unused"),
+                &[("null", "satisfies")],
+            );
         }
     }
 }
@@ -1328,7 +1309,7 @@ fn standard_identity_completions_cannot_invert_partial_verdicts() {
             json!({keyword:[{"$ref":U},{"$ref":format!("{standard}#/$defs/nonNegativeInteger")}]}),
         );
         verdicts(
-            &ready(&context(&doc, &ResourceSet::default()), "op"),
+            &ready(&conformant(&doc), &ResourceSet::default(), "op"),
             &[(instance, before)],
         );
         let claim = json!({"$id":standard,"$defs":{"nonNegativeInteger":replacement}});
@@ -1338,7 +1319,7 @@ fn standard_identity_completions_cannot_invert_partial_verdicts() {
             resources(&[(U, json!(replacement)), (A, json!({"$defs":{"x":claim}}))]),
             resources(&[(U, json!(replacement)), (standard, claim)]),
         ] {
-            let detail = refusal(context(&doc, &supplied).prepare("op", Direction::Input));
+            let detail = refusal(prepare(&conformant(&doc), &supplied, "op"));
             assert_eq!(detail.code, "ambiguous-resource", "{keyword}");
             assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
         }

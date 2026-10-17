@@ -28,13 +28,11 @@ impl SchemaEvaluator for OriginalContext {
 }
 fn main() {
     let report = run(
-        Arc::new(OriginalContext(
-            if std::env::args().any(|arg| arg == "--upstream") {
-                openbindings_json_schema_evaluator::Diagnostics::Upstream
-            } else {
-                openbindings_json_schema_evaluator::Diagnostics::Coarse
-            },
-        )),
+        &OriginalContext(if std::env::args().any(|arg| arg == "--upstream") {
+            openbindings_json_schema_evaluator::Diagnostics::Upstream
+        } else {
+            openbindings_json_schema_evaluator::Diagnostics::Coarse
+        }),
         &Options::without_unicode_property_matching(),
     );
     let admission: Vec<_> = suite().groups.iter().map(|group| {

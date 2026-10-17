@@ -1,25 +1,21 @@
 //! Independent wire-shape oracle: the pinned published interface document, not a
 //! schema recreated from this implementation's native types.
-use openbindings::{
-    Direction, Document, JsonValue, ResourceSet, ValueContractPreparation, ValueOutcome,
-};
+use openbindings::{Document, JsonValue, ValueOutcome};
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use openbindings_source_inspection::*;
-use std::sync::Arc;
 
 #[test]
 fn inventories_validate_against_pinned_interface_output_contract() {
     let document = Document::parse(include_bytes!("fixtures/source-inspector-0.1.json")).unwrap();
-    let context = document
+    let proof = document
         .validate()
         .unwrap()
         .conformant()
-        .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
-    let ValueContractPreparation::Ready(contract) = context.prepare(
-        "openbindings.source-inspector.inspectSource",
-        Direction::Output,
-    ) else {
+        .expect("conformant document");
+    let Some(contract) = proof
+        .resolve_operation("openbindings.source-inspector.inspectSource")
+        .and_then(|operation| operation.output()?.prepare(&DefaultEvaluator::new()).ok())
+    else {
         panic!("interface output contract did not prepare")
     };
     let target = BindableTarget {
@@ -65,16 +61,15 @@ fn inventories_validate_against_pinned_interface_output_contract() {
 #[test]
 fn duplicate_recovery_is_sdk_policy_not_an_interface_requirement() {
     let document = Document::parse(include_bytes!("fixtures/source-inspector-0.1.json")).unwrap();
-    let context = document
+    let proof = document
         .validate()
         .unwrap()
         .conformant()
-        .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
-    let ValueContractPreparation::Ready(contract) = context.prepare(
-        "openbindings.source-inspector.inspectSource",
-        Direction::Output,
-    ) else {
+        .expect("conformant document");
+    let Some(contract) = proof
+        .resolve_operation("openbindings.source-inspector.inspectSource")
+        .and_then(|operation| operation.output()?.prepare(&DefaultEvaluator::new()).ok())
+    else {
         panic!("interface output contract did not prepare")
     };
     // A consumer can retain repeated evidence or deduplicate it. Neither result
@@ -116,16 +111,15 @@ fn limitation_additional_evidence_matches_the_published_interface() {
             .get("additionalProperties")
             .is_none()
     );
-    let context = document
+    let proof = document
         .validate()
         .unwrap()
         .conformant()
-        .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
-    let ValueContractPreparation::Ready(contract) = context.prepare(
-        "openbindings.source-inspector.inspectSource",
-        Direction::Output,
-    ) else {
+        .expect("conformant document");
+    let Some(contract) = proof
+        .resolve_operation("openbindings.source-inspector.inspectSource")
+        .and_then(|operation| operation.output()?.prepare(&DefaultEvaluator::new()).ok())
+    else {
         panic!("interface contract failed")
     };
     let mut limitation = InspectionLimitation {

@@ -64,7 +64,7 @@ impl DerefMut for SchemaSpace {
 /// pointers also have a separate 64 MiB pre-copy guard. Refusal locations outside
 /// successful plans use that guard too (including any keyword suffix), and can
 /// be omitted or identify a bounded original preparation boundary. No I/O occurs. Later
-/// resource replacements require a new context; these bounds never change.
+/// resource replacements require a new preparation; these bounds never change.
 #[derive(Debug)]
 pub(super) struct EvaluationBounds {
     pub(crate) lower: EvaluationProgram,

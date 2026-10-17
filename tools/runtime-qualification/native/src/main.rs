@@ -1,10 +1,7 @@
-use openbindings::{
-    Conformance, Direction, Document, JsonValue, ResourceSet, ValueContractPreparation,
-    ValueOutcome,
-};
+use openbindings::{Conformance, Document, JsonValue, ValueOutcome};
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, hint::black_box, path::Path, sync::Arc, time::Instant};
+use std::{collections::BTreeMap, hint::black_box, path::Path, time::Instant};
 fn measured<T>(enabled: bool, f: impl FnOnce() -> T) -> (T, f64) {
     let start = enabled.then(Instant::now);
     let result = black_box(f());
@@ -27,14 +24,15 @@ fn once(
     row.insert("assess", ms);
     assert_eq!(validation.report().conclusion, Conformance::Conformant);
     let proof = validation.conformant().expect("conformant document");
-    let ((context, contract), ms) = measured(timed, || {
-        let context =
-            proof.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
-        let ValueContractPreparation::Ready(contract) = context.prepare("check", Direction::Input)
-        else {
-            panic!("must prepare")
-        };
-        (context, contract)
+    // The stage keeps its cross-revision name; a caller now prepares from the proof.
+    let (contract, ms) = measured(timed, || {
+        let operation = proof
+            .resolve_operation("check")
+            .expect("declared operation");
+        let input = operation.input().expect("declared input");
+        input
+            .prepare(&DefaultEvaluator::new())
+            .expect("must prepare")
     });
     row.insert("contextAndPrepare", ms);
     let (value, ms) = measured(timed, || JsonValue::parse(valid).unwrap());
@@ -64,7 +62,7 @@ fn once(
     let observation = json!({"valid":first,"invalid":serde_json::from_str::<Value>(&wire).unwrap(),"invalidWireBytes":wire.len()});
     let (_, ms) = measured(timed, || {
         drop((
-            failed, invalid, hot, first, value, contract, context, validation, document,
+            failed, invalid, hot, first, value, contract, proof, validation, document,
         ))
     });
     row.insert("cleanup", ms);
@@ -151,13 +149,18 @@ fn main() {
             .unwrap()
     };
     let document = Document::parse(&source("document")).unwrap();
-    let context = document
+    let proof = document
         .validate()
         .unwrap()
         .conformant()
-        .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
-    let ValueContractPreparation::Ready(contract) = context.prepare("check", Direction::Input)
+        .expect("conformant document");
+    let operation = proof
+        .resolve_operation("check")
+        .expect("declared operation");
+    let Ok(contract) = operation
+        .input()
+        .expect("declared input")
+        .prepare(&DefaultEvaluator::new())
     else {
         panic!("witness prepares")
     };

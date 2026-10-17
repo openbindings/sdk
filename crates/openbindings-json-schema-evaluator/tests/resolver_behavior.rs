@@ -165,16 +165,19 @@ fn encoded_plain_names_keep_document_decoding_and_follow_the_library_elsewhere()
                 .iter()
                 .find(|r| r.location.pointer == "/operations/op/input/$ref")
                 .unwrap();
-            let prepared = proof
-                .value_contracts(Arc::new(DefaultEvaluator::new()), supplied)
-                .prepare("op", Direction::Input);
+            let operation = proof.resolve_operation("op").expect("declared operation");
+            let prepared = operation
+                .input()
+                .expect("declared input")
+                .prepare_with(&DefaultEvaluator::new(), &supplied);
             if fragment == "task" || carrier == "document" {
                 assert!(matches!(
                     reference.resolution,
                     ReferenceResolution::Located { .. }
                 ));
-                let ValueContractPreparation::Ready(contract) = prepared else {
-                    panic!("{prepared:?}")
+                let contract = match prepared {
+                    Ok(contract) => contract,
+                    Err(detail) => panic!("{detail:?}"),
                 };
                 assert!(matches!(
                     contract.validate(&JsonValue::parse(r#""s""#).unwrap()),
@@ -185,10 +188,8 @@ fn encoded_plain_names_keep_document_decoding_and_follow_the_library_elsewhere()
                     matches!(&reference.resolution, ReferenceResolution::Unresolved { detail }
                     if detail.reason == ReferenceRefusalReason::MissingTarget && detail.code == "anchor-missing")
                 );
-                assert!(
-                    matches!(prepared, ValueContractPreparation::NoVerdict { detail }
-                    if detail.reason == NoVerdictReason::ConservativePreparation && detail.code == "anchor-missing")
-                );
+                assert!(matches!(prepared, Err(detail)
+                    if detail.reason == NoVerdictReason::ConservativePreparation && detail.code == "anchor-missing"));
             }
         }
     }

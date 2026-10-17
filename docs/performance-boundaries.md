@@ -10,12 +10,12 @@ Use the locked dependencies and release profile to reproduce them.
 
 ## Prepared value contracts
 
-Retain a prepared `ValueContract` for repeated validation. Reusing a conformant
-document or `ValueContracts` context also saves work, but still prepares a fresh
-contract on each `prepare` call. The SDK does not transparently cache arbitrary
-custom evaluator results.
+Retain a `PreparedContract` for repeated validation. Reusing a conformant
+document and `ResourceSet` also saves work, but still prepares a fresh contract on
+each `prepare` call. The SDK does not transparently cache arbitrary custom
+evaluator results.
 
-On 2026-10-15, paired release measurements against revision `7013a36` on macOS
+On 2026-10-15, paired release measurements against revision `3fd152c` on macOS
 arm64 / Rust 1.99.0 produced the following medians, including shared carrier inspection
 and compact reference routing. Preparation includes schema parsing, minimal document proof, resource
 contexts, compilation and destruction; evaluation retains the contract and parsed
@@ -39,9 +39,20 @@ against the faster of two peers. Exact decimal-array evaluation changed by
 +1.7% (ratio interval 1.007–1.026); integer shortcuts retain its general
 arithmetic costs.
 
+On 2026-10-16, preparing contracts from the operation instead of a retained
+context was compared with revision `37bfd7f` by the benchmark harness's cross-API
+pairs (macOS arm64, Rust 1.99.0, two batches of 20 adjacent randomized pairs).
+Preparation no longer assembles a core resolution space unless an evaluator asks
+for the core projection, so one-shot preparation (`compile`) fell by 1–20% and
+`full` by up to 20%; repeated preparation with the same document and resources
+(`context`) stayed within 0.992–1.008. Allocation counts per operation fell for
+one-shot preparation and were unchanged elsewhere. The evaluation path's machine
+code is byte-identical apart from addresses; sub-microsecond evaluation rows
+measured up to 4% slower in these builds, which is not yet attributed.
+
 A fan-in workload has 100 distinct referring resources pointing to one supplied
 integer schema with 5,000 unused definitions. Twelve adjacent fresh-child pairs
-measure public `ValueContracts::prepare` alone, after context construction:
+measure public preparation alone, after the proof and resources are built:
 
 | Referrers | Public preparation before → after ms | Ratio (95% interval) |
 | --- | ---: | --- |
@@ -52,8 +63,8 @@ measure public `ValueContracts::prepare` alone, after context construction:
 Repeated references with long spellings also retain only compact source handles.
 The original spellings stay in the source document, and initialized carrier query
 batches are released. The following fresh-child pairs isolate public preparation;
-peak requested System heap includes the already-retained context and process
-caches. Each case has one supplied integer target and repeats its pointer reference.
+peak requested System heap includes the already-retained proof, resources and
+process caches. Each case has one supplied integer target and repeats its pointer reference.
 URI suffix widths are 256 and 1,024 bytes respectively. Twelve pairs give identical
 peak counts (degenerate heap ratio intervals).
 
@@ -99,7 +110,7 @@ original-source diagnostics remain in force.
 The separate [benchmark harness](../tools/evaluator-bench/README.md) and
 [performance workflow](../.github/workflows/performance.yml) record outcomes before
 timing and keep allocation instrumentation separate. The fan-in fixture includes
-cold, compile, retained-context preparation, evaluation and full modes. The two
+cold, compile, repeated preparation, evaluation and full modes. The two
 reference-text fixtures also qualify preparation heap. Outcome checks, requested
 heap and allocation counts enforce now: failed checks or a heap/count flag fail
 the job. Heap flags require both >10% and >128 KiB for retained baseline, total

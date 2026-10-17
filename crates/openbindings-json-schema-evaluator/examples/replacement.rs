@@ -1,11 +1,7 @@
 //! Application-owned replacement; run with --example replacement.
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
-use std::{
-    error::Error,
-    fmt,
-    sync::{Arc, mpsc},
-};
+use std::{error::Error, fmt, sync::mpsc};
 
 const DOCUMENT: &str = r#"{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"$ref":"https://example.invalid/input"},"output":true}}}"#;
 
@@ -14,7 +10,9 @@ enum LoadFailure {
     Parse(InputError),
     Version(VersionRefusal),
     Conformance(ValidationReport),
-    Preparation(ValueContractPreparation),
+    MissingOperation,
+    NoInputContract,
+    Preparation(NoVerdict),
     MissingResources(NoVerdict),
     UnresolvedReferences(Box<ReferenceReport>),
 }
@@ -28,7 +26,9 @@ impl fmt::Display for LoadFailure {
                 "document conformance: {:?}; findings: {:?}",
                 report.conclusion, report.findings
             ),
-            Self::Preparation(state) => write!(f, "input contract setup: {state:?}"),
+            Self::MissingOperation => f.write_str("operation find is missing"),
+            Self::NoInputContract => f.write_str("operation find declares no input contract"),
+            Self::Preparation(detail) => write!(f, "input contract preparation: {detail:?}"),
             Self::MissingResources(detail) => write!(f, "input contract resources: {detail:?}"),
             Self::UnresolvedReferences(report) => {
                 write!(f, "unresolved reference inventory: {report:?}")
@@ -51,7 +51,7 @@ fn candidate(
     text: &str,
     resources: ResourceSet,
     control: &dyn WorkControl,
-) -> Result<ValueContract, LoadFailure> {
+) -> Result<PreparedContract, LoadFailure> {
     let document = Document::parse(text).map_err(LoadFailure::Parse)?;
     let validation = document.validate().map_err(LoadFailure::Version)?;
     let Some(proof) = validation.conformant() else {
@@ -66,24 +66,25 @@ fn candidate(
     {
         return Err(LoadFailure::UnresolvedReferences(Box::new(report)));
     }
-    let context = proof.value_contracts(Arc::new(DefaultEvaluator::new()), resources);
-    let input = match context.prepare_with_control("find", Direction::Input, control) {
-        ValueContractPreparation::Ready(input) => input,
-        ValueContractPreparation::NoVerdict { detail }
-            if detail.reason == NoVerdictReason::ResourceUnavailable =>
-        {
-            return Err(LoadFailure::MissingResources(detail));
+    // Retain the distinct missing-operation, no-contract and no-verdict states.
+    let operation = proof
+        .resolve_operation("find")
+        .ok_or(LoadFailure::MissingOperation)?;
+    let contract = operation.input().ok_or(LoadFailure::NoInputContract)?;
+    match contract.prepare_with_control(&DefaultEvaluator::new(), &resources, control) {
+        // Document, resource and evaluator owners end; the returned owner remains usable.
+        Ok(input) => Ok(input),
+        Err(detail) if detail.reason == NoVerdictReason::ResourceUnavailable => {
+            Err(LoadFailure::MissingResources(detail))
         }
-        // Retain the distinct no-contract, missing, ambiguous or no-verdict state.
-        other => return Err(LoadFailure::Preparation(other)),
-    };
-    Ok(input) // document/context owners end; the returned owner remains usable.
+        Err(detail) => Err(LoadFailure::Preparation(detail)),
+    }
 }
 
-fn satisfies(input: &ValueContract, value: &JsonValue) {
+fn satisfies(input: &PreparedContract, value: &JsonValue) {
     assert!(matches!(input.validate(value), ValueOutcome::Satisfies));
 }
-fn mismatch(input: &ValueContract, value: &JsonValue) {
+fn mismatch(input: &PreparedContract, value: &JsonValue) {
     assert!(matches!(input.validate(value), ValueOutcome::Fails { .. }));
 }
 
@@ -98,26 +99,30 @@ fn main() -> Result<(), Box<dyn Error>> {
         let proof = validation
             .conformant()
             .ok_or("fixture must be conformant")?;
-        let context = proof
-            .as_document()
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant document")
-            .value_contracts(
-                Arc::new(DefaultEvaluator::new()),
-                resources(r#"{"const":9007199254740993}"#)?,
-            );
-        let ValueContractPreparation::Ready(retained) = context.prepare("find", Direction::Input)
-        else {
-            panic!("fixture must have a ready input");
-        };
-        assert!(matches!(
-            context.prepare("lookup", Direction::Output),
-            ValueContractPreparation::Ready(_)
-        )); // each direction prepares independently
-        drop(context);
-        satisfies(&retained, &old_value); // explicit owner survives context drop
+        let evaluator = DefaultEvaluator::new();
+        let resources = resources(r#"{"const":9007199254740993}"#)?;
+        let find = proof
+            .resolve_operation("find")
+            .expect("fixture declares find");
+        let retained = find
+            .input()
+            .expect("fixture declares an input")
+            .prepare_with(&evaluator, &resources)
+            .expect("fixture must have a prepared input");
+        let lookup = proof
+            .resolve_operation("lookup")
+            .expect("fixture declares lookup");
+        assert!(
+            lookup
+                .output()
+                .expect("fixture declares an output")
+                .prepare_with(&evaluator, &resources)
+                .is_ok()
+        ); // each direction prepares independently
+        // The prepared owner survives the document, resources and evaluator.
+        drop((find, lookup, proof, validation, document));
+        drop((resources, evaluator));
+        satisfies(&retained, &old_value);
     }
     // A caller can also load an input-only operation through the reusable helper.
     let input_only = candidate(
@@ -158,7 +163,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     satisfies(&active, &new_value);
     mismatch(&active, &old_value);
     resume.send(())?;
-    old_job.join().expect("old context remains usable");
+    old_job.join().expect("old preparation remains usable");
 
     let malformed = DOCUMENT.replace("[\"find\"]", "[false]");
     match candidate(&malformed, ResourceSet::default(), &healthy) {
@@ -210,7 +215,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         &std::sync::atomic::AtomicBool::new(false),
     )?;
     satisfies(&active, &old_value);
-    drop(active); // old job and every context have already released their owners
+    drop(active); // old job and every earlier preparation have already released their owners
     println!("retained work, failed replacement, cancellation and healthy recovery passed");
     Ok(())
 }

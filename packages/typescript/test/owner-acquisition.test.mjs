@@ -22,6 +22,8 @@ test("owner acquisition is a method; property access creates no owner", () => {
     [sdk.Document, ["value", "schemas"]],
     [sdk.ConformantDocument, ["value", "schemas"]],
     [sdk.OperationView, ["value", "input", "output"]],
+    [sdk.ConformantOperationView, ["value", "input", "output"]],
+    [sdk.ValueContract, ["schema", "prepare"]],
     [sdk.DependencyView, ["value"]],
     [sdk.BindingView, ["value", "content"]],
     [sdk.SourceView, ["value", "content"]],

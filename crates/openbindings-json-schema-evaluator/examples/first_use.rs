@@ -1,6 +1,6 @@
 //! Run with: cargo run -p openbindings-json-schema-evaluator --example first_use
-use openbindings::{Direction, Document, JsonValue, ValidationReport, ValueOutcome};
-use openbindings_json_schema_evaluator::value_contracts;
+use openbindings::{Document, JsonValue, ValidationReport, ValueOutcome};
+use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde::Serialize;
 use std::error::Error;
 
@@ -60,13 +60,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         .resolve_operation("find")
         .ok_or("operation is missing")?;
     println!("{:?}: {:?}", operation.key(), operation.description());
-    if let Some(schema) = operation.input() {
-        // Conformant reads preserve presence; schema preparation remains separate.
-        println!("input schema at {:?}", schema.location().pointer);
-    }
-    // Default budgets, coarse diagnostics and no extra resources.
-    let context = value_contracts(&proof);
-    let input = context.prepare("lookup", Direction::Input).into_result()?;
+    let contract = operation.input().ok_or("operation has no input contract")?;
+    // Conformant reads preserve presence; schema preparation remains separate.
+    println!("input schema at {:?}", contract.schema().location().pointer);
+    // Default budgets, coarse diagnostics and no supplied resources.
+    let input = contract.prepare(&DefaultEvaluator::new())?;
     // Ordinary values have checked Serde admission. Exact text preserves its tokens.
     let ordinary = JsonValue::from_serializable(&Input {
         id: 9_007_199_254_740_993,

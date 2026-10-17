@@ -63,7 +63,10 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 | `set`, `remove`, `edit(edits)` | Mutable pointer edits; a batch crosses the bridge once, including exact inputs, and preserves untouched bytes. Exact inputs are borrowed. Failure leaves bytes and caches unchanged. |
 | Typed field and whole-part setters | Accept typed part values; map setters commit bulk construction once. |
 | `Document.validate()` | Returns a union whose `conformant` branch owns an independent `ConformantDocument` and a plain report. |
-| `ConformantDocument` | Nominal, privately constructed proof with infallible typed reads and `valueContracts()`. It has no setters and does not inherit `Document`. |
+| `ConformantDocument` | Nominal, privately constructed proof with infallible typed reads. `resolveOperation(name)` returns a `ConformantOperationView` or `undefined`. It has no setters and does not inherit `Document`. |
+| `ConformantOperationView` | `input()` and `output()` return a disposable `ValueContract` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. |
+| `ValueContract` | `schema()` acquires the exact schema; `prepare(options)` takes `resources`, `limits`, `diagnostics` and `signal` and returns `{ status: "ready", contract }` or `{ status: "no-verdict", detail }`. |
+| `PreparedContract` | Disposable prepared contract with `validate(value, options)` and `retain()`, independent of its document, operation, resources and contract owners. |
 | `asDocument()`, `intoDocument()` | Acquire an independent editable owner, or consume the proof. Consumption revokes all JavaScript aliases of that proof; retained owners survive. |
 | `toBytes()`, `dispose()`, `Symbol.dispose`, `disposed` | Detached exact current bytes and the existing deterministic lifecycle. |
 
@@ -82,24 +85,31 @@ the bridge once and commits one revision. Known byte extents are preflighted;
 typed parts serialize once into a bounded writer that reserves all remaining
 known bytes and stops before exceeding the budget. A refusal discards that buffer.
 
-## Rust value-contract conveniences
+## Rust value contracts
 
 | Public item | Contract |
 | --- | --- |
-| `openbindings_json_schema_evaluator::value_contracts(&Conformant<Document>) -> ValueContracts` | Uses `Limits::default()`, `Diagnostics::Coarse` and an empty `ResourceSet`. Performs no preparation or acquisition. The document conformance gate remains required. |
-| `ValueContract::validate_json(input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError>` | Admits through `JsonValue::parse` with default limits, then validates. `Err` is admission failure only; all four value outcomes are `Ok`. Duplicate members yield no-verdict and numbers retain exact semantics. |
-| `ValueContractPreparation::into_result(self) -> Result<ValueContract, ValueContractPreparationError>` | Consumes preparation without retrying. Ready becomes `Ok`; every other reason and payload becomes `Err`. |
-| `ValueContractPreparationError` | Non-exhaustive error with `NoValueContract`, `OperationMissing`, `OperationAmbiguous { candidates }` and `NoVerdict { detail }`. Implements `Display` and `Error`; no-verdict exposes its original detail through `source()`. |
+| `ConformantOperationView::input(&self)`, `output(&self) -> Option<ValueContract<'_>>` | The operation's declared value contract, or `None` when the field is absent. Reading prepares nothing. Only a conformant view hands one out; a plain `OperationView` returns the exact `JsonRef`. |
+| `ValueContract::schema(&self) -> JsonRef<'a>` | The exact unprepared schema; present `true`, `false` and objects remain distinct. |
+| `ValueContract::prepare(&self, &dyn SchemaEvaluator) -> Result<PreparedContract, NoVerdict>` | Prepares with no supplied resources. A `&DefaultEvaluator` coerces; the evaluator is borrowed for the call. |
+| `ValueContract::prepare_with(&self, &dyn SchemaEvaluator, &ResourceSet)`, `prepare_with_control(.., &dyn WorkControl)` | The same with immutable supplied resources and cooperative cancellation. A refusal judges no instance and does not prove undefinedness. |
+| `PreparedContract::validate_json(input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError>` | Admits through `JsonValue::parse` with default limits, then validates. `Err` is admission failure only; all four value outcomes are `Ok`. Duplicate members yield no-verdict and numbers retain exact semantics. |
 
-The existing `Conformant<Document>::value_contracts` method remains the explicit path
-for shared or configured evaluators and supplied resources. Core has no default
-evaluator dependency. Use `JsonValue::parse_with_limits` and `ValueContract::validate`
+`PreparedContract` is `Clone + Send + Sync + 'static` and owns what it needs after
+the document, resources and evaluator are dropped. Core has no default evaluator
+dependency. Use `JsonValue::parse_with_limits` and `PreparedContract::validate`
 for custom admission limits or retained exact values; `validate_with_control`
 accepts cooperative cancellation. Each preparation still compiles independently.
+A `ResourceSet` indexes its resource identities once, and clones share it. A
+resolution space is assembled only when an evaluator requests the core projection,
+once per live revision and set; repeated or alternating preparation reuses it. The
+space without supplied resources stays with the revision, and a space with a set
+stays with that set until the set or the revision is dropped, so a prepared
+contract never retains a space for resources it did not receive.
 
-Preparation-error Debug shows variants, broad refusal reasons and recognized
-fixed preparation codes. It redacts candidate keys, custom codes, messages and
-original schema text and locations. Display and the error source can expose
+A preparation refusal is a `NoVerdict`, with its Debug redaction: broad reasons
+and recognized fixed codes are shown, while custom codes, messages and original
+schema text and locations are redacted. Display and the public fields can expose
 custom evaluator messages; callers choose their disclosure policy.
 
 ## Optional Rust companion APIs
@@ -131,8 +141,8 @@ futures and `Rc` providers are also supported.
   Only that proof constructs normative value contracts and an operation invoker.
   Documents retain fallible editor reads. Wasm owns the Rust proof; plain
   TypeScript reports and forged wrappers cannot create it.
-- The semantic partitions `Evidence`, `Conformance`, `ValueOutcome`,
-  `ValueContractPreparation` and `Direction` are closed, supporting exhaustive handling.
+- The semantic partitions `Evidence`, `Conformance` and `ValueOutcome` are closed,
+  supporting exhaustive handling.
   Interpretation and no-verdict cause families are extensible. Rust matchers need a
   fallback for these causes. TypeScript exposes the known reason union for its
   version and is distributed with the matching Wasm engine; it does not add an
@@ -144,8 +154,9 @@ futures and `Rc` providers are also supported.
   New binding/source/dependency/example views follow this same owner-acquisition method rule;
   their frozen metadata is plain data. A traversal cursor and each yielded owner
   have independent lifetimes. See the TypeScript guide for editing ownership.
-- Every preparation compiles independently. Retain a ready `ValueContract` for
-  repeated validation without recompilation; it survives context drop. Resource sets are immutable, explicit and scoped to each context; URI
+- Every preparation compiles independently. Retain a `PreparedContract` for
+  repeated validation without recompilation; it survives document, resource and
+  evaluator drop. Resource sets are immutable, explicit and scoped to the preparations that receive them; URI
   identity never authorizes I/O. Core and default schema evaluation do no acquisition.
   For a missing resource, Rust `Document::references()` and TypeScript
   `Document.references()` expose explicit reference spellings and keyword
@@ -157,7 +168,7 @@ futures and `Rc` providers are also supported.
   location is `None` in Rust and `null` in TypeScript. Debug shows the recognized
   fixed code and redacts arbitrary codes, text and pointers. Explicit fields and
   serialization retain them. `NoVerdictReason` contains only inability causes.
-- Ready means prepared, not decidable. Every value may still return
+- Prepared does not mean decidable. Every value may still return
   `NoVerdict`. Contracts expose no resource-completeness classification. Applications
   own replacement policy and handle refusal at preparation and validation.
 - Static inspection uses `ReferenceRefusal` and `ReferenceRefusalReason`, including
@@ -317,9 +328,9 @@ Raw parser admission codes `byte-limit`, `node-limit` and `depth-limit` remain
 
 ## Conformant document reads
 
-`Conformant<Document>::value_contracts` returns `ValueContracts` directly;
+A conformant operation's `input()` and `output()` return its `ValueContract`s;
 `operation::Invoker::new` takes `Conformant<Document>` and `with_evaluator` returns
-`Self`. Preparation still may refuse, and Ready means prepared, not decidable.
+`Self`. Preparation still may refuse, and prepared does not mean decidable.
 `SchemaRequest::document()` exposes the conformant document revision to custom evaluators.
 
 | Rust read | Result and presence |
@@ -332,6 +343,7 @@ Raw parser admission codes `byte-limit`, `node-limit` and `depth-limit` remain
 | Conformant dependency `accepts_kind(kind)` | Takes `&str` and compares decoded text, independent of escape spelling |
 | `schemas()`, `schema(key)` | Optional exact object/boolean schema views; no preparation |
 | `operations()`, `resolve_operation(name)` | Retained `ConformantOperationView` vector or optional selection |
+| Conformant operation `input()`, `output()` | Optional `ValueContract`; `schema()` borrows the exact schema without preparation |
 | `bindings()`, `sources()`, `dependencies()` and keyed reads | Optional retained `ConformantBindingView`, `ConformantSourceView`, `ConformantDependencyView`; absent differs from present-empty |
 | Conformant operation `examples()` and `example(key)` | Retained `ConformantExampleView`; example truth is not implied |
 
@@ -390,7 +402,7 @@ contract”, no problems, and `problems_complete = false`. TypeScript uses
 `diagnostics: "coarse"`, `message`, and `problemsComplete: false`.
 
 Select `DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream)` or
-`proof.valueContracts({ diagnostics: "upstream" })` to request the library's own
+`contract.prepare({ diagnostics: "upstream" })` to request the library's own
 first error through `validate()`. Messages remain value-free; available paths map
 to original locations and optional schema facts may expose source operands.
 This mode is **library-bounded**: construction can allocate in proportion to inputs

@@ -1,5 +1,5 @@
 import * as testing from "../dist/testing.js";
-import { conformantContracts } from "./conformant-contracts.mjs";
+import { prepareInput } from "./conformant-contracts.mjs";
 // Shared Node/browser controls at real production caps; no test knobs.
 export function plannerLocationCases(sdk) {
   // Warm instance-lifetime meta-schema/evaluator storage before owner deltas.
@@ -7,12 +7,10 @@ export function plannerLocationCases(sdk) {
     '{"openbindings":"0.2.0","operations":{"op":{"input":true}}}',
   ).value;
   warm.validate().document?.dispose();
-  const warmContext = conformantContracts(warm);
-  const warmPrepared = warmContext.prepare("op", "input");
+  const warmPrepared = prepareInput(warm, "op");
   if (warmPrepared.status !== "ready") throw Error("warm preparation");
-  warmPrepared.valueContract.validate(null);
-  warmPrepared.valueContract.dispose();
-  warmContext.dispose();
+  warmPrepared.contract.validate(null);
+  warmPrepared.contract.dispose();
   warm.dispose();
   const initial = testing.liveStorageOwners();
   const U = "https://absent.invalid/U";
@@ -34,7 +32,7 @@ export function plannerLocationCases(sdk) {
     check(parsed.status === "parsed", "planner document admitted");
     const document = parsed.value;
     const values = [];
-    let resources, context;
+    let resources, proof, contract;
     try {
       check(
         sdk.validateDocument(document.toBytes()).report.conclusion ===
@@ -49,18 +47,21 @@ export function plannerLocationCases(sdk) {
           return [uri, parsed.value];
         }),
       );
-      context = conformantContracts(document, { resources });
+      const checked = document.validate();
+      check(checked.status === "conformant", "conformant proof");
+      proof = checked.document;
+      const operation = proof.resolveOperation("op");
+      contract = operation.input();
+      operation.dispose();
       const cancelled = new AbortController();
       cancelled.abort();
-      const stopped = context.prepare("op", "input", {
-        signal: cancelled.signal,
-      });
+      const stopped = contract.prepare({ resources, signal: cancelled.signal });
       check(
         stopped.status === "no-verdict" &&
           stopped.detail.reason === "cancelled",
         "cancellation retained",
       );
-      const result = context.prepare("op", "input");
+      const result = contract.prepare({ resources });
       check(result.status === "no-verdict", "planner refuses");
       const detail = result.detail;
       const reason = code.endsWith("-limit")
@@ -83,23 +84,24 @@ export function plannerLocationCases(sdk) {
         "fixed original diagnostic",
       );
       check(
-        JSON.stringify(context.prepare("op", "input")) ===
+        JSON.stringify(contract.prepare({ resources })) ===
           JSON.stringify(result),
-        "cached refusal unchanged",
+        "repeated preparation refuses identically",
       );
-      const healthy = context.prepare("healthy", "input");
+      const healthy = prepareInput(proof, "healthy", { resources });
       check(healthy.status === "ready", "healthy subsequent preparation");
       try {
         check(
-          healthy.valueContract.validate(null).outcome === "satisfies",
+          healthy.contract.validate(null).outcome === "satisfies",
           "healthy validation",
         );
       } finally {
-        healthy.valueContract.dispose();
+        healthy.contract.dispose();
       }
       observations.push({ code, location: detail.location });
     } finally {
-      context?.dispose();
+      contract?.dispose();
+      proof?.dispose();
       resources?.dispose();
       for (const value of values) value.dispose();
       document.dispose();

@@ -4,25 +4,22 @@ use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
-// Existing evaluator cases compare semantic outcomes from either setup refusal or
-// value evaluation. New setup-state tests below assert the stage independently.
+// Existing evaluator cases compare semantic outcomes from either preparation refusal
+// or value evaluation. Preparation-stage tests below assert the stage independently.
 trait EvaluateCase {
     fn validate(&self, value: &JsonValue) -> ValueOutcome;
     fn validate_with_control(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome;
 }
-impl EvaluateCase for ValueContractPreparation {
+impl EvaluateCase for Result<PreparedContract, NoVerdict> {
     fn validate(&self, value: &JsonValue) -> ValueOutcome {
         self.validate_with_control(value, &std::sync::atomic::AtomicBool::new(false))
     }
     fn validate_with_control(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
         match self {
-            ValueContractPreparation::Ready(contract) => {
-                contract.validate_with_control(value, control)
-            }
-            ValueContractPreparation::NoVerdict { detail } => ValueOutcome::NoVerdict {
+            Ok(contract) => contract.validate_with_control(value, control),
+            Err(detail) => ValueOutcome::NoVerdict {
                 detail: detail.clone(),
             },
-            other => panic!("unexpected setup state: {other:?}"),
         }
     }
 }
@@ -32,19 +29,31 @@ fn doc(schema: &str) -> Document {
     ))
     .unwrap()
 }
-fn contracts(schema: &str) -> ValueContracts {
-    doc(schema)
+fn conformant(document: &Document) -> Conformant<Document> {
+    document
         .validate()
         .unwrap()
         .conformant()
         .expect("conformant document")
-        .value_contracts(
-            Arc::new(
-                DefaultEvaluator::new()
-                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-            ),
-            ResourceSet::default(),
-        )
+}
+fn upstream() -> DefaultEvaluator {
+    DefaultEvaluator::new()
+        .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream)
+}
+/// Prepare the input contract of operation `op` with no supplied resources.
+fn prepare_op(
+    document: &Conformant<Document>,
+    evaluator: &dyn SchemaEvaluator,
+) -> Result<PreparedContract, NoVerdict> {
+    document
+        .resolve_operation("op")
+        .expect("declared operation")
+        .input()
+        .expect("declared input")
+        .prepare(evaluator)
+}
+fn prepare(schema: &str) -> Result<PreparedContract, NoVerdict> {
+    prepare_op(&conformant(&doc(schema)), &upstream())
 }
 fn value(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
@@ -60,19 +69,15 @@ fn numeric_arithmetic_admission_preserves_carriage_types_counts_and_bounds() {
         format!("{{\"const\":{huge}}}"),
     ] {
         assert!(matches!(
-            contracts(&schema)
-                .prepare("op", Direction::Input)
-                .validate(&parsed),
+            prepare(&schema).validate(&parsed),
             ValueOutcome::Satisfies
         ));
     }
     assert!(matches!(
-        contracts(&format!("{{\"maxItems\":{huge}}}"))
-            .prepare("op", Direction::Input)
-            .validate(&value("[]")),
+        prepare(&format!("{{\"maxItems\":{huge}}}")).validate(&value("[]")),
         ValueOutcome::Satisfies
     ));
-    let multiple = contracts("{\"multipleOf\":3}").prepare("op", Direction::Input);
+    let multiple = prepare("{\"multipleOf\":3}");
     for token in [&huge, &"7".repeat(4097)] {
         assert!(
             matches!(multiple.validate(&value(token)),ValueOutcome::NoVerdict {detail:NoVerdict {reason:NoVerdictReason::LimitExceeded,ref code,..}} if code=="numeric-arithmetic-limit")
@@ -100,7 +105,7 @@ fn deep_literal_and_opaque_data_do_not_inherit_compiler_tree_depth() {
             format!("{{\"const\":{literal}}}"),
             format!("{{\"enum\":[{literal}]}}"),
         ] {
-            let prepared = contracts(&schema).prepare("op", Direction::Input);
+            let prepared = prepare(&schema);
             assert!(
                 matches!(prepared.validate(&value(&literal)), ValueOutcome::Satisfies),
                 "depth {depth}"
@@ -118,10 +123,9 @@ fn deep_literal_and_opaque_data_do_not_inherit_compiler_tree_depth() {
             assert_eq!(problems[0].instance_pointer, "");
             assert!(matches!(problems[0].code.as_str(), "const" | "enum"));
         }
-        let prepared = contracts(&format!(
+        let prepared = prepare(&format!(
             "{{\"type\":\"integer\",\"default\":{literal},\"x-opaque\":{literal}}}"
-        ))
-        .prepare("op", Direction::Input);
+        ));
         assert!(matches!(
             prepared.validate(&value("7")),
             ValueOutcome::Satisfies
@@ -159,30 +163,34 @@ fn explicit_preparation_and_retained_validation_have_caller_owned_lifetimes() {
     let document=Document::parse(r#"{"openbindings":"0.2.0","operations":{"a":{"aliases":["alias"],"input":true},"b":{"input":true},"c":{"input":true}}}"#).unwrap();
     let calls = Arc::new(AtomicUsize::new(0));
     let live = Arc::new(AtomicUsize::new(0));
-    let evaluator = Arc::new(Probe {
+    let evaluator = Probe {
         calls: calls.clone(),
         live: live.clone(),
-    });
-    let context = document
-        .validate()
-        .unwrap()
-        .conformant()
-        .expect("conformant document")
-        .value_contracts(evaluator, ResourceSet::default());
-    let retained = context.prepare("a", Direction::Input);
-    drop(context.prepare("a", Direction::Input));
-    drop(context.prepare("alias", Direction::Input));
+    };
+    let proof = conformant(&document);
+    let prepare_input = |name: &str| {
+        proof
+            .resolve_operation(name)
+            .expect("declared operation")
+            .input()
+            .expect("declared input")
+            .prepare(&evaluator)
+    };
+    let retained = prepare_input("a");
+    drop(prepare_input("a"));
+    drop(prepare_input("alias"));
     assert_eq!(calls.load(Ordering::SeqCst), 3);
     assert_eq!(live.load(Ordering::SeqCst), 1);
     std::thread::scope(|scope| {
         for _ in 0..4 {
-            scope.spawn(|| drop(context.prepare("a", Direction::Input)));
+            scope.spawn(|| drop(prepare_input("a")));
         }
     });
     assert_eq!(calls.load(Ordering::SeqCst), 7);
     assert_eq!(live.load(Ordering::SeqCst), 1);
-    drop(context);
+    drop(proof);
     drop(document);
+    drop(evaluator);
     for _ in 0..100 {
         assert!(matches!(
             retained.validate(&value("7")),
@@ -196,9 +204,9 @@ fn explicit_preparation_and_retained_validation_have_caller_owned_lifetimes() {
 }
 #[test]
 fn retained_contracts_outlive_documents_and_distinguish_absent_sides() {
-    let context = contracts(r#"{"maximum":9007199254740992}"#);
-    let prepared = context.prepare("op", Direction::Input);
-    drop(context);
+    let document = conformant(&doc(r#"{"maximum":9007199254740992}"#));
+    let prepared = prepare_op(&document, &upstream());
+    drop(document);
     assert!(matches!(
         prepared.validate(&value("9007199254740992")),
         ValueOutcome::Satisfies
@@ -207,32 +215,18 @@ fn retained_contracts_outlive_documents_and_distinguish_absent_sides() {
         prepared.validate(&value("9007199254740993")),
         ValueOutcome::Fails { .. }
     ));
-    let context = contracts("true");
-    assert!(matches!(
-        context.prepare("op", Direction::Output),
-        ValueContractPreparation::NoValueContract
-    ));
-    assert!(matches!(
-        context.prepare("missing", Direction::Input),
-        ValueContractPreparation::OperationMissing
-    ));
+    let document = conformant(&doc("true"));
+    let operation = document
+        .resolve_operation("op")
+        .expect("declared operation");
+    assert!(operation.input().is_some());
+    assert!(operation.output().is_none());
+    assert!(document.resolve_operation("missing").is_none());
 }
 #[test]
 fn anonymous_scope_selects_outer_dynamic_anchor() {
     let document=Document::parse(r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://review.invalid/list"}}},"schemas":{"List":{"$id":"https://review.invalid/list","type":"array","items":{"$dynamicRef":"#element"},"$defs":{"element":{"$dynamicAnchor":"element","type":"string"}}},"Override":{"$dynamicAnchor":"element","type":"integer"}}}"##).unwrap();
-    let context = document
-        .validate()
-        .unwrap()
-        .conformant()
-        .expect("conformant document")
-        .value_contracts(
-            Arc::new(
-                DefaultEvaluator::new()
-                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-            ),
-            ResourceSet::default(),
-        );
-    let prepared = context.prepare("op", Direction::Input);
+    let prepared = prepare_op(&conformant(&document), &upstream());
     assert!(matches!(
         prepared.validate(&value("[7]")),
         ValueOutcome::Satisfies
@@ -249,59 +243,52 @@ fn anonymous_scope_selects_outer_dynamic_anchor() {
 }
 #[test]
 fn same_uri_resources_are_isolated_and_precancellation_does_not_poison() {
-    let document = doc(r#"{"$ref":"https://review.invalid/shared"}"#);
-    let evaluator = Arc::new(
-        DefaultEvaluator::new()
-            .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-    );
-    let make = |schema: &str| {
-        document
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant document")
-            .value_contracts(
-                evaluator.clone(),
-                ResourceSet::new([SchemaResource {
-                    uri: "https://review.invalid/shared".into(),
-                    document: value(schema),
-                }])
-                .unwrap(),
-            )
+    let proof = conformant(&doc(r#"{"$ref":"https://review.invalid/shared"}"#));
+    let operation = proof.resolve_operation("op").expect("declared operation");
+    let contract = operation.input().expect("declared input");
+    let evaluator = upstream();
+    // Two resource sets supply different snapshots for the same retrieval URI.
+    let snapshot = |schema: &str| {
+        ResourceSet::new([SchemaResource {
+            uri: "https://review.invalid/shared".into(),
+            document: value(schema),
+        }])
+        .unwrap()
     };
-    let integer = make(r#"{"type":"integer"}"#);
-    let string = make(r#"{"type":"string"}"#);
-    for context in [&integer, &string] {
+    let integer = snapshot(r#"{"type":"integer"}"#);
+    let string = snapshot(r#"{"type":"string"}"#);
+    for resources in [&integer, &string] {
         let cancelled = std::sync::atomic::AtomicBool::new(false);
         cancelled.store(true, std::sync::atomic::Ordering::Release);
         assert!(matches!(
-            context.prepare_with_control("op", Direction::Input, &cancelled),
-            ValueContractPreparation::NoVerdict {
-                detail: NoVerdict {
-                    reason: NoVerdictReason::Cancelled,
-                    ..
-                }
-            }
+            contract.prepare_with_control(&evaluator, resources, &cancelled),
+            Err(NoVerdict {
+                reason: NoVerdictReason::Cancelled,
+                ..
+            })
         ));
     }
     assert!(matches!(
-        integer
-            .prepare("op", Direction::Input)
+        contract
+            .prepare_with(&evaluator, &integer)
             .validate(&value("7")),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
-        string.prepare("op", Direction::Input).validate(&value("7")),
+        contract
+            .prepare_with(&evaluator, &string)
+            .validate(&value("7")),
         ValueOutcome::Fails { .. }
     ));
     std::thread::scope(|scope| {
         for _ in 0..8 {
-            let context = integer.clone();
+            let resources = integer.clone();
+            let evaluator = &evaluator;
             scope.spawn(move || {
                 for _ in 0..100 {
                     assert!(matches!(
-                        context
-                            .prepare("op", Direction::Input)
+                        contract
+                            .prepare_with(evaluator, &resources)
                             .validate(&value("7")),
                         ValueOutcome::Satisfies
                     ));
@@ -330,45 +317,35 @@ impl SchemaEvaluator for CancelOnce {
 #[test]
 fn cancellation_during_preparation_allows_independent_retries() {
     let control = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let evaluator = Arc::new(CancelOnce {
+    let evaluator = CancelOnce {
         cancelled: control.clone(),
         calls: AtomicUsize::new(0),
-    });
-    let context = doc("true")
-        .validate()
-        .unwrap()
-        .conformant()
-        .expect("conformant document")
-        .value_contracts(evaluator.clone(), ResourceSet::default());
-    let cancelled = context.prepare_with_control("op", Direction::Input, control.as_ref());
+    };
+    let proof = conformant(&doc("true"));
+    let operation = proof.resolve_operation("op").expect("declared operation");
+    let contract = operation.input().expect("declared input");
+    let cancelled =
+        contract.prepare_with_control(&evaluator, &ResourceSet::default(), control.as_ref());
     assert!(matches!(
         cancelled,
-        ValueContractPreparation::NoVerdict {
-            detail: NoVerdict {
-                reason: NoVerdictReason::Cancelled,
-                ..
-            }
-        }
+        Err(NoVerdict {
+            reason: NoVerdictReason::Cancelled,
+            ..
+        })
     ));
     assert!(matches!(
-        context
-            .prepare("op", Direction::Input)
-            .validate(&value("1")),
+        contract.prepare(&evaluator).validate(&value("1")),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
-        context
-            .prepare("op", Direction::Input)
-            .validate(&value("2")),
+        contract.prepare(&evaluator).validate(&value("2")),
         ValueOutcome::Satisfies
     ));
     assert_eq!(evaluator.calls.load(Ordering::SeqCst), 3);
 }
 #[test]
 fn conservative_preparation_is_not_semantic_undefinedness() {
-    let result = contracts(r#"{"anyOf":[true,{"pattern":"["}]}"#)
-        .prepare("op", Direction::Input)
-        .validate(&value(r#""secret""#));
+    let result = prepare(r#"{"anyOf":[true,{"pattern":"["}]}"#).validate(&value(r#""secret""#));
     assert!(matches!(
         result,
         ValueOutcome::NoVerdict {
@@ -379,10 +356,9 @@ fn conservative_preparation_is_not_semantic_undefinedness() {
         }
     ));
     // Passing anyOf annotations still matter despite a true branch.
-    let prepared = contracts(
+    let prepared = prepare(
         r#"{"anyOf":[{"properties":{"x":{"type":"string"}}},true],"unevaluatedProperties":false}"#,
-    )
-    .prepare("op", Direction::Input);
+    );
     assert!(matches!(
         prepared.validate(&value(r#"{"x":"ok"}"#)),
         ValueOutcome::Satisfies
@@ -396,8 +372,7 @@ fn conservative_preparation_is_not_semantic_undefinedness() {
 fn positive_missing_disjunct_establishes_satisfaction() {
     // Intentionally expanded capability: missing positive disjuncts now use bounds.
     assert!(matches!(
-        contracts(r#"{"anyOf":[true,{"$ref":"https://absent.invalid/x"}]}"#)
-            .prepare("op", Direction::Input)
+        prepare(r#"{"anyOf":[true,{"$ref":"https://absent.invalid/x"}]}"#)
             .validate(&value(r#""secret""#)),
         ValueOutcome::Satisfies
     ));
@@ -413,13 +388,7 @@ fn diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
 
         ..Limits::default()
     });
-    let context = doc(&expensive)
-        .validate()
-        .unwrap()
-        .conformant()
-        .expect("conformant document")
-        .value_contracts(Arc::new(evaluator), ResourceSet::default());
-    let prepared = context.prepare("op", Direction::Input);
+    let prepared = prepare_op(&conformant(&doc(&expensive)), &evaluator);
     for _ in 0..5 {
         let result = prepared.validate(&value("0"));
         let ValueOutcome::Fails {
@@ -434,27 +403,18 @@ fn diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
         assert!(problems.is_empty());
     }
     assert!(matches!(
-        contracts("true")
-            .prepare("op", Direction::Input)
-            .validate(&value("0")),
+        prepare("true").validate(&value("0")),
         ValueOutcome::Satisfies
     ));
-    let limited = doc(r#"{"allOf":[true,true,true]}"#)
-        .validate()
-        .unwrap()
-        .conformant()
-        .expect("conformant document")
-        .value_contracts(
-            Arc::new(DefaultEvaluator::with_limits(Limits {
-                evaluation_steps: 1,
-                ..Limits::default()
-            })),
-            ResourceSet::default(),
-        );
+    let limited = prepare_op(
+        &conformant(&doc(r#"{"allOf":[true,true,true]}"#)),
+        &DefaultEvaluator::with_limits(Limits {
+            evaluation_steps: 1,
+            ..Limits::default()
+        }),
+    );
     assert!(matches!(
-        limited
-            .prepare("op", Direction::Input)
-            .validate(&value("0")),
+        limited.validate(&value("0")),
         ValueOutcome::NoVerdict {
             detail: NoVerdict {
                 reason: NoVerdictReason::LimitExceeded,
@@ -466,8 +426,7 @@ fn diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
 #[test]
 fn diagnostics_are_original_and_do_not_expose_instance_values() {
     let prepared =
-        contracts(r#"{"properties":{"a/b":{"type":"string"}},"unevaluatedProperties":false}"#)
-            .prepare("op", Direction::Input);
+        prepare(r#"{"properties":{"a/b":{"type":"string"}},"unevaluatedProperties":false}"#);
     let result = prepared.validate(&value(r#"{"a/b":789,"secret":"SYNTHETIC_SECRET_VALUE"}"#));
     let encoded = serde_json::to_string(&result).unwrap();
     assert!(!encoded.contains("789"));
@@ -481,7 +440,7 @@ fn diagnostics_are_original_and_do_not_expose_instance_values() {
 }
 #[test]
 fn property_escape_refusal_is_lazy_and_does_not_poison_thread_state() {
-    let prepared = contracts(r#"{"pattern":"\\p{Lu}"}"#).prepare("op", Direction::Input);
+    let prepared = prepare(r#"{"pattern":"\\p{Lu}"}"#);
     assert!(matches!(
         prepared.validate(&value("3")),
         ValueOutcome::Satisfies
@@ -500,9 +459,7 @@ fn property_escape_refusal_is_lazy_and_does_not_poison_thread_state() {
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
-        contracts(r#"{"pattern":"^A$"}"#)
-            .prepare("op", Direction::Input)
-            .validate(&value(r#""A""#)),
+        prepare(r#"{"pattern":"^A$"}"#).validate(&value(r#""A""#)),
         ValueOutcome::Satisfies
     ));
 }
@@ -514,18 +471,11 @@ fn diagnostic_allocation_admission_bounds_many_missing_names() {
         .collect::<Vec<_>>()
         .join(",");
     let schema = format!("{{\"required\":[{names}]}}");
-    let context = doc(&schema)
-        .validate()
-        .unwrap()
-        .conformant()
-        .expect("conformant document")
-        .value_contracts(
-            Arc::new(DefaultEvaluator::with_limits(Limits::default())),
-            ResourceSet::default(),
-        );
-    let result = context
-        .prepare("op", Direction::Input)
-        .validate(&value("{}"));
+    let result = prepare_op(
+        &conformant(&doc(&schema)),
+        &DefaultEvaluator::with_limits(Limits::default()),
+    )
+    .validate(&value("{}"));
     let ValueOutcome::Fails {
         problems,
         problems_complete,
@@ -578,9 +528,7 @@ fn upstream_test_dispositions_use_the_supported_exact_ecma_u_path() {
     // The SDK exclusively uses ECMAScript Unicode-mode matching.
     for (pattern, expected) in [(r"^\s$", false), (r"^\S$", true), (r"^[^\s]$", true)] {
         let schema = serde_json::json!({"pattern": pattern}).to_string();
-        let result = contracts(&schema)
-            .prepare("op", Direction::Input)
-            .validate(&value(r#""\u0085""#));
+        let result = prepare(&schema).validate(&value(r#""\u0085""#));
         assert_eq!(
             matches!(result, ValueOutcome::Satisfies),
             expected,
@@ -595,20 +543,18 @@ fn upstream_test_dispositions_use_the_supported_exact_ecma_u_path() {
     for pattern in [r"^[\w--z]$", r"^[\d--z]$", r"^[[a]]$"] {
         let schema = serde_json::json!({"pattern": pattern}).to_string();
         assert!(matches!(
-            contracts(&schema)
-                .prepare("op", Direction::Input)
-                .validate(&value(r#""-""#)),
+            prepare(&schema).validate(&value(r#""-""#)),
             ValueOutcome::NoVerdict { .. }
         ));
     }
     // The original test expected an engine failure for a valid empty match.
-    let prepared = contracts(r#"{"pattern":"^.{0,404600}$"}"#).prepare("op", Direction::Input);
+    let prepared = prepare(r#"{"pattern":"^.{0,404600}$"}"#);
     assert!(matches!(
         prepared.validate(&value(r#""""#)),
         ValueOutcome::Satisfies
     ));
     // Huge finite decimal exponents do not become infinity or cease to be integers.
-    let prepared = contracts(r#"{"type":"integer"}"#).prepare("op", Direction::Input);
+    let prepared = prepare(r#"{"type":"integer"}"#);
     for number in ["1e1000001", "-1e1000001"] {
         assert!(matches!(
             prepared.validate(&value(number)),
@@ -618,9 +564,8 @@ fn upstream_test_dispositions_use_the_supported_exact_ecma_u_path() {
     // Raw dependency APIs lack the SDK's enclosing refusal guard. Through the
     // public adapter, selected property matching can never become false validity.
     let schema = serde_json::json!({"patternProperties": {r"^\p{L}{300}$": {"type":"integer"}}, "unevaluatedProperties": false}).to_string();
-    let result = contracts(&schema)
-        .prepare("op", Direction::Input)
-        .validate(&value(&serde_json::json!({"a".repeat(300): 1}).to_string()));
+    let result =
+        prepare(&schema).validate(&value(&serde_json::json!({"a".repeat(300): 1}).to_string()));
     assert!(matches!(
         result,
         ValueOutcome::NoVerdict {
@@ -643,30 +588,26 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
         OperationSelection::Ambiguous { .. }
     ));
     let d = Document::parse(r#"{"openbindings":"0.2.0","operations":{"absent":{},"yes":{"input":true},"no":{"input":false}}}"#).unwrap();
-    let c = d
-        .validate()
-        .unwrap()
-        .conformant()
-        .expect("conformant document")
-        .value_contracts(
-            Arc::new(
-                DefaultEvaluator::new()
-                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-            ),
-            ResourceSet::default(),
-        );
-    assert!(matches!(
-        c.prepare("absent", Direction::Input),
-        ValueContractPreparation::NoValueContract
-    ));
-    assert!(matches!(
-        c.prepare("missing", Direction::Input),
-        ValueContractPreparation::OperationMissing
-    ));
-    let ValueContractPreparation::Ready(ready) = c.prepare("yes", Direction::Input) else {
+    let c = conformant(&d);
+    let evaluator = upstream();
+    assert!(
+        c.resolve_operation("absent")
+            .expect("declared operation")
+            .input()
+            .is_none()
+    );
+    assert!(c.resolve_operation("missing").is_none());
+    let prepare_input = |name: &str| {
+        c.resolve_operation(name)
+            .expect("declared operation")
+            .input()
+            .expect("declared input")
+            .prepare(&evaluator)
+    };
+    let Ok(ready) = prepare_input("yes") else {
         panic!()
     };
-    let ValueContractPreparation::Ready(no) = c.prepare("no", Direction::Input) else {
+    let Ok(no) = prepare_input("no") else {
         panic!()
     };
     let cancel = std::sync::atomic::AtomicBool::new(false);

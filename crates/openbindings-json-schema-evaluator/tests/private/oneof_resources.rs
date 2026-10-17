@@ -15,29 +15,28 @@ fn label(outcome: &ValueOutcome) -> &'static str {
         }
     }
 }
-fn ready(
-    document: &Document,
-    op: &str,
-    direction: Direction,
-    resources: ResourceSet,
-    limits: Limits,
-) -> ValueContract {
-    match document
+fn conformant(document: &Document) -> Conformant<Document> {
+    document
         .validate()
         .unwrap()
         .conformant()
         .expect("conformant document")
-        .value_contracts(
-            Arc::new(
-                DefaultEvaluator::with_limits(limits)
-                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-            ),
-            resources,
-        )
-        .prepare(op, direction)
+}
+fn upstream(limits: Limits) -> DefaultEvaluator {
+    DefaultEvaluator::with_limits(limits)
+        .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream)
+}
+/// Prepare operation `probe` input with upstream diagnostics; preparation must succeed.
+fn ready(document: &Document, resources: ResourceSet, limits: Limits) -> PreparedContract {
+    match conformant(document)
+        .resolve_operation("probe")
+        .expect("declared operation")
+        .input()
+        .expect("declared input")
+        .prepare_with(&upstream(limits), &resources)
     {
-        ValueContractPreparation::Ready(contract) => contract,
-        other => panic!("expected ready: {other:?}"),
+        Ok(contract) => contract,
+        Err(detail) => panic!("expected ready: {detail:?}"),
     }
 }
 #[test]
@@ -54,14 +53,16 @@ fn frozen_c22_original_values_and_renamed_operation_keep_their_independent_truth
                 r#""aliases":["2x.thumbnail","thumb.render""#,
             );
         }
-        let document = Document::parse(text).unwrap();
-        let contract = ready(
-            &document,
-            op,
-            Direction::Output,
-            ResourceSet::default(),
-            Limits::default(),
-        );
+        let document = conformant(&Document::parse(text).unwrap());
+        let operation = document.resolve_operation(op).expect("declared operation");
+        let contract = match operation
+            .output()
+            .expect("declared output")
+            .prepare(&upstream(Limits::default()))
+        {
+            Ok(contract) => contract,
+            Err(detail) => panic!("expected ready: {detail:?}"),
+        };
         for case in cases.as_array().unwrap() {
             let Some(text) = case["valueText"].as_str() else {
                 continue;
@@ -104,14 +105,8 @@ fn resources(entries: &[(&str, &str)]) -> ResourceSet {
     .unwrap()
 }
 fn evaluate(schema: &str, value: &str) -> ValueOutcome {
-    ready(
-        &document(schema),
-        "probe",
-        Direction::Input,
-        ResourceSet::default(),
-        Limits::default(),
-    )
-    .validate(&JsonValue::parse(value).unwrap())
+    ready(&document(schema), ResourceSet::default(), Limits::default())
+        .validate(&JsonValue::parse(value).unwrap())
 }
 #[test]
 fn nested_endpoint_success_does_not_prove_resource_independence() {
@@ -140,13 +135,7 @@ fn nested_endpoint_success_does_not_prove_resource_independence() {
                 ),
             ])
         });
-        let contract = ready(
-            &document,
-            "probe",
-            Direction::Input,
-            supplied,
-            Limits::default(),
-        );
+        let contract = ready(&document, supplied, Limits::default());
         let expected = match completion {
             None => "no-verdict",
             Some((u, v)) if u == v => "satisfies",
@@ -171,13 +160,7 @@ fn frozen_owner_controls_cover_endpoints_siblings_nested_and_original_summaries(
             .iter()
             .map(|(u, s)| (u.as_str(), s.as_str()))
             .collect();
-        let contract = ready(
-            &document(&schema),
-            "probe",
-            Direction::Input,
-            resources(&entries),
-            Limits::default(),
-        );
+        let contract = ready(&document(&schema), resources(&entries), Limits::default());
         let outcome =
             contract.validate(&JsonValue::parse(case["valueText"].as_str().unwrap()).unwrap());
         assert_eq!(
@@ -267,13 +250,7 @@ fn distinct_hole_truth_tables_are_corroborated_by_all_small_complete_resource_se
                         )
                     })
                     .collect();
-                let complete = ready(
-                    &document,
-                    "probe",
-                    Direction::Input,
-                    resources(&entries),
-                    Limits::default(),
-                );
+                let complete = ready(&document, resources(&entries), Limits::default());
                 actual_truths.insert(label(&complete.validate(&JsonValue::null())));
             }
             let expected = if actual_truths.len() == 1 {
@@ -387,14 +364,13 @@ fn unsupported_influence_and_known_closure_defects_remain_refusals() {
             assert!(validation.conformant().is_none());
             continue;
         }
-        let setup = document(schema)
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant document")
-            .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
-            .prepare("probe", Direction::Input);
-        let ValueContractPreparation::NoVerdict { detail } = setup else {
+        let setup = conformant(&document(schema))
+            .resolve_operation("probe")
+            .expect("declared operation")
+            .input()
+            .expect("declared input")
+            .prepare(&DefaultEvaluator::new());
+        let Err(detail) = setup else {
             panic!("{setup:?}")
         };
         assert_eq!(detail.reason, reason, "{schema}");
@@ -406,13 +382,7 @@ fn upstream_privacy_and_partial_work_do_not_fabricate_results() {
     let schema = r#"{"oneOf":[true,true,{"$ref":"https://oneof.invalid/U"}]}"#;
     let value = JsonValue::parse(r#"{"secret":"do-not-render"}"#).unwrap();
     let document = document(schema);
-    let regular = ready(
-        &document,
-        "probe",
-        Direction::Input,
-        ResourceSet::default(),
-        Limits::default(),
-    );
+    let regular = ready(&document, ResourceSet::default(), Limits::default());
     let ValueOutcome::Fails {
         problems,
         problems_complete,
@@ -436,8 +406,6 @@ fn upstream_privacy_and_partial_work_do_not_fabricate_results() {
     assert_eq!(label(&regular.validate(&value)), "fails");
     let limited = ready(
         &document,
-        "probe",
-        Direction::Input,
         ResourceSet::default(),
         Limits {
             evaluation_steps: 0,
@@ -489,24 +457,24 @@ fn adapters_receive_unmodified_requests_and_each_bound_compiles_without_the_othe
             panic!("closed programs must not retrieve")
         }
     }
-    let custom = Arc::new(Capture {
+    let custom = Capture {
         calls: AtomicUsize::new(0),
         bounds: Mutex::new(None),
-    });
-    let context = document(r#"{"oneOf":[true,{"$ref":"https://oneof.invalid/U"}]}"#)
-        .validate()
-        .unwrap()
-        .conformant()
-        .expect("conformant document")
-        .value_contracts(custom.clone(), ResourceSet::default());
-    let ValueContractPreparation::NoVerdict { detail } = context.prepare("probe", Direction::Input)
-    else {
+    };
+    let proof = conformant(&document(
+        r#"{"oneOf":[true,{"$ref":"https://oneof.invalid/U"}]}"#,
+    ));
+    let operation = proof
+        .resolve_operation("probe")
+        .expect("declared operation");
+    let Err(detail) = operation.input().expect("declared input").prepare(&custom) else {
         panic!()
     };
     assert_eq!(detail.code, "my-adapter");
     assert_eq!(custom.calls.load(Ordering::SeqCst), 1);
     let EvaluationBounds { lower, upper, .. } = custom.bounds.lock().unwrap().take().unwrap();
-    drop(context);
+    drop(operation);
+    drop(proof);
     drop(custom);
     for (program, expected) in [(lower, false), (upper, true)] {
         let mut registry = jsonschema::Registry::new().retriever(Reject);
@@ -535,24 +503,14 @@ fn adapters_receive_unmodified_requests_and_each_bound_compiles_without_the_othe
 #[test]
 fn old_partial_and_new_complete_snapshots_remain_independent() {
     let document = document(r#"{"oneOf":[true,{"$ref":"https://oneof.invalid/U"}]}"#);
-    let old = ready(
-        &document,
-        "probe",
-        Direction::Input,
-        ResourceSet::default(),
-        Limits::default(),
-    );
+    let old = ready(&document, ResourceSet::default(), Limits::default());
     let no_match = ready(
         &document,
-        "probe",
-        Direction::Input,
         resources(&[("https://oneof.invalid/U", "false")]),
         Limits::default(),
     );
     let two_match = ready(
         &document,
-        "probe",
-        Direction::Input,
         resources(&[("https://oneof.invalid/U", "true")]),
         Limits::default(),
     );
@@ -575,8 +533,6 @@ fn bounded_nested_runtime_and_original_exact_details_retain_separate_policies() 
     let document = document(&nested);
     let finite = ready(
         &document,
-        "probe",
-        Direction::Input,
         ResourceSet::default(),
         Limits {
             evaluation_steps: 30,
@@ -587,19 +543,14 @@ fn bounded_nested_runtime_and_original_exact_details_retain_separate_policies() 
         matches!(finite.validate(&JsonValue::parse("{}").unwrap()), ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::LimitExceeded)
     );
     let schema = r#"{"minimum":0.290000000000000000001,"oneOf":[false,{"properties":{"p":{"$ref":"https://oneof.invalid/U"}}}]}"#;
-    let contracts = self::document(schema)
-        .validate()
-        .unwrap()
-        .conformant()
-        .expect("conformant document")
-        .value_contracts(
-            Arc::new(
-                DefaultEvaluator::new()
-                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-            ),
-            ResourceSet::default(),
-        );
-    let ValueContractPreparation::Ready(contract) = contracts.prepare("probe", Direction::Input)
+    let proof = conformant(&self::document(schema));
+    let operation = proof
+        .resolve_operation("probe")
+        .expect("declared operation");
+    let Ok(contract) = operation
+        .input()
+        .expect("declared input")
+        .prepare(&upstream(Limits::default()))
     else {
         panic!()
     };

@@ -1,6 +1,6 @@
 import * as testing from "../dist/testing.js";
-import { conformantContracts } from "./conformant-contracts.mjs";
-// Shared Node/browser tests: the facade keeps the same context → prepare → validate workflow.
+import { prepareInput } from "./conformant-contracts.mjs";
+// Shared Node/browser tests: the facade keeps the same proof → operation → prepare → validate workflow.
 export function partialResourceCases(sdk) {
   let count = 0;
   const check = (condition, message) => {
@@ -18,10 +18,9 @@ export function partialResourceCases(sdk) {
     );
     check(parsed.status === "parsed", "partial fixture parsed");
     const document = parsed.value;
-    let context, contract;
+    let contract;
     try {
-      context = conformantContracts(document, { diagnostics: "upstream" });
-      const setup = context.prepare("op", "input");
+      const setup = prepareInput(document, "op", { diagnostics: "upstream" });
       if (expected === "refuse") {
         check(
           setup.status === "no-verdict",
@@ -30,8 +29,7 @@ export function partialResourceCases(sdk) {
         return;
       }
       check(setup.status === "ready", "qualified partial preparation is ready");
-      contract = setup.valueContract;
-      context.dispose();
+      contract = setup.contract;
       document.dispose();
       const result = contract.validate(value);
       check(
@@ -68,7 +66,6 @@ export function partialResourceCases(sdk) {
         }
         check(code === "disposed-handle", "validation checks disposal");
       }
-      context?.dispose();
       document.dispose();
     }
   };
@@ -152,9 +149,8 @@ export function partialResourceCases(sdk) {
         operations: { op: { input: schema } },
       }),
     );
-    const context = conformantContracts(parsed.value);
     try {
-      const result = context.prepare("op", "input");
+      const result = prepareInput(parsed.value, "op");
       check(
         result.status === "no-verdict" &&
           result.detail.reason === "resource-unavailable",
@@ -171,7 +167,6 @@ export function partialResourceCases(sdk) {
         "strict original location preserved",
       );
     } finally {
-      context.dispose();
       parsed.value.dispose();
     }
   }
@@ -189,9 +184,11 @@ export function partialResourceCases(sdk) {
     JSON.stringify({ properties: { x: { $ref: V } } }),
   ).value;
   const supplied = new sdk.SchemaResources([[U, known]]);
-  const oldContext = conformantContracts(doc, { resources: supplied });
-  const old = oldContext.prepare("op", "input").valueContract;
-  let completeResources, yes, newContext, next, retained;
+  const proof = doc.validate().document;
+  const operation = proof.resolveOperation("op");
+  const input = operation.input();
+  const old = input.prepare({ resources: supplied }).contract;
+  let completeResources, yes, next, retained;
   try {
     const info = old.validate({ x: 1 });
     check(
@@ -202,18 +199,18 @@ export function partialResourceCases(sdk) {
     );
     retained = old.retain();
     old.dispose();
-    oldContext.dispose();
+    operation.dispose();
+    proof.dispose();
     check(
       JSON.stringify(retained.validate({ x: 1 })) === JSON.stringify(info),
-      "evidence survives old owner/context disposal",
+      "evidence survives old owner, operation and proof disposal",
     );
     yes = sdk.parseJson("true").value;
     completeResources = supplied.with(V, yes);
-    newContext = conformantContracts(doc, { resources: completeResources });
-    next = newContext.prepare("op", "input").valueContract;
+    next = input.prepare({ resources: completeResources }).contract;
     check(
       next.validate({ x: 1 }).outcome === "satisfies",
-      "new complete context ignores unselected references",
+      "preparing again with complete resources ignores unselected references",
     );
     check(
       JSON.stringify(retained.validate({ x: 1 })) === JSON.stringify(info),
@@ -227,9 +224,10 @@ export function partialResourceCases(sdk) {
   } finally {
     retained?.dispose();
     old.dispose();
-    oldContext.dispose();
+    operation.dispose();
+    proof.dispose();
     next?.dispose();
-    newContext?.dispose();
+    input.dispose();
     completeResources?.dispose();
     yes?.dispose();
     supplied.dispose();

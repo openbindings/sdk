@@ -1,23 +1,38 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use serde_json::{Value, json};
-use std::sync::Arc;
 
-fn prepared(schema: Value, limits: Limits, resources: ResourceSet) -> ValueContract {
+fn prepared(schema: Value, limits: Limits, resources: ResourceSet) -> PreparedContract {
     let doc = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
     .unwrap();
-    let context = doc
+    let doc = doc
         .validate()
         .unwrap()
         .conformant()
-        .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::with_limits(limits)), resources);
-    match context.prepare("op", Direction::Input) {
-        ValueContractPreparation::Ready(contract) => contract,
-        other => panic!("{other:?}"),
+        .expect("conformant document");
+    let operation = doc.resolve_operation("op").expect("declared operation");
+    let contract = operation.input().expect("declared input");
+    match contract.prepare_with(&DefaultEvaluator::with_limits(limits), &resources) {
+        Ok(contract) => contract,
+        Err(detail) => panic!("{detail:?}"),
     }
+}
+/// Prepare operation `op` input with upstream diagnostics and no supplied resources.
+fn prepare_upstream(doc: &Document) -> Result<PreparedContract, NoVerdict> {
+    doc.validate()
+        .unwrap()
+        .conformant()
+        .unwrap()
+        .resolve_operation("op")
+        .unwrap()
+        .input()
+        .unwrap()
+        .prepare(
+            &DefaultEvaluator::new()
+                .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
+        )
 }
 #[test]
 fn coarse_is_value_free_and_upstream_is_one_first_error() {
@@ -40,19 +55,7 @@ fn coarse_is_value_free_and_upstream_is_one_first_error() {
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
     .unwrap();
-    let context = doc
-        .validate()
-        .unwrap()
-        .conformant()
-        .unwrap()
-        .value_contracts(
-            Arc::new(
-                DefaultEvaluator::new()
-                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-            ),
-            ResourceSet::default(),
-        );
-    let ValueContractPreparation::Ready(contract) = context.prepare("op", Direction::Input) else {
+    let Ok(contract) = prepare_upstream(&doc) else {
         panic!()
     };
     let ValueOutcome::Fails {
@@ -92,19 +95,7 @@ fn interrupted_upstream_detail_cannot_weaken_an_established_failure() {
     }
     let doc =
         Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":false}}}"#).unwrap();
-    let context = doc
-        .validate()
-        .unwrap()
-        .conformant()
-        .unwrap()
-        .value_contracts(
-            Arc::new(
-                DefaultEvaluator::new()
-                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-            ),
-            ResourceSet::default(),
-        );
-    let ValueContractPreparation::Ready(contract) = context.prepare("op", Direction::Input) else {
+    let Ok(contract) = prepare_upstream(&doc) else {
         panic!()
     };
     let result = contract

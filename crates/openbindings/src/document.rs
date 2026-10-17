@@ -10,13 +10,14 @@ mod edit;
 mod read_views;
 pub use edit::{Edit, EditError};
 mod conformant_views;
+use crate::{contracts::ResourceSetInner, schema_space::SchemaSpace};
 pub use conformant_views::*;
 use read_views::NamespaceCache;
 pub use read_views::{BindingView, DependencyView, ExampleView, SourceView};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt,
-    sync::{Arc, OnceLock},
+    sync::{Arc, Mutex, OnceLock, PoisonError, Weak},
 };
 
 /// Stable rule identifiers OBI-01 through OBI-13, in specification order.
@@ -173,12 +174,45 @@ pub struct Document {
 pub(crate) struct DocumentInner {
     pub value: JsonValue,
     pub schemas: OnceLock<SchemaIndex>,
+    // Value-contract resolution spaces are assembled only when an evaluator asks
+    // for the core projection. The space without supplied resources lives here;
+    // a space with a nonempty set lives in that set, which this revision tells
+    // to release it when the revision is dropped.
+    resolution: OnceLock<Arc<SchemaSpace>>,
+    spaces_in: Mutex<Vec<Weak<ResourceSetInner>>>,
     validation: OnceLock<Result<Arc<ValidationReport>, VersionRefusal>>,
     interpretation: OnceLock<Result<(), InterpretationError>>,
     names: OnceLock<Result<NameIndex, InterpretationError>>,
     bindings: NamespaceCache,
     sources: NamespaceCache,
     dependencies: NamespaceCache,
+}
+impl DocumentInner {
+    /// Stop tracking a set that is being dropped.
+    pub(crate) fn forget_set(&self, set: *const ResourceSetInner) {
+        let mut sets = self
+            .spaces_in
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        sets.retain(|known| !std::ptr::eq(known.as_ptr(), set));
+        if sets.is_empty() {
+            *sets = Vec::new();
+        }
+    }
+}
+impl Drop for DocumentInner {
+    fn drop(&mut self) {
+        let revision: *const Self = self;
+        let sets = self
+            .spaces_in
+            .get_mut()
+            .unwrap_or_else(PoisonError::into_inner);
+        for set in sets.drain(..) {
+            if let Some(set) = set.upgrade() {
+                set.release(revision);
+            }
+        }
+    }
 }
 impl fmt::Debug for Document {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -221,10 +255,12 @@ pub struct DocumentValidation {
 /// use openbindings::{Conformant, Document};
 /// fn consume(proof: Conformant<Document>) { let document = proof.into_inner(); proof.operations(); }
 /// ```
-/// ```compile_fail
-/// use openbindings::{Document, ResourceSet, SchemaEvaluator};
-/// fn contracts(doc: Document, evaluator: std::sync::Arc<dyn SchemaEvaluator>) {
-///     doc.value_contracts(evaluator, ResourceSet::default());
+/// Only a conformant operation hands out value contracts:
+/// ```compile_fail,E0599
+/// use openbindings::{Document, SchemaEvaluator};
+/// fn contracts(doc: Document, evaluator: &dyn SchemaEvaluator) {
+///     let operations = doc.operations().unwrap();
+///     let _ = operations[0].input().unwrap().prepare(evaluator);
 /// }
 /// ```
 /// Obtain it through [`DocumentValidation::conformant`]; value contract preparation is still a separate evaluator-dependent step.
@@ -316,6 +352,8 @@ impl Document {
             inner: Arc::new(DocumentInner {
                 value,
                 schemas: OnceLock::new(),
+                resolution: OnceLock::new(),
+                spaces_in: Mutex::default(),
                 validation: OnceLock::new(),
                 interpretation: OnceLock::new(),
                 names: OnceLock::new(),
@@ -601,7 +639,8 @@ impl OperationView {
     }
     /// The exact input field, without interpreting or preparing its schema.
     /// `None` means absence; JSON null and false remain present exact values.
-    /// Use [`crate::ValueContracts::prepare`] to establish value contract readiness.
+    /// Only a conformant operation's [`crate::ConformantOperationView::input`]
+    /// yields a value contract that can be prepared.
     pub fn input(&self) -> Option<JsonRef<'_>> {
         self.value.get("input")
     }
@@ -679,6 +718,38 @@ impl DocumentValidation {
     }
 }
 impl Conformant<Document> {
+    /// The resolution space layering `resources` over this revision. It is
+    /// assembled once per live pair: the space without resources lives with the
+    /// revision, and a space with a nonempty set lives with that set until
+    /// either the set or the revision is dropped. Alternating live sets reuses
+    /// each set's space; nothing retains a space beyond its pair.
+    pub(crate) fn resolution(&self, resources: &ResourceSet) -> Arc<SchemaSpace> {
+        let inner = &self.document.inner;
+        if resources.is_empty() {
+            return inner
+                .resolution
+                .get_or_init(|| Arc::new(SchemaSpace::new(&self.document, resources)))
+                .clone();
+        }
+        if let Some(space) = resources.kept_space(inner) {
+            return space;
+        }
+        // Assemble outside every lock; a concurrent preparation's space may win.
+        let space =
+            resources.keep_space(inner, Arc::new(SchemaSpace::new(&self.document, resources)));
+        // The caller holds this revision, so it cannot be dropped before the set
+        // learns to release the space with it.
+        let mut sets = inner
+            .spaces_in
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        sets.retain(|set| set.strong_count() > 0);
+        let set = resources.downgrade();
+        if !sets.iter().any(|known| known.ptr_eq(&set)) {
+            sets.push(set);
+        }
+        space
+    }
     /// Borrow the exact snapshot certified by this proof, for plain fallible reads.
     pub fn as_document(&self) -> &Document {
         &self.document
@@ -1399,5 +1470,214 @@ mod finding_identity_tests {
         assert_eq!(checks.findings.len(), MAX_FINDINGS);
         assert!(!checks.truncated);
         assert_eq!(checks.evidence[2], Evidence::Violated);
+    }
+}
+
+#[cfg(test)]
+mod resolution_reuse {
+    use super::*;
+    use crate::schema_space::ASSEMBLED;
+    use std::sync::Weak;
+    /// Projects the core resolution space on every preparation, as custom
+    /// evaluators may, and retains its request, as diagnostics-bearing
+    /// prepared schemas do.
+    struct Projecting;
+    struct Retaining(#[allow(dead_code)] SchemaRequest);
+    impl SchemaEvaluator for Projecting {
+        fn prepare(
+            &self,
+            request: &SchemaRequest,
+            control: &dyn WorkControl,
+        ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+            request.evaluation_program(control)?;
+            Ok(Arc::new(Retaining(request.clone())))
+        }
+    }
+    /// Never asks for the core projection, like the default evaluator.
+    struct Accepting;
+    impl SchemaEvaluator for Accepting {
+        fn prepare(
+            &self,
+            request: &SchemaRequest,
+            _: &dyn WorkControl,
+        ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+            Ok(Arc::new(Retaining(request.clone())))
+        }
+    }
+    impl PreparedSchema for Retaining {
+        fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
+            ValueOutcome::Satisfies
+        }
+    }
+    fn proof() -> Conformant<Document> {
+        Document::parse(
+            r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/item"},"output":true}}}"#,
+        )
+        .unwrap()
+        .validate()
+        .unwrap()
+        .conformant()
+        .unwrap()
+    }
+    fn snapshot(minimum: u32) -> ResourceSet {
+        ResourceSet::new([SchemaResource {
+            uri: "https://example.test/item".into(),
+            document: JsonValue::parse(format!(r#"{{"type":"integer","minimum":{minimum}}}"#))
+                .unwrap(),
+        }])
+        .unwrap()
+    }
+    fn assembled() -> usize {
+        ASSEMBLED.with(std::cell::Cell::get)
+    }
+    /// The space kept for a live pair, without assembling one.
+    fn kept(proof: &Conformant<Document>, set: &ResourceSet) -> Option<Weak<SchemaSpace>> {
+        set.kept_space(&proof.document.inner)
+            .map(|space| Arc::downgrade(&space))
+    }
+
+    #[test]
+    fn evaluators_that_never_project_assemble_no_space() {
+        let proof = proof();
+        let operation = proof.resolve_operation("op").unwrap();
+        let set = snapshot(1);
+        let before = assembled();
+        drop(
+            operation
+                .input()
+                .unwrap()
+                .prepare_with(&Accepting, &set)
+                .unwrap(),
+        );
+        drop(operation.output().unwrap().prepare(&Accepting).unwrap());
+        assert_eq!(assembled(), before);
+        assert!(proof.document.inner.resolution.get().is_none());
+        assert!(kept(&proof, &set).is_none());
+    }
+
+    #[test]
+    fn repeated_and_alternating_sets_reuse_one_space_per_live_pair() {
+        let proof = proof();
+        let operation = proof.resolve_operation("op").unwrap();
+        let (input, output) = (operation.input().unwrap(), operation.output().unwrap());
+        let (first, second) = (snapshot(1), snapshot(2));
+        let before = assembled();
+        for _ in 0..3 {
+            for set in [&first, &second, &first.clone()] {
+                drop(input.prepare_with(&Projecting, set).unwrap());
+                drop(output.prepare_with(&Projecting, set).unwrap());
+            }
+            drop(output.prepare(&Projecting).unwrap());
+            drop(
+                output
+                    .prepare_with(&Projecting, &ResourceSet::default())
+                    .unwrap(),
+            );
+        }
+        // One space per set, plus one without resources, however preparations alternate.
+        assert_eq!(assembled() - before, 3);
+        let (a, b) = (
+            kept(&proof, &first).unwrap(),
+            kept(&proof, &second).unwrap(),
+        );
+        assert!(!a.ptr_eq(&b));
+    }
+
+    #[test]
+    fn dropping_a_set_or_every_document_owner_releases_its_space() {
+        let proof = proof();
+        let operation = proof.resolve_operation("op").unwrap();
+        let input = operation.input().unwrap();
+        let (first, second) = (snapshot(1), snapshot(2));
+        drop(input.prepare_with(&Projecting, &first).unwrap());
+        drop(input.prepare_with(&Projecting, &second).unwrap());
+        let (a, b) = (
+            kept(&proof, &first).unwrap(),
+            kept(&proof, &second).unwrap(),
+        );
+        // The set goes; its space goes with it while the document lives on, and
+        // the document stops tracking it.
+        drop(first);
+        assert!(a.upgrade().is_none());
+        assert!(b.upgrade().is_some());
+        assert_eq!(proof.document.inner.spaces_in.lock().unwrap().len(), 1);
+        // Every document owner goes; the set it outlives no longer keeps its space.
+        drop(operation);
+        drop(proof);
+        assert!(b.upgrade().is_none());
+        assert_eq!(second.kept_spaces(), 0);
+    }
+
+    #[test]
+    fn a_prepared_contract_keeps_no_space_of_a_set_it_never_received() {
+        let proof = proof();
+        let operation = proof.resolve_operation("op").unwrap();
+        // Prepared without resources and retaining its request, hence the document.
+        let keep = operation.output().unwrap().prepare(&Projecting).unwrap();
+        let without = Arc::downgrade(proof.document.inner.resolution.get().unwrap());
+        let other = snapshot(1);
+        let prepared = operation
+            .input()
+            .unwrap()
+            .prepare_with(&Projecting, &other)
+            .unwrap();
+        let space = kept(&proof, &other).unwrap();
+        drop((prepared, other, operation, proof));
+        // The document lives on through `keep`; the other set's space does not.
+        assert!(space.upgrade().is_none());
+        assert!(without.upgrade().is_some());
+        drop(keep);
+        assert!(without.upgrade().is_none());
+    }
+
+    #[test]
+    fn concurrent_preparations_project_their_own_set() {
+        /// Fails preparation when the projection lacks the request's own snapshot,
+        /// recognized by its `minimum` member.
+        struct Checking;
+        impl SchemaEvaluator for Checking {
+            fn prepare(
+                &self,
+                request: &SchemaRequest,
+                control: &dyn WorkControl,
+            ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+                let program = request.evaluation_program(control)?;
+                if let Some(resource) = request.supplied_resources().iter().next() {
+                    let text = resource.document.text();
+                    let marker = text[text.find("\"minimum\":").unwrap()..].trim_end_matches('}');
+                    if !program
+                        .resources()
+                        .iter()
+                        .any(|r| r.document.text().contains(marker))
+                    {
+                        return Err(NoVerdict::new(
+                            NoVerdictReason::EvaluatorFailure,
+                            "crossed-sets",
+                            "the projection carries another set's snapshot",
+                        ));
+                    }
+                }
+                Ok(Arc::new(Retaining(request.clone())))
+            }
+        }
+        let proof = proof();
+        let sets: Vec<_> = (0..6).map(snapshot).collect();
+        std::thread::scope(|scope| {
+            for thread in 0..6 {
+                let (proof, sets) = (&proof, &sets);
+                scope.spawn(move || {
+                    let operation = proof.resolve_operation("op").unwrap();
+                    let (input, output) = (operation.input().unwrap(), operation.output().unwrap());
+                    for i in 0..60 {
+                        let set = &sets[(thread + i) % sets.len()];
+                        assert!(input.prepare_with(&Checking, set).is_ok());
+                        if i % 5 == 0 {
+                            assert!(output.prepare(&Checking).is_ok());
+                        }
+                    }
+                });
+            }
+        });
+        assert!(sets.iter().all(|set| set.kept_spaces() == 1));
     }
 }

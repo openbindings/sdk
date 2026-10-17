@@ -1,26 +1,12 @@
 //! Retained value contracts and the optional evaluator interface.
-use crate::{schema_space::SchemaSpace, *};
+use crate::{document::DocumentInner, schema_space::SchemaSpace, *};
 use serde::Serialize;
-use std::{collections::BTreeMap, fmt, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    fmt,
+    sync::{Arc, Mutex, PoisonError, Weak},
+};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
-#[serde(rename_all = "kebab-case")]
-/// Closed choice of the operation's input or output contract.
-pub enum Direction {
-    /// Select the operation's `input` schema.
-    Input,
-    /// Select the operation's `output` schema.
-    Output,
-}
-impl Direction {
-    /// Return the normative field spelling, `input` or `output`.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Input => "input",
-            Self::Output => "output",
-        }
-    }
-}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 /// Extensible cause of an unavailable schema verdict. Refusal is neither satisfaction nor failure; consumers should retain an unknown-cause fallback.
@@ -37,7 +23,7 @@ pub enum NoVerdictReason {
     /// schemas can refuse at preparation. This does not prove that missing content
     /// is necessary to the instance's semantic verdict.
     /// Use [`Document::references`] to inspect document-wide reference spellings
-    /// and original keyword locations, then create a new context with supplied resources.
+    /// and original keyword locations, then prepare again with supplied resources.
     /// That inventory is not an exact per-value-contract missing-resource list.
     /// Apply your disclosure policy before logging it.
     ResourceUnavailable,
@@ -289,15 +275,57 @@ impl std::fmt::Debug for ValueOutcome {
 pub struct SchemaResource {
     /// Absolute retrieval URI without a nonempty fragment; [`ResourceSet::new`] validates and normalizes identity.
     pub uri: String,
-    /// Exact resource JSON retained by the context; duplicate-member resources are refused.
+    /// Exact resource JSON retained by its set; duplicate-member resources are refused.
     pub document: JsonValue,
 }
-/// Immutable caller-supplied resources. Separate contexts can use the same URI
+/// Immutable caller-supplied resources. Separate sets can use the same URI
 /// for different snapshots; this is not a process-wide registry or an acquirer.
+/// Clones share storage, including the identity index built by [`Self::new`],
+/// so passing one set to many preparations indexes its resources once. A
+/// resolution space assembled for this set and a document revision is kept
+/// with the set while both are alive, and released when either is dropped.
 #[derive(Clone, Default)]
 pub struct ResourceSet {
-    resources: Arc<Vec<SchemaResource>>,
-    pub(crate) input_policy: openbindings_internal_schema::Supplied,
+    inner: Arc<ResourceSetInner>,
+}
+#[derive(Default)]
+pub(crate) struct ResourceSetInner {
+    resources: Vec<SchemaResource>,
+    input_policy: openbindings_internal_schema::Supplied,
+    // One space per live revision this set was projected with. A revision's
+    // entry leaves when the revision is dropped; all leave with the set.
+    spaces: Mutex<Vec<(Weak<DocumentInner>, Arc<SchemaSpace>)>>,
+}
+impl Drop for ResourceSetInner {
+    fn drop(&mut self) {
+        let set: *const Self = self;
+        let spaces = std::mem::take(
+            self.spaces
+                .get_mut()
+                .unwrap_or_else(PoisonError::into_inner),
+        );
+        // Live revisions stop tracking this set; the spaces go with it.
+        for (revision, _) in &spaces {
+            if let Some(revision) = revision.upgrade() {
+                revision.forget_set(set);
+            }
+        }
+    }
+}
+impl ResourceSetInner {
+    /// Release the space kept for a revision that is being dropped.
+    pub(crate) fn release(&self, document: *const DocumentInner) {
+        // Drop the released space after unlocking: it can own large snapshots.
+        let released: Vec<_> = {
+            let mut spaces = self.spaces.lock().unwrap_or_else(PoisonError::into_inner);
+            let (released, kept) = std::mem::take(&mut *spaces)
+                .into_iter()
+                .partition(|(revision, _)| std::ptr::eq(revision.as_ptr(), document));
+            *spaces = kept;
+            released
+        };
+        drop(released);
+    }
 }
 #[derive(Clone, PartialEq, Eq)]
 /// Invalid supplied-resource configuration, separate from schema preparation and value outcomes.
@@ -359,23 +387,77 @@ impl ResourceSet {
         }))
         .expect("admitted resources");
         Ok(Self {
-            resources: Arc::new(resources),
-            input_policy,
+            inner: Arc::new(ResourceSetInner {
+                resources,
+                input_policy,
+                spaces: Mutex::default(),
+            }),
         })
     }
     /// Borrow supplied resources in deterministic normalized-URI order; no allocation or acquisition.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &SchemaResource> {
-        self.resources.iter()
+        self.inner.resources.iter()
+    }
+    pub(crate) fn input_policy(&self) -> &openbindings_internal_schema::Supplied {
+        &self.inner.input_policy
+    }
+    pub(crate) fn is_empty(&self) -> bool {
+        self.inner.resources.is_empty()
+    }
+    /// The space kept for this set and a live revision, if one was assembled.
+    pub(crate) fn kept_space(&self, document: &Arc<DocumentInner>) -> Option<Arc<SchemaSpace>> {
+        let spaces = self
+            .inner
+            .spaces
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        spaces
+            .iter()
+            .find(|(revision, _)| std::ptr::eq(revision.as_ptr(), Arc::as_ptr(document)))
+            .map(|(_, space)| space.clone())
+    }
+    /// Keep `space` for this set and a live revision; when a concurrent
+    /// preparation kept one first, that space wins and is returned.
+    pub(crate) fn keep_space(
+        &self,
+        document: &Arc<DocumentInner>,
+        space: Arc<SchemaSpace>,
+    ) -> Arc<SchemaSpace> {
+        let mut spaces = self
+            .inner
+            .spaces
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if let Some((_, kept)) = spaces
+            .iter()
+            .find(|(revision, _)| std::ptr::eq(revision.as_ptr(), Arc::as_ptr(document)))
+        {
+            return kept.clone();
+        }
+        spaces.push((Arc::downgrade(document), space.clone()));
+        space
+    }
+    pub(crate) fn downgrade(&self) -> Weak<ResourceSetInner> {
+        Arc::downgrade(&self.inner)
+    }
+    #[cfg(test)]
+    pub(crate) fn kept_spaces(&self) -> usize {
+        self.inner.spaces.lock().unwrap().len()
+    }
+    /// One shared empty set, so preparation without resources allocates nothing.
+    pub(crate) fn empty() -> &'static Self {
+        static EMPTY: std::sync::OnceLock<ResourceSet> = std::sync::OnceLock::new();
+        EMPTY.get_or_init(Self::default)
     }
 }
 
 /// Original snapshots and an entry point. Evaluators may use the checked projection
-/// helper or evaluate this context directly; generated identifiers are never API identity.
+/// helper or evaluate this request directly; generated identifiers are never API identity.
 #[derive(Clone)]
 pub struct SchemaRequest {
-    pub(crate) space: Arc<SchemaSpace>,
-    pub(crate) entry: usize,
     document: Conformant<Document>,
+    resources: ResourceSet,
+    entry: JsonValue,
 }
 impl std::fmt::Debug for SchemaRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -388,19 +470,27 @@ impl SchemaRequest {
     pub fn document(&self) -> &Conformant<Document> {
         &self.document
     }
-    /// Borrow the immutable explicit resources for this context; evaluators must not substitute global URI caches.
+    /// Borrow the immutable explicit resources for this preparation; evaluators must not substitute global URI caches.
     pub fn supplied_resources(&self) -> &ResourceSet {
-        &self.space.supplied
+        &self.resources
     }
     /// Borrow the selected exact input/output schema in its original context.
     pub fn entry(&self) -> &JsonValue {
-        &self.space.nodes[self.entry].value
+        &self.entry
     }
     /// Allocate the selected schema's original document location.
     pub fn entry_location(&self) -> SchemaLocation {
-        self.space.location(self.entry)
+        SchemaLocation {
+            resource: None,
+            pointer: openbindings_internal_json::backend::pointer(&self.entry).unwrap_or_default(),
+        }
     }
     /// Build a finite evaluator projection with private resource identities, original-location mapping and cooperative cancellation. Refuses unsupported/ambiguous/unavailable references instead of retrieving data.
+    ///
+    /// The first projection for a document revision and resource set assembles
+    /// their resolution space using the set's identity index; later preparations
+    /// with the same live pair reuse it, and dropping the set or every owner of
+    /// the revision releases it.
     ///
     /// # Errors
     /// Returns a refusal if references cannot be resolved soundly, a required capability or resource is unavailable, work limits are exceeded, or cancellation is observed. A refusal is not an instance failure.
@@ -408,7 +498,12 @@ impl SchemaRequest {
         &self,
         control: &dyn WorkControl,
     ) -> Result<EvaluationProgram, NoVerdict> {
-        self.space.program(self.entry, control)
+        control.check()?;
+        let space = self.document.resolution(&self.resources);
+        let entry = space
+            .document_node(&self.entry)
+            .expect("preparation admits only indexed document schema positions");
+        space.program(entry, control)
     }
 }
 /// A closed §7 schema projection with original provenance. Generated identifiers
@@ -509,10 +604,9 @@ pub(crate) fn projection_failure(f: openbindings_internal_schema::Failure) -> No
 /// }
 /// let document = Document::parse(
 ///     r#"{"openbindings":"0.2.0","operations":{"run":{"input":true}}}"#)?;
-/// let context = document.validate().unwrap().conformant().expect("conformant document").value_contracts(Arc::new(TrueOnly), ResourceSet::default());
-/// let ValueContractPreparation::Ready(contract) = context.prepare("run", Direction::Input) else {
-///     panic!("the true schema must be supported");
-/// };
+/// let document = document.validate()?.conformant().expect("conformant document");
+/// let operation = document.resolve_operation("run").expect("declared operation");
+/// let contract = operation.input().expect("declared input").prepare(&TrueOnly)?;
 /// assert!(matches!(contract.validate(&JsonValue::null()), ValueOutcome::Satisfies));
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -532,153 +626,145 @@ pub trait PreparedSchema: Send + Sync {
     /// Return only established verdicts. Resource/capability/work failures are NoVerdict.
     fn validate(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome;
 }
-/// An immutable document/resource/evaluator context with caller-owned preparation.
-/// Select a value contract using [`Self::prepare`], then retain its ready owner for
-/// repeated validation. Replacing an application's active context does not
-/// mutate already prepared work. See the
+/// An operation's input or output schema as a normative value contract, not yet
+/// prepared. Only a conformant operation hands one out, through
+/// [`ConformantOperationView::input`] and [`ConformantOperationView::output`]; a
+/// plain [`OperationView`] exposes the exact schema value without preparation:
+/// ```compile_fail,E0599
+/// use openbindings::*;
+/// fn draft(operation: OperationView, evaluator: &dyn SchemaEvaluator) {
+///     let _ = operation.input().unwrap().prepare(evaluator);
+/// }
+/// ```
+/// Neither a contract nor a prepared contract can be assembled by hand:
+/// ```compile_fail,E0451
+/// use openbindings::*;
+/// fn forge(operation: &ConformantOperationView) {
+///     let _ = ValueContract { operation, side: todo!() };
+/// }
+/// ```
+/// ```compile_fail,E0451
+/// use openbindings::*;
+/// fn raw(schema: std::sync::Arc<dyn PreparedSchema>) { let _ = PreparedContract { schema }; }
+/// ```
+/// Preparation borrows the evaluator and any supplied resources. Each call
+/// prepares anew; retain the [`PreparedContract`] to validate repeatedly. The
+/// document's resolution space is assembled only when an evaluator requests the
+/// core projection, once per live revision and resource set. See the
 /// [Rust lifecycle guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md#resources-diagnostics-and-lifetime).
-#[derive(Clone)]
-pub struct ValueContracts {
-    inner: Arc<ContractsInner>,
+#[derive(Clone, Copy)]
+pub struct ValueContract<'a> {
+    // Two words, like the exact schema reference it replaces in conformant reads.
+    operation: &'a ConformantOperationView,
+    side: Side,
 }
-impl std::fmt::Debug for ValueContracts {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ValueContracts").finish_non_exhaustive()
-    }
+/// Which declared field of its operation a contract is.
+#[derive(Clone, Copy)]
+pub(crate) enum Side {
+    Input,
+    Output,
 }
-
-struct ContractsInner {
-    document: Conformant<Document>,
-    space: Arc<SchemaSpace>,
-    evaluator: Arc<dyn SchemaEvaluator>,
-}
-/// Setup result. Ready means successfully prepared, not decidable. A ready
-/// contract may return no verdict for every instance (including a bare missing reference).
-#[derive(Clone)]
-#[must_use = "inspect the outcome before continuing"]
-pub enum ValueContractPreparation {
-    /// A retained prepared value contract, independently usable after context drop.
-    Ready(ValueContract),
-    /// The selected operation exists but has no field for this direction; this is distinct from the present boolean schema `false`.
-    NoValueContract,
-    /// No primary key or alias matches the request.
-    OperationMissing,
-    /// Retained selection branch; conformant documents cannot produce it because OBI-05 proves unique names. Document selection reports ambiguity through OperationSelection.
-    OperationAmbiguous {
-        #[doc = "Distinct matching primary keys in lexical order; repeated aliases can yield one candidate key."]
-        candidates: Vec<String>,
-    },
-    /// Selection found a value contract, but preparation did not establish readiness.
-    NoVerdict {
-        #[doc = "Truthful preparation refusal; no instance was judged."]
-        detail: NoVerdict,
-    },
-}
-impl ValueContractPreparation {
-    /// Consume preparation into a ready value contract or its non-ready reason.
-    /// A ready contract can still return any of the four [`ValueOutcome`] variants.
-    /// This conversion does not retry preparation or change its evidence.
-    ///
-    /// # Errors
-    /// Returns the missing-operation, absent-contract, ambiguous-operation or
-    /// no-verdict reason with its original payload.
-    pub fn into_result(self) -> Result<ValueContract, ValueContractPreparationError> {
-        match self {
-            Self::Ready(contract) => Ok(contract),
-            Self::NoValueContract => Err(ValueContractPreparationError::NoValueContract),
-            Self::OperationMissing => Err(ValueContractPreparationError::OperationMissing),
-            Self::OperationAmbiguous { candidates } => {
-                Err(ValueContractPreparationError::OperationAmbiguous { candidates })
-            }
-            Self::NoVerdict { detail } => Err(ValueContractPreparationError::NoVerdict { detail }),
-        }
-    }
-}
-
-/// A non-ready value-contract preparation result for callers using `?`.
-/// No instance was judged. Payloads retain the original selection or preparation
-/// evidence. `Display` and [`std::error::Error::source`] can expose evaluator text;
-/// `Debug` follows [`NoVerdict`]'s redaction and shows no caller or document text.
-#[derive(Clone)]
-#[non_exhaustive]
-pub enum ValueContractPreparationError {
-    /// The selected operation has no schema for the requested direction.
-    NoValueContract,
-    /// No primary key or alias matches the request.
-    OperationMissing,
-    /// Retained selection branch, unreachable through a conformant document.
-    OperationAmbiguous {
-        /// Distinct matching primary keys in lexical order, retained unchanged.
-        candidates: Vec<String>,
-    },
-    /// Preparation did not establish readiness. This does not prove undefinedness.
-    NoVerdict {
-        /// Original reason, code, message and optional schema location.
-        detail: NoVerdict,
-    },
-}
-impl fmt::Debug for ValueContractPreparationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::NoValueContract => f.write_str("NoValueContract"),
-            Self::OperationMissing => f.write_str("OperationMissing"),
-            Self::OperationAmbiguous { .. } => {
-                f.debug_struct("OperationAmbiguous").finish_non_exhaustive()
-            }
-            // NoVerdict's own Debug already applies the redaction rule.
-            Self::NoVerdict { detail } => {
-                f.debug_struct("NoVerdict").field("detail", detail).finish()
-            }
-        }
-    }
-}
-impl fmt::Display for ValueContractPreparationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::NoValueContract => f.write_str("operation has no value contract"),
-            Self::OperationMissing => f.write_str("operation is missing"),
-            Self::OperationAmbiguous { .. } => f.write_str("operation is ambiguous"),
-            Self::NoVerdict { detail } => write!(f, "value contract preparation refused: {detail}"),
-        }
-    }
-}
-impl std::error::Error for ValueContractPreparationError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::NoVerdict { detail } => Some(detail),
-            _ => None,
-        }
-    }
-}
-impl std::fmt::Debug for ValueContractPreparation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Ready(value) => f.debug_tuple("Ready").field(value).finish(),
-            Self::NoValueContract => f.write_str("NoValueContract"),
-            Self::OperationMissing => f.write_str("OperationMissing"),
-            Self::OperationAmbiguous { .. } => {
-                f.debug_struct("OperationAmbiguous").finish_non_exhaustive()
-            }
-            Self::NoVerdict { detail } => {
-                f.debug_struct("NoVerdict").field("detail", detail).finish()
-            }
-        }
-    }
-}
-
-/// A ready value contract that retains its required compiled state independently of
-/// document/context lifetime. Cloning shares immutable state;
-/// dropping the final owner releases that owner, without promising lower RSS.
-#[derive(Clone)]
-pub struct ValueContract {
-    schema: Arc<dyn PreparedSchema>,
-}
-impl fmt::Debug for ValueContract {
+impl fmt::Debug for ValueContract<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ValueContract { .. }")
     }
 }
-impl ValueContract {
+impl<'a> ValueContract<'a> {
+    /// The contract of a field the operation declares, or `None` when it is absent.
+    pub(crate) fn declared(operation: &'a ConformantOperationView, side: Side) -> Option<Self> {
+        operation.field(side).map(|_| Self { operation, side })
+    }
+    /// Borrow the exact schema without preparing it. Present `true`, `false` and
+    /// objects remain distinct original values.
+    pub fn schema(&self) -> JsonRef<'a> {
+        self.operation
+            .field(self.side)
+            .expect("a contract exists only for a declared field")
+    }
+    /// Prepare with no supplied resources. Ready means prepared, not decidable:
+    /// a prepared contract can still return any of the four [`ValueOutcome`]
+    /// variants, including no-verdict for every value.
+    ///
+    /// # Errors
+    /// Returns a [`NoVerdict`] refusal when preparation is not established. A
+    /// refusal judges no instance and does not prove semantic undefinedness.
+    pub fn prepare(&self, evaluator: &dyn SchemaEvaluator) -> Result<PreparedContract, NoVerdict> {
+        self.prepare_with(evaluator, ResourceSet::empty())
+    }
+    /// Prepare with immutable supplied resources; nothing is fetched. Passing
+    /// the same set again reuses its index, and its resolution space with this
+    /// document while both are alive.
+    ///
+    /// # Errors
+    /// Returns a [`NoVerdict`] refusal when preparation is not established. A
+    /// refusal judges no instance and does not prove semantic undefinedness.
+    pub fn prepare_with(
+        &self,
+        evaluator: &dyn SchemaEvaluator,
+        resources: &ResourceSet,
+    ) -> Result<PreparedContract, NoVerdict> {
+        self.prepare_with_control(evaluator, resources, &crate::work_control::NeverCancelled)
+    }
+    /// Prepare with cooperative cancellation. A cancelled attempt returns no
+    /// prepared owner. Cancellation and transient evaluator failures do not
+    /// poison a retry; use a fresh [`WorkControl`] after cancellation.
+    ///
+    /// # Errors
+    /// Returns a [`NoVerdict`] refusal when preparation is not established,
+    /// including `Cancelled` when cancellation is observed before a prepared
+    /// owner is returned. A refusal judges no instance.
+    pub fn prepare_with_control(
+        &self,
+        evaluator: &dyn SchemaEvaluator,
+        resources: &ResourceSet,
+        control: &dyn WorkControl,
+    ) -> Result<PreparedContract, NoVerdict> {
+        control.check()?;
+        let schema = self.schema();
+        let entry = schema.to_owned();
+        let document = self.operation.proof();
+        if !document
+            .as_document()
+            .schema_index()
+            .positions
+            .contains_key(&openbindings_internal_json::backend::node_id(&entry))
+        {
+            return Err(NoVerdict::new(
+                NoVerdictReason::ConservativePreparation,
+                "non-schema-entry",
+                "the operation direction is not a schema position",
+            )
+            .located(SchemaLocation {
+                resource: None,
+                pointer: schema.location().pointer.unwrap_or_default(),
+            }));
+        }
+        let request = SchemaRequest {
+            document: document.clone(),
+            resources: resources.clone(),
+            entry,
+        };
+        let prepared = evaluator.prepare(&request, control);
+        // An evaluator may finish while the caller cancels; no ready owner is returned.
+        control.check()?;
+        prepared.map(|schema| PreparedContract { schema })
+    }
+}
+
+/// A prepared value contract that retains its required compiled state
+/// independently of the document, resources and evaluator. It is
+/// `Clone + Send + Sync + 'static`; cloning shares immutable state, and dropping
+/// the final owner releases it, without promising lower RSS.
+#[derive(Clone)]
+pub struct PreparedContract {
+    schema: Arc<dyn PreparedSchema>,
+}
+impl fmt::Debug for PreparedContract {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PreparedContract { .. }")
+    }
+}
+impl PreparedContract {
     /// Admit exact JSON text or bytes under [`JsonLimits::default`], then validate.
     /// Every [`ValueOutcome`] is returned as `Ok`, including undefined and
     /// no-verdict. Duplicate members are retained by admission and yield
@@ -730,99 +816,6 @@ impl ValueContract {
         self.schema.validate(value, control)
     }
 }
-impl Conformant<Document> {
-    /// Select an evaluator and immutable supplied resources for normative value contracts.
-    /// Documents cannot construct normative contracts:
-    /// ```compile_fail
-    /// use openbindings::*;
-    /// fn draft(doc: Document, evaluator: std::sync::Arc<dyn SchemaEvaluator>) {
-    ///     doc.value_contracts(evaluator, ResourceSet::default());
-    /// }
-    /// ```
-    /// Raw prepared schemas cannot manufacture a normative contract:
-    /// ```compile_fail
-    /// use openbindings::*;
-    /// fn raw(schema: std::sync::Arc<dyn PreparedSchema>) { let _ = ValueContract { schema }; }
-    /// ```
-    /// No preparation or acquisition occurs. Each prepare compiles anew; retain
-    /// the ready ValueContract to reuse it. Ready means prepared, not guaranteed decidable.
-    pub fn value_contracts(
-        &self,
-        evaluator: Arc<dyn SchemaEvaluator>,
-        resources: ResourceSet,
-    ) -> ValueContracts {
-        ValueContracts {
-            inner: Arc::new(ContractsInner {
-                document: self.clone(),
-                space: Arc::new(SchemaSpace::new(self.as_document().clone(), resources)),
-                evaluator,
-            }),
-        }
-    }
-}
-impl ValueContracts {
-    /// Select a primary operation name or alias and prepare one direction's value contract.
-    /// Match [`ValueContractPreparation`] or use [`ValueContractPreparation::into_result`]
-    /// to propagate a non-ready result with `?`. Missing operation,
-    /// absent value contract and preparation refusal are setup states, not instance failures.
-    /// The retained ambiguous branch is unreachable through conformant documents.
-    /// Ready value contracts can be retained beyond this context and validated repeatedly.
-    /// Every call prepares independently, including aliases of the same operation.
-    /// Retain and clone a ready [`ValueContract`] to validate without recompiling.
-    pub fn prepare(&self, operation: &str, direction: Direction) -> ValueContractPreparation {
-        self.prepare_with_control(operation, direction, &crate::work_control::NeverCancelled)
-    }
-    /// Prepare with cooperative cancellation. A cancelled attempt returns no ready
-    /// owner. Cancellation and transient evaluator failures do not poison healthy
-    /// retry on this context; use a fresh [`WorkControl`] after cancellation.
-    /// A no-verdict refusal does not prove semantic undefinedness. To change supplied
-    /// resources, build a new immutable context and decide when to replace active work.
-    pub fn prepare_with_control(
-        &self,
-        operation: &str,
-        direction: Direction,
-        control: &dyn WorkControl,
-    ) -> ValueContractPreparation {
-        if let Err(detail) = control.check() {
-            let detail = detail.into();
-            return ValueContractPreparation::NoVerdict { detail };
-        }
-        let Some(op) = self.inner.document.resolve_operation(operation) else {
-            return ValueContractPreparation::OperationMissing;
-        };
-        let Some(schema) = op.value().get(direction.as_str()) else {
-            return ValueContractPreparation::NoValueContract;
-        };
-        let Some(entry) = self.inner.space.document_node(&schema.to_owned()) else {
-            return ValueContractPreparation::NoVerdict {
-                detail: NoVerdict::new(
-                    NoVerdictReason::ConservativePreparation,
-                    "non-schema-entry",
-                    "the operation direction is not a schema position",
-                )
-                .located(SchemaLocation {
-                    resource: None,
-                    pointer: schema.location().pointer.unwrap_or_default(),
-                }),
-            };
-        };
-        let request = SchemaRequest {
-            document: self.inner.document.clone(),
-            space: self.inner.space.clone(),
-            entry,
-        };
-        let prepared = self.inner.evaluator.prepare(&request, control);
-        // An evaluator may finish while the caller cancels; no ready owner is returned.
-        if let Err(detail) = control.check() {
-            let detail = detail.into();
-            return ValueContractPreparation::NoVerdict { detail };
-        }
-        match prepared {
-            Ok(schema) => ValueContractPreparation::Ready(ValueContract { schema }),
-            Err(detail) => ValueContractPreparation::NoVerdict { detail },
-        }
-    }
-}
 
 impl std::fmt::Debug for ValueProblemDetails {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -846,7 +839,7 @@ impl std::fmt::Debug for SchemaResource {
 impl std::fmt::Debug for ResourceSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ResourceSet")
-            .field("resources", &self.resources.len())
+            .field("resources", &self.inner.resources.len())
             .finish_non_exhaustive()
     }
 }

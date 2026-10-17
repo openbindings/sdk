@@ -25,24 +25,31 @@ fn row(label: &'static str, value: &(impl Debug + ?Sized)) -> Row {
     }
 }
 
+/// Prepares nothing and refuses with a caller-chosen code.
+struct Refuse(&'static str);
+impl SchemaEvaluator for Refuse {
+    fn prepare(
+        &self,
+        _: &SchemaRequest,
+        _: &dyn WorkControl,
+    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+        let mut detail = refusal();
+        detail.code = self.0.into();
+        Err(detail)
+    }
+}
 #[test]
-fn preparation_errors_redact_payloads_like_no_verdict() {
-    let mut rows = vec![
-        row(
-            "preparation error absent contract",
-            &ValueContractPreparationError::NoValueContract,
-        ),
-        row(
-            "preparation error missing operation",
-            &ValueContractPreparationError::OperationMissing,
-        ),
-        row(
-            "preparation error ambiguous operation",
-            &ValueContractPreparationError::OperationAmbiguous {
-                candidates: vec![SECRET.into()],
-            },
-        ),
-    ];
+fn preparation_refusals_redact_payloads_like_no_verdict() {
+    let document =
+        Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":true}}}"#)
+            .unwrap()
+            .validate()
+            .unwrap()
+            .conformant()
+            .unwrap();
+    let operation = document.resolve_operation("op").unwrap();
+    let contract = operation.input().unwrap();
+    let mut rows = vec![row("ValueContract", &contract)];
     for code in [
         "caller-cancelled",
         "resource-unavailable",
@@ -50,26 +57,19 @@ fn preparation_errors_redact_payloads_like_no_verdict() {
         SECRET,
         "caller-cancelled-PROBE-BEARER-TOKEN-7391",
     ] {
-        let mut detail = refusal();
-        detail.code = code.into();
-        let error = ValueContractPreparation::NoVerdict { detail }
-            .into_result()
-            .unwrap_err();
-        // The error's Debug is NoVerdict's own: same redaction, no code text.
-        let ValueContractPreparationError::NoVerdict { detail } = &error else {
-            unreachable!("a no-verdict preparation converts to the no-verdict error")
-        };
-        assert!(format!("{error:?}").contains(&format!("{detail:?}")));
-        rows.push(row("preparation error code", &error));
+        let error = contract.prepare(&Refuse(code)).unwrap_err();
+        // A preparation refusal is the evaluator's NoVerdict: same redaction, no code text.
+        assert_eq!(error.code, code);
+        rows.push(row("preparation refusal code", &error));
         assert!(error.to_string().contains(SECRET));
-        assert!(
-            std::error::Error::source(&error)
-                .unwrap()
-                .to_string()
-                .contains(SECRET)
-        );
+        let error: &dyn std::error::Error = &error;
+        assert!(error.source().is_none());
     }
-    check_rows(rows, 8);
+    rows.push(row(
+        "refused preparation result",
+        &contract.prepare(&Refuse(SECRET)),
+    ));
+    check_rows(rows, 7);
 }
 fn evidence() -> BTreeMap<String, JsonValue> {
     BTreeMap::from([(
@@ -89,6 +89,22 @@ fn refusal() -> NoVerdict {
         code: SECRET.into(),
         message: format!("provider refused schema operand {SECRET}"),
         location: Some(location()),
+    }
+}
+/// Accepts every value, so a prepared contract exists to inspect.
+struct Accept;
+impl SchemaEvaluator for Accept {
+    fn prepare(
+        &self,
+        _: &SchemaRequest,
+        _: &dyn WorkControl,
+    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+        Ok(Arc::new(Accept))
+    }
+}
+impl PreparedSchema for Accept {
+    fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
+        ValueOutcome::Satisfies
     }
 }
 #[derive(Default)]
@@ -245,12 +261,6 @@ fn debug_redacts_caller_text_at_every_boundary() {
                 candidates: vec![SECRET.into()],
             },
         ),
-        row(
-            "ValueContractPreparation::OperationAmbiguous",
-            &ValueContractPreparation::OperationAmbiguous {
-                candidates: vec![SECRET.into()],
-            },
-        ),
         row("ReferenceRefusal", &reference_refusal),
         row("Reference", &reference_item),
         row(
@@ -275,10 +285,6 @@ fn debug_redacts_caller_text_at_every_boundary() {
         row(
             "ValueOutcome::NoVerdict",
             &ValueOutcome::NoVerdict { detail: refusal() },
-        ),
-        row(
-            "ValueContractPreparation::NoVerdict",
-            &ValueContractPreparation::NoVerdict { detail: refusal() },
         ),
     ];
     assert!(serde_json::to_string(&outcome).unwrap().contains(SECRET));
@@ -321,11 +327,14 @@ fn debug_redacts_caller_text_at_every_boundary() {
         row("SchemaResource", &resource),
         row("ResourceSet", &resources),
     ]);
-    let capture = Arc::new(Capture::default());
-    let captured = validated
-        .value_contracts(capture.clone(), resources)
-        .prepare("op", Direction::Input);
+    let capture = Capture::default();
+    let operation = validated.resolve_operation("op").unwrap();
+    let contract = operation.input().unwrap();
+    rows.push(row("ValueContract", &contract));
+    let captured = contract.prepare_with(&capture, &resources);
     rows.push(row("capturing preparation", &captured));
+    let prepared = contract.prepare(&Accept).unwrap();
+    rows.push(row("PreparedContract", &prepared));
     let request = capture.0.lock().unwrap().take().unwrap();
     rows.push(row("SchemaRequest", &request));
     rows.push(row(

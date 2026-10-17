@@ -32,8 +32,8 @@ async fn call<P: BindingInvoker>(document: Document, provider: P)
 
 The optional evaluator package is an explicit application dependency. Without
 `.with_evaluator`, absent schemas still forward values; a declared schema yields
-`ERR_SCHEMA_UNRESOLVED` on its first actual value. Supplying an evaluator builds
-one immutable document/resource context. Plain `invoke` prepares each used
+`ERR_SCHEMA_UNRESOLVED` on its first actual value. Supplying an evaluator retains
+it with one immutable resource set for every preparation. Plain `invoke` prepares each used
 direction lazily once per attempt and retains that contract for its stream; zero
 values do not trigger preparation. Fresh attempts prepare again. There is no network retrieval
 or whole-graph readiness gate.
@@ -54,7 +54,7 @@ Preparation returns `ERR_OPERATION_NOT_FOUND` for an unknown operation, `ERR_REF
 for metadata it cannot represent, and `ERR_SCHEMA_UNRESOLVED` when a declared
 value contract cannot be prepared; each releases partial work. `prepare_with_control`
 returns `ERR_CANCELLED` when cancelled, leaving no handle.
-A ready contract can still return no verdict or an undefined result for a
+A prepared contract can still return no verdict or an undefined result for a
 particular value. Both stop the affected value with `ERR_SCHEMA_UNRESOLVED`.
 `ValidationFailure::outcome()` retains `ValueOutcome::Undefined` separately from
 `NoVerdict`, so callers can distinguish an established undefined result from

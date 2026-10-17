@@ -311,16 +311,9 @@ mod tests {
             r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"enum":[0,1,2]}}}}"#,
         )
         .unwrap();
-        let context = document
-            .validate()
-            .unwrap()
-            .conformant()
-            .unwrap()
-            .value_contracts(capture.clone(), ResourceSet::default());
-        assert!(matches!(
-            context.prepare("op", Direction::Input),
-            ValueContractPreparation::Ready(_)
-        ));
+        let document = document.validate().unwrap().conformant().unwrap();
+        let operation = document.resolve_operation("op").unwrap();
+        assert!(operation.input().unwrap().prepare(&*capture).is_ok());
         let request = capture.0.lock().unwrap().take().unwrap();
         let at = SchemaLocation {
             resource: None,
@@ -426,16 +419,17 @@ mod tests {
             r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{{"enum":{choices}}}}}}}}}"#
         ))
         .unwrap();
-        let context = doc
+        let doc = doc
             .validate()
             .unwrap()
             .conformant()
-            .expect("conformant document")
-            .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
-        let ValueContractPreparation::Ready(contract) = context.prepare("op", Direction::Input)
-        else {
-            panic!()
-        };
+            .expect("conformant document");
+        let operation = doc.resolve_operation("op").unwrap();
+        let contract = operation
+            .input()
+            .unwrap()
+            .prepare(&DefaultEvaluator::new())
+            .unwrap();
         COPIED_DETAIL_BYTES.set(0);
         COPIED_ENUM_ITEMS.set(0);
         let ValueOutcome::Fails {

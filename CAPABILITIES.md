@@ -33,14 +33,15 @@ intact. See [performance and allocation boundaries](docs/performance-boundaries.
 
 Document validation needs no caller-supplied evaluator. Operation values require
 an explicit Rust `SchemaEvaluator`; the TypeScript facade supplies the bundled
-evaluator. Core alone makes no satisfies/fails decision, even for a boolean
+evaluator. Only a conformant operation hands out its input and output value
+contracts, and preparing one borrows the evaluator and any supplied resources. Core alone makes no satisfies/fails decision, even for a boolean
 schema. The [evaluator guide](docs/schema-evaluators.md) explains integration.
 
 The optional default evaluator supports JSON Schema 2020-12 with exact decimal
 comparison and explicit immutable resources. It performs no reference acquisition.
 `format` remains an annotation. Applied Unicode property matching and other
 unsupported capabilities produce no-verdict. Work and regex budgets can also
-prevent a verdict; a ready contract can remain undecidable for a particular value.
+prevent a verdict; a prepared contract can remain undecidable for a particular value.
 
 Missing content or undefined reference results do not prevent a verdict when the
 evaluator proves that they cannot affect it. An established undefined result has

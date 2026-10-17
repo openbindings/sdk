@@ -1,9 +1,29 @@
 //! Schema-embedding regressions: inspection must not alter authored identity or truth.
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
-use std::sync::{Arc, atomic::AtomicBool};
+use std::sync::atomic::AtomicBool;
 
 const BASE: &str = "https://probe.invalid/root";
+
+/// Prepare operation `op` input of a conformant document with upstream diagnostics.
+fn prepare_upstream(
+    doc: &Document,
+    resources: &ResourceSet,
+) -> Result<PreparedContract, NoVerdict> {
+    doc.validate()
+        .unwrap()
+        .conformant()
+        .unwrap()
+        .resolve_operation("op")
+        .unwrap()
+        .input()
+        .unwrap()
+        .prepare_with(
+            &DefaultEvaluator::new()
+                .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
+            resources,
+        )
+}
 
 fn fixture(schema: &str, reference: &str, supplied: bool) -> (Document, ResourceSet) {
     let (schemas, resources) = if supplied {
@@ -90,16 +110,7 @@ fn contained_draft_and_supplied_surrogate_collision_preserves_each_original_targ
                     let literal_pointer = literal_pointer
                         .strip_prefix("/schemas/R")
                         .unwrap_or(&literal_pointer);
-                    let validation = doc.validate().unwrap();
-                    let context = validation.conformant().unwrap().value_contracts(
-                        Arc::new(DefaultEvaluator::new().with_diagnostics(
-                            openbindings_json_schema_evaluator::Diagnostics::Upstream,
-                        )),
-                        resources,
-                    );
-                    let ValueContractPreparation::Ready(contract) =
-                        context.prepare("op", Direction::Input)
-                    else {
+                    let Ok(contract) = prepare_upstream(&doc, &resources) else {
                         panic!("expected ready")
                     };
                     assert!(matches!(
@@ -150,16 +161,7 @@ fn inspection_root_never_masks_missing_references_including_suffix_candidates() 
             let report = doc.references().unwrap();
             assert!(report.complete);
             assert!(report.references.iter().all(|r| matches!(&r.resolution, ReferenceResolution::Unresolved { detail } if detail.reason == ReferenceRefusalReason::ResourceUnavailable && detail.code == "resource-unavailable")), "{report:?}");
-            let validation = doc.validate().unwrap();
-            let context =
-                validation.conformant().unwrap().value_contracts(
-                    Arc::new(DefaultEvaluator::new().with_diagnostics(
-                        openbindings_json_schema_evaluator::Diagnostics::Upstream,
-                    )),
-                    ResourceSet::default(),
-                );
-            let ValueContractPreparation::Ready(contract) = context.prepare("op", Direction::Input)
-            else {
+            let Ok(contract) = prepare_upstream(&doc, &ResourceSet::default()) else {
                 panic!("expected ready")
             };
             for value in ["null", r#""s""#, "3", "{}", "[]"] {
@@ -201,18 +203,11 @@ fn unused_malformed_reference_sibling_is_isolated_but_malformed_id_stays_refused
                     matches!(&reference.resolution, ReferenceResolution::Unresolved { detail } if detail.code == "resource-inspection")
                 );
             }
-            let validation = doc.validate().unwrap();
-            let context =
-                validation.conformant().unwrap().value_contracts(
-                    Arc::new(DefaultEvaluator::new().with_diagnostics(
-                        openbindings_json_schema_evaluator::Diagnostics::Upstream,
-                    )),
-                    resources,
-                );
-            let prepared = context.prepare("op", Direction::Input);
+            let prepared = prepare_upstream(&doc, &resources);
             if bad.contains("$ref") {
-                let ValueContractPreparation::Ready(contract) = prepared else {
-                    panic!("{prepared:?}")
+                let contract = match prepared {
+                    Ok(contract) => contract,
+                    Err(detail) => panic!("{detail:?}"),
                 };
                 assert!(matches!(
                     contract.validate(&JsonValue::parse(r#""s""#).unwrap()),
@@ -224,7 +219,7 @@ fn unused_malformed_reference_sibling_is_isolated_but_malformed_id_stays_refused
                 ));
             } else {
                 assert!(
-                    matches!(prepared, ValueContractPreparation::NoVerdict { detail } if detail.reason == NoVerdictReason::ConservativePreparation && detail.code == "resource-inspection")
+                    matches!(prepared, Err(detail) if detail.reason == NoVerdictReason::ConservativePreparation && detail.code == "resource-inspection")
                 );
             }
         }

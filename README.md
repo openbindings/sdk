@@ -28,11 +28,11 @@ assert_eq!(operation.key(), "lookup");
 
 Continue with [Rust first use](docs/rust-first-use.md) to prepare a value contract,
 validate input, edit opaque values and retain prepared work. Rust needs no runtime
-initialization. The evaluator companion's `value_contracts(&conformant)` function
-supplies default budgets, coarse diagnostics and no extra resources. Prepare with
-`context.prepare(name, Direction::Input).into_result()?`, then check JSON text or
-bytes with `contract.validate_json(input)?`. The explicit context method remains
-available for shared evaluators and supplied resources. The [TypeScript guide](packages/typescript/README.md) starts with a
+initialization. A conformant operation hands out its contracts:
+`operation.input().ok_or("no input contract")?.prepare(&DefaultEvaluator::new())?`
+uses default budgets, coarse diagnostics and no supplied resources, then
+`contract.validate_json(input)?` checks JSON text or bytes. `prepare_with` borrows a
+configured evaluator and a `ResourceSet`. The [TypeScript guide](packages/typescript/README.md) starts with a
 complete document-to-verdict example and covers initialization and disposal.
 
 Edit a mutable `Document` with `set`, `remove`, atomic `edit(&[Edit])`, or typed
@@ -64,7 +64,7 @@ Start with the crate guide for
 
 ## Limits and compatibility
 
-Parsing, document conformance and value validation are separate steps. A ready
+Parsing, document conformance and value validation are separate steps. A prepared
 value contract can still return no-verdict for a value. Core never fetches schema
 references. Document validation works without an operation value evaluator;
 [the evaluator guide](docs/schema-evaluators.md) explains that boundary.

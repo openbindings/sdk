@@ -1,19 +1,20 @@
 //! Reproduce the cost of an unanchored search with the default regex allowance.
-use openbindings::{
-    Direction, Document, JsonValue, NoVerdictReason, ResourceSet, ValueContractPreparation,
-    ValueOutcome,
-};
+use openbindings::{Document, JsonValue, NoVerdictReason, ValueOutcome};
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
-use std::{hint::black_box, sync::Arc, time::Instant};
+use std::{hint::black_box, time::Instant};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let document = Document::parse(
         r#"{"openbindings":"0.2.0","operations":{"search":{"input":{"type":"string","pattern":"[A-Z]+[0-9]+"}}}}"#,
     )?;
     let conformant = document.validate()?.conformant().ok_or("invalid fixture")?;
-    let context =
-        conformant.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
-    let ValueContractPreparation::Ready(contract) = context.prepare("search", Direction::Input)
+    let operation = conformant
+        .resolve_operation("search")
+        .ok_or("fixture declares search")?;
+    let Ok(contract) = operation
+        .input()
+        .ok_or("fixture declares an input")?
+        .prepare(&DefaultEvaluator::new())
     else {
         return Err("pattern did not prepare".into());
     };

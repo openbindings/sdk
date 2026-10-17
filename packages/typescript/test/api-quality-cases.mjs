@@ -1,5 +1,5 @@
 import * as testing from "../dist/testing.js";
-import { conformantContracts } from "./conformant-contracts.mjs";
+import { prepareInput } from "./conformant-contracts.mjs";
 /** Public-API checks shared by repository and freshly installed host consumers. */
 export async function apiQualityCases(sdk, http) {
   let assertions = 0;
@@ -22,10 +22,10 @@ export async function apiQualityCases(sdk, http) {
     check(r.status === "parsed", "exact admission");
     return own(r.value);
   };
-  const ready = (context, name, direction = "input") => {
-    const r = context.prepare(name, direction);
+  const ready = (proof, name, options) => {
+    const r = prepareInput(proof, name, options);
     check(r.status === "ready", "ready " + name);
-    return own(r.valueContract);
+    return own(r.contract);
   };
   const throws = (fn, predicate, label) => {
     let error;
@@ -41,13 +41,11 @@ export async function apiQualityCases(sdk, http) {
     '{"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"}}}}',
   );
   warm.value.validate().document?.dispose();
-  const warmContext = conformantContracts(warm.value);
-  const warmPrepared = warmContext.prepare("run", "input");
+  const warmPrepared = prepareInput(warm.value, "run");
   if (warmPrepared.status !== "ready")
     throw new Error("Warmup did not prepare.");
-  warmPrepared.valueContract.validate(1);
-  warmPrepared.valueContract.dispose();
-  warmContext.dispose();
+  warmPrepared.contract.validate(1);
+  warmPrepared.contract.dispose();
   warm.value.dispose();
   const baseline = testing.liveStorageOwners();
   try {
@@ -189,26 +187,28 @@ export async function apiQualityCases(sdk, http) {
         e.location?.pointer === "/operations/run/aliases",
       "malformed alias primary lookup",
     );
-    const context = own(conformantContracts(document));
+    const validated = document.validate();
+    check(validated.status === "conformant", "document proof");
+    const conformant = own(validated.document);
     check(
-      context.prepare("empty", "input").status === "no-value-contract",
+      own(conformant.resolveOperation("empty")).input() === undefined,
       "absent contract setup",
     );
     check(
-      context.prepare("missing", "input").status === "operation-missing",
+      conformant.resolveOperation("missing") === undefined,
       "missing operation setup",
     );
     check(
       ambiguous.validate().status === "report",
       "ambiguous documents cannot construct contracts",
     );
-    const remote = context.prepare("remote", "input");
+    const remote = prepareInput(conformant, "remote");
     check(
       remote.status === "ready",
       "qualified missing-resource contract prepares ready",
     );
-    own(remote.valueContract);
-    const remoteResult = remote.valueContract.validate(null);
+    own(remote.contract);
+    const remoteResult = remote.contract.validate(null);
     check(
       remoteResult.outcome === "no-verdict" &&
         remoteResult.detail.reason === "resource-unavailable",
@@ -216,10 +216,9 @@ export async function apiQualityCases(sdk, http) {
     );
     const cancelled = new AbortController();
     cancelled.abort();
+    const runContract = own(own(conformant.resolveOperation("run")).input());
     const beforeCancel = testing.liveStorageOwners();
-    const cancelledSetup = context.prepare("run", "input", {
-      signal: cancelled.signal,
-    });
+    const cancelledSetup = runContract.prepare({ signal: cancelled.signal });
     check(
       cancelledSetup.status === "no-verdict" &&
         cancelledSetup.detail.reason === "cancelled",
@@ -229,8 +228,8 @@ export async function apiQualityCases(sdk, http) {
       testing.liveStorageOwners() === beforeCancel,
       "no ready owner on cancellation",
     );
-    const input = ready(context, "run");
-    const never = ready(context, "never");
+    const input = ready(conformant, "run");
+    const never = ready(conformant, "never");
     check(
       never.validate(null).outcome === "fails",
       "false is present contract",
@@ -306,7 +305,7 @@ export async function apiQualityCases(sdk, http) {
       "options validated",
     );
     const large = exact("9007199254740993");
-    const object = ready(context, "object");
+    const object = ready(conformant, "object");
     const beforeValue = testing.liveStorageOwners();
     check(
       object.validate({ n: large }).outcome === "satisfies",
@@ -407,10 +406,8 @@ export async function apiQualityCases(sdk, http) {
     const others = own(
       new sdk.SchemaResources([["https://schema.test/id", stringSchema]]),
     );
-    const first = own(conformantContracts(document, { resources }));
-    const second = own(conformantContracts(document, { resources: others }));
-    const a = ready(first, "remote"),
-      b = ready(second, "remote");
+    const a = ready(conformant, "remote", { resources }),
+      b = ready(conformant, "remote", { resources: others });
     check(
       a.validate(7).outcome === "satisfies" &&
         b.validate(7).outcome === "fails",
@@ -459,7 +456,8 @@ export async function apiQualityCases(sdk, http) {
     const publication = own(new http.DiscoveryPublication(proof));
     proof.dispose();
     document.dispose();
-    context.dispose();
+    conformant.dispose();
+    runContract.dispose();
     resources.dispose();
     check(operation.key === "run", "retained selected owner");
     const child = own(operation.value());

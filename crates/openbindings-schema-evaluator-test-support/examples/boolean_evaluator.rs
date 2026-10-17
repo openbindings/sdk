@@ -47,18 +47,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let document = Document::parse(
         r#"{"openbindings":"0.2.0","operations":{"op":{"input":true,"output":false}}}"#,
     )?;
-    let context = document
+    let document = document
         .validate()?
         .conformant()
-        .ok_or("document is not conformant")?
-        .value_contracts(Arc::new(BooleanEvaluator), ResourceSet::default());
+        .ok_or("document is not conformant")?;
+    let operation = document
+        .resolve_operation("op")
+        .ok_or("operation is missing")?;
     let value = JsonValue::null();
-    let ValueContractPreparation::Ready(input) = context.prepare("op", Direction::Input) else {
-        panic!("boolean input should prepare")
-    };
-    let ValueContractPreparation::Ready(output) = context.prepare("op", Direction::Output) else {
-        panic!("boolean output should prepare")
-    };
+    let input = operation
+        .input()
+        .ok_or("operation has no input contract")?
+        .prepare(&BooleanEvaluator)?;
+    let output = operation
+        .output()
+        .ok_or("operation has no output contract")?
+        .prepare(&BooleanEvaluator)?;
     assert!(matches!(input.validate(&value), ValueOutcome::Satisfies));
     assert!(matches!(
         output.validate(&value),

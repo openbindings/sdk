@@ -4,10 +4,12 @@
 
 ### Added
 
-- Rust `value_contracts(&conformant)` in the default evaluator companion,
-  `ValueContract::validate_json` for exact text admission, and
-  `ValueContractPreparation::into_result` with a payload-preserving
-  `ValueContractPreparationError` for error propagation.
+- Value contracts come from the operation. A conformant operation's `input()` and
+  `output()` return a `ValueContract`; `prepare(&evaluator)`, `prepare_with(&evaluator,
+  &resources)` and `prepare_with_control` borrow the evaluator and return
+  `Result<PreparedContract, NoVerdict>`. `PreparedContract::validate_json` checks exact
+  JSON text. TypeScript mirrors this with `ConformantOperationView.input()`/`output()`
+  and `ValueContract.prepare(options)`.
 
 - One exact OpenBindings 0.2 `Document` for parsing, inspection and in-place
   editing: atomic batches of JSON Pointer edits and typed part maps, and typed
@@ -17,7 +19,7 @@
   infallible views, operation and alias lookup, exact schema access, reference
   inspection and opaque kind comparison. It is the only route to value contracts.
 - Explicit immutable resources and reusable input/output value contracts, with
-  distinct preparation results and satisfies, fails, undefined or no-verdict outcomes.
+  preparation refusals separate from satisfies, fails, undefined or no-verdict outcomes.
   Undefined results carry a code, message and optional original schema location;
   no-verdict describes inability to answer.
 - An optional JSON Schema 2020-12 evaluator with exact numeric semantics,

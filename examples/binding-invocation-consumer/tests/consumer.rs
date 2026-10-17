@@ -322,6 +322,7 @@ async fn dependency_first_cannot_shadow_a_lossy_target_or_impose_operation_schem
             .unwrap()
             .input()
             .unwrap()
+            .schema()
             .text(),
         r#"{"type":"null"}"#
     );

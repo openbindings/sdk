@@ -12,7 +12,7 @@ conformant fields, authors documents, resolves operation names and inspects
 references. Its fixed document-schema and meta-schema checks are included.
 They do not evaluate examples or runtime values against an operation's schemas.
 
-Creating `ValueContracts` requires an explicit evaluator and resources. There is
+Preparing a `ValueContract` requires an explicit evaluator. There is
 no fallback value evaluator in core. A stated `true`, `false` or `{}` schema
 still requires an evaluator. Absence alone means no value contract is stated.
 
@@ -31,16 +31,19 @@ the default evaluator; it does not expose custom evaluator callbacks.
 ## Bring your own
 
 Implement `SchemaEvaluator::prepare` and return an owned `PreparedSchema`.
-Pass the implementation in an `Arc` and an immutable `ResourceSet` to
-`Conformant<Document>::value_contracts`. Implement `PreparedSchema::validate` to
-return satisfies, fails, undefined or no-verdict. Observe `WorkControl` during both stages
-and retain everything needed after the document and context owners are dropped.
+Pass a borrowed implementation, and an immutable `ResourceSet` when resources are
+supplied, to a conformant operation's `ValueContract::prepare_with`. Implement
+`PreparedSchema::validate` to return satisfies, fails, undefined or no-verdict.
+Observe `WorkControl` during both stages and retain everything needed after the
+document, resources and request are dropped.
 
 `SchemaRequest` gives the original document, entry, source location and supplied
 resources. Its `evaluation_program()` helper supplies the OpenBindings embedding
-projection when the evaluator needs a closed JSON Schema program. It can refuse;
-preserve the reason rather than claiming a value failure. The original context
-remains available to an implementation with a different resolution strategy.
+projection when the evaluator needs a closed JSON Schema program. Its resolution
+space is assembled once per live document revision and resource set and reused by
+later preparations with that pair, until the set or the revision is dropped. It can refuse; preserve the reason rather than claiming a value
+failure. The original document and resources remain available to an implementation
+with a different resolution strategy.
 Reference acquisition is application policy, never an implicit request from core.
 
 Implement OpenBindings' value-contract semantics, including its JSON Schema

@@ -1,5 +1,5 @@
 import * as testing from "../dist/testing.js";
-import { conformantContracts } from "./conformant-contracts.mjs";
+import { prepareInput, prepareOutput } from "./conformant-contracts.mjs";
 // Shared Node/browser controls. Fixtures retain frozen independent expected truths.
 export function oneOfCases(sdk, fixtures) {
   let checks = 0;
@@ -10,7 +10,7 @@ export function oneOfCases(sdk, fixtures) {
   const run = (
     text,
     operation,
-    direction,
+    field,
     valueText,
     entries = {},
     options = {},
@@ -22,21 +22,20 @@ export function oneOfCases(sdk, fixtures) {
       sdk.parseJson(JSON.stringify(value)).value,
     ]);
     const resources = new sdk.SchemaResources(values);
-    let context, contract, value;
+    let contract, value;
     try {
-      context = conformantContracts(parsed.value, {
+      const prepare = field === "output" ? prepareOutput : prepareInput;
+      const setup = prepare(parsed.value, operation, {
         diagnostics: "upstream",
         ...options,
         resources,
       });
-      const setup = context.prepare(operation, direction);
       check(
         setup.status === "ready",
         `oneOf prepared: ${JSON.stringify(setup)}`,
       );
-      contract = setup.valueContract;
+      contract = setup.contract;
       value = sdk.parseJson(valueText).value;
-      context.dispose();
       parsed.value.dispose();
       resources.dispose();
       const result = contract.validate(value);
@@ -55,7 +54,6 @@ export function oneOfCases(sdk, fixtures) {
     } finally {
       value?.dispose();
       contract?.dispose();
-      context?.dispose();
       resources.dispose();
       values.forEach(([, value]) => value.dispose());
       parsed.value.dispose();

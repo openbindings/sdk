@@ -2,8 +2,14 @@
 use crate::*;
 use openbindings_internal_schema as embedding;
 use std::ops::Deref;
+#[cfg(test)]
+thread_local! {
+    /// Resolution spaces assembled on this thread, for reuse tests.
+    pub(crate) static ASSEMBLED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+// Holds snapshots of the document and the set's resources, never the set or
+// revision handles, so a set that keeps a space forms no ownership cycle.
 pub(crate) struct SchemaSpace {
-    pub supplied: ResourceSet,
     inner: embedding::SchemaSpace,
 }
 impl Deref for SchemaSpace {
@@ -13,18 +19,17 @@ impl Deref for SchemaSpace {
     }
 }
 impl SchemaSpace {
-    pub fn new(document: Document, supplied: ResourceSet) -> Self {
-        let resources = supplied.input_policy.clone();
+    /// Layer supplied resources over the document. Value-contract callers keep
+    /// the result per live revision and set; validation keeps its own index.
+    pub fn new(document: &Document, supplied: &ResourceSet) -> Self {
+        #[cfg(test)]
+        ASSEMBLED.with(|count| count.set(count.get() + 1));
         Self {
-            supplied,
             inner: embedding::SchemaSpace::new(
                 embedding::RawDocument::new(document.value().clone()),
-                resources,
+                supplied.input_policy().clone(),
             ),
         }
-    }
-    pub fn location(&self, node: usize) -> SchemaLocation {
-        crate::contracts::original_location(self.inner.location(node))
     }
     pub fn program(
         &self,
@@ -212,7 +217,7 @@ impl Document {
         control: &dyn WorkControl,
     ) -> Result<ReferenceReport, InterpretationError> {
         self.interpretable()?;
-        Ok(SchemaSpace::new(self.clone(), resources).references(control))
+        Ok(SchemaSpace::new(self, &resources).references(control))
     }
 }
 
@@ -221,12 +226,12 @@ impl Conformant<Document> {
     pub fn references(&self) -> ReferenceReport {
         self.references_with_resources(ResourceSet::default(), &crate::work_control::NeverCancelled)
     }
-    /// Inspect references using an immutable supplied-resource context and control.
+    /// Inspect references using an immutable supplied resource set and control.
     pub fn references_with_resources(
         &self,
         resources: ResourceSet,
         control: &dyn WorkControl,
     ) -> ReferenceReport {
-        SchemaSpace::new(self.as_document().clone(), resources).references(control)
+        SchemaSpace::new(self.as_document(), &resources).references(control)
     }
 }

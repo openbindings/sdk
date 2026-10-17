@@ -12,7 +12,16 @@ const text = String.raw`{"openbindings":"0.2.0","name":"\ud800\udc00","version":
 
 test("Rust proof transfer is single-use and unavailable to parsed or forged handles", () => {
   const parsed = bridge.WasmDocument.parseBytes(new TextEncoder().encode(text));
-  assert.equal(typeof parsed.valueContracts, "undefined");
+  // A parsed document's operation carries exact schema values, never contracts.
+  const selection = parsed.resolveOperation("go");
+  const plain = selection.takeOperation();
+  selection.free();
+  assert.ok(!(plain instanceof bridge.WasmConformantOperation));
+  const plainInput = plain.input();
+  assert.ok(plainInput instanceof bridge.WasmJson);
+  assert.equal(typeof plainInput.prepare, "undefined");
+  plainInput.free();
+  plain.free();
   const transfer = parsed.validate();
   assert.equal(JSON.parse(transfer.report()).report.conclusion, "conformant");
   const proof = transfer.takeConformant();
@@ -23,8 +32,15 @@ test("Rust proof transfer is single-use and unavailable to parsed or forged hand
   const retained = proof.retain();
   proof.free();
   const resources = new bridge.WasmResources();
-  const context = retained.valueContracts(resources, "{}", "coarse");
-  context.free();
+  const operation = retained.resolveOperation("go");
+  assert.ok(operation instanceof bridge.WasmConformantOperation);
+  const contract = operation.input();
+  assert.ok(contract instanceof bridge.WasmValueContract);
+  const preparation = contract.prepareWith(resources, "{}", "coarse", false);
+  assert.equal(JSON.parse(preparation.result()).status, "ready");
+  preparation.free();
+  contract.free();
+  operation.free();
   resources.free();
   retained.free();
   for (const source of [
@@ -41,13 +57,21 @@ test("Rust proof transfer is single-use and unavailable to parsed or forged hand
     unproven.free();
   }
   const unproven = sdk.Document.parse(text).value;
-  assert.equal(typeof unproven.valueContracts, "undefined");
+  const selected = unproven.resolveOperation("go");
+  assert.equal(selected.status, "found");
+  assert.ok(!(selected.operation instanceof sdk.ConformantOperationView));
+  const exactInput = selected.operation.input();
+  assert.ok(exactInput instanceof sdk.ExactJson);
+  assert.equal(typeof exactInput.prepare, "undefined");
+  exactInput.dispose();
+  selected.operation.dispose();
   assert.throws(() =>
-    sdk.ConformantDocument.prototype.valueContracts.call(unproven),
+    sdk.ConformantDocument.prototype.resolveOperation.call(unproven, "go"),
   );
   assert.throws(() =>
-    sdk.ConformantDocument.prototype.valueContracts.call(
+    sdk.ConformantDocument.prototype.resolveOperation.call(
       Object.create(sdk.ConformantDocument.prototype),
+      "go",
     ),
   );
   // Overriding JS evidence cannot mint Rust proof.
@@ -81,11 +105,9 @@ test("raw document receiver substitution rechecks proof at every authority entry
         for (const receiver of [parsed, transfer]) {
           assert.throws(
             () =>
-              bridge.WasmConformantDocument.prototype.valueContracts.call(
+              bridge.WasmConformantDocument.prototype.resolveOperation.call(
                 receiver,
-                resources,
-                "{}",
-                "coarse",
+                "op",
               ),
             refuses("document-conformance"),
           );
@@ -147,29 +169,30 @@ test("raw document receiver substitution rechecks proof at every authority entry
       bridge.WasmDocumentValidation.prototype.takeConformant.call(parsed),
       undefined,
     );
-    const context = bridge.WasmConformantDocument.prototype.valueContracts.call(
-      parsed,
-      resources,
-      "{}",
-      "coarse",
-    );
+    const operation =
+      bridge.WasmConformantDocument.prototype.resolveOperation.call(
+        parsed,
+        "op",
+      );
     parsed.free();
     const publication = new bridge.WasmPublication(proof, "*");
     publication.free();
     proof.free();
     retained.free();
-    const preparation = context.prepare("op", "input", false);
+    const contract = operation.input();
+    operation.free();
+    const preparation = contract.prepareWith(resources, "{}", "coarse", false);
     assert.equal(JSON.parse(preparation.result()).status, "ready");
-    const contract = preparation.takeValueContract();
+    const prepared = preparation.takeContract();
     const value = bridge.WasmJson.parseBytes(new TextEncoder().encode("42"));
     assert.equal(
-      JSON.parse(contract.validate(value, false)).outcome,
+      JSON.parse(prepared.validate(value, false)).outcome,
       "satisfies",
     );
     value.free();
-    contract.free();
+    prepared.free();
     preparation.free();
-    context.free();
+    contract.free();
   } finally {
     resources.free();
   }
@@ -248,10 +271,14 @@ test("validated text and retained reads preserve decoded text and presence", () 
   assert.equal(proof.dependencyAcceptsKind("d", "\ud800\udc00"), true);
   const schemas = proof.schemas();
   assert.deepEqual([...schemas.keys()], ["f", "o", "t"]);
-  const operation = proof.resolveOperation("go").operation;
+  const operation = proof.resolveOperation("go");
   const example = operation.example("e");
-  const input = operation.input(),
-    output = operation.output();
+  const inputContract = operation.input(),
+    outputContract = operation.output();
+  const input = inputContract.schema(),
+    output = outputContract.schema();
+  inputContract.dispose();
+  outputContract.dispose();
   const exampleInput = example.input();
   assert.equal(example.output(), undefined);
   assert.equal(example.metadata.description.charCodeAt(0), 0xd800);
@@ -340,6 +367,6 @@ test("undetermined admission evidence cannot produce a proof through Rust/Wasm o
   assert.equal(result.report.conclusion, "undetermined");
   assert.equal(sdk.Document.parse(bytes).status, "input-error");
   assert.throws(() =>
-    sdk.ConformantDocument.prototype.valueContracts.call(result),
+    sdk.ConformantDocument.prototype.resolveOperation.call(result, "run"),
   );
 });

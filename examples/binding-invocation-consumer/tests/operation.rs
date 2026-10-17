@@ -1,8 +1,8 @@
 //! External-consumer checks: literal catalog expectations, public APIs only.
 use binding_invocation_consumer::{Catalog, KIND, yield_once};
 use openbindings::{
-    Direction, Document, JsonValue, NoVerdict, NoVerdictReason, PreparedSchema, ResourceSet,
-    SchemaEvaluator, SchemaRequest, Source, ValueOutcome, ValueProblem,
+    Document, JsonValue, NoVerdict, NoVerdictReason, PreparedSchema, ResourceSet, SchemaEvaluator,
+    SchemaRequest, Source, ValueOutcome, ValueProblem,
 };
 use openbindings_interface_synthesis::{
     CoverageStatus, SynthesisRequest, SynthesisSource, Synthesizer,
@@ -11,7 +11,7 @@ use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
     BindingRequest, InvocationError, ProviderIo,
     binding::BindingInvoker,
-    operation::{Attempt, Invoker, Request, ValidationStage},
+    operation::{Attempt, Direction, Invoker, Request, ValidationStage},
 };
 use std::{
     future::Future,

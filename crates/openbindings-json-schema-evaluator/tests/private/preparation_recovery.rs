@@ -17,24 +17,34 @@ fn resources(entries: &[(&str, &str)]) -> ResourceSet {
     }))
     .unwrap()
 }
-fn prepare(
-    schema: &str,
-    entries: ResourceSet,
-    evaluator: Arc<dyn SchemaEvaluator>,
-) -> ValueContract {
-    match document(schema)
+/// Prepare operation `op` input of a conformant fixture.
+fn prepare_input(
+    document: &Document,
+    entries: &ResourceSet,
+    evaluator: &dyn SchemaEvaluator,
+) -> Result<PreparedContract, NoVerdict> {
+    document
         .validate()
         .unwrap()
         .conformant()
         .expect("conformant document")
-        .value_contracts(evaluator, entries)
-        .prepare("op", Direction::Input)
-    {
-        ValueContractPreparation::Ready(contract) => contract,
-        other => panic!("{other:?}"),
+        .resolve_operation("op")
+        .expect("declared operation")
+        .input()
+        .expect("declared input")
+        .prepare_with(evaluator, entries)
+}
+fn prepare(
+    schema: &str,
+    entries: ResourceSet,
+    evaluator: &dyn SchemaEvaluator,
+) -> PreparedContract {
+    match prepare_input(&document(schema), &entries, evaluator) {
+        Ok(contract) => contract,
+        Err(detail) => panic!("{detail:?}"),
     }
 }
-fn evidence(contract: &ValueContract) -> NoVerdict {
+fn evidence(contract: &PreparedContract) -> NoVerdict {
     match contract.validate(&json(r#"{"x":1,"a":1,"b":1}"#)) {
         ValueOutcome::NoVerdict { detail } => detail,
         other => panic!("{other:?}"),
@@ -56,20 +66,15 @@ fn bare_and_aliased_holes_are_ready_but_not_is_a_preparation_refusal() {
         (format!(r#"{{"not":{{"$ref":"{U}"}}}}"#), false),
     ] {
         let doc = document(&schema);
-        let validation = doc.validate().unwrap();
-        let context = validation
-            .conformant()
-            .unwrap()
-            .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
-        match context.prepare("op", Direction::Input) {
-            ValueContractPreparation::Ready(contract) if ready => {
+        match prepare_input(&doc, &ResourceSet::default(), &DefaultEvaluator::new()) {
+            Ok(contract) if ready => {
                 for value in ["null", "true", "1", r#""x""#, "[]", "{}"] {
                     assert!(matches!(contract.validate(&json(value)),
                         ValueOutcome::NoVerdict { detail }
                             if detail.reason == NoVerdictReason::ResourceUnavailable));
                 }
             }
-            ValueContractPreparation::NoVerdict { detail } if !ready => {
+            Err(detail) if !ready => {
                 assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
                 assert_eq!(detail.code, "resource-unavailable");
             }
@@ -80,14 +85,14 @@ fn bare_and_aliased_holes_are_ready_but_not_is_a_preparation_refusal() {
 
 #[test]
 fn preparation_is_selected_and_does_not_promise_value_decidability() {
-    let default = || Arc::new(DefaultEvaluator::new()) as Arc<dyn SchemaEvaluator>;
+    let default = DefaultEvaluator::new();
     for schema in [
         "true".to_owned(),
         format!(
             r#"{{"then":{{"$ref":"{U}"}},"else":{{"$ref":"{U}"}},"contentSchema":{{"$ref":"{U}"}},"$defs":{{"unused":{{"$ref":"{U}"}}}}}}"#
         ),
     ] {
-        let contract = prepare(&schema, ResourceSet::default(), default());
+        let contract = prepare(&schema, ResourceSet::default(), &default);
         assert!(matches!(
             contract.validate(&json("null")),
             ValueOutcome::Satisfies
@@ -101,7 +106,7 @@ fn preparation_is_selected_and_does_not_promise_value_decidability() {
             r##"{{"$defs":{{"a":{{"$ref":"{U}"}}}},"allOf":[{{"$ref":"#/operations/op/input/$defs/a"}}]}}"##
         ),
     ] {
-        let contract = prepare(&schema, ResourceSet::default(), default());
+        let contract = prepare(&schema, ResourceSet::default(), &default);
         if schema.contains("anyOf") {
             assert!(matches!(
                 contract.validate(&json("null")),
@@ -125,24 +130,20 @@ fn preparation_is_selected_and_does_not_promise_value_decidability() {
     let limited = prepare(
         "true",
         ResourceSet::default(),
-        Arc::new(DefaultEvaluator::with_limits(Limits {
+        &DefaultEvaluator::with_limits(Limits {
             evaluation_steps: 0,
             ..Limits::default()
-        })),
+        }),
     );
     assert!(
         matches!(limited.validate(&json("null")), ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::LimitExceeded)
     );
 }
 #[test]
-fn transitive_holes_and_original_snapshot_evidence_survive_new_contexts() {
+fn transitive_holes_and_original_snapshot_evidence_survive_new_resource_sets() {
     let schema = format!(r#"{{"$ref":"{U}"}}"#);
     let known = format!(r#"{{"properties":{{"x":{{"$ref":"{V}"}}}}}}"#);
-    let old = prepare(
-        &schema,
-        resources(&[(U, &known)]),
-        Arc::new(DefaultEvaluator::new()),
-    );
+    let old = prepare(&schema, resources(&[(U, &known)]), &DefaultEvaluator::new());
     let old_detail = evidence(&old);
     let at = old_detail.location.as_ref().unwrap();
     assert_eq!(at.resource.as_deref(), Some(U));
@@ -151,7 +152,7 @@ fn transitive_holes_and_original_snapshot_evidence_survive_new_contexts() {
     let new = prepare(
         &schema,
         resources(&[(U, &known), (V, "true")]),
-        Arc::new(DefaultEvaluator::new()),
+        &DefaultEvaluator::new(),
     );
     assert!(matches!(
         new.validate(&json(r#"{"x":1}"#)),
@@ -165,7 +166,7 @@ fn transitive_holes_and_original_snapshot_evidence_survive_new_contexts() {
     let two = prepare(
         &format!(r#"{{"properties":{{"a":{{"$ref":"{U}"}},"b":{{"$ref":"{V}"}}}}}}"#),
         ResourceSet::default(),
-        Arc::new(DefaultEvaluator::with_limits(Limits::default())),
+        &DefaultEvaluator::with_limits(Limits::default()),
     );
     assert!(
         evidence(&two)
@@ -199,14 +200,8 @@ impl SchemaEvaluator for Capture {
 fn direct_bounds_keeps_planner_diagnostics_while_default_restores_strict_refusal() {
     let schema = format!(r#"{{"not":{{"$ref":"{U}"}}}}"#);
     let doc = document(&schema);
-    let capture = Arc::new(Capture(Mutex::new(None)));
-    let _ = doc
-        .validate()
-        .unwrap()
-        .conformant()
-        .expect("conformant document")
-        .value_contracts(capture.clone(), ResourceSet::default())
-        .prepare("op", Direction::Input);
+    let capture = Capture(Mutex::new(None));
+    let _ = prepare_input(&doc, &ResourceSet::default(), &capture);
     let request = capture.0.lock().unwrap().take().unwrap();
     let strict = request
         .evaluation_program(&std::sync::atomic::AtomicBool::new(false))
@@ -216,14 +211,7 @@ fn direct_bounds_keeps_planner_diagnostics_while_default_restores_strict_refusal
         .unwrap_err();
     assert_eq!(direct.code, "partial-nonpositive-influence");
     assert_eq!(direct.reason, NoVerdictReason::ConservativePreparation);
-    let ValueContractPreparation::NoVerdict { detail } = doc
-        .validate()
-        .unwrap()
-        .conformant()
-        .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
-        .prepare("op", Direction::Input)
-    else {
+    let Err(detail) = prepare_input(&doc, &ResourceSet::default(), &DefaultEvaluator::new()) else {
         panic!()
     };
     assert_eq!(detail_json(&detail), detail_json(&strict));
@@ -268,7 +256,7 @@ impl PreparedSchema for Declared {
 }
 #[test]
 fn custom_evaluators_return_their_own_outcomes() {
-    let legacy = prepare("true", ResourceSet::default(), Arc::new(Legacy));
+    let legacy = prepare("true", ResourceSet::default(), &Legacy);
     assert!(matches!(
         legacy.validate(&json("null")),
         ValueOutcome::Satisfies
@@ -282,10 +270,6 @@ fn custom_evaluators_return_their_own_outcomes() {
         resource: None,
         pointer: "/operations/op/input".into(),
     });
-    let custom = prepare(
-        "true",
-        ResourceSet::default(),
-        Arc::new(Declared(own.clone())),
-    );
+    let custom = prepare("true", ResourceSet::default(), &Declared(own.clone()));
     assert_eq!(detail_json(&evidence(&custom)), detail_json(&own));
 }

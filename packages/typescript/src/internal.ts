@@ -149,8 +149,6 @@ export type DocumentValidation =
         supported: string;
       };
     };
-/** Closed choice of the normative operation input or output schema field. */
-export type Direction = "input" | "output";
 /** Original schema resource/pointer identity. resource null denotes the OpenBindings document; supplied URIs identify explicit resources and never initiate acquisition. Private evaluator projection identities are not exposed. */
 export interface SchemaLocation {
   /** Original supplied-resource URI, or null for the OpenBindings document. */
@@ -277,23 +275,13 @@ export type OperationSelection =
       /** Distinct primary keys in lexical order; repeated occurrences can yield one key. */
       candidates: readonly string[];
     };
-/** Setup partition: ready transfers a disposable ValueContract; no-value-contract means the selected direction is absent; operation-missing is a selection outcome; the retained operation-ambiguous branch is unreachable from conformant documents; no-verdict is preparation refusal. Present false is a value contract. Ready means prepared, not decidable: a contract can return no-verdict for every value. None of these setup refusals judges an instance. */
+/** Preparation result: ready transfers a disposable PreparedContract; no-verdict is a preparation refusal that judges no instance. Ready means prepared, not decidable: a contract can return no-verdict for every value. A missing operation or an absent contract is undefined before preparation, never a preparation result. */
 export type ValueContractPreparation =
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
       status: "ready";
-      /** Caller-owned prepared value contract, valid independently of its context. */
-      valueContract: ValueContract;
-    }
-  | {
-      /** Result discriminant; narrow this before reading branch-specific fields. */
-      status: "no-value-contract" | "operation-missing";
-    }
-  | {
-      /** Result discriminant; narrow this before reading branch-specific fields. */
-      status: "operation-ambiguous";
-      /** Distinct primary keys in lexical order; repeated occurrences can yield one key. */
-      candidates: readonly string[];
+      /** Caller-owned prepared contract, valid independently of its document, resources and operation owners. */
+      contract: PreparedContract;
     }
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
@@ -405,9 +393,9 @@ export interface EvaluatorLimits {
   /** Maximum regex parenthesis nesting; default 256. */
   patternDepth: number;
 }
-/** Immutable context inputs for caller-owned preparation. The built-in JSON Schema 2020-12 evaluator performs no resource I/O, treats format as annotation, declines unqualified Unicode property-escape matching, and may conservatively refuse potential non-progressing cycles. */
-export interface ValueContractOptions {
-  /** Explicit resources retained by the context; omitted means an empty caller set. The passed owner remains caller-owned. */
+/** Inputs for one preparation with the built-in JSON Schema 2020-12 evaluator, which performs no resource I/O, treats format as annotation, declines unqualified Unicode property-escape matching, and may conservatively refuse potential non-progressing cycles. A pre-aborted signal returns no-verdict. */
+export interface PrepareOptions extends WorkOptions {
+  /** Explicit resources borrowed for this preparation; omitted means none. No URI is fetched and the passed owner remains caller-owned. */
   resources?: SchemaResources;
   /** Overrides for built-in evaluator budgets; unspecified entries use evaluatorLimits(). */
   limits?: Partial<EvaluatorLimits>;
@@ -675,6 +663,27 @@ function conformantRaw(
 }
 const resourceRaw = (owner: SchemaResources) =>
   handle<wasm.WasmResources>(owner);
+// A JavaScript receiver's class is never authority for a proof-requiring call.
+function conformantOperationRaw(
+  owner: ConformantOperationView,
+): wasm.WasmConformantOperation {
+  const raw = handle<wasm.WasmConformantOperation>(owner);
+  if (!(raw instanceof wasm.WasmConformantOperation))
+    throw new SdkError(
+      "document-conformance",
+      "A conformant operation is required.",
+    );
+  return raw;
+}
+function contractRaw(owner: ValueContract): wasm.WasmValueContract {
+  const raw = handle<wasm.WasmValueContract>(owner);
+  if (!(raw instanceof wasm.WasmValueContract))
+    throw new SdkError(
+      "document-conformance",
+      "A value contract of a conformant operation is required.",
+    );
+  return raw;
+}
 /** Ordinary JSON scalar types; runtime admission additionally requires finite numbers. JavaScript number precision already lost before admission cannot be reconstructed. */
 export type JsonPrimitive = null | boolean | number | string;
 /** Checked ordinary JSON input, including nested borrowed ExactJson owners for precise subtrees. Arrays must be dense; objects plain with enumerable data properties; cycles, accessors, symbols, bigint and undefined are refused. Admission never invokes toJSON or getters. Ordinary encoding admits at most 67,108,864 UTF-16 code units of serialized text, 1,000,000 visited values and depth 10,000; subsequent exact parsing also enforces 64 MiB UTF-8 and 1,000,000 total nodes, including member-name tokens. */
@@ -1069,34 +1078,6 @@ abstract class DocumentReads extends Managed {
     const raw = sdkCall(() => documentRaw(this).dependency(key));
     return raw ? adopt(raw, DependencyView.fromRaw) : undefined;
   }
-  /** Resolve an exact primary key or alias; found transfers a new disposable view. Repeated occurrences remain ambiguous, including repeats within one operation. Invalid typed namespace throws SdkError. */
-  resolveOperation(name: string): OperationSelection {
-    scalar(name);
-    const selection = sdkCall(() => documentRaw(this).resolveOperation(name));
-    try {
-      const result = decode<
-        Exclude<OperationSelection, { status: "found" }> | { status: "found" }
-      >(selection.result());
-      if (result.status !== "found") {
-        if (result.status === "ambiguous") freezeCandidates(result.candidates);
-        else if (result.status !== "missing")
-          throw new Error("Invalid operation selection result.");
-        return result;
-      }
-      const raw = selection.takeOperation();
-      if (!raw)
-        throw new Error("Selection invariant: found operation missing.");
-      try {
-        return { status: "found", operation: new OperationView(raw) };
-      } catch (error) {
-        raw.free();
-        throw error;
-      }
-    } finally {
-      selection.free();
-    }
-  }
-
   /** Return undefined for absent dependency; otherwise test its kind filter. Absent kinds accepts all; an empty list matches none but is nonconformant. This helper does not establish normative conformance. */
   dependencyAcceptsKind(dependency: string, kind: string): boolean | undefined {
     scalar(dependency);
@@ -1198,6 +1179,35 @@ export class Document extends DocumentReads {
   /** Retain a separate editable owner sharing this revision until either owner is edited. */
   retain(): Document {
     return adoptDocument(handle<wasm.WasmDocument>(this).retain());
+  }
+  /** Resolve an exact primary key or alias; found transfers a new disposable view. Repeated occurrences remain ambiguous, including repeats within one operation. Invalid typed namespace throws SdkError. */
+  resolveOperation(name: string): OperationSelection {
+    scalar(name);
+    const selection = sdkCall(() =>
+      handle<wasm.WasmDocument>(this).resolveOperation(name),
+    );
+    try {
+      const result = decode<
+        Exclude<OperationSelection, { status: "found" }> | { status: "found" }
+      >(selection.result());
+      if (result.status !== "found") {
+        if (result.status === "ambiguous") freezeCandidates(result.candidates);
+        else if (result.status !== "missing")
+          throw new Error("Invalid operation selection result.");
+        return result;
+      }
+      const raw = selection.takeOperation();
+      if (!raw)
+        throw new Error("Selection invariant: found operation missing.");
+      try {
+        return { status: "found", operation: new OperationView(raw) };
+      } catch (error) {
+        raw.free();
+        throw error;
+      }
+    } finally {
+      selection.free();
+    }
   }
   /** Assess all rules; the conformant branch owns a new ConformantDocument. The original owner stays editable. Other branches retain evidence or a version refusal. */
   validate(): ValidationResult {
@@ -1476,70 +1486,41 @@ export class ConformantDocument extends DocumentReads {
     conformantRaw(this);
     return super.openbindings!;
   }
-  /** Create a NEW disposable evaluator/resource context from this Rust-owned conformance proof. Preparation is separate and may refuse. */
-  valueContracts(options: ValueContractOptions = {}): ValueContracts {
-    if (
-      options.diagnostics !== undefined &&
-      options.diagnostics !== "coarse" &&
-      options.diagnostics !== "upstream"
-    )
-      throw new SdkError(
-        "invalid-diagnostics",
-        "diagnostics must be coarse or upstream.",
-      );
-    const resources = options.resources,
-      limits = encodedLimits(options.limits),
-      empty = resources ? undefined : new SchemaResources();
-    try {
-      return new ValueContracts(
-        sdkCall(() =>
-          conformantRaw(this).valueContracts(
-            resourceRaw(resources ?? empty!),
-            limits,
-            options.diagnostics ?? "coarse",
-          ),
-        ),
-      );
-    } finally {
-      empty?.dispose();
-    }
+  /** Select a primary key or alias; undefined means missing, because OBI-05 excludes ambiguity. Transfers a new disposable ConformantOperationView whose input() and output() hand out value contracts. */
+  resolveOperation(name: string): ConformantOperationView | undefined {
+    scalar(name);
+    const raw = sdkCall(() => conformantRaw(this).resolveOperation(name));
+    return raw ? adopt(raw, ConformantOperationView.fromRaw) : undefined;
   }
 }
-/** Retained operation selected by primary key or alias. It survives parent disposal; dispose it independently. Exact value inspection is not normative proof or a prepared schema. */
-export class OperationView extends Managed {
+type OperationRaw = wasm.WasmOperation | wasm.WasmConformantOperation;
+/** Reads shared by plain and conformant operation views. */
+abstract class OperationReads extends Managed {
   #metadata?: OperationMetadata;
   #examples?: readonly ExampleMetadata[] | null;
-  /** @internal */ constructor(raw: wasm.WasmOperation) {
+  protected constructor(
+    raw: wasm.WasmOperation | wasm.WasmConformantOperation,
+  ) {
     super(raw);
   }
   /** Allocate the selected primary key, even when lookup used an alias. */
   get key(): string {
-    return handle<wasm.WasmOperation>(this).key();
+    return handle<OperationRaw>(this).key();
   }
   /** Return a NEW independently disposable ExactJson owner on every call. It survives operation/document disposal and can retain the original arena. */
   value(): ExactJson {
-    return new ExactJson(handle<wasm.WasmOperation>(this).value());
-  }
-  /** Acquire a NEW independently disposable input value; undefined means absent, including on documents. JSON null, true, false and objects remain present values. */
-  input(): ExactJson | undefined {
-    const raw = handle<wasm.WasmOperation>(this).input();
-    return raw ? new ExactJson(raw) : undefined;
-  }
-  /** Acquire a NEW independently disposable output value; undefined means absent. */
-  output(): ExactJson | undefined {
-    const raw = handle<wasm.WasmOperation>(this).output();
-    return raw ? new ExactJson(raw) : undefined;
+    return new ExactJson(handle<OperationRaw>(this).value());
   }
   /** Cached frozen metadata for this selected operation only; no disposable owner is created. */
   get metadata(): OperationMetadata {
-    const raw = handle<wasm.WasmOperation>(this);
+    const raw = handle<OperationRaw>(this);
     return (this.#metadata ??= freezeMetadata(
       decode<OperationMetadata>(sdkCall(() => raw.metadata())),
     ));
   }
   /** Cached frozen example metadata in lexical key order; null means absent, empty means present-empty. Checks every example row but transports no values. */
   get examples(): readonly ExampleMetadata[] | null {
-    const raw = handle<wasm.WasmOperation>(this);
+    const raw = handle<OperationRaw>(this);
     if (this.#examples === undefined)
       this.#examples = metadataRows<ExampleMetadata>(
         sdkCall(() => raw.examples()),
@@ -1549,12 +1530,49 @@ export class OperationView extends Managed {
   /** Acquire a selected independent example view, or undefined for absence; unrelated row metadata is not interpreted. */
   example(key: string): ExampleView | undefined {
     scalar(key);
-    const raw = sdkCall(() => handle<wasm.WasmOperation>(this).example(key));
+    const raw = sdkCall(() => handle<OperationRaw>(this).example(key));
     return raw ? adopt(raw, ExampleView.fromRaw) : undefined;
   }
   /** Allocate a plain array of binding keys in lexical order. No owner disposal, ranking or invocation is involved. */
   get bindings(): readonly string[] {
-    return decode(sdkCall(() => handle<wasm.WasmOperation>(this).bindings()));
+    return decode(sdkCall(() => handle<OperationRaw>(this).bindings()));
+  }
+}
+/** Retained operation of a Document, selected by primary key or alias. It survives parent disposal; dispose it independently. Exact value inspection is not normative proof or a prepared schema. */
+export class OperationView extends OperationReads {
+  /** @internal */ constructor(raw: wasm.WasmOperation) {
+    super(raw);
+  }
+  /** Acquire a NEW independently disposable input value; undefined means absent. JSON null, true, false and objects remain present values. */
+  input(): ExactJson | undefined {
+    const raw = handle<wasm.WasmOperation>(this).input();
+    return raw ? new ExactJson(raw) : undefined;
+  }
+  /** Acquire a NEW independently disposable output value; undefined means absent. */
+  output(): ExactJson | undefined {
+    const raw = handle<wasm.WasmOperation>(this).output();
+    return raw ? new ExactJson(raw) : undefined;
+  }
+}
+/** Retained operation of a ConformantDocument. Its input() and output() hand out value contracts; the plain OperationView of a Document cannot. It survives parent disposal; dispose it independently. */
+export class ConformantOperationView extends OperationReads {
+  private constructor(raw: wasm.WasmConformantOperation) {
+    super(raw);
+  }
+  /** @internal */ static fromRaw(
+    raw: wasm.WasmConformantOperation,
+  ): ConformantOperationView {
+    return new ConformantOperationView(raw);
+  }
+  /** Acquire a NEW disposable input value contract; undefined means the operation declares no input. Present true, false and object schemas are all contracts. Nothing is prepared here. */
+  input(): ValueContract | undefined {
+    const raw = conformantOperationRaw(this).input();
+    return raw ? adopt(raw, ValueContract.fromRaw) : undefined;
+  }
+  /** Acquire a NEW disposable output value contract; undefined means the operation declares no output. Nothing is prepared here. */
+  output(): ValueContract | undefined {
+    const raw = conformantOperationRaw(this).output();
+    return raw ? adopt(raw, ValueContract.fromRaw) : undefined;
   }
 }
 const resourceToken = Symbol("retained resource set");
@@ -1728,23 +1746,35 @@ export class SchemaResources extends Managed {
     return SchemaResources.fromRaw(handle<wasm.WasmResources>(this).retain());
   }
 }
-/** Disposable immutable document/resource/evaluator context. Every prepare call compiles anew; retain a ready ValueContract for repeated validation. Replacing or disposing the context does not invalidate retained contracts. */
-export class ValueContracts extends Managed {
-  /** @internal */ constructor(raw: wasm.WasmValueContracts) {
+/** A conformant operation's input or output value contract, not yet prepared. Obtain it from ConformantOperationView.input() or output(); it retains its proved revision and survives operation and document disposal. Each prepare() compiles anew; retain the PreparedContract for repeated validation. */
+export class ValueContract extends Managed {
+  private constructor(raw: wasm.WasmValueContract) {
     super(raw);
   }
-  /** Select the named operation/alias and requested direction, then return the complete ValueContractPreparation partition. Ready transfers a new disposable value contract independent of this context and does not promise every value is decidable. The default evaluator can prepare qualified missing-resource value contracts, including a bare missing $ref and dual-polarity oneOf bounds. Validation establishes a verdict when independent of missing content, or returns resource-unavailable when dependent. Known errors and unsupported partial contexts still refuse preparation. Supply resources in a new context to recover; existing prepared owners retain their original snapshot. Each call prepares independently; retain the ready owner to reuse compiled state. Cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
-  prepare(
-    operation: string,
-    direction: Direction,
-    options: WorkOptions = {},
-  ): ValueContractPreparation {
+  /** @internal */ static fromRaw(raw: wasm.WasmValueContract): ValueContract {
+    return new ValueContract(raw);
+  }
+  /** Acquire a NEW independently disposable owner for the exact schema, without preparing it. */
+  schema(): ExactJson {
+    return new ExactJson(contractRaw(this).schema());
+  }
+  /** Prepare with the built-in evaluator. Ready transfers a new disposable PreparedContract independent of this owner; it does not promise every value is decidable. The default evaluator can prepare qualified missing-resource value contracts, including a bare missing $ref and dual-polarity oneOf bounds. Validation establishes a verdict when independent of missing content, or returns resource-unavailable when dependent. Known errors and unsupported partial contracts still refuse preparation; prepare again with resources to recover, while existing prepared owners retain their original snapshot. Cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
+  prepare(options: PrepareOptions = {}): ValueContractPreparation {
     requireReady();
-    const raw = handle<wasm.WasmValueContracts>(this);
-    scalar(operation);
-    const signal = workSignal(options);
+    const raw = contractRaw(this);
+    const { resources, limits, diagnostics, signal } = prepareOptions(options);
+    // Omitted resources and limits cross the bridge as absent: the engine uses
+    // its shared empty set and default budgets without building either.
+    const encoded = limits === undefined ? undefined : encodedLimits(limits);
     const preparation = sdkCall(() =>
-      raw.prepare(operation, direction, isAborted(signal)),
+      resources === undefined
+        ? raw.prepare(encoded, diagnostics, isAborted(signal))
+        : raw.prepareWith(
+            resourceRaw(resources),
+            encoded,
+            diagnostics,
+            isAborted(signal),
+          ),
     );
     try {
       const result = decode<
@@ -1752,29 +1782,44 @@ export class ValueContracts extends Managed {
         | { status: "ready" }
       >(preparation.result());
       if (result.status !== "ready") {
-        if (result.status === "operation-ambiguous")
-          freezeCandidates(result.candidates);
-        else if (
-          !["no-value-contract", "operation-missing", "no-verdict"].includes(
-            result.status,
-          )
-        )
+        if (result.status !== "no-verdict")
           throw new Error("Invalid preparation result.");
         return result;
       }
-      const contract = preparation.takeValueContract();
+      const contract = preparation.takeContract();
       if (!contract)
-        throw new Error("Preparation invariant: ready value contract missing.");
-      try {
-        return { status: "ready", valueContract: new ValueContract(contract) };
-      } catch (error) {
-        contract.free();
-        throw error;
-      }
+        throw new Error("Preparation invariant: ready contract missing.");
+      return {
+        status: "ready",
+        contract: adopt(contract, PreparedContract.fromRaw),
+      };
     } finally {
       preparation.free();
     }
   }
+  /** Return a NEW independently disposable owner of this unprepared contract. */
+  retain(): ValueContract {
+    return ValueContract.fromRaw(contractRaw(this).retain());
+  }
+}
+function prepareOptions(options: PrepareOptions): {
+  resources?: SchemaResources;
+  limits?: Partial<EvaluatorLimits>;
+  diagnostics: "coarse" | "upstream";
+  signal?: AbortSignal;
+} {
+  if (!options || typeof options !== "object" || Array.isArray(options))
+    throw new SdkError(
+      "invalid-work-options",
+      "Preparation options must be an object.",
+    );
+  const { resources, limits, diagnostics = "coarse", ...work } = options;
+  if (diagnostics !== "coarse" && diagnostics !== "upstream")
+    throw new SdkError(
+      "invalid-diagnostics",
+      "diagnostics must be coarse or upstream.",
+    );
+  return { resources, limits, diagnostics, signal: workSignal(work) };
 }
 function freezeCandidates(candidates: readonly string[]): void {
   if (
@@ -1827,10 +1872,13 @@ function cancelledValue(): ValueOutcome {
     },
   };
 }
-/** Disposable retained selected-schema validator, independent of document/context lifetime. Repeated validation borrows exact input; ordinary inputs are admitted and temporary owners released within the call. No verdict here proves whole-document conformance. */
-export class ValueContract extends Managed {
-  /** @internal */ constructor(raw: wasm.WasmPrepared) {
+/** Disposable prepared value contract, independent of its document, resources, operation and contract owners. Repeated validation borrows exact input; ordinary inputs are admitted and temporary owners released within the call. No verdict here proves whole-document conformance. */
+export class PreparedContract extends Managed {
+  private constructor(raw: wasm.WasmPrepared) {
     super(raw);
+  }
+  /** @internal */ static fromRaw(raw: wasm.WasmPrepared): PreparedContract {
+    return new PreparedContract(raw);
   }
   /** Borrow an exact root; cancellation cannot preempt synchronous Wasm. */
   validate(value: ExactJson, options?: WorkOptions): ValueOutcome;
@@ -1892,12 +1940,9 @@ export class ValueContract extends Managed {
     }
   }
 
-  /** Return a NEW independently disposable owner sharing compiled state; it remains valid after the context or prior value contract owner is disposed. */
-  retain(): ValueContract {
-    const retained = new ValueContract(
-      handle<wasm.WasmPrepared>(this).retain(),
-    );
-    return retained;
+  /** Return a NEW independently disposable owner sharing compiled state; it remains valid after the prior prepared owner is disposed. */
+  retain(): PreparedContract {
+    return PreparedContract.fromRaw(handle<wasm.WasmPrepared>(this).retain());
   }
 }
 /** Pinned HTTP discovery companion identity and wire defaults, independent of package/spec core versions. */

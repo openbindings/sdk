@@ -2,9 +2,9 @@
 
 The default evaluator first prepares a complete closed program. If static reference
 resolution finds an absent resource carrier, it can prepare paired validity bounds
-for the fragment below. Applications still use context → prepare → validate.
-`Ready` means a validator exists, not that every value is decidable. Even a bare
-missing `$ref` prepares ready in this fragment and returns
+for the fragment below. Applications still use operation contract → prepare → validate.
+A prepared contract means a validator exists, not that every value is decidable. Even a bare
+missing `$ref` prepares in this fragment and returns
 `NoVerdict(ResourceUnavailable)` for every admitted value.
 
 An absent optional property can therefore satisfy its contract; a present unknown
@@ -17,12 +17,13 @@ error after the first hole is still checked. The strict `evaluation_program()`
 helper and core dispatch to custom evaluators retain their contracts.
 
 Prepared owners expose no resource-completeness classification. Applications retain
-ready owners and handle `NoVerdict` during validation. A ready owner can return no
+prepared owners and handle `NoVerdict` during validation. A prepared owner can return no
 verdict for every value; a bare missing reference and an alias of one are
 stage-tested, while `not` around one retains a preparation refusal. Applications
-that need a reference inventory can inspect the original context. Inspection is
-not a proof of value decidability, and no completeness promise is inferred for
-custom evaluators. New contexts do not change old prepared owners.
+that need a reference inventory can inspect the original document and resources.
+Inspection is not a proof of value decidability, and no completeness promise is
+inferred for custom evaluators. Preparing with new resources does not change old
+prepared owners.
 
 When optional bounds planning declines, the default evaluator restores its original
 strict located refusal detail for exactly these reason/code pairs:
@@ -76,7 +77,7 @@ identities, the Boolean ordering is:
 
 `lower(value) ≤ actual(value) ≤ upper(value)`.
 
-The programs make no annotation-output claim. A new context supplying colliding
+The programs make no annotation-output claim. A new resource set supplying colliding
 identities or unsupported content may refuse preparation; the theorem does not
 promise that every future resource set is preparable. A refused completion must
 not silently invert a previously proved verdict. Old owners remain bound to their
@@ -93,13 +94,13 @@ resources, including the constant and known-resource containers, use that namesp
 This includes relative spellings and fragments that resolve to the same carrier.
 Reference siblings, property/pattern names, array prefix positions, known identities
 and original mappings survive. The constants have no source map. Missing anchors
-or non-schema targets in a supplied carrier are not holes. The bundled context
+or non-schema targets in a supplied carrier are not holes. The bundled resolution
 selects unique contained declared IDs before supplied names; a supplied claim on a
 packaged standard identity is an identity conflict, so no completion can redefine one.
 Both planners check the selected base and final target carrier for references and
 every directly reached carrier. A competing canonical carrier is a conservative
 `resource-identity-conflict` refusal, even through an otherwise unique retrieval
-alias; it never produces an incomplete ready owner. Independently named nested
+alias; it never produces an incomplete prepared owner. Independently named nested
 resources retain their original base, dialect and provenance, without admitting an
 unused conflicting lexical ancestor. Independently invalid pointer/anchor fragment
 syntax cannot qualify an absent carrier as a hole.
@@ -186,7 +187,7 @@ allowance; exhaustion returns no verdict. Capacity and cost need separate measur
 ## Passes and diagnostics
 
 The evaluator compiles upper first, checks cancellation, then compiles lower.
-Failure of either compilation produces no ready owner. Compilation uses the same
+Failure of either compilation produces no prepared owner. Compilation uses the same
 exact literals/numbers, pattern limits and closed no-retrieval registry as the
 complete-resource path. Compilation clears the direct projection-resource owners.
 Exact `const` and `enum` constraints can retain subviews of those arenas, keeping

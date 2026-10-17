@@ -12,9 +12,9 @@ use crate::{
     value::source_from_json,
 };
 use openbindings::{
-    Conformant, ConformantBindingView, ConformantOperationView, Direction, Document, JsonKind,
-    JsonValue, NoVerdict, NoVerdictReason, ResourceSet, SchemaEvaluator, Source, ValueContract,
-    ValueContractPreparation, ValueContracts, ValueOutcome,
+    Conformant, ConformantBindingView, ConformantOperationView, Document, JsonKind, JsonValue,
+    NoVerdict, NoVerdictReason, PreparedContract, ResourceSet, SchemaEvaluator, Source,
+    ValueContract, ValueOutcome,
 };
 use std::{
     collections::HashMap,
@@ -23,6 +23,45 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
+/// The direction in which a caller-facing value crosses the operation's
+/// boundary, and so which value contract governs it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Direction {
+    /// A value crossing to the operation, governed by its input contract.
+    Input,
+    /// A value crossing from the operation, governed by its output contract.
+    Output,
+}
+impl Direction {
+    /// Return the operation field spelling, `input` or `output`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Input => "input",
+            Self::Output => "output",
+        }
+    }
+    fn contract(self, operation: &ConformantOperationView) -> Option<ValueContract<'_>> {
+        match self {
+            Self::Input => operation.input(),
+            Self::Output => operation.output(),
+        }
+    }
+}
+/// The explicit evaluator and immutable resources every preparation borrows.
+#[derive(Clone)]
+struct Evaluation {
+    evaluator: Arc<dyn SchemaEvaluator>,
+    resources: ResourceSet,
+}
+impl Evaluation {
+    fn prepare(
+        &self,
+        contract: ValueContract<'_>,
+        control: &dyn openbindings::WorkControl,
+    ) -> Result<PreparedContract, NoVerdict> {
+        contract.prepare_with_control(&*self.evaluator, &self.resources, control)
+    }
+}
 #[derive(Clone, Copy)]
 enum Target<'a> {
     Operation {
@@ -154,7 +193,7 @@ impl fmt::Debug for Attempt<'_> {
 pub struct Invoker<P> {
     document: Conformant<Document>,
     binding: binding::Invoker<P>,
-    contracts: Option<ValueContracts>,
+    evaluation: Option<Evaluation>,
     sources: CarrierCache<Source>,
     bindings: CarrierCache<BindingValue>,
 }
@@ -181,7 +220,7 @@ impl<P: BindingInvoker> Invoker<P> {
         Self {
             document,
             binding: binding::Invoker::new(provider),
-            contracts: None,
+            evaluation: None,
             sources: OnceLock::new(),
             bindings: OnceLock::new(),
         }
@@ -195,7 +234,10 @@ impl<P: BindingInvoker> Invoker<P> {
         evaluator: Arc<dyn SchemaEvaluator>,
         resources: ResourceSet,
     ) -> Self {
-        self.contracts = Some(self.document.value_contracts(evaluator, resources));
+        self.evaluation = Some(Evaluation {
+            evaluator,
+            resources,
+        });
         self
     }
     /// Set the same finite handoff policy used by binding invocation.
@@ -239,21 +281,19 @@ impl<P: BindingInvoker> Invoker<P> {
             if control.is_cancelled() {
                 return Err(InvocationError::cancelled());
             }
-            if operation.value().get(direction.as_str()).is_none() {
+            let Some(contract) = direction.contract(&operation) else {
                 return Ok(None);
-            }
-            let contracts = self
-                .contracts
+            };
+            let evaluation = self
+                .evaluation
                 .as_ref()
                 .ok_or_else(|| error("ERR_SCHEMA_UNRESOLVED"))?;
-            match contracts.prepare_with_control(operation.key(), direction, control) {
-                ValueContractPreparation::Ready(contract) => Ok(Some(contract)),
-                ValueContractPreparation::NoVerdict { detail }
-                    if detail.reason == NoVerdictReason::Cancelled =>
-                {
+            match evaluation.prepare(contract, control) {
+                Ok(contract) => Ok(Some(contract)),
+                Err(detail) if detail.reason == NoVerdictReason::Cancelled => {
                     Err(InvocationError::cancelled())
                 }
-                _ => Err(error("ERR_SCHEMA_UNRESOLVED")),
+                Err(_) => Err(error("ERR_SCHEMA_UNRESOLVED")),
             }
         };
         let input = prepare(Direction::Input)?;
@@ -442,13 +482,13 @@ impl<P: BindingInvoker> Invoker<P> {
         operation: &ConformantOperationView,
         direction: Direction,
         external: &CancellationToken,
-        prepared: Option<&ValueContract>,
+        prepared: Option<&PreparedContract>,
     ) -> Option<Gate> {
-        operation.value().get(direction.as_str()).map(|_| Gate {
-            contracts: self.contracts.clone(),
-            operation: operation.key().into(),
+        direction.contract(operation).map(|_| Gate {
+            evaluation: self.evaluation.clone(),
+            operation: operation.clone(),
             direction,
-            prepared: prepared.cloned().map(ValueContractPreparation::Ready),
+            prepared: prepared.cloned().map(Ok),
             external: external.clone(),
         })
     }
@@ -594,8 +634,8 @@ impl<P: BindingInvoker> Invoker<P> {
 pub struct PreparedOperation<'a, P> {
     invoker: &'a Invoker<P>,
     operation: String,
-    input: Option<ValueContract>,
-    output: Option<ValueContract>,
+    input: Option<PreparedContract>,
+    output: Option<PreparedContract>,
 }
 impl<P> std::fmt::Debug for PreparedOperation<'_, P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -692,10 +732,10 @@ impl fmt::Debug for ValidationFailure {
     }
 }
 pub(crate) struct Gate {
-    contracts: Option<ValueContracts>,
-    operation: String,
+    evaluation: Option<Evaluation>,
+    operation: ConformantOperationView,
     direction: Direction,
-    prepared: Option<ValueContractPreparation>,
+    prepared: Option<Result<PreparedContract, NoVerdict>>,
     external: CancellationToken,
 }
 impl Gate {
@@ -707,38 +747,35 @@ impl Gate {
         if local.is_cancelled() || self.external.is_cancelled() {
             return Err((InvocationError::cancelled(), None));
         }
-        let prepared = self.prepared.get_or_insert_with(|| match &self.contracts {
-            Some(contracts) => {
-                contracts.prepare_with_control(&self.operation, self.direction, local)
-            }
-            None => ValueContractPreparation::NoVerdict {
-                detail: NoVerdict::new(
+        let (evaluation, operation, direction) =
+            (&self.evaluation, &self.operation, self.direction);
+        let prepared = self.prepared.get_or_insert_with(|| {
+            // A gate exists only for a declared contract of its immutable operation.
+            let Some(contract) = direction.contract(operation) else {
+                return Err(NoVerdict::new(
+                    NoVerdictReason::EvaluatorFailure,
+                    "value-contract-invariant",
+                    "the selected declared value contract could not be prepared",
+                ));
+            };
+            match evaluation {
+                Some(evaluation) => evaluation.prepare(contract, local),
+                None => Err(NoVerdict::new(
                     NoVerdictReason::UnsupportedCapability,
                     "operation-evaluator-missing",
                     "supply a schema evaluator to validate declared value contracts",
-                ),
-            },
+                )),
+            }
         });
         let (stage, outcome) = match prepared {
-            ValueContractPreparation::Ready(contract) => (
+            Ok(contract) => (
                 ValidationStage::Evaluation,
                 contract.validate_with_control(value, local),
             ),
-            ValueContractPreparation::NoVerdict { detail } => (
+            Err(detail) => (
                 ValidationStage::Preparation,
                 ValueOutcome::NoVerdict {
                     detail: detail.clone(),
-                },
-            ),
-            // The immutable, uniquely resolved operation had a declared direction.
-            _ => (
-                ValidationStage::Preparation,
-                ValueOutcome::NoVerdict {
-                    detail: NoVerdict::new(
-                        NoVerdictReason::EvaluatorFailure,
-                        "value-contract-invariant",
-                        "the selected declared value contract could not be prepared",
-                    ),
                 },
             ),
         };

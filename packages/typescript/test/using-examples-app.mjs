@@ -1,5 +1,5 @@
 import * as testing from "../dist/testing.js";
-import { conformantContracts } from "./conformant-contracts.mjs";
+import { prepareInput } from "./conformant-contracts.mjs";
 import * as sdk from "@openbindings/sdk";
 
 function check(condition, message) {
@@ -22,17 +22,12 @@ const warm = sdk.Document.parse(
 check(warm.status === "parsed", "warm document");
 try {
   warm.value.validate();
-  const context = conformantContracts(warm.value);
+  const setup = prepareInput(warm.value, "run");
+  check(setup.status === "ready", "warm contract");
   try {
-    const setup = context.prepare("run", "input");
-    check(setup.status === "ready", "warm contract");
-    try {
-      setup.valueContract.validate(1);
-    } finally {
-      setup.valueContract.dispose();
-    }
+    setup.contract.validate(1);
   } finally {
-    context.dispose();
+    setup.contract.dispose();
   }
 } finally {
   warm.value.dispose();
