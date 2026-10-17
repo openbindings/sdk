@@ -65,7 +65,7 @@
         {
           "file": "src/lib.rs",
           "upstream_sha256": "1218eff99cbb7e2513eae52362ad996ab9555cf7179d63cc15ecf3d242f4f1ae",
-          "current_sha256": "ff0d778dbbffbda5cebe900e21f1fcbb201fcd0e233fe8ead616c117647535ef"
+          "current_sha256": "2da9e591877434e4e4c6ef8b7772b841274239f839bb477ecf002380f5a36f56"
         },
         {
           "file": "src/node.rs",
@@ -91,11 +91,6 @@
           "file": "src/regex.rs",
           "upstream_sha256": "dd26316b9d27a921859259e792d11b876f36e0ebc150e7c55eedd9b8ce9c8b83",
           "current_sha256": "da713520c737b552629ad5f97b832b557c4302743385a168aa6ae66b48c4711e"
-        },
-        {
-          "file": "src/validator.rs",
-          "upstream_sha256": "2df8295e15a93b704ad9d37154185b93056f0ebf3bda41381b32cb03e914a1c4",
-          "current_sha256": "b28bac6b930f00555e4e6c2b3544c51535cddafea0b8d72ed1b9aa4f90d43084"
         }
       ],
       "patch": "jsonschema.patch"

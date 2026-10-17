@@ -62,7 +62,7 @@ def fixtures():
     add('regex-stop', dict(pattern='[A-Z]+[0-9]+'), compact('a'*1048576), 'no-verdict')
     add('cancelled', True, '1', 'no-verdict', cancelled=True)
     add('source-diagnostics', '{"maximum":9223372036854775807}', '9223372036854775808', 'fails', upstream=True)
-    for name, code in [('missing-resource', 'resource-unavailable'), ('depth-stop', 'evaluation-work-limit'),
+    for name, code in [('missing-resource', 'resource-unavailable'), ('depth-stop', 'evaluation-depth-limit'),
                        ('work-stop', 'evaluation-work-limit'), ('regex-stop', 'regex-work-limit'), ('cancelled', 'caller-cancelled')]:
         rows[name]['expected']['code'] = code
     rows['undefined-pointer']['expected']['code'] = 'static-reference-defect'

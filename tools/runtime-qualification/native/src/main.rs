@@ -14,7 +14,6 @@ fn once(
     document: &str,
     valid: &str,
     invalid: &str,
-    limited: bool,
     timed: bool,
 ) -> (BTreeMap<&'static str, f64>, Value) {
     let mut row = BTreeMap::new();
@@ -39,13 +38,7 @@ fn once(
     row.insert("parseValue", ms);
     let (first, ms) = measured(timed, || contract.validate(&value));
     row.insert("firstValidation", ms);
-    if limited {
-        assert!(
-            matches!(&first, ValueOutcome::NoVerdict { detail } if detail.code == "evaluation-work-limit")
-        );
-    } else {
-        assert!(matches!(first, ValueOutcome::Satisfies));
-    }
+    assert!(matches!(first, ValueOutcome::Satisfies));
     let (hot, ms) = measured(timed, || contract.validate(&value));
     row.insert("hot", ms);
     assert_eq!(
@@ -99,7 +92,6 @@ fn main() {
             &source("document"),
             &source("valid"),
             &source("invalid"),
-            false,
             true,
         );
         println!("{}", json!({"stagesMs":stages,"observation":observation}));
@@ -114,7 +106,7 @@ fn main() {
         let document = read("document");
         let valid = read("valid");
         let invalid = read("invalid");
-        let once = || once(&document, &valid, &invalid, tier == "near", timed);
+        let once = || once(&document, &valid, &invalid, timed);
         once();
         once();
         let reps = if timed {
@@ -142,7 +134,7 @@ fn main() {
         rows.insert(tier.clone(), json!({"samplesMs":if timed {Some(samples)} else {None},"repetitions":reps,"observation":{
             "valid":observation["valid"],"outcome":invalid["outcome"],"problems":invalid["problems"].as_array().unwrap().len(),
             "complete":invalid["problems_complete"],"firstProblem":invalid["problems"][0],"wireBytes":observation["invalidWireBytes"]
-        },"concurrency":1,"throughputMeaning":if tier == "near" {"resource refusals"} else {"successful retained validation"}}));
+        },"concurrency":1,"throughputMeaning":"successful retained validation"}));
     }
     let source = |kind: &str| {
         std::fs::read_to_string(root.join(manifest["adversarial"][kind]["name"].as_str().unwrap()))

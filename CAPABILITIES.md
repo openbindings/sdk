@@ -48,8 +48,14 @@ schema. The [evaluator guide](docs/schema-evaluators.md) explains integration.
 The optional default evaluator supports JSON Schema 2020-12 with exact decimal
 comparison and explicit immutable resources. It performs no reference acquisition.
 `format` remains an annotation. Applied Unicode property matching and other
-unsupported capabilities produce no-verdict. Work and regex budgets can also
-prevent a verdict; a prepared contract can remain undecidable for a particular value.
+unsupported capabilities produce no-verdict. The work allowance grows with the
+value checked: 2,000,000 units per pass up to 65,536 value nodes and
+proportionally more above, so ordinary schemas decide values as large as the
+default admission limits accept. The evaluation depth (1,024 nested
+evaluations, a stack bound) and the regex budget (2,000,000 steps, the safety
+bound) can still prevent a verdict; a prepared contract can remain undecidable
+for a particular value. Patterns may nest 32 groups by default, which keeps
+preparation within a 256 KiB thread stack.
 
 Missing content or undefined reference results do not prevent a verdict when the
 evaluator proves that they cannot affect it. An established undefined result has

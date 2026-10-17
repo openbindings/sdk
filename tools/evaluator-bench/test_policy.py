@@ -358,7 +358,7 @@ class FixtureCoverage(unittest.TestCase):
         self.assertEqual(len(existing), 32)
         serialized = (json.dumps(existing, indent=2)+'\n').encode()
         self.assertEqual(hashlib.sha256(serialized).hexdigest(),
-                         '9f19a08d7409a0e0bf6d86e9ee10ae0ebc93501638a9cdc80ff467d6c68bb6b8')
+                         '1a358b13151775452f266be52b2e775ff5b2673d1741c8816d1372609f13d8f1')
 
     def test_document_scales_shared_definitions_and_complete_reads(self):
         rows = fixtures()
