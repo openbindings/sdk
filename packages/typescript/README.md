@@ -70,6 +70,8 @@ contracts: `resolveOperation` returns `undefined` for a missing operation, and
 each result before validating a value. Value results distinguish `satisfies`, `fails`, `undefined`
 (the specification gives the value no defined validity), `no-verdict` (the SDK could
 not answer) and an `input-error` when ordinary JavaScript data cannot be admitted.
+`validate` reads a string as a JSON string value; check JSON text or bytes, such as
+a request body, with `validateJson`, which admits them as `parseJson` does.
 
 ## Browser resource management
 

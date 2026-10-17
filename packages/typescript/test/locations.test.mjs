@@ -160,3 +160,26 @@ test("supplied resources locate their keywords, including through unpaired names
       null,
     );
   }));
+
+test("at selects the node locate reports, including through unpaired names", () =>
+  owning((own) => {
+    const text = '{"\\ud800": {"\\udc00x": [1, "two"]}, "a~/b": 3}';
+    const value = own(exact(text));
+    for (const pointer of ["", "/\ud800", "/\ud800/\udc00x/1", "/a~0~1b"]) {
+      const node = own(value.at(pointer));
+      assert.equal(
+        node.metadata.location.byteOffset,
+        value.locate(pointer).byteOffset,
+      );
+    }
+    assert.equal(own(value.at("/\ud800/\udc00x/1")).text, '"two"');
+    // A pointer naming no node selects nothing either way.
+    for (const pointer of ["/\udc00", "/\ud800/\udc00x/2", "/\ud800/\udc00"]) {
+      assert.equal(value.at(pointer), undefined);
+      assert.equal(value.locate(pointer), null);
+    }
+    // A malformed pointer selects nothing, as it does without unpaired units.
+    assert.equal(value.at("/\ud800/~2"), undefined);
+    assert.equal(value.at("/a~2"), undefined);
+    assert.equal(value.at("no-slash\ud800"), undefined);
+  }));

@@ -34,7 +34,10 @@ credentials, provider state and invocation context. `Display`, accessors and
 serialization retain their existing output; use them when disclosure is intended.
 Debug formatting is not a stable serialization format.
 `Document` owns private exact storage; construct and edit it through its methods. Result-returning APIs document caller-visible failures
-under `# Errors`; validation outcomes (including `DocumentValidation`) and configuration methods warn when ignored.
+under `# Errors`. `DocumentValidation`, `VersionDecision`, `ValueOutcome` and
+`DiscoveryOutcome` are `#[must_use]`, as are the invocation builders' `with_context`,
+`with_evaluator` and `with_validation_detail`; core methods that return a modified
+value, such as `UndefinedResult::with_location`, are not.
 
 ## Records that may gain fields
 
@@ -83,7 +86,7 @@ kind union.
 
 | Public item | Contract |
 | --- | --- |
-| `Document::parse`, `Document::from_json` | Admit exact JSON without a conformance claim, including malformed documents. |
+| `Document::parse`, `Document::from_json` | Admit exact JSON without a conformance claim, including documents with missing or mistyped fields. `parse` returns `InputError` for invalid UTF-8, a byte order mark, a JSON syntax error or an exceeded admission limit. |
 | `is_valid_name` | Tests the specification's ASCII name grammar without normalizing the name. |
 | `Document::new` | Create an empty OBI declaring the authoring version. |
 | `Document::set`, `remove`, `edit(&[Edit])` | Require a mutable borrow. One atomic splice and parse per batch, exact untouched bytes, compact insertions, default JSON limits. |
@@ -101,15 +104,15 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 
 | Public item | Contract |
 | --- | --- |
-| `Document.parse(bytes)` | Returns the existing parse-result union; admits exact JSON, including broken documents. Typed reads may throw. |
+| `Document.parse(bytes)` | Returns the existing parse-result union; admits exact JSON without a conformance claim, including documents with missing or mistyped fields, and returns `input-error` for an encoding or JSON syntax error or an exceeded admission limit. Typed reads may throw. |
 | `Document.create()` | Creates an empty OBI for construction through setters. |
 | `set`, `remove`, `edit(edits)` | Mutable pointer edits; a batch crosses the bridge once, including exact inputs, and preserves untouched bytes. Exact inputs are borrowed. Failure leaves bytes and caches unchanged. |
 | Typed field and whole-part setters | Accept typed part values; map setters commit bulk construction once. |
 | `Document.validate()` | Returns a union whose `conformant` branch owns an independent `ConformantDocument` and a plain report. |
 | `ConformantDocument` | Nominal, privately constructed proof with infallible typed reads. `resolveOperation(name)` returns a `ConformantOperationView` or `undefined`. It has no setters and does not inherit `Document`. |
-| `ConformantOperationView` | `input()` and `output()` return a disposable `ValueContract` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. |
+| `ConformantOperationView` | `input()` and `output()` return a disposable `ValueContract` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. Both views have `retain()`. |
 | `ValueContract` | `schema()` acquires the exact schema; `prepare(options)` takes `resources`, `limits` and `signal` and returns `{ status: "ready", contract }` or `{ status: "no-verdict", detail }`. |
-| `PreparedContract` | Disposable prepared contract with `validate(value, options)`, the cheap check, `explain(value, options)`, which adds problems to a failure, and `retain()`; independent of its document, operation, resources and contract owners. |
+| `PreparedContract` | Disposable prepared contract with `validate(value, options)`, the cheap check, `explain(value, options)`, which adds problems to a failure, and `retain()`; independent of its document, operation, resources and contract owners. `validateJson(input, options)` is Rust's `validate_json`: it admits JSON text or bytes as `parseJson` does and returns a `JsonCheck`, whose `input-error` carries the `parseJson` error. `validate` reads a string as a JSON string value. |
 | `ExactJson.locate(pointer)`, `ConformantDocument.locate(at)`, `SchemaResources.locate(at)` | The `SourceLocation` of the node a problem's instance pointer or a `SchemaLocation` names, in the value, the document or the supplied resource with its URI, or `null`. A malformed pointer throws `SdkError` with code `invalid-pointer`, and a malformed schema location with code `invalid-schema-location`. |
 | `asDocument()`, `intoDocument()` | Acquire an independent editable owner, or consume the proof. Consumption revokes all JavaScript aliases of that proof; retained owners survive. |
 | `toBytes()`, `dispose()`, `Symbol.dispose`, `disposed` | Detached exact current bytes and the existing deterministic lifecycle. |
@@ -262,10 +265,10 @@ Rust deadline and outcome items are defined in
 | `AttemptTimeout::duration()` | Returns `Result<Option<Duration>, ConfigurationError>`; `None` denotes unbounded and zero returns `invalid-timeout`. |
 | `ClientOptions::timeout` | Defaults to `AttemptTimeout::Default`; successful reads and redirects never reset it. `max_document_bytes: usize` defaults to 1 MiB; explicit zero and `usize::MAX` are refused. |
 | `DiscoveryTimer::{now, sleep_until}` | Host monotonic time and a wake-capable absolute timer in the same epoch, expressed as `Duration`. Dropping the timer releases it; local futures are supported. |
-| `discover(origin, &options, &control, &timer, transport)` | Races one host timer and caller `CancellationToken` while invoking a repeatable one-hop callback. The callback must dispatch the normalized URL, expose redirects, deliver decoded bytes or a typed refusal, and release acquisition on drop. Connection-time DNS, peer and proxy policy belongs to the host. |
+| `discover(origin, &options, &control, &timer, transport)` | Races one host timer and caller `CancellationToken` while invoking a repeatable one-hop callback. The callback must dispatch the normalized URL, expose redirects, deliver decoded bytes or a typed refusal, and release acquisition on drop. It is called again for each admitted redirect, including a cross-origin one, and scopes credentials to the URL it is given. Connection-time DNS, peer and proxy policy belongs to the host. `final_url` is the URL the SDK last dispatched. |
 | `DEFAULT_TIMEOUT_SECONDS` | Thirty-second SDK default. |
 | `MAX_REDIRECTS` | Ten followed redirects on native and portable checked paths. Browser Fetch owns its hidden redirect limit. |
-| `native::Client::new(ClientBuilder, ClientOptions)` | Installs SDK redirect policy last and builds the client, retaining application TLS, resolver, proxy, credential and decoding choices. Refuses downgrade and credential-replay hops before dispatch. Owns one Tokio attempt timer. |
+| `native::Client::new(ClientBuilder, ClientOptions)` | Installs SDK redirect policy last and builds the client, retaining application TLS, resolver, proxy, credential and decoding choices. Refuses downgrade and credential-replay hops before dispatch. Owns one Tokio attempt timer, so it requires a Tokio runtime with timers enabled. Credential headers other than reqwest's four standard ones follow cross-origin hops. |
 | `native::Client::with_delegated_policy(Client, ClientOptions)` | Accepts an already-built client through explicit host policy delegation. The application owns per-hop admission, the ten-redirect limit and credential handling. SDK deadline and cancellation handling still apply. |
 | `DiscoveryOutcome::Timeout` | SDK or identified transport deadline expired; distinct from caller `Cancelled`. Caller cancellation wins when both are ready at the same poll. Observed metadata and complete bounded body, if available, remain in the receipt. |
 | `ErrorKind::RedirectPolicy` | Admission, downgrade, hop-limit, credential-replay or observable hidden/unfollowed redirect refusal; never document nonconformance or absence. |
@@ -297,7 +300,8 @@ origin differs from the immediately preceding one. Applications requiring such
 chains use `with_delegated_policy` and own credentials across all hops.
 
 TypeScript Fetch uses `redirect: "follow"`, checks final URL admission and refuses
-an observable HTTPS-to-HTTP downgrade. Browser mixed-content blocking in secure
+an observable HTTPS-to-HTTP downgrade. A visible 301, 302, 303, 307 or 308 with
+Location was left unfollowed and is `"redirect-policy"`, as in Rust. Browser mixed-content blocking in secure
 contexts and private-network rules govern hidden hops; the SDK cannot observe them.
 Opaque/opaqueredirect responses mean policy cannot be established. Timers remain
 cooperative at blocking polls and synchronous validation boundaries.

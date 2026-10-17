@@ -82,27 +82,90 @@ test("final HTTPS downgrade and opaque responses cannot establish policy", async
   }
 });
 
-// one deadline covers never-ready headers and body, independent of caller signals.
-test("SDK deadline interrupts stalled acquisition and retains body-phase metadata", async () => {
-  for (const phase of ["headers", "body"]) {
+// Fetch follows the five redirect statuses, so a visible Location was left unfollowed.
+test("unfollowed visible redirect is a redirect-policy refusal", async () => {
+  for (const status of [301, 302, 303, 307, 308]) {
     let cancelled = false;
     const result = await discovery.discover("https://example.test", {
-      timeoutMs: 10,
       fetch: async () =>
-        phase === "headers"
-          ? new Promise(() => {})
-          : new Response(
-              new ReadableStream({
+        new Response(
+          new ReadableStream({
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { status, headers: { location: "https://example.test/moved" } },
+        ),
+    });
+    assert.equal(result.status, "transport-error");
+    assert.equal(result.error.kind, "redirect-policy");
+    assert.equal(result.metadata.status, status);
+    assert.equal(result.body, undefined);
+    assert.ok(cancelled);
+  }
+  // Nothing to follow: no Location, or a status outside the five.
+  for (const [status, headers] of [
+    [302, {}],
+    [304, {}],
+    [300, { location: "https://example.test/moved" }],
+  ]) {
+    const result = await discovery.discover("https://example.test", {
+      fetch: async () => new Response(null, { status, headers }),
+    });
+    assert.equal(result.status, "http-status");
+    assert.equal(result.metadata.status, status);
+  }
+});
+
+// one deadline covers never-ready headers and body, independent of caller signals.
+test("SDK deadline interrupts stalled acquisition and retains body-phase metadata", async () => {
+  // A controlled clock passes the deadline only once the phase under test is
+  // reached, so host speed or load cannot move expiry to an earlier phase.
+  const original = performance.now;
+  let now = 0;
+  Object.defineProperty(performance, "now", {
+    configurable: true,
+    value: () => now,
+  });
+  try {
+    for (const phase of ["headers", "body"]) {
+      now = 0;
+      let cancelled = false;
+      const result = await discovery.discover("https://example.test", {
+        timeoutMs: 10,
+        fetch: async () => {
+          if (phase === "headers") {
+            now = 11;
+            return new Promise(() => {});
+          }
+          // A zero high-water mark pulls only for the SDK's own read, so the
+          // deadline passes while that read is waiting on the body.
+          return new Response(
+            new ReadableStream(
+              {
+                pull() {
+                  now = 11;
+                  return new Promise(() => {});
+                },
                 cancel() {
                   cancelled = true;
                 },
-              }),
+              },
+              { highWaterMark: 0 },
             ),
+          );
+        },
+      });
+      assert.equal(result.status, "timeout");
+      assert.equal(!!result.metadata, phase === "body");
+      assert.equal(result.body, undefined);
+      assert.equal(cancelled, phase === "body");
+    }
+  } finally {
+    Object.defineProperty(performance, "now", {
+      configurable: true,
+      value: original,
     });
-    assert.equal(result.status, "timeout");
-    assert.equal(!!result.metadata, phase === "body");
-    assert.equal(result.body, undefined);
-    assert.equal(cancelled, phase === "body");
   }
   for (const timeoutMs of [0, -1, NaN, Infinity])
     await assert.rejects(
@@ -283,44 +346,61 @@ test("publication uses serialized origins and matches the route exactly", async 
 
 // the default installs one thirty-second timer and releases it on success.
 test("default thirty-second timer and late response cleanup", async () => {
+  // A controlled clock fixes the timer's delay and moves past the deadline only
+  // after dispatch, so host speed or load cannot expire the attempt earlier.
+  const original = performance.now;
+  let now = 0;
+  Object.defineProperty(performance, "now", {
+    configurable: true,
+    value: () => now,
+  });
   const nativeSetTimeout = globalThis.setTimeout;
-  const delays = [];
-  globalThis.setTimeout = (fn, delay, ...args) => {
-    delays.push(delay);
-    return nativeSetTimeout(fn, delay, ...args);
-  };
   try {
-    const result = await discovery.discover("https://example.test", {
-      fetch: async () => new Response(text),
+    const delays = [];
+    globalThis.setTimeout = (fn, delay, ...args) => {
+      delays.push(delay);
+      return nativeSetTimeout(fn, delay, ...args);
+    };
+    try {
+      const result = await discovery.discover("https://example.test", {
+        fetch: async () => new Response(text),
+      });
+      assert.equal(result.status, "found");
+      result.document.dispose();
+      assert.deepEqual(delays, [30_000]);
+    } finally {
+      globalThis.setTimeout = nativeSetTimeout;
+    }
+    let resolve;
+    const late = new Promise((r) => {
+      resolve = r;
     });
-    assert.equal(result.status, "found");
-    result.document.dispose();
-    assert.equal(delays.length, 1);
-    assert.ok(delays[0] <= 30_000 && delays[0] > 29_900);
+    const timed = await discovery.discover("https://example.test", {
+      timeoutMs: 5,
+      fetch: async () => {
+        now = 6;
+        return late;
+      },
+    });
+    assert.equal(timed.status, "timeout");
+    let released = false;
+    resolve(
+      new Response(
+        new ReadableStream({
+          cancel() {
+            released = true;
+          },
+        }),
+      ),
+    );
+    await new Promise((r) => nativeSetTimeout(r, 0));
+    assert.ok(released);
   } finally {
-    globalThis.setTimeout = nativeSetTimeout;
+    Object.defineProperty(performance, "now", {
+      configurable: true,
+      value: original,
+    });
   }
-  let resolve;
-  const late = new Promise((r) => {
-    resolve = r;
-  });
-  const timed = await discovery.discover("https://example.test", {
-    timeoutMs: 5,
-    fetch: async () => late,
-  });
-  assert.equal(timed.status, "timeout");
-  let released = false;
-  resolve(
-    new Response(
-      new ReadableStream({
-        cancel() {
-          released = true;
-        },
-      }),
-    ),
-  );
-  await new Promise((r) => nativeSetTimeout(r, 0));
-  assert.ok(released);
 });
 
 // successful EOF retains all bytes before checking the terminal cause.
