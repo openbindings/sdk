@@ -49,16 +49,15 @@ fn explained_problems_locate_the_failing_node_and_the_documents_keyword() {
     let problems = problems(contract.explain(&value));
     assert_eq!(problems.len(), 1);
     let problem = &problems[0];
+    assert_eq!(problem.instance, "/items/1");
+    // The value holds its text, so it finds the line and column when asked.
     let offset = text.find("\"two\"").unwrap();
-    assert_eq!(problem.instance, value.at("/items/1").unwrap().location());
-    assert_eq!(problem.instance.pointer.as_ref().unwrap(), "/items/1");
-    assert_eq!(problem.instance.byte_offset, offset);
+    let located = value.locate(&problem.instance).unwrap();
+    assert_eq!(located, value.at("/items/1").unwrap().location());
+    assert_eq!(located.byte_offset, offset);
+    assert_eq!((located.line, located.byte_column), position(text, offset));
     assert_eq!(
-        (problem.instance.line, problem.instance.byte_column),
-        position(text, offset)
-    );
-    assert_eq!(
-        problem.instance.to_string(),
+        located.to_string(),
         format!("/items/1 (line 4, column 5, byte {offset})")
     );
     // The schema side names the keyword; the document finds its line and column.
@@ -79,6 +78,7 @@ fn explained_problems_locate_the_failing_node_and_the_documents_keyword() {
     assert_eq!(ResourceSet::default().locate(&problem.schema), None);
     let absent = SchemaLocation::new(None, "/operations/op/absent".parse().unwrap());
     assert_eq!(document.locate(&absent), None);
+    assert_eq!(value.locate(&"/items/2".parse().unwrap()), None);
 }
 
 #[test]
@@ -87,37 +87,31 @@ fn a_root_failure_displays_its_coordinates_without_the_empty_pointer() {
     let contract = contract(&document, &ResourceSet::default());
     let value = JsonValue::parse("  7").unwrap();
     let problems = problems(contract.explain(&value));
-    assert_eq!(problems[0].instance.pointer.as_ref().unwrap(), "");
-    assert_eq!(problems[0].instance.to_string(), "line 1, column 3, byte 2");
+    assert_eq!(problems[0].instance, "");
+    let located = value.locate(&problems[0].instance).unwrap();
+    assert_eq!(located.to_string(), "line 1, column 3, byte 2");
 }
 
 #[test]
 fn member_names_holding_the_views_marker_are_named_as_the_caller_spells_them() {
     // The evaluator's library view encodes unpaired units with U+E000; a
-    // pointer names the caller's own member, mapped through the exact value.
+    // pointer names the caller's own member.
     for schema in [
-        r#"{"properties": {"ab": {"type": "integer"}}}"#,
+        r#"{"properties": {"a\ue000b": {"type": "integer"}}}"#,
         r#"{"additionalProperties": {"type": "integer"}}"#,
         r#"{"patternProperties": {"^a": {"type": "integer"}}}"#,
     ] {
         let document = document(schema);
         let contract = contract(&document, &ResourceSet::default());
-        let text = r#"{"x":1,"ab":"s"}"#;
+        let text = r#"{"x":1,"a\ue000b":"s"}"#;
         let value = JsonValue::parse(text).unwrap();
         let problems = problems(contract.explain(&value));
         assert_eq!(problems.len(), 1, "{schema}");
-        let instance = &problems[0].instance;
+        assert_eq!(problems[0].instance, "/a\u{e000}b", "{schema}");
         assert_eq!(
-            instance.pointer.as_ref().unwrap(),
-            "/a\u{e000}b",
-            "{schema}"
+            value.locate(&problems[0].instance),
+            Some(value.get("a\u{e000}b").unwrap().location())
         );
-        assert_eq!(
-            instance.byte_offset,
-            text.find("\"s\"").unwrap(),
-            "{schema}"
-        );
-        assert_eq!(*instance, value.get("a\u{e000}b").unwrap().location());
     }
 }
 
@@ -125,7 +119,7 @@ fn member_names_holding_the_views_marker_are_named_as_the_caller_spells_them() {
 fn failures_beneath_unpaired_names_never_report_a_library_spelling() {
     // Reaching a name with an unpaired unit leaves the evaluator no truthful
     // reading of it: a failure beneath one is established with no problem,
-    // and problems elsewhere locate their nodes exactly.
+    // and problems elsewhere name their nodes exactly.
     for (schema, text, expected) in [
         (
             r#"{"additionalProperties": {"type": "integer"}}"#,
@@ -158,9 +152,8 @@ fn failures_beneath_unpaired_names_never_report_a_library_spelling() {
         let pointers: Vec<_> = problems
             .iter()
             .map(|problem| {
-                let pointer = problem.instance.pointer.as_ref().unwrap().as_str().unwrap();
-                assert_eq!(problem.instance, value.at(pointer).unwrap().location());
-                pointer
+                assert!(value.at_pointer(&problem.instance).is_some());
+                problem.instance.as_str().unwrap()
             })
             .collect();
         assert_eq!(pointers, expected, "{schema}");
@@ -168,20 +161,26 @@ fn failures_beneath_unpaired_names_never_report_a_library_spelling() {
 }
 
 #[test]
-fn a_subtree_value_is_located_in_the_text_it_was_parsed_from() {
+fn a_subtree_value_is_named_from_itself_and_located_in_its_text() {
     let document = document(r#"{"properties": {"n": {"type": "integer"}}}"#);
     let contract = contract(&document, &ResourceSet::default());
     let text = "{\"request\": {\n  \"n\": \"x\"\n}}";
     let whole = JsonValue::parse(text).unwrap();
     let request = whole.get("request").unwrap().to_owned();
     let problems = problems(contract.explain(&request));
-    let offset = text.find("\"x\"").unwrap();
-    assert_eq!(problems[0].instance.pointer.as_ref().unwrap(), "/request/n");
-    assert_eq!(problems[0].instance.byte_offset, offset);
+    // The instance's root is the value passed, as for a value parsed alone.
+    assert_eq!(problems[0].instance, "/n");
+    let alone = JsonValue::parse(request.text()).unwrap();
     assert_eq!(
-        (problems[0].instance.line, problems[0].instance.byte_column),
-        position(text, offset)
+        serde_json::to_string(&contract.explain(&alone)).unwrap(),
+        serde_json::to_string(&contract.explain(&request)).unwrap()
     );
+    // Its coordinates are in the text it was parsed from.
+    let offset = text.find("\"x\"").unwrap();
+    let located = request.locate(&problems[0].instance).unwrap();
+    assert_eq!(located.pointer.as_ref().unwrap(), "/n");
+    assert_eq!(located.byte_offset, offset);
+    assert_eq!((located.line, located.byte_column), position(text, offset));
 }
 
 #[test]
@@ -278,4 +277,90 @@ fn requests_locate_the_schema_nodes_an_evaluator_was_given() {
         request.location(program.resources()[0].document.view()),
         None
     );
+}
+
+// A pointer whose `\0` units stand for one unpaired unit, U+D800.
+fn unpaired(text: &str) -> Pointer {
+    let units: Vec<u16> = text
+        .encode_utf16()
+        .map(|unit| if unit == 0 { 0xd800 } else { unit })
+        .collect();
+    Pointer::from_utf16(&units).unwrap()
+}
+
+#[test]
+fn schema_locations_beneath_unpaired_names_are_exact() {
+    let uri = "https://loc.test/r";
+    let anchored = format!(r#"{{"$ref": "{uri}#an"}}"#);
+    for (input, resource, value, expected) in [
+        (
+            anchored.as_str(),
+            "{\"minimum\":0,\n\"$defs\":{\"\\ud800\":{\"$anchor\":\"an\",\n\"minimum\":3}}}",
+            "1",
+            "/$defs/\0/minimum",
+        ),
+        (
+            r#"{"$ref": "https://loc.test/e"}"#,
+            r#"{"minimum":0,"$defs":{"\ud800":{"$id":"https://loc.test/e","minimum":3}}}"#,
+            "1",
+            "/$defs/\0/minimum",
+        ),
+        (
+            anchored.as_str(),
+            r#"{"$defs":{"\ud800":{"$anchor":"an","properties":{"p":{"minimum":3}}}}}"#,
+            r#"{"p":1}"#,
+            "/$defs/\0/properties/p/minimum",
+        ),
+        (
+            anchored.as_str(),
+            r##"{"$defs":{"\ud800":{"$anchor":"an","$ref":"#/$defs/k"},"k":{"minimum":3}}}"##,
+            "1",
+            "/$defs/k/minimum",
+        ),
+    ] {
+        let resources = ResourceSet::new([SchemaResource {
+            uri: uri.into(),
+            document: JsonValue::parse(resource).unwrap(),
+        }])
+        .unwrap();
+        let document = document(input);
+        let contract = contract(&document, &resources);
+        let problems = problems(contract.explain(&JsonValue::parse(value).unwrap()));
+        let expected = unpaired(expected);
+        assert_eq!(
+            problems[0].schema,
+            SchemaLocation::new(Some(uri.into()), expected.clone()),
+            "{resource}"
+        );
+        // The set finds the failing keyword itself, `minimum: 3`.
+        let supplied = &resources.iter().next().unwrap().document;
+        let keyword = supplied.at_pointer(&expected).unwrap();
+        assert_eq!(keyword.text(), "3");
+        let located = resources.locate(&problems[0].schema).unwrap();
+        assert_eq!(located, keyword.location());
+    }
+}
+
+#[test]
+fn draft_references_beneath_unpaired_names_are_exact() {
+    let draft = Document::parse(
+        r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"properties":{"\ud800":{"properties":{"q":{"$ref":"#/missing"}}}}}}}}"##,
+    )
+    .unwrap();
+    let report = draft.references().unwrap();
+    let reference = &report.references[0];
+    let at = unpaired("/operations/op/input/properties/\0/properties/q/$ref");
+    assert_eq!(reference.location, SchemaLocation::new(None, at.clone()));
+    assert_eq!(
+        draft.value().at_pointer(&at).unwrap().text(),
+        r##""#/missing""##
+    );
+    let ReferenceResolution::Unresolved { detail } = &reference.resolution else {
+        panic!("expected an unresolved reference")
+    };
+    // The refusal names an exact node of the draft, never an invented root.
+    let location = detail.location.as_ref().unwrap();
+    assert_eq!(location.resource, None);
+    assert!(location.pointer.as_str().is_none());
+    assert!(draft.value().at_pointer(&location.pointer).is_some());
 }

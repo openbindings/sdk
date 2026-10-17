@@ -93,7 +93,7 @@ export type ParseResult<T> =
 export type Evidence = "met" | "violated" | "inconclusive" | "not-applicable";
 /** Coordinates in original UTF-8 source. byteOffset is zero-based; line and byteColumn are one-based. A byte column is not a JavaScript UTF-16 editor column: convert against the original source. Pointers are untrusted display data and repeated keys may share a pointer. */
 export interface SourceLocation {
-  /** Exact RFC 6901 pointer from the source's root; empty string means root. A member name with an unpaired UTF-16 unit keeps it, as a JavaScript string can. null only when the location precedes any value, as a syntax error does. Use byteOffset to distinguish duplicate key occurrences. */
+  /** Exact RFC 6901 pointer: from the value, document or resource a locate() call was asked of, or from the source's root for findings and metadata; empty string means that root. A member name with an unpaired UTF-16 unit keeps it, as a JavaScript string can. null only when the location precedes any value, as a syntax error does. Use byteOffset to distinguish duplicate key occurrences. */
   pointer: string | null;
   /** Zero-based original UTF-8 byte offset. */
   byteOffset: number;
@@ -218,9 +218,9 @@ export type ValueProblemDetails =
     };
 /** Established instance failure, located in the value and in the schema. Failure messages avoid echoing instance values by default; pointers still contain source-controlled strings and must be rendered as text. */
 export interface ValueProblem {
-  /** The failing node in the validated value's text: its exact pointer from that text's root (the value itself unless it was acquired from a larger text), byte offset, line and column. An ordinary value is located in its exact JSON serialization. */
-  instance: SourceLocation;
-  /** The failing keyword in its original schema source; when the evaluator cannot map a keyword to the original source, the selected schema itself rather than a guessed keyword. */
+  /** Exact RFC 6901 pointer to the failing node, from the value passed to validate/explain (also when that value was acquired from a larger text); it can hold an unpaired UTF-16 unit. ExactJson.locate(instance) gives its byte offset, line and column when asked; an ordinary value is located in its exact JSON serialization. */
+  instance: string;
+  /** The failing keyword in its original schema source, from that document's or resource's root: ConformantDocument.locate() or SchemaResources.locate() gives its coordinates. When the evaluator cannot map a keyword to the original source, the selected schema itself rather than a guessed keyword. */
   schema: SchemaLocation;
   /** Stable evaluator-defined problem code, commonly the failed keyword. */
   code: string;
@@ -823,6 +823,13 @@ export class ExactJson extends Managed {
     scalar(pointer);
     const found = handle<wasm.WasmJson>(this).at(pointer);
     return found ? new ExactJson(found) : undefined;
+  }
+  /** Locate an exact RFC 6901 pointer relative to this value, such as a value problem's instance, in the text it was parsed from: the node's byte offset, line and byte column with the given pointer, or null when it names no node. A segment may hold an unpaired UTF-16 unit. Computed on this call; nothing is retained. */
+  locate(pointer: string): SourceLocation | null {
+    if (typeof pointer !== "string")
+      throw new TypeError("A JSON Pointer string is required.");
+    const raw = handle<wasm.WasmJson>(this);
+    return decode(sdkCall(() => raw.locate(JSON.stringify(pointer))));
   }
   /** Return a NEW disposable owner for the first member with this decoded name, or undefined if absent/not an object. Duplicate names remain available through exact text; this lookup does not prove uniqueness. */
   get(name: string): ExactJson | undefined {

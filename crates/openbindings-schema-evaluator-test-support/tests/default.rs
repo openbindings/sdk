@@ -46,48 +46,20 @@ fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {
     };
     assert!(!judge(case, &value, &refusal, true).is_empty());
     let schema = SchemaLocation::new(None, "/operations/op/input".parse().unwrap());
-    let failure = |instance: SourceLocation| ValueOutcome::Fails {
+    let failure = |instance: &str| ValueOutcome::Fails {
         message: "value does not satisfy the contract".into(),
         problems: vec![ValueProblem::new(
-            instance,
+            instance.parse().unwrap(),
             schema.clone(),
             "type",
             "expected string",
         )],
         problems_complete: true,
     };
-    // An existing node at the wrong place, or no node at all.
-    let at = |pointer: &str| match value.at(pointer) {
-        Some(node) => node.location(),
-        None => SourceLocation {
-            pointer: Some(pointer.parse().unwrap()),
-            byte_offset: 0,
-            line: 1,
-            byte_column: 1,
-        },
-    };
     for path in ["/absent", "", "/a/absent"] {
-        assert!(!judge(case, &value, &failure(at(path)), false).is_empty());
+        assert!(!judge(case, &value, &failure(path), false).is_empty());
     }
-    let valid = at("/a");
-    assert!(judge(case, &value, &failure(valid.clone()), false).is_empty());
-    // The right node with coordinates that are not its own.
-    for misplaced in [
-        SourceLocation {
-            line: valid.line + 1,
-            ..valid.clone()
-        },
-        SourceLocation {
-            byte_offset: valid.byte_offset + 1,
-            ..valid.clone()
-        },
-        SourceLocation {
-            pointer: None,
-            ..valid.clone()
-        },
-    ] {
-        assert!(!judge(case, &value, &failure(misplaced), false).is_empty());
-    }
+    assert!(judge(case, &value, &failure("/a"), false).is_empty());
 }
 
 /// An adapter can consume original source identity without depending on a bundler.
@@ -168,8 +140,8 @@ enum Fault {
     DisagreeingExplanation,
     // An interrupted explanation answers satisfies instead of no verdict.
     InterruptedSatisfies,
-    // Problems name their instance nodes at coordinates that are not theirs.
-    MisplacedInstance,
+    // Problems name their instance from the value's source rather than the value.
+    SourceRootedInstance,
 }
 struct FaultyAdapter(Fault);
 struct FaultyContract(Arc<dyn PreparedSchema>, Fault);
@@ -237,14 +209,15 @@ impl PreparedSchema for FaultyContract {
                 }
                 other => other,
             },
-            Fault::MisplacedInstance => match outcome {
+            Fault::SourceRootedInstance => match outcome {
                 ValueOutcome::Fails {
                     mut problems,
                     problems_complete,
                     ..
                 } => {
+                    let root = value.location().pointer.expect("a value's pointer");
                     for problem in &mut problems {
-                        problem.instance.line += 1;
+                        problem.instance = format!("{root}{}", problem.instance).parse().unwrap();
                     }
                     ValueOutcome::Fails {
                         problems,
@@ -277,7 +250,7 @@ fn real_runner_rejects_malformed_outcomes_fabricated_sources_and_broad_refusals(
         Fault::DetailedCheck,
         Fault::DisagreeingExplanation,
         Fault::InterruptedSatisfies,
-        Fault::MisplacedInstance,
+        Fault::SourceRootedInstance,
     ] {
         let report = run(
             &FaultyAdapter(fault),
@@ -321,7 +294,7 @@ fn cheap_checks_report_no_problems_and_agree_with_explanations() {
         problems_complete,
     };
     let problem = ValueProblem::new(
-        JsonValue::null().location(),
+        "".parse().unwrap(),
         SchemaLocation::new(None, "".parse().unwrap()),
         "type",
         "expected string",

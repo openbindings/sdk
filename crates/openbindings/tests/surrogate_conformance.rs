@@ -1,8 +1,12 @@
 use openbindings::*;
 
-// `pointer` is the expected pointer as Display writes it; `exact` says whether
-// it is Unicode text, or passes through a name with an unpaired unit.
-fn assert_unpaired(text: &str, token: &str, pointer: &str, exact: bool) {
+// `pointer` is the expected pointer; a `\0` in it stands for the unpaired unit
+// U+DC00 of a member name.
+fn assert_unpaired(text: &str, token: &str, pointer: &str) {
+    let pointer: Vec<u16> = pointer
+        .encode_utf16()
+        .map(|unit| if unit == 0 { 0xdc00 } else { unit })
+        .collect();
     // All public document entry paths apply the same boundary without changing
     // exact parsing or the retained draft bytes.
     let parsed = Document::parse(text).unwrap();
@@ -29,9 +33,9 @@ fn assert_unpaired(text: &str, token: &str, pointer: &str, exact: bool) {
         assert!(format!("{finding:?}").contains("unpaired-surrogate"));
         let at = finding.location.as_ref().unwrap();
         let offset = text.find(token).unwrap();
-        let at_pointer = at.pointer.as_ref().unwrap();
-        assert_eq!(at_pointer.to_string(), pointer);
-        assert_eq!(at_pointer.as_str().is_some(), exact);
+        let exact = at.pointer.as_ref().unwrap();
+        assert_eq!(exact.utf16_units().collect::<Vec<_>>(), pointer);
+        assert_eq!(Some(exact), Pointer::from_utf16(&pointer).ok().as_ref());
         assert_eq!(at.byte_offset, offset);
         assert_eq!(
             at.line,
@@ -51,7 +55,6 @@ fn unpaired_high_surrogate_value_violates_only_json_conformance() {
         r#"{"openbindings":"0.2.0","description":"\ud800","operations":{}}"#,
         r#""\ud800""#,
         "/description",
-        true,
     );
 }
 
@@ -60,8 +63,7 @@ fn unpaired_low_surrogate_member_in_schema_locates_the_name_token() {
     assert_unpaired(
         r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"type":"object","properties":{"\udc00":{}}}}}}"#,
         r#""\udc00""#,
-        "/operations/op/input/properties/\\udc00",
-        false,
+        "/operations/op/input/properties/\0",
     );
 }
 
@@ -71,7 +73,6 @@ fn reversed_surrogates_are_not_a_pair() {
         r#"{"openbindings":"0.2.0","description":"\ude00\ud83d","operations":{}}"#,
         r#""\ude00\ud83d""#,
         "/description",
-        true,
     );
 }
 
@@ -107,7 +108,7 @@ fn surrogate_exclusion_follows_version_selection_and_precedes_later_rules() {
     }
     for declaration in ["", r#""openbindings":7,"#, r#""openbindings":"bad","#] {
         let text = format!("{{\n{declaration}\"description\":\"\\uD800\"\n}}");
-        assert_unpaired(&text, r#""\uD800""#, "/description", true);
+        assert_unpaired(&text, r#""\uD800""#, "/description");
     }
 }
 

@@ -76,7 +76,7 @@ fn frozen_c22_original_values_and_renamed_operation_keep_their_independent_truth
                 assert!(!problems.is_empty());
                 assert!(problems.iter().all(|p| {
                     p.code == "oneOf"
-                        && p.instance.pointer.as_ref().unwrap() == ""
+                        && p.instance == ""
                         && p.schema.resource.is_none()
                         && p.schema.pointer == format!("/operations/{op}/output/oneOf")
                 }));
@@ -174,8 +174,7 @@ fn frozen_owner_controls_cover_endpoints_siblings_nested_and_original_summaries(
             if let Some(pointer) = case["summary"].as_str() {
                 assert!(
                     problems.iter().any(|p| p.code == "oneOf"
-                        && p.instance.pointer.as_ref().unwrap()
-                            == case["instancePointer"].as_str().unwrap_or("")
+                        && p.instance == case["instancePointer"].as_str().unwrap_or("")
                         && p.schema.pointer == pointer
                         && p.schema.resource.as_deref() == case["summaryResource"].as_str()),
                     "{}: {problems:?}",

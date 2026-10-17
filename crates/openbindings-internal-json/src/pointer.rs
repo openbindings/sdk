@@ -16,8 +16,10 @@ use std::{fmt, str::FromStr};
 /// consumer that keeps UTF-16 strings (such as JavaScript) receives the exact
 /// pointer. A `serde_json::Value` cannot hold such a string, as for an exact
 /// [`crate::JsonValue`] with one, so serialize records that may carry one to
-/// JSON text (`serde_json::to_string`, `to_writer`); `to_value` refuses it.
-/// `Debug` shows no segment.
+/// JSON text (`serde_json::to_string`, `to_writer`); `to_value` refuses it and
+/// `json!` panics. Another serializer receives that string token as
+/// `serde_json`'s raw-value newtype, as for an exact value. `Debug` shows no
+/// segment.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Pointer(Repr);
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -59,6 +61,14 @@ impl Pointer {
             .flat_map(str::encode_utf16)
             .chain(units.into_iter().flatten())
     }
+    /// Check escaped RFC 6901 UTF-16 units, as [`Self::utf16_units`] gives them,
+    /// keeping unpaired units; the counterpart of `String::from_utf16`.
+    ///
+    /// # Errors
+    /// Returns [`PointerError`] when the units are not an RFC 6901 pointer.
+    pub fn from_utf16(units: &[u16]) -> Result<Self, PointerError> {
+        Self::parse_units(units).ok_or(PointerError)
+    }
     /// Wrap escaped RFC 6901 text the caller has built or checked.
     pub(crate) fn escaped(text: String) -> Self {
         debug_assert!(valid(text.encode_utf16()));
@@ -77,6 +87,41 @@ impl Pointer {
     /// Check and wrap escaped RFC 6901 units.
     pub(crate) fn parse_units(units: &[u16]) -> Option<Self> {
         valid(units.iter().copied()).then(|| Self::from_escaped_units(units.to_vec()))
+    }
+    /// Append escaped RFC 6901 text, such as `/minimum`.
+    pub(crate) fn push_escaped(&mut self, escaped: &str) {
+        match &mut self.0 {
+            Repr::Text(text) => {
+                debug_assert!(escaped.is_empty() || valid(escaped.encode_utf16()));
+                text.push_str(escaped);
+            }
+            Repr::Units(_) => *self = self.joined(escaped),
+        }
+    }
+    /// This pointer followed by escaped RFC 6901 text, in one exact allocation.
+    pub(crate) fn joined(&self, escaped: &str) -> Self {
+        debug_assert!(escaped.is_empty() || valid(escaped.encode_utf16()));
+        match &self.0 {
+            Repr::Text(text) => {
+                let mut joined = String::with_capacity(text.len() + escaped.len());
+                joined.push_str(text);
+                joined.push_str(escaped);
+                Self(Repr::Text(joined))
+            }
+            Repr::Units(units) => {
+                let mut joined = Vec::with_capacity(units.len() + escaped.len());
+                joined.extend_from_slice(units);
+                joined.extend(escaped.encode_utf16());
+                Self(Repr::Units(joined.into_boxed_slice()))
+            }
+        }
+    }
+    /// Retained bytes: the UTF-8 text, or two per unit.
+    pub(crate) fn size(&self) -> usize {
+        match &self.0 {
+            Repr::Text(text) => text.len(),
+            Repr::Units(units) => 2 * units.len(),
+        }
     }
     pub(crate) fn is_root(&self) -> bool {
         matches!(&self.0, Repr::Text(text) if text.is_empty())
@@ -175,19 +220,27 @@ impl Serialize for Pointer {
             Repr::Text(text) => serializer.serialize_str(text),
             Repr::Units(units) => {
                 // JSON text can denote an unpaired unit with an escape, which no
-                // Rust string holds; write the exact string token.
+                // Rust string holds; write the exact string token. Every run of
+                // scalar text takes serde_json's own escapes.
                 let mut token = String::with_capacity(units.len() + 2);
+                let mut run = String::new();
+                let flush = |token: &mut String, run: &mut String| {
+                    let quoted = serde_json::to_string(run.as_str()).expect("text serializes");
+                    token.push_str(&quoted[1..quoted.len() - 1]);
+                    run.clear();
+                };
                 token.push('"');
                 for unit in char::decode_utf16(units.iter().copied()) {
-                    use std::fmt::Write;
-                    let _ = match unit {
-                        Ok('"') => write!(token, "\\\""),
-                        Ok('\\') => write!(token, "\\\\"),
-                        Ok(c) if c < ' ' => write!(token, "\\u{:04x}", u32::from(c)),
-                        Ok(c) => write!(token, "{c}"),
-                        Err(unit) => write!(token, "\\u{:04x}", unit.unpaired_surrogate()),
-                    };
+                    match unit {
+                        Ok(c) => run.push(c),
+                        Err(unit) => {
+                            flush(&mut token, &mut run);
+                            use std::fmt::Write;
+                            let _ = write!(token, "\\u{:04x}", unit.unpaired_surrogate());
+                        }
+                    }
                 }
+                flush(&mut token, &mut run);
                 token.push('"');
                 serde_json::value::RawValue::from_string(token)
                     .map_err(serde::ser::Error::custom)?
@@ -228,23 +281,30 @@ mod tests {
         let mut exact = units("/a\"\\\n/");
         exact.push(0xd800);
         exact.extend(units("~0x"));
-        let pointer = Pointer::parse_units(&exact).unwrap();
+        let mut pointer = Pointer::from_utf16(&exact).unwrap();
         assert_eq!(pointer.as_str(), None);
         assert_ne!(pointer, "/a\"\\\n/\\ud800~0x");
         assert_eq!(pointer.utf16_units().collect::<Vec<_>>(), exact);
         assert_eq!(pointer.to_string(), "/a\"\\\n/\\ud800~0x");
         assert_eq!(
             serde_json::to_string(&pointer).unwrap(),
-            r#""/a\"\\\u000a/\ud800~0x""#
+            r#""/a\"\\\n/\ud800~0x""#
         );
+        // A character takes the same escape in either form.
+        let scalar: Pointer = "/a\"\\\n/x".parse().unwrap();
+        assert_eq!(serde_json::to_string(&scalar).unwrap(), r#""/a\"\\\n/x""#);
         assert_eq!(format!("{pointer:?}"), "Pointer { .. }");
         assert_eq!(
             pointer.unit_segments().collect::<Vec<_>>(),
             vec![units("a\"\\\n"), [&[0xd800][..], &units("~x")].concat()]
         );
+        pointer.push_escaped("/~1");
+        assert_eq!(pointer.to_string(), "/a\"\\\n/\\ud800~0x/~1");
+        assert_eq!(pointer.size(), 2 * (exact.len() + 3));
         // Paired units are scalar text.
-        let paired = Pointer::parse_units(&units("/😀")).unwrap();
+        let paired = Pointer::from_utf16(&units("/😀")).unwrap();
         assert_eq!(paired.as_str(), Some("/😀"));
-        assert!(Pointer::parse_units(&[0xd800]).is_none());
+        assert_eq!(Pointer::from_utf16(&[0xd800]), Err(PointerError));
+        assert_eq!(Pointer::from_utf16(&units("/~2")), Err(PointerError));
     }
 }

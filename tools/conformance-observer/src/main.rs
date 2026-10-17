@@ -113,16 +113,17 @@ fn observe(request: &Value) -> String {
                     "output"
                 };
                 let prepared = prepare(&proof, operation, side, &evaluator, &resources);
-                out["values"] = json!(
-                    given["valuesJson"]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .map(|v| observe_value(
-                            &prepared,
-                            &JsonValue::parse(v.as_str().unwrap()).unwrap()
-                        ))
-                        .collect::<Vec<_>>()
+                let values: Vec<String> = given["valuesJson"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| {
+                        observe_value(&prepared, &JsonValue::parse(v.as_str().unwrap()).unwrap())
+                    })
+                    .collect();
+                return extended(
+                    out.to_string(),
+                    &[("values", format!("[{}]", values.join(",")))],
                 );
             } else {
                 let OperationSelection::Found(op) = doc.resolve_operation(operation).unwrap()
@@ -134,18 +135,28 @@ fn observe(request: &Value) -> String {
                     for example in examples {
                         for side in ["input", "output"] {
                             if let Some(value) = example.value.get(side) {
-                                let mut result = observe_value(
+                                let result = observe_value(
                                     &prepare(&proof, operation, side, &evaluator, &resources),
                                     &value.to_owned(),
                                 );
-                                result["example"] = json!(example.name.as_str().unwrap());
-                                result["side"] = json!(side);
-                                results.push(result);
+                                results.push(extended(
+                                    result,
+                                    &[
+                                        (
+                                            "example",
+                                            json!(example.name.as_str().unwrap()).to_string(),
+                                        ),
+                                        ("side", json!(side).to_string()),
+                                    ],
+                                ));
                             }
                         }
                     }
                 }
-                out["examples"] = json!(results);
+                return extended(
+                    out.to_string(),
+                    &[("examples", format!("[{}]", results.join(",")))],
+                );
             }
         }
         _ => {
@@ -181,12 +192,25 @@ fn with_findings(out: Value, findings: &[Finding]) -> String {
             )
         })
         .collect();
-    let mut observation = out.to_string();
-    observation.pop();
-    observation.push_str(r#","findings":["#);
-    observation.push_str(&rows.join(","));
-    observation.push_str("]}");
-    observation
+    extended(
+        out.to_string(),
+        &[("findings", format!("[{}]", rows.join(",")))],
+    )
+}
+// A JSON object's text with fields of JSON text appended.
+fn extended(object: String, fields: &[(&str, String)]) -> String {
+    let mut text = object;
+    assert_eq!(text.pop(), Some('}'), "an object's text");
+    for (key, value) in fields {
+        if !text.ends_with('{') {
+            text.push(',');
+        }
+        text.push_str(&json!(key).to_string());
+        text.push(':');
+        text.push_str(value);
+    }
+    text.push('}');
+    text
 }
 fn main() {
     for line in io::stdin().lock().lines() {
@@ -222,15 +246,17 @@ fn prepare(
         None => Preparation::NoContract,
     }
 }
-fn observe_value(preparation: &Preparation, value: &JsonValue) -> Value {
+// Outcomes and refusals carry exact pointers, so they are written as JSON text.
+fn observe_value(preparation: &Preparation, value: &JsonValue) -> String {
     match preparation {
         Preparation::Prepared(Ok(contract)) => {
-            serde_json::to_value(contract.validate(value)).unwrap()
+            serde_json::to_string(&contract.validate(value)).unwrap()
         }
-        Preparation::NoContract => json!({"outcome":"no-contract"}),
-        Preparation::OperationMissing => json!({"outcome":"operation-missing"}),
-        Preparation::Prepared(Err(detail)) => {
-            json!({"outcome":"no-verdict","detail":detail})
-        }
+        Preparation::NoContract => json!({"outcome":"no-contract"}).to_string(),
+        Preparation::OperationMissing => json!({"outcome":"operation-missing"}).to_string(),
+        Preparation::Prepared(Err(detail)) => extended(
+            json!({"outcome":"no-verdict"}).to_string(),
+            &[("detail", serde_json::to_string(detail).unwrap())],
+        ),
     }
 }

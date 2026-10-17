@@ -399,18 +399,29 @@ impl<W: Sink> Writer<'_, W> {
         self.quoted(prefix);
         self.put(",{");
     }
-    // A program map entry, relative to the resource's original source.
-    fn origin(&mut self, origin: &ProgramOrigin, source: Option<&str>) {
+    // A program map entry, relative to the resource's original source. `false`,
+    // writing nothing, for a pointer through a name with an unpaired unit, which
+    // this text does not spell: the program's own map keeps it exactly.
+    fn origin(&mut self, origin: &ProgramOrigin, source: Option<&str>) -> bool {
         let (exact, at) = match origin {
-            ProgramOrigin::Synthetic => return self.put("null"),
+            ProgramOrigin::Synthetic => {
+                self.put("null");
+                return true;
+            }
+            ProgramOrigin::Prefix(at) | ProgramOrigin::Exact(at)
+                if at.pointer.as_str().is_none() =>
+            {
+                return false;
+            }
             ProgramOrigin::Prefix(at) if at.resource.as_deref() == source => {
-                return self.escaped(&at.pointer);
+                self.escaped(at.pointer.as_str().expect("text pointer"));
+                return true;
             }
             ProgramOrigin::Prefix(at) => (false, at),
             ProgramOrigin::Exact(at) => (true, at),
         };
         self.put(if exact { "[true," } else { "[false," });
-        self.escaped(&at.pointer);
+        self.escaped(at.pointer.as_str().expect("text pointer"));
         let resource = at.resource.as_deref();
         if resource != source {
             match resource {
@@ -423,6 +434,7 @@ impl<W: Sink> Writer<'_, W> {
             }
         }
         self.put_char(']');
+        true
     }
     // Write each resource's definitions with the program map's entries for
     // them. `Ok(false)` when the map holds an entry this text cannot carry.
@@ -526,7 +538,9 @@ impl<W: Sink> Writer<'_, W> {
                 }
                 let at = self.name(name);
                 self.put(":[");
-                self.origin(origin, source);
+                if !self.origin(origin, source) {
+                    return Ok(false);
+                }
                 self.put_char(',');
                 let schema_at = self.out.len();
                 let first_keyword = self.keywords;
@@ -553,7 +567,9 @@ impl<W: Sink> Writer<'_, W> {
                     self.put_char('[');
                     self.escaped(path);
                     self.put_char(',');
-                    self.origin(origin, source);
+                    if !self.origin(origin, source) {
+                        return Ok(false);
+                    }
                     self.put_char(']');
                     written += 1;
                 }
@@ -1143,15 +1159,41 @@ impl Explanation {
             _ => Ok(None),
         }
     }
+    /// The original location of a problem's failing keyword, from the
+    /// library's keyword URI. A keyword the original sources do not hold is not
+    /// guessed: the problem names the selected schema itself, with no facts,
+    /// except in a partial program (`original_only`), whose generated errors
+    /// are not original schema evidence and yield no problem. `Ok(None)` when
+    /// nothing can be named; interrupted lookup is `Err`.
+    // Out of line, so the diagnostic pass that calls it stays small enough for
+    // the compiler to inline that pass's budget scopes.
+    #[inline(never)]
+    pub(crate) fn problem_schema(
+        &self,
+        program: Option<&Program>,
+        uri: Option<&str>,
+        original_only: bool,
+        control: &dyn WorkControl,
+    ) -> Result<Option<Located<'_>>, ()> {
+        if let Some(uri) = uri
+            && let Some(located) = self.locate(program, uri, control)?
+        {
+            return Ok(Some(located));
+        }
+        if original_only {
+            return Ok(None);
+        }
+        Ok(self.entry(program, control)?.map(|entry| Located {
+            location: entry.location,
+            operand: None,
+        }))
+    }
     /// Map a library keyword location to its original location, keeping the
     /// nearest existing ancestor when the library names a path the source
     /// lacks. Interrupted lookup reports no location rather than an unchecked
     /// one. Packaged meta-schemas are original sources for location validity,
     /// but their facts are not reported. `program` is the compiled program when
     /// its own location map is kept.
-    // Out of line, so the diagnostic pass that calls it stays small enough for
-    // the compiler to inline that pass's budget scopes.
-    #[inline(never)]
     pub(crate) fn locate(
         &self,
         program: Option<&Program>,
@@ -1373,10 +1415,9 @@ impl Explanation {
                 end += 1 + token.len();
             }
         }
-        let (resource, mut pointer, standard) = match original {
+        let (resource, pointer, standard) = match original {
             Original::Map(at) => {
-                let mut pointer = String::with_capacity(at.pointer.len() + end);
-                pointer.push_str(&at.pointer);
+                let pointer = backend::joined_pointer(&at.pointer, &suffix[..end]);
                 let mut standard = false;
                 if let Some(uri) = &at.resource {
                     for resource in openbindings_internal_schema::embedded_resources() {
@@ -1400,12 +1441,13 @@ impl Explanation {
                     Some(source) => Some(self.owned(source, 0).ok_or(())?),
                     None => None,
                 };
-                (resource, self.owned(pointer, end).ok_or(())?, standard)
+                let mut pointer = self.owned(pointer, end).ok_or(())?;
+                pointer.push_str(&suffix[..end]);
+                (resource, backend::escaped_pointer(pointer), standard)
             }
         };
-        pointer.push_str(&suffix[..end]);
         Ok(Some(Located {
-            location: SchemaLocation::new(resource, backend::escaped_pointer(pointer)),
+            location: SchemaLocation::new(resource, pointer),
             operand: (!standard).then_some(node),
         }))
     }
@@ -1820,7 +1862,7 @@ mod tests {
             uri,
             ProgramOrigin::Prefix(openbindings_internal_schema::Location {
                 resource: None,
-                pointer: String::new(),
+                pointer: "".parse().unwrap(),
             }),
         );
         program.locations = Arc::new(locations);

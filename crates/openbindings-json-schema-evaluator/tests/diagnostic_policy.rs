@@ -342,12 +342,12 @@ impl SchemaEvaluator for Custom {
     }
 }
 impl PreparedSchema for CustomPrepared {
-    fn validate(&self, value: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
+    fn validate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
         ValueOutcome::Fails {
             message: "value does not satisfy the contract".into(),
             problems: vec![ValueProblem {
                 details: None,
-                instance: value.location(),
+                instance: "".parse().unwrap(),
                 schema: self.0.clone(),
                 code: "custom".into(),
                 message: "custom evaluator failure".into(),

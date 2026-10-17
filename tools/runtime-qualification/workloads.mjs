@@ -457,7 +457,7 @@ export function amplification(sdk, fixture, timed = true) {
         problems: result.problems.length,
         wireBytes: bytes(wire),
         instancePointerBytes: result.problems.reduce(
-          (n, p) => n + bytes(p.instance.pointer ?? ""),
+          (n, p) => n + bytes(p.instance),
           0,
         ),
         schemaPointerBytes: result.problems.reduce(

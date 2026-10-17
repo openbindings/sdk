@@ -64,7 +64,10 @@ async function caller(
     });
     const result: ValueOutcome = input.explain(value);
     if (result.outcome === "fails") {
-      result.problems[0]!.instance satisfies SourceLocation;
+      result.problems[0]!.instance satisfies string;
+      value.locate(
+        result.problems[0]!.instance,
+      ) satisfies SourceLocation | null;
       result.problems[0]!.schema satisfies SchemaLocation;
       validated.locate(
         result.problems[0]!.schema,

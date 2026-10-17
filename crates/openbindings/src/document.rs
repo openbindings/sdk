@@ -50,7 +50,7 @@ pub enum Conformance {
     Undetermined,
 }
 #[derive(Clone, Serialize)]
-/// One explanatory normative-rule finding. Findings may be bounded; the report's independent rule evidence determines its conclusion.
+/// One explanatory normative-rule finding. Findings may be bounded; the report's independent rule evidence determines its conclusion. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 pub struct Finding {
     /// Normative rule identifier, such as `OBI-01`.
     pub rule: &'static str,
@@ -117,7 +117,7 @@ impl std::fmt::Debug for Finding {
 }
 
 #[derive(Clone, Serialize)]
-/// Assessment of all normative document rules at the pinned specification revision. At most 4096 findings and 8 MiB of aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate) are retained. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source.
+/// Assessment of all normative document rules at the pinned specification revision. At most 4096 findings and 8 MiB of aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate) are retained. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 pub struct ValidationReport {
     /// Applied specification release, independent of package version.
     pub release: &'static str,

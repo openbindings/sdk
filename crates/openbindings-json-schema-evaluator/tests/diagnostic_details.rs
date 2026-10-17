@@ -159,7 +159,7 @@ fn exact_facts_private_defaults_and_recovery() {
         match problems[0].details.as_ref().unwrap() {
             ValueProblemDetails::Required { member } => {
                 assert_eq!(member, "SECRET/member~key");
-                assert_eq!(problems[0].instance.pointer.as_ref().unwrap(), "");
+                assert_eq!(problems[0].instance, "");
             }
             ValueProblemDetails::NumericBound { bound } => assert_eq!(bound, "9007199254740993"),
             ValueProblemDetails::Enum { choices } => assert_eq!(
@@ -191,7 +191,7 @@ fn external_old_snapshot_nested_coordinates_and_escaped_names() {
     let value = JsonValue::parse(r#"{"a/~":6}"#).unwrap();
     let result = old.explain(&value);
     let problem = &failure(&result).0[0];
-    assert_eq!(problem.instance.pointer.as_ref().unwrap(), "/a~1~0");
+    assert_eq!(problem.instance, "/a~1~0");
     assert_eq!(problem.schema.pointer, "/allOf/0/properties/a~1~0/minimum");
     assert_eq!(
         problem.schema.resource.as_deref(),

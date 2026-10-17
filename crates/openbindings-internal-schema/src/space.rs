@@ -4,7 +4,9 @@ use crate::{
     schema_index::{DIALECT, SchemaIndex},
     uri, *,
 };
-use openbindings_internal_json::backend::{has_unpaired, node_id, pointer, pointer_size};
+use openbindings_internal_json::backend::{
+    has_unpaired, location_pointer_size, node_id, push_pointer, relative_pointer,
+};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 pub struct SpaceNode {
@@ -400,8 +402,7 @@ impl SchemaSpace {
         let source = &self.sources[node.source];
         let uri_bytes = source.uri.as_ref().map_or(0, String::len);
         if let Some(remaining) = LOCATION_BYTES.checked_sub(uri_bytes)
-            && pointer_size(node.value.view(), remaining).is_some()
-            && pointer_size(source.value.view(), remaining).is_some()
+            && location_pointer_size(node.value.view(), remaining).is_some()
         {
             detail.location = Some(self.location(at));
         }
@@ -413,16 +414,10 @@ impl SchemaSpace {
     pub fn location(&self, node: usize) -> Location {
         let node = &self.nodes[node];
         let source = &self.sources[node.source];
-        let prefix = pointer(&source.value).unwrap_or_default();
-        let full = pointer(&node.value).unwrap_or_default();
-        // A source at its document's root keeps the full pointer without a copy.
-        let pointer = match full.strip_prefix(&prefix) {
-            Some(relative) if !prefix.is_empty() => relative.into(),
-            _ => full,
-        };
+        // Exact from the source's own root, including names with unpaired units.
         Location {
             resource: source.uri.clone(),
-            pointer,
+            pointer: relative_pointer(node.value.view(), source.value.view()),
         }
     }
     pub fn failure(
@@ -559,8 +554,8 @@ impl SchemaSpace {
                         Err(detail) => ReferenceResolution::Unresolved { detail },
                     };
                     let mut location = self.location(id);
-                    location.pointer.push('/');
-                    location.pointer.push_str(keyword);
+                    // Reference keywords need no escape.
+                    push_pointer(&mut location.pointer, &format!("/{keyword}"));
                     report.references.push(Reference {
                         location,
                         keyword: keyword.into(),

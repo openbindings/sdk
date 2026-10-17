@@ -112,7 +112,7 @@ mod location_budget_tests {
         let uri = "https://sdk-program.openbindings.invalid/p#/$defs/n0";
         let location = SchemaLocation {
             resource: Some("https://example.test/".to_owned() + &"u".repeat(32768)),
-            pointer: "/é~0~1\n".into(),
+            pointer: "/é~0~1\n".parse().unwrap(),
         };
         let program = EvaluationProgram {
             entry_uri: uri.into(),
@@ -123,7 +123,9 @@ mod location_budget_tests {
             )])),
         };
         let generated = uri.to_owned() + "/type";
-        let required = location.resource.as_ref().unwrap().len() + location.pointer.len() + 5;
+        let required = location.resource.as_ref().unwrap().len()
+            + openbindings_internal_json::backend::pointer_bytes(&location.pointer)
+            + 5;
         for bytes in [0, 1, required - 1] {
             assert_eq!(
                 program.original_location_bounded(&generated, bytes),
@@ -137,7 +139,10 @@ mod location_budget_tests {
                     .unwrap(),
                 Some(SchemaLocation {
                     resource: location.resource.clone(),
-                    pointer: location.pointer.clone() + "/type"
+                    pointer: openbindings_internal_json::backend::joined_pointer(
+                        &location.pointer,
+                        "/type"
+                    )
                 })
             );
         }
@@ -170,7 +175,7 @@ mod location_budget_tests {
     fn percent_bearing_base_lookup_preserves_original_mapping_contract() {
         let at = SchemaLocation {
             resource: None,
-            pointer: String::new(),
+            pointer: "".parse().unwrap(),
         };
         for base in [
             "https://example.test/%61",
@@ -193,7 +198,7 @@ mod location_budget_tests {
                 program.original_location_bounded(&(base.to_owned() + "/type"), 5),
                 Ok(Some(SchemaLocation {
                     resource: None,
-                    pointer: "/type".into()
+                    pointer: "/type".parse().unwrap()
                 }))
             );
         }

@@ -66,7 +66,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("{:?}: {:?}", operation.key(), operation.description());
     let contract = operation.input().ok_or("operation has no input contract")?;
     // Conformant reads preserve presence; schema preparation remains separate.
-    println!("input schema at {}", contract.schema().location());
+    let schema = contract.schema().location();
+    println!(
+        "input schema at {:?}, line {}",
+        schema.pointer.as_ref().map(ToString::to_string),
+        schema.line
+    );
     // Default budgets and no supplied resources.
     let input = contract.prepare(&DefaultEvaluator::new())?;
     // Ordinary values have checked Serde admission. Exact text preserves its tokens.
@@ -89,11 +94,20 @@ fn main() -> Result<(), Box<dyn Error>> {
             } => {
                 println!("{message}");
                 for problem in problems {
-                    // The value locates itself; the document locates its schema.
+                    // The value and the document each find their side's line
+                    // and column when asked. Pointers are caller-controlled
+                    // text: Debug of the string quotes and escapes it.
+                    let instance = value.locate(&problem.instance).ok_or("instance location")?;
                     let schema = proof.locate(&problem.schema).ok_or("schema location")?;
                     println!(
-                        "mismatch at {} (schema at {schema}): {}",
-                        problem.instance, problem.message
+                        "mismatch at {:?}, line {}, column {} (schema {:?}, line {}, column {}): {}",
+                        problem.instance.to_string(),
+                        instance.line,
+                        instance.byte_column,
+                        problem.schema.pointer.to_string(),
+                        schema.line,
+                        schema.byte_column,
+                        problem.message
                     );
                 }
                 println!("selected diagnostics complete: {problems_complete}");

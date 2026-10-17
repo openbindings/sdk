@@ -22,12 +22,7 @@ impl SchemaEvaluator for BooleanEvaluator {
     }
 }
 impl PreparedSchema for BooleanContract {
-    fn validate(
-        &self,
-        value: &JsonValue,
-        detail: Detail,
-        control: &dyn WorkControl,
-    ) -> ValueOutcome {
+    fn validate(&self, _: &JsonValue, detail: Detail, control: &dyn WorkControl) -> ValueOutcome {
         if let Err(detail) = control.check() {
             let detail = detail.into();
             return ValueOutcome::NoVerdict { detail };
@@ -41,8 +36,9 @@ impl PreparedSchema for BooleanContract {
             message: "value does not satisfy the contract".into(),
             problems: explain
                 .then(|| {
+                    // The whole value fails: the instance's root.
                     ValueProblem::new(
-                        value.location(),
+                        "".parse().expect("the root pointer"),
                         self.1.clone(),
                         "false-schema",
                         "a false schema permits no values",
@@ -93,9 +89,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .locate(&problems[0].schema)
         .ok_or("schema location")?;
     assert_eq!(schema.pointer.as_ref().unwrap(), "/operations/op/output");
+    // The value and the document each locate their side on demand. Pointers
+    // are source-controlled text: Debug of the string quotes and escapes it.
+    let instance = value
+        .locate(&problems[0].instance)
+        .ok_or("instance location")?;
     println!(
-        "{} at {} (schema at {schema})",
-        problems[0].code, problems[0].instance
+        "{} at {:?}, line {}, column {} (schema {:?}, line {}, column {})",
+        problems[0].code,
+        problems[0].instance.to_string(),
+        instance.line,
+        instance.byte_column,
+        problems[0].schema.pointer.to_string(),
+        schema.line,
+        schema.byte_column
     );
     Ok(())
 }

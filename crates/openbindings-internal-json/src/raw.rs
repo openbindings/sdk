@@ -464,26 +464,40 @@ impl Arena {
         Some(current)
     }
     pub fn pointer(&self, id: Id) -> Option<String> {
+        self.pointer_from(id, 0)
+    }
+    /// The scalar pointer of `id` from its ancestor `root`, which may be `id`.
+    pub fn pointer_from(&self, id: Id, root: Id) -> Option<String> {
         // Measure first: an unrepresentable ancestor makes the whole pointer
         // unavailable before anything is copied, and the pointer then takes one
         // exact allocation, written from its last segment back.
         let escaped =
             |name: &str| name.len() + name.bytes().filter(|&b| b == b'~' || b == b'/').count();
+        let edges = |mut current: Id| {
+            std::iter::from_fn(move || {
+                (current != root).then(|| {
+                    let (parent, edge) =
+                        self.nodes[current].parent.expect("an ancestor of the node");
+                    current = parent;
+                    edge
+                })
+            })
+        };
+        if id == root {
+            return Some(String::new());
+        }
         let mut size = 0usize;
-        let mut current = id;
-        while let Some((parent, edge)) = self.nodes[current].parent {
+        for edge in edges(id) {
             size += 1 + match edge {
                 Edge::Index(index) => index
                     .checked_ilog10()
                     .map_or(1, |digits| digits as usize + 1),
                 Edge::Key(key) => escaped(self.string(key)?),
             };
-            current = parent;
         }
         let mut bytes = vec![0u8; size];
         let mut end = size;
-        let mut current = id;
-        while let Some((parent, edge)) = self.nodes[current].parent {
+        for edge in edges(id) {
             match edge {
                 Edge::Index(mut index) => loop {
                     end -= 1;
@@ -521,20 +535,24 @@ impl Arena {
             }
             end -= 1;
             bytes[end] = b'/';
-            current = parent;
         }
         debug_assert_eq!(end, 0);
         Some(String::from_utf8(bytes).expect("segments are UTF-8"))
     }
     /// The exact pointer, including segments whose names hold unpaired units.
     pub fn exact_pointer(&self, id: Id) -> crate::Pointer {
-        if let Some(text) = self.pointer(id) {
+        self.exact_pointer_from(id, 0)
+    }
+    /// The exact pointer of `id` from its ancestor `root`, which may be `id`.
+    pub fn exact_pointer_from(&self, id: Id, root: Id) -> crate::Pointer {
+        if let Some(text) = self.pointer_from(id, root) {
             return crate::Pointer::escaped(text);
         }
         // An ancestor's name holds an unpaired unit: write escaped units.
         let mut segments = Vec::new();
         let mut current = id;
-        while let Some((parent, edge)) = self.nodes[current].parent {
+        while current != root {
+            let (parent, edge) = self.nodes[current].parent.expect("an ancestor of the node");
             segments.push(match edge {
                 Edge::Index(index) => index.to_string().encode_utf16().collect(),
                 Edge::Key(key) => self.units(key).expect("member name is a string"),
@@ -563,6 +581,18 @@ impl Arena {
             }
         }
         crate::Pointer::from_escaped_units(units)
+    }
+    /// One-based line and byte column of a node's offset, found by one pass
+    /// over the bytes before it; nothing is indexed or retained.
+    pub fn line_and_column(&self, offset: usize) -> (usize, usize) {
+        let before = &self.source.as_bytes()[..offset];
+        // Counting compares every byte, which the compiler vectorizes.
+        let lines = before.iter().filter(|&&byte| byte == b'\n').count();
+        let line_start = before
+            .iter()
+            .rposition(|&byte| byte == b'\n')
+            .map_or(0, |at| at + 1);
+        (1 + lines, offset - line_start + 1)
     }
     pub fn position(&self, offset: usize) -> Option<(usize, usize)> {
         if offset > self.source.len() || !self.source.is_char_boundary(offset) {

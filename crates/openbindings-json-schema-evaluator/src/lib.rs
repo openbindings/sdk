@@ -311,32 +311,15 @@ impl Compiled {
                 let Err(error) = self.validator.validate(backend::view(value)) else {
                     return Ok(None);
                 };
-                let located = match error.absolute_keyword_location() {
-                    Some(uri) => {
-                        match explanation.locate(self.program.as_ref(), uri.as_str(), control) {
-                            Ok(located) => located,
-                            Err(()) => return Ok(None),
-                        }
-                    }
-                    None => None,
-                };
-                // Generated partial-program errors are not original schema evidence.
-                if original_only && located.is_none() {
-                    return Ok(None);
-                }
-                // A keyword the original sources do not hold is not guessed:
-                // the problem names the selected schema itself.
-                let (schema, operand) = match located {
-                    Some(located) => (located.location, located.operand),
-                    None => match explanation.entry(self.program.as_ref(), control) {
-                        Ok(Some(entry)) => (entry.location, None),
-                        Ok(None) | Err(()) => return Ok(None),
-                    },
-                };
-                let Some(instance) = instance_location(value, error.instance_path().as_str())
+                let uri = error.absolute_keyword_location().map(|uri| uri.as_str());
+                let program = self.program.as_ref();
+                let Ok(Some(located)) =
+                    explanation.problem_schema(program, uri, original_only, control)
                 else {
                     return Ok(None);
                 };
+                let (schema, operand) = (located.location, located.operand);
+                let instance = instance_pointer(error.instance_path().as_str());
                 let detail = details::collect(operand, error.kind(), control);
                 control.check()?;
                 Ok(Some(ValueProblem {
@@ -352,6 +335,7 @@ impl Compiled {
                 }))
             });
             if let Ok(Some(problem)) = diagnostic {
+                debug_assert!(value.at_pointer(&problem.instance).is_some());
                 // The library's first error is the only problem.
                 problems = vec![problem];
             }
@@ -365,14 +349,15 @@ impl Compiled {
     }
 }
 
-// The library spells member names as the value does, except a name with an
-// unpaired unit, and reading one discards the pass. Resolving its path in the
-// exact value finds the node, located in the value's own text. Out of line, so
-// the diagnostic pass that calls it stays small enough for the compiler to
-// inline that pass's budget scopes.
-#[inline(never)]
-fn instance_location(value: &JsonValue, path: &str) -> Option<SourceLocation> {
-    value.at(path).map(JsonRef::location)
+// The library's instance path is the failing node's exact pointer from the
+// value. It escapes `~` and `/` as RFC 6901 does and writes indices in decimal,
+// and it spells each member name as the value does: evaluation presents scalar
+// names, including those holding the view's marker U+E000, as themselves, and
+// a name with an unpaired unit can only be read through `AsRef<str>` or
+// `Cow<str>`, which marks the pass unsupported: a path built in such a pass
+// may hold the view's spelling, but the pass and its problem are discarded.
+fn instance_pointer(path: &str) -> Pointer {
+    backend::escaped_pointer(path.to_owned())
 }
 
 struct PartialCompiled {
@@ -889,7 +874,7 @@ mod partial_budget_tests {
 }
 
 fn original_location(at: openbindings_internal_schema::Location) -> SchemaLocation {
-    SchemaLocation::new(at.resource, backend::escaped_pointer(at.pointer))
+    SchemaLocation::new(at.resource, at.pointer)
 }
 fn projection_failure(f: openbindings_internal_schema::Failure) -> NoVerdict {
     use openbindings_internal_schema::FailureReason as F;

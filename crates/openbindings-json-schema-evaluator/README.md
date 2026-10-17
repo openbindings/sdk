@@ -103,11 +103,11 @@ false`. `explain` returns the library's first error for the same verdict, with
 redacted messages and original schema facts. Building that error can allocate in
 proportion to the schema and value and can overflow the stack on deep values, so
 keep `validate` on paths that check untrusted input. Each explained problem
-locates the failing node in the value's text (`instance`: exact pointer, byte
-offset, line and column) and names the failing keyword by resource and exact
-pointer (`schema`). `Conformant::locate` and `ResourceSet::locate` find that
-keyword's line and column on demand; a keyword the original sources do not hold
-is named by the selected schema itself, never guessed. Schema facts may expose
+names the failing node by its exact pointer from the value passed (`instance`)
+and the failing keyword by resource and exact pointer (`schema`); a keyword the
+original sources do not hold is named by the selected schema itself, never
+guessed. `JsonValue::locate`, `Conformant::locate` and `ResourceSet::locate`
+find line and column on demand, so an explanation costs no position. Schema facts may expose
 source operands. A prepared contract keeps the text of the schemas it reached
 for these facts, never the document, its supplied resources or any position.
 Missing or incomplete diagnostics never weaken an established failure.

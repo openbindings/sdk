@@ -542,48 +542,26 @@ pub fn escaped_pointer(text: String) -> crate::Pointer {
 pub fn string_pointer(value: crate::JsonRef<'_>) -> Option<crate::Pointer> {
     crate::Pointer::parse_units(&value.utf16_units()?)
 }
+/// The exact pointer of `value` from its ancestor `root`, a value's own frame.
+pub fn relative_pointer(value: crate::JsonRef<'_>, root: crate::JsonRef<'_>) -> crate::Pointer {
+    debug_assert!(std::sync::Arc::ptr_eq(value.owner, root.owner));
+    value.owner.exact_pointer_from(value.id, root.id)
+}
+/// Append escaped RFC 6901 text, such as a keyword's `/minimum`.
+pub fn push_pointer(pointer: &mut crate::Pointer, escaped: &str) {
+    pointer.push_escaped(escaped);
+}
+/// A pointer followed by escaped RFC 6901 text, in one exact allocation.
+pub fn joined_pointer(pointer: &crate::Pointer, escaped: &str) -> crate::Pointer {
+    pointer.joined(escaped)
+}
+/// The bytes a pointer retains: its UTF-8 text, or two per UTF-16 unit.
+pub fn pointer_bytes(pointer: &crate::Pointer) -> usize {
+    pointer.size()
+}
 /// Whether two views read the same source.
 pub fn same_source(value: crate::JsonRef<'_>, source: &crate::JsonValue) -> bool {
     std::sync::Arc::ptr_eq(value.owner, &source.owner)
-}
-/// Resolve an exact pointer from `value`, matching names by their UTF-16 units,
-/// so a segment holding an unpaired unit names exactly its member. Repeated
-/// names select the first occurrence, as [`crate::JsonValue::at`] does.
-pub fn resolve<'a>(
-    value: &'a crate::JsonValue,
-    pointer: &crate::Pointer,
-) -> Option<crate::JsonRef<'a>> {
-    if let Some(text) = pointer.as_str() {
-        return value.at(text);
-    }
-    let mut current = value.view();
-    for segment in pointer.unit_segments() {
-        current = match &value.owner.nodes[current.id].kind {
-            Kind::Object(_) => {
-                current
-                    .members()?
-                    .find(|member| {
-                        member
-                            .name
-                            .as_string()
-                            .is_some_and(|name| name.utf16_units().eq(segment.iter().copied()))
-                    })?
-                    .value
-            }
-            Kind::Array(_) => {
-                let index = String::from_utf16(&segment).ok()?;
-                if index.is_empty()
-                    || (index.len() > 1 && index.starts_with('0'))
-                    || !index.bytes().all(|b| b.is_ascii_digit())
-                {
-                    return None;
-                }
-                current.element(index.parse().ok()?)?
-            }
-            _ => return None,
-        };
-    }
-    Some(current)
 }
 /// Measure separately owned decoded UTF-8 strings in a borrowed exact subtree,
 /// including member names. Raw source bytes are excluded. Unescaped strings borrow
@@ -1062,9 +1040,10 @@ mod tests {
         );
         assert_eq!(at.byte_offset, 11);
         assert_eq!(
-            resolve(&value, pointer).map(byte_range),
+            value.at_pointer(pointer).map(byte_range),
             Some(byte_range(node))
         );
+        assert_eq!(value.locate(pointer).as_ref(), Some(&at));
 
         let scalar = crate::JsonValue::parse(r#"{"a/~":{"k":0,"k":1}}"#).unwrap();
         let node = duplicate_nodes(&scalar).next().unwrap();

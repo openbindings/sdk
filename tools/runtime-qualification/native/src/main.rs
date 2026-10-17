@@ -179,7 +179,7 @@ fn main() {
             panic!("witness fails")
         };
         assert!(!problems_complete);
-        observation = json!({"outcome":"fails","problems":problems.len(),"complete":problems_complete,"wireBytes":wire.len(),"instancePointerBytes":problems.iter().map(|p|p.instance.pointer.as_ref().and_then(openbindings::Pointer::as_str).map_or(0,str::len)).sum::<usize>(),"schemaPointerBytes":problems.iter().map(|p|p.schema.pointer.as_str().map_or(0,str::len)).sum::<usize>()});
+        observation = json!({"outcome":"fails","problems":problems.len(),"complete":problems_complete,"wireBytes":wire.len(),"instancePointerBytes":problems.iter().map(|p|pointer_bytes(&p.instance)).sum::<usize>(),"schemaPointerBytes":problems.iter().map(|p|pointer_bytes(&p.schema.pointer)).sum::<usize>()});
         if n >= 2 {
             samples.push(invalid_ms + serialize_ms);
         }
@@ -188,4 +188,10 @@ fn main() {
         "{}",
         json!({"kind":"native","timed":timed,"tiers":rows,"amplification":{"samplesMs":samples,"observation":observation},"ownership":"public native API exposes no live arena counter; correctness/Drop controls separate; RSS measured by campaign wrapper"})
     );
+}
+// The bytes a pointer retains: its UTF-8 text, or two per UTF-16 unit.
+fn pointer_bytes(pointer: &openbindings::Pointer) -> usize {
+    pointer
+        .as_str()
+        .map_or_else(|| 2 * pointer.utf16_units().count(), str::len)
 }

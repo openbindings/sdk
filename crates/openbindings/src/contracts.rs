@@ -40,7 +40,7 @@ pub enum NoVerdictReason {
 /// pointer; generated evaluation-program identities are mapped back before
 /// exposure. Line and column come from the source's holder:
 /// [`Conformant::locate`] for the document and [`ResourceSet::locate`] for a
-/// supplied resource. A prepared contract keeps no source text.
+/// supplied resource. A prepared contract keeps no source text. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 pub struct SchemaLocation {
     /// Original supplied-resource URI, or `None` for the OpenBindings document. A URI is an identity, never an instruction to fetch.
     pub resource: Option<String>,
@@ -174,16 +174,18 @@ pub enum ValueProblemDetails {
 
 #[derive(Clone, Serialize)]
 /// One established instance failure, located in the value and in the schema.
-/// Custom evaluators can construct this public record.
+/// Custom evaluators can construct this public record. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 pub struct ValueProblem {
-    /// The failing node in the validated value's text, as
-    /// [`JsonRef::location`] gives it: its exact pointer from that text's root
-    /// (the value itself unless it is a subtree of a larger text), byte offset,
-    /// line and column.
-    pub instance: SourceLocation,
-    /// The failing keyword in its original schema source. When an evaluator
+    /// Exact RFC 6901 pointer to the failing node, from the value passed to
+    /// validation (the instance's root, also when that value is a subtree of
+    /// a larger text). The caller holds the value, so it finds the byte offset,
+    /// line and column when asked: [`JsonValue::locate`].
+    pub instance: Pointer,
+    /// The failing keyword in its original schema source, from that
+    /// document's or resource's root; [`Conformant::locate`] and
+    /// [`ResourceSet::locate`] find its line and column. When an evaluator
     /// cannot map a keyword to the original source, this names the selected
-    /// schema's root rather than a guessed keyword.
+    /// schema rather than a guessed keyword.
     pub schema: SchemaLocation,
     /// Stable evaluator-defined problem code, commonly the failed JSON Schema keyword.
     pub code: String,
@@ -241,10 +243,11 @@ impl std::fmt::Debug for ValueProblem {
 }
 impl ValueProblem {
     /// A problem without schema facts; set the public `details` field to add
-    /// them. Use [`JsonRef::location`] on the failing node for `instance` and
-    /// [`SchemaRequest::location`] at preparation for `schema`.
+    /// them. `instance` is the failing node's pointer from the validated value
+    /// (`Pointer::from_str` parses one, [`JsonRef::at_pointer`] checks it);
+    /// [`SchemaRequest::location`] at preparation names `schema`.
     pub fn new(
-        instance: SourceLocation,
+        instance: Pointer,
         schema: SchemaLocation,
         code: impl Into<String>,
         message: impl Into<String>,
@@ -261,6 +264,8 @@ impl ValueProblem {
 #[derive(Clone, Serialize)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
 /// Closed result partition for the selected schema and instance: satisfies, fails, undefined, or no verdict. No value outcome proves that the surrounding OpenBindings document conforms.
+///
+/// Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 #[must_use = "inspect the outcome before continuing"]
 pub enum ValueOutcome {
     /// The instance was established to satisfy the selected schema.
@@ -447,8 +452,7 @@ impl ResourceSet {
         let found = resources
             .binary_search_by(|resource| resource.uri.as_str().cmp(uri))
             .ok()?;
-        openbindings_internal_json::backend::resolve(&resources[found].document, &at.pointer)
-            .map(JsonRef::location)
+        resources[found].document.locate(&at.pointer)
     }
     pub(crate) fn input_policy(&self) -> &openbindings_internal_schema::Supplied {
         &self.inner.input_policy
@@ -512,8 +516,7 @@ impl Conformant<Document> {
         if at.resource.is_some() {
             return None;
         }
-        openbindings_internal_json::backend::resolve(self.as_document().value(), &at.pointer)
-            .map(JsonRef::location)
+        self.as_document().value().locate(&at.pointer)
     }
 }
 
@@ -637,7 +640,7 @@ impl EvaluationProgram {
 pub(crate) fn original_location(at: openbindings_internal_schema::Location) -> SchemaLocation {
     SchemaLocation {
         resource: at.resource,
-        pointer: openbindings_internal_json::backend::escaped_pointer(at.pointer),
+        pointer: at.pointer,
     }
 }
 pub(crate) fn projection_failure(f: openbindings_internal_schema::Failure) -> NoVerdict {

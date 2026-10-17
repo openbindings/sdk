@@ -50,7 +50,7 @@ mod tests {
     impl PreparedSchema for Prepared {
         fn validate(
             &self,
-            value: &JsonValue,
+            _: &JsonValue,
             _: openbindings::Detail,
             c: &dyn openbindings::WorkControl,
         ) -> ValueOutcome {
@@ -68,7 +68,7 @@ mod tests {
             ValueOutcome::Fails {
                 message: "value does not satisfy the contract".into(),
                 problems: vec![ValueProblem::new(
-                    value.location(),
+                    "".parse().unwrap(),
                     self.schema.clone(),
                     "test.false",
                     "reject",

@@ -75,7 +75,7 @@ impl SchemaEvaluator for Booleans {
 impl PreparedSchema for BooleanContract {
     fn validate(
         &self,
-        value: &JsonValue,
+        _: &JsonValue,
         detail: openbindings::Detail,
         control: &dyn openbindings::WorkControl,
     ) -> ValueOutcome {
@@ -93,7 +93,7 @@ impl PreparedSchema for BooleanContract {
             problems: explain
                 .then(|| {
                     ValueProblem::new(
-                        value.location(),
+                        "".parse().expect("the root pointer"),
                         self.1.clone(),
                         "consumer.false",
                         "false schema rejects the value",

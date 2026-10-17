@@ -122,7 +122,7 @@ fn deep_literal_and_opaque_data_do_not_inherit_compiler_tree_depth() {
                 panic!("{depth}: {result:?}")
             };
             assert!(!problems_complete);
-            assert_eq!(problems[0].instance.pointer.as_ref().unwrap(), "");
+            assert_eq!(problems[0].instance, "");
             assert!(matches!(problems[0].code.as_str(), "const" | "enum"));
         }
         let prepared = prepare(&format!(
@@ -237,7 +237,7 @@ fn anonymous_scope_selects_outer_dynamic_anchor() {
     let ValueOutcome::Fails { problems, .. } = result else {
         panic!("{result:?}");
     };
-    assert_eq!(problems[0].instance.pointer.as_ref().unwrap(), "/0");
+    assert_eq!(problems[0].instance, "/0");
     assert_eq!(problems[0].schema.pointer, "/schemas/Override/type");
 }
 #[test]
@@ -434,11 +434,7 @@ fn diagnostics_are_original_and_do_not_expose_instance_values() {
     let ValueOutcome::Fails { problems, .. } = result else {
         panic!("{result:?}");
     };
-    assert!(
-        problems
-            .iter()
-            .any(|p| p.instance.pointer.as_ref().unwrap() == "/a~1b")
-    );
+    assert!(problems.iter().any(|p| p.instance == "/a~1b"));
     assert_eq!(problems.len(), 1);
 }
 #[test]

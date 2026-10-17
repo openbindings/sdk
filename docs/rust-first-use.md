@@ -51,9 +51,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let seven = openbindings::JsonValue::parse(r#""seven""#)?;
     if let openbindings::ValueOutcome::Fails { problems, .. } = input.explain(&seven) {
         for problem in &problems {
-            // The value locates itself; the document locates the schema keyword.
+            // The value and the document each find their side's line and
+            // column when asked; Debug of the pointer text quotes it.
+            let at = seven.locate(&problem.instance).ok_or("instance location")?;
             let schema = proof.locate(&problem.schema).ok_or("schema location")?;
-            println!("{} at {} (schema at {schema})", problem.code, problem.instance);
+            println!("{} at {:?} line {} (schema {:?} line {})", problem.code,
+                problem.instance.to_string(), at.line,
+                problem.schema.pointer.to_string(), schema.line);
         }
     }
     Ok(())
@@ -180,10 +184,11 @@ error, which precedes any value. Quote pointers when displaying them. Truncation
 leaves rule evidence intact. Use codes and evidence for logic; messages are
 advisory. `validate` reports value failures without problems. `explain` is an
 explicit per-call choice with library allocation and stack limits, including
-possible stack overflow on deep values. An explained problem locates the failing
-node in the value's text (`instance`) and names the failing keyword by resource
-and exact pointer (`schema`); `Conformant::locate` and `ResourceSet::locate` find
-that keyword's line and column when asked. A prepared contract keeps a compact copy
+possible stack overflow on deep values. An explained problem names the failing
+node by its exact pointer from the value passed (`instance`) and the failing
+keyword by resource and exact pointer (`schema`). Line and column come from the
+text's holder when asked: `JsonValue::locate` for the value, `Conformant::locate`
+and `ResourceSet::locate` for the schema. A prepared contract keeps a compact copy
 of the keywords it compiled for explanations, never its document or resources, and
 no positions. See the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md)
 and [host support](support.md).

@@ -347,7 +347,9 @@ impl Report {
 /// return honest unsupported/limit outcomes. Both calls must reach the same
 /// verdict; a cheap check reports no problems and never claims completeness.
 /// Every failing value is also explained under cancellation after successively
-/// more control observations (see [`judge_interruptions`]).
+/// more control observations (see [`judge_interruptions`]), and again as a
+/// member of a larger text, which must not change its problems: instance
+/// pointers start at the value passed.
 pub fn run(evaluator: &dyn SchemaEvaluator, options: &Options) -> Report {
     let suite = suite();
     let mut report = Report {
@@ -424,6 +426,15 @@ pub fn run(evaluator: &dyn SchemaEvaluator, options: &Options) -> Report {
                     &explanation,
                     &interrupted(contract, &value),
                 ));
+                // Instance pointers start at the value passed, also when it is
+                // part of a larger text.
+                let wrapper = JsonValue::parse(format!("{{\"value\":{}}}", case.value))
+                    .expect("packaged instance JSON");
+                let nested = contract.explain(&wrapper.get("value").expect("wrapped").to_owned());
+                if serde_json::to_string(&nested).ok() != serde_json::to_string(&explanation).ok() {
+                    failures
+                        .push("an explanation of the value within a larger text differs".into());
+                }
             }
             if value.text() != original {
                 failures.push("evaluator changed an immutable input".into());
@@ -578,8 +589,8 @@ pub fn judge_interruptions(
     failures
 }
 /// Judge one observation independently. Useful for host harnesses and controls.
-/// Each problem's instance location must be the location of the node its
-/// pointer names in `value`, parsed on its own, as [`JsonRef::location`] gives.
+/// Each problem's instance pointer must name a node of `value`, from `value`
+/// itself.
 pub fn judge(
     case: &Case,
     value: &JsonValue,
@@ -633,17 +644,12 @@ pub fn judge(
                 "complete failure diagnostics lack an actual failing instance location".into(),
             );
         }
-        let paths: BTreeSet<_> = problems
+        let paths: BTreeSet<_> = problems.iter().map(|p| p.instance.to_string()).collect();
+        if problems
             .iter()
-            .filter_map(|p| p.instance.pointer.as_ref().map(ToString::to_string))
-            .collect();
-        for problem in problems {
-            match instance_node(value, &problem.instance) {
-                None => failures.push("problem location does not exist in the instance".into()),
-                Some(node) if node.location() != problem.instance => failures
-                    .push("problem location's coordinates differ from its instance node's".into()),
-                Some(_) => {}
-            }
+            .any(|p| value.at_pointer(&p.instance).is_none())
+        {
+            failures.push("problem location does not exist in the instance".into());
         }
         if *problems_complete
             && let Some(choices) = &case.acceptable_paths
@@ -655,26 +661,6 @@ pub fn judge(
         }
     }
     failures
-}
-
-// The node an instance location's pointer names. The kit's values are parsed
-// on their own, so pointers start at the value. A pointer through a name with
-// an unpaired unit has no text to resolve; it names the node whose own location
-// has that pointer.
-fn instance_node<'a>(value: &'a JsonValue, at: &SourceLocation) -> Option<JsonRef<'a>> {
-    let pointer = at.pointer.as_ref()?;
-    if let Some(text) = pointer.as_str() {
-        return value.at(text);
-    }
-    let mut pending = vec![value.view()];
-    while let Some(node) = pending.pop() {
-        if node.location().pointer.as_ref() == Some(pointer) {
-            return Some(node);
-        }
-        pending.extend(node.elements().into_iter().flatten());
-        pending.extend(node.members().into_iter().flatten().map(|m| m.value));
-    }
-    None
 }
 
 #[cfg(test)]

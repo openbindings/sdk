@@ -104,10 +104,15 @@ pub enum JsonKind {
 ///
 /// `Display` writes `pointer (line L, column C, byte B)`, or `line L, column C,
 /// byte B` when there is no pointer or it is a root's empty pointer. The column
-/// counts UTF-8 bytes. Pointers are source-controlled text.
+/// counts UTF-8 bytes. Pointers are source-controlled text: quote them for display.
+///
+/// Serialization writes JSON text. A pointer through a member name with an
+/// unpaired UTF-16 unit is written with an escape that no `serde_json::Value`
+/// can hold, so `serde_json::to_value` refuses such a location (`json!` panics);
+/// serialize with `serde_json::to_string` or `to_writer`.
 #[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct SourceLocation {
-    /// Exact RFC 6901 pointer from the source's root; an empty pointer means the root. `None` only when the location precedes any value, as a syntax error does. Duplicate member occurrences can share a pointer, so use byte coordinates to distinguish them.
+    /// Exact RFC 6901 pointer: from the value, document or resource the location was asked of (`locate`), or from the source's root (findings, [`JsonRef::location`]); an empty pointer means that root. `None` only when the location precedes any value, as a syntax error does. Duplicate member occurrences can share a pointer, so use byte coordinates to distinguish them.
     pub pointer: Option<Pointer>,
     /// Zero-based token-start offset into original UTF-8 bytes.
     pub byte_offset: usize,
@@ -278,6 +283,16 @@ impl JsonValue {
     /// Allocate original-source coordinates, including its exact escaped pointer.
     pub fn location(&self) -> SourceLocation {
         self.view().location()
+    }
+    /// Resolve an exact pointer relative to this value, as [`Self::at`] resolves
+    /// text; a segment holding an unpaired UTF-16 unit names exactly its member.
+    pub fn at_pointer(&self, pointer: &Pointer) -> Option<JsonRef<'_>> {
+        self.view().at_pointer(pointer)
+    }
+    /// Locate an exact pointer relative to this value, such as a problem's
+    /// instance: see [`JsonRef::locate`].
+    pub fn locate(&self, pointer: &Pointer) -> Option<SourceLocation> {
+        self.view().locate(pointer)
     }
     /// Create a standalone exact boolean snapshot.
     pub fn boolean(value: bool) -> Self {
@@ -453,6 +468,58 @@ impl<'a> JsonRef<'a> {
                 id: m.value,
             },
         }))
+    }
+    /// Resolve an exact pointer relative to this view, as [`Self::at`] resolves
+    /// text; a segment holding an unpaired UTF-16 unit names exactly its member.
+    /// Repeated object names select the first occurrence.
+    pub fn at_pointer(self, pointer: &Pointer) -> Option<Self> {
+        if let Some(text) = pointer.as_str() {
+            return self.at(text);
+        }
+        let mut current = self;
+        for segment in pointer.unit_segments() {
+            current = match current.kind() {
+                JsonKind::Object => {
+                    current
+                        .members()?
+                        .find(|member| {
+                            member
+                                .name
+                                .as_string()
+                                .is_some_and(|name| name.utf16_units().eq(segment.iter().copied()))
+                        })?
+                        .value
+                }
+                JsonKind::Array => {
+                    let index = String::from_utf16(&segment).ok()?;
+                    if index.is_empty()
+                        || (index.len() > 1 && index.starts_with('0'))
+                        || !index.bytes().all(|b| b.is_ascii_digit())
+                    {
+                        return None;
+                    }
+                    current.element(index.parse().ok()?)?
+                }
+                _ => return None,
+            };
+        }
+        Some(current)
+    }
+    /// Locate an exact pointer relative to this view, such as a value problem's
+    /// instance, in the text the view was parsed from: the node's byte offset,
+    /// line and column, found by one pass over the bytes before it, with the
+    /// given pointer. Nothing is computed until asked, and nothing is retained.
+    /// `None` when the pointer names no node.
+    pub fn locate(self, pointer: &Pointer) -> Option<SourceLocation> {
+        let node = self.at_pointer(pointer)?;
+        let byte_offset = node.owner.nodes[node.id].span.start;
+        let (line, byte_column) = node.owner.line_and_column(byte_offset);
+        Some(SourceLocation {
+            pointer: Some(pointer.clone()),
+            byte_offset,
+            line,
+            byte_column,
+        })
     }
     /// Allocate coordinates in the complete original source, even when this view
     /// is a subtree: its exact pointer from that source's root, with line and

@@ -111,12 +111,7 @@ fn check_rows(rows: Vec<Row>, expected: usize) {
 #[test]
 fn debug_redacts_caller_text_at_every_boundary() {
     let problem = ValueProblem {
-        instance: SourceLocation {
-            pointer: Some(format!("/{SECRET}").parse().unwrap()),
-            byte_offset: 42,
-            line: 2,
-            byte_column: 3,
-        },
+        instance: format!("/{SECRET}").parse().unwrap(),
         schema: location(),
         code: SECRET.into(),
         message: SECRET.into(),

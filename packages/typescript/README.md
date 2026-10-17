@@ -163,10 +163,10 @@ budgets can produce no-verdict. Replacing resources means preparing again.
 `problemsComplete: false`. Call `explain` on the same prepared contract for the
 library's first error. An explanation can allocate in proportion to input and
 overflow the stack on deep values, so keep `validate` for untrusted input. Each
-problem's `instance` locates the failing node in the value's text (pointer,
-`byteOffset`, `line`, `byteColumn`); its `schema` names the failing keyword by
-`resource` and `pointer`, and `ConformantDocument.locate(problem.schema)` or
-`SchemaResources.locate(problem.schema)` gives that keyword's coordinates. Schema
+problem's `instance` is the failing node's exact pointer from the value passed,
+and its `schema` names the failing keyword by `resource` and `pointer`.
+`value.locate(problem.instance)`, `ConformantDocument.locate(problem.schema)` and
+`SchemaResources.locate(problem.schema)` give coordinates when asked. Schema
 facts may disclose source operands. A prepared contract keeps a compact copy of
 the keywords it compiled for explanations, never its document, resources or any
 position. Messages are advisory; use result tags, codes and rule evidence for

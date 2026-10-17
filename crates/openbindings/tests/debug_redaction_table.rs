@@ -213,7 +213,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
         },
     };
     let problem = ValueProblem {
-        instance: source_location.clone(),
+        instance: format!("/{SECRET}").parse().unwrap(),
         schema: location(),
         code: SECRET.into(),
         message: SECRET.into(),
@@ -298,7 +298,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
             .contains(SECRET)
     );
     // Both locations are shown structurally, without their pointers.
-    assert!(format!("{problem:?}").contains("instance: SourceLocation"));
+    assert!(format!("{problem:?}").contains("instance: Pointer"));
     assert!(format!("{problem:?}").contains("schema: SchemaLocation"));
     assert!(format!("{:?}", refusal()).contains("EvaluatorFailure"));
     for detail in [

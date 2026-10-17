@@ -197,10 +197,17 @@ fn main() {
                 case["id"]
             );
             let finding_count = locations.len();
+            // A JSON tree holds a pointer through an unpaired name as its units.
             let locations: Vec<_> = locations.iter().map(|at| {
-                if case["group"] == "corpus" { serde_json::to_value(at).unwrap() }
+                if case["group"] == "corpus" {
+                    let pointer = at.pointer.as_ref().map(|p| match p.as_str() {
+                        Some(text) => json!(text),
+                        None => json!({"utf16": p.utf16_units().collect::<Vec<_>>()}),
+                    });
+                    json!({"pointer":pointer,"byte_offset":at.byte_offset,"line":at.line,"byte_column":at.byte_column})
+                }
                 else { json!({"byte_offset":at.byte_offset,"line":at.line,"byte_column":at.byte_column,
-                    "pointer_bytes":at.pointer.as_ref().and_then(|p| p.as_str()).map_or(0, str::len)}) }
+                    "pointer_bytes":at.pointer.as_ref().map_or(0, backend::pointer_bytes)}) }
             }).collect();
             println!(
                 "{}",

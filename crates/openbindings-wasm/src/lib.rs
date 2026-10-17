@@ -120,6 +120,14 @@ impl WasmJson {
             value: v.to_owned(),
         })
     }
+    /// Locate a pointer, given as an exact JSON string, relative to this value.
+    pub fn locate(&self, pointer: &str) -> Result<String, JsValue> {
+        let pointer = JsonValue::parse(pointer)
+            .ok()
+            .and_then(|text| openbindings_internal_json::backend::string_pointer(text.view()))
+            .ok_or_else(|| error("invalid-pointer", "expected an RFC 6901 pointer"))?;
+        Ok(encoded(self.value.locate(&pointer)))
+    }
     pub fn get(&self, name: &str) -> Option<WasmJson> {
         self.value.get(name).map(|v| Self {
             value: v.to_owned(),
@@ -1645,6 +1653,15 @@ mod location_transfer_tests {
         }
         .metadata();
         assert!(metadata.contains(r#""pointer":"/x/\ud800""#), "{metadata}");
+    }
+    #[test]
+    fn instance_pointers_are_located_on_demand_as_exact_text() {
+        let value = WasmJson::parse_text("{\"\\ud800\":[1,\n\"x\"]}").unwrap();
+        assert_eq!(
+            value.locate(r#""/\ud800/1""#).unwrap(),
+            r#"{"pointer":"/\ud800/1","byte_offset":14,"line":2,"byte_column":1}"#
+        );
+        assert_eq!(value.locate(r#""/x""#).unwrap(), "null");
     }
     #[test]
     fn schema_locations_cross_as_exact_text() {

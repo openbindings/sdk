@@ -58,12 +58,15 @@ test("explained problems locate the value's node and the document's keyword", ()
     const result = contract.explain(value);
     assert.equal(result.outcome, "fails");
     const [problem] = result.problems;
+    assert.equal(problem.instance, "/items/1");
+    // The value holds its text, so it finds the line and column when asked.
     const offset = text.indexOf('"two"');
-    assert.deepEqual(problem.instance, {
+    assert.deepEqual(value.locate(problem.instance), {
       pointer: "/items/1",
       byteOffset: offset,
       ...position(text, offset),
     });
+    assert.equal(value.locate("/items/2"), null);
     const keyword = "/operations/op/input/properties/items/items/type";
     assert.deepEqual(problem.schema, { resource: null, pointer: keyword });
     const at = source.indexOf('"integer"');
@@ -84,13 +87,38 @@ test("explained problems locate the value's node and the document's keyword", ()
         error instanceof sdk.SdkError &&
         error.code === "invalid-schema-location",
     );
-    // An ordinary value is located in its exact serialization.
     const ordinary = contract.explain({ items: [1, "two"] });
-    assert.deepEqual(ordinary.problems[0].instance, {
-      pointer: "/items/1",
-      byteOffset: '{"items":[1,'.length,
-      line: 1,
-      byteColumn: '{"items":[1,'.length + 1,
+    assert.equal(ordinary.problems[0].instance, "/items/1");
+  }));
+
+test("a subtree value is named from itself and located in its text", () =>
+  owning((own) => {
+    const proof = own(
+      conformant(
+        '{"openbindings":"0.2.0","operations":{"op":{"input":{"properties":{"n":{"type":"integer"}}}}}}',
+      ),
+    );
+    const ready = prepareInput(proof, "op");
+    assert.equal(ready.status, "ready");
+    const contract = own(ready.contract);
+    const text = '{"request": {\n  "n": "x"\n}}';
+    const whole = own(exact(text));
+    const request = own(whole.at("/request"));
+    const [problem] = contract.explain(request).problems;
+    assert.equal(problem.instance, "/n");
+    const offset = text.indexOf('"x"');
+    assert.deepEqual(request.locate(problem.instance), {
+      pointer: "/n",
+      byteOffset: offset,
+      ...position(text, offset),
+    });
+    // A pointer can name a member whose name holds an unpaired unit.
+    const lone = own(exact('{"\\ud800":[1,\n"x"]}'));
+    assert.deepEqual(lone.locate("/\ud800/1"), {
+      pointer: "/\ud800/1",
+      byteOffset: 14,
+      line: 2,
+      byteColumn: 1,
     });
   }));
 

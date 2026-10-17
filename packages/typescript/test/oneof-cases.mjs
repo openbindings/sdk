@@ -139,7 +139,7 @@ export function oneOfCases(sdk, fixtures) {
           result.problems.every(
             (p) =>
               p.code === "oneOf" &&
-              p.instance.pointer === "" &&
+              p.instance === "" &&
               p.schema.resource === null &&
               p.schema.pointer === `/operations/${op}/output/oneOf`,
           ),
@@ -172,7 +172,7 @@ export function oneOfCases(sdk, fixtures) {
             p.code === "oneOf" &&
             p.schema.pointer === test.summary &&
             p.schema.resource === (test.summaryResource ?? null) &&
-            p.instance.pointer === (test.instancePointer ?? ""),
+            p.instance === (test.instancePointer ?? ""),
         ),
         "original summary and instance location",
       );

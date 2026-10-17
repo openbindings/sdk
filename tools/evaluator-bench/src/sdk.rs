@@ -164,12 +164,7 @@ impl Outcome {
                     .iter()
                     .map(|problem| {
                         let mut observed = json!({
-                            "instance_pointer": problem
-                                .instance
-                                .pointer
-                                .as_ref()
-                                .map(ToString::to_string)
-                                .unwrap_or_default(),
+                            "instance_pointer": problem.instance.to_string(),
                             "schema_location": {
                                 "resource": problem.schema.resource,
                                 "pointer": problem.schema.pointer.to_string(),

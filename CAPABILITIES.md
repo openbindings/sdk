@@ -64,9 +64,9 @@ force; these are measured examples, not latency guarantees. See
 Each value check chooses its detail. `validate` reports a failure without
 problems; `explain` reports the library's first error, an explicit choice with
 library allocation and stack limits. It can allocate in proportion to input and
-overflow on deep values. Each explained problem locates the failing node in the
-value's text with line and column, and names the failing keyword by resource and
-exact pointer, which the document or resource set locates on demand. A prepared
+overflow on deep values. Each explained problem names the failing node by exact
+pointer from the value and the failing keyword by resource and exact pointer; the
+value, document or resource set finds line and column on demand. A prepared
 contract keeps a compact copy of the keywords it compiled for explanations, never
 its document, supplied resources or any position. Diagnostic completeness is
 separate from the established value outcome.

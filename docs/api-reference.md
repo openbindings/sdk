@@ -67,7 +67,7 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 | `ConformantOperationView` | `input()` and `output()` return a disposable `ValueContract` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. |
 | `ValueContract` | `schema()` acquires the exact schema; `prepare(options)` takes `resources`, `limits` and `signal` and returns `{ status: "ready", contract }` or `{ status: "no-verdict", detail }`. |
 | `PreparedContract` | Disposable prepared contract with `validate(value, options)`, the cheap check, `explain(value, options)`, which adds problems to a failure, and `retain()`; independent of its document, operation, resources and contract owners. |
-| `ConformantDocument.locate(at)`, `SchemaResources.locate(at)` | The `SourceLocation` of the node a `SchemaLocation` names, in the document or in the supplied resource with its URI, or `null`. A malformed location throws `SdkError` with code `invalid-schema-location`. |
+| `ExactJson.locate(pointer)`, `ConformantDocument.locate(at)`, `SchemaResources.locate(at)` | The `SourceLocation` of the node a problem's instance pointer or a `SchemaLocation` names, in the value, the document or the supplied resource with its URI, or `null`. A malformed schema location throws `SdkError` with code `invalid-schema-location`. |
 | `asDocument()`, `intoDocument()` | Acquire an independent editable owner, or consume the proof. Consumption revokes all JavaScript aliases of that proof; retained owners survive. |
 | `toBytes()`, `dispose()`, `Symbol.dispose`, `disposed` | Detached exact current bytes and the existing deterministic lifecycle. |
 
@@ -97,7 +97,7 @@ known bytes and stops before exceeding the budget. A refusal discards that buffe
 | `PreparedContract::validate_json(input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError>` | Admits through `JsonValue::parse` with default limits, then validates. `Err` is admission failure only; all four value outcomes are `Ok`. Duplicate members yield no-verdict and numbers retain exact semantics. |
 | `PreparedContract::validate(&self, &JsonValue)`, `validate_with_control(.., &dyn WorkControl) -> ValueOutcome` | The cheap check: a failure carries no problems and `problems_complete` is false. |
 | `PreparedContract::explain(&self, &JsonValue)`, `explain_with_control(.., &dyn WorkControl) -> ValueOutcome` | The same verdict, with problems that explain a failure. Library-bounded; see [value diagnostics](#value-diagnostics). |
-| `Conformant<Document>::locate(&self, &SchemaLocation)`, `ResourceSet::locate(&self, &SchemaLocation) -> Option<SourceLocation>` | Line, column and byte offset of the node a schema location names, in the document or in the supplied resource with its URI; `None` for another source or a pointer naming no node. Computed on the call. |
+| `JsonValue::locate(&self, &Pointer)`, `Conformant<Document>::locate(&self, &SchemaLocation)`, `ResourceSet::locate(&self, &SchemaLocation) -> Option<SourceLocation>` | Byte offset, line and column of the node a problem's instance pointer or schema location names, in the value's, document's or supplied resource's text; `None` for another source or a pointer naming no node. One pass on the call; nothing retained. |
 
 `PreparedContract` is `Clone + Send + Sync + 'static` and owns what it needs after
 the document, resources and evaluator are dropped. Core has no default evaluator
@@ -198,8 +198,8 @@ Custom Rust evaluators receive the call's `Detail`. An evaluator constructing
 Custom evaluators receive a `SchemaRequest` with the original document, supplied
 resources, entry and entry location; `location(node)` names a node of the document
 or a supplied resource. They build problems with `ValueProblem::new(instance,
-schema, code, message)`, `JsonRef::location()` and `SchemaLocation::new(resource,
-pointer)`. `evaluation_program(control)` provides the
+schema, code, message)`, an instance pointer from the validated value and
+`SchemaLocation::new(resource, pointer)`. `evaluation_program(control)` provides the
 strict §7 projection; read-only `EvaluationProgram::entry_uri()` and `resources()`
 keep its contents aligned with provenance, and `original_location` recovers
 original coordinates. See [evaluator integration](schema-evaluators.md) for the custom evaluator contract.
@@ -422,27 +422,32 @@ does not establish diagnostic completeness, so the flag remains false.
 Work/regex limits and cancellation can omit detail after a verdict; missing
 detail never weakens failure and never counts as rule evidence.
 
-Each problem locates its failure on both sides. `instance` is a `SourceLocation`
-of the failing node in the validated value's text: its exact pointer from that
-text's root (the value itself unless it is a subtree of a larger text), zero-based
-byte offset and one-based line and byte column, computed when the problem is
-reported. An ordinary value is located in its exact JSON serialization. `schema` is
-a `SchemaLocation`: `resource` (`None` for the document) and an exact `pointer` to
-the failing keyword. When a keyword cannot be mapped to an original source, it
-names the selected schema rather than a guessed keyword. Line and column for the
-schema side come from `Conformant::locate` or `ResourceSet::locate` (TypeScript
-`ConformantDocument.locate`, `SchemaResources.locate`), from text the caller
-already holds. `NoVerdict` and `UndefinedResult` carry an optional `SchemaLocation`
-of the same shape.
+Each problem names its failure on both sides, by exact pointer. `instance` is the
+failing node's `Pointer` from the value passed to validation (the instance's root,
+also when that value is a subtree of a larger text). `schema` is a
+`SchemaLocation`: `resource` (`None` for the document) and an exact `pointer` from
+that document's or resource's root to the failing keyword. When a keyword cannot
+be mapped to an original source, it names the selected schema rather than a
+guessed keyword, and no location is invented beneath a member name the evaluator
+cannot spell. Byte offset, line and column come on demand from whoever holds the
+text, each with one pass over the bytes before the node and nothing retained:
+`JsonValue::locate(&problem.instance)` (also on `JsonRef`), `Conformant::locate`
+and `ResourceSet::locate` (TypeScript `ExactJson.locate`,
+`ConformantDocument.locate`, `SchemaResources.locate`). Each returns a
+`SourceLocation` whose pointer is the one asked for, or `None` when it names no
+node. An explanation computes no position. `NoVerdict` and `UndefinedResult`
+carry an optional `SchemaLocation` of the same shape.
 
 `Pointer` holds RFC 6901 segments exactly. `as_str()` returns `None` for a
 pointer through a member name with an unpaired UTF-16 unit, `utf16_units()` reads
-it exactly and `FromStr` parses escaped text. `Display` writes such a unit as
-`\uXXXX`, and serialization writes it as a JSON escape, which JavaScript keeps as
-the same string; like an exact `JsonValue` holding one, such a record serializes
-to JSON text but not into a `serde_json::Value`. `SourceLocation`'s `Display`
-writes `pointer (line L, column C, byte B)`, or `line L, column C, byte B` without
-a pointer or at a root.
+it exactly, `from_utf16` builds one from units and `FromStr` parses escaped text;
+`JsonValue::at_pointer` resolves one as `at` resolves text. `Display` writes such a
+unit as `\uXXXX`, and serialization writes it as a JSON escape, which JavaScript
+keeps as the same string; like an exact `JsonValue` holding one, such a record
+(a report, finding, outcome, problem or location) serializes to JSON text but not
+into a `serde_json::Value`, so `to_value` refuses it and `json!` panics.
+`SourceLocation`'s `Display` writes `pointer (line L, column C, byte B)`, or
+`line L, column C, byte B` without a pointer or at a root.
 
 A prepared contract keeps what its own explanation reads (a compact copy of the
 keywords it compiled) and never its document, supplied resources, schema space or
