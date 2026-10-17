@@ -278,10 +278,10 @@ fn custom_evaluators_return_their_own_outcomes() {
         "custom",
         "custom evidence",
     );
-    own.location = Some(SchemaLocation {
-        resource: None,
-        pointer: "/operations/op/input".parse().unwrap(),
-    });
+    own.location = Some(SchemaLocation::new(
+        None,
+        "/operations/op/input".parse().unwrap(),
+    ));
     let custom = prepare("true", ResourceSet::default(), &Declared(own.clone()));
     assert_eq!(detail_json(&evidence(&custom)), detail_json(&own));
 }

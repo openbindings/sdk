@@ -38,10 +38,10 @@ impl InterfaceSynthesizer for Skeleton {
                 .map(|(pointer, value)| Edit::Set { pointer, value })
                 .collect();
             document.edit(&edits)?;
-            Ok(SynthesisCandidate {
+            Ok(SynthesisCandidate::new(
                 document,
-                coverage: CoverageClaim::complete(Vec::new()),
-            })
+                CoverageClaim::complete(Vec::new()),
+            ))
         })())
     }
 }

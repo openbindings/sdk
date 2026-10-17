@@ -28,6 +28,22 @@ fn evidence() -> BTreeMap<String, JsonValue> {
         JsonValue::string(SECRET).unwrap(),
     )])
 }
+/// Supports every kind, so the facade reports a verdict for any label.
+struct AnyKind;
+impl inspection::SourceInspector for AnyKind {
+    type Inspection<'a> =
+        std::future::Ready<Result<inspection::SourceInspection, inspection::InspectionError>>;
+    fn supports_kind(&self, _: &str) -> bool {
+        true
+    }
+    fn inspect<'a>(
+        &'a self,
+        _: &'a openbindings::Source,
+        _: inspection::CancellationToken,
+    ) -> Self::Inspection<'a> {
+        std::future::ready(Ok(inspection::SourceInspection::complete(Vec::new())))
+    }
+}
 fn inspection_rows(context: &JsonValue, operation: &Operation) -> Vec<Row> {
     let error = inspection::InspectionError::new(
         inspection::InspectionErrorKind::ProviderFailure,
@@ -43,34 +59,24 @@ fn inspection_rows(context: &JsonValue, operation: &Operation) -> Vec<Row> {
         extensions: BTreeMap::from([(format!("x-{SECRET}"), context.clone())]),
         ..Default::default()
     };
-    let target = inspection::BindableTarget {
-        source_ref: SECRET.into(),
-        binding: fragment.clone(),
-        operation_key: Some(SECRET.into()),
-        operation: Some(operation.clone()),
-    };
-    let limitation = inspection::InspectionLimitation {
-        code: SECRET.into(),
-        message: SECRET.into(),
-        details: Some(evidence()),
-        additional_fields: evidence(),
-    };
+    let target = inspection::BindableTarget::new(SECRET, fragment.clone())
+        .with_operation_key(SECRET)
+        .with_operation(operation.clone());
+    let limitation = inspection::InspectionLimitation::new(SECRET, SECRET)
+        .with_details(evidence())
+        .with_additional_fields(evidence());
     assert!(serde_json::to_string(&limitation).unwrap().contains(SECRET));
     vec![
         row("InspectionError", &error),
         row(
             "inspection SupportedKind",
-            &inspection::SupportedKind {
-                kind: SECRET.into(),
-                description: Some(SECRET.into()),
-            },
+            &inspection::SupportedKind::new(SECRET).with_description(SECRET),
         ),
         row(
             "inspection KindSupportVerdict",
-            &inspection::KindSupportVerdict {
-                kind: SECRET.into(),
-                supported: true,
-            },
+            &inspection::Inspector::new(AnyKind)
+                .check_kind_support([SECRET])
+                .unwrap()[0],
         ),
         row("BindingFragment", &fragment),
         row("BindableTarget", &target),

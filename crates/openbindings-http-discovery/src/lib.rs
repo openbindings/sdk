@@ -23,6 +23,8 @@ pub const DEFAULT_MAX_DOCUMENT_BYTES: usize = 1 << 20;
 
 #[derive(Clone, PartialEq, Eq)]
 /// Caller configuration rejected before acquisition/publication; contains stable code and fixed explanation.
+/// Later versions may add fields: read them by name and match with `..`.
+#[non_exhaustive]
 pub struct ConfigurationError {
     /// Stable configuration failure identifier.
     pub code: &'static str,

@@ -24,8 +24,10 @@ impl Default for JsonLimits {
         }
     }
 }
-/// Why an exact input could not be represented.
+/// Why an exact input could not be represented. Later versions may add kinds,
+/// so a `match` needs a fallback arm.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum InputErrorKind {
     /// Input bytes are not valid UTF-8.
     InvalidUtf8,
@@ -39,6 +41,8 @@ pub enum InputErrorKind {
 
 #[derive(Clone, PartialEq, Eq)]
 /// Exact JSON admission failure. It is separate from document conformance and schema-instance outcomes.
+/// Later versions may add fields: read them by name and match with `..`.
+#[non_exhaustive]
 pub struct InputError {
     /// Broad admission failure category.
     pub kind: InputErrorKind,
@@ -49,7 +53,7 @@ pub struct InputError {
 }
 impl std::fmt::Debug for InputError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Only fixed parser/admission reasons are safe; this record is publicly constructible.
+        // Only fixed parser/admission reasons are safe; the public code can be reassigned.
         let code = match self.code {
             "bom"
             | "byte-limit"
@@ -110,7 +114,10 @@ pub enum JsonKind {
 /// unpaired UTF-16 unit is written with an escape that no `serde_json::Value`
 /// can hold, so `serde_json::to_value` refuses such a location (`json!` panics);
 /// serialize with `serde_json::to_string` or `to_writer`.
+///
+/// Later versions may add fields: read them by name and match with `..`.
 #[derive(Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct SourceLocation {
     /// Exact RFC 6901 pointer: from the value, document or resource the location was asked of (`locate`), or from the source's root (findings, [`JsonRef::location`]); an empty pointer means that root. `None` only when the location precedes any value, as a syntax error does. Duplicate member occurrences can share a pointer, so use byte coordinates to distinguish them.
     pub pointer: Option<Pointer>,

@@ -256,20 +256,18 @@ pub fn derive(
         edits.push(Edit::SetBindings { value: &bindings });
     }
     doc.edit(&edits)?;
-    Ok(SynthesisCandidate {
-        document: doc,
-        coverage: CoverageClaim {
+    let coverage = if exhaustive {
+        CoverageClaim::complete(entries)
+    } else {
+        CoverageClaim::partial(
             entries,
-            exhaustive,
-            limitation: (!exhaustive).then(|| CoverageLimitation {
-                code: "example.catalog.unknown".into(),
-                message: "Fixture explicitly declares an unknown remainder.".into(),
-                details: None,
-                additional_fields: BTreeMap::new(),
-            }),
-            ..Default::default()
-        },
-    })
+            CoverageLimitation::new(
+                "example.catalog.unknown",
+                "Fixture explicitly declares an unknown remainder.",
+            ),
+        )
+    };
+    Ok(SynthesisCandidate::new(doc, coverage))
 }
 impl InterfaceSynthesizer for Catalog {
     type Synthesis<'a> =
@@ -278,10 +276,7 @@ impl InterfaceSynthesizer for Catalog {
         k == KIND
     }
     fn supported_kinds(&self) -> Vec<SupportedKind> {
-        vec![SupportedKind {
-            kind: KIND.into(),
-            description: None,
-        }]
+        vec![SupportedKind::new(KIND)]
     }
     fn synthesize<'a>(
         &'a self,
@@ -334,25 +329,23 @@ impl inspect::SourceInspector for Catalog {
                     u.scope == CoverageScope::Target
                         && !matches!(u.status, CoverageStatus::Excluded | CoverageStatus::Invalid)
                 })
-                .map(|u| inspect::BindableTarget {
-                    source_ref: u.id.clone(),
-                    binding: inspect::BindingFragment {
-                        content: Some(JsonValue::string(&u.id).unwrap()),
-                        ..Default::default()
-                    },
-                    operation_key: None,
-                    operation: None,
+                .map(|u| {
+                    inspect::BindableTarget::new(
+                        u.id.clone(),
+                        inspect::BindingFragment {
+                            content: Some(JsonValue::string(&u.id).unwrap()),
+                            ..Default::default()
+                        },
+                    )
                 })
                 .collect();
             Ok(if unknown {
                 inspect::SourceInspection::partial(
                     targets,
-                    inspect::InspectionLimitation {
-                        code: "example.catalog.unknown".into(),
-                        message: "Unknown remainder".into(),
-                        details: None,
-                        additional_fields: Default::default(),
-                    },
+                    inspect::InspectionLimitation::new(
+                        "example.catalog.unknown",
+                        "Unknown remainder",
+                    ),
                 )
             } else {
                 inspect::SourceInspection::complete(targets)

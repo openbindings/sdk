@@ -30,6 +30,8 @@ impl Header {
 }
 #[derive(Clone, Serialize)]
 /// Response facts retained independently from body acquisition or document validation.
+/// Later versions may add fields: read them by name and match with `..`.
+#[non_exhaustive]
 pub struct ResponseMetadata {
     /// Constructed discovery URL sent to the caller's transport.
     pub requested_url: String,
@@ -52,6 +54,8 @@ impl ResponseMetadata {
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 /// Transport-provided failure category; distinct from document evidence and HTTP response status.
+/// Later versions may add categories, so a `match` needs a fallback arm.
+#[non_exhaustive]
 pub enum ErrorKind {
     /// The transport could not complete a network operation.
     Network,
@@ -71,11 +75,23 @@ pub enum ErrorKind {
 }
 #[derive(Clone, Serialize)]
 /// Caller-transport failure during request or body reading. Its message is supplied by the adapter, not normative evidence.
+/// Transports build one with [`Self::new`]. Later versions may add fields: read
+/// them by name and match with `..`.
+#[non_exhaustive]
 pub struct RequestError {
     /// Transport failure category.
     pub kind: ErrorKind,
     /// Adapter-provided explanation; adapters should remove credentials, URLs and source data from default diagnostics.
     pub message: String,
+}
+impl RequestError {
+    /// A transport failure of this category with an adapter-owned explanation.
+    pub fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+        }
+    }
 }
 impl std::fmt::Display for RequestError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -120,6 +136,8 @@ impl<B> std::fmt::Debug for HttpResponse<B> {
 
 #[derive(Clone)]
 /// One finite request constructed by the portable discovery client; the callback performs acquisition.
+/// Later versions may add fields: read them by name and match with `..`.
+#[non_exhaustive]
 pub struct DiscoveryRequest {
     /// Absolute discovery endpoint derived from the caller's HTTP(S) origin.
     pub url: String,
@@ -487,7 +505,49 @@ async fn until_stopped<C: DiscoveryTimer, F: Future, E: Future<Output = ()>>(
 }
 #[derive(Clone, Debug)]
 /// Acquisition and validation partition. Only `Found` carries normative proof; HTTP status, refusal and incomplete work remain distinct.
+///
+/// Later versions may add outcomes, so a `match` needs a fallback arm:
+/// ```compile_fail,E0004
+/// use openbindings_http_discovery::DiscoveryOutcome;
+/// fn found(outcome: &DiscoveryOutcome) -> bool {
+///     match outcome {
+///         DiscoveryOutcome::Found { .. } => true,
+///         DiscoveryOutcome::NonConformant { .. }
+///         | DiscoveryOutcome::Undetermined { .. }
+///         | DiscoveryOutcome::VersionRefused { .. }
+///         | DiscoveryOutcome::Absent
+///         | DiscoveryOutcome::Gated
+///         | DiscoveryOutcome::HttpStatus
+///         | DiscoveryOutcome::BodyLimit { .. }
+///         | DiscoveryOutcome::Cancelled
+///         | DiscoveryOutcome::Timeout
+///         | DiscoveryOutcome::TransportError { .. }
+///         | DiscoveryOutcome::BodyError { .. } => false,
+///     }
+/// }
+/// ```
+/// ```
+/// use openbindings_http_discovery::DiscoveryOutcome;
+/// fn found(outcome: &DiscoveryOutcome) -> bool {
+///     match outcome {
+///         DiscoveryOutcome::Found { .. } => true,
+///         DiscoveryOutcome::NonConformant { .. }
+///         | DiscoveryOutcome::Undetermined { .. }
+///         | DiscoveryOutcome::VersionRefused { .. }
+///         | DiscoveryOutcome::Absent
+///         | DiscoveryOutcome::Gated
+///         | DiscoveryOutcome::HttpStatus
+///         | DiscoveryOutcome::BodyLimit { .. }
+///         | DiscoveryOutcome::Cancelled
+///         | DiscoveryOutcome::Timeout
+///         | DiscoveryOutcome::TransportError { .. }
+///         | DiscoveryOutcome::BodyError { .. } => false,
+///         _ => false,
+///     }
+/// }
+/// ```
 #[must_use = "inspect the outcome before continuing"]
+#[non_exhaustive]
 pub enum DiscoveryOutcome {
     /// A complete bounded 200 body established normative document conformance.
     Found {
@@ -537,6 +597,20 @@ pub enum DiscoveryOutcome {
 }
 #[derive(Clone)]
 /// Finite discovery receipt: semantic outcome, observed response metadata and complete bounded body when available. No response cache or server is created.
+///
+/// Only discovery builds results. Later versions may add fields: read them by
+/// name and match with `..`.
+/// ```compile_fail,E0639
+/// use openbindings_http_discovery::{DiscoveryOutcome, DiscoveryResult};
+/// let _ = DiscoveryResult { outcome: DiscoveryOutcome::Absent, metadata: None, body: None };
+/// ```
+/// ```
+/// use openbindings_http_discovery::DiscoveryResult;
+/// fn read(result: &DiscoveryResult) {
+///     let DiscoveryResult { outcome, metadata, body, .. } = result;
+/// }
+/// ```
+#[non_exhaustive]
 pub struct DiscoveryResult {
     /// Distinct acquisition or validation outcome; do not collapse absence, gating and inability into invalidity.
     pub outcome: DiscoveryOutcome,

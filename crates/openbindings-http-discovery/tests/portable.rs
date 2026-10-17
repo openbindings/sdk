@@ -42,10 +42,7 @@ impl ResponseBody for Body {
             std::future::pending::<()>().await;
         }
         if self.fail {
-            return Err(RequestError {
-                kind: ErrorKind::Network,
-                message: "incomplete response".into(),
-            });
+            return Err(RequestError::new(ErrorKind::Network, "incomplete response"));
         }
         let n = output.len().min(self.bytes.len() - self.offset).min(17);
         output[..n].copy_from_slice(&self.bytes[self.offset..self.offset + n]);
@@ -414,12 +411,7 @@ async fn incomplete_body_transport_failure_and_missing_final_url_are_distinct() 
         &options,
         &control,
         &Timer::new(),
-        |_| async {
-            Err(RequestError {
-                kind: ErrorKind::Timeout,
-                message: "deadline".into(),
-            })
-        },
+        |_| async { Err(RequestError::new(ErrorKind::Timeout, "deadline")) },
     )
     .await
     .unwrap();
@@ -988,4 +980,11 @@ async fn eof_boundary_retains_complete_body_on_timeout_or_cancellation() {
             assert_eq!(r.metadata.unwrap().status, 200);
         }
     }
+}
+#[test]
+fn transports_report_failures_with_the_request_error_constructor() {
+    let error = RequestError::new(ErrorKind::RedirectPolicy, "hop refused");
+    assert_eq!(error.kind, ErrorKind::RedirectPolicy);
+    assert_eq!(error.message, "hop refused");
+    assert_eq!(error.to_string(), "hop refused");
 }

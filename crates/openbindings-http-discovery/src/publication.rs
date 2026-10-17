@@ -42,6 +42,8 @@ impl Default for PublicationOptions {
 
 #[derive(Clone, Debug)]
 /// Publication setup refusal; no listener is started and no unproved body is published.
+/// Later versions may add refusals, so a `match` needs a fallback arm.
+#[non_exhaustive]
 pub enum PublicationError {
     /// Invalid publication options, such as an unsafe CORS origin.
     Configuration(ConfigurationError),
@@ -168,6 +170,8 @@ impl Publication {
 }
 #[derive(Clone)]
 /// Owned HTTP response data for the caller's server adapter; no I/O or listener side effect.
+/// Later versions may add fields: read them by name and match with `..`.
+#[non_exhaustive]
 pub struct PublicationResponse {
     /// HTTP status selected from route and method.
     pub status: u16,

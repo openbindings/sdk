@@ -7,13 +7,31 @@ use serde::{
 use std::collections::{BTreeMap, HashSet};
 
 /// Advisory description of a supported exact kind; omission implies nothing.
+///
+/// Providers build one with [`Self::new`] and [`Self::with_description`]. Later
+/// versions may add fields: read them by name and match with `..`.
 #[derive(Clone, Serialize)]
+#[non_exhaustive]
 pub struct SupportedKind {
     /// Exact, opaque source kind.
     pub kind: String,
     /// Optional human-facing description.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+}
+impl SupportedKind {
+    /// An exact kind without a description.
+    pub fn new(kind: impl Into<String>) -> Self {
+        Self {
+            kind: kind.into(),
+            description: None,
+        }
+    }
+    /// Attach a human-facing description.
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
 }
 impl std::fmt::Debug for SupportedKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -22,7 +40,9 @@ impl std::fmt::Debug for SupportedKind {
 }
 
 /// Authoritative support verdict for this provider's inspection job.
+/// Later versions may add fields: read them by name and match with `..`.
 #[derive(Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct KindSupportVerdict {
     /// Exact requested kind, unchanged.
     pub kind: String,
@@ -131,7 +151,23 @@ impl Serialize for BindingFragment {
 }
 
 /// One target admitted by the source's kind, with optional operation framing.
+///
+/// Providers build one with [`Self::new`], [`Self::with_operation_key`] and
+/// [`Self::with_operation`]. Later versions may add fields: read them by name
+/// and match with `..`.
+/// ```compile_fail,E0639
+/// use openbindings_source_inspection::{BindableTarget, BindingFragment};
+/// let _ = BindableTarget { source_ref: "value".into(), binding: BindingFragment::default(),
+///     operation_key: None, operation: None };
+/// ```
+/// ```
+/// use openbindings_source_inspection::{BindableTarget, BindingFragment};
+/// let target = BindableTarget::new("value", BindingFragment::default()).with_operation_key("get");
+/// let BindableTarget { source_ref, binding, operation_key, operation, .. } = target;
+/// assert_eq!(operation_key.as_deref(), Some("get"));
+/// ```
 #[derive(Clone)]
+#[non_exhaustive]
 pub struct BindableTarget {
     /// Stable source-local identity. This SDK requires uniqueness within one
     /// inspection by exact string equality. Cross-provider equality exists only if the
@@ -155,7 +191,12 @@ impl std::fmt::Debug for BindableTarget {
 }
 
 /// Evidence explaining omitted or unestablished admitted targets.
+///
+/// Providers build one with [`Self::new`], [`Self::with_details`] and
+/// [`Self::with_additional_fields`]. Later versions may add fields: read them by
+/// name and match with `..`.
 #[derive(Clone)]
+#[non_exhaustive]
 pub struct InspectionLimitation {
     /// Nonempty, stable namespaced reason code.
     pub code: String,
@@ -175,6 +216,26 @@ impl std::fmt::Debug for InspectionLimitation {
 }
 
 impl InspectionLimitation {
+    /// Evidence with a stable namespaced code and an explanation, both nonempty.
+    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
+            details: None,
+            additional_fields: BTreeMap::new(),
+        }
+    }
+    /// Attach structured evidence; exact values are preserved.
+    pub fn with_details(mut self, details: BTreeMap<String, JsonValue>) -> Self {
+        self.details = Some(details);
+        self
+    }
+    /// Attach additional evidence members; they must not shadow `code`,
+    /// `message` or `details`.
+    pub fn with_additional_fields(mut self, fields: BTreeMap<String, JsonValue>) -> Self {
+        self.additional_fields = fields;
+        self
+    }
     fn validate(&self) -> Result<(), InspectionError> {
         if self.code.is_empty() || self.message.is_empty() {
             return Err(InspectionError::result(
@@ -215,7 +276,12 @@ impl Serialize for InspectionLimitation {
 /// Complete empty inventories are valid. Excluded upstream interactions are not
 /// targets. An admitted target that cannot be established or represented requires
 /// `exhaustive: false` and a limitation. An unreadable source is a refusal instead.
+///
+/// Providers build one with [`Self::complete`] or [`Self::partial`], and
+/// [`Self::with_limitation`]. Later versions may add fields: read them by name
+/// and match with `..`.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct SourceInspection {
     /// Bindable targets; this inventory does not silently apply a relevance filter.
     pub targets: Vec<BindableTarget>,
@@ -292,6 +358,12 @@ impl SourceInspection {
             limitation: Some(limitation),
         }
     }
+    /// Attach evidence, keeping completeness unchanged. The interface also
+    /// permits evidence on a complete inventory.
+    pub fn with_limitation(mut self, limitation: InspectionLimitation) -> Self {
+        self.limitation = Some(limitation);
+        self
+    }
     /// Check the SDK's result structure and policy, including duplicate rejection.
     /// This is stricter than the shared interface and does not prove source
     /// correspondence, inventory completeness, or sound operation framing.
@@ -324,6 +396,26 @@ impl SourceInspection {
 }
 
 impl BindableTarget {
+    /// A target with its source-local identity and binding data, without
+    /// operation framing.
+    pub fn new(source_ref: impl Into<String>, binding: BindingFragment) -> Self {
+        Self {
+            source_ref: source_ref.into(),
+            binding,
+            operation_key: None,
+            operation: None,
+        }
+    }
+    /// Suggest an operation key; the author owns the actual key.
+    pub fn with_operation_key(mut self, operation_key: impl Into<String>) -> Self {
+        self.operation_key = Some(operation_key.into());
+        self
+    }
+    /// Frame the target as an operation. It must not carry `idempotent`.
+    pub fn with_operation(mut self, operation: Operation) -> Self {
+        self.operation = Some(operation);
+        self
+    }
     fn validate(&self) -> Result<(), InspectionError> {
         if self.source_ref.is_empty() {
             return Err(InspectionError::result("requires a nonempty sourceRef"));

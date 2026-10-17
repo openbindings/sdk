@@ -57,14 +57,16 @@ Implement OpenBindings' value-contract semantics, including its JSON Schema
 provisions and original-source locations. Declare unsupported capabilities with
 no-verdict. Neither an unsupported feature nor an exhausted budget establishes
 an undefined result. Return `ValueOutcome::Undefined { detail }` only with
-semantic provenance and disagreeing admissible completions. Construct its public
+semantic provenance and disagreeing admissible completions. Build its
 `UndefinedResult` with `new(code, message)` and attach an established original
-schema location with `with_location(location)`, or set its public fields.
+schema location with `with_location(location)`. Refuse with
+`NoVerdict::new(reason, code, message)`, adding `with_location(location)` when
+the refusal has an original schema location.
 Preparation success does not promise a verdict on every
 value, and missing diagnostic detail does not weaken an established failure.
 
 Construct a problem with `ValueProblem::new(instance, schema, code, message)`
-and set its public `details` to add schema facts. `instance` is the failing
+and add schema facts with `with_details(details)`. `instance` is the failing
 node's exact `Pointer` from the value the call received (its root is that value,
 also when it is part of a larger text); `JsonValue::at_pointer` checks one and
 `Pointer: FromStr` parses escaped text from a library. Name `schema` by resource
@@ -76,6 +78,11 @@ pointer)` takes any exact `Pointer`. When a keyword cannot be mapped to an
 original source, name the selected schema rather than guessing. Callers find line
 and column on demand with `JsonValue::locate`, `Conformant::locate` and
 `ResourceSet::locate`.
+
+These records may gain fields in later versions, so they have no struct-literal
+form outside the SDK; their fields stay public to read and assign. `ValueOutcome`
+is a closed partition: build `ValueOutcome::Fails { message, problems,
+problems_complete }` directly and match every variant.
 
 Run the [boolean evaluator example](../crates/openbindings-schema-evaluator-test-support/examples/boolean_evaluator.rs)
 for a minimal implementation. It supports boolean schemas and explicitly refuses

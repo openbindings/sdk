@@ -665,3 +665,61 @@ fn prepared_contracts_are_owned_and_contract_reads_stay_two_words() {
         std::mem::size_of::<Option<JsonRef<'static>>>()
     );
 }
+#[test]
+fn version_refusals_are_built_only_for_unsupported_declarations() {
+    // A tool checking a declaration before any document exists refuses with the
+    // record validation returns.
+    let validated = validate_document(r#"{"openbindings":"0.3.0","operations":{}}"#).unwrap_err();
+    let built = VersionRefusal::new("0.3.0").expect("outside the supported line");
+    assert_eq!(built, validated);
+    assert_eq!(
+        (built.declared.as_str(), built.supported),
+        ("0.3.0", "0.2.x")
+    );
+    assert_eq!(built.to_string(), validated.to_string());
+    assert!(VersionRefusal::new("0.2.0-rc.1").is_some());
+    for declared in ["0.2.0", "0.2.99+build", "0.2", "not a version", ""] {
+        assert!(VersionRefusal::new(declared).is_none(), "{declared:?}");
+    }
+}
+#[test]
+fn evaluator_records_build_with_constructors_and_optional_fields() {
+    let location = SchemaLocation::new(
+        Some("https://example.invalid/s".into()),
+        "/type".parse().unwrap(),
+    );
+    let refusal = NoVerdict::new(
+        NoVerdictReason::LimitExceeded,
+        "budget",
+        "work limit reached",
+    );
+    assert!(refusal.location.is_none());
+    let refusal = refusal.with_location(location.clone());
+    assert_eq!(
+        (
+            refusal.reason,
+            refusal.code.as_str(),
+            refusal.message.as_str()
+        ),
+        (
+            NoVerdictReason::LimitExceeded,
+            "budget",
+            "work limit reached"
+        )
+    );
+    assert!(refusal.location == Some(location.clone()));
+    let problem = ValueProblem::new(
+        "/0".parse().unwrap(),
+        location.clone(),
+        "type",
+        "wrong type",
+    );
+    assert!(problem.details.is_none());
+    let problem = problem.with_details(ValueProblemDetails::Type {
+        expected: vec!["integer".into()],
+    });
+    assert_eq!(
+        serde_json::to_string(&problem).unwrap(),
+        r#"{"instance":"/0","schema":{"resource":"https://example.invalid/s","pointer":"/type"},"code":"type","message":"wrong type","details":{"kind":"type","expected":["integer"]}}"#
+    );
+}

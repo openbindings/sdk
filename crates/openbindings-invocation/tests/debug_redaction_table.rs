@@ -22,6 +22,22 @@ fn row(label: &'static str, value: &(impl Debug + ?Sized)) -> Row {
         ],
     }
 }
+/// Supports every kind, so the facade reports a verdict for any label.
+struct AnyKind;
+impl invocation::binding::BindingInvoker for AnyKind {
+    type Invocation<'a> = std::future::Ready<Result<(), invocation::InvocationError>>;
+    fn supports_kind(&self, _: &str) -> bool {
+        true
+    }
+    fn invoke<'a>(
+        &'a self,
+        _: invocation::BindingRequest<'a>,
+        _: invocation::ProviderIo,
+        _: invocation::CancellationToken,
+    ) -> Self::Invocation<'a> {
+        std::future::ready(Ok(()))
+    }
+}
 fn invocation_rows(source: &Source, context: &JsonValue) -> Vec<Row> {
     let binding = invocation::BindingValue {
         content: Some(context.clone()),
@@ -47,17 +63,13 @@ fn invocation_rows(source: &Source, context: &JsonValue) -> Vec<Row> {
         row("InvocationError", &error),
         row(
             "invocation SupportedKind",
-            &invocation::binding::SupportedKind {
-                kind: SECRET.into(),
-                description: Some(SECRET.into()),
-            },
+            &invocation::binding::SupportedKind::new(SECRET).with_description(SECRET),
         ),
         row(
             "invocation KindSupportVerdict",
-            &invocation::binding::KindSupportVerdict {
-                kind: SECRET.into(),
-                supported: true,
-            },
+            &invocation::binding::Invoker::new(AnyKind)
+                .check_kind_support([SECRET])
+                .unwrap()[0],
         ),
     ]
 }
