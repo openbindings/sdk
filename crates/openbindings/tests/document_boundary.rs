@@ -18,7 +18,14 @@ fn to_bytes_include_whitespace_and_rebased_children_have_local_locations() {
     drop(parent);
     assert_eq!(doc.to_bytes(), expected.as_bytes());
     assert_eq!(doc.value().location().byte_offset, 0);
-    assert_eq!(doc.value().location().pointer.as_deref(), Some(""));
+    assert_eq!(
+        doc.value()
+            .location()
+            .pointer
+            .as_ref()
+            .and_then(openbindings::Pointer::as_str),
+        Some("")
+    );
 }
 
 fn validation(text: &str) -> DocumentValidation {
@@ -146,7 +153,13 @@ fn indexed_reference_checks_keep_primary_key_and_diagnostic_semantics() {
             (
                 f.rule,
                 f.code,
-                f.location.as_ref().unwrap().pointer.as_deref().unwrap(),
+                f.location
+                    .as_ref()
+                    .unwrap()
+                    .pointer
+                    .as_ref()
+                    .and_then(openbindings::Pointer::as_str)
+                    .unwrap(),
             )
         })
         .collect();

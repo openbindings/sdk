@@ -71,13 +71,16 @@ def judge_value(case,result,sources):
     if tag=='fails':
         problems=result.get('problems',[])
         if not problems and result.get('problemsComplete') is True:failures.append('complete diagnostics lack problems')
-        paths=sorted({p.get('instancePointer','<absent>') for p in problems})
+        instances=[p.get('instance') or {} for p in problems]
+        paths=sorted({i.get('pointer','<absent>') for i in instances})
         if result.get('problemsComplete') is True and case['acceptable_paths'] is not None and paths not in [sorted(set(p)) for p in case['acceptable_paths']]:failures.append('wrong instance paths')
         value=json.loads(case['value'])
         if any(not pointer_exists(value,p) for p in paths):failures.append('nonexistent instance location')
+        if any(not all(isinstance(i.get(k),int) and not isinstance(i.get(k),bool) for k in ('byteOffset','line','byteColumn')) for i in instances):failures.append('instance location lacks coordinates')
         for problem in problems:
-            location=problem.get('schemaLocation')
-            if not location:continue
+            location=problem.get('schema')
+            if not location:
+                failures.append('problem lacks a schema location');continue
             resource=location.get('resource');pointer=location.get('pointer')
             if resource is not None and resource.startswith('https://sdk-program.openbindings.invalid/'):failures.append('generated identity leaked')
             if resource not in sources or not pointer_exists(sources[resource],pointer):failures.append('nonexistent original schema location')
@@ -104,13 +107,13 @@ def judge_evaluator(fixture,observed):
 
 def controls():
     case={'id':'control','value':'{"a":7}','expected':'fails','acceptable_paths':[['/a']],'optional_capability':None,'refusal_kind':None}
-    valid={'outcome':'fails','problemsComplete':True,'problems':[{'instancePointer':'/a','schemaLocation':{'resource':None,'pointer':'/type'}}]}
+    valid={'outcome':'fails','problemsComplete':True,'problems':[{'instance':{'pointer':'/a','byteOffset':5,'line':1,'byteColumn':6},'schema':{'resource':None,'pointer':'/type'}}]}
     sources={None:{'type':'string'}}
     assert not judge_value(case,valid,sources)
     bad=[]
     bad.append({**valid,'outcome':'mismatch'}) # obsolete public result tag is not a synonym
     bad.append({'outcome':'satisfies'})
-    for field,value in [('instancePointer','/missing'),('schemaLocation',{'resource':None,'pointer':'/missing'}),('schemaLocation',{'resource':'https://sdk-program.openbindings.invalid/private','pointer':''})]:
+    for field,value in [('instance',{'pointer':'/missing','byteOffset':0,'line':1,'byteColumn':1}),('instance',{'pointer':'/a'}),('schema',None),('schema',{'resource':None,'pointer':'/missing'}),('schema',{'resource':'https://sdk-program.openbindings.invalid/private','pointer':''})]:
         x=copy.deepcopy(valid);x['problems'][0][field]=value;bad.append(x)
     x=copy.deepcopy(valid);x['problemsComplete']=False;assert not judge_value(case,x,sources)
     for result in bad:assert judge_value(case,result,sources)

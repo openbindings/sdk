@@ -2,7 +2,8 @@
 use openbindings::*;
 use std::sync::Arc;
 struct BooleanEvaluator;
-struct BooleanContract(bool);
+// The schema's value and its original location, for explanations.
+struct BooleanContract(bool, SchemaLocation);
 impl SchemaEvaluator for BooleanEvaluator {
     fn prepare(
         &self,
@@ -11,7 +12,7 @@ impl SchemaEvaluator for BooleanEvaluator {
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         control.check()?;
         match request.entry().view().as_bool() {
-            Some(value) => Ok(Arc::new(BooleanContract(value))),
+            Some(value) => Ok(Arc::new(BooleanContract(value, request.entry_location()))),
             None => Err(NoVerdict::new(
                 NoVerdictReason::UnsupportedCapability,
                 "boolean-only",
@@ -21,7 +22,12 @@ impl SchemaEvaluator for BooleanEvaluator {
     }
 }
 impl PreparedSchema for BooleanContract {
-    fn validate(&self, _: &JsonValue, detail: Detail, control: &dyn WorkControl) -> ValueOutcome {
+    fn validate(
+        &self,
+        value: &JsonValue,
+        detail: Detail,
+        control: &dyn WorkControl,
+    ) -> ValueOutcome {
         if let Err(detail) = control.check() {
             let detail = detail.into();
             return ValueOutcome::NoVerdict { detail };
@@ -34,12 +40,13 @@ impl PreparedSchema for BooleanContract {
         ValueOutcome::Fails {
             message: "value does not satisfy the contract".into(),
             problems: explain
-                .then(|| ValueProblem {
-                    details: None,
-                    instance_pointer: String::new(),
-                    schema_location: None,
-                    code: "false-schema".into(),
-                    message: "a false schema permits no values".into(),
+                .then(|| {
+                    ValueProblem::new(
+                        value.location(),
+                        self.1.clone(),
+                        "false-schema",
+                        "a false schema permits no values",
+                    )
                 })
                 .into_iter()
                 .collect(),
@@ -72,9 +79,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         output.validate(&value),
         ValueOutcome::Fails { problems, .. } if problems.is_empty()
     ));
-    assert!(matches!(
-        output.explain(&value),
-        ValueOutcome::Fails { problems, problems_complete: true, .. } if problems.len() == 1
-    ));
+    let ValueOutcome::Fails {
+        problems,
+        problems_complete: true,
+        ..
+    } = output.explain(&value)
+    else {
+        return Err("the false schema was not explained".into());
+    };
+    assert_eq!(problems.len(), 1);
+    // The document holds the schema's text, so it finds the line and column.
+    let schema = document
+        .locate(&problems[0].schema)
+        .ok_or("schema location")?;
+    assert_eq!(schema.pointer.as_ref().unwrap(), "/operations/op/output");
+    println!(
+        "{} at {} (schema at {schema})",
+        problems[0].code, problems[0].instance
+    );
     Ok(())
 }

@@ -139,9 +139,9 @@ export function oneOfCases(sdk, fixtures) {
           result.problems.every(
             (p) =>
               p.code === "oneOf" &&
-              p.instancePointer === "" &&
-              p.schemaLocation?.resource === null &&
-              p.schemaLocation?.pointer === `/operations/${op}/output/oneOf`,
+              p.instance.pointer === "" &&
+              p.schema.resource === null &&
+              p.schema.pointer === `/operations/${op}/output/oneOf`,
           ),
           "C22 original oneOf boundary",
         );
@@ -170,9 +170,9 @@ export function oneOfCases(sdk, fixtures) {
         result.problems.some(
           (p) =>
             p.code === "oneOf" &&
-            p.schemaLocation?.pointer === test.summary &&
-            p.schemaLocation?.resource === (test.summaryResource ?? null) &&
-            p.instancePointer === (test.instancePointer ?? ""),
+            p.schema.pointer === test.summary &&
+            p.schema.resource === (test.summaryResource ?? null) &&
+            p.instance.pointer === (test.instancePointer ?? ""),
         ),
         "original summary and instance location",
       );

@@ -102,11 +102,15 @@ failure has a fixed message, an empty problem list and `problems_complete =
 false`. `explain` returns the library's first error for the same verdict, with
 redacted messages and original schema facts. Building that error can allocate in
 proportion to the schema and value and can overflow the stack on deep values, so
-keep `validate` on paths that check untrusted input. Explained paths map to
-original sources. Schema facts may expose source operands. A prepared contract
-keeps the text of the schemas it reached for these facts, never the document or
-its supplied resources. Missing or incomplete diagnostics never weaken an
-established failure.
+keep `validate` on paths that check untrusted input. Each explained problem
+locates the failing node in the value's text (`instance`: exact pointer, byte
+offset, line and column) and names the failing keyword by resource and exact
+pointer (`schema`). `Conformant::locate` and `ResourceSet::locate` find that
+keyword's line and column on demand; a keyword the original sources do not hold
+is named by the selected schema itself, never guessed. Schema facts may expose
+source operands. A prepared contract keeps the text of the schemas it reached
+for these facts, never the document, its supplied resources or any position.
+Missing or incomplete diagnostics never weaken an established failure.
 
 Cancellation uses `WorkControl` and is cooperative. Cancelled preparation produces
 no prepared owner; cancelled validation leaves a prepared owner usable for a later

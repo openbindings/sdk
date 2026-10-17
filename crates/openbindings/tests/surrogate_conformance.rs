@@ -1,6 +1,8 @@
 use openbindings::*;
 
-fn assert_unpaired(text: &str, token: &str, pointer: Option<&str>) {
+// `pointer` is the expected pointer as Display writes it; `exact` says whether
+// it is Unicode text, or passes through a name with an unpaired unit.
+fn assert_unpaired(text: &str, token: &str, pointer: &str, exact: bool) {
     // All public document entry paths apply the same boundary without changing
     // exact parsing or the retained draft bytes.
     let parsed = Document::parse(text).unwrap();
@@ -27,7 +29,9 @@ fn assert_unpaired(text: &str, token: &str, pointer: Option<&str>) {
         assert!(format!("{finding:?}").contains("unpaired-surrogate"));
         let at = finding.location.as_ref().unwrap();
         let offset = text.find(token).unwrap();
-        assert_eq!(at.pointer.as_deref(), pointer);
+        let at_pointer = at.pointer.as_ref().unwrap();
+        assert_eq!(at_pointer.to_string(), pointer);
+        assert_eq!(at_pointer.as_str().is_some(), exact);
         assert_eq!(at.byte_offset, offset);
         assert_eq!(
             at.line,
@@ -46,7 +50,8 @@ fn unpaired_high_surrogate_value_violates_only_json_conformance() {
     assert_unpaired(
         r#"{"openbindings":"0.2.0","description":"\ud800","operations":{}}"#,
         r#""\ud800""#,
-        Some("/description"),
+        "/description",
+        true,
     );
 }
 
@@ -55,7 +60,8 @@ fn unpaired_low_surrogate_member_in_schema_locates_the_name_token() {
     assert_unpaired(
         r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"type":"object","properties":{"\udc00":{}}}}}}"#,
         r#""\udc00""#,
-        None,
+        "/operations/op/input/properties/\\udc00",
+        false,
     );
 }
 
@@ -64,7 +70,8 @@ fn reversed_surrogates_are_not_a_pair() {
     assert_unpaired(
         r#"{"openbindings":"0.2.0","description":"\ude00\ud83d","operations":{}}"#,
         r#""\ude00\ud83d""#,
-        Some("/description"),
+        "/description",
+        true,
     );
 }
 
@@ -84,7 +91,10 @@ fn escaped_pairs_and_noncharacters_remain_conformant() {
         let proof = validation.conformant().unwrap();
         assert_eq!(proof.to_bytes(), text.as_bytes());
         let at = proof.value().get("description").unwrap().location();
-        assert_eq!(at.pointer.as_deref(), Some("/description"));
+        assert_eq!(
+            at.pointer.as_ref().and_then(openbindings::Pointer::as_str),
+            Some("/description")
+        );
         assert_eq!(at.byte_offset, text.find(token).unwrap());
     }
 }
@@ -97,7 +107,7 @@ fn surrogate_exclusion_follows_version_selection_and_precedes_later_rules() {
     }
     for declaration in ["", r#""openbindings":7,"#, r#""openbindings":"bad","#] {
         let text = format!("{{\n{declaration}\"description\":\"\\uD800\"\n}}");
-        assert_unpaired(&text, r#""\uD800""#, Some("/description"));
+        assert_unpaired(&text, r#""\uD800""#, "/description", true);
     }
 }
 
@@ -122,8 +132,9 @@ fn surrogate_findings_obey_the_document_finding_cap() {
             .as_ref()
             .unwrap()
             .pointer
-            .as_deref(),
-        Some("/x-data/4095")
+            .as_ref()
+            .unwrap(),
+        "/x-data/4095"
     );
     for rule in &DOCUMENT_RULES[1..] {
         assert_eq!(report.evidence[rule], Evidence::NotApplicable);

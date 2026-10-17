@@ -26,9 +26,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let validation = document.validate()?;
     for finding in &validation.report().findings {
         // Debug quotes and escapes the pointer, including any control characters.
-        let pointer = finding.location.as_ref().and_then(|at| at.pointer.as_deref());
+        let pointer = finding.location.as_ref().and_then(|at| at.pointer.as_ref());
         println!("{}/{} ({:?}) at {:?}: {}",
-            finding.rule, finding.code, finding.status, pointer, finding.message);
+            finding.rule, finding.code, finding.status,
+            pointer.map(ToString::to_string), finding.message);
     }
     if validation.report().findings_truncated {
         println!("More findings were omitted; rule evidence remains available.");
@@ -48,7 +49,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("value outcome: {:?}", input.validate_json("7")?);
     // The cheap check says whether a value fails; explaining it says why.
     let seven = openbindings::JsonValue::parse(r#""seven""#)?;
-    println!("explained outcome: {:?}", input.explain(&seven));
+    if let openbindings::ValueOutcome::Fails { problems, .. } = input.explain(&seven) {
+        for problem in &problems {
+            // The value locates itself; the document locates the schema keyword.
+            let schema = proof.locate(&problem.schema).ok_or("schema location")?;
+            println!("{} at {} (schema at {schema})", problem.code, problem.instance);
+        }
+    }
     Ok(())
 }
 ```
@@ -165,11 +172,18 @@ an `AtomicBool` or a companion's `CancellationToken`. Cancellation is cooperativ
 Use a fresh flag or token for a retry. Cancelled preparation returns no prepared
 owner; cancelled validation leaves an existing owner usable.
 
-Document findings describe the assessed revision with JSON Pointers, zero-based UTF-8 byte offsets and
-one-based lines and byte columns. Quote pointers when displaying them. Truncation
+Document findings describe the assessed revision with exact JSON Pointers, zero-based UTF-8 byte offsets and
+one-based lines and byte columns; `SourceLocation`'s `Display` writes them as
+`pointer (line L, column C, byte B)`. A pointer keeps a member name's unpaired
+UTF-16 unit (`Pointer::as_str` is then `None`) and is absent only for a syntax
+error, which precedes any value. Quote pointers when displaying them. Truncation
 leaves rule evidence intact. Use codes and evidence for logic; messages are
 advisory. `validate` reports value failures without problems. `explain` is an
 explicit per-call choice with library allocation and stack limits, including
-possible stack overflow on deep values. A prepared contract keeps a compact copy
-of the keywords it compiled for explanations, never its document or resources. See the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md)
+possible stack overflow on deep values. An explained problem locates the failing
+node in the value's text (`instance`) and names the failing keyword by resource
+and exact pointer (`schema`); `Conformant::locate` and `ResourceSet::locate` find
+that keyword's line and column when asked. A prepared contract keeps a compact copy
+of the keywords it compiled for explanations, never its document or resources, and
+no positions. See the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md)
 and [host support](support.md).

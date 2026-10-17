@@ -2,7 +2,7 @@ use base64::Engine;
 use openbindings::*;
 use serde_json::{Value, json};
 use std::io::{self, BufRead};
-fn observe(request: &Value) -> Value {
+fn observe(request: &Value) -> String {
     let given = &request["given"];
     let data = base64::engine::general_purpose::STANDARD
         .decode(given["documentBase64"].as_str().unwrap())
@@ -30,21 +30,7 @@ fn observe(request: &Value) -> Value {
                         })
                         .collect::<std::collections::BTreeMap<_, _>>()
                 );
-                out["findings"] = json!(report.findings);
-                if let Some(findings) = out["findings"].as_array_mut() {
-                    for finding in findings {
-                        if finding["status"] == "met" {
-                            finding["status"] = json!("satisfied");
-                        }
-                        if matches!(
-                            (finding["rule"].as_str(), finding["code"].as_str()),
-                            (Some("OBI-06" | "OBI-08"), Some("unknown-operation"))
-                                | (Some("OBI-07"), Some("unknown-source"))
-                        ) {
-                            finding["code"] = json!("missing-target");
-                        }
-                    }
-                }
+                return with_findings(out, &report.findings);
             }
             Err(error) => {
                 out["outcome"] = json!("version-refused");
@@ -167,7 +153,40 @@ fn observe(request: &Value) -> Value {
             out["outcome"] = json!("not-implemented");
         }
     }
-    out
+    out.to_string()
+}
+// Findings in the frozen protocol's vocabulary, written as JSON text: an exact
+// pointer through a member name with an unpaired unit has no `Value` form.
+fn with_findings(out: Value, findings: &[Finding]) -> String {
+    let rows: Vec<String> = findings
+        .iter()
+        .map(|finding| {
+            let status = if finding.status == Evidence::Met {
+                json!("satisfied")
+            } else {
+                json!(finding.status)
+            };
+            let code = match (finding.rule, finding.code) {
+                ("OBI-06" | "OBI-08", "unknown-operation") | ("OBI-07", "unknown-source") => {
+                    "missing-target"
+                }
+                (_, code) => code,
+            };
+            format!(
+                r#"{{"code":{},"location":{},"message":{},"rule":{},"status":{status}}}"#,
+                serde_json::to_string(code).unwrap(),
+                serde_json::to_string(&finding.location).unwrap(),
+                serde_json::to_string(&finding.message).unwrap(),
+                serde_json::to_string(finding.rule).unwrap(),
+            )
+        })
+        .collect();
+    let mut observation = out.to_string();
+    observation.pop();
+    observation.push_str(r#","findings":["#);
+    observation.push_str(&rows.join(","));
+    observation.push_str("]}");
+    observation
 }
 fn main() {
     for line in io::stdin().lock().lines() {

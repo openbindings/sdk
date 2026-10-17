@@ -98,7 +98,15 @@ fn uniform_ready_phase_including_bare_holes_and_static_aliases() {
                 panic!("bare hole decided {text}")
             };
             assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
-            assert!(detail.location.unwrap().pointer.ends_with("/$ref"));
+            assert!(
+                detail
+                    .location
+                    .unwrap()
+                    .pointer
+                    .as_str()
+                    .unwrap()
+                    .ends_with("/$ref")
+            );
             assert!(!detail.message.contains(U));
         }
     }
@@ -240,10 +248,7 @@ fn active_unknown_can_fail_known_constraint_and_never_emits_lower_diagnostics() 
     assert!(!problems_complete);
     assert_eq!(problems.len(), 1);
     assert_eq!(problems[0].code, "required");
-    assert_eq!(
-        problems[0].schema_location.as_ref().unwrap().pointer,
-        "/operations/op/input/required"
-    );
+    assert_eq!(problems[0].schema.pointer, "/operations/op/input/required");
     assert!(problems[0].details.is_some());
     assert!(!problems[0].message.contains("private-name"));
     let serialized = serde_json::to_string(&problems).unwrap();
@@ -644,11 +649,11 @@ fn original_five_frozen_values_and_empty_resource_sets() {
         {
             assert!(!problems_complete);
             assert!(problems.iter().any(|p| p.code == keyword));
-            assert!(problems.iter().all(|p| {
-                p.schema_location
-                    .as_ref()
-                    .is_some_and(|l| !l.pointer.contains("$defs/n"))
-            }));
+            assert!(
+                problems
+                    .iter()
+                    .all(|p| { !p.schema.pointer.as_str().unwrap().contains("$defs/n") })
+            );
         }
     }
 }

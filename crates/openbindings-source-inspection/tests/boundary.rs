@@ -320,7 +320,13 @@ fn exact_encoding_budgets_and_opaque_values_are_preserved() {
         .unwrap();
     assert_eq!(finding.rule, "OBI-01");
     assert_eq!(
-        finding.location.as_ref().unwrap().pointer.as_deref(),
+        finding
+            .location
+            .as_ref()
+            .unwrap()
+            .pointer
+            .as_ref()
+            .and_then(openbindings::Pointer::as_str),
         Some("/bindings/b/content/surrogate")
     );
 

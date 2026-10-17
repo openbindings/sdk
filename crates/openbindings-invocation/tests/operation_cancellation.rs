@@ -32,23 +32,25 @@ mod tests {
     struct Prepared {
         barrier: Option<Arc<Barrier>>,
         saw_cancel: Arc<AtomicBool>,
+        schema: openbindings::SchemaLocation,
     }
     impl SchemaEvaluator for Evaluator {
         fn prepare(
             &self,
-            _: &SchemaRequest,
+            request: &SchemaRequest,
             _: &dyn openbindings::WorkControl,
         ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
             Ok(Arc::new(Prepared {
                 barrier: self.barrier.clone(),
                 saw_cancel: self.saw_cancel.clone(),
+                schema: request.entry_location(),
             }))
         }
     }
     impl PreparedSchema for Prepared {
         fn validate(
             &self,
-            _: &JsonValue,
+            value: &JsonValue,
             _: openbindings::Detail,
             c: &dyn openbindings::WorkControl,
         ) -> ValueOutcome {
@@ -65,13 +67,12 @@ mod tests {
             }
             ValueOutcome::Fails {
                 message: "value does not satisfy the contract".into(),
-                problems: vec![ValueProblem {
-                    details: None,
-                    instance_pointer: String::new(),
-                    schema_location: None,
-                    code: "test.false".into(),
-                    message: "reject".into(),
-                }],
+                problems: vec![ValueProblem::new(
+                    value.location(),
+                    self.schema.clone(),
+                    "test.false",
+                    "reject",
+                )],
                 problems_complete: true,
             }
         }

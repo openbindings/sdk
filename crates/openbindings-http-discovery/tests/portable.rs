@@ -509,7 +509,8 @@ fn publication_refuses_every_unestablished_conformance_state() {
             .as_ref()
             .unwrap()
             .pointer
-            .as_deref(),
+            .as_ref()
+            .and_then(openbindings::Pointer::as_str),
         Some("/x-value")
     );
 }

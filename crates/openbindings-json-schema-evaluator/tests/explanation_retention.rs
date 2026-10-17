@@ -81,7 +81,7 @@ fn explaining_contracts_keep_neither_documents_nor_resources() {
     let ValueOutcome::Fails { problems, .. } = contract.explain(&value) else {
         panic!("expected failure")
     };
-    let location = problems[0].schema_location.as_ref().unwrap();
+    let location = &problems[0].schema;
     assert_eq!(location.resource.as_deref(), Some(ITEM));
     assert_eq!(location.pointer, "/properties/id/minimum");
     assert!(matches!(

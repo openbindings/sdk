@@ -141,8 +141,8 @@ test("editor presentation quotes original pointers and reports diagnostic trunca
         outcome: "fails",
         problems: [
           {
-            instancePointer: "/id",
-            schemaLocation: {
+            instance: { pointer: "/id", byteOffset: 6, line: 1, byteColumn: 7 },
+            schema: {
               resource: null,
               pointer: "/operations/lookup/input",
             },

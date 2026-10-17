@@ -87,6 +87,9 @@ pub(crate) struct Explanation {
     literals: Vec<JsonValue>,
     // Whether the text holds every origin, so the program's map is not needed.
     locates: bool,
+    // The entry definition's slot, or `NONE`: the selected schema, whose own
+    // origin names it when a keyword cannot be mapped.
+    entry: u32,
 }
 // A resource, definition or keyword: its name, between its quotes in the text,
 // then for a resource the range of its definition slots; for a definition its
@@ -863,7 +866,7 @@ impl Explanation {
                 .all(|pair| name(&pair[0]) < name(&pair[1]))
         });
         resource_slots.sort_unstable_by(|a, b| name(a).cmp(name(b)));
-        Ok(Some(Self {
+        let mut explanation = Self {
             text,
             slots,
             resources: offset(resource_count),
@@ -871,7 +874,22 @@ impl Explanation {
             prefix: offset(prefix),
             literals,
             locates,
-        }))
+            entry: NONE,
+        };
+        // The entry resource's root refers to the entry definition.
+        let entry = resources
+            .iter()
+            .find(|resource| resource.uri == program.entry_uri)
+            .and_then(|resource| resource.document.get("$ref")?.as_str())
+            .and_then(|reference| {
+                let (base, fragment) = reference.split_once('#')?;
+                let name = fragment.strip_prefix("/$defs/")?;
+                explanation.find(explanation.key(base)?, name)
+            });
+        if let Some(entry) = entry {
+            explanation.entry = entry.index;
+        }
+        Ok(Some(explanation))
     }
     /// Whether explanations need the program's own location map.
     pub(crate) fn needs_locations(&self) -> bool {
@@ -893,10 +911,13 @@ impl Explanation {
         if !work(control, key.len().saturating_add(name.len())) {
             return Err(());
         }
+        Ok(self.find(key, name))
+    }
+    fn find(&self, key: &str, name: &str) -> Option<Definition> {
         let resources = &self.slots[..self.resources as usize];
-        let Ok(found) = resources.binary_search_by(|slot| self.name(*slot).cmp(key)) else {
-            return Ok(None);
-        };
+        let found = resources
+            .binary_search_by(|slot| self.name(*slot).cmp(key))
+            .ok()?;
         let resource = resources[found];
         let definitions = &self.slots[resource.first as usize..resource.last as usize];
         let found = if self.ordered {
@@ -906,10 +927,10 @@ impl Explanation {
         } else {
             definitions.iter().position(|slot| self.name(*slot) == name)
         };
-        Ok(found.map(|found| Definition {
+        found.map(|found| Definition {
             resource,
             index: resource.first + found as u32,
-        }))
+        })
     }
     // A resource's original source (`None` for the document) and whether it is a
     // packaged meta-schema, at fixed offsets: its value starts `[true,` or
@@ -1184,13 +1205,61 @@ impl Explanation {
         let Some(fragment) = fragment.strip_prefix("/$defs/") else {
             return Ok(None);
         };
-        let (name, mut suffix) = fragment.split_at(fragment.find('/').unwrap_or(fragment.len()));
+        let (name, suffix) = fragment.split_at(fragment.find('/').unwrap_or(fragment.len()));
         let Some(key) = self.key(base) else {
             return Ok(None);
         };
         let Some(definition) = self.definition(key, name, control)? else {
             return Ok(None);
         };
+        self.origin(definition, suffix, control)
+    }
+    /// The selected schema's own original location, which names it when a
+    /// library keyword cannot be mapped. `program` is the compiled program when
+    /// its own location map is kept.
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn entry(
+        &self,
+        program: Option<&Program>,
+        control: &dyn WorkControl,
+    ) -> Result<Option<Located<'_>>, ()> {
+        if self.entry == NONE {
+            return Ok(None);
+        }
+        let resource = self.slots[..self.resources as usize]
+            .iter()
+            .find(|resource| (resource.first..resource.last).contains(&self.entry));
+        let Some(&resource) = resource else {
+            return Ok(None);
+        };
+        if self.locates {
+            let definition = Definition {
+                resource,
+                index: self.entry,
+            };
+            return self.origin(definition, "", control);
+        }
+        // The program's map holds the origin, under the definition's address.
+        let Some(program) = program else {
+            return Ok(None);
+        };
+        let address = format!(
+            "{}{}#/$defs/{}",
+            &self.text[2..2 + self.prefix as usize],
+            self.name(resource),
+            self.name(self.slots[self.entry as usize])
+        );
+        self.locate(Some(program), &address, control)
+    }
+    // A definition's origin, or that of the longest of its keyword origins the
+    // generated suffix continues with, then the walk of what is left.
+    fn origin(
+        &self,
+        definition: Definition,
+        mut suffix: &str,
+        control: &dyn WorkControl,
+    ) -> Result<Option<Located<'_>>, ()> {
         let slot = self.slots[definition.index as usize];
         let mut origin = self.at(slot.name + slot.len + 3);
         // The definition's own origin ends at the comma before its schema.
@@ -1336,7 +1405,7 @@ impl Explanation {
         };
         pointer.push_str(&suffix[..end]);
         Ok(Some(Located {
-            location: SchemaLocation { resource, pointer },
+            location: SchemaLocation::new(resource, backend::escaped_pointer(pointer)),
             operand: (!standard).then_some(node),
         }))
     }
@@ -1599,6 +1668,17 @@ mod tests {
 
     // The projected program a default preparation compiles for `schema`.
     fn projected(schema: &str) -> (Program, Explanation) {
+        let mut program = project(schema);
+        let control = std::sync::atomic::AtomicBool::new(false);
+        let explanation = Explanation::new(&program, &control).unwrap().unwrap();
+        // A strict projection maps one prefix origin per definition, so the
+        // explanation holds every location itself.
+        assert!(!explanation.needs_locations());
+        program.resources = Vec::new();
+        (program, explanation)
+    }
+    // The strict projection of an operation input schema.
+    fn project(schema: &str) -> Program {
         #[derive(Default)]
         struct Capture(std::sync::Mutex<Option<SchemaRequest>>);
         impl SchemaEvaluator for Capture {
@@ -1621,14 +1701,7 @@ mod tests {
         assert!(operation.input().unwrap().prepare(&capture).is_ok());
         let request = capture.0.lock().unwrap().take().unwrap();
         let (space, entry) = crate::planner::space(&request);
-        let mut program = space.program(entry, &|| false).unwrap();
-        let control = std::sync::atomic::AtomicBool::new(false);
-        let explanation = Explanation::new(&program, &control).unwrap().unwrap();
-        // A strict projection maps one prefix origin per definition, so the
-        // explanation holds every location itself.
-        assert!(!explanation.needs_locations());
-        program.resources = Vec::new();
-        (program, explanation)
+        space.program(entry, &|| false).unwrap()
     }
     // The generated keyword URI for an original document pointer and suffix.
     fn generated(program: &Program, pointer: &str, suffix: &str) -> String {
@@ -1725,6 +1798,42 @@ mod tests {
                 "{keyword}"
             );
         }
+    }
+
+    #[test]
+    fn the_entry_names_the_selected_schema_from_the_text_or_the_programs_map() {
+        let schema = r##"{"properties":{"a":{"$ref":"#/operations/op/input/$defs/s"}},"$defs":{"s":{"type":"string"}}}"##;
+        let control = std::sync::atomic::AtomicBool::new(false);
+        let (program, explanation) = projected(schema);
+        let entry = explanation
+            .entry(Some(&program), &control)
+            .unwrap()
+            .unwrap();
+        assert_eq!(entry.location.resource, None);
+        assert_eq!(entry.location.pointer, "/operations/op/input");
+        // A map entry the text cannot carry keeps the program's map, which
+        // then names the entry.
+        let mut program = project(schema);
+        let mut locations = (*program.locations).clone();
+        let uri = program.entry_uri.clone();
+        locations.insert(
+            uri,
+            ProgramOrigin::Prefix(openbindings_internal_schema::Location {
+                resource: None,
+                pointer: String::new(),
+            }),
+        );
+        program.locations = Arc::new(locations);
+        let unlocated = Explanation::new(&program, &control).unwrap().unwrap();
+        assert!(unlocated.needs_locations());
+        program.resources = Vec::new();
+        let entry = unlocated.entry(Some(&program), &control).unwrap().unwrap();
+        assert_eq!(entry.location.resource, None);
+        assert_eq!(entry.location.pointer, "/operations/op/input");
+        assert!(unlocated.entry(None, &control).unwrap().is_none());
+        // Interrupted lookup reports nothing rather than an unchecked location.
+        control.store(true, std::sync::atomic::Ordering::Relaxed);
+        assert!(unlocated.entry(Some(&program), &control).is_err());
     }
 
     #[test]

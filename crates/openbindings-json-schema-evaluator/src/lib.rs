@@ -324,15 +324,24 @@ impl Compiled {
                 if original_only && located.is_none() {
                     return Ok(None);
                 }
-                let (location, operand) = match located {
-                    Some(located) => (Some(located.location), located.operand),
-                    None => (None, None),
+                // A keyword the original sources do not hold is not guessed:
+                // the problem names the selected schema itself.
+                let (schema, operand) = match located {
+                    Some(located) => (located.location, located.operand),
+                    None => match explanation.entry(self.program.as_ref(), control) {
+                        Ok(Some(entry)) => (entry.location, None),
+                        Ok(None) | Err(()) => return Ok(None),
+                    },
+                };
+                let Some(instance) = instance_location(value, error.instance_path().as_str())
+                else {
+                    return Ok(None);
                 };
                 let detail = details::collect(operand, error.kind(), control);
                 control.check()?;
                 Ok(Some(ValueProblem {
-                    instance_pointer: error.instance_path().as_str().into(),
-                    schema_location: location,
+                    instance,
+                    schema,
                     code: error.kind().keyword().into(),
                     message: if original_only && error.kind().keyword() == "oneOf" {
                         "value does not satisfy exactly one alternative".into()
@@ -343,7 +352,8 @@ impl Compiled {
                 }))
             });
             if let Ok(Some(problem)) = diagnostic {
-                problems.push(problem);
+                // The library's first error is the only problem.
+                problems = vec![problem];
             }
         }
         ValueOutcome::Fails {
@@ -353,6 +363,16 @@ impl Compiled {
             problems_complete: false,
         }
     }
+}
+
+// The library spells member names as the value does, except a name with an
+// unpaired unit, and reading one discards the pass. Resolving its path in the
+// exact value finds the node, located in the value's own text. Out of line, so
+// the diagnostic pass that calls it stays small enough for the compiler to
+// inline that pass's budget scopes.
+#[inline(never)]
+fn instance_location(value: &JsonValue, path: &str) -> Option<SourceLocation> {
+    value.at(path).map(JsonRef::location)
 }
 
 struct PartialCompiled {
@@ -708,7 +728,7 @@ mod partial_budget_tests {
         );
         strict.location = Some(SchemaLocation {
             resource: Some("https://original.invalid/R".into()),
-            pointer: "/properties/long~0name".into(),
+            pointer: "/properties/long~0name".parse().unwrap(),
         });
         for (reason, code) in [
             (
@@ -775,7 +795,7 @@ mod partial_budget_tests {
             let mut actual = no_verdict(reason, code, "actual refusal");
             actual.location = Some(SchemaLocation {
                 resource: Some("https://original.invalid/R".into()),
-                pointer: "/selected/schema".into(),
+                pointer: "/selected/schema".parse().unwrap(),
             });
             assert_eq!(
                 serde_json::to_value(recover_partial_decline(strict.clone(), actual.clone()))
@@ -869,10 +889,7 @@ mod partial_budget_tests {
 }
 
 fn original_location(at: openbindings_internal_schema::Location) -> SchemaLocation {
-    SchemaLocation {
-        resource: at.resource,
-        pointer: at.pointer,
-    }
+    SchemaLocation::new(at.resource, backend::escaped_pointer(at.pointer))
 }
 fn projection_failure(f: openbindings_internal_schema::Failure) -> NoVerdict {
     use openbindings_internal_schema::FailureReason as F;

@@ -24,7 +24,8 @@ fn local_meta_checks_at_arbitrary_depth_on_small_stack() {
                         .as_ref()
                         .unwrap()
                         .pointer
-                        .as_deref()
+                        .as_ref()
+                        .and_then(Pointer::as_str)
                         .unwrap()
                 })
                 .collect();

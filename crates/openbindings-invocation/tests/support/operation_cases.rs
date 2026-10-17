@@ -937,7 +937,13 @@ fn unpaired_metadata_is_rejected_before_invoker_construction() {
         let finding = &validation.report().findings[0];
         assert_eq!(finding.rule, "OBI-01");
         assert_eq!(
-            finding.location.as_ref().unwrap().pointer.as_deref(),
+            finding
+                .location
+                .as_ref()
+                .unwrap()
+                .pointer
+                .as_ref()
+                .and_then(openbindings::Pointer::as_str),
             Some(path)
         );
         assert_eq!(finding.code, "unpaired-surrogate");

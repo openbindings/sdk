@@ -179,7 +179,7 @@ fn main() {
             panic!("witness fails")
         };
         assert!(!problems_complete);
-        observation = json!({"outcome":"fails","problems":problems.len(),"complete":problems_complete,"wireBytes":wire.len(),"instancePointerBytes":problems.iter().map(|p|p.instance_pointer.len()).sum::<usize>(),"schemaPointerBytes":problems.iter().map(|p|p.schema_location.as_ref().map_or(0,|s|s.pointer.len())).sum::<usize>()});
+        observation = json!({"outcome":"fails","problems":problems.len(),"complete":problems_complete,"wireBytes":wire.len(),"instancePointerBytes":problems.iter().map(|p|p.instance.pointer.as_ref().and_then(openbindings::Pointer::as_str).map_or(0,str::len)).sum::<usize>(),"schemaPointerBytes":problems.iter().map(|p|p.schema.pointer.as_str().map_or(0,str::len)).sum::<usize>()});
         if n >= 2 {
             samples.push(invalid_ms + serialize_ms);
         }

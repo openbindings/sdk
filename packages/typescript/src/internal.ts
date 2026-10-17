@@ -93,7 +93,7 @@ export type ParseResult<T> =
 export type Evidence = "met" | "violated" | "inconclusive" | "not-applicable";
 /** Coordinates in original UTF-8 source. byteOffset is zero-based; line and byteColumn are one-based. A byte column is not a JavaScript UTF-16 editor column: convert against the original source. Pointers are untrusted display data and repeated keys may share a pointer. */
 export interface SourceLocation {
-  /** RFC 6901 pointer; empty string means root, null means unavailable. Use byteOffset to distinguish duplicate key occurrences. */
+  /** Exact RFC 6901 pointer from the source's root; empty string means root. A member name with an unpaired UTF-16 unit keeps it, as a JavaScript string can. null only when the location precedes any value, as a syntax error does. Use byteOffset to distinguish duplicate key occurrences. */
   pointer: string | null;
   /** Zero-based original UTF-8 byte offset. */
   byteOffset: number;
@@ -110,12 +110,12 @@ export interface Finding {
   status: Evidence;
   /** Stable detailed diagnostic identifier. */
   code: string;
-  /** Original source coordinate, or null when unavailable. */
+  /** Original source coordinate, null only for a finding about no particular position, such as an input limit. */
   location: SourceLocation | null;
   /** Human-readable explanation; render as text rather than HTML. */
   message: string;
 }
-/** Normative OBI assessment at an exact specification revision. All rules retain independent evidence even if findings are omitted. Presentation retains at most 4096 findings and 8 MiB aggregate generated-pointer UTF-8 bytes; findingsTruncated records omissions without changing the conclusion. */
+/** Normative OBI assessment at an exact specification revision. All rules retain independent evidence even if findings are omitted. Presentation retains at most 4096 findings and 8 MiB aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate); findingsTruncated records omissions without changing the conclusion. */
 export interface ValidationReport {
   /** Applied specification release. */
   release: string;
@@ -149,11 +149,11 @@ export type DocumentValidation =
         supported: string;
       };
     };
-/** Original schema resource/pointer identity. resource null denotes the OpenBindings document; supplied URIs identify explicit resources and never initiate acquisition. Private evaluator projection identities are not exposed. */
+/** A keyword or schema in an original schema source, by resource and exact pointer. resource null denotes the OpenBindings document; supplied URIs identify explicit resources and never initiate acquisition. Private evaluator projection identities are not exposed. Line and column come from the source's holder: ConformantDocument.locate() for the document and SchemaResources.locate() for a supplied resource; a prepared contract keeps no source text. */
 export interface SchemaLocation {
   /** Original supplied-resource URI, or null for the OpenBindings document. */
   resource: string | null;
-  /** RFC 6901 pointer within that original source; empty string denotes root. */
+  /** Exact RFC 6901 pointer from that source's root; empty string denotes root. */
   pointer: string;
 }
 /** Known refusal causes for this facade and its bundled engine. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. A potential cycle alone is conservative-preparation. Later package versions may add causes. Qualified partial value contracts can prepare ready; values whose result depends on missing content return resource-unavailable during validation. For unavailable resources, Document.references() exposes document-wide reference spellings and original keyword locations, not an exact per-value-contract missing-resource list; apply an application disclosure policy before logging them. */
@@ -216,12 +216,12 @@ export type ValueProblemDetails =
       /** Original exact JSON token for every choice, including source-controlled strings/objects and exact numbers. */
       choices: readonly string[];
     };
-/** Established instance failure, with an existing instance pointer and optional original schema coordinate. Failure messages avoid echoing instance values by default; pointers still contain source-controlled strings and must be rendered as text. */
+/** Established instance failure, located in the value and in the schema. Failure messages avoid echoing instance values by default; pointers still contain source-controlled strings and must be rendered as text. */
 export interface ValueProblem {
-  /** RFC 6901 pointer to an existing input location; empty string means root. */
-  instancePointer: string;
-  /** Original schema keyword coordinate when mapped, otherwise null. */
-  schemaLocation: SchemaLocation | null;
+  /** The failing node in the validated value's text: its exact pointer from that text's root (the value itself unless it was acquired from a larger text), byte offset, line and column. An ordinary value is located in its exact JSON serialization. */
+  instance: SourceLocation;
+  /** The failing keyword in its original schema source; when the evaluator cannot map a keyword to the original source, the selected schema itself rather than a guessed keyword. */
+  schema: SchemaLocation;
   /** Stable evaluator-defined problem code, commonly the failed keyword. */
   code: string;
   /** Explanatory text; present pointers separately and safely. */
@@ -1490,6 +1490,16 @@ export class ConformantDocument extends DocumentReads {
     const raw = sdkCall(() => conformantRaw(this).resolveOperation(name));
     return raw ? adopt(raw, ConformantOperationView.fromRaw) : undefined;
   }
+  /** Locate a schema location in this document: the node its pointer names, with line and column in the document's text. null for a location in a supplied resource, or a pointer that names no node in this revision. Positions are computed on this call; a prepared contract keeps none. A malformed location throws SdkError with code invalid-schema-location. */
+  locate(at: SchemaLocation): SourceLocation | null {
+    const raw = conformantRaw(this);
+    return decode(sdkCall(() => raw.locate(schemaLocationText(at))));
+  }
+}
+// Exact JSON text for a schema location; JSON.stringify escapes an unpaired
+// UTF-16 unit, so the engine reads the pointer exactly.
+function schemaLocationText(at: SchemaLocation): string {
+  return JSON.stringify({ resource: at?.resource, pointer: at?.pointer });
 }
 type OperationRaw = wasm.WasmOperation | wasm.WasmConformantOperation;
 /** Reads shared by plain and conformant operation views. */
@@ -1742,6 +1752,11 @@ export class SchemaResources extends Managed {
   /** Return a NEW independently disposable owner of this immutable set. */
   retain(): SchemaResources {
     return SchemaResources.fromRaw(handle<wasm.WasmResources>(this).retain());
+  }
+  /** Locate a schema location in one of these resources: the node its pointer names in the resource with its URI, with line and column in that resource's text. null for a document location, a URI this set does not hold (such as a packaged meta-schema's), or a pointer that names no node. Positions are computed on this call. A malformed location throws SdkError with code invalid-schema-location. */
+  locate(at: SchemaLocation): SourceLocation | null {
+    const raw = handle<wasm.WasmResources>(this);
+    return decode(sdkCall(() => raw.locate(schemaLocationText(at))));
   }
 }
 /** A conformant operation's input or output value contract, not yet prepared. Obtain it from ConformantOperationView.input() or output(); it retains its proved revision and survives operation and document disposal. Each prepare() compiles anew; retain the PreparedContract for repeated validation. */

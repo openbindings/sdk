@@ -63,10 +63,24 @@ schema location with `with_location(location)`, or set its public fields.
 Preparation success does not promise a verdict on every
 value, and missing diagnostic detail does not weaken an established failure.
 
+Construct a problem with `ValueProblem::new(instance, schema, code, message)`
+and set its public `details` to add schema facts. Locate `instance` with
+`JsonRef::location()` on the failing node of the value the call received: its
+exact pointer from that value's text, with byte offset, line and column. Name
+`schema` by resource and exact pointer: `SchemaRequest::location(node)` builds
+one for a node of the request's document or supplied resources, and
+`entry_location()` names the selected schema; do this at preparation, since the
+prepared object must not keep the request. `SchemaLocation::new(resource,
+pointer)` takes a `Pointer` parsed from RFC 6901 text. When a keyword cannot be
+mapped to an original source, name the selected schema rather than guessing.
+Callers find a schema location's line and column with `Conformant::locate` or
+`ResourceSet::locate`.
+
 Run the [boolean evaluator example](../crates/openbindings-schema-evaluator-test-support/examples/boolean_evaluator.rs)
 for a minimal implementation. It supports boolean schemas and explicitly refuses
 other forms. Qualify a broader implementation with
 [`openbindings-schema-evaluator-test-support`](../crates/openbindings-schema-evaluator-test-support/README.md).
 The suite checks and explains every value. It distinguishes permitted refusals
 from wrong verdicts, checks that both calls agree and that a cheap check reports
-no problems, and checks that reported locations exist in the original sources.
+no problems, and checks that reported schema locations exist in the original
+sources and that each instance location is its node's own.

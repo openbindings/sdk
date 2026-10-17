@@ -58,7 +58,7 @@ pub struct Finding {
     pub status: Evidence,
     /// Stable machine-readable diagnostic identifier; prefer it over message matching.
     pub code: &'static str,
-    /// Original-source coordinates when available. Pointers are data and must be escaped for display; byte columns are not UTF-16 editor columns.
+    /// Original-source coordinates, absent only for a finding about no particular position, such as an input limit. Pointers are exact, are data and must be escaped for display; byte columns are not UTF-16 editor columns.
     pub location: Option<SourceLocation>,
     /// Human-facing explanation; display as text and use `rule`, `code` and `status` for logic.
     pub message: String,
@@ -117,7 +117,7 @@ impl std::fmt::Debug for Finding {
 }
 
 #[derive(Clone, Serialize)]
-/// Assessment of all normative document rules at the pinned specification revision. At most 4096 findings and 8 MiB of aggregate generated-pointer UTF-8 bytes are retained. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source.
+/// Assessment of all normative document rules at the pinned specification revision. At most 4096 findings and 8 MiB of aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate) are retained. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source.
 pub struct ValidationReport {
     /// Applied specification release, independent of package version.
     pub release: &'static str,

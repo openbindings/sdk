@@ -20,7 +20,14 @@ fn decoded_text_and_exact_tokens_survive_in_retained_conformant_views() {
     assert_ne!(name, "�");
     let exact_name = document.value().get("name").unwrap();
     assert_eq!(exact_name.text(), r#""\ud800\udc00""#);
-    assert_eq!(exact_name.location().pointer.as_deref(), Some("/name"));
+    assert_eq!(
+        exact_name
+            .location()
+            .pointer
+            .as_ref()
+            .and_then(openbindings::Pointer::as_str),
+        Some("/name")
+    );
     assert_eq!(
         document
             .schemas()
@@ -116,7 +123,8 @@ fn presence_and_field_local_editor_errors_remain_distinct() {
             .source_location()
             .unwrap()
             .pointer
-            .as_deref(),
+            .as_ref()
+            .and_then(openbindings::Pointer::as_str),
         Some("/name")
     );
     let op = parsed.operations().unwrap().remove(0);
@@ -224,7 +232,10 @@ fn every_conformant_text_read_decodes_escapes_and_preserves_original_locations()
             let exact = value.get("description").unwrap();
             assert_eq!(exact.text(), token);
             let at = exact.location();
-            assert_eq!(at.pointer.as_deref(), Some(pointer));
+            assert_eq!(
+                at.pointer.as_ref().and_then(openbindings::Pointer::as_str),
+                Some(pointer)
+            );
             assert_eq!(&json[at.byte_offset..at.byte_offset + token.len()], token);
             assert_eq!(at.line, 1);
             assert_eq!(at.byte_column, at.byte_offset + 1);

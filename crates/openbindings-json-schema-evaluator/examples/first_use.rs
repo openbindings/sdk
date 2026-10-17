@@ -12,11 +12,15 @@ struct Input {
 fn print_findings(report: &ValidationReport) {
     println!("document conformance: {:?}", report.conclusion);
     for finding in &report.findings {
-        // Debug quotes/escapes caller-controlled pointers, including control characters.
+        // Pointers are caller-controlled text: Debug of the string quotes and
+        // escapes it, including control characters.
         let at = match &finding.location {
             Some(location) => format!(
                 "pointer {:?}, line {}, UTF-8 byte column {}, byte offset {}",
-                location.pointer, location.line, location.byte_column, location.byte_offset
+                location.pointer.as_ref().map(ToString::to_string),
+                location.line,
+                location.byte_column,
+                location.byte_offset
             ),
             None => "location unavailable".into(),
         };
@@ -62,7 +66,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("{:?}: {:?}", operation.key(), operation.description());
     let contract = operation.input().ok_or("operation has no input contract")?;
     // Conformant reads preserve presence; schema preparation remains separate.
-    println!("input schema at {:?}", contract.schema().location().pointer);
+    println!("input schema at {}", contract.schema().location());
     // Default budgets and no supplied resources.
     let input = contract.prepare(&DefaultEvaluator::new())?;
     // Ordinary values have checked Serde admission. Exact text preserves its tokens.
@@ -85,9 +89,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             } => {
                 println!("{message}");
                 for problem in problems {
+                    // The value locates itself; the document locates its schema.
+                    let schema = proof.locate(&problem.schema).ok_or("schema location")?;
                     println!(
-                        "mismatch at {:?} (schema {:?}): {}",
-                        problem.instance_pointer, problem.schema_location, problem.message
+                        "mismatch at {} (schema at {schema}): {}",
+                        problem.instance, problem.message
                     );
                 }
                 println!("selected diagnostics complete: {problems_complete}");

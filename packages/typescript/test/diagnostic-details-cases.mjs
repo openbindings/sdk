@@ -69,8 +69,7 @@ export function diagnosticDetailsCases(sdk) {
           "original numeric token, never handle",
         );
         check(
-          problem.schemaLocation.pointer ===
-            "/operations/op/input/exclusiveMinimum",
+          problem.schema.pointer === "/operations/op/input/exclusiveMinimum",
           "original numeric location",
         );
         check(
@@ -99,7 +98,7 @@ export function diagnosticDetailsCases(sdk) {
     if (kind === "required")
       check(
         detail.member === "SECRET/member~key" &&
-          detailed.problems[0].instancePointer === "",
+          detailed.problems[0].instance.pointer === "",
         "required parent location",
       );
     if (kind === "numeric-bound")
@@ -166,8 +165,8 @@ export function diagnosticDetailsCases(sdk) {
       "replacement preserves original resource",
     );
     check(
-      oldResult.problems[0].instancePointer === "/a~1~0" &&
-        oldResult.problems[0].schemaLocation.pointer ===
+      oldResult.problems[0].instance.pointer === "/a~1~0" &&
+        oldResult.problems[0].schema.pointer ===
           "/allOf/0/properties/a~1~0/minimum",
       "escaped nested coordinates",
     );

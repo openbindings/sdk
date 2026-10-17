@@ -6,6 +6,8 @@ import {
   ConformantDocument,
   initialize,
   type JsonOutput,
+  type SchemaLocation,
+  type SourceLocation,
   type ValueOutcome,
   type ValueProblemDetails,
 } from "../dist/index.js";
@@ -62,7 +64,14 @@ async function caller(
     });
     const result: ValueOutcome = input.explain(value);
     if (result.outcome === "fails") {
-      result.problems[0]!.instancePointer satisfies string;
+      result.problems[0]!.instance satisfies SourceLocation;
+      result.problems[0]!.schema satisfies SchemaLocation;
+      validated.locate(
+        result.problems[0]!.schema,
+      ) satisfies SourceLocation | null;
+      resources.locate(
+        result.problems[0]!.schema,
+      ) satisfies SourceLocation | null;
       const detail: ValueProblemDetails | undefined =
         result.problems[0]!.details;
       if (detail?.kind === "required") detail.member satisfies string;

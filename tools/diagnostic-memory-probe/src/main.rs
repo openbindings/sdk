@@ -200,7 +200,7 @@ fn main() {
             let locations: Vec<_> = locations.iter().map(|at| {
                 if case["group"] == "corpus" { serde_json::to_value(at).unwrap() }
                 else { json!({"byte_offset":at.byte_offset,"line":at.line,"byte_column":at.byte_column,
-                    "pointer_bytes":at.pointer.as_ref().map_or(0, String::len)}) }
+                    "pointer_bytes":at.pointer.as_ref().and_then(|p| p.as_str()).map_or(0, str::len)}) }
             }).collect();
             println!(
                 "{}",

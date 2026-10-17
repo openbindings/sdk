@@ -36,7 +36,7 @@ fn duplicate_cap_preserves_order_coordinates_and_truthful_truncation() {
                         .map_or(offset + 1, |newline| offset - newline)
                 );
                 assert_eq!(
-                    at.pointer.as_deref(),
+                    at.pointer.as_ref().and_then(openbindings::Pointer::as_str),
                     Some(if nested { "/x-duplicates/k" } else { "/k" })
                 );
             }
@@ -69,7 +69,7 @@ fn nonfixed_findings_keep_coordinates_and_evidence_after_the_cap() {
         assert_eq!(finding.code, "duplicate-operation-name");
         let at = finding.location.as_ref().unwrap();
         assert_eq!(
-            at.pointer.as_deref(),
+            at.pointer.as_ref().and_then(openbindings::Pointer::as_str),
             Some(format!("/operations/run/aliases/{index}").as_str())
         );
         assert_eq!(
@@ -94,21 +94,33 @@ fn aggregate_pointer_budget_applies_to_duplicates_and_keeps_rule_evidence() {
     let bytes: usize = report
         .findings
         .iter()
-        .map(|f| f.location.as_ref().unwrap().pointer.as_ref().unwrap().len())
+        .map(|f| {
+            f.location
+                .as_ref()
+                .unwrap()
+                .pointer
+                .as_ref()
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .len()
+        })
         .sum();
     assert!(bytes <= 8 * 1024 * 1024);
     assert!(bytes > 8 * 1024 * 1024 - name.len() - 3);
-    assert!(
-        report
-            .findings
-            .iter()
-            .all(|f| f.location.as_ref().unwrap().pointer.as_deref()
-                == Some(format!("/{name}/k").as_str()))
-    );
+    assert!(report.findings.iter().all(|f| {
+        f.location
+            .as_ref()
+            .unwrap()
+            .pointer
+            .as_ref()
+            .and_then(openbindings::Pointer::as_str)
+            == Some(format!("/{name}/k").as_str())
+    }));
 }
 
 #[test]
-fn duplicate_under_unpaired_ancestor_keeps_original_byte_coordinates() {
+fn duplicate_under_unpaired_ancestor_keeps_its_exact_pointer_and_byte_coordinates() {
     let source = r#"{"openbindings":"0.2.0","operations":{},"x":{"\ud800":{"k":0,"k":1}}}"#;
     let validation = validate_document(source).unwrap();
     let report = validation.report();
@@ -120,7 +132,16 @@ fn duplicate_under_unpaired_ancestor_keeps_original_byte_coordinates() {
         .find(|f| f.code == "duplicate-member")
         .unwrap();
     let at = duplicate.location.as_ref().unwrap();
-    assert_eq!(at.pointer, None);
+    // The ancestor's unpaired unit is kept: no text spells the pointer.
+    let pointer = at.pointer.as_ref().unwrap();
+    assert_eq!(pointer.as_str(), None);
+    assert_eq!(
+        pointer.utf16_units().collect::<Vec<_>>(),
+        "/x/\u{0}/k"
+            .encode_utf16()
+            .map(|unit| if unit == 0 { 0xd800 } else { unit })
+            .collect::<Vec<_>>()
+    );
     assert_eq!(at.byte_offset, source.rfind("\"k\"").unwrap());
 }
 
@@ -138,7 +159,7 @@ fn deep_duplicate_pointer_retains_its_original_coordinates() {
     assert!(!report.findings_truncated);
     let at = report.findings[0].location.as_ref().unwrap();
     assert_eq!(
-        at.pointer.as_deref(),
+        at.pointer.as_ref().and_then(openbindings::Pointer::as_str),
         Some(("/x".repeat(depth) + "/k").as_str())
     );
     assert_eq!(at.byte_offset, source.rfind("\"k\"").unwrap());
@@ -157,7 +178,15 @@ fn identical_invalid_schemas_at_distinct_locations_are_both_reported() {
         .collect();
     let pointers: std::collections::BTreeSet<_> = schema
         .iter()
-        .map(|f| f.location.as_ref().unwrap().pointer.as_deref().unwrap())
+        .map(|f| {
+            f.location
+                .as_ref()
+                .unwrap()
+                .pointer
+                .as_ref()
+                .and_then(openbindings::Pointer::as_str)
+                .unwrap()
+        })
         .collect();
     assert!(pointers.contains("/operations/a/input"), "{schema:?}");
     assert!(pointers.contains("/operations/b/input"), "{schema:?}");

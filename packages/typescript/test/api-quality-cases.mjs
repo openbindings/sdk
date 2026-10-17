@@ -99,8 +99,12 @@ export async function apiQualityCases(sdk, http) {
             finding.rule === "OBI-01" && finding.code === "unpaired-surrogate",
             "surrogate rule and code",
           );
+          // A member name's unpaired unit is kept exactly, as JavaScript can.
           check(
-            finding.location.pointer === (member ? null : "/description"),
+            finding.location.pointer ===
+              (member
+                ? "/operations/op/input/properties/\udc00"
+                : "/description"),
             "surrogate pointer",
           );
           check(

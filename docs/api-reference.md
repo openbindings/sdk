@@ -67,6 +67,7 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 | `ConformantOperationView` | `input()` and `output()` return a disposable `ValueContract` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. |
 | `ValueContract` | `schema()` acquires the exact schema; `prepare(options)` takes `resources`, `limits` and `signal` and returns `{ status: "ready", contract }` or `{ status: "no-verdict", detail }`. |
 | `PreparedContract` | Disposable prepared contract with `validate(value, options)`, the cheap check, `explain(value, options)`, which adds problems to a failure, and `retain()`; independent of its document, operation, resources and contract owners. |
+| `ConformantDocument.locate(at)`, `SchemaResources.locate(at)` | The `SourceLocation` of the node a `SchemaLocation` names, in the document or in the supplied resource with its URI, or `null`. A malformed location throws `SdkError` with code `invalid-schema-location`. |
 | `asDocument()`, `intoDocument()` | Acquire an independent editable owner, or consume the proof. Consumption revokes all JavaScript aliases of that proof; retained owners survive. |
 | `toBytes()`, `dispose()`, `Symbol.dispose`, `disposed` | Detached exact current bytes and the existing deterministic lifecycle. |
 
@@ -96,6 +97,7 @@ known bytes and stops before exceeding the budget. A refusal discards that buffe
 | `PreparedContract::validate_json(input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError>` | Admits through `JsonValue::parse` with default limits, then validates. `Err` is admission failure only; all four value outcomes are `Ok`. Duplicate members yield no-verdict and numbers retain exact semantics. |
 | `PreparedContract::validate(&self, &JsonValue)`, `validate_with_control(.., &dyn WorkControl) -> ValueOutcome` | The cheap check: a failure carries no problems and `problems_complete` is false. |
 | `PreparedContract::explain(&self, &JsonValue)`, `explain_with_control(.., &dyn WorkControl) -> ValueOutcome` | The same verdict, with problems that explain a failure. Library-bounded; see [value diagnostics](#value-diagnostics). |
+| `Conformant<Document>::locate(&self, &SchemaLocation)`, `ResourceSet::locate(&self, &SchemaLocation) -> Option<SourceLocation>` | Line, column and byte offset of the node a schema location names, in the document or in the supplied resource with its URI; `None` for another source or a pointer naming no node. Computed on the call. |
 
 `PreparedContract` is `Clone + Send + Sync + 'static` and owns what it needs after
 the document, resources and evaluator are dropped. Core has no default evaluator
@@ -182,10 +184,11 @@ futures and `Rc` providers are also supported.
   synchronous Wasm occupies that thread. HTTP discovery can interrupt asynchronous
   acquisition and separately enforces a whole-attempt deadline. It retains observed
   response metadata on later body failure and complete bounded bytes on a later stop.
-- Findings retain original byte coordinates. JSON Pointer escaping and safe text
-  presentation are separate operations. Byte columns require conversion for UTF-16
-  editors. A report's independent rule evidence survives finding-count and aggregate
-  pointer-byte caps; diagnostic truncation must remain visible.
+- Findings and value problems retain original byte coordinates with exact
+  pointers. JSON Pointer escaping and safe text presentation are separate
+  operations. Byte columns require conversion for UTF-16 editors. A report's
+  independent rule evidence survives finding-count and aggregate pointer-byte caps;
+  diagnostic truncation must remain visible.
 
 Value diagnostics are chosen per call: `validate` is the cheap check and `explain`
 asks for problems. See the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md).
@@ -193,7 +196,10 @@ Custom Rust evaluators receive the call's `Detail`. An evaluator constructing
 `ValueOutcome::Fails` supplies a value-free `message` alongside `problems` and
 `problems_complete`. Empty incomplete diagnostics are valid established failures.
 Custom evaluators receive a `SchemaRequest` with the original document, supplied
-resources, entry and entry location. `evaluation_program(control)` provides the
+resources, entry and entry location; `location(node)` names a node of the document
+or a supplied resource. They build problems with `ValueProblem::new(instance,
+schema, code, message)`, `JsonRef::location()` and `SchemaLocation::new(resource,
+pointer)`. `evaluation_program(control)` provides the
 strict §7 projection; read-only `EvaluationProgram::entry_uri()` and `resources()`
 keep its contents aligned with provenance, and `original_location` recovers
 original coordinates. See [evaluator integration](schema-evaluators.md) for the custom evaluator contract.
@@ -284,9 +290,10 @@ established by any applicable rule makes the document non-conformant.
 
 These are stable `Finding.code` values for document validation. Messages are human
 explanations, not machine identifiers. Multiple rules can share a code. Parse
-locations use original byte coordinates; pointers are absent where a member name
-cannot be represented in Unicode scalar text. Input admission refusals are not
-violations. `InputError` outside whole-document validation retains its existing
+locations use original byte coordinates. Pointers are exact, including a member
+name with an unpaired UTF-16 unit (Rust `Pointer::as_str` is then `None`), and are
+absent only for a syntax error, which precedes any value. Input-limit findings have
+no location. Input admission refusals are not violations. `InputError` outside whole-document validation retains its existing
 code-based Display representation.
 
 | Code | Rule | Meaning |
@@ -415,9 +422,31 @@ does not establish diagnostic completeness, so the flag remains false.
 Work/regex limits and cancellation can omit detail after a verdict; missing
 detail never weakens failure and never counts as rule evidence.
 
+Each problem locates its failure on both sides. `instance` is a `SourceLocation`
+of the failing node in the validated value's text: its exact pointer from that
+text's root (the value itself unless it is a subtree of a larger text), zero-based
+byte offset and one-based line and byte column, computed when the problem is
+reported. An ordinary value is located in its exact JSON serialization. `schema` is
+a `SchemaLocation`: `resource` (`None` for the document) and an exact `pointer` to
+the failing keyword. When a keyword cannot be mapped to an original source, it
+names the selected schema rather than a guessed keyword. Line and column for the
+schema side come from `Conformant::locate` or `ResourceSet::locate` (TypeScript
+`ConformantDocument.locate`, `SchemaResources.locate`), from text the caller
+already holds. `NoVerdict` and `UndefinedResult` carry an optional `SchemaLocation`
+of the same shape.
+
+`Pointer` holds RFC 6901 segments exactly. `as_str()` returns `None` for a
+pointer through a member name with an unpaired UTF-16 unit, `utf16_units()` reads
+it exactly and `FromStr` parses escaped text. `Display` writes such a unit as
+`\uXXXX`, and serialization writes it as a JSON escape, which JavaScript keeps as
+the same string; like an exact `JsonValue` holding one, such a record serializes
+to JSON text but not into a `serde_json::Value`. `SourceLocation`'s `Display`
+writes `pointer (line L, column C, byte B)`, or `line L, column C, byte B` without
+a pointer or at a root.
+
 A prepared contract keeps what its own explanation reads (a compact copy of the
-keywords it compiled) and never its document, supplied resources or schema space.
-Custom evaluators receive the call's `Detail`: with `Detail::Outcome` a failure
+keywords it compiled) and never its document, supplied resources, schema space or
+any position. Custom evaluators receive the call's `Detail`: with `Detail::Outcome` a failure
 carries no problems and `problems_complete` is false; with `Detail::Explain` it
 carries at least one problem unless detail work was cut short or found no problem
 it can report in the original sources, in which case `problems_complete` is false.

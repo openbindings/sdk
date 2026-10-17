@@ -17,7 +17,7 @@ fn fixed_message_preserves_rule_location_and_rejected_value_privacy() {
     assert_eq!(finding.message, MESSAGE);
     let at = finding.location.as_ref().unwrap();
     assert_eq!(
-        at.pointer.as_deref(),
+        at.pointer.as_ref().and_then(openbindings::Pointer::as_str),
         Some("/operations/lookup/description")
     );
     assert_eq!(at.byte_offset, text.find("{\"private\"").unwrap());
@@ -41,7 +41,10 @@ fn required_failure_points_at_the_original_containing_object() {
     assert_eq!(finding.code, "schema-mismatch");
     assert_eq!(finding.message, MESSAGE);
     let at = finding.location.as_ref().unwrap();
-    assert_eq!(at.pointer.as_deref(), Some(""));
+    assert_eq!(
+        at.pointer.as_ref().and_then(openbindings::Pointer::as_str),
+        Some("")
+    );
     assert_eq!((at.byte_offset, at.line, at.byte_column), (3, 2, 2));
 
     let nested = validate_document(
@@ -56,7 +59,13 @@ fn required_failure_points_at_the_original_containing_object() {
         .unwrap();
     assert_eq!(finding.message, MESSAGE);
     assert_eq!(
-        finding.location.as_ref().unwrap().pointer.as_deref(),
+        finding
+            .location
+            .as_ref()
+            .unwrap()
+            .pointer
+            .as_ref()
+            .and_then(openbindings::Pointer::as_str),
         Some("/sources/s")
     );
     assert!(!finding.message.contains("private-payload"));
@@ -72,7 +81,13 @@ fn document_and_meta_failures_use_fixed_messages() {
     assert_eq!(normative.code, "schema-mismatch");
     assert_eq!(normative.message, MESSAGE);
     assert_eq!(
-        normative.location.as_ref().unwrap().pointer.as_deref(),
+        normative
+            .location
+            .as_ref()
+            .unwrap()
+            .pointer
+            .as_ref()
+            .and_then(openbindings::Pointer::as_str),
         Some("/operations/lookup/input")
     );
     let meta = findings.iter().find(|f| f.rule == "OBI-10").unwrap();
@@ -108,7 +123,10 @@ fn unexpected_fields_locate_original_key_tokens_in_source_order() {
         let offset = text.find(token).unwrap();
         let prefix = &text[..offset];
         assert_eq!(at.byte_offset, offset);
-        assert_eq!(at.pointer.as_deref(), Some(pointer));
+        assert_eq!(
+            at.pointer.as_ref().and_then(openbindings::Pointer::as_str),
+            Some(pointer)
+        );
         assert_eq!(at.line, prefix.bytes().filter(|&b| b == b'\n').count() + 1);
         assert_eq!(
             at.byte_column,
@@ -128,7 +146,15 @@ fn all_closed_objects_are_diagnosed_without_entering_opaque_or_schema_values() {
         .findings
         .iter()
         .filter(|f| f.rule == "OBI-02")
-        .map(|f| f.location.as_ref().unwrap().pointer.clone().unwrap())
+        .map(|f| {
+            f.location
+                .as_ref()
+                .unwrap()
+                .pointer
+                .as_ref()
+                .unwrap()
+                .to_string()
+        })
         .collect();
     paths.sort_unstable();
     assert_eq!(
@@ -225,7 +251,17 @@ fn findings_respect_aggregate_source_pointer_allowance() {
     let bytes: usize = report
         .findings
         .iter()
-        .map(|f| f.location.as_ref().unwrap().pointer.as_ref().unwrap().len())
+        .map(|f| {
+            f.location
+                .as_ref()
+                .unwrap()
+                .pointer
+                .as_ref()
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .len()
+        })
         .sum();
     assert!(bytes <= 8 * 1024 * 1024);
     assert_eq!(report.findings[0].message, UNEXPECTED);
@@ -235,7 +271,8 @@ fn findings_respect_aggregate_source_pointer_allowance() {
             .as_ref()
             .unwrap()
             .pointer
-            .as_deref(),
+            .as_ref()
+            .and_then(openbindings::Pointer::as_str),
         Some(format!("/operations/{name}/bad0").as_str())
     );
 }
@@ -298,7 +335,13 @@ fn fixed_messages_are_value_free_and_property_names_locate_original_tokens() {
                 .findings
                 .iter()
                 .any(|f| f.code == "schema-mismatch"
-                    && f.location.as_ref().unwrap().pointer.as_deref() == Some(pointer)
+                    && f.location
+                        .as_ref()
+                        .unwrap()
+                        .pointer
+                        .as_ref()
+                        .and_then(openbindings::Pointer::as_str)
+                        == Some(pointer)
                     && f.message == MESSAGE),
             "{pointer}"
         );
@@ -355,7 +398,13 @@ fn independent_container_findings_keep_children_and_truthful_omissions() {
             .filter(|f| f.rule == "OBI-02")
             .map(|f| {
                 assert_eq!(f.message, MESSAGE);
-                f.location.as_ref().unwrap().pointer.as_deref().unwrap()
+                f.location
+                    .as_ref()
+                    .unwrap()
+                    .pointer
+                    .as_ref()
+                    .and_then(openbindings::Pointer::as_str)
+                    .unwrap()
             })
             .collect();
         assert_eq!(actual, pointers);

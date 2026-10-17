@@ -88,7 +88,9 @@ fn compilation_refusals_locate_authored_keywords_in_document_and_supplied_resour
                 detail.location,
                 Some(SchemaLocation {
                     resource,
-                    pointer: format!("{prefix}/properties/a~1b~0c/{keyword}"),
+                    pointer: format!("{prefix}/properties/a~1b~0c/{keyword}")
+                        .parse()
+                        .unwrap(),
                 })
             );
             assert_eq!(

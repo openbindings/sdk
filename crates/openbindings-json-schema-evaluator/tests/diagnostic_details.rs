@@ -112,7 +112,7 @@ fn explained_locations_exist_in_original_document_and_supplied_resources() {
             let coarse = contract.validate(&value);
             assert!(failure(&coarse).0.is_empty());
             let upstream = contract.explain(&value);
-            let location = failure(&upstream).0[0].schema_location.as_ref().unwrap();
+            let location = &failure(&upstream).0[0].schema;
             assert_eq!(location.resource.as_deref(), external.then_some(uri));
             assert_eq!(
                 location.pointer,
@@ -124,7 +124,7 @@ fn explained_locations_exist_in_original_document_and_supplied_resources() {
                 "{schema}"
             );
             let source = JsonValue::parse(if external { schema } else { &text }).unwrap();
-            assert!(source.at(&location.pointer).is_some());
+            assert!(source.at(location.pointer.as_str().unwrap()).is_some());
         }
     }
 }
@@ -159,7 +159,7 @@ fn exact_facts_private_defaults_and_recovery() {
         match problems[0].details.as_ref().unwrap() {
             ValueProblemDetails::Required { member } => {
                 assert_eq!(member, "SECRET/member~key");
-                assert_eq!(problems[0].instance_pointer, "");
+                assert_eq!(problems[0].instance.pointer.as_ref().unwrap(), "");
             }
             ValueProblemDetails::NumericBound { bound } => assert_eq!(bound, "9007199254740993"),
             ValueProblemDetails::Enum { choices } => assert_eq!(
@@ -191,18 +191,10 @@ fn external_old_snapshot_nested_coordinates_and_escaped_names() {
     let value = JsonValue::parse(r#"{"a/~":6}"#).unwrap();
     let result = old.explain(&value);
     let problem = &failure(&result).0[0];
-    assert_eq!(problem.instance_pointer, "/a~1~0");
+    assert_eq!(problem.instance.pointer.as_ref().unwrap(), "/a~1~0");
+    assert_eq!(problem.schema.pointer, "/allOf/0/properties/a~1~0/minimum");
     assert_eq!(
-        problem.schema_location.as_ref().unwrap().pointer,
-        "/allOf/0/properties/a~1~0/minimum"
-    );
-    assert_eq!(
-        problem
-            .schema_location
-            .as_ref()
-            .unwrap()
-            .resource
-            .as_deref(),
+        problem.schema.resource.as_deref(),
         Some("https://example.test/schema")
     );
     assert!(

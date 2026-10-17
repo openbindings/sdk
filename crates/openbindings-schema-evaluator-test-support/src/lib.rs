@@ -431,31 +431,33 @@ pub fn run(evaluator: &dyn SchemaEvaluator, options: &Options) -> Report {
             let locations: Vec<_> = [&outcome, &explanation]
                 .into_iter()
                 .flat_map(|outcome| match outcome {
-                    ValueOutcome::Fails { problems, .. } => problems
-                        .iter()
-                        .filter_map(|p| p.schema_location.as_ref())
-                        .collect(),
+                    ValueOutcome::Fails { problems, .. } => {
+                        problems.iter().map(|p| &p.schema).collect()
+                    }
                     ValueOutcome::Undefined { detail } => detail.location.iter().collect(),
                     _ => Vec::new(),
                 })
                 .collect();
             for location in locations {
-                let source = match &location.resource {
-                    None => Some(document.value().clone()),
-                    Some(uri) => group
-                        .resources
-                        .iter()
-                        .map(|id| &suite.resources[id])
-                        .find(|r| &r.uri == uri)
-                        .and_then(|r| JsonValue::parse(&r.document).ok())
-                        .or_else(|| {
-                            suite
+                // The document and supplied resources locate their own nodes;
+                // a packaged meta-schema is read from its text.
+                let exists = match &location.resource {
+                    None => validated.locate(location).is_some(),
+                    Some(uri) => {
+                        resources.locate(location).is_some()
+                            || suite
                                 .builtin_resources
                                 .get(uri)
                                 .and_then(|text| JsonValue::parse(text).ok())
-                        }),
+                                .is_some_and(|source| {
+                                    location
+                                        .pointer
+                                        .as_str()
+                                        .is_some_and(|pointer| source.at(pointer).is_some())
+                                })
+                    }
                 };
-                if source.is_none_or(|s| s.at(&location.pointer).is_none()) {
+                if !exists {
                     failures.push(
                         "reported schema location does not exist in the original source".into(),
                     );
@@ -559,11 +561,12 @@ pub fn judge_interruptions(
             _ => failures.push("an interrupted explanation reached another verdict".to_owned()),
         }
     }
-    // Outcomes compare by their serialized form, which carries every field.
+    // Outcomes compare by their serialized text, which carries every field,
+    // including pointers through names with unpaired units.
     let same = |a: &ValueOutcome, b: &ValueOutcome| {
-        serde_json::to_value(a)
+        serde_json::to_string(a)
             .ok()
-            .is_some_and(|a| serde_json::to_value(b).ok() == Some(a))
+            .is_some_and(|a| serde_json::to_string(b).ok() == Some(a))
     };
     if interrupted
         .last()
@@ -575,6 +578,8 @@ pub fn judge_interruptions(
     failures
 }
 /// Judge one observation independently. Useful for host harnesses and controls.
+/// Each problem's instance location must be the location of the node its
+/// pointer names in `value`, parsed on its own, as [`JsonRef::location`] gives.
 pub fn judge(
     case: &Case,
     value: &JsonValue,
@@ -630,13 +635,15 @@ pub fn judge(
         }
         let paths: BTreeSet<_> = problems
             .iter()
-            .map(|p| p.instance_pointer.clone())
+            .filter_map(|p| p.instance.pointer.as_ref().map(ToString::to_string))
             .collect();
-        if problems
-            .iter()
-            .any(|p| value.at(&p.instance_pointer).is_none())
-        {
-            failures.push("problem location does not exist in the instance".into());
+        for problem in problems {
+            match instance_node(value, &problem.instance) {
+                None => failures.push("problem location does not exist in the instance".into()),
+                Some(node) if node.location() != problem.instance => failures
+                    .push("problem location's coordinates differ from its instance node's".into()),
+                Some(_) => {}
+            }
         }
         if *problems_complete
             && let Some(choices) = &case.acceptable_paths
@@ -648,6 +655,26 @@ pub fn judge(
         }
     }
     failures
+}
+
+// The node an instance location's pointer names. The kit's values are parsed
+// on their own, so pointers start at the value. A pointer through a name with
+// an unpaired unit has no text to resolve; it names the node whose own location
+// has that pointer.
+fn instance_node<'a>(value: &'a JsonValue, at: &SourceLocation) -> Option<JsonRef<'a>> {
+    let pointer = at.pointer.as_ref()?;
+    if let Some(text) = pointer.as_str() {
+        return value.at(text);
+    }
+    let mut pending = vec![value.view()];
+    while let Some(node) = pending.pop() {
+        if node.location().pointer.as_ref() == Some(pointer) {
+            return Some(node);
+        }
+        pending.extend(node.elements().into_iter().flatten());
+        pending.extend(node.members().into_iter().flatten().map(|m| m.value));
+    }
+    None
 }
 
 #[cfg(test)]

@@ -527,6 +527,64 @@ pub fn view(value: &crate::JsonValue) -> View<'_> {
 pub fn pointer(value: &crate::JsonValue) -> Option<String> {
     value.owner.pointer(value.id)
 }
+/// Build only the exact JSON Pointer from the source's root, without line and
+/// column, including names that hold unpaired units.
+pub fn exact_pointer(value: crate::JsonRef<'_>) -> crate::Pointer {
+    value.owner.exact_pointer(value.id)
+}
+/// Wrap escaped RFC 6901 text built from original sources, without checking it
+/// again.
+pub fn escaped_pointer(text: String) -> crate::Pointer {
+    crate::Pointer::escaped(text)
+}
+/// Read a pointer from an exact JSON string, keeping unpaired units. `None` for
+/// a non-string or text that is not an RFC 6901 pointer.
+pub fn string_pointer(value: crate::JsonRef<'_>) -> Option<crate::Pointer> {
+    crate::Pointer::parse_units(&value.utf16_units()?)
+}
+/// Whether two views read the same source.
+pub fn same_source(value: crate::JsonRef<'_>, source: &crate::JsonValue) -> bool {
+    std::sync::Arc::ptr_eq(value.owner, &source.owner)
+}
+/// Resolve an exact pointer from `value`, matching names by their UTF-16 units,
+/// so a segment holding an unpaired unit names exactly its member. Repeated
+/// names select the first occurrence, as [`crate::JsonValue::at`] does.
+pub fn resolve<'a>(
+    value: &'a crate::JsonValue,
+    pointer: &crate::Pointer,
+) -> Option<crate::JsonRef<'a>> {
+    if let Some(text) = pointer.as_str() {
+        return value.at(text);
+    }
+    let mut current = value.view();
+    for segment in pointer.unit_segments() {
+        current = match &value.owner.nodes[current.id].kind {
+            Kind::Object(_) => {
+                current
+                    .members()?
+                    .find(|member| {
+                        member
+                            .name
+                            .as_string()
+                            .is_some_and(|name| name.utf16_units().eq(segment.iter().copied()))
+                    })?
+                    .value
+            }
+            Kind::Array(_) => {
+                let index = String::from_utf16(&segment).ok()?;
+                if index.is_empty()
+                    || (index.len() > 1 && index.starts_with('0'))
+                    || !index.bytes().all(|b| b.is_ascii_digit())
+                {
+                    return None;
+                }
+                current.element(index.parse().ok()?)?
+            }
+            _ => return None,
+        };
+    }
+    Some(current)
+}
 /// Measure separately owned decoded UTF-8 strings in a borrowed exact subtree,
 /// including member names. Raw source bytes are excluded. Unescaped strings borrow
 /// their source; escaped scalar strings own their complete decoded value. This
@@ -584,26 +642,45 @@ pub fn pointer_size(value: crate::JsonRef<'_>, limit: usize) -> Option<usize> {
     Some(size)
 }
 
-/// Bound the bytes of a retained location's pointer before constructing it.
-/// An unavailable pointer (a non-scalar ancestor name) costs zero bytes; its
-/// original byte coordinates are still useful. None means the budget is exceeded.
+/// Bound the bytes a retained location's exact pointer keeps before
+/// constructing it: its UTF-8 bytes, or two bytes per UTF-16 unit when an
+/// ancestor's name holds an unpaired unit. None means the budget is exceeded.
 pub fn location_pointer_size(value: crate::JsonRef<'_>, limit: usize) -> Option<usize> {
     if let Some(size) = pointer_size(value, limit) {
         return Some(size);
     }
-    // Distinguish an unavailable pointer from an oversized one without allocating
-    // either. This second walk is needed only after the ordinary bounded measure
-    // failed; normal locations take a single ancestor walk.
+    // Distinguish a pointer through an unpaired name, held as units, from an
+    // oversized one without allocating either. This second walk is needed only
+    // after the ordinary bounded measure failed; normal locations take one walk.
+    let escaped = |unit: u16| unit == u16::from(b'~') || unit == u16::from(b'/');
+    let (mut units, mut unpaired) = (0usize, false);
     let mut current = value.id;
     while let Some((parent, edge)) = value.owner.nodes[current].parent {
-        if let crate::raw::Edge::Key(key) = edge
-            && value.owner.string(key).is_none()
-        {
-            return Some(0);
-        }
+        let segment = match edge {
+            crate::raw::Edge::Index(index) => index
+                .checked_ilog10()
+                .map_or(1, |digits| digits as usize + 1),
+            crate::raw::Edge::Key(key) => match &value.owner.nodes[key].kind {
+                Kind::String {
+                    unpaired: Some(name),
+                    ..
+                } => {
+                    unpaired = true;
+                    name.len() + name.iter().filter(|&&unit| escaped(unit)).count()
+                }
+                _ => value
+                    .owner
+                    .string(key)?
+                    .encode_utf16()
+                    .map(|unit| 1 + usize::from(escaped(unit)))
+                    .sum(),
+            },
+        };
+        units = units.saturating_add(1).saturating_add(segment);
         current = parent;
     }
-    None
+    let size = units.saturating_mul(2);
+    (unpaired && size <= limit).then_some(size)
 }
 
 /// Locate a bounded diagnostic batch while scanning each arena's source prefix
@@ -644,7 +721,7 @@ fn locations_with_work(values: &[crate::JsonRef<'_>]) -> (Vec<crate::SourceLocat
         scanned += byte_offset - cursor;
         cursor = byte_offset;
         result[index] = Some(crate::SourceLocation {
-            pointer: arena.pointer(value.id),
+            pointer: Some(arena.exact_pointer(value.id)),
             byte_offset,
             line,
             byte_column: byte_offset - line_start + 1,
@@ -930,11 +1007,14 @@ mod tests {
         assert_eq!(duplicate_member_names(&value).len(), 3);
         let nodes: Vec<_> = duplicate_member_names(&value).collect();
         let at = locations(&nodes);
-        assert_eq!(at[0].pointer.as_deref(), Some("/a~1~0/k"));
+        assert_eq!(at[0].pointer.as_ref().unwrap(), "/a~1~0/k");
         assert_eq!(at[1].pointer, at[0].pointer);
         assert_eq!(at[0].byte_offset, source.find("\"k\":1").unwrap());
         assert_eq!(at[1].byte_offset, source.find("\"k\":2").unwrap());
-        assert_eq!(at[2].pointer, None);
+        // A name with an unpaired unit is named exactly.
+        let exact = at[2].pointer.as_ref().unwrap();
+        assert_eq!(exact.as_str(), None);
+        assert_eq!(exact.to_string(), "/\\ud800/j");
         assert_eq!(at[2].byte_offset, source.find("\"j\":1").unwrap());
         assert_eq!(duplicate_member_names(&value).take(1).count(), 1);
     }
@@ -960,20 +1040,31 @@ mod tests {
         assert!(
             locations
                 .iter()
-                .all(|at| at.byte_offset == offset && at.pointer.as_deref() == Some("/nested"))
+                .all(|at| at.byte_offset == offset && at.pointer.as_ref().unwrap() == "/nested")
         );
         assert_eq!(duplicate_nodes(&value).take(0).count(), 0);
     }
 
     #[test]
-    fn unavailable_pointer_keeps_coordinates_without_spending_pointer_bytes() {
-        let value = crate::JsonValue::parse(r#"{"\ud800":{"k":0,"k":1}}"#).unwrap();
+    fn pointers_through_unpaired_names_are_exact_and_charge_their_units() {
+        let value = crate::JsonValue::parse(r#"{"\ud800/":{"k":0,"k":1}}"#).unwrap();
         let node = duplicate_nodes(&value).next().unwrap();
+        // The scalar measure has no spelling for it; the exact one holds the
+        // escaped units `/`, U+D800, `~`, `1`, two bytes each.
         assert_eq!(pointer_size(node, usize::MAX), None);
-        assert_eq!(location_pointer_size(node, 0), Some(0));
+        assert_eq!(location_pointer_size(node, 7), None);
+        assert_eq!(location_pointer_size(node, 8), Some(8));
         let at = locations(&[node]).remove(0);
-        assert_eq!(at.pointer, None);
-        assert_eq!(at.byte_offset, 10);
+        let pointer = at.pointer.as_ref().unwrap();
+        assert_eq!(
+            pointer.utf16_units().collect::<Vec<_>>(),
+            [0x2f, 0xd800, 0x7e, 0x31]
+        );
+        assert_eq!(at.byte_offset, 11);
+        assert_eq!(
+            resolve(&value, pointer).map(byte_range),
+            Some(byte_range(node))
+        );
 
         let scalar = crate::JsonValue::parse(r#"{"a/~":{"k":0,"k":1}}"#).unwrap();
         let node = duplicate_nodes(&scalar).next().unwrap();
@@ -1015,7 +1106,7 @@ mod tests {
         assert_eq!(scanned, max_first + max_second);
         assert!(locations_with_work(&[]).0.is_empty());
         for value in values {
-            let size = value.location().pointer.unwrap().len();
+            let size = value.location().pointer.unwrap().as_str().unwrap().len();
             assert_eq!(pointer_size(value, size), Some(size));
             if size > 0 {
                 assert_eq!(pointer_size(value, size - 1), None);
