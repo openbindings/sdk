@@ -252,10 +252,13 @@ fn key_size(key: &str) -> usize {
         })
         .sum::<usize>()
 }
-// Build each parent's removal range index once per batch.
+// Build each parent's removal range index once per batch. Removed children are
+// planned together once every request is known, so adjacent removals share
+// separators instead of each claiming one alone.
 struct RemovalIndex {
     children: Vec<Range<usize>>,
     by_end: HashMap<usize, usize>,
+    removed: Vec<usize>,
 }
 #[cfg(test)]
 thread_local! { static PLANNING_WORK: std::cell::Cell<(usize, usize, usize)> = const { std::cell::Cell::new((0, 0, 0)) }; }
@@ -280,23 +283,54 @@ impl RemovalIndex {
             .enumerate()
             .map(|(i, r)| (r.end, i))
             .collect();
-        Ok(Self { children, by_end })
+        Ok(Self {
+            children,
+            by_end,
+            removed: Vec::new(),
+        })
     }
-    fn range(&self, end: usize) -> Result<Range<usize>, EditError> {
+    fn remove(&mut self, end: usize) -> Result<(), EditError> {
         #[cfg(test)]
         PLANNING_WORK.with(|work| {
             let (p, c, l) = work.get();
             work.set((p, c, l + 1));
         });
         let i = *self.by_end.get(&end).ok_or(EditError::MissingValue)?;
-        let children = &self.children;
-        Ok(if i + 1 < children.len() {
-            children[i].start..children[i + 1].start
-        } else if i > 0 {
-            children[i - 1].end..children[i].end
-        } else {
-            children[i].clone()
-        })
+        self.removed.push(i);
+        Ok(())
+    }
+    // Each run of adjacent removed children takes the separator after it. A run
+    // reaching the last child takes the separator before it instead, and with no
+    // child kept the removal spans first to last child. Removing one child twice
+    // overlaps. Returns whether every child is removed.
+    fn plan(&mut self, splices: &mut Vec<Splice<'_>>) -> Result<bool, EditError> {
+        let (children, removed) = (&self.children, &mut self.removed);
+        removed.sort_unstable();
+        if removed.windows(2).any(|pair| pair[0] == pair[1]) {
+            return Err(EditError::Overlap);
+        }
+        let last = children.len() - 1;
+        let mut runs = removed.iter().copied().peekable();
+        while let Some(first) = runs.next() {
+            let mut end = first;
+            while runs.next_if_eq(&(end + 1)).is_some() {
+                end += 1;
+            }
+            let range = if end < last {
+                children[first].start..children[end + 1].start
+            } else if first > 0 {
+                children[first - 1].end..children[end].end
+            } else {
+                children[0].start..children[last].end
+            };
+            splices.push(Splice {
+                range,
+                value: None,
+                insertion: None,
+                size: 0,
+            });
+        }
+        Ok(removed.len() == children.len())
     }
 }
 struct Request<'a> {
@@ -344,7 +378,8 @@ impl Document {
     }
     /// Commit a batch with one splice and one parse, under the default JSON limits.
     /// All paths refer to the pre-edit revision. Sibling insertions share a boundary
-    /// in batch order. Overlapping replacements/removals are refused. Untouched bytes
+    /// in batch order. Removing adjacent siblings, up to every member of a container,
+    /// is not an overlap. Overlapping replacements/removals are refused. Untouched bytes
     /// retain their exact spelling, formatting and order. Positions describe current
     /// bytes; retained views and proofs continue to describe their earlier revision.
     ///
@@ -402,7 +437,7 @@ impl Document {
             return Err(EditError::DuplicateMembers);
         }
         let mut splices = Vec::with_capacity(edits.len());
-        let mut emptied = HashSet::new();
+        // Removals are indexed by their parent's closing position.
         let mut removal_indexes = HashMap::new();
         for edit in edits {
             let pointer = edit.pointer;
@@ -423,21 +458,18 @@ impl Document {
                 .flatten()
                 .unwrap_or(0);
             if let Some(target) = self.value().at(pointer) {
-                let mut range = backend::byte_range(target);
+                let range = backend::byte_range(target);
                 if edit.value.is_none() {
                     let (parent, _) = pointer.rsplit_once('/').ok_or(EditError::InvalidPointer)?;
                     let parent = self.value().at(parent).ok_or(EditError::MissingParent)?;
-                    let parent_range = backend::byte_range(parent);
-                    let index = match removal_indexes.entry(parent_range.start) {
+                    let index = match removal_indexes.entry(backend::byte_range(parent).end - 1) {
                         std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
                         std::collections::hash_map::Entry::Vacant(entry) => {
                             entry.insert(RemovalIndex::new(parent)?)
                         }
                     };
-                    if index.children.len() == 1 {
-                        emptied.insert(parent_range.end - 1);
-                    }
-                    range = index.range(range.end)?;
+                    index.remove(range.end)?;
+                    continue;
                 }
                 splices.push(Splice {
                     range,
@@ -472,6 +504,13 @@ impl Document {
                     insertion: Some(Insertion { key, comma }),
                     size,
                 });
+            }
+        }
+        // An insertion into a parent whose every child is removed needs no comma.
+        let mut emptied = HashSet::new();
+        for (close, index) in &mut removal_indexes {
+            if index.plan(&mut splices)? {
+                emptied.insert(*close);
             }
         }
         for splice in &mut splices {

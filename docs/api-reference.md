@@ -111,9 +111,9 @@ space without supplied resources stays with the revision, and a space with a set
 stays with that set until the set or the revision is dropped, so a prepared
 contract never retains a space for resources it did not receive.
 
-A preparation refusal is a `NoVerdict`, with its Debug redaction: broad reasons
-and recognized fixed codes are shown, while custom codes, messages and original
-schema text and locations are redacted. Display and the public fields can expose
+A preparation refusal is a `NoVerdict`, with its Debug redaction: the broad
+reason is shown, while its code, message and original schema text and
+locations are redacted. Display and the public fields can expose
 custom evaluator messages; callers choose their disclosure policy.
 
 ## Optional Rust companion APIs

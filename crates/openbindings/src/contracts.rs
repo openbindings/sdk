@@ -69,6 +69,7 @@ pub struct NoVerdict {
 }
 impl std::fmt::Debug for NoVerdict {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Any evaluator chooses the code, so only the SDK's broad reason shows.
         f.debug_struct("NoVerdict")
             .field("reason", &self.reason)
             .field("location", &self.location)

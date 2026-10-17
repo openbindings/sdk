@@ -468,6 +468,130 @@ fn removing_the_only_child_and_inserting_siblings_uses_one_separator_group() {
 }
 
 #[test]
+fn removing_any_set_of_siblings_in_one_batch_matches_removing_them_one_at_a_time() {
+    // Adjacent removals, up to every child, are not overlaps. The independent
+    // text reference removes one child at a time, from the last to the first,
+    // so earlier pointers stay valid; an optional append then lands at the
+    // parent's end, with a comma only when a child remains.
+    let containers = [
+        (
+            r#"{"a":1,"b":2,"c":3,"d":4}"#,
+            ["/a", "/b", "/c", "/d"],
+            "/z",
+        ),
+        (
+            " { \"a\" : 1 , \"b\" : [2] ,\"c\":{\"x\":3},\n\t\"d\":4 } ",
+            ["/a", "/b", "/c", "/d"],
+            "/z",
+        ),
+        ("[1,2,3,4]", ["/0", "/1", "/2", "/3"], "/-"),
+        (
+            r#"[ [1] , {"a":2},3 ,"d" ]"#,
+            ["/0", "/1", "/2", "/3"],
+            "/-",
+        ),
+    ];
+    for (source, children, append) in containers {
+        for subset in 1..16u32 {
+            let removed: Vec<_> = (0..4).filter(|i| subset & (1 << i) != 0).collect();
+            for insert in [false, true] {
+                let mut expected = source.to_owned();
+                for &i in removed.iter().rev() {
+                    expected = reference(&expected, children[i], None).0;
+                }
+                if insert {
+                    expected = reference(&expected, append, Some("5")).0;
+                }
+                // Request order does not matter: plan both orders.
+                for reversed in [false, true] {
+                    let mut edits: Vec<_> = removed
+                        .iter()
+                        .map(|&i| Edit::Remove {
+                            pointer: children[i],
+                        })
+                        .collect();
+                    if reversed {
+                        edits.reverse();
+                    }
+                    let five = exact("5");
+                    if insert {
+                        edits.push(Edit::Set {
+                            pointer: append,
+                            value: &five,
+                        });
+                    }
+                    let mut document = Document::parse(source).unwrap();
+                    document.edit(&edits).unwrap();
+                    assert_eq!(
+                        String::from_utf8_lossy(document.to_bytes()),
+                        expected,
+                        "{source} without {removed:?}, append {insert}"
+                    );
+                }
+            }
+        }
+    }
+    let mut document = Document::parse(r#"{"a":1,"b":2,"c":3}"#).unwrap();
+    document
+        .edit(&[
+            Edit::Remove { pointer: "/b" },
+            Edit::Remove { pointer: "/c" },
+        ])
+        .unwrap();
+    assert_eq!(document.to_bytes(), br#"{"a":1}"#);
+}
+
+#[test]
+fn overlapping_edits_are_refused_without_changing_bytes() {
+    let two = exact("2");
+    let source = r#"{"a":{"b":1,"c":2},"d":3}"#;
+    for edits in [
+        vec![
+            Edit::Remove { pointer: "/d" },
+            Edit::Remove { pointer: "/d" },
+        ],
+        vec![
+            Edit::Remove { pointer: "/a/b" },
+            Edit::Remove { pointer: "/a" },
+        ],
+        vec![
+            Edit::Remove { pointer: "/a" },
+            Edit::Remove { pointer: "/a/b" },
+            Edit::Remove { pointer: "/a/c" },
+        ],
+        vec![
+            Edit::Remove { pointer: "/d" },
+            Edit::Set {
+                pointer: "/d",
+                value: &two,
+            },
+        ],
+        vec![
+            Edit::Remove { pointer: "/a" },
+            Edit::Set {
+                pointer: "/a/b",
+                value: &two,
+            },
+        ],
+        vec![
+            Edit::Set {
+                pointer: "/z",
+                value: &two,
+            },
+            Edit::Set {
+                pointer: "/z",
+                value: &two,
+            },
+        ],
+    ] {
+        let mut document = Document::parse(source).unwrap();
+        let error = document.edit(&edits).unwrap_err();
+        assert_eq!(error.code(), "overlapping-edits", "{edits:?}");
+        assert_eq!(document.to_bytes(), source.as_bytes());
+    }
+}
+
+#[test]
 fn every_typed_part_setter_matches_an_exact_reference_sequence() {
     // Exercise all construction namespaces with escaped keys.
     let mut seed = 0x9876_5432u64;

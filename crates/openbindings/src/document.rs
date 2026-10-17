@@ -33,7 +33,7 @@ pub enum Evidence {
     Met,
     /// A rule violation was established, even if other work is inconclusive.
     Violated,
-    /// The implementation could not establish satisfaction or violation.
+    /// The implementation could not establish whether the rule was met or violated.
     Inconclusive,
     /// The rule does not apply after an earlier prerequisite fails.
     NotApplicable,
@@ -240,7 +240,7 @@ pub struct DocumentValidation {
     report: Arc<ValidationReport>,
 }
 #[derive(Clone, Debug)]
-/// Retained proof that a document revision satisfied every applicable normative rule.
+/// Retained proof that a document revision met every applicable normative rule.
 /// Proof has no public unchecked constructor or deserializer:
 /// ```compile_fail
 /// use openbindings::*;
@@ -493,6 +493,9 @@ impl Document {
     pub fn operation_bindings(&self, key: &str) -> Result<Vec<String>, InterpretationError> {
         self.interpretable()?;
         let index = self.names()?;
+        if index.unpaired_binding_key {
+            return Err(InterpretationError::UnpairedString);
+        }
         if !index.operations.contains_key(key) {
             return Ok(Vec::new());
         }
@@ -525,6 +528,8 @@ pub(crate) struct NameIndex {
     primary_keys: Vec<Arc<str>>,
     names: HashMap<String, Vec<usize>>,
     bindings: HashMap<String, Vec<String>>,
+    // Like the bindings namespace, binding names refuse when a key cannot be text.
+    unpaired_binding_key: bool,
 }
 struct OperationEntry {
     value: JsonValue,
@@ -541,9 +546,10 @@ impl NameIndex {
             .ok_or_else(|| InterpretationError::invalid("invalid-operations-object", operations))?;
         {
             for member in operations {
-                let Some(key) = member.name.as_str() else {
-                    continue;
-                };
+                let key = member
+                    .name
+                    .as_str()
+                    .ok_or(InterpretationError::UnpairedString)?;
                 if member.value.kind() != JsonKind::Object {
                     return Err(InterpretationError::invalid(
                         "invalid-operation-object",
@@ -576,10 +582,12 @@ impl NameIndex {
         }
         if let Some(bindings) = value.get("bindings").and_then(|v| v.members()) {
             for member in bindings {
-                if let (Some(name), Some(operation)) = (
-                    member.name.as_str(),
-                    member.value.get("operation").and_then(|v| v.as_str()),
-                ) {
+                let Some(name) = member.name.as_str() else {
+                    index.unpaired_binding_key = true;
+                    index.bindings = HashMap::new();
+                    break;
+                };
+                if let Some(operation) = member.value.get("operation").and_then(|v| v.as_str()) {
                     index
                         .bindings
                         .entry(operation.into())

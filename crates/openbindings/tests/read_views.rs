@@ -27,6 +27,42 @@ fn draft_text_reads_retain_unpaired_utf16_units() {
     }
     assert!(doc.validate().unwrap().conformant().is_none());
 }
+#[test]
+fn draft_reads_refuse_operation_and_binding_keys_with_unpaired_units() {
+    // Typed keys cannot hold the unit, and dropping the entry would claim it
+    // is absent: an operation found by its alias would read as missing.
+    let doc = Document::parse(r#"{"openbindings":"0.2.0","operations":{"\ud800":{"aliases":["shadow"]},"ok":{}},"sources":{"s":{"kind":"k"}},"bindings":{"b":{"operation":"ok","source":"s"}}}"#).unwrap();
+    for error in [
+        doc.operations().map(|_| ()).unwrap_err(),
+        doc.resolve_operation("shadow").map(|_| ()).unwrap_err(),
+        doc.resolve_operation("ok").map(|_| ()).unwrap_err(),
+        doc.operation_bindings("ok").map(|_| ()).unwrap_err(),
+    ] {
+        assert_eq!(error, InterpretationError::UnpairedString);
+    }
+    // Binding names for an operation refuse as the bindings namespace does,
+    // while operation reads stay independent of binding rows.
+    let doc = Document::parse(r#"{"openbindings":"0.2.0","operations":{"ok":{}},"sources":{"s":{"kind":"k"}},"bindings":{"\ud800":{"operation":"ok","source":"s"},"b":{"operation":"ok","source":"s"}}}"#).unwrap();
+    assert_eq!(
+        doc.binding("b").map(|_| ()).unwrap_err(),
+        InterpretationError::UnpairedString
+    );
+    let operations = doc.operations().unwrap();
+    for error in [
+        doc.operation_bindings("ok").unwrap_err(),
+        doc.operation_bindings("absent").unwrap_err(),
+        operations[0].bindings().unwrap_err(),
+    ] {
+        assert_eq!(error, InterpretationError::UnpairedString);
+    }
+    assert!(matches!(
+        doc.resolve_operation("ok").unwrap(),
+        OperationSelection::Found(_)
+    ));
+    // A binding whose operation field holds the unit names no scalar key.
+    let doc = Document::parse(r#"{"openbindings":"0.2.0","operations":{"ok":{}},"sources":{"s":{"kind":"k"}},"bindings":{"b":{"operation":"\ud800","source":"s"},"c":{"operation":"ok","source":"s"}}}"#).unwrap();
+    assert_eq!(doc.operation_bindings("ok").unwrap(), ["c"]);
+}
 fn location(error: InterpretationError, code: &str, pointer: &str) {
     assert_eq!(error.code(), code);
     assert_eq!(

@@ -136,7 +136,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 Each batch splices the current bytes once and parses the result once. A failed
 batch changes nothing. Untouched extension members, number tokens, member order
 and whitespace remain exact; inserted members use compact punctuation. Sibling
-insertions at one boundary coalesce in request order. Overlapping replacements
+insertions at one boundary coalesce in request order. Adjacent removals, up to
+every member of a container, share their separators. Overlapping replacements
 and removals are refused. Default byte, node and depth limits apply to the result;
 byte preflight happens before replacement allocation.
 
