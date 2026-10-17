@@ -18,7 +18,7 @@ def generate(destination):
         if tier == 'near':
             document['x-padding'] = [0] * items
         fixtures = {'document': compact(document), 'valid': compact([1] * items), 'invalid': compact(['x'] * items)}
-        row = {'items': items, 'operations': operations, 'repetitions': repeats, 'validOutcome': 'no-verdict' if tier == 'near' else 'satisfies', 'files': {}}
+        row = {'items': items, 'operations': operations, 'repetitions': repeats, 'validOutcome': 'satisfies', 'files': {}}
         for kind, source in fixtures.items():
             name = f'{tier}-{kind}.json'
             raw = source.encode()

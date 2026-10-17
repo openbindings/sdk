@@ -12,8 +12,9 @@ replacing an existing dependency.
 | Browser | Desktop Chromium and WebKit with explicit initialization; use a Worker for potentially expensive work. Firefox, mobile devices, and particular framework/bundler versions require their own qualification. |
 | Worker service | Local workerd with a compiled Wasm module and initialization in an allowed request context. This is not evidence of deployed Cloudflare latency, quotas, or service availability. |
 
-The 256 KiB small-stack document regression is qualified on the development
-toolchain. Older supported compilers may need larger stacks in debug builds.
+The 256 KiB small-stack document regression, and preparation of value contracts
+whose patterns nest to the default `pattern_depth`, are qualified on the
+development toolchain. Older supported compilers may need larger stacks in debug builds.
 MSRV CI runs all workspace tests except the exact stack-margin tests selected by
 [this inventory](../tools/stack-margin-tests.json), with reasons and scope for the
 vendored tests too. Development-toolchain jobs retain the workspace stack tests.

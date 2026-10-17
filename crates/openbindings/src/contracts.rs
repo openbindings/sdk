@@ -323,10 +323,13 @@ pub struct SchemaResource {
 }
 /// Immutable caller-supplied resources. Separate sets can use the same URI
 /// for different snapshots; this is not a process-wide registry or an acquirer.
-/// Clones share storage, including the identity index built by [`Self::new`],
-/// so passing one set to many preparations indexes its resources once. A
-/// resolution space assembled for this set and a document revision is kept
-/// with the set while both are alive, and released when either is dropped.
+/// Clones share storage, including the identity index built by [`Self::new`].
+/// [`SchemaRequest::evaluation_program`] reads that index, and the resolution
+/// space it assembles for this set and a document revision is kept with the
+/// set while both are alive, and released when either is dropped. The default
+/// evaluator does not use them: each of its preparations indexes the set again
+/// and assembles its own resolution space, so its preparation time grows with
+/// the set's resources, including those the contract never reaches.
 #[derive(Clone, Default)]
 pub struct ResourceSet {
     inner: Arc<ResourceSetInner>,
@@ -813,9 +816,11 @@ impl<'a> ValueContract<'a> {
     pub fn prepare(&self, evaluator: &dyn SchemaEvaluator) -> Result<PreparedContract, NoVerdict> {
         self.prepare_with(evaluator, ResourceSet::empty())
     }
-    /// Prepare with immutable supplied resources; nothing is fetched. Passing
-    /// the same set again reuses its index, and its resolution space with this
-    /// document while both are alive.
+    /// Prepare with immutable supplied resources; nothing is fetched. An
+    /// evaluator that calls [`SchemaRequest::evaluation_program`] reuses the
+    /// set's index, and its resolution space with this document while both are
+    /// alive. The default evaluator indexes the set and assembles its
+    /// resolution space again on every preparation.
     ///
     /// # Errors
     /// Returns a [`NoVerdict`] refusal when preparation is not established. A
@@ -916,8 +921,11 @@ impl PreparedContract {
     pub fn validate(&self, value: &JsonValue) -> ValueOutcome {
         self.validate_with_control(value, &crate::work_control::NeverCancelled)
     }
-    /// Validate with cooperative cancellation. Cancellation before a verdict yields
-    /// no-verdict and leaves this owner usable with a fresh healthy control.
+    /// Validate with cooperative cancellation. Cancellation observed before a
+    /// verdict is established yields no-verdict and leaves this owner usable with
+    /// a fresh healthy control. A verdict the default evaluator establishes
+    /// before it observes cancellation stands, whether the value satisfies or
+    /// fails.
     /// This is not a preemptive wall-clock deadline; applications schedule work.
     pub fn validate_with_control(
         &self,

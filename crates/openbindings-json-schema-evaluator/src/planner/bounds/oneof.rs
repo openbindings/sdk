@@ -283,6 +283,8 @@ impl<'a> Emitter<'a> {
                         self.child(node.source, member.value, polarity, policy.inplace)?
                     }
                 }
+            } else if let Some(index) = self.plan.literal(id, keyword) {
+                self.sink.literal(member.value, index)?;
             } else {
                 self.sink.raw(member.value)?;
             }
@@ -605,6 +607,7 @@ impl SchemaSpace {
             let (reason, code, message) = plan.split_evidence();
             NoVerdict::new(reason, code, message).located(at)
         });
+        let literals = plan.separate_literals(self, control)?;
         let mut programs = Vec::with_capacity(2);
         for polarity in [Polarity::Lower, Polarity::Upper] {
             control.check()?;
@@ -667,8 +670,10 @@ impl SchemaSpace {
         Ok(EvaluationBounds {
             lower,
             upper,
+            literals,
             unavailable,
             semantic_completions: false,
+            sole_hole: plan.holes.len() == 1,
         })
     }
 }

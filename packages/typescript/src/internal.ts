@@ -380,9 +380,9 @@ export interface WorkOptions {
 }
 /** Default-evaluator finite budgets, each a nonnegative 32-bit integer. Work counts are implementation units, not milliseconds. Zero is literal; the allocation and stack use of an explanation's library diagnostics are library-bounded; exhaustion produces no-verdict unless only post-verdict diagnostics are incomplete. */
 export interface EvaluatorLimits {
-  /** Work units per verdict/diagnostic pass; default 2,000,000. */
+  /** Work units per verdict/diagnostic pass over a value of up to 65,536 nodes (member names count), and proportionally more for a larger value; default 2,000,000. */
   evaluationSteps: number;
-  /** Nested evaluation depth; default 1024. */
+  /** Nested evaluation depth; default 1024. It bounds stack use; a deeper value yields the `evaluation-depth-limit` no-verdict. */
   evaluationDepth: number;
   /** Regex evaluation/backtracking work budget; default 2,000,000. */
   regexSteps: number;
@@ -390,7 +390,7 @@ export interface EvaluatorLimits {
   compileJsonDepth: number;
   /** Maximum UTF-8 bytes per schema regex; default 1,048,576 (1 MiB). */
   patternBytes: number;
-  /** Maximum regex parenthesis nesting; default 256. */
+  /** Maximum regex parenthesis nesting; default 32, which keeps preparation within a 256 KiB stack. */
   patternDepth: number;
 }
 /** Inputs for one preparation with the built-in JSON Schema 2020-12 evaluator, which performs no resource I/O, treats format as annotation, declines unqualified Unicode property-escape matching, and may conservatively refuse potential non-progressing cycles. A pre-aborted signal returns no-verdict. */

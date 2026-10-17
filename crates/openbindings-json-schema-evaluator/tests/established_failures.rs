@@ -141,25 +141,49 @@ fn cancellation_before_verdict_still_yields_no_verdict() {
 }
 
 #[test]
-fn satisfaction_still_checks_cancellation_after_verdict() {
-    for (schema, instance) in [
-        (json!(true), "null"),
-        (json!({"type":"integer"}), "1"),
-        (partial_schema(), "{}"),
+fn established_satisfaction_survives_cancellation_after_verdict() {
+    // Each control allows the observations an evaluation makes before its
+    // verdict and reports cancellation at every later one. A partial contract
+    // satisfies only after both of its passes, which observe the control
+    // between them.
+    for (schema, instance, before_verdict) in [
+        (json!(true), "null", 1),
+        (json!({"type":"integer"}), "1", 1),
+        (partial_schema(), "{}", 2),
     ] {
         let (contract, prepared) = prepared(schema);
         let value = JsonValue::parse(instance).unwrap();
         assert!(matches!(contract.validate(&value), ValueOutcome::Satisfies));
         for outcome in [
-            prepared.validate(&value, Detail::Outcome, &CancelAfterChecks::new(1)),
-            prepared.validate(&value, Detail::Explain, &CancelAfterChecks::new(1)),
-            contract.validate_with_control(&value, &CancelAfterChecks::new(2)),
-            contract.explain_with_control(&value, &CancelAfterChecks::new(2)),
+            prepared.validate(
+                &value,
+                Detail::Outcome,
+                &CancelAfterChecks::new(before_verdict),
+            ),
+            prepared.validate(
+                &value,
+                Detail::Explain,
+                &CancelAfterChecks::new(before_verdict),
+            ),
+            contract.validate_with_control(&value, &CancelAfterChecks::new(before_verdict + 1)),
+            contract.explain_with_control(&value, &CancelAfterChecks::new(before_verdict + 1)),
         ] {
             assert!(
-                matches!(&outcome, ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled),
-                "satisfaction must still observe cancellation: {outcome:?}"
+                matches!(outcome, ValueOutcome::Satisfies),
+                "an established satisfaction must survive later cancellation: {outcome:?}"
             );
+        }
+        // Cancellation between a partial contract's passes precedes its verdict.
+        if before_verdict > 1 {
+            for outcome in [
+                prepared.validate(&value, Detail::Outcome, &CancelAfterChecks::new(1)),
+                contract.validate_with_control(&value, &CancelAfterChecks::new(2)),
+            ] {
+                assert!(
+                    matches!(&outcome, ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled),
+                    "cancellation between passes must prevent a verdict: {outcome:?}"
+                );
+            }
         }
     }
 }

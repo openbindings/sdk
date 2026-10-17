@@ -68,6 +68,9 @@ const PROGRAM_NAMESPACE: &str = "https://sdk-program.openbindings.invalid/";
 pub struct UnmappedProgram {
     pub program: Program,
     pub definitions: Vec<Vec<usize>>,
+    /// Each `const` and `enum` value, by the index the program writes in its
+    /// place, all in one arena holding only them ([`SchemaSpace::program_unmapped`]).
+    pub literals: Vec<JsonValue>,
 }
 impl std::fmt::Debug for UnmappedProgram {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -767,6 +770,11 @@ impl SchemaSpace {
     /// The same projection as [`Self::program`] without its location map, for a
     /// caller that writes origins itself: each definition's node, per projected
     /// resource in `$defs` order, whose origin [`Self::location_into`] gives.
+    ///
+    /// Each `const` and `enum` value is copied into one arena that holds only
+    /// those values, and the program holds its index in the value's place. The
+    /// copy is parsed instead of the text the program would hold, so a caller
+    /// can keep literals without keeping the program.
     pub fn program_unmapped(
         &self,
         entry: usize,
@@ -774,12 +782,40 @@ impl SchemaSpace {
     ) -> Result<UnmappedProgram, Failure> {
         control.check()?;
         let reach = self.reach(entry, control)?;
-        let (program, definitions) =
-            self.projection(entry, &reach, control, PROGRAM_NAMESPACE, false)?;
+        let mut literals = Vec::new();
+        let (program, definitions) = self.projection(
+            entry,
+            &reach,
+            control,
+            PROGRAM_NAMESPACE,
+            false,
+            Some(&mut literals),
+        )?;
         Ok(UnmappedProgram {
             program,
             definitions,
+            literals,
         })
+    }
+    /// [`Self::program`] with its literals separated as
+    /// [`Self::program_unmapped`] separates them, in the same order.
+    pub fn program_separating_literals(
+        &self,
+        entry: usize,
+        control: &dyn Control,
+    ) -> Result<(Program, Vec<JsonValue>), Failure> {
+        control.check()?;
+        let reach = self.reach(entry, control)?;
+        let mut literals = Vec::new();
+        let (program, _) = self.projection(
+            entry,
+            &reach,
+            control,
+            PROGRAM_NAMESPACE,
+            true,
+            Some(&mut literals),
+        )?;
+        Ok((program, literals))
     }
     pub fn project(
         &self,
@@ -796,11 +832,14 @@ impl SchemaSpace {
         control: &dyn Control,
         namespace: &str,
     ) -> Result<Program, Failure> {
-        self.projection(entry, reach, control, namespace, true)
+        self.projection(entry, reach, control, namespace, true, None)
             .map(|(program, _)| program)
     }
     // With `mapped`, the program maps every definition to its origin; without,
     // it maps nothing and the nodes of each resource's definitions are returned.
+    // With `literals`, each `const` and `enum` value is copied there instead,
+    // into one arena holding only those values, and the program holds its
+    // index; the copy counts toward the byte limit as the value's text would.
     fn projection(
         &self,
         entry: usize,
@@ -808,6 +847,7 @@ impl SchemaSpace {
         control: &dyn Control,
         namespace: &str,
         mapped: bool,
+        literals: Option<&mut Vec<JsonValue>>,
     ) -> Result<(Program, Vec<Vec<usize>>), Failure> {
         // Generated names number nodes and resources densely (`node_number`).
         let resource_uri =
@@ -825,6 +865,11 @@ impl SchemaSpace {
         let mut definitions: BTreeMap<usize, BTreeMap<String, (String, usize)>> = BTreeMap::new();
         let mut locations = BTreeMap::new();
         let mut byte_count = 0usize;
+        // Separated literals, copied together once every node is admitted, and
+        // the literal text the current node separates, counted with its own.
+        let separating = literals.is_some();
+        let mut values = Vec::new();
+        let mut separated = 0usize;
         let mut nodes: Vec<_> = reach.nodes.iter().copied().collect();
         nodes.sort_unstable();
         for id in nodes {
@@ -911,13 +956,20 @@ impl SchemaSpace {
                             format!("[{}]", children?.join(","))
                         }
                         Some(ChildShape::Single) => child_reference(member.value)?,
+                        None if separating && matches!(keyword, "const" | "enum") => {
+                            separated = separated.saturating_add(member.value.text().len());
+                            values.push(member.value);
+                            (values.len() - 1).to_string()
+                        }
                         None => member.value.text().to_owned(),
                     };
                     fields.insert(keyword.to_owned(), value);
                 }
                 object(fields)
             };
-            byte_count = byte_count.saturating_add(transformed.len());
+            byte_count = byte_count
+                .saturating_add(transformed.len())
+                .saturating_add(std::mem::take(&mut separated));
             if byte_count > 64 * 1024 * 1024 {
                 return Err(self.failure(
                     id,
@@ -933,6 +985,9 @@ impl SchemaSpace {
                 .entry(node.resource)
                 .or_default()
                 .insert(format!("n{}", self.node_number(id)), (transformed, id));
+        }
+        if let Some(literals) = literals {
+            *literals = openbindings_internal_json::backend::standalone_list(&values);
         }
         let entry_resource = self.node(entry).resource;
         let entry_uri = resource_uri(entry_resource);

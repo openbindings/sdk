@@ -94,9 +94,6 @@ fn only_reached_string_interpretation_refuses_and_scopes_do_not_leak() {
         (r#"{"pattern":"a"}"#, r#""\ud800""#),
         (r#"{"minLength":1}"#, r#""\ud800""#),
         (r#"{"maxLength":9}"#, r#""\ud800""#),
-        (r#"{"const":"a"}"#, r#""\ud800""#),
-        (r#"{"enum":["a"]}"#, r#""\ud800""#),
-        (r#"{"const":"\ud800"}"#, r#""\ud800""#),
         (r#"{"propertyNames":{"pattern":"a"}}"#, r#"{"\ud800":1}"#),
         (r#"{"patternProperties":{"a":true}}"#, r#"{"\ud800":1}"#),
         (
@@ -125,6 +122,42 @@ fn only_reached_string_interpretation_refuses_and_scopes_do_not_leak() {
             contract.validate(&JsonValue::parse(r#""a""#).unwrap()),
             ValueOutcome::Satisfies
         ));
+    }
+}
+#[test]
+fn exact_equality_decides_strings_with_unpaired_units() {
+    // Strings and member names are equal exactly when their UTF-16 units are,
+    // so equality needs no Unicode scalar interpretation.
+    for (schema, value, satisfies) in [
+        (r#"{"const":"a"}"#, r#""\ud800""#, false),
+        (r#"{"enum":["a"]}"#, r#""\ud800""#, false),
+        (r#"{"const":"\ud800"}"#, r#""\ud800""#, true),
+        (r#"{"const":"\ud800"}"#, r#""\udc00""#, false),
+        (r#"{"const":"\ud800"}"#, r#""s""#, false),
+        (r#"{"enum":["a","\ud800"]}"#, r#""\ud800""#, true),
+        (r#"{"const":{"\ud800":1}}"#, r#"{"\ud800":1}"#, true),
+        (r#"{"const":{"\ud800":1}}"#, r#"{"\udc00":1}"#, false),
+        (r#"{"const":{"a":"\ud800"}}"#, r#"{"a":"\ud800"}"#, true),
+        (r#"{"uniqueItems":true}"#, r#"["\ud800","\ud800"]"#, false),
+        (r#"{"uniqueItems":true}"#, r#"["\ud800","\udc00"]"#, true),
+        (
+            r#"{"uniqueItems":true}"#,
+            r#"[{"\ud800":1},{"\ud800":1}]"#,
+            false,
+        ),
+        (
+            r#"{"uniqueItems":true}"#,
+            r#"[{"\ud800":1},{"\udc00":1}]"#,
+            true,
+        ),
+    ] {
+        let result = outcome(schema, value);
+        let expected = if satisfies {
+            matches!(result, ValueOutcome::Satisfies)
+        } else {
+            matches!(result, ValueOutcome::Fails { .. })
+        };
+        assert!(expected, "{schema} against {value}: {result:?}");
     }
 }
 #[test]

@@ -26,7 +26,11 @@ pub struct Case {
     pub optional_capability: Option<String>,
     /// Human-readable fixture explanation for its refusal expectation.
     pub refusal_reason: String,
-    /// Expected no-verdict reason wire spelling, when a refusal is expected.
+    /// No-verdict reason wire spelling a refusal must give: the expected
+    /// outcome's when `expected` is `no-verdict`, otherwise a refusal the case
+    /// also accepts. Beside an `optional_capability` that refusal needs the
+    /// caller's allowance; without one it is accepted as it is, for a schema in
+    /// a dialect an evaluator may not read.
     pub refusal_kind: Option<String>,
 }
 impl std::fmt::Debug for Case {
@@ -137,12 +141,16 @@ fn translate_policy(suite: &mut Suite) {
         assert_eq!(case.refusal_kind, translation.from_refusal_kind);
         assert!(matches!(
             translation.to_expected.as_str(),
-            "satisfies" | "no-verdict"
+            "satisfies" | "fails" | "no-verdict"
         ));
-        assert_eq!(
-            translation.to_expected == "no-verdict",
-            translation.to_refusal_kind.is_some()
-        );
+        // A verdict may also accept an unsupported-capability refusal.
+        assert!(match translation.to_expected.as_str() {
+            "no-verdict" => translation.to_refusal_kind.is_some(),
+            _ => translation
+                .to_refusal_kind
+                .as_deref()
+                .is_none_or(|kind| kind == "unsupported-capability"),
+        });
         case.expected = translation.to_expected;
         case.refusal_kind = translation.to_refusal_kind;
         case.refusal_reason = translation.to_refusal_reason;
@@ -604,8 +612,13 @@ pub fn judge(
         ValueOutcome::Undefined { .. } => "undefined",
         ValueOutcome::NoVerdict { .. } => "no-verdict",
     };
-    let permitted_refusal = permitted_refusal
-        && case.optional_capability.is_some()
+    // A case with a verdict can accept a refusal of its stated capability: one
+    // the caller permits for an optional capability, or one for a dialect an
+    // evaluator may not read, which JSON Schema has it refuse.
+    let refusal_accepted = case.expected != "no-verdict"
+        && case.refusal_kind.as_deref() == Some("unsupported-capability")
+        && (case.optional_capability.is_none() || permitted_refusal);
+    let permitted_refusal = refusal_accepted
         && matches!(outcome, ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::UnsupportedCapability);
     if tag != case.expected && !(tag == "no-verdict" && permitted_refusal) {
         failures.push(format!("expected {}, observed {tag}", case.expected));

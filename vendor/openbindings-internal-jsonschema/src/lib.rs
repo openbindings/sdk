@@ -1139,7 +1139,7 @@ pub(crate) use jsonschema_value::{
 /// struct ToyJson;
 ///
 /// impl Json for ToyJson {
-///     // A cheap-to-`Clone` handle; `&ToyValue` behaves like `&serde_json::Value`
+///     // A cheap-to-`Clone` handle; `&ToyValue` plays the role `&serde_json::Value` does
 ///     // for the built-in representation.
 ///     type Node<'a> = &'a ToyValue;
 ///     // Property names are prepared once at schema compile time.

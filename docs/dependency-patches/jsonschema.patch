@@ -511,15 +511,6 @@
  
 --- a/src/lib.rs
 +++ b/src/lib.rs
-@@ -1139,7 +1139,7 @@
- /// struct ToyJson;
- ///
- /// impl Json for ToyJson {
--///     // A cheap-to-`Clone` handle; `&ToyValue` plays the role `&serde_json::Value` does
-+///     // A cheap-to-`Clone` handle; `&ToyValue` behaves like `&serde_json::Value`
- ///     // for the built-in representation.
- ///     type Node<'a> = &'a ToyValue;
- ///     // Property names are prepared once at schema compile time.
 @@ -7276,3 +7276,8 @@
          })));
      }
@@ -964,39 +955,3 @@
      if let Some(limit) = backtrack_limit {
          builder.backtrack_limit(limit);
      }
---- a/src/validator.rs
-+++ b/src/validator.rs
-@@ -1596,14 +1596,14 @@
-             "properties": {"name": {"type": "string"}},
-             "required": ["name"]
-         });
--        let role_schema = json!({
-+        let permission_schema = json!({
-             "type": "string",
-             "enum": ["admin", "user", "guest"]
-         });
-         let registry = crate::Registry::new()
-             .add("https://example.com/user.json", &user_schema)
-             .expect("valid resource")
--            .add("https://example.com/role.json", &role_schema)
-+            .add("https://example.com/role.json", &permission_schema)
-             .expect("valid resource")
-             .prepare()
-             .expect("registry build failed");
-@@ -1663,14 +1663,14 @@
-             "properties": {"name": {"type": "string"}},
-             "required": ["name"]
-         });
--        let role_schema = json!({
-+        let permission_schema = json!({
-             "type": "string",
-             "enum": ["admin", "user", "guest"]
-         });
-         let registry = crate::Registry::new()
-             .add("https://example.com/user.json", &user_schema)
-             .expect("valid resource")
--            .add("https://example.com/role.json", &role_schema)
-+            .add("https://example.com/role.json", &permission_schema)
-             .expect("valid resource")
-             .prepare()
-             .expect("registry build failed");

@@ -97,6 +97,10 @@ struct Plan {
     namespace: usize,
     dependent: HashSet<usize>,
     oneofs: HashSet<usize>,
+    // The index each reached node's `const` (false) or `enum` (true) value is
+    // written as, in node order: both programs share one separated copy.
+    literals: HashMap<(usize, bool), usize>,
+    literal_order: Vec<(usize, bool)>,
 }
 #[derive(Clone, Copy)]
 enum Children {
@@ -159,6 +163,61 @@ fn add_bytes(total: &mut usize, size: usize, cap: usize) -> Result<(), NoVerdict
     Ok(())
 }
 impl Plan {
+    // Number every reached `const` and `enum` value, without copying any.
+    fn number_literals(
+        &mut self,
+        space: &SchemaSpace,
+        control: &dyn WorkControl,
+    ) -> Result<(), NoVerdict> {
+        let mut nodes: Vec<_> = self.reach.nodes.iter().copied().collect();
+        nodes.sort_unstable();
+        for id in nodes {
+            control.check()?;
+            for member in space.node(id).value.view().members().into_iter().flatten() {
+                let key = match member.name.as_str() {
+                    Some("const") => (id, false),
+                    Some("enum") => (id, true),
+                    _ => continue,
+                };
+                if !self.literals.contains_key(&key) {
+                    self.literals.insert(key, self.literal_order.len());
+                    self.literal_order.push(key);
+                }
+            }
+        }
+        Ok(())
+    }
+    // The numbered literals, copied together into one arena that holds only
+    // them, once the programs that name them are admitted.
+    fn separate_literals(
+        &self,
+        space: &SchemaSpace,
+        control: &dyn WorkControl,
+    ) -> Result<Vec<JsonValue>, NoVerdict> {
+        let mut values = Vec::with_capacity(self.literal_order.len());
+        for &(id, is_enum) in &self.literal_order {
+            control.check()?;
+            values.push(
+                space
+                    .node(id)
+                    .value
+                    .get(if is_enum { "enum" } else { "const" })
+                    .expect("a numbered literal"),
+            );
+        }
+        Ok(openbindings_internal_json::backend::standalone_list(
+            &values,
+        ))
+    }
+    // The index a node's `const` or `enum` value is written as.
+    fn literal(&self, id: usize, keyword: &str) -> Option<usize> {
+        let is_enum = match keyword {
+            "const" => false,
+            "enum" => true,
+            _ => return None,
+        };
+        self.literals.get(&(id, is_enum)).copied()
+    }
     fn split_evidence(&self) -> (NoVerdictReason, &'static str, &'static str) {
         if self.first_semantic.is_none() {
             (
@@ -556,7 +615,8 @@ impl SchemaSpace {
         control: &dyn WorkControl,
         cap: Admission,
     ) -> Result<EvaluationBounds, NoVerdict> {
-        let plan = self.partial_reach(entry, control, cap)?;
+        let mut plan = self.partial_reach(entry, control, cap)?;
+        plan.number_literals(self, control)?;
         if !plan.oneofs.is_empty() {
             return self.oneof_bounds(entry, control, cap, &plan);
         }
@@ -624,6 +684,7 @@ impl SchemaSpace {
             let (reason, code, message) = plan.split_evidence();
             NoVerdict::new(reason, code, message).located(location)
         });
+        let literals = plan.separate_literals(self, control)?;
         let mut programs = Vec::with_capacity(2);
         for (pass, lower) in [true, false].into_iter().enumerate() {
             let mut resources =
@@ -667,8 +728,10 @@ impl SchemaSpace {
         Ok(EvaluationBounds {
             lower,
             upper,
+            literals,
             unavailable,
             semantic_completions: plan.first_semantic.is_some(),
+            sole_hole: plan.holes.len() == 1,
         })
     }
     fn write_resource(
@@ -781,6 +844,8 @@ impl SchemaSpace {
                         self.write_child(sink, plan.namespace, node.source, member.value)?
                     }
                 }
+            } else if let Some(index) = plan.literal(id, keyword) {
+                sink.literal(member.value, index)?;
             } else {
                 sink.raw(member.value)?;
             }
@@ -890,6 +955,16 @@ impl Sink {
             .ok_or(fmt::Error)?;
         Ok(())
     }
+    // A separated literal is written as its index; its text and decoded
+    // strings still count, as the separated copy retains them.
+    fn literal(&mut self, value: JsonRef<'_>, index: usize) -> fmt::Result {
+        let remaining = (self.cap - self.size - self.decoded)
+            .checked_sub(value.text().len())
+            .ok_or(fmt::Error)?;
+        let decoded = decoded_string_size(value, remaining).ok_or(fmt::Error)?;
+        self.add_decoded(value.text().len() + decoded)?;
+        write!(self, "{index}")
+    }
     fn raw(&mut self, value: JsonRef<'_>) -> fmt::Result {
         let remaining = (self.cap - self.size - self.decoded)
             .checked_sub(value.text().len())
@@ -945,6 +1020,18 @@ mod tests {
             for resource in &program.resources {
                 size += resource.uri.len() + resource.document.text().len();
                 size += decoded_string_size(resource.document.view(), usize::MAX).unwrap();
+                // Each literal a program names counts as the text it would hold.
+                let definitions = resource.document.get("$defs").and_then(|d| d.members());
+                for definition in definitions.into_iter().flatten() {
+                    for field in definition.value.members().into_iter().flatten() {
+                        if matches!(field.name.as_str(), Some("const" | "enum")) {
+                            let index: usize = field.value.text().parse().unwrap();
+                            let literal = bounds.literals[index].view();
+                            size += literal.text().len();
+                            size += decoded_string_size(literal, usize::MAX).unwrap();
+                        }
+                    }
+                }
             }
         }
         assert!(Arc::ptr_eq(

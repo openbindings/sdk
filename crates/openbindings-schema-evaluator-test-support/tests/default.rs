@@ -383,3 +383,51 @@ fn undefined_is_an_answer_and_not_an_optional_refusal() {
     };
     assert!(!judge(case, &value, &unexplained, false).is_empty());
 }
+
+#[test]
+fn other_dialect_cases_accept_the_specification_verdict_or_a_truthful_refusal() {
+    // A schema reached through an external URI follows its own dialect, so a
+    // capable evaluator answers with JSON Schema's verdict; one that does not
+    // read the dialect may refuse it, needing no declaration.
+    let cases: Vec<_> = suite()
+        .groups
+        .iter()
+        .flat_map(|g| &g.cases)
+        .filter(|c| {
+            c.optional_capability.is_none()
+                && c.expected != "no-verdict"
+                && c.refusal_kind.as_deref() == Some("unsupported-capability")
+        })
+        .collect();
+    assert_eq!(cases.len(), 9);
+    let failure = || ValueOutcome::Fails {
+        message: "value does not satisfy the contract".into(),
+        problems: vec![],
+        problems_complete: false,
+    };
+    let refusal = |reason| ValueOutcome::NoVerdict {
+        detail: NoVerdict::new(reason, "schema-dialect", "the dialect is not read"),
+    };
+    for case in cases {
+        let value = JsonValue::parse(&case.value).unwrap();
+        let (right, wrong) = match case.expected.as_str() {
+            "satisfies" => (ValueOutcome::Satisfies, failure()),
+            "fails" => (failure(), ValueOutcome::Satisfies),
+            other => panic!("{other}"),
+        };
+        assert!(judge(case, &value, &right, false).is_empty(), "{}", case.id);
+        assert!(
+            !judge(case, &value, &wrong, false).is_empty(),
+            "{}",
+            case.id
+        );
+        let truthful = refusal(NoVerdictReason::UnsupportedCapability);
+        assert!(
+            judge(case, &value, &truthful, false).is_empty(),
+            "{}",
+            case.id
+        );
+        let other = refusal(NoVerdictReason::ConservativePreparation);
+        assert!(!judge(case, &value, &other, true).is_empty(), "{}", case.id);
+    }
+}

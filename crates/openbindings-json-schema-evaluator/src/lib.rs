@@ -16,9 +16,16 @@ use std::sync::Arc;
 #[serde(default, deny_unknown_fields)]
 /// Finite default-evaluator budgets. Work counts are implementation units, not milliseconds; exhaustion yields no verdict unless an established failure only loses diagnostic completeness. Zero is literal. These budgets do not bound the allocation or stack use of an explanation's library diagnostics.
 pub struct Limits {
-    /// Evaluation work units per verdict/diagnostic pass; default 2,000,000. A partial verdict shares this allowance across upper and lower evaluations.
+    /// Evaluation work units per verdict/diagnostic pass over a value of up to
+    /// 65,536 nodes (member names count), and proportionally more for a larger
+    /// value; default 2,000,000. An ordinary schema uses a few units per value
+    /// node, so it decides values as large as the default admission limits
+    /// accept (1,000,000 nodes), within about 30,500,000 units per pass. A
+    /// partial verdict shares this allowance across upper and lower evaluations.
     pub evaluation_steps: usize,
     /// Nested evaluation depth; default 1024, distinct from source JSON nesting.
+    /// Each nested evaluation is a recursive call, so this also bounds stack
+    /// use; reaching it yields the `evaluation-depth-limit` no-verdict.
     pub evaluation_depth: usize,
     /// Regular-expression work/backtracking budget per verdict/diagnostic pass; default 2,000,000. Upper and lower share one verdict allowance.
     pub regex_steps: usize,
@@ -26,8 +33,24 @@ pub struct Limits {
     pub compile_json_depth: usize,
     /// Maximum UTF-8 bytes in each schema regular expression; default 1 MiB (1,048,576 bytes).
     pub pattern_bytes: usize,
-    /// Maximum parenthesis nesting in a schema regular expression; default 256.
+    /// Maximum parenthesis nesting in a schema regular expression; default 32.
+    /// The regular-expression engine parses, compiles and matches nested groups
+    /// recursively, so this also bounds the stack preparation uses: at the
+    /// default, preparation fits a 256 KiB thread stack.
     pub pattern_depth: usize,
+}
+// The value size, in nodes, that `Limits::evaluation_steps` is stated for.
+const STEPS_NODES: usize = 65_536;
+impl Limits {
+    // The work allowance of one pass over `value`.
+    fn steps_for(&self, value: &JsonValue) -> usize {
+        let nodes = backend::node_count(value);
+        if nodes <= STEPS_NODES {
+            return self.evaluation_steps;
+        }
+        let scaled = self.evaluation_steps as u128 * nodes as u128 / STEPS_NODES as u128;
+        usize::try_from(scaled).unwrap_or(usize::MAX)
+    }
 }
 impl Default for Limits {
     fn default() -> Self {
@@ -37,7 +60,7 @@ impl Default for Limits {
             regex_steps: 2_000_000,
             compile_json_depth: 512,
             pattern_bytes: 1024 * 1024,
-            pattern_depth: 256,
+            pattern_depth: 32,
         }
     }
 }
@@ -125,6 +148,7 @@ impl SchemaEvaluator for DefaultEvaluator {
                 };
                 Ok(Arc::new(self.compile(
                     unmapped.program,
+                    unmapped.literals,
                     origins,
                     true,
                     control,
@@ -144,20 +168,24 @@ impl SchemaEvaluator for DefaultEvaluator {
                 let planner::EvaluationBounds {
                     lower,
                     upper,
+                    literals,
                     unavailable,
                     semantic_completions,
+                    sole_hole,
                 } = bounds;
                 let unavailable = unavailable.map(projection_failure);
-                let upper = self.compile(upper, Origins::Map, true, control)?;
+                // Both programs name the same separated literals.
+                let upper = self.compile(upper, literals.clone(), Origins::Map, true, control)?;
                 control.check()?;
                 // Explanations never read lower-bound failures.
-                let lower = self.compile(lower, Origins::Map, false, control)?;
+                let lower = self.compile(lower, literals, Origins::Map, false, control)?;
                 control.check()?;
                 Ok(Arc::new(PartialCompiled {
                     upper,
                     lower,
                     unavailable,
                     semantic_completions,
+                    sole_hole,
                 }))
             }
             Err(detail) => Err(projection_failure(detail)),
@@ -231,19 +259,22 @@ impl Origins<'_> {
     }
 }
 impl DefaultEvaluator {
+    // `literals` are the program's separated `const` and `enum` values, in an
+    // arena holding only them, which the program names by index.
     fn compile(
         &self,
         mut program: EvaluationProgram,
+        literals: Vec<JsonValue>,
         origins: Origins<'_>,
         explains: bool,
         control: &dyn WorkControl,
     ) -> Result<Compiled, NoVerdict> {
         let mut registry = jsonschema::Registry::new().retriever(NoRetrieval);
-        let mut literals = operands::Operands::default();
+        let mut operands = operands::Operands::default();
         for (index, resource) in program.resources.iter().enumerate() {
             control.check()?;
             check_patterns(index, &program, origins, &self.limits, control)?;
-            let value = literals.resource(&resource.document, &self.limits, control)?;
+            let value = operands.resource(&resource.document, &literals, &self.limits, control)?;
             // Transfer each private projection into the registry. Holding a
             // second serde tree until compilation unnecessarily raises peak RSS.
             registry = registry.add(&resource.uri, value).map_err(|_| {
@@ -275,7 +306,7 @@ impl DefaultEvaluator {
                 "the projected schema entry could not be located",
             )
         })?;
-        let validator = literals
+        let validator = operands
             .apply(jsonschema::options_for::<FlatJson>())
             .with_registry(&registry)
             .with_draft(jsonschema::Draft::Draft202012)
@@ -288,14 +319,14 @@ impl DefaultEvaluator {
             .map_err(|error| preparation_error(error.kind()))?;
         control.check()?;
         // Keep, for explanations, a compact copy of the compiled keywords with
-        // their original locations; release the projection and, when that copy
-        // holds every location, the program's location map. Compiled exact
-        // const/enum subviews can still retain projection arenas.
+        // their original locations, sharing the validator's literals; release
+        // the projection and, when that copy holds every location, the
+        // program's location map.
         let explanation = explains
             .then(|| match origins {
-                Origins::Map => details::Explanation::new(&program, control),
+                Origins::Map => details::Explanation::new(&program, literals, control),
                 Origins::Space { space, definitions } => {
-                    details::Explanation::projected(&program, space, definitions, control)
+                    details::Explanation::projected(&program, literals, space, definitions, control)
                 }
             })
             .transpose()?
@@ -339,17 +370,15 @@ impl PreparedSchema for Compiled {
             let detail = detail.into();
             return ValueOutcome::NoVerdict { detail };
         }
-        let valid = verdict_pass(&self.limits, || {
+        let steps = self.limits.steps_for(value);
+        let valid = verdict_pass(&self.limits, steps, || {
             Ok(self.validator.is_valid(backend::view(value)))
         });
+        // A completed verdict pass establishes its verdict: cancellation
+        // observed later never discards it.
         match valid {
             Err(detail) => ValueOutcome::NoVerdict { detail },
-            Ok(true) => match control.check() {
-                Ok(()) => ValueOutcome::Satisfies,
-                Err(detail) => ValueOutcome::NoVerdict {
-                    detail: detail.into(),
-                },
-            },
+            Ok(true) => ValueOutcome::Satisfies,
             Ok(false) if detail == Detail::Outcome => verdict_only_failure(),
             // An established failure survives interruption of optional diagnostics.
             Ok(false) => self.diagnostics(value, control, false),
@@ -367,20 +396,27 @@ impl Compiled {
         if let Some(explanation) = &self.explanation {
             // Validity is already established. Failure to obtain detail (including
             // cancellation or exhausted work) must never turn it into no-verdict.
-            let diagnostic = verdict_pass(&self.limits, || {
+            let steps = self.limits.steps_for(value);
+            let diagnostic = verdict_pass(&self.limits, steps, || {
                 control.check()?;
                 let Err(error) = self.validator.validate(backend::view(value)) else {
                     return Ok(None);
                 };
                 let uri = error.absolute_keyword_location().map(|uri| uri.as_str());
                 let program = self.program.as_ref();
-                let Ok(Some(located)) =
+                let Ok(Some(mut located)) =
                     explanation.problem_schema(program, uri, original_only, control)
                 else {
                     return Ok(None);
                 };
-                let (schema, operand) = (located.location, located.operand);
                 let instance = instance_pointer(error.instance_path().as_str());
+                if located
+                    .narrow_to_failed_list(value.at_pointer(&instance), control)
+                    .is_err()
+                {
+                    return Ok(None);
+                }
+                let (schema, operand) = (located.location, located.operand);
                 let detail = details::collect(operand, error.kind(), control);
                 control.check()?;
                 Ok(Some(ValueProblem {
@@ -426,6 +462,7 @@ struct PartialCompiled {
     lower: Compiled,
     unavailable: Option<NoVerdict>,
     semantic_completions: bool,
+    sole_hole: bool,
 }
 impl PreparedSchema for PartialCompiled {
     fn validate(
@@ -440,7 +477,8 @@ impl PreparedSchema for PartialCompiled {
         }
         // One outer work AND regex allowance covers both Boolean evaluations.
         // Diagnostics start after this scope and never evaluate synthetic lower failures.
-        let result = verdict_pass(&self.upper.limits, || {
+        let steps = self.upper.limits.steps_for(value);
+        let result = verdict_pass(&self.upper.limits, steps, || {
             bounded_decision(
                 || self.upper.validator.is_valid(backend::view(value)),
                 || self.lower.validator.is_valid(backend::view(value)),
@@ -455,12 +493,16 @@ impl PreparedSchema for PartialCompiled {
             Ok(None) => match self.unavailable.clone() {
                 // In the positive fragment these are actual completions,
                 // not merely interval endpoints. Both completed evaluations
-                // finished within the shared budget and disagree here.
+                // finished within the shared budget and disagree here. With
+                // one hole, they are the two ways its reference's result comes
+                // out, so the value's validity depends on that reference. With
+                // several, which of them it depends on is not established, so
+                // no location is given rather than the first one.
                 Some(detail) if self.semantic_completions => ValueOutcome::Undefined {
                     detail: UndefinedResult {
                         code: detail.code,
                         message: detail.message,
-                        location: detail.location,
+                        location: detail.location.filter(|_| self.sole_hole),
                     },
                 },
                 Some(detail) => ValueOutcome::NoVerdict { detail },
@@ -475,6 +517,8 @@ impl PreparedSchema for PartialCompiled {
         }
     }
 }
+// Satisfaction needs both passes, so cancellation between them comes before
+// the verdict. Once the lower pass completes, the outcome is established.
 fn bounded_decision(
     upper: impl FnOnce() -> bool,
     lower: impl FnOnce() -> bool,
@@ -486,16 +530,16 @@ fn bounded_decision(
         return Ok(Some(false));
     }
     control.check()?;
-    let lower = lower();
-    control.check()?;
-    Ok(lower.then_some(true))
+    Ok(lower().then_some(true))
 }
+// One verdict or diagnostic pass with `steps` work units.
 fn verdict_pass<T>(
     limits: &Limits,
+    steps: usize,
     evaluate: impl FnOnce() -> Result<T, NoVerdict>,
 ) -> Result<T, NoVerdict> {
     let evaluated = backend::string_scope(|| {
-        jsonschema::ob_work::bounded(limits.evaluation_steps, limits.evaluation_depth, || {
+        jsonschema::ob_work::bounded(steps, limits.evaluation_depth, || {
             jsonschema::ob_ecma::top_level(limits.regex_steps, evaluate)
         })
     })
@@ -691,10 +735,15 @@ fn evaluation_stop(stop: jsonschema::ob_work::Stop) -> NoVerdict {
             "numeric-arithmetic-limit",
             "numeric arithmetic exceeds the admitted evaluation limit",
         ),
-        Stop::Work | Stop::Depth => (
+        Stop::Work => (
             NoVerdictReason::LimitExceeded,
             "evaluation-work-limit",
-            "evaluation work or depth limit reached",
+            "evaluation work limit reached",
+        ),
+        Stop::Depth => (
+            NoVerdictReason::LimitExceeded,
+            "evaluation-depth-limit",
+            "evaluation depth limit reached",
         ),
     };
     no_verdict(reason, code, message)
@@ -755,6 +804,9 @@ mod diagnostic_tests {
             assert_eq!(stopped.reason, NoVerdictReason::LimitExceeded);
             assert_ne!(stopped.code, cycle.code);
         }
+        // Exhausted depth and exhausted work are told apart.
+        assert_eq!(evaluation_stop(Stop::Work).code, "evaluation-work-limit");
+        assert_eq!(evaluation_stop(Stop::Depth).code, "evaluation-depth-limit");
     }
 }
 
@@ -866,7 +918,7 @@ mod partial_budget_tests {
             ..Limits::default()
         };
         for (upper_cost, lower_cost, upper) in [(6, 6, true), (11, 0, false), (0, 11, true)] {
-            let result = verdict_pass(&limits, || {
+            let result = verdict_pass(&limits, limits.evaluation_steps, || {
                 bounded_decision(
                     || {
                         jsonschema::ob_work::charge(upper_cost);
@@ -882,7 +934,7 @@ mod partial_budget_tests {
             assert_eq!(result.unwrap_err().reason, NoVerdictReason::LimitExceeded);
         }
         assert_eq!(
-            verdict_pass(&limits, || bounded_decision(
+            verdict_pass(&limits, limits.evaluation_steps, || bounded_decision(
                 || false,
                 || panic!("failure uses no lower pass"),
                 &std::sync::atomic::AtomicBool::new(false)
@@ -906,7 +958,7 @@ mod partial_budget_tests {
             regex_steps: needed,
             ..Limits::default()
         };
-        let result = verdict_pass(&limits, || {
+        let result = verdict_pass(&limits, limits.evaluation_steps, || {
             bounded_decision(
                 || regex.is_match(&input).unwrap_or(false),
                 || regex.is_match(&input).unwrap_or(false),
@@ -919,7 +971,7 @@ mod partial_budget_tests {
             ..Limits::default()
         };
         assert_eq!(
-            verdict_pass(&healthy, || bounded_decision(
+            verdict_pass(&healthy, healthy.evaluation_steps, || bounded_decision(
                 || regex.is_match(&input).unwrap_or(false),
                 || regex.is_match(&input).unwrap_or(false),
                 &std::sync::atomic::AtomicBool::new(false)
@@ -927,6 +979,100 @@ mod partial_budget_tests {
             .unwrap(),
             Some(true)
         );
+    }
+}
+
+#[cfg(test)]
+mod literal_retention_tests {
+    use super::*;
+    use std::sync::{Mutex, atomic::AtomicBool};
+    // The request a default preparation of operation `op`'s input receives.
+    fn request(schemas: &str, input: &str) -> SchemaRequest {
+        #[derive(Default)]
+        struct Capture(Mutex<Option<SchemaRequest>>);
+        impl SchemaEvaluator for Capture {
+            fn prepare(
+                &self,
+                request: &SchemaRequest,
+                control: &dyn WorkControl,
+            ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+                *self.0.lock().unwrap() = Some(request.clone());
+                DefaultEvaluator::new().prepare(request, control)
+            }
+        }
+        let document = Document::parse(format!(
+            r#"{{"openbindings":"0.2.0","schemas":{{{schemas}}},"operations":{{"op":{{"input":{input}}}}}}}"#
+        ))
+        .unwrap();
+        let proof = document.validate().unwrap().conformant().unwrap();
+        let capture = Capture::default();
+        let operation = proof.resolve_operation("op").unwrap();
+        assert!(operation.input().unwrap().prepare(&capture).is_ok());
+        capture.0.lock().unwrap().take().unwrap()
+    }
+    // Each literal is held in an arena of literals alone, which the
+    // explanation shares rather than copies.
+    fn assert_separated(literals: &[JsonValue], compiled: &Compiled) {
+        assert!(!literals.is_empty());
+        for literal in literals {
+            let source = std::str::from_utf8(literal.original_source()).unwrap();
+            assert!(source.len() < 256 && !source.contains("ddd"), "{source}");
+        }
+        let explained = compiled.explanation.as_ref().unwrap().literals();
+        assert_eq!(explained.len(), literals.len());
+        for (kept, literal) in explained.iter().zip(literals) {
+            assert!(backend::same_source(kept.view(), literal));
+        }
+        assert!(compiled.program.is_none());
+    }
+    #[test]
+    fn compiled_literals_keep_none_of_the_schemas_they_were_read_from() {
+        let text = "d".repeat(1 << 20);
+        let control = AtomicBool::new(false);
+        let evaluator = DefaultEvaluator::new();
+        for (schemas, input) in [
+            // A literal beside a large annotation in its own schema.
+            (
+                String::new(),
+                format!(r#"{{"description":"{text}","enum":[1,2,{{"a":"b"}}]}}"#),
+            ),
+            (
+                String::new(),
+                format!(r#"{{"description":"{text}","const":{{"a":"b"}}}}"#),
+            ),
+            // A literal in one reached schema, a large annotation in another.
+            (
+                format!(
+                    r#""A":{{"examples":["{text}"],"type":"object"}},"B":{{"enum":[{{"a":"b"}},2]}}"#
+                ),
+                r##"{"allOf":[{"$ref":"#/schemas/A"},{"$ref":"#/schemas/B"}]}"##.to_owned(),
+            ),
+        ] {
+            let request = request(&schemas, &input);
+            let (space, entry) = planner::space(&request);
+            let unmapped = space.program_unmapped(entry, &|| false).unwrap();
+            let literals = unmapped.literals.clone();
+            let origins = Origins::Space {
+                space: &space,
+                definitions: &unmapped.definitions,
+            };
+            let compiled = evaluator
+                .compile(unmapped.program, unmapped.literals, origins, true, &control)
+                .unwrap();
+            assert_separated(&literals, &compiled);
+        }
+        // Paired bounds for a missing resource share one copy of each literal.
+        let input = format!(
+            r#"{{"anyOf":[{{"$ref":"https://missing.invalid/m"}},{{"description":"{text}","enum":[1,2]}}]}}"#
+        );
+        let request = request("", &input);
+        let (space, entry) = planner::space(&request);
+        let bounds = space.bounds(entry, &|| false).unwrap();
+        let literals = bounds.literals.clone();
+        let upper = evaluator
+            .compile(bounds.upper, bounds.literals, Origins::Map, true, &control)
+            .unwrap();
+        assert_separated(&literals, &upper);
     }
 }
 
