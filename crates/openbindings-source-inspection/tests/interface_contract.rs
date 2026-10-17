@@ -18,27 +18,20 @@ fn inventories_validate_against_pinned_interface_output_contract() {
     else {
         panic!("interface output contract did not prepare")
     };
-    let target = BindableTarget {
-        source_ref: "空.🚲".into(),
-        binding: BindingFragment {
+    let target = BindableTarget::new(
+        "空.🚲",
+        BindingFragment {
             content: Some(JsonValue::parse("9007199254740993").unwrap()),
             idempotent: Some(false),
             ..Default::default()
         },
-        operation_key: None,
-        operation: None,
-    };
+    );
     for inventory in [
         SourceInspection::complete(vec![]),
         SourceInspection::complete(vec![target]),
         SourceInspection::partial(
             vec![],
-            InspectionLimitation {
-                code: "example.unavailable".into(),
-                message: "admitted records could not be read".into(),
-                details: None,
-                additional_fields: Default::default(),
-            },
+            InspectionLimitation::new("example.unavailable", "admitted records could not be read"),
         ),
     ] {
         assert!(matches!(
@@ -83,12 +76,7 @@ fn duplicate_recovery_is_sdk_policy_not_an_interface_requirement() {
             ValueOutcome::Satisfies
         ));
     }
-    let target = BindableTarget {
-        source_ref: "a".into(),
-        binding: BindingFragment::default(),
-        operation_key: None,
-        operation: None,
-    };
+    let target = BindableTarget::new("a", BindingFragment::default());
     assert!(
         SourceInspection::complete(vec![target.clone(), target.clone()])
             .validate()
@@ -122,15 +110,14 @@ fn limitation_additional_evidence_matches_the_published_interface() {
     else {
         panic!("interface contract failed")
     };
-    let mut limitation = InspectionLimitation {
-        code: "example.remaining".into(),
-        message: "Some admitted targets could not be inspected".into(),
-        details: None,
-        additional_fields: std::collections::BTreeMap::from([(
-            "evidence".into(),
-            JsonValue::parse(r#"{"count":9007199254740993,"state":null}"#).unwrap(),
-        )]),
-    };
+    let mut limitation = InspectionLimitation::new(
+        "example.remaining",
+        "Some admitted targets could not be inspected",
+    )
+    .with_additional_fields(std::collections::BTreeMap::from([(
+        "evidence".into(),
+        JsonValue::parse(r#"{"count":9007199254740993,"state":null}"#).unwrap(),
+    )]));
     let inventory = SourceInspection::partial(vec![], limitation.clone());
     let wire = inventory.to_json().unwrap();
     assert_eq!(wire.text(), serde_json::to_string(&inventory).unwrap());

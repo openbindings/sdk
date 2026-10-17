@@ -425,3 +425,46 @@ fn diagnostics_and_debug_do_not_reveal_strings_values_or_field_names() {
         assert!(text.len() < 256);
     }
 }
+
+/// Supports one kind and lists it with a description.
+struct Listed;
+impl openbindings_invocation::binding::BindingInvoker for Listed {
+    type Invocation<'a> = std::future::Ready<Result<(), InvocationError>>;
+    fn supports_kind(&self, kind: &str) -> bool {
+        kind == "urn:example:listed"
+    }
+    fn supported_kinds(&self) -> Vec<openbindings_invocation::binding::SupportedKind> {
+        vec![
+            openbindings_invocation::binding::SupportedKind::new("urn:example:listed")
+                .with_description("listed for this job"),
+        ]
+    }
+    fn invoke<'a>(
+        &'a self,
+        _: BindingRequest<'a>,
+        _: openbindings_invocation::ProviderIo,
+        _: openbindings_invocation::CancellationToken,
+    ) -> Self::Invocation<'a> {
+        std::future::ready(Ok(()))
+    }
+}
+#[test]
+fn providers_list_kinds_with_their_constructor() {
+    let facade = openbindings_invocation::binding::Invoker::new(Listed);
+    let listed = facade.list_supported_kinds().unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(
+        (listed[0].kind.as_str(), listed[0].description.as_deref()),
+        ("urn:example:listed", Some("listed for this job"))
+    );
+    let verdicts = facade
+        .check_kind_support(["urn:example:listed", "urn:example:other"])
+        .unwrap();
+    assert_eq!(
+        verdicts
+            .iter()
+            .map(|v| (v.kind.as_str(), v.supported))
+            .collect::<Vec<_>>(),
+        [("urn:example:listed", true), ("urn:example:other", false)]
+    );
+}

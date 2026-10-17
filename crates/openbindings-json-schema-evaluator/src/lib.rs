@@ -383,17 +383,15 @@ impl Compiled {
                 let instance = instance_pointer(error.instance_path().as_str());
                 let detail = details::collect(operand, error.kind(), control);
                 control.check()?;
-                Ok(Some(ValueProblem {
-                    instance,
-                    schema,
-                    code: error.kind().keyword().into(),
-                    message: if original_only && error.kind().keyword() == "oneOf" {
-                        "value does not satisfy exactly one alternative".into()
-                    } else {
-                        diagnostic_message(error.kind())
-                    },
-                    details: detail,
-                }))
+                let code: String = error.kind().keyword().into();
+                let message = if original_only && error.kind().keyword() == "oneOf" {
+                    "value does not satisfy exactly one alternative".into()
+                } else {
+                    diagnostic_message(error.kind())
+                };
+                let mut problem = ValueProblem::new(instance, schema, code, message);
+                problem.details = detail;
+                Ok(Some(problem))
             });
             if let Ok(Some(problem)) = diagnostic {
                 debug_assert!(value.at_pointer(&problem.instance).is_some());
@@ -457,10 +455,10 @@ impl PreparedSchema for PartialCompiled {
                 // not merely interval endpoints. Both completed evaluations
                 // finished within the shared budget and disagree here.
                 Some(detail) if self.semantic_completions => ValueOutcome::Undefined {
-                    detail: UndefinedResult {
-                        code: detail.code,
-                        message: detail.message,
-                        location: detail.location,
+                    detail: {
+                        let mut undefined = UndefinedResult::new(detail.code, detail.message);
+                        undefined.location = detail.location;
+                        undefined
                     },
                 },
                 Some(detail) => ValueOutcome::NoVerdict { detail },
@@ -768,10 +766,10 @@ mod partial_budget_tests {
             "resource-unavailable",
             "original strict message",
         );
-        strict.location = Some(SchemaLocation {
-            resource: Some("https://original.invalid/R".into()),
-            pointer: "/properties/long~0name".parse().unwrap(),
-        });
+        strict.location = Some(SchemaLocation::new(
+            Some("https://original.invalid/R".into()),
+            "/properties/long~0name".parse().unwrap(),
+        ));
         for (reason, code) in [
             (
                 NoVerdictReason::ConservativePreparation,
@@ -835,10 +833,10 @@ mod partial_budget_tests {
             ),
         ] {
             let mut actual = no_verdict(reason, code, "actual refusal");
-            actual.location = Some(SchemaLocation {
-                resource: Some("https://original.invalid/R".into()),
-                pointer: "/selected/schema".parse().unwrap(),
-            });
+            actual.location = Some(SchemaLocation::new(
+                Some("https://original.invalid/R".into()),
+                "/selected/schema".parse().unwrap(),
+            ));
             assert_eq!(
                 serde_json::to_value(recover_partial_decline(strict.clone(), actual.clone()))
                     .unwrap(),
@@ -943,10 +941,7 @@ fn projection_failure(f: openbindings_internal_schema::Failure) -> NoVerdict {
         F::Cancelled => NoVerdictReason::Cancelled,
         F::EvaluatorFailure => NoVerdictReason::EvaluatorFailure,
     };
-    NoVerdict {
-        reason,
-        code: f.code,
-        message: f.message,
-        location: f.location.map(original_location),
-    }
+    let mut detail = NoVerdict::new(reason, f.code, f.message);
+    detail.location = f.location.map(original_location);
+    detail
 }

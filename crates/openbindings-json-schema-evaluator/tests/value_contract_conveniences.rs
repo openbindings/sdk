@@ -185,16 +185,12 @@ fn preparation_refusal_is_the_original_record_and_propagates_as_an_error() {
         NoVerdictReason::Cancelled,
         NoVerdictReason::EvaluatorFailure,
     ] {
-        let location = SchemaLocation {
-            resource: Some("https://example.invalid/schema".into()),
-            pointer: "/input".parse().unwrap(),
-        };
-        let detail = NoVerdict {
-            reason,
-            code: "custom-code".into(),
-            message: "custom message".into(),
-            location: Some(location.clone()),
-        };
+        let location = SchemaLocation::new(
+            Some("https://example.invalid/schema".into()),
+            "/input".parse().unwrap(),
+        );
+        let detail =
+            NoVerdict::new(reason, "custom-code", "custom message").with_location(location.clone());
         let proof = document("true");
         let operation = proof.resolve_operation("find").expect("declared alias");
         let contract = operation.input().expect("declared input");

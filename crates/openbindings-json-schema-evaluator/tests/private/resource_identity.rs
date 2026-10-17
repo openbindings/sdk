@@ -334,10 +334,7 @@ fn ri04_05_contained_authority_ignores_supplied_body_and_keeps_raw_catalog() {
         assert_eq!(*observed.lock().unwrap(), vec![text]);
         assert_eq!(
             failed_location(&contract, "0"),
-            SchemaLocation {
-                resource: None,
-                pointer: "/schemas/E/minimum".parse().unwrap()
-            }
+            SchemaLocation::new(None, "/schemas/E/minimum".parse().unwrap())
         );
         helpers_ready(&doc, &supplied, "op");
         located(
@@ -803,10 +800,7 @@ fn ri22_23_original_dialect_follows_selected_resource() {
         assert_eq!(detail.code, "schema-dialect");
         assert_eq!(
             detail.location.unwrap(),
-            SchemaLocation {
-                resource: Some(A.into()),
-                pointer: "/$defs/Child".parse().unwrap()
-            }
+            SchemaLocation::new(Some(A.into()), "/$defs/Child".parse().unwrap())
         );
     }
     // Identical child bodies retain distinct resolved bases and inherited dialects.
@@ -1156,10 +1150,10 @@ fn ri16_nested_resource_does_not_invent_losing_parent_dynamic_scope() {
     verdicts(&contract, &[("2", "satisfies"), (r#""x""#, "fails")]);
     assert_eq!(
         failed_location(&contract, r#""x""#),
-        SchemaLocation {
-            resource: Some(A.into()),
-            pointer: "/$defs/Child/$defs/Node/type".parse().unwrap()
-        }
+        SchemaLocation::new(
+            Some(A.into()),
+            "/$defs/Child/$defs/Node/type".parse().unwrap()
+        )
     );
 }
 
@@ -1175,10 +1169,7 @@ fn inherited_conservative_policy_case_has_both_value_controls() {
     verdicts(&contract, &[("1", "satisfies"), (r#""x""#, "fails")]);
     assert_eq!(
         failed_location(&contract, r#""x""#),
-        SchemaLocation {
-            resource: None,
-            pointer: "/schemas/S/type".parse().unwrap()
-        }
+        SchemaLocation::new(None, "/schemas/S/type".parse().unwrap())
     );
     helpers_ready(&doc, &supplied, "op");
 }

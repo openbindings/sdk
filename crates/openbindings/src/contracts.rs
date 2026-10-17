@@ -41,6 +41,10 @@ pub enum NoVerdictReason {
 /// exposure. Line and column come from the source's holder:
 /// [`Conformant::locate`] for the document and [`ResourceSet::locate`] for a
 /// supplied resource. A prepared contract keeps no source text. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
+///
+/// Custom evaluators build one with [`Self::new`] or [`SchemaRequest::location`].
+/// Later versions may add fields: read them by name and match with `..`.
+#[non_exhaustive]
 pub struct SchemaLocation {
     /// Original supplied-resource URI, or `None` for the OpenBindings document. A URI is an identity, never an instruction to fetch.
     pub resource: Option<String>,
@@ -56,7 +60,10 @@ impl SchemaLocation {
     }
 }
 #[derive(Clone, Serialize)]
-/// Structured explanation for why no schema verdict was established. This public record may be constructed by custom evaluators.
+/// Structured explanation for why no schema verdict was established. Custom
+/// evaluators build one with [`Self::new`] and [`Self::with_location`]. Later
+/// versions may add fields: read them by name and match with `..`.
+#[non_exhaustive]
 pub struct NoVerdict {
     /// Extensible broad refusal category.
     pub reason: NoVerdictReason,
@@ -76,7 +83,8 @@ impl std::fmt::Debug for NoVerdict {
     }
 }
 impl NoVerdict {
-    /// Construct an unlocated refusal; callers may set its public `location` when original-source evidence is available.
+    /// Construct an unlocated refusal; add an original schema location with
+    /// [`Self::with_location`] when original-source evidence is available.
     pub fn new(
         reason: NoVerdictReason,
         code: impl Into<String>,
@@ -89,7 +97,8 @@ impl NoVerdict {
             location: None,
         }
     }
-    pub(crate) fn located(mut self, location: SchemaLocation) -> Self {
+    /// Attach an established original schema location.
+    pub fn with_location(mut self, location: SchemaLocation) -> Self {
         self.location = Some(location);
         self
     }
@@ -102,7 +111,11 @@ impl fmt::Display for NoVerdict {
 impl std::error::Error for NoVerdict {}
 
 #[derive(Clone, Serialize)]
-/// An established undefined result under the value-contract rules. Custom evaluators can construct this public record when semantic provenance and disagreeing completions are proved.
+/// An established undefined result under the value-contract rules. Custom
+/// evaluators build one with [`Self::new`] and [`Self::with_location`] when
+/// semantic provenance and disagreeing completions are proved. Later versions
+/// may add fields: read them by name and match with `..`.
+#[non_exhaustive]
 pub struct UndefinedResult {
     /// Stable evaluator-defined detail code.
     pub code: String,
@@ -174,7 +187,27 @@ pub enum ValueProblemDetails {
 
 #[derive(Clone, Serialize)]
 /// One established instance failure, located in the value and in the schema.
-/// Custom evaluators can construct this public record. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
+/// Custom evaluators build one with [`Self::new`] and [`Self::with_details`].
+/// Later versions may add fields: read them by name and match with `..`.
+/// Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
+/// ```compile_fail,E0639
+/// use openbindings::*;
+/// fn build(instance: Pointer, schema: SchemaLocation) -> ValueProblem {
+///     ValueProblem { instance, schema, code: "type".into(), message: "wrong type".into(),
+///         details: None }
+/// }
+/// ```
+/// ```
+/// use openbindings::*;
+/// fn build(instance: Pointer, schema: SchemaLocation) -> ValueProblem {
+///     ValueProblem::new(instance, schema, "type", "wrong type")
+///         .with_details(ValueProblemDetails::Type { expected: vec!["integer".into()] })
+/// }
+/// fn read(problem: &ValueProblem) {
+///     let ValueProblem { instance, schema, code, message, details, .. } = problem;
+/// }
+/// ```
+#[non_exhaustive]
 pub struct ValueProblem {
     /// Exact RFC 6901 pointer to the failing node, from the value passed to
     /// validation (the instance's root, also when that value is a subtree of
@@ -242,8 +275,8 @@ impl std::fmt::Debug for ValueProblem {
     }
 }
 impl ValueProblem {
-    /// A problem without schema facts; set the public `details` field to add
-    /// them. `instance` is the failing node's pointer from the validated value
+    /// A problem without schema facts; add them with [`Self::with_details`].
+    /// `instance` is the failing node's pointer from the validated value
     /// (`Pointer::from_str` parses one, [`JsonRef::at_pointer`] checks it);
     /// [`SchemaRequest::location`] at preparation names `schema`.
     pub fn new(
@@ -259,6 +292,11 @@ impl ValueProblem {
             message: message.into(),
             details: None,
         }
+    }
+    /// Attach established schema facts.
+    pub fn with_details(mut self, details: ValueProblemDetails) -> Self {
+        self.details = Some(details);
+        self
     }
 }
 #[derive(Clone, Serialize)]
@@ -372,6 +410,8 @@ impl ResourceSetInner {
 }
 #[derive(Clone, PartialEq, Eq)]
 /// Invalid supplied-resource configuration, separate from schema preparation and value outcomes.
+/// Later versions may add fields: read them by name and match with `..`.
+#[non_exhaustive]
 pub struct ResourceError {
     /// Caller-supplied resource identifier associated with the error; treat it as untrusted display data.
     pub uri: String,
@@ -676,12 +716,12 @@ pub(crate) fn projection_failure(f: openbindings_internal_schema::Failure) -> No
 ///         if request.entry().view().as_bool() == Some(true) {
 ///             Ok(Arc::new(TrueOnly))
 ///         } else {
-///             Err(NoVerdict {
-///                 reason: NoVerdictReason::UnsupportedCapability,
-///                 code: "true-only".into(),
-///                 message: "this evaluator supports only the true schema".into(),
-///                 location: Some(request.entry_location()),
-///             })
+///             Err(NoVerdict::new(
+///                 NoVerdictReason::UnsupportedCapability,
+///                 "true-only",
+///                 "this evaluator supports only the true schema",
+///             )
+///             .with_location(request.entry_location()))
 ///         }
 ///     }
 /// }
@@ -853,7 +893,7 @@ impl<'a> ValueContract<'a> {
                 "non-schema-entry",
                 "the operation direction is not a schema position",
             )
-            .located(SchemaLocation {
+            .with_location(SchemaLocation {
                 resource: None,
                 pointer: openbindings_internal_json::backend::exact_pointer(schema),
             }));

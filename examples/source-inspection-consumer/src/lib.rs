@@ -118,31 +118,31 @@ pub fn inspect_catalog(
                 input: Some(input.to_owned()),
                 ..Default::default()
             });
-        targets.push(BindableTarget {
-            source_ref: id.into(),
-            operation_key: Some(id.into()),
-            operation,
-            binding: BindingFragment {
+        let mut target = BindableTarget::new(
+            id,
+            BindingFragment {
                 content: entry.get("binding").map(|v| v.to_owned()),
                 idempotent,
                 ..Default::default()
             },
-        });
+        )
+        .with_operation_key(id);
+        target.operation = operation;
+        targets.push(target);
     }
     Ok(if omitted == 0 {
         SourceInspection::complete(targets)
     } else {
         SourceInspection::partial(
             targets,
-            InspectionLimitation {
-                code: "example.catalog.unavailable".into(),
-                message: "admitted catalog records were unavailable to this inspector".into(),
-                details: Some(BTreeMap::from([(
-                    "omitted".into(),
-                    JsonValue::from_serializable(&omitted).expect("small counter"),
-                )])),
-                additional_fields: Default::default(),
-            },
+            InspectionLimitation::new(
+                "example.catalog.unavailable",
+                "admitted catalog records were unavailable to this inspector",
+            )
+            .with_details(BTreeMap::from([(
+                "omitted".into(),
+                JsonValue::from_serializable(&omitted).expect("small counter"),
+            )])),
         )
     })
 }

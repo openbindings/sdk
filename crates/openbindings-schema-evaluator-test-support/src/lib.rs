@@ -13,6 +13,8 @@ use std::{
 
 #[derive(Clone, Deserialize)]
 /// One frozen evaluator observation. Exact JSON text avoids host numeric conversion; expected outcome and capability exceptions come from packaged provenance.
+/// Later versions may add fields: read them by name and match with `..`.
+#[non_exhaustive]
 pub struct Case {
     /// Stable case identity, also used for explicit capability allowances.
     pub id: String,
@@ -37,6 +39,8 @@ impl std::fmt::Debug for Case {
 
 #[derive(Clone, Deserialize)]
 /// Related cases sharing one original document, operation `op` input contract and supplied resource set.
+/// Later versions may add fields: read them by name and match with `..`.
+#[non_exhaustive]
 pub struct Group {
     /// Stable group identity.
     pub id: String,
@@ -57,6 +61,8 @@ impl std::fmt::Debug for Group {
 
 #[derive(Clone, Deserialize)]
 /// One exact schema resource in the packaged fixture registry; no acquisition is implied.
+/// Later versions may add fields: read them by name and match with `..`.
+#[non_exhaustive]
 pub struct Resource {
     /// Absolute resource identity used when building the explicit resource set.
     pub uri: String,
@@ -72,6 +78,8 @@ impl std::fmt::Debug for Resource {
 
 #[derive(Clone, Deserialize)]
 /// Frozen finite evaluator contract suite. This is a qualification input, not a claim of complete JSON Schema coverage.
+/// Later versions may add fields: read them by name and match with `..`.
+#[non_exhaustive]
 pub struct Suite {
     /// Named resource fixtures available to groups.
     pub resources: BTreeMap<String, Resource>,
@@ -264,6 +272,8 @@ impl Options {
 }
 #[derive(Clone, Serialize)]
 /// Receipt for one case, preserving verdicts and refusals separately from contract-check failures.
+/// Later versions may add fields: read them by name and match with `..`.
+#[non_exhaustive]
 pub struct Observation {
     /// Case identity from the fixture.
     pub id: String,
@@ -291,6 +301,22 @@ impl std::fmt::Debug for Observation {
 
 #[derive(Clone, Serialize)]
 /// Finite suite receipt. Success permits explicitly declared capability refusals; inspect verdict/refusal counts before claiming coverage.
+///
+/// Only [`run`] builds reports. Later versions may add fields: read them by name
+/// and match with `..`.
+/// ```compile_fail,E0638
+/// use openbindings_schema_evaluator_test_support::Report;
+/// fn read(report: &Report) {
+///     let Report { observations, configuration_failures } = report;
+/// }
+/// ```
+/// ```
+/// use openbindings_schema_evaluator_test_support::Report;
+/// fn read(report: &Report) {
+///     let Report { observations, configuration_failures, .. } = report;
+/// }
+/// ```
+#[non_exhaustive]
 pub struct Report {
     /// Actual observations in fixture order.
     pub observations: Vec<Observation>,

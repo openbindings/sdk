@@ -3,6 +3,7 @@ use openbindings::*;
 use openbindings_schema_evaluator_test_support as kit;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+use std::sync::Arc;
 // A credential-shaped probe value; Debug output must never contain it.
 const SECRET: &str = "PROBE-BEARER-TOKEN-7391";
 const NUMBER: &str = "739173917391";
@@ -23,59 +24,66 @@ fn row(label: &'static str, value: &(impl Debug + ?Sized)) -> Row {
     }
 }
 fn location() -> SchemaLocation {
-    SchemaLocation {
-        resource: Some(SECRET.into()),
-        pointer: format!("/{SECRET}").parse().unwrap(),
-    }
+    SchemaLocation::new(Some(SECRET.into()), format!("/{SECRET}").parse().unwrap())
 }
 fn refusal() -> NoVerdict {
-    NoVerdict {
-        reason: NoVerdictReason::EvaluatorFailure,
-        code: SECRET.into(),
-        message: format!("provider refused schema operand {SECRET}"),
-        location: Some(location()),
+    NoVerdict::new(
+        NoVerdictReason::EvaluatorFailure,
+        SECRET,
+        format!("provider refused schema operand {SECRET}"),
+    )
+    .with_location(location())
+}
+/// Refuses every preparation, so the kit records a receipt for every case.
+struct Refuse;
+impl SchemaEvaluator for Refuse {
+    fn prepare(
+        &self,
+        _: &SchemaRequest,
+        _: &dyn WorkControl,
+    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+        Err(refusal())
     }
 }
+// The kit builds its suite and receipts; a caller receives them and can
+// reassign their public fields, so these probes fill actual records with
+// caller text.
 fn kit_rows(outcome: &ValueOutcome) -> Vec<Row> {
-    let case = kit::Case {
-        id: SECRET.into(),
-        value: SECRET.into(),
-        expected: SECRET.into(),
-        acceptable_paths: Some(vec![vec![SECRET.into()]]),
-        optional_capability: Some(SECRET.into()),
-        refusal_reason: SECRET.into(),
-        refusal_kind: Some(SECRET.into()),
-    };
-    let group = kit::Group {
-        id: SECRET.into(),
-        document: SECRET.into(),
-        resources: vec![SECRET.into()],
-        cases: vec![case.clone()],
-    };
-    let resource = kit::Resource {
-        uri: SECRET.into(),
-        document: SECRET.into(),
-    };
-    let observation = kit::Observation {
-        id: SECRET.into(),
-        expected: SECRET.into(),
-        preparation_refusal: Some(refusal()),
-        outcome: Some(outcome.clone()),
-        explanation: Some(outcome.clone()),
-        failures: vec![SECRET.into()],
-    };
+    let mut suite = kit::suite().clone();
+    let mut group = suite.groups[0].clone();
+    let mut case = group.cases[0].clone();
+    case.id = SECRET.into();
+    case.value = SECRET.into();
+    case.expected = SECRET.into();
+    case.acceptable_paths = Some(vec![vec![SECRET.into()]]);
+    case.optional_capability = Some(SECRET.into());
+    case.refusal_reason = SECRET.into();
+    case.refusal_kind = Some(SECRET.into());
+    group.id = SECRET.into();
+    group.document = SECRET.into();
+    group.resources = vec![SECRET.into()];
+    group.cases = vec![case.clone()];
+    let mut resource = suite.resources.values().next().unwrap().clone();
+    resource.uri = SECRET.into();
+    resource.document = SECRET.into();
+    suite.resources = BTreeMap::from([(SECRET.into(), resource.clone())]);
+    suite.groups = vec![group.clone()];
+    suite.builtin_resources = BTreeMap::from([(SECRET.into(), SECRET.into())]);
+    let mut report = kit::run(&Refuse, &kit::Options::default());
+    let mut observation = report.observations[0].clone();
+    observation.id = SECRET.into();
+    observation.expected = SECRET.into();
+    observation.preparation_refusal = Some(refusal());
+    observation.outcome = Some(outcome.clone());
+    observation.explanation = Some(outcome.clone());
+    observation.failures = vec![SECRET.into()];
+    report.observations = vec![observation.clone()];
+    report.configuration_failures = vec![SECRET.into()];
     vec![
         row("kit Case", &case),
         row("kit Group", &group),
         row("kit Resource", &resource),
-        row(
-            "kit Suite",
-            &kit::Suite {
-                resources: BTreeMap::from([(SECRET.into(), resource)]),
-                groups: vec![group],
-                builtin_resources: BTreeMap::from([(SECRET.into(), SECRET.into())]),
-            },
-        ),
+        row("kit Suite", &suite),
         row(
             "kit Options",
             &kit::Options {
@@ -83,13 +91,7 @@ fn kit_rows(outcome: &ValueOutcome) -> Vec<Row> {
             },
         ),
         row("kit Observation", &observation),
-        row(
-            "kit Report",
-            &kit::Report {
-                observations: vec![observation],
-                configuration_failures: vec![SECRET.into()],
-            },
-        ),
+        row("kit Report", &report),
     ]
 }
 
@@ -110,15 +112,15 @@ fn check_rows(rows: Vec<Row>, expected: usize) {
 
 #[test]
 fn debug_redacts_caller_text_at_every_boundary() {
-    let problem = ValueProblem {
-        instance: format!("/{SECRET}").parse().unwrap(),
-        schema: location(),
-        code: SECRET.into(),
-        message: SECRET.into(),
-        details: Some(ValueProblemDetails::Required {
-            member: SECRET.into(),
-        }),
-    };
+    let problem = ValueProblem::new(
+        format!("/{SECRET}").parse().unwrap(),
+        location(),
+        SECRET,
+        SECRET,
+    )
+    .with_details(ValueProblemDetails::Required {
+        member: SECRET.into(),
+    });
     let outcome = ValueOutcome::Fails {
         message: SECRET.into(),
         problems: vec![problem.clone()],

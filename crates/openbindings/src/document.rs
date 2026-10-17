@@ -51,6 +51,27 @@ pub enum Conformance {
 }
 #[derive(Clone, Serialize)]
 /// One explanatory normative-rule finding. Findings may be bounded; the report's independent rule evidence determines its conclusion. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
+///
+/// Only validation builds findings. Later versions may add fields: read them by
+/// name and match with `..`.
+/// ```compile_fail,E0639
+/// use openbindings::*;
+/// let _ = Finding { rule: "OBI-01", status: Evidence::Violated, code: "value",
+///     location: None, message: String::new() };
+/// ```
+/// ```compile_fail,E0638
+/// use openbindings::*;
+/// fn read(finding: &Finding) {
+///     let Finding { rule, status, code, location, message } = finding;
+/// }
+/// ```
+/// ```
+/// use openbindings::*;
+/// fn read(finding: &Finding) {
+///     let Finding { rule, status, code, location, message, .. } = finding;
+/// }
+/// ```
+#[non_exhaustive]
 pub struct Finding {
     /// Normative rule identifier, such as `OBI-01`.
     pub rule: &'static str,
@@ -118,6 +139,10 @@ impl std::fmt::Debug for Finding {
 
 #[derive(Clone, Serialize)]
 /// Assessment of all normative document rules at the pinned specification revision. At most 4096 findings and 8 MiB of aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate) are retained. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
+///
+/// Only validation builds reports. Later versions may add fields: read them by
+/// name and match with `..`.
+#[non_exhaustive]
 pub struct ValidationReport {
     /// Applied specification release, independent of package version.
     pub release: &'static str,
@@ -144,11 +169,26 @@ impl std::fmt::Debug for ValidationReport {
 
 #[derive(Clone, PartialEq, Eq, Serialize)]
 /// A well-formed declared version outside this implementation's supported line. This is separate from conformance evidence.
+/// Later versions may add fields: read them by name and match with `..`.
+#[non_exhaustive]
 pub struct VersionRefusal {
     /// Original declared version string.
     pub declared: String,
     /// Supported specification line used for the refusal.
     pub supported: &'static str,
+}
+impl VersionRefusal {
+    /// The refusal of a declared version: `Some` for a well-formed version
+    /// outside the supported line, `None` when [`check_version`] finds it
+    /// supported or malformed. A tool that checks a declaration before any
+    /// document exists, such as a synthesis target version, refuses with the
+    /// record validation returns.
+    pub fn new(declared: &str) -> Option<Self> {
+        (check_version(declared) == VersionDecision::Unsupported).then(|| Self {
+            declared: declared.into(),
+            supported: SUPPORTED_VERSIONS,
+        })
+    }
 }
 impl std::fmt::Debug for VersionRefusal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -805,20 +845,11 @@ pub fn validate_document_with_limits(
                     );
                 }
             } else {
-                let offset = error.byte_offset.min(bytes.len());
-                let prefix = &bytes[..offset];
-                let line = 1 + prefix.iter().filter(|&&b| b == b'\n').count();
-                let byte_column = 1 + prefix.iter().rev().take_while(|&&b| b != b'\n').count();
                 checks.mark(
                     0,
                     Evidence::Violated,
                     error.code,
-                    Some(SourceLocation {
-                        pointer: None,
-                        byte_offset: offset,
-                        line,
-                        byte_column,
-                    }),
+                    Some(backend::input_location(bytes, error.byte_offset)),
                     parse_error_message(error.code),
                 );
                 checks.not_applicable_after_json();
@@ -859,10 +890,7 @@ fn version_refusal(value: &JsonValue) -> Option<VersionRefusal> {
     if declarations.next().is_some() {
         return None;
     }
-    (check_version(declared) == VersionDecision::Unsupported).then(|| VersionRefusal {
-        declared: declared.into(),
-        supported: SUPPORTED_VERSIONS,
-    })
+    VersionRefusal::new(declared)
 }
 const MAX_FINDINGS: usize = 4096;
 const MAX_FINDING_POINTER_BYTES: usize = 8 * 1024 * 1024;

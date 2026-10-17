@@ -86,12 +86,12 @@ fn compilation_refusals_locate_authored_keywords_in_document_and_supplied_resour
             assert_eq!(detail.code, "schema-pattern-compilation");
             assert_eq!(
                 detail.location,
-                Some(SchemaLocation {
+                Some(SchemaLocation::new(
                     resource,
-                    pointer: format!("{prefix}/properties/a~1b~0c/{keyword}")
+                    format!("{prefix}/properties/a~1b~0c/{keyword}")
                         .parse()
                         .unwrap(),
-                })
+                ))
             );
             assert_eq!(
                 detail.message,

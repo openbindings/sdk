@@ -1,6 +1,6 @@
 //! Refusing oversized string encodings must not allocate the encoded payload.
 use super::{JsonValue, measured};
-use openbindings::{InputError, InputErrorKind, JsonLimits};
+use openbindings::{InputErrorKind, JsonLimits};
 use serde_json::json;
 
 pub fn run() {
@@ -14,13 +14,10 @@ pub fn run() {
     ] {
         let input = unit.repeat(count);
         let (result, bytes, nanos) = measured(|| JsonValue::string(&input));
+        let error = result.unwrap_err();
         assert_eq!(
-            result.unwrap_err(),
-            InputError {
-                kind: InputErrorKind::Limit,
-                byte_offset: limit,
-                code: "byte-limit",
-            }
+            (error.kind, error.byte_offset, error.code),
+            (InputErrorKind::Limit, limit, "byte-limit")
         );
         assert!(
             bytes <= 4096,

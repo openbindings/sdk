@@ -1,5 +1,7 @@
 use crate::*;
-use openbindings::{AUTHORING_VERSION, JsonKind, JsonRef, Source, VersionDecision, check_version};
+use openbindings::{
+    AUTHORING_VERSION, JsonKind, JsonRef, Source, VersionDecision, VersionRefusal, check_version,
+};
 use std::collections::{BTreeMap, HashMap, HashSet, hash_map::DefaultHasher};
 use std::hash::{Hash, Hasher};
 
@@ -183,16 +185,15 @@ pub(crate) fn admit(request: &SynthesisRequest<'_>) -> Result<(), SynthesisError
         SynthesisError::simple(SynthesisErrorKind::InvalidInput, "invalid-input", message)
     };
     let declared = request.openbindings_version.unwrap_or(AUTHORING_VERSION);
-    match check_version(declared) {
-        VersionDecision::Supported => {}
-        VersionDecision::Unsupported => return Err(SynthesisError::unsupported_version(declared)),
-        VersionDecision::Malformed => {
-            return Err(SynthesisError::simple(
-                SynthesisErrorKind::InvalidInput,
-                "malformed-version",
-                "target version is not valid SemVer",
-            ));
-        }
+    if let Some(refusal) = VersionRefusal::new(declared) {
+        return Err(SynthesisError::unsupported_version(refusal));
+    }
+    if check_version(declared) == VersionDecision::Malformed {
+        return Err(SynthesisError::simple(
+            SynthesisErrorKind::InvalidInput,
+            "malformed-version",
+            "target version is not valid SemVer",
+        ));
     }
     let mut names: HashMap<&str, &Source> = HashMap::new();
     for input in request.sources {

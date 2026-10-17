@@ -23,7 +23,7 @@ impl InterfaceSynthesizer for Skeleton {
             if let Some(value) = request.name { document.set_name(value)?; }
             if let Some(value) = request.version { document.set_version(value)?; }
             if let Some(value) = request.description { document.set_description(value)?; }
-            Ok(SynthesisCandidate { document, coverage: CoverageClaim::complete(Vec::new()) })
+            Ok(SynthesisCandidate::new(document, CoverageClaim::complete(Vec::new())))
         })())
     }
 }
@@ -38,10 +38,15 @@ async fn example() -> Result<(), SynthesisError> {
 }
 ```
 
-Providers return an editable `CoverageClaim`. Use `CoverageClaim::complete(entries)`
-to claim an exhaustive inventory with no limitation. The facade checks the claim
-against the request and candidate document before returning `SynthesisCoverage`;
-the constructor does not establish correspondence or provider honesty.
+Providers return an editable `CoverageClaim` in a `SynthesisCandidate::new(document,
+coverage)`. Use `CoverageClaim::complete(entries)` to claim an exhaustive inventory
+with no limitation, or `CoverageClaim::partial(entries, limitation)` with a
+`CoverageLimitation::new(code, message)` for an unknown remainder. Start each
+disposition with `CoverageEntry::new` and assign the fields its status requires.
+The facade checks the claim against the request and candidate document before
+returning `SynthesisCoverage`; the constructors do not establish correspondence or
+provider honesty. Provider and result records may gain fields in later versions,
+so build them with these constructors and match them with `..`.
 
 Use `synthesize_with_coverage` to inspect the checked document and its coverage.
 Use `synthesize` when the application requires the SDK's strict eligibility
