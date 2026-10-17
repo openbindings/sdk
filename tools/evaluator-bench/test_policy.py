@@ -219,39 +219,116 @@ class InstrumentConfinement(unittest.TestCase):
     def test_identical_instruments_do_not_authorize_a_failed_build_fallback(self):
         self.assertFalse(self.audit()['confined'])
 
-    def build(self, *, confined=True, fail_candidate=False, fail_own_base=False):
-        # Fake only Cargo, retaining the real copying, confinement and fallback
-        # logic. The identical instrument fails on the old SDK by construction.
+    def build(self, *, confined=True, fail_candidate=False, fail_own_base=False, identical_builds=False,
+              reports=None):
+        # Fake only Cargo and the binaries, retaining the real copying,
+        # confinement, fallback and provenance logic. Unless `identical_builds`,
+        # the identical instrument fails on the old SDK by construction. Like
+        # real Cargo with relative workspace fingerprints and old modification
+        # times, the fake judges a directory that already holds a binary fresh
+        # and leaves that binary in place. A fake binary reports the digests of
+        # the trees it was built from, or `reports(name, sources)` if given.
         sources = []
         for variant, instrument in [('baseline', self.base), ('candidate', self.candidate)]:
             source = self.root/'sources'/variant
             shutil.copytree(instrument, source/'tools/evaluator-bench')
             (source/'crates/core').mkdir(parents=True)
-            (source/'crates/core/Cargo.toml').write_text('[package]\nname = "openbindings"\n')
+            (source/'crates/core/Cargo.toml').write_text(f'[package]\nname = "openbindings"\n# {variant}\n')
             sources.append(source)
         (sources[1]/'tools/evaluator-bench/src/sdk.rs').write_text('new SDK calls\n')
         if not confined:
             (sources[1]/'tools/evaluator-bench/src/main.rs').write_text('changed timing\n')
         calls = []
         target = self.root/'target'
-        def cargo(command, **options):
+        def run(command, **options):
+            if command[1:] == ['--provenance']:
+                return subprocess.CompletedProcess(command, 0, stdout=Path(command[0]).read_text(), stderr='')
             manifest = Path(command[command.index('--manifest-path')+1])
-            calls.append(str(manifest))
+            directory = Path(options['env']['CARGO_TARGET_DIR'])
+            calls.append((str(manifest), directory))
             is_candidate = manifest.is_relative_to(sources[1])
             identical = manifest.parent.name.startswith('evaluator-candidate-')
-            fails = identical or (is_candidate and fail_candidate) or (not is_candidate and fail_own_base)
-            if not fails:
-                (target/'release').mkdir(parents=True, exist_ok=True)
-                (target/'release/openbindings-evaluator-bench').write_text(str(manifest))
+            fails = (identical and not identical_builds) or (is_candidate and fail_candidate) or (not is_candidate and fail_own_base)
+            binary = directory/'release'/compare.BINARY
+            if not fails and not binary.exists():
+                binary.parent.mkdir(parents=True)
+                root = sources[1] if is_candidate else sources[0]
+                report = dict(instrument=compare.tree_digest(manifest.parent, compare.INSTRUMENT_SOURCES),
+                              sdk=compare.tree_digest(root, compare.SDK_SOURCES))
+                if reports:
+                    report = reports(directory.name, sources) or report
+                binary.write_text(json.dumps(report))
             return subprocess.CompletedProcess(command, int(fails))
-        with patch.object(compare.subprocess, 'run', side_effect=cargo):
+        with patch.object(compare.subprocess, 'run', side_effect=run):
             metadata = compare.build_instruments(*sources, self.root/'output', self.root/'bin', target)
         return metadata, calls
+
+    def test_each_variant_builds_in_its_own_new_target_directory(self):
+        # One shared directory would hand the identical baseline the candidate's
+        # binary; separate directories keep every binary its own build.
+        metadata, calls = self.build(identical_builds=True)
+        self.assertEqual(metadata['kind'], 'identical')
+        directories = [directory for _, directory in calls]
+        self.assertEqual(directories, [(self.root/'target'/name).resolve() for name in compare.VARIANTS[:4]])
+        builds = metadata['builds']
+        self.assertEqual(list(builds), compare.VARIANTS[:4])
+        for name, tree in [('candidate', 'candidate'), ('baseline-identical', 'baseline')]:
+            root = self.root/'sources'/tree
+            self.assertEqual(builds[name]['source'], str(root.resolve()))
+            self.assertEqual(builds[name]['sdk_digest'], compare.tree_digest(root, compare.SDK_SOURCES))
+            self.assertEqual(json.loads((self.root/'bin'/name.removesuffix('-identical')).read_text())['sdk'],
+                             builds[name]['sdk_digest'])
+        self.assertTrue(Path(builds['baseline-identical']['instrument']).name.startswith('evaluator-candidate-'))
+        self.assertEqual(builds['baseline-identical']['instrument_digest'], builds['candidate']['instrument_digest'])
+        self.assertNotEqual(builds['baseline-identical']['sdk_digest'], builds['candidate']['sdk_digest'])
+
+    def test_reused_target_directories_are_refused_before_building(self):
+        (self.root/'target/baseline-identical').mkdir(parents=True)
+        with self.assertRaisesRegex(RuntimeError, 'reuse'):
+            self.build(identical_builds=True)
+        self.assertFalse((self.root/'bin').exists())
+
+    def test_baseline_built_from_candidate_sources_is_refused(self):
+        def candidate_sdk(name, sources):
+            if name == 'baseline-identical':
+                return dict(instrument=compare.tree_digest(sources[1]/'tools/evaluator-bench', compare.INSTRUMENT_SOURCES),
+                            sdk=compare.tree_digest(sources[1], compare.SDK_SOURCES))
+        with self.assertRaisesRegex(RuntimeError, 'baseline-identical binary was not built from.*SDK sources are those of'):
+            self.build(identical_builds=True, reports=candidate_sdk)
+
+    def test_fallback_binary_reused_from_the_identical_attempt_is_refused(self):
+        # The merge base's own instrument shares the merge base's SDK path with
+        # the identical copy; a reused binary still reports the copy's sources.
+        def identical_copy(name, sources):
+            if name == 'baseline':
+                return dict(instrument=compare.tree_digest(sources[1]/'tools/evaluator-bench', compare.INSTRUMENT_SOURCES),
+                            sdk=compare.tree_digest(sources[0], compare.SDK_SOURCES))
+        with self.assertRaisesRegex(RuntimeError, 'baseline binary was not built from'):
+            self.build(reports=identical_copy)
+
+    def test_source_digests_match_the_build_script(self):
+        # Known vector from build.rs: nested files, UTF-8 contents, an empty
+        # file, a skipped symbolic link and skipped `target` entries.
+        tree = self.root/'tree'
+        for name, data in [('src/main.rs', b'fn main() {}\n'), ('src/nested/data.txt', 'café\n'.encode()),
+                           ('src/target/x', b'ignored'), ('Cargo.toml', b'[package]\n'),
+                           ('crates/a/target/out', b'built'), ('crates/a/lib.rs', b'pub fn a() {}\n'),
+                           ('vendor/b/empty', b'')]:
+            (tree/name).parent.mkdir(parents=True, exist_ok=True)
+            (tree/name).write_bytes(data)
+        (tree/'src/link.toml').symlink_to('../Cargo.toml')
+        self.assertEqual(compare.tree_digest(tree, compare.INSTRUMENT_SOURCES), 'f557db8b34debee6')
+        self.assertEqual(compare.tree_digest(tree, compare.SDK_SOURCES), '38845d3fe1785c2a')
 
     def test_confined_fallback_builds_each_own_instrument_and_records_diff(self):
         metadata, calls = self.build()
         self.assertEqual(metadata['kind'], 'cross-API')
-        self.assertEqual(len(calls), 5)
+        self.assertEqual([directory.name for _, directory in calls],
+                         ['candidate', 'candidate-alloc', 'baseline-identical', 'baseline', 'baseline-alloc'])
+        self.assertEqual(metadata['builds']['baseline']['instrument'],
+                         str((self.root/'sources/baseline/tools/evaluator-bench').resolve()))
+        self.assertEqual(json.loads((self.root/'bin/baseline').read_text())['instrument'],
+                         compare.tree_digest(self.root/'sources/baseline/tools/evaluator-bench', compare.INSTRUMENT_SOURCES))
         self.assertTrue((self.root/'output/instrument.diff').read_text())
         self.assertEqual(json.loads((self.root/'output/instrument-pair.json').read_text()), metadata)
         for name in ['baseline', 'candidate', 'baseline-alloc', 'candidate-alloc']:

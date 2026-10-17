@@ -10,14 +10,14 @@ mod edit;
 mod read_views;
 pub use edit::{Edit, EditError};
 mod conformant_views;
-use crate::schema_space::SchemaSpace;
+use crate::{contracts::ResourceSetInner, schema_space::SchemaSpace};
 pub use conformant_views::*;
 use read_views::NamespaceCache;
 pub use read_views::{BindingView, DependencyView, ExampleView, SourceView};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt,
-    sync::{Arc, Mutex, OnceLock, PoisonError},
+    sync::{Arc, Mutex, OnceLock, PoisonError, Weak},
 };
 
 /// Stable rule identifiers OBI-01 through OBI-13, in specification order.
@@ -174,18 +174,45 @@ pub struct Document {
 pub(crate) struct DocumentInner {
     pub value: JsonValue,
     pub schemas: OnceLock<SchemaIndex>,
-    // Value-contract resolution spaces, assembled only when an evaluator asks
-    // for the core projection: one without supplied resources, and one for the
-    // most recently used nonempty resource set. Both are released with this
-    // revision; a different set replaces the second.
+    // Value-contract resolution spaces are assembled only when an evaluator asks
+    // for the core projection. The space without supplied resources lives here;
+    // a space with a nonempty set lives in that set, which this revision tells
+    // to release it when the revision is dropped.
     resolution: OnceLock<Arc<SchemaSpace>>,
-    supplied_resolution: Mutex<Option<Arc<SchemaSpace>>>,
+    spaces_in: Mutex<Vec<Weak<ResourceSetInner>>>,
     validation: OnceLock<Result<Arc<ValidationReport>, VersionRefusal>>,
     interpretation: OnceLock<Result<(), InterpretationError>>,
     names: OnceLock<Result<NameIndex, InterpretationError>>,
     bindings: NamespaceCache,
     sources: NamespaceCache,
     dependencies: NamespaceCache,
+}
+impl DocumentInner {
+    /// Stop tracking a set that is being dropped.
+    pub(crate) fn forget_set(&self, set: *const ResourceSetInner) {
+        let mut sets = self
+            .spaces_in
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        sets.retain(|known| !std::ptr::eq(known.as_ptr(), set));
+        if sets.is_empty() {
+            *sets = Vec::new();
+        }
+    }
+}
+impl Drop for DocumentInner {
+    fn drop(&mut self) {
+        let revision: *const Self = self;
+        let sets = self
+            .spaces_in
+            .get_mut()
+            .unwrap_or_else(PoisonError::into_inner);
+        for set in sets.drain(..) {
+            if let Some(set) = set.upgrade() {
+                set.release(revision);
+            }
+        }
+    }
 }
 impl fmt::Debug for Document {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -326,7 +353,7 @@ impl Document {
                 value,
                 schemas: OnceLock::new(),
                 resolution: OnceLock::new(),
-                supplied_resolution: Mutex::new(None),
+                spaces_in: Mutex::default(),
                 validation: OnceLock::new(),
                 interpretation: OnceLock::new(),
                 names: OnceLock::new(),
@@ -691,35 +718,36 @@ impl DocumentValidation {
     }
 }
 impl Conformant<Document> {
-    /// The resolution space layering `resources` over this revision, assembled
-    /// at most once per revision for an empty set and once for the most
-    /// recently used nonempty set; repeated preparation reuses it.
+    /// The resolution space layering `resources` over this revision. It is
+    /// assembled once per live pair: the space without resources lives with the
+    /// revision, and a space with a nonempty set lives with that set until
+    /// either the set or the revision is dropped. Alternating live sets reuses
+    /// each set's space; nothing retains a space beyond its pair.
     pub(crate) fn resolution(&self, resources: &ResourceSet) -> Arc<SchemaSpace> {
         let inner = &self.document.inner;
         if resources.is_empty() {
             return inner
                 .resolution
-                .get_or_init(|| Arc::new(SchemaSpace::new(&self.document, resources.clone())))
+                .get_or_init(|| Arc::new(SchemaSpace::new(&self.document, resources)))
                 .clone();
         }
-        // The slot is only a cache: a panic elsewhere cannot leave it inconsistent.
-        let cached = inner
-            .supplied_resolution
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .as_ref()
-            .filter(|space| space.supplied.same_set(resources))
-            .cloned();
-        if let Some(space) = cached {
+        if let Some(space) = resources.kept_space(inner) {
             return space;
         }
-        // Assemble outside the lock so concurrent preparations with other sets
-        // do not wait; the last assembled set stays cached.
-        let space = Arc::new(SchemaSpace::new(&self.document, resources.clone()));
-        *inner
-            .supplied_resolution
+        // Assemble outside every lock; a concurrent preparation's space may win.
+        let space =
+            resources.keep_space(inner, Arc::new(SchemaSpace::new(&self.document, resources)));
+        // The caller holds this revision, so it cannot be dropped before the set
+        // learns to release the space with it.
+        let mut sets = inner
+            .spaces_in
             .lock()
-            .unwrap_or_else(PoisonError::into_inner) = Some(space.clone());
+            .unwrap_or_else(PoisonError::into_inner);
+        sets.retain(|set| set.strong_count() > 0);
+        let set = resources.downgrade();
+        if !sets.iter().any(|known| known.ptr_eq(&set)) {
+            sets.push(set);
+        }
         space
     }
     /// Borrow the exact snapshot certified by this proof, for plain fallible reads.
@@ -1448,10 +1476,13 @@ mod finding_identity_tests {
 #[cfg(test)]
 mod resolution_reuse {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    /// Projects the core resolution space on every preparation, as custom evaluators may.
-    #[derive(Default)]
-    struct Projecting(AtomicUsize);
+    use crate::schema_space::ASSEMBLED;
+    use std::sync::Weak;
+    /// Projects the core resolution space on every preparation, as custom
+    /// evaluators may, and retains its request, as diagnostics-bearing
+    /// prepared schemas do.
+    struct Projecting;
+    struct Retaining(#[allow(dead_code)] SchemaRequest);
     impl SchemaEvaluator for Projecting {
         fn prepare(
             &self,
@@ -1459,8 +1490,7 @@ mod resolution_reuse {
             control: &dyn WorkControl,
         ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
             request.evaluation_program(control)?;
-            self.0.fetch_add(1, Ordering::Relaxed);
-            Ok(Arc::new(Accepting))
+            Ok(Arc::new(Retaining(request.clone())))
         }
     }
     /// Never asks for the core projection, like the default evaluator.
@@ -1468,79 +1498,186 @@ mod resolution_reuse {
     impl SchemaEvaluator for Accepting {
         fn prepare(
             &self,
-            _: &SchemaRequest,
+            request: &SchemaRequest,
             _: &dyn WorkControl,
         ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-            Ok(Arc::new(Accepting))
+            Ok(Arc::new(Retaining(request.clone())))
         }
     }
-    impl PreparedSchema for Accepting {
+    impl PreparedSchema for Retaining {
         fn validate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
             ValueOutcome::Satisfies
         }
     }
-    fn snapshot(schema: &str) -> ResourceSet {
-        ResourceSet::new([SchemaResource {
-            uri: "https://example.test/item".into(),
-            document: JsonValue::parse(schema).unwrap(),
-        }])
-        .unwrap()
-    }
-    fn cached(
-        proof: &Conformant<Document>,
-    ) -> (Option<Arc<SchemaSpace>>, Option<Arc<SchemaSpace>>) {
-        let inner = &proof.document.inner;
-        (
-            inner.resolution.get().cloned(),
-            inner.supplied_resolution.lock().unwrap().clone(),
-        )
-    }
-
-    #[test]
-    fn preparations_share_one_resolution_space_per_document_and_resource_set() {
-        let proof = Document::parse(
+    fn proof() -> Conformant<Document> {
+        Document::parse(
             r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/item"},"output":true}}}"#,
         )
         .unwrap()
         .validate()
         .unwrap()
         .conformant()
-        .unwrap();
+        .unwrap()
+    }
+    fn snapshot(minimum: u32) -> ResourceSet {
+        ResourceSet::new([SchemaResource {
+            uri: "https://example.test/item".into(),
+            document: JsonValue::parse(format!(r#"{{"type":"integer","minimum":{minimum}}}"#))
+                .unwrap(),
+        }])
+        .unwrap()
+    }
+    fn assembled() -> usize {
+        ASSEMBLED.with(std::cell::Cell::get)
+    }
+    /// The space kept for a live pair, without assembling one.
+    fn kept(proof: &Conformant<Document>, set: &ResourceSet) -> Option<Weak<SchemaSpace>> {
+        set.kept_space(&proof.document.inner)
+            .map(|space| Arc::downgrade(&space))
+    }
+
+    #[test]
+    fn evaluators_that_never_project_assemble_no_space() {
+        let proof = proof();
+        let operation = proof.resolve_operation("op").unwrap();
+        let set = snapshot(1);
+        let before = assembled();
+        drop(
+            operation
+                .input()
+                .unwrap()
+                .prepare_with(&Accepting, &set)
+                .unwrap(),
+        );
+        drop(operation.output().unwrap().prepare(&Accepting).unwrap());
+        assert_eq!(assembled(), before);
+        assert!(proof.document.inner.resolution.get().is_none());
+        assert!(kept(&proof, &set).is_none());
+    }
+
+    #[test]
+    fn repeated_and_alternating_sets_reuse_one_space_per_live_pair() {
+        let proof = proof();
         let operation = proof.resolve_operation("op").unwrap();
         let (input, output) = (operation.input().unwrap(), operation.output().unwrap());
-        let first = snapshot(r#"{"type":"integer"}"#);
-        // Validation, reads and evaluators that never project assemble nothing.
-        assert!(input.prepare_with(&Accepting, &first).is_ok());
-        assert!(matches!(cached(&proof), (None, None)));
+        let (first, second) = (snapshot(1), snapshot(2));
+        let before = assembled();
+        for _ in 0..3 {
+            for set in [&first, &second, &first.clone()] {
+                drop(input.prepare_with(&Projecting, set).unwrap());
+                drop(output.prepare_with(&Projecting, set).unwrap());
+            }
+            drop(output.prepare(&Projecting).unwrap());
+            drop(
+                output
+                    .prepare_with(&Projecting, &ResourceSet::default())
+                    .unwrap(),
+            );
+        }
+        // One space per set, plus one without resources, however preparations alternate.
+        assert_eq!(assembled() - before, 3);
+        let (a, b) = (
+            kept(&proof, &first).unwrap(),
+            kept(&proof, &second).unwrap(),
+        );
+        assert!(!a.ptr_eq(&b));
+    }
 
-        // Repeated preparation with one set, or a clone of it, reuses one space,
-        // including for another contract of the same revision.
-        let projecting = Projecting::default();
-        input.prepare_with(&projecting, &first).unwrap();
-        let space = cached(&proof).1.unwrap();
-        input.prepare_with(&projecting, &first.clone()).unwrap();
-        output.prepare_with(&projecting, &first).unwrap();
-        assert!(Arc::ptr_eq(&space, &cached(&proof).1.unwrap()));
-        assert_eq!(projecting.0.load(Ordering::Relaxed), 3);
+    #[test]
+    fn dropping_a_set_or_every_document_owner_releases_its_space() {
+        let proof = proof();
+        let operation = proof.resolve_operation("op").unwrap();
+        let input = operation.input().unwrap();
+        let (first, second) = (snapshot(1), snapshot(2));
+        drop(input.prepare_with(&Projecting, &first).unwrap());
+        drop(input.prepare_with(&Projecting, &second).unwrap());
+        let (a, b) = (
+            kept(&proof, &first).unwrap(),
+            kept(&proof, &second).unwrap(),
+        );
+        // The set goes; its space goes with it while the document lives on, and
+        // the document stops tracking it.
+        drop(first);
+        assert!(a.upgrade().is_none());
+        assert!(b.upgrade().is_some());
+        assert_eq!(proof.document.inner.spaces_in.lock().unwrap().len(), 1);
+        // Every document owner goes; the set it outlives no longer keeps its space.
+        drop(operation);
+        drop(proof);
+        assert!(b.upgrade().is_none());
+        assert_eq!(second.kept_spaces(), 0);
+    }
 
-        // Preparation without resources uses its own space, assembled once.
-        output.prepare(&projecting).unwrap();
-        output
-            .prepare_with(&projecting, &ResourceSet::default())
+    #[test]
+    fn a_prepared_contract_keeps_no_space_of_a_set_it_never_received() {
+        let proof = proof();
+        let operation = proof.resolve_operation("op").unwrap();
+        // Prepared without resources and retaining its request, hence the document.
+        let keep = operation.output().unwrap().prepare(&Projecting).unwrap();
+        let without = Arc::downgrade(proof.document.inner.resolution.get().unwrap());
+        let other = snapshot(1);
+        let prepared = operation
+            .input()
+            .unwrap()
+            .prepare_with(&Projecting, &other)
             .unwrap();
-        let empty = cached(&proof).0.unwrap();
-        assert!(!Arc::ptr_eq(&empty, &space));
-        assert!(Arc::ptr_eq(&empty, &proof.resolution(ResourceSet::empty())));
+        let space = kept(&proof, &other).unwrap();
+        drop((prepared, other, operation, proof));
+        // The document lives on through `keep`; the other set's space does not.
+        assert!(space.upgrade().is_none());
+        assert!(without.upgrade().is_some());
+        drop(keep);
+        assert!(without.upgrade().is_none());
+    }
 
-        // A different set, even with equal contents, replaces the supplied space:
-        // the revision retains at most one, so the replaced space is released.
-        let released = Arc::downgrade(&space);
-        drop(space);
-        let second = snapshot(r#"{"type":"integer"}"#);
-        input.prepare_with(&projecting, &second).unwrap();
-        assert!(released.upgrade().is_none());
-        let replacement = cached(&proof).1.unwrap();
-        assert!(replacement.supplied.same_set(&second));
-        assert!(Arc::ptr_eq(&empty, &cached(&proof).0.unwrap()));
+    #[test]
+    fn concurrent_preparations_project_their_own_set() {
+        /// Fails preparation when the projection lacks the request's own snapshot,
+        /// recognized by its `minimum` member.
+        struct Checking;
+        impl SchemaEvaluator for Checking {
+            fn prepare(
+                &self,
+                request: &SchemaRequest,
+                control: &dyn WorkControl,
+            ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+                let program = request.evaluation_program(control)?;
+                if let Some(resource) = request.supplied_resources().iter().next() {
+                    let text = resource.document.text();
+                    let marker = text[text.find("\"minimum\":").unwrap()..].trim_end_matches('}');
+                    if !program
+                        .resources()
+                        .iter()
+                        .any(|r| r.document.text().contains(marker))
+                    {
+                        return Err(NoVerdict::new(
+                            NoVerdictReason::EvaluatorFailure,
+                            "crossed-sets",
+                            "the projection carries another set's snapshot",
+                        ));
+                    }
+                }
+                Ok(Arc::new(Retaining(request.clone())))
+            }
+        }
+        let proof = proof();
+        let sets: Vec<_> = (0..6).map(snapshot).collect();
+        std::thread::scope(|scope| {
+            for thread in 0..6 {
+                let (proof, sets) = (&proof, &sets);
+                scope.spawn(move || {
+                    let operation = proof.resolve_operation("op").unwrap();
+                    let (input, output) = (operation.input().unwrap(), operation.output().unwrap());
+                    for i in 0..60 {
+                        let set = &sets[(thread + i) % sets.len()];
+                        assert!(input.prepare_with(&Checking, set).is_ok());
+                        if i % 5 == 0 {
+                            assert!(output.prepare(&Checking).is_ok());
+                        }
+                    }
+                });
+            }
+        });
+        assert!(sets.iter().all(|set| set.kept_spaces() == 1));
     }
 }

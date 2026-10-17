@@ -94,8 +94,62 @@ def instrument_diff(baseline, candidate, names):
                 diff=content, sha256=hashlib.sha256(content.encode()).hexdigest())
 
 
+BINARY = 'openbindings-evaluator-bench'
+VARIANTS = ['candidate', 'candidate-alloc', 'baseline-identical', 'baseline-alloc-identical',
+            'baseline', 'baseline-alloc']
+INSTRUMENT_SOURCES = ['src', 'Cargo.toml', 'Cargo.lock', 'build.rs']
+SDK_SOURCES = ['crates', 'vendor']
+
+
+def tree_digest(root, entries):
+    """The source digest that the instrument's build.rs embeds (FNV-1a, 64-bit).
+
+    Regular files under `entries`, sorted by relative path, each contribute the
+    path's UTF-8 bytes, a zero byte, the length as eight little-endian bytes and
+    the contents. Symbolic links and anything named `target` are skipped.
+    """
+    files = []
+    def collect(path):
+        if path.is_symlink():
+            return
+        if path.is_dir():
+            for child in path.iterdir():
+                if child.name != 'target':
+                    collect(child)
+        elif path.is_file():
+            files.append((path.relative_to(root).as_posix(), path))
+    for entry in entries:
+        if (root/entry).exists():
+            collect(root/entry)
+    value = 0xcbf29ce484222325
+    for relative, path in sorted(files):
+        contents = path.read_bytes()
+        for chunk in (relative.encode(), b'\0', len(contents).to_bytes(8, 'little'), contents):
+            for byte in chunk:
+                value = ((value ^ byte) * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF
+    return f'{value:016x}'
+
+
+def reported_sources(binary):
+    """Source digests a built instrument embedded at compile time."""
+    run = subprocess.run([str(binary.resolve()), '--provenance'], capture_output=True, text=True)
+    if run.returncode:
+        raise RuntimeError(f'{binary} could not report its sources: {run.stderr}')
+    return json.loads(run.stdout)
+
+
 def build_instruments(baseline_source, candidate_source, output, binaries, target):
-    """Try the identical candidate instrument first; audit before any fallback."""
+    """Try the identical candidate instrument first; audit before any fallback.
+
+    Every variant builds in its own new target directory. Cargo fingerprints
+    the instrument by paths relative to its own workspace and judges sources
+    with older modification times fresh, so a shared directory could hand one
+    variant another's binary. Each binary must then report the instrument and
+    SDK source digests of the trees it was built from.
+    """
+    reused = [name for name in VARIANTS if (target/name).exists()]
+    if reused:
+        raise RuntimeError(f'Refusing to reuse target directories {reused} under {target}; pass a new --target')
     output.mkdir(parents=True, exist_ok=True)
     binaries.mkdir(parents=True, exist_ok=True)
     base = baseline_source/'tools/evaluator-bench'
@@ -105,6 +159,8 @@ def build_instruments(baseline_source, candidate_source, output, binaries, targe
     metadata = dict(kind='identical', instrument_diff=audit,
                     baseline_source=str(baseline_source.resolve()), candidate_source=str(candidate_source.resolve()))
     metadata['lock_sha256'] = dict(baseline=digest(base/'Cargo.lock'), candidate=digest(candidate/'Cargo.lock'))
+    metadata['builds'] = {}
+    roots = [baseline_source, candidate_source]
     # Never overwrite the original merge-base instrument. Its own relative SDK
     # paths still resolve correctly from this temporary sibling directory.
     with tempfile.TemporaryDirectory(prefix='evaluator-candidate-', dir=base.parent) as temporary:
@@ -116,29 +172,45 @@ def build_instruments(baseline_source, candidate_source, output, binaries, targe
                 destination.symlink_to(os.readlink(source))
             else:
                 shutil.copy2(source, destination)
-        def build(source, variant, allocation=False, attempt=''):
+        sdk_digests = {}
+        def build(source, root, variant, allocation=False, attempt=''):
             command = ['cargo', 'build', '--locked', '--release', '--manifest-path', str(source/'Cargo.toml')]
             if allocation: command += ['--features', 'allocations']
             suffix = '-alloc' if allocation else ''
-            env = dict(os.environ, CARGO_TARGET_DIR=str(target.resolve()))
-            with (output/f'build-{variant}{suffix}{attempt}.log').open('w') as log:
+            name = variant+suffix+attempt
+            directory = target/name
+            env = dict(os.environ, CARGO_TARGET_DIR=str(directory.resolve()))
+            with (output/f'build-{name}.log').open('w') as log:
                 code = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, env=env).returncode
             if code == 0:
-                shutil.copy2(target/'release/openbindings-evaluator-bench', binaries/(variant+suffix))
+                built = directory/'release'/BINARY
+                for tree in roots:
+                    if tree not in sdk_digests: sdk_digests[tree] = tree_digest(tree, SDK_SOURCES)
+                expected = dict(instrument=tree_digest(source, INSTRUMENT_SOURCES), sdk=sdk_digests[root])
+                reported = reported_sources(built)
+                if reported != expected:
+                    other = [tree for tree in roots if tree != root and sdk_digests[tree] == reported.get('sdk')]
+                    origin = f'; its SDK sources are those of {other[0]}' if other and expected['sdk'] != reported.get('sdk') else ''
+                    raise RuntimeError(f'{name} binary was not built from {source} and {root}: it reports '
+                                       f'{reported}, expected {expected}{origin}')
+                metadata['builds'][name] = dict(target=str(directory.resolve()), source=str(root.resolve()),
+                                                instrument=str(source.resolve()), instrument_digest=expected['instrument'],
+                                                sdk_digest=expected['sdk'], binary_sha256=digest(built))
+                shutil.copy2(built, binaries/(variant+suffix))
             return code == 0
         # Candidate failures are real build failures, never "not comparable".
-        if not build(candidate, 'candidate') or not build(candidate, 'candidate', True):
+        if not build(candidate, candidate_source, 'candidate') or not build(candidate, candidate_source, 'candidate', True):
             raise RuntimeError('Candidate release instrument failed; inspect build logs')
-        baseline_builds = build(same, 'baseline', attempt='-identical')
+        baseline_builds = build(same, baseline_source, 'baseline', attempt='-identical')
         if baseline_builds:
-            baseline_builds = build(same, 'baseline', True, attempt='-identical')
+            baseline_builds = build(same, baseline_source, 'baseline', True, attempt='-identical')
         if not baseline_builds:
             if not audit['confined']:
                 metadata['kind'] = 'not comparable'
                 metadata['reason'] = 'Candidate instrument failed against merge base; instrument diff is not confined to src/sdk.rs and SDK-owned lock entries.'
             else:
                 metadata['kind'] = 'cross-API'
-                if not build(base, 'baseline') or not build(base, 'baseline', True):
+                if not build(base, baseline_source, 'baseline') or not build(base, baseline_source, 'baseline', True):
                     raise RuntimeError('Confined cross-API baseline failed; inspect build logs')
     (output/'instrument-pair.json').write_text(json.dumps(metadata, indent=2)+'\n')
     if metadata['kind'] == 'not comparable':

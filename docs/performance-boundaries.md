@@ -15,7 +15,7 @@ document and `ResourceSet` also saves work, but still prepares a fresh contract 
 each `prepare` call. The SDK does not transparently cache arbitrary custom
 evaluator results.
 
-On 2026-10-15, paired release measurements against revision `7013a36` on macOS
+On 2026-10-15, paired release measurements against revision `3fd152c` on macOS
 arm64 / Rust 1.99.0 produced the following medians, including shared carrier inspection
 and compact reference routing. Preparation includes schema parsing, minimal document proof, resource
 contexts, compilation and destruction; evaluation retains the contract and parsed
@@ -40,15 +40,15 @@ against the faster of two peers. Exact decimal-array evaluation changed by
 arithmetic costs.
 
 On 2026-10-16, preparing contracts from the operation instead of a retained
-context was compared with revision `3cb5783` by the benchmark harness's cross-API
+context was compared with revision `37bfd7f` by the benchmark harness's cross-API
 pairs (macOS arm64, Rust 1.99.0, two batches of 20 adjacent randomized pairs).
 Preparation no longer assembles a core resolution space unless an evaluator asks
 for the core projection, so one-shot preparation (`compile`) fell by 1–20% and
 `full` by up to 20%; repeated preparation with the same document and resources
 (`context`) stayed within 0.992–1.008. Allocation counts per operation fell for
-one-shot preparation and were unchanged elsewhere. Evaluation code is unchanged,
-and its small rows moved by up to ±4% between builds with byte-identical hot
-machine code; that is code placement, not a contract cost.
+one-shot preparation and were unchanged elsewhere. The evaluation path's machine
+code is byte-identical apart from addresses; sub-microsecond evaluation rows
+measured up to 4% slower in these builds, which is not yet attributed.
 
 A fan-in workload has 100 distinct referring resources pointing to one supplied
 integer schema with 5,000 unused definitions. Twelve adjacent fresh-child pairs
@@ -126,6 +126,25 @@ the largest, plus a document with six findings. Explain inputs contain one and
 Checks cover that count and its original code and instance/schema locations.
 The many-violation input does not qualify the cost of returning many problems.
 
+Each mode's operation is selected before timing and runs in its own non-inlined
+timed loop, so a change cannot recompile the loop of a mode it does not reach,
+and no timed iteration compares mode names. Code placement still couples modes:
+growing one loop moves every later one, and SDK changes move code the same way.
+Layout effects cannot be removed entirely, so timing stays advisory on shared
+runners.
+
+On 2026-10-17 (macOS arm64, Rust 1.99.0, paired runs of 40 pairs per row on a
+loaded host), removing per-iteration dispatch lowered the `baseline` floor from
+5.1 to 2.9 ns and small evaluations by 1.3 to 3.9 ns; larger rows kept a median
+ratio of 1.000. One extra `black_box` in the read loop moved every later loop by
+120 bytes. The other non-cold rows then moved by a median of 0.17% (90th
+percentile 0.57%), against 0.10% (0.48%) for two identical binaries; `one-of`
+evaluation moved 1.7% and 1.9% in two runs. The previous single-function
+structure, which this edit grew by exactly 64 bytes, moved by 0.14% (0.40%).
+The `reference-text` evaluations run at two or three distinct speeds per
+process and moved by up to 14% between differently laid out binaries in either
+structure.
+
 The workflow first tries the candidate's identical instrument against both SDK
 revisions. If the baseline fails to build, it may build each revision's own
 instrument only when their complete instrument diff changes `src/sdk.rs` and
@@ -134,7 +153,12 @@ Any fixture, timing, check, allocator, manifest, third-party lock or other
 instrument change prohibits that fallback. Such pairs remain not comparable
 and pass with a report. Authorized pairs are marked `cross-API`, retain the
 instrument diff and SHA-256 plus lock hashes, and face the same outcome, heap,
-allocation-count and timing policy as identical-instrument pairs.
+allocation-count and timing policy as identical-instrument pairs. Every build
+uses its own new target directory, because Cargo can judge archived sources fresh
+and reuse another tree's binary from a shared one. Each binary embeds digests of
+the instrument and SDK sources it was compiled from; a mismatch with the claimed
+trees fails the job, and the pair record keeps each build's digests and binary
+hash.
 
 Timing remains advisory until about 20 calibration runs show stable noise and
 enforcement is explicitly reviewed. Shared runners report a confirmed >20%

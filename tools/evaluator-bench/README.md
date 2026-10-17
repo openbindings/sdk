@@ -23,7 +23,17 @@ python3 tools/evaluator-bench/compare.py --baseline /path/bin/baseline --candida
 ```
 
 Use clean source snapshots at the same pinned compiler. Each snapshot's SDK
-sources must be at their usual relative paths. Direct release builds remain
+sources must be at their usual relative paths. Every build variant (each side's
+timing and memory binaries, and any fallback) gets its own new directory under
+`--target`, and the driver refuses to reuse one: Cargo fingerprints the
+instrument by paths relative to its own workspace and judges archived sources
+with old modification times fresh, so a shared directory could hand one variant
+another's binary. `build.rs` embeds digests of the instrument sources and of the
+SDK tree it compiles against, and `--provenance` prints them. The driver
+recomputes both from the trees it claims to build and fails the build when a
+binary reports others, naming the candidate tree if the baseline binary carries
+its SDK sources. `instrument-pair.json` records every build's directory, trees,
+digests and binary hash. Direct release builds remain
 available with `cargo build --release --locked --manifest-path
 tools/evaluator-bench/Cargo.toml`, adding `--features allocations` for the separate
 memory instrument. `cargo test --locked --manifest-path
@@ -84,6 +94,19 @@ then requests full available diagnostics per iteration; serialization stays
 outside timing. Its precheck includes reported problem count, first problem
 code and original instance/schema locations, as well as the full observation.
 On the current SDK the shim selects `Diagnostics::Upstream` at preparation.
+
+Each request selects its mode's operation once, before timing. Every mode's
+warmups and timed loop form a separate, never-inlined instance of one generic
+function (cold first use has its own), so a timed iteration runs only that
+operation, its `black_box` boundaries and outcome counting, never an engine or
+mode comparison. Editing one mode cannot change another mode's instructions.
+It can still move them: each loop starts where earlier code ends, SDK changes
+move code the same way, and caches and branch predictors respond to alignment.
+Layout effects cannot be removed entirely, which is one reason timing stays
+advisory on shared runners. A timing change confined to modes that cannot reach
+the edited code indicates placement, not cost. The `src/sdk.rs` wrappers keep
+`#[inline(always)]`: making them `#[inline(never)]` added about 1 ns per call (2%
+of scalar evaluation) without removing that placement coupling.
 
 Deterministic document fixtures contain 1, 50 and 1,000 operations. The largest
 shares a schema's `$defs` through references; all have aliases, escaped Unicode

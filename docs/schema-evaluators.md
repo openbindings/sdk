@@ -47,8 +47,8 @@ explanations read.
 `SchemaRequest` gives the original document, entry, source location and supplied
 resources. Its `evaluation_program()` helper supplies the OpenBindings embedding
 projection when the evaluator needs a closed JSON Schema program. Its resolution
-space is assembled once per document revision and resource set and reused by later
-preparations. It can refuse; preserve the reason rather than claiming a value
+space is assembled once per live document revision and resource set and reused by
+later preparations with that pair, until the set or the revision is dropped. It can refuse; preserve the reason rather than claiming a value
 failure. The original document and resources remain available to an implementation
 with a different resolution strategy.
 Reference acquisition is application policy, never an implicit request from core.

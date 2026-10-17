@@ -153,10 +153,10 @@ its active contract and keep serving old work if preparation fails.
 
 A `ResourceSet` indexes its resource identities once when it is built, and clones
 share that index. Evaluators that request the core projection reuse one resolution
-space per document revision: one without supplied resources and one for the most
-recently used set. Repeated preparation
-with the same document and set reuses it; a different set replaces it, so a
-revision retains at most two.
+space per live document revision and set, including when preparations alternate
+between sets. The space without supplied resources stays with the revision; a
+space with a set stays with that set and is released when the set or the revision
+is dropped. A prepared contract retains only its own document and resources.
 
 `prepare_with_control`, `validate_with_control` and `explain_with_control` accept
 `WorkControl`, including
