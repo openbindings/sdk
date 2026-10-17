@@ -505,47 +505,6 @@ impl SchemaRequest {
             .expect("preparation admits only indexed document schema positions");
         space.program(entry, control)
     }
-    /// The resolution space [`Self::evaluation_program`] projects from, kept
-    /// for the same live document revision and resource set, so the default
-    /// evaluator does not assemble a second one. Not part of the supported
-    /// API: it takes a token from the SDK's private schema crate and may change
-    /// or disappear in any release.
-    #[doc(hidden)]
-    pub fn default_evaluator_space(
-        &self,
-        _: openbindings_internal_schema::DefaultEvaluatorLink,
-    ) -> ResolutionSpace {
-        let space = self.document.resolution(&self.resources);
-        let entry = space
-            .document_node(&self.entry)
-            .expect("preparation admits only indexed document schema positions");
-        ResolutionSpace { space, entry }
-    }
-}
-/// A shared resolution space and the request's entry node in it, for the
-/// default evaluator only. Not part of the supported API.
-#[doc(hidden)]
-pub struct ResolutionSpace {
-    space: Arc<crate::schema_space::SchemaSpace>,
-    entry: usize,
-}
-impl ResolutionSpace {
-    /// The request's entry schema node.
-    #[doc(hidden)]
-    pub fn entry(&self) -> usize {
-        self.entry
-    }
-}
-impl std::ops::Deref for ResolutionSpace {
-    type Target = openbindings_internal_schema::SchemaSpace;
-    fn deref(&self) -> &Self::Target {
-        &self.space
-    }
-}
-impl fmt::Debug for ResolutionSpace {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ResolutionSpace").finish_non_exhaustive()
-    }
 }
 /// A closed §7 schema projection with original provenance. Generated identifiers
 /// are private to this program and are not original source identities.
@@ -718,9 +677,8 @@ pub trait PreparedSchema: Send + Sync {
 /// ```
 /// Preparation borrows the evaluator and any supplied resources. Each call
 /// prepares anew; retain the [`PreparedContract`] to validate repeatedly. The
-/// document's resolution space is assembled when the default evaluator
-/// prepares or another evaluator requests the core projection, once per live
-/// revision and resource set. See the
+/// document's resolution space is assembled only when an evaluator requests the
+/// core projection, once per live revision and resource set. See the
 /// [Rust lifecycle guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md#resources-diagnostics-and-lifetime).
 #[derive(Clone, Copy)]
 pub struct ValueContract<'a> {

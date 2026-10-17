@@ -15,22 +15,6 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
-/// The token the default evaluator presents for the core's resolution space.
-///
-/// Not part of any supported API: this package is private to the OpenBindings
-/// SDK, and the core accepts the token only on a hidden method that may change
-/// or disappear in any release. Evaluators outside the SDK use
-/// `SchemaRequest::evaluation_program`.
-#[doc(hidden)]
-#[derive(Clone, Copy, Debug)]
-pub struct DefaultEvaluatorLink(());
-impl DefaultEvaluatorLink {
-    /// Only `openbindings-json-schema-evaluator` constructs this token.
-    #[doc(hidden)]
-    pub const fn for_default_evaluator() -> Self {
-        Self(())
-    }
-}
 #[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct Location {
     pub resource: Option<String>,

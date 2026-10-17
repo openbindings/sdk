@@ -174,11 +174,10 @@ pub struct Document {
 pub(crate) struct DocumentInner {
     pub value: JsonValue,
     pub schemas: OnceLock<SchemaIndex>,
-    // Value-contract resolution spaces are assembled when the default evaluator
-    // prepares or another evaluator asks for the core projection. The space
-    // without supplied resources lives here; a space with a nonempty set lives
-    // in that set, which this revision tells to release it when the revision is
-    // dropped.
+    // Value-contract resolution spaces are assembled only when an evaluator asks
+    // for the core projection. The space without supplied resources lives here;
+    // a space with a nonempty set lives in that set, which this revision tells
+    // to release it when the revision is dropped.
     resolution: OnceLock<Arc<SchemaSpace>>,
     spaces_in: Mutex<Vec<Weak<ResourceSetInner>>>,
     validation: OnceLock<Result<Arc<ValidationReport>, VersionRefusal>>,

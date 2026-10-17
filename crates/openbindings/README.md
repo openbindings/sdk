@@ -65,9 +65,9 @@ repeated checks or custom admission limits. `validate` is the cheap check; call
 rules leave whether the value satisfies its contract undefined; no-verdict means
 the evaluator could not answer. Each preparation compiles independently; cloning a
 prepared contract shares its compiled state. A `ResourceSet` indexes its resource
-identities once. For the default evaluator and evaluators that request the core
-projection, a resolution space is assembled once per live document revision and
-set, and released when either is dropped.
+identities once. For evaluators that request the core projection, a resolution
+space is assembled once per live document revision and set, and released when
+either is dropped.
 
 Core performs no resource acquisition, binding selection or invocation. Source
 and binding content remain opaque. Kind implementations interpret them outside
