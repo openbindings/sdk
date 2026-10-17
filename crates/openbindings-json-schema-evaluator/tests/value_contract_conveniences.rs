@@ -187,7 +187,7 @@ fn preparation_refusal_is_the_original_record_and_propagates_as_an_error() {
     ] {
         let location = SchemaLocation {
             resource: Some("https://example.invalid/schema".into()),
-            pointer: "/input".into(),
+            pointer: "/input".parse().unwrap(),
         };
         let detail = NoVerdict {
             reason,

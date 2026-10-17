@@ -347,7 +347,9 @@ impl Report {
 /// return honest unsupported/limit outcomes. Both calls must reach the same
 /// verdict; a cheap check reports no problems and never claims completeness.
 /// Every failing value is also explained under cancellation after successively
-/// more control observations (see [`judge_interruptions`]).
+/// more control observations (see [`judge_interruptions`]), and again as a
+/// member of a larger text, which must not change its problems: instance
+/// pointers start at the value passed.
 pub fn run(evaluator: &dyn SchemaEvaluator, options: &Options) -> Report {
     let suite = suite();
     let mut report = Report {
@@ -424,6 +426,15 @@ pub fn run(evaluator: &dyn SchemaEvaluator, options: &Options) -> Report {
                     &explanation,
                     &interrupted(contract, &value),
                 ));
+                // Instance pointers start at the value passed, also when it is
+                // part of a larger text.
+                let wrapper = JsonValue::parse(format!("{{\"value\":{}}}", case.value))
+                    .expect("packaged instance JSON");
+                let nested = contract.explain(&wrapper.get("value").expect("wrapped").to_owned());
+                if serde_json::to_string(&nested).ok() != serde_json::to_string(&explanation).ok() {
+                    failures
+                        .push("an explanation of the value within a larger text differs".into());
+                }
             }
             if value.text() != original {
                 failures.push("evaluator changed an immutable input".into());
@@ -431,31 +442,33 @@ pub fn run(evaluator: &dyn SchemaEvaluator, options: &Options) -> Report {
             let locations: Vec<_> = [&outcome, &explanation]
                 .into_iter()
                 .flat_map(|outcome| match outcome {
-                    ValueOutcome::Fails { problems, .. } => problems
-                        .iter()
-                        .filter_map(|p| p.schema_location.as_ref())
-                        .collect(),
+                    ValueOutcome::Fails { problems, .. } => {
+                        problems.iter().map(|p| &p.schema).collect()
+                    }
                     ValueOutcome::Undefined { detail } => detail.location.iter().collect(),
                     _ => Vec::new(),
                 })
                 .collect();
             for location in locations {
-                let source = match &location.resource {
-                    None => Some(document.value().clone()),
-                    Some(uri) => group
-                        .resources
-                        .iter()
-                        .map(|id| &suite.resources[id])
-                        .find(|r| &r.uri == uri)
-                        .and_then(|r| JsonValue::parse(&r.document).ok())
-                        .or_else(|| {
-                            suite
+                // The document and supplied resources locate their own nodes;
+                // a packaged meta-schema is read from its text.
+                let exists = match &location.resource {
+                    None => validated.locate(location).is_some(),
+                    Some(uri) => {
+                        resources.locate(location).is_some()
+                            || suite
                                 .builtin_resources
                                 .get(uri)
                                 .and_then(|text| JsonValue::parse(text).ok())
-                        }),
+                                .is_some_and(|source| {
+                                    location
+                                        .pointer
+                                        .as_str()
+                                        .is_some_and(|pointer| source.at(pointer).is_some())
+                                })
+                    }
                 };
-                if source.is_none_or(|s| s.at(&location.pointer).is_none()) {
+                if !exists {
                     failures.push(
                         "reported schema location does not exist in the original source".into(),
                     );
@@ -559,11 +572,12 @@ pub fn judge_interruptions(
             _ => failures.push("an interrupted explanation reached another verdict".to_owned()),
         }
     }
-    // Outcomes compare by their serialized form, which carries every field.
+    // Outcomes compare by their serialized text, which carries every field,
+    // including pointers through names with unpaired units.
     let same = |a: &ValueOutcome, b: &ValueOutcome| {
-        serde_json::to_value(a)
+        serde_json::to_string(a)
             .ok()
-            .is_some_and(|a| serde_json::to_value(b).ok() == Some(a))
+            .is_some_and(|a| serde_json::to_string(b).ok() == Some(a))
     };
     if interrupted
         .last()
@@ -575,6 +589,8 @@ pub fn judge_interruptions(
     failures
 }
 /// Judge one observation independently. Useful for host harnesses and controls.
+/// Each problem's instance pointer must name a node of `value`, from `value`
+/// itself.
 pub fn judge(
     case: &Case,
     value: &JsonValue,
@@ -628,13 +644,10 @@ pub fn judge(
                 "complete failure diagnostics lack an actual failing instance location".into(),
             );
         }
-        let paths: BTreeSet<_> = problems
-            .iter()
-            .map(|p| p.instance_pointer.clone())
-            .collect();
+        let paths: BTreeSet<_> = problems.iter().map(|p| p.instance.to_string()).collect();
         if problems
             .iter()
-            .any(|p| value.at(&p.instance_pointer).is_none())
+            .any(|p| value.at_pointer(&p.instance).is_none())
         {
             failures.push("problem location does not exist in the instance".into());
         }

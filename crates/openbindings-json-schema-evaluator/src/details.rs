@@ -68,10 +68,12 @@ pub(crate) struct Explanation {
     // An origin is the program map's entry for a generated URI: `"<pointer>"` is
     // a prefix origin in the resource's source, `null` a synthetic one, and
     // `[<exact>,"<pointer>"(,<source>,<standard>)]` an exact origin or one in
-    // another source. `<keyword origins>` lists `["<keyword path>",<origin>]` for
-    // the map's entries inside a definition, as paired oneOf bounds write. When
-    // the map holds anything else, every origin is `null` and the contract keeps
-    // the program's own map.
+    // another source. A pointer through a member name holding unpaired units
+    // writes each such unit as a `\uXXXX` escape and is read back exactly.
+    // `<keyword origins>` lists `["<keyword path>",<origin>]` for the map's
+    // entries inside a definition, as paired oneOf bounds write. When the map
+    // holds an entry no projection writes, every origin is `null` and the
+    // contract keeps the program's own map.
     text: Box<str>,
     // Resource slots sorted by key, then each resource's definition slots in
     // name order, a closing definition slot, and every definition's keyword
@@ -87,6 +89,9 @@ pub(crate) struct Explanation {
     literals: Vec<JsonValue>,
     // Whether the text holds every origin, so the program's map is not needed.
     locates: bool,
+    // The entry definition's slot, or `NONE`: the selected schema, whose own
+    // origin names it when a keyword cannot be mapped.
+    entry: u32,
 }
 // A resource, definition or keyword: its name, between its quotes in the text,
 // then for a resource the range of its definition slots; for a definition its
@@ -258,16 +263,34 @@ impl Sink for String {
 }
 // Where the text takes each definition's origin from: the program's location
 // map, or the space it was projected from, with each projected resource's
-// definition nodes and their original pointers, built once for both passes:
-// definition `k`'s pointer ends at `ends[k]` in `pointers`.
+// definition nodes and their original pointers.
 enum Origins<'a> {
     Map(&'a std::collections::BTreeMap<String, ProgramOrigin>),
     Space {
         space: &'a SchemaSpace,
         definitions: &'a [Vec<usize>],
-        pointers: Vec<u8>,
-        ends: Vec<usize>,
+        pointers: Pointers,
     },
+}
+// Every projected definition's original pointer, built once for both passes:
+// definition `k`'s ends at `ends[k]` in `bytes`. `tokens` lists, in order, the
+// definitions whose pointer passes through a name holding unpaired units, held
+// already as the JSON string the text writes.
+struct Pointers {
+    bytes: Vec<u8>,
+    ends: Vec<usize>,
+    tokens: Vec<usize>,
+}
+impl Pointers {
+    // Definition `k`'s pointer, and whether it is already a JSON string.
+    fn get(&self, k: usize) -> (&str, bool) {
+        let start = k.checked_sub(1).map_or(0, |k| self.ends[k]);
+        let pointer = std::str::from_utf8(&self.bytes[start..self.ends[k]]);
+        (
+            pointer.expect("pointers are UTF-8"),
+            self.tokens.binary_search(&k).is_ok(),
+        )
+    }
 }
 // Slots the filling pass writes: resources from 0, definitions from
 // `definitions`, keywords from `keywords`.
@@ -297,6 +320,35 @@ struct Writer<'r, W> {
 // offsets would not fit.
 fn offset(at: usize) -> u32 {
     u32::try_from(at).expect("measured text fits 32-bit offsets")
+}
+// A pointer through a name holding unpaired units as a JSON string: its scalar
+// text escaped as [`Writer::escaped`] escapes it, each unpaired unit as `\uXXXX`.
+#[cold]
+#[inline(never)]
+fn units_token(pointer: &Pointer) -> String {
+    use std::fmt::Write;
+    let mut token = String::from('"');
+    for unit in char::decode_utf16(pointer.utf16_units()) {
+        let escape = match unit {
+            Ok('"') => {
+                token.push_str("\\\"");
+                continue;
+            }
+            Ok('\\') => {
+                token.push_str("\\\\");
+                continue;
+            }
+            Ok(c) if (c as u32) >= 0x20 => {
+                token.push(c);
+                continue;
+            }
+            Ok(c) => c as u32,
+            Err(unit) => u32::from(unit.unpaired_surrogate()),
+        };
+        write!(token, "\\u{escape:04x}").expect("String writer");
+    }
+    token.push('"');
+    token
 }
 impl<W: Sink> Writer<'_, W> {
     fn put(&mut self, text: &str) {
@@ -408,18 +460,25 @@ impl<W: Sink> Writer<'_, W> {
         self.quoted(prefix);
         self.put(",{");
     }
+    // An original pointer as a JSON string.
+    fn pointer(&mut self, pointer: &Pointer) {
+        match pointer.as_str() {
+            Some(text) => self.escaped(text),
+            None => self.put(&units_token(pointer)),
+        }
+    }
     // A program map entry, relative to the resource's original source.
     fn origin(&mut self, origin: &ProgramOrigin, source: Option<&str>) {
         let (exact, at) = match origin {
             ProgramOrigin::Synthetic => return self.put("null"),
             ProgramOrigin::Prefix(at) if at.resource.as_deref() == source => {
-                return self.escaped(&at.pointer);
+                return self.pointer(&at.pointer);
             }
             ProgramOrigin::Prefix(at) => (false, at),
             ProgramOrigin::Exact(at) => (true, at),
         };
         self.put(if exact { "[true," } else { "[false," });
-        self.escaped(&at.pointer);
+        self.pointer(&at.pointer);
         let resource = at.resource.as_deref();
         if resource != source {
             match resource {
@@ -594,9 +653,8 @@ impl<W: Sink> Writer<'_, W> {
                 space,
                 definitions,
                 pointers,
-                ends,
             } => {
-                self.projected(resources, space, definitions, pointers, ends, control)?;
+                self.projected(resources, space, definitions, pointers, control)?;
                 Ok(true)
             }
         }
@@ -609,8 +667,7 @@ impl<W: Sink> Writer<'_, W> {
         resources: &[ProjectedResource],
         space: &SchemaSpace,
         definitions: &[Vec<usize>],
-        pointers: &[u8],
-        ends: &[usize],
+        pointers: &Pointers,
         control: &dyn WorkControl,
     ) -> Result<(), NoVerdict> {
         self.begin(resources);
@@ -651,14 +708,17 @@ impl<W: Sink> Writer<'_, W> {
                     continue;
                 };
                 debug_assert_eq!(space.source_uri(node), source);
-                let k = first_node + k;
-                let pointer = &pointers[k.checked_sub(1).map_or(0, |k| ends[k])..ends[k]];
+                let (pointer, token) = pointers.get(first_node + k);
                 if self.definitions != first_definition {
                     self.put_char(',');
                 }
                 let at = self.name(name);
                 self.put(":[");
-                self.escaped(std::str::from_utf8(pointer).expect("pointers are UTF-8"));
+                if token {
+                    self.put(pointer);
+                } else {
+                    self.escaped(pointer);
+                }
                 self.put_char(',');
                 let schema_at = self.out.len();
                 let first_keyword = self.keywords;
@@ -889,17 +949,24 @@ impl Explanation {
     ) -> Result<Option<Self>, NoVerdict> {
         // Each pointer is built once, for both passes.
         let mut ends = Vec::with_capacity(definitions.iter().map(Vec::len).sum());
-        let (mut pointers, mut scratch) = (Vec::new(), Vec::new());
-        for &node in definitions.iter().flatten() {
+        let (mut bytes, mut scratch, mut tokens) = (Vec::new(), Vec::new(), Vec::new());
+        for (k, &node) in definitions.iter().flatten().enumerate() {
             control.check()?;
-            space.location_into(node, &mut pointers, &mut scratch);
-            ends.push(pointers.len());
+            if !space.location_into(node, &mut bytes, &mut scratch) {
+                let pointer = space.location(node).pointer;
+                bytes.extend_from_slice(units_token(&pointer).as_bytes());
+                tokens.push(k);
+            }
+            ends.push(bytes.len());
         }
         let origins = Origins::Space {
             space,
             definitions,
-            pointers,
-            ends,
+            pointers: Pointers {
+                bytes,
+                ends,
+                tokens,
+            },
         };
         Self::build(program, origins, control)
     }
@@ -991,7 +1058,7 @@ impl Explanation {
                 .all(|pair| name(&pair[0]) < name(&pair[1]))
         });
         resource_slots.sort_unstable_by(|a, b| name(a).cmp(name(b)));
-        Ok(Some(Self {
+        let mut explanation = Self {
             text,
             slots,
             resources: offset(resource_count),
@@ -999,7 +1066,22 @@ impl Explanation {
             prefix: offset(prefix),
             literals,
             locates,
-        }))
+            entry: NONE,
+        };
+        // The entry resource's root refers to the entry definition.
+        let entry = resources
+            .iter()
+            .find(|resource| resource.uri == program.entry_uri)
+            .and_then(|resource| resource.document.get("$ref")?.as_str())
+            .and_then(|reference| {
+                let (base, fragment) = reference.split_once('#')?;
+                let name = fragment.strip_prefix("/$defs/")?;
+                explanation.find(explanation.key(base)?, name)
+            });
+        if let Some(entry) = entry {
+            explanation.entry = entry.index;
+        }
+        Ok(Some(explanation))
     }
     /// Whether explanations need the program's own location map.
     pub(crate) fn needs_locations(&self) -> bool {
@@ -1021,10 +1103,13 @@ impl Explanation {
         if !work(control, key.len().saturating_add(name.len())) {
             return Err(());
         }
+        Ok(self.find(key, name))
+    }
+    fn find(&self, key: &str, name: &str) -> Option<Definition> {
         let resources = &self.slots[..self.resources as usize];
-        let Ok(found) = resources.binary_search_by(|slot| self.name(*slot).cmp(key)) else {
-            return Ok(None);
-        };
+        let found = resources
+            .binary_search_by(|slot| self.name(*slot).cmp(key))
+            .ok()?;
         let resource = resources[found];
         let definitions = &self.slots[resource.first as usize..resource.last as usize];
         let found = if self.ordered {
@@ -1034,10 +1119,10 @@ impl Explanation {
         } else {
             definitions.iter().position(|slot| self.name(*slot) == name)
         };
-        Ok(found.map(|found| Definition {
+        found.map(|found| Definition {
             resource,
             index: resource.first + found as u32,
-        }))
+        })
     }
     // A resource's original source (`None` for the document) and whether it is a
     // packaged meta-schema, at fixed offsets: its value starts `[true,` or
@@ -1148,7 +1233,13 @@ impl Explanation {
                 JsonKind::Array => origin.elements().nth(1),
                 _ => Some(origin),
             };
-            let Some(pointer) = origin.and_then(TextValue::string) else {
+            let Some(origin) = origin.filter(|origin| origin.kind() == JsonKind::String) else {
+                continue;
+            };
+            let Some(pointer) = origin.string() else {
+                if self.units_segment_is(origin, token, control)? {
+                    return Ok(Some(child));
+                }
                 continue;
             };
             if !work(control, pointer.len().saturating_add(token.len())) {
@@ -1177,6 +1268,59 @@ impl Explanation {
             }
         }
         Ok(None)
+    }
+    // An origin's pointer through a name holding unpaired units, written as
+    // `\uXXXX` escapes, followed by the walked suffix.
+    #[cold]
+    #[inline(never)]
+    fn units_pointer(&self, token: Token, suffix: &str) -> Option<Pointer> {
+        let mut units = self.at(token.start).utf16_units()?;
+        units.extend(suffix.encode_utf16());
+        Pointer::from_utf16(&units).ok()
+    }
+    // Whether the last segment of a pointer through a name holding unpaired
+    // units, as `named_child` decodes one, is the token's name.
+    #[cold]
+    #[inline(never)]
+    fn units_segment_is(
+        &self,
+        pointer: TextValue<'_>,
+        token: &str,
+        control: &dyn WorkControl,
+    ) -> Result<bool, ()> {
+        let Some(units) = pointer.utf16_units() else {
+            return Ok(false);
+        };
+        if !work(control, units.len().saturating_add(token.len())) {
+            return Err(());
+        }
+        let Some(slash) = units.iter().rposition(|&unit| unit == u16::from(b'/')) else {
+            return Ok(false);
+        };
+        // Decode both sides' `~1` and `~0` escapes, as `segment_eq` does.
+        let mut expected = Vec::with_capacity(token.len());
+        let mut token = token.encode_utf16();
+        while let Some(unit) = token.next() {
+            expected.push(match unit {
+                0x7e => match token.next() {
+                    Some(0x30) => 0x7e,
+                    Some(0x31) => 0x2f,
+                    _ => return Ok(false),
+                },
+                unit => unit,
+            });
+        }
+        let mut name = units[slash + 1..].iter().copied();
+        let name = std::iter::from_fn(|| match name.next()? {
+            0x7e => match name.next() {
+                Some(0x31) => Some(0x2f),
+                Some(0x30) => Some(0x7e),
+                // A canonical pointer escapes nothing else.
+                _ => Some(0),
+            },
+            unit => Some(unit),
+        });
+        Ok(name.eq(expected))
     }
     // A `const` or `enum` value kept in its projected arena.
     fn literal(&self, reference: TextValue<'_>) -> Option<JsonRef<'_>> {
@@ -1256,15 +1400,41 @@ impl Explanation {
             _ => Ok(None),
         }
     }
+    /// The original location of a problem's failing keyword, from the
+    /// library's keyword URI. A keyword the original sources do not hold is not
+    /// guessed: the problem names the selected schema itself, with no facts,
+    /// except in a partial program (`original_only`), whose generated errors
+    /// are not original schema evidence and yield no problem. `Ok(None)` when
+    /// nothing can be named; interrupted lookup is `Err`.
+    // Out of line, so the diagnostic pass that calls it stays small enough for
+    // the compiler to inline that pass's budget scopes.
+    #[inline(never)]
+    pub(crate) fn problem_schema(
+        &self,
+        program: Option<&Program>,
+        uri: Option<&str>,
+        original_only: bool,
+        control: &dyn WorkControl,
+    ) -> Result<Option<Located<'_>>, ()> {
+        if let Some(uri) = uri
+            && let Some(located) = self.locate(program, uri, control)?
+        {
+            return Ok(Some(located));
+        }
+        if original_only {
+            return Ok(None);
+        }
+        Ok(self.entry(program, control)?.map(|entry| Located {
+            location: entry.location,
+            operand: None,
+        }))
+    }
     /// Map a library keyword location to its original location, keeping the
     /// nearest existing ancestor when the library names a path the source
     /// lacks. Interrupted lookup reports no location rather than an unchecked
     /// one. Packaged meta-schemas are original sources for location validity,
     /// but their facts are not reported. `program` is the compiled program when
     /// its own location map is kept.
-    // Out of line, so the diagnostic pass that calls it stays small enough for
-    // the compiler to inline that pass's budget scopes.
-    #[inline(never)]
     pub(crate) fn locate(
         &self,
         program: Option<&Program>,
@@ -1318,13 +1488,61 @@ impl Explanation {
         let Some(fragment) = fragment.strip_prefix("/$defs/") else {
             return Ok(None);
         };
-        let (name, mut suffix) = fragment.split_at(fragment.find('/').unwrap_or(fragment.len()));
+        let (name, suffix) = fragment.split_at(fragment.find('/').unwrap_or(fragment.len()));
         let Some(key) = self.key(base) else {
             return Ok(None);
         };
         let Some(definition) = self.definition(key, name, control)? else {
             return Ok(None);
         };
+        self.origin(definition, suffix, control)
+    }
+    /// The selected schema's own original location, which names it when a
+    /// library keyword cannot be mapped. `program` is the compiled program when
+    /// its own location map is kept.
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn entry(
+        &self,
+        program: Option<&Program>,
+        control: &dyn WorkControl,
+    ) -> Result<Option<Located<'_>>, ()> {
+        if self.entry == NONE {
+            return Ok(None);
+        }
+        let resource = self.slots[..self.resources as usize]
+            .iter()
+            .find(|resource| (resource.first..resource.last).contains(&self.entry));
+        let Some(&resource) = resource else {
+            return Ok(None);
+        };
+        if self.locates {
+            let definition = Definition {
+                resource,
+                index: self.entry,
+            };
+            return self.origin(definition, "", control);
+        }
+        // The program's map holds the origin, under the definition's address.
+        let Some(program) = program else {
+            return Ok(None);
+        };
+        let address = format!(
+            "{}{}#/$defs/{}",
+            &self.text[2..2 + self.prefix as usize],
+            self.name(resource),
+            self.name(self.slots[self.entry as usize])
+        );
+        self.locate(Some(program), &address, control)
+    }
+    // A definition's origin, or that of the longest of its keyword origins the
+    // generated suffix continues with, then the walk of what is left.
+    fn origin(
+        &self,
+        definition: Definition,
+        mut suffix: &str,
+        control: &dyn WorkControl,
+    ) -> Result<Option<Located<'_>>, ()> {
         let slot = self.slots[definition.index as usize];
         let mut origin = self.at(slot.name + slot.len + 3);
         // The definition's own origin ends at the comma before its schema.
@@ -1438,10 +1656,9 @@ impl Explanation {
                 end += 1 + token.len();
             }
         }
-        let (resource, mut pointer, standard) = match original {
+        let (resource, pointer, standard) = match original {
             Original::Map(at) => {
-                let mut pointer = String::with_capacity(at.pointer.len() + end);
-                pointer.push_str(&at.pointer);
+                let pointer = backend::joined_pointer(&at.pointer, &suffix[..end]);
                 let mut standard = false;
                 if let Some(uri) = &at.resource {
                     for resource in openbindings_internal_schema::embedded_resources() {
@@ -1465,12 +1682,18 @@ impl Explanation {
                     Some(source) => Some(self.owned(source, 0).ok_or(())?),
                     None => None,
                 };
-                (resource, self.owned(pointer, end).ok_or(())?, standard)
+                let pointer = match self.owned(pointer, end) {
+                    Some(mut text) => {
+                        text.push_str(&suffix[..end]);
+                        backend::escaped_pointer(text)
+                    }
+                    None => self.units_pointer(pointer, &suffix[..end]).ok_or(())?,
+                };
+                (resource, pointer, standard)
             }
         };
-        pointer.push_str(&suffix[..end]);
         Ok(Some(Located {
-            location: SchemaLocation { resource, pointer },
+            location: SchemaLocation::new(resource, pointer),
             operand: (!standard).then_some(node),
         }))
     }
@@ -1733,6 +1956,17 @@ mod tests {
 
     // The projected program a default preparation compiles for `schema`.
     fn projected(schema: &str) -> (Program, Explanation) {
+        let mut program = project(schema);
+        let control = std::sync::atomic::AtomicBool::new(false);
+        let explanation = Explanation::new(&program, &control).unwrap().unwrap();
+        // A strict projection maps one prefix origin per definition, so the
+        // explanation holds every location itself.
+        assert!(!explanation.needs_locations());
+        program.resources = Vec::new();
+        (program, explanation)
+    }
+    // The strict projection of an operation input schema.
+    fn project(schema: &str) -> Program {
         #[derive(Default)]
         struct Capture(std::sync::Mutex<Option<SchemaRequest>>);
         impl SchemaEvaluator for Capture {
@@ -1755,14 +1989,7 @@ mod tests {
         assert!(operation.input().unwrap().prepare(&capture).is_ok());
         let request = capture.0.lock().unwrap().take().unwrap();
         let (space, entry) = crate::planner::space(&request);
-        let mut program = space.program(entry, &|| false).unwrap();
-        let control = std::sync::atomic::AtomicBool::new(false);
-        let explanation = Explanation::new(&program, &control).unwrap().unwrap();
-        // A strict projection maps one prefix origin per definition, so the
-        // explanation holds every location itself.
-        assert!(!explanation.needs_locations());
-        program.resources = Vec::new();
-        (program, explanation)
+        space.program(entry, &|| false).unwrap()
     }
     // The generated keyword URI for an original document pointer and suffix.
     fn generated(program: &Program, pointer: &str, suffix: &str) -> String {
@@ -1859,6 +2086,42 @@ mod tests {
                 "{keyword}"
             );
         }
+    }
+
+    #[test]
+    fn the_entry_names_the_selected_schema_from_the_text_or_the_programs_map() {
+        let schema = r##"{"properties":{"a":{"$ref":"#/operations/op/input/$defs/s"}},"$defs":{"s":{"type":"string"}}}"##;
+        let control = std::sync::atomic::AtomicBool::new(false);
+        let (program, explanation) = projected(schema);
+        let entry = explanation
+            .entry(Some(&program), &control)
+            .unwrap()
+            .unwrap();
+        assert_eq!(entry.location.resource, None);
+        assert_eq!(entry.location.pointer, "/operations/op/input");
+        // A map entry the text cannot carry keeps the program's map, which
+        // then names the entry.
+        let mut program = project(schema);
+        let mut locations = (*program.locations).clone();
+        let uri = program.entry_uri.clone();
+        locations.insert(
+            uri,
+            ProgramOrigin::Prefix(openbindings_internal_schema::Location {
+                resource: None,
+                pointer: "".parse().unwrap(),
+            }),
+        );
+        program.locations = Arc::new(locations);
+        let unlocated = Explanation::new(&program, &control).unwrap().unwrap();
+        assert!(unlocated.needs_locations());
+        program.resources = Vec::new();
+        let entry = unlocated.entry(Some(&program), &control).unwrap().unwrap();
+        assert_eq!(entry.location.resource, None);
+        assert_eq!(entry.location.pointer, "/operations/op/input");
+        assert!(unlocated.entry(None, &control).unwrap().is_none());
+        // Interrupted lookup reports nothing rather than an unchecked location.
+        control.store(true, std::sync::atomic::Ordering::Relaxed);
+        assert!(unlocated.entry(Some(&program), &control).is_err());
     }
 
     #[test]
@@ -2137,6 +2400,86 @@ mod tests {
     }
 
     #[test]
+    fn origins_through_unpaired_names_are_written_as_escapes_and_read_exactly() {
+        #[derive(Default)]
+        struct Capture(std::sync::Mutex<Option<SchemaRequest>>);
+        impl SchemaEvaluator for Capture {
+            fn prepare(
+                &self,
+                request: &SchemaRequest,
+                control: &dyn WorkControl,
+            ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+                *self.0.lock().unwrap() = Some(request.clone());
+                DefaultEvaluator::new().prepare(request, control)
+            }
+        }
+        // An anchor reaches a schema beneath a name no reference can spell.
+        let resources = ResourceSet::new(vec![SchemaResource {
+            uri: "https://loc.test/r".into(),
+            document: JsonValue::parse(
+                r#"{"minimum":0,"$defs":{"\ud800/":{"$anchor":"an","properties":{"p":{"minimum":3}}}}}"#,
+            )
+            .unwrap(),
+        }])
+        .unwrap();
+        let document = Document::parse(
+            r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://loc.test/r#an"}}}}"#,
+        )
+        .unwrap();
+        let document = document.validate().unwrap().conformant().unwrap();
+        let operation = document.resolve_operation("op").unwrap();
+        let capture = Capture::default();
+        assert!(
+            operation
+                .input()
+                .unwrap()
+                .prepare_with(&capture, &resources)
+                .is_ok()
+        );
+        let request = capture.0.lock().unwrap().take().unwrap();
+        let (space, entry) = crate::planner::space(&request);
+        let control = std::sync::atomic::AtomicBool::new(false);
+        let mapped = space.program(entry, &|| false).unwrap();
+        let unmapped = space.program_unmapped(entry, &|| false).unwrap();
+        let from_map = Explanation::new(&mapped, &control).unwrap().unwrap();
+        let from_space =
+            Explanation::projected(&unmapped.program, &space, &unmapped.definitions, &control)
+                .unwrap()
+                .unwrap();
+        // Both write the same text, holding the pointer's unit as an escape, so
+        // neither needs the program's map.
+        assert_eq!(from_map.text, from_space.text);
+        assert!(!from_space.needs_locations());
+        assert!(from_space.text.contains(r#""/$defs/\ud800~1""#));
+        let key = mapped
+            .locations
+            .iter()
+            .find_map(|(key, origin)| match origin {
+                ProgramOrigin::Prefix(at) if at.pointer.as_str().is_none() => Some(key),
+                _ => None,
+            })
+            .unwrap();
+        // The definition's own origin, and a walk through its children, which
+        // finds the child by the last segment of its own pointer.
+        for (suffix, expected) in [
+            ("", r"/$defs/\ud800~1"),
+            (
+                "/properties/p/minimum",
+                r"/$defs/\ud800~1/properties/p/minimum",
+            ),
+        ] {
+            let at = from_space
+                .locate(None, &format!("{key}{suffix}"), &control)
+                .unwrap()
+                .unwrap()
+                .location;
+            assert_eq!(at.resource.as_deref(), Some("https://loc.test/r"));
+            assert!(at.pointer.as_str().is_none());
+            assert_eq!(at.pointer.to_string(), expected, "{suffix}");
+        }
+    }
+
+    #[test]
     fn name_lists_keep_names_only_where_the_location_walk_reads_them() {
         // The library reports names, the marker character included, exactly.
         let (_, projection) =
@@ -2168,7 +2511,7 @@ mod tests {
                 panic!("expected a failure")
             };
             let problem = problems.into_iter().next().unwrap();
-            (problem.schema_location.unwrap().pointer, problem.details)
+            (problem.schema.pointer, problem.details)
         };
         let (pointer, details) = explain(
             r#"{"dependentRequired":{"a":["0"],"0":["1"]}}"#,

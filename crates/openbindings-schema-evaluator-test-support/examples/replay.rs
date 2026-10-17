@@ -2,7 +2,7 @@
 //! a custom evaluator outside core.
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
-use openbindings_schema_evaluator_test_support::{Options, run, suite};
+use openbindings_schema_evaluator_test_support::{Options, Report, run, suite};
 use std::sync::Arc;
 
 struct OriginalContext;
@@ -13,10 +13,11 @@ impl SchemaEvaluator for OriginalContext {
         control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         let document: &Conformant<Document> = request.document();
+        let entry = document.locate(&request.entry_location()).unwrap();
         assert_eq!(
             document
                 .value()
-                .at(&request.entry_location().pointer)
+                .at(entry.pointer.as_ref().and_then(Pointer::as_str).unwrap())
                 .unwrap()
                 .to_owned()
                 .semantic_eq(request.entry()),
@@ -30,14 +31,37 @@ fn main() {
         &OriginalContext,
         &Options::without_unicode_property_matching(),
     );
-    let admission: Vec<_> = suite().groups.iter().map(|group| {
-        let document = Document::parse(&group.document).unwrap();
-        let validation = document.validate().unwrap();
-        serde_json::json!({"id":group.id, "document":group.document, "resources":group.resources, "report":validation.report()})
-    }).collect();
-    println!(
-        "{}",
-        serde_json::json!({"report":report, "admission":admission})
-    );
+    // The receipt is written as JSON text: a report can carry an exact pointer
+    // through a member name with an unpaired unit, which no `Value` holds.
+    #[derive(serde::Serialize)]
+    struct Admission<'a> {
+        document: &'a str,
+        id: &'a str,
+        report: ValidationReport,
+        resources: &'a [String],
+    }
+    #[derive(serde::Serialize)]
+    struct Receipt<'a> {
+        admission: Vec<Admission<'a>>,
+        report: &'a Report,
+    }
+    let admission = suite()
+        .groups
+        .iter()
+        .map(|group| {
+            let document = Document::parse(&group.document).unwrap();
+            Admission {
+                document: &group.document,
+                id: &group.id,
+                report: document.validate().unwrap().report().clone(),
+                resources: &group.resources,
+            }
+        })
+        .collect();
+    let receipt = Receipt {
+        admission,
+        report: &report,
+    };
+    println!("{}", serde_json::to_string(&receipt).unwrap());
     assert!(report.is_success(), "{:?}", report.configuration_failures);
 }

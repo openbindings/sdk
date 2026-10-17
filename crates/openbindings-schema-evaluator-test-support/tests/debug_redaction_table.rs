@@ -25,7 +25,7 @@ fn row(label: &'static str, value: &(impl Debug + ?Sized)) -> Row {
 fn location() -> SchemaLocation {
     SchemaLocation {
         resource: Some(SECRET.into()),
-        pointer: format!("/{SECRET}"),
+        pointer: format!("/{SECRET}").parse().unwrap(),
     }
 }
 fn refusal() -> NoVerdict {
@@ -111,8 +111,8 @@ fn check_rows(rows: Vec<Row>, expected: usize) {
 #[test]
 fn debug_redacts_caller_text_at_every_boundary() {
     let problem = ValueProblem {
-        instance_pointer: format!("/{SECRET}"),
-        schema_location: Some(location()),
+        instance: format!("/{SECRET}").parse().unwrap(),
+        schema: location(),
         code: SECRET.into(),
         message: SECRET.into(),
         details: Some(ValueProblemDetails::Required {

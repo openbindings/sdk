@@ -30,7 +30,12 @@ fn draft_text_reads_retain_unpaired_utf16_units() {
 fn location(error: InterpretationError, code: &str, pointer: &str) {
     assert_eq!(error.code(), code);
     assert_eq!(
-        error.source_location().unwrap().pointer.as_deref(),
+        error
+            .source_location()
+            .unwrap()
+            .pointer
+            .as_ref()
+            .and_then(openbindings::Pointer::as_str),
         Some(pointer)
     );
 }

@@ -18,7 +18,8 @@ use std::sync::{
 #[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct Location {
     pub resource: Option<String>,
-    pub pointer: String,
+    /// Exact, from the resource's (or the document's) root.
+    pub pointer: openbindings_internal_json::Pointer,
 }
 impl std::fmt::Debug for Location {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

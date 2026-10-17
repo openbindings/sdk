@@ -206,10 +206,7 @@ fn failed_location(contract: &PreparedContract, text: &str) -> SchemaLocation {
     let ValueOutcome::Fails { problems, .. } = contract.explain(&value(text)) else {
         panic!("expected failure")
     };
-    problems
-        .into_iter()
-        .find_map(|p| p.schema_location)
-        .unwrap()
+    problems.into_iter().next().unwrap().schema
 }
 
 #[test]
@@ -339,7 +336,7 @@ fn ri04_05_contained_authority_ignores_supplied_body_and_keeps_raw_catalog() {
             failed_location(&contract, "0"),
             SchemaLocation {
                 resource: None,
-                pointer: "/schemas/E/minimum".into()
+                pointer: "/schemas/E/minimum".parse().unwrap()
             }
         );
         helpers_ready(&doc, &supplied, "op");
@@ -808,7 +805,7 @@ fn ri22_23_original_dialect_follows_selected_resource() {
             detail.location.unwrap(),
             SchemaLocation {
                 resource: Some(A.into()),
-                pointer: "/$defs/Child".into()
+                pointer: "/$defs/Child".parse().unwrap()
             }
         );
     }
@@ -1161,7 +1158,7 @@ fn ri16_nested_resource_does_not_invent_losing_parent_dynamic_scope() {
         failed_location(&contract, r#""x""#),
         SchemaLocation {
             resource: Some(A.into()),
-            pointer: "/$defs/Child/$defs/Node/type".into()
+            pointer: "/$defs/Child/$defs/Node/type".parse().unwrap()
         }
     );
 }
@@ -1180,7 +1177,7 @@ fn inherited_conservative_policy_case_has_both_value_controls() {
         failed_location(&contract, r#""x""#),
         SchemaLocation {
             resource: None,
-            pointer: "/schemas/S/type".into()
+            pointer: "/schemas/S/type".parse().unwrap()
         }
     );
     helpers_ready(&doc, &supplied, "op");

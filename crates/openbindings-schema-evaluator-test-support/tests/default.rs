@@ -45,32 +45,21 @@ fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {
         ),
     };
     assert!(!judge(case, &value, &refusal, true).is_empty());
-    for path in ["/absent", "", "/a/absent"] {
-        let wrong = ValueOutcome::Fails {
-            message: "value does not satisfy the contract".into(),
-            problems: vec![ValueProblem {
-                details: None,
-                instance_pointer: path.into(),
-                schema_location: None,
-                code: "wrong".into(),
-                message: "wrong".into(),
-            }],
-            problems_complete: true,
-        };
-        assert!(!judge(case, &value, &wrong, false).is_empty());
-    }
-    let valid = ValueOutcome::Fails {
+    let schema = SchemaLocation::new(None, "/operations/op/input".parse().unwrap());
+    let failure = |instance: &str| ValueOutcome::Fails {
         message: "value does not satisfy the contract".into(),
-        problems: vec![ValueProblem {
-            details: None,
-            instance_pointer: "/a".into(),
-            schema_location: None,
-            code: "type".into(),
-            message: "expected string".into(),
-        }],
+        problems: vec![ValueProblem::new(
+            instance.parse().unwrap(),
+            schema.clone(),
+            "type",
+            "expected string",
+        )],
         problems_complete: true,
     };
-    assert!(judge(case, &value, &valid, false).is_empty());
+    for path in ["/absent", "", "/a/absent"] {
+        assert!(!judge(case, &value, &failure(path), false).is_empty());
+    }
+    assert!(judge(case, &value, &failure("/a"), false).is_empty());
 }
 
 /// An adapter can consume original source identity without depending on a bundler.
@@ -85,7 +74,7 @@ impl SchemaEvaluator for OriginalContextAdapter {
         let original = request
             .document()
             .value()
-            .at(&request.entry_location().pointer)
+            .at(request.entry_location().pointer.as_str().unwrap())
             .expect("original entry location")
             .to_owned();
         assert_eq!(original.semantic_eq(request.entry()), Some(true));
@@ -151,6 +140,8 @@ enum Fault {
     DisagreeingExplanation,
     // An interrupted explanation answers satisfies instead of no verdict.
     InterruptedSatisfies,
+    // Problems name their instance from the value's source rather than the value.
+    SourceRootedInstance,
 }
 struct FaultyAdapter(Fault);
 struct FaultyContract(Arc<dyn PreparedSchema>, Fault);
@@ -205,12 +196,28 @@ impl PreparedSchema for FaultyContract {
                     ..
                 } => {
                     for problem in &mut problems {
-                        problem.schema_location = Some(SchemaLocation {
-                            resource: Some(
-                                "https://not-an-original-resource.invalid/fabricated".into(),
-                            ),
-                            pointer: String::new(),
-                        });
+                        problem.schema = SchemaLocation::new(
+                            Some("https://not-an-original-resource.invalid/fabricated".into()),
+                            "".parse().unwrap(),
+                        );
+                    }
+                    ValueOutcome::Fails {
+                        problems,
+                        problems_complete,
+                        message: "value does not satisfy the contract".into(),
+                    }
+                }
+                other => other,
+            },
+            Fault::SourceRootedInstance => match outcome {
+                ValueOutcome::Fails {
+                    mut problems,
+                    problems_complete,
+                    ..
+                } => {
+                    let root = value.location().pointer.expect("a value's pointer");
+                    for problem in &mut problems {
+                        problem.instance = format!("{root}{}", problem.instance).parse().unwrap();
                     }
                     ValueOutcome::Fails {
                         problems,
@@ -243,6 +250,7 @@ fn real_runner_rejects_malformed_outcomes_fabricated_sources_and_broad_refusals(
         Fault::DetailedCheck,
         Fault::DisagreeingExplanation,
         Fault::InterruptedSatisfies,
+        Fault::SourceRootedInstance,
     ] {
         let report = run(
             &FaultyAdapter(fault),
@@ -285,13 +293,12 @@ fn cheap_checks_report_no_problems_and_agree_with_explanations() {
         problems,
         problems_complete,
     };
-    let problem = ValueProblem {
-        details: None,
-        instance_pointer: String::new(),
-        schema_location: None,
-        code: "type".into(),
-        message: "expected string".into(),
-    };
+    let problem = ValueProblem::new(
+        "".parse().unwrap(),
+        SchemaLocation::new(None, "".parse().unwrap()),
+        "type",
+        "expected string",
+    );
     assert!(
         judge_detail(
             &failure(vec![], false),

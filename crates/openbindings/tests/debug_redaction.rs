@@ -50,7 +50,7 @@ impl SchemaEvaluator for PrivateEvaluator {
             message: "test evaluator".into(),
             location: Some(SchemaLocation {
                 resource: None,
-                pointer: String::new(),
+                pointer: "".parse().unwrap(),
             }),
         })
     }

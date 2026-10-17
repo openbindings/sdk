@@ -15,6 +15,44 @@ pub fn initialize_runtime() {
 fn encoded(value: impl serde::Serialize) -> String {
     serde_json::to_string(&value).expect("SDK metadata is serializable")
 }
+// JSON text for named fields, written without a `serde_json::Value` tree,
+// which cannot hold a pointer through a member name with an unpaired unit;
+// such a pointer serializes as an exact escape. Keys are given in order.
+macro_rules! object {
+    ($($key:literal: $value:expr),* $(,)?) => {{
+        let mut text = String::from("{");
+        $(
+            if text.len() > 1 {
+                text.push(',');
+            }
+            text.push_str(&encoded($key));
+            text.push(':');
+            text.push_str(&encoded(&$value));
+        )*
+        text.push('}');
+        text
+    }};
+}
+// A schema location as exact JSON text, so its pointer keeps unpaired units.
+fn schema_location(text: &str) -> Result<SchemaLocation, JsValue> {
+    let invalid = || {
+        error(
+            "invalid-schema-location",
+            "expected a resource URI or null and an RFC 6901 pointer",
+        )
+    };
+    let value = JsonValue::parse(text).map_err(|_| invalid())?;
+    let resource = match value.get("resource") {
+        Some(resource) if resource.kind() == JsonKind::Null => None,
+        Some(resource) => Some(resource.as_str().ok_or_else(invalid)?.to_owned()),
+        None => return Err(invalid()),
+    };
+    let pointer = value
+        .get("pointer")
+        .and_then(openbindings_internal_json::backend::string_pointer)
+        .ok_or_else(invalid)?;
+    Ok(SchemaLocation::new(resource, pointer))
+}
 fn error(code: &str, message: impl ToString) -> JsValue {
     JsValue::from_str(&encoded(json!({"code":code,"message":message.to_string()})))
 }
@@ -24,8 +62,11 @@ fn input_error(e: InputError) -> JsValue {
     ))
 }
 fn interpretation_error(e: InterpretationError) -> JsValue {
-    JsValue::from_str(&encoded(
-        json!({"code":"interpretation", "message":e.to_string(), "interpretation_code":e.code(), "location":e.source_location()}),
+    JsValue::from_str(&object!(
+        "code": "interpretation",
+        "interpretation_code": e.code(),
+        "location": e.source_location(),
+        "message": e.to_string(),
     ))
 }
 // Absent limits mean the defaults, so ordinary preparation parses nothing.
@@ -79,14 +120,24 @@ impl WasmJson {
             value: v.to_owned(),
         })
     }
+    /// Locate a pointer, given as an exact JSON string, relative to this value.
+    pub fn locate(&self, pointer: &str) -> Result<String, JsValue> {
+        let pointer = JsonValue::parse(pointer)
+            .ok()
+            .and_then(|text| openbindings_internal_json::backend::string_pointer(text.view()))
+            .ok_or_else(|| error("invalid-pointer", "expected an RFC 6901 pointer"))?;
+        Ok(encoded(self.value.locate(&pointer)))
+    }
     pub fn get(&self, name: &str) -> Option<WasmJson> {
         self.value.get(name).map(|v| Self {
             value: v.to_owned(),
         })
     }
     pub fn metadata(&self) -> String {
-        encoded(
-            json!({"kind":format!("{:?}",self.value.kind()).to_lowercase(),"location":self.value.location(),"duplicate_names":self.value.has_duplicate_names()}),
+        object!(
+            "duplicate_names": self.value.has_duplicate_names(),
+            "kind": format!("{:?}", self.value.kind()).to_lowercase(),
+            "location": self.value.location(),
         )
     }
     pub fn members(&self) -> Option<WasmMembers> {
@@ -625,7 +676,7 @@ impl std::fmt::Debug for WasmDocumentValidation {
 impl WasmDocumentValidation {
     pub fn report(&self) -> String {
         match self.handle.document().validate() {
-            Ok(v) => encoded(json!({"status":"report", "report":v.report()})),
+            Ok(v) => object!("report": v.report(), "status": "report"),
             Err(e) => encoded(json!({"status":"version-refused", "refusal":e})),
         }
     }
@@ -693,6 +744,11 @@ impl WasmConformantDocument {
     }
     pub fn validate(&self) -> WasmDocumentValidation {
         self.as_document().validate()
+    }
+    /// Locate a schema location, given as exact JSON text, in this document.
+    pub fn locate(&self, location: &str) -> Result<String, JsValue> {
+        let proof = self.handle.proof("document-conformance")?;
+        Ok(encoded(proof.locate(&schema_location(location)?)))
     }
     pub fn openbindings(&self) -> Result<String, JsValue> {
         Ok(encoded(
@@ -1190,6 +1246,10 @@ impl WasmResources {
             resources: self.resources.clone(),
         }
     }
+    /// Locate a schema location, given as exact JSON text, in these resources.
+    pub fn locate(&self, location: &str) -> Result<String, JsValue> {
+        Ok(encoded(self.resources.locate(&schema_location(location)?)))
+    }
 }
 impl Default for WasmResources {
     fn default() -> Self {
@@ -1356,7 +1416,7 @@ impl WasmPreparation {
     pub fn result(&self) -> String {
         match &self.preparation {
             Some(Ok(_)) => encoded(json!({"status":"ready"})),
-            Some(Err(detail)) => encoded(json!({"status":"no-verdict","detail":detail})),
+            Some(Err(detail)) => object!("detail": detail, "status": "no-verdict"),
             None => encoded(json!({"status":"consumed"})),
         }
     }
@@ -1401,7 +1461,7 @@ impl WasmPrepared {
 #[wasm_bindgen(js_name=validateBytes)]
 pub fn validate_bytes(bytes: &[u8]) -> String {
     match validate_document(bytes) {
-        Ok(a) => encoded(json!({"status":"report","report":a.report()})),
+        Ok(a) => object!("report": a.report(), "status": "report"),
         Err(e) => encoded(json!({"status":"version-refused","refusal":e})),
     }
 }
@@ -1456,14 +1516,15 @@ impl WasmDiscovery {
     pub fn result(&self) -> String {
         use openbindings_http_discovery::DiscoveryOutcome::*;
         match &self.outcome {
-            Found { document } => encoded(
-                json!({"status":"found","report":document.as_document().validate().unwrap().report()}),
+            Found { document } => object!(
+                "report": document.as_document().validate().unwrap().report(),
+                "status": "found",
             ),
             NonConformant { validation } => {
-                encoded(json!({"status":"non-conformant","report":validation.report()}))
+                object!("report": validation.report(), "status": "non-conformant")
             }
             Undetermined { validation } => {
-                encoded(json!({"status":"undetermined","report":validation.report()}))
+                object!("report": validation.report(), "status": "undetermined")
             }
             VersionRefused { refusal } => {
                 encoded(json!({"status":"version-refused","refusal":refusal}))
@@ -1564,5 +1625,79 @@ mod proof_mutation_tests {
             .unwrap()
             .set_name("edited")
             .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod location_transfer_tests {
+    use super::*;
+    #[test]
+    fn reports_and_locations_keep_pointers_through_unpaired_names() {
+        // A JSON tree cannot hold this finding's pointer; the bridge writes
+        // its exact escape, which a JavaScript host parses back exactly.
+        let text = r#"{"openbindings":"0.2.0","operations":{},"x":{"\ud800":{"k":0,"k":1}}}"#;
+        let report = validate_bytes(text.as_bytes());
+        assert!(report.starts_with(r#"{"report":{"#));
+        assert!(report.contains(r#""pointer":"/x/\ud800/k""#), "{report}");
+        let value = WasmJson::parse_text(text).unwrap();
+        let name = value
+            .value
+            .at("/x")
+            .unwrap()
+            .members()
+            .unwrap()
+            .next()
+            .unwrap();
+        let metadata = WasmJson {
+            value: name.value.to_owned(),
+        }
+        .metadata();
+        assert!(metadata.contains(r#""pointer":"/x/\ud800""#), "{metadata}");
+    }
+    #[test]
+    fn instance_pointers_are_located_on_demand_as_exact_text() {
+        let value = WasmJson::parse_text("{\"\\ud800\":[1,\n\"x\"]}").unwrap();
+        assert_eq!(
+            value.locate(r#""/\ud800/1""#).unwrap(),
+            r#"{"pointer":"/\ud800/1","byte_offset":14,"line":2,"byte_column":1}"#
+        );
+        assert_eq!(value.locate(r#""/x""#).unwrap(), "null");
+    }
+    #[test]
+    fn schema_locations_cross_as_exact_text() {
+        let uri = "https://example.test/schema";
+        let resources = WasmResources::new()
+            .add(
+                uri,
+                &WasmJson::parse_text(r#"{"$defs":{"\ud800":{"type":"string"}}}"#).unwrap(),
+            )
+            .unwrap();
+        let located = resources
+            .locate(&format!(
+                r#"{{"resource":"{uri}","pointer":"/$defs/\ud800/type"}}"#
+            ))
+            .unwrap();
+        assert_eq!(
+            located,
+            r#"{"pointer":"/$defs/\ud800/type","byte_offset":27,"line":1,"byte_column":28}"#
+        );
+        assert_eq!(
+            resources
+                .locate(r#"{"resource":null,"pointer":"/$defs"}"#)
+                .unwrap(),
+            "null"
+        );
+        let document = Document::parse(
+            "{\"openbindings\":\"0.2.0\",\n\"operations\":{\"op\":{\"input\":{\"type\":\"string\"}}}}",
+        )
+        .unwrap();
+        let proof =
+            WasmConformantDocument::from_proof(document.validate().unwrap().conformant().unwrap());
+        assert_eq!(
+            proof
+                .locate(r#"{"resource":null,"pointer":"/operations/op/input/type"}"#)
+                .unwrap(),
+            r#"{"pointer":"/operations/op/input/type","byte_offset":61,"line":2,"byte_column":37}"#
+        );
     }
 }

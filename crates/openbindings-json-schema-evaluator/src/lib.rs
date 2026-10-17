@@ -224,8 +224,7 @@ impl Origins<'_> {
             }
             Origins::Space { space, definitions } => {
                 let mut at = space.location(*definitions.get(resource)?.get(definition)?);
-                at.pointer.push('/');
-                at.pointer.push_str(keyword);
+                backend::push_pointer(&mut at.pointer, &format!("/{keyword}"));
                 Some(original_location(at))
             }
         }
@@ -373,28 +372,20 @@ impl Compiled {
                 let Err(error) = self.validator.validate(backend::view(value)) else {
                     return Ok(None);
                 };
-                let located = match error.absolute_keyword_location() {
-                    Some(uri) => {
-                        match explanation.locate(self.program.as_ref(), uri.as_str(), control) {
-                            Ok(located) => located,
-                            Err(()) => return Ok(None),
-                        }
-                    }
-                    None => None,
-                };
-                // Generated partial-program errors are not original schema evidence.
-                if original_only && located.is_none() {
+                let uri = error.absolute_keyword_location().map(|uri| uri.as_str());
+                let program = self.program.as_ref();
+                let Ok(Some(located)) =
+                    explanation.problem_schema(program, uri, original_only, control)
+                else {
                     return Ok(None);
-                }
-                let (location, operand) = match located {
-                    Some(located) => (Some(located.location), located.operand),
-                    None => (None, None),
                 };
+                let (schema, operand) = (located.location, located.operand);
+                let instance = instance_pointer(error.instance_path().as_str());
                 let detail = details::collect(operand, error.kind(), control);
                 control.check()?;
                 Ok(Some(ValueProblem {
-                    instance_pointer: error.instance_path().as_str().into(),
-                    schema_location: location,
+                    instance,
+                    schema,
                     code: error.kind().keyword().into(),
                     message: if original_only && error.kind().keyword() == "oneOf" {
                         "value does not satisfy exactly one alternative".into()
@@ -405,7 +396,9 @@ impl Compiled {
                 }))
             });
             if let Ok(Some(problem)) = diagnostic {
-                problems.push(problem);
+                debug_assert!(value.at_pointer(&problem.instance).is_some());
+                // The library's first error is the only problem.
+                problems = vec![problem];
             }
         }
         ValueOutcome::Fails {
@@ -415,6 +408,17 @@ impl Compiled {
             problems_complete: false,
         }
     }
+}
+
+// The library's instance path is the failing node's exact pointer from the
+// value. It escapes `~` and `/` as RFC 6901 does and writes indices in decimal,
+// and it spells each member name as the value does: evaluation presents scalar
+// names, including those holding the view's marker U+E000, as themselves, and
+// a name with an unpaired unit can only be read through `AsRef<str>` or
+// `Cow<str>`, which marks the pass unsupported: a path built in such a pass
+// may hold the view's spelling, but the pass and its problem are discarded.
+fn instance_pointer(path: &str) -> Pointer {
+    backend::escaped_pointer(path.to_owned())
 }
 
 struct PartialCompiled {
@@ -766,7 +770,7 @@ mod partial_budget_tests {
         );
         strict.location = Some(SchemaLocation {
             resource: Some("https://original.invalid/R".into()),
-            pointer: "/properties/long~0name".into(),
+            pointer: "/properties/long~0name".parse().unwrap(),
         });
         for (reason, code) in [
             (
@@ -833,7 +837,7 @@ mod partial_budget_tests {
             let mut actual = no_verdict(reason, code, "actual refusal");
             actual.location = Some(SchemaLocation {
                 resource: Some("https://original.invalid/R".into()),
-                pointer: "/selected/schema".into(),
+                pointer: "/selected/schema".parse().unwrap(),
             });
             assert_eq!(
                 serde_json::to_value(recover_partial_decline(strict.clone(), actual.clone()))
@@ -927,10 +931,7 @@ mod partial_budget_tests {
 }
 
 fn original_location(at: openbindings_internal_schema::Location) -> SchemaLocation {
-    SchemaLocation {
-        resource: at.resource,
-        pointer: at.pointer,
-    }
+    SchemaLocation::new(at.resource, at.pointer)
 }
 fn projection_failure(f: openbindings_internal_schema::Failure) -> NoVerdict {
     use openbindings_internal_schema::FailureReason as F;

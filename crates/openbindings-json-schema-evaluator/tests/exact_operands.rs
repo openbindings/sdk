@@ -142,7 +142,7 @@ fn explained_facts_use_original_tokens_and_never_numeric_handles() {
         let problem = &problems[0];
         assert_eq!(problem.code, "exclusiveMinimum");
         assert_eq!(
-            problem.schema_location.as_ref().unwrap().pointer,
+            problem.schema.pointer,
             "/operations/op/input/exclusiveMinimum"
         );
         assert!(
@@ -187,7 +187,7 @@ fn substituted_resource_nodes_keep_distinct_original_provenance() {
                 panic!()
             };
             if mode == Detail::Explain {
-                let location = problems[0].schema_location.as_ref().unwrap();
+                let location = &problems[0].schema;
                 assert_eq!(
                     location.resource.as_deref(),
                     Some("https://exact.test/root")

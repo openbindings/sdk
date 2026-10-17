@@ -5,7 +5,7 @@ use crate::{
     uri, *,
 };
 use openbindings_internal_json::backend::{
-    has_unpaired, node_id, pointer, pointer_into, pointer_size,
+    has_unpaired, location_pointer_size, node_id, pointer_into, push_pointer, relative_pointer,
 };
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
@@ -567,8 +567,7 @@ impl SchemaSpace {
         let source = self.source(node.source);
         let uri_bytes = source.uri.as_ref().map_or(0, String::len);
         if let Some(remaining) = LOCATION_BYTES.checked_sub(uri_bytes)
-            && pointer_size(node.value.view(), remaining).is_some()
-            && pointer_size(source.value.view(), remaining).is_some()
+            && location_pointer_size(node.value.view(), remaining).is_some()
         {
             detail.location = Some(self.location(at));
         }
@@ -581,14 +580,10 @@ impl SchemaSpace {
             .copied()
     }
     /// Append a node's original pointer, exactly as [`Self::location`] gives it,
-    /// to `out`, using `scratch` for its source's own pointer, and return the
-    /// source's URI (`None` for the document).
-    pub fn location_into(
-        &self,
-        node: usize,
-        out: &mut Vec<u8>,
-        scratch: &mut Vec<u8>,
-    ) -> Option<&str> {
+    /// to `out`, using `scratch` for its source's own pointer. `false`,
+    /// appending nothing, when the pointer passes through a name holding
+    /// unpaired units, which only [`Self::location`] can hold.
+    pub fn location_into(&self, node: usize, out: &mut Vec<u8>, scratch: &mut Vec<u8>) -> bool {
         let node = self.node(node);
         let source = self.source(node.source);
         scratch.clear();
@@ -596,11 +591,13 @@ impl SchemaSpace {
             scratch.clear();
         }
         let start = out.len();
-        pointer_into(&node.value, out);
+        if !pointer_into(&node.value, out) {
+            return false;
+        }
         if !scratch.is_empty() && out[start..].starts_with(scratch) {
             out.drain(start..start + scratch.len());
         }
-        source.uri.as_deref()
+        true
     }
     /// The URI of a node's source, as [`Self::location`] gives it.
     pub fn source_uri(&self, node: usize) -> Option<&str> {
@@ -609,16 +606,10 @@ impl SchemaSpace {
     pub fn location(&self, node: usize) -> Location {
         let node = self.node(node);
         let source = self.source(node.source);
-        let prefix = pointer(&source.value).unwrap_or_default();
-        let full = pointer(&node.value).unwrap_or_default();
-        // A source at its document's root keeps the full pointer without a copy.
-        let pointer = match full.strip_prefix(&prefix) {
-            Some(relative) if !prefix.is_empty() => relative.into(),
-            _ => full,
-        };
+        // Exact from the source's own root, including names with unpaired units.
         Location {
             resource: source.uri.clone(),
-            pointer,
+            pointer: relative_pointer(node.value.view(), source.value.view()),
         }
     }
     pub fn failure(
@@ -755,8 +746,8 @@ impl SchemaSpace {
                         Err(detail) => ReferenceResolution::Unresolved { detail },
                     };
                     let mut location = self.location(id);
-                    location.pointer.push('/');
-                    location.pointer.push_str(keyword);
+                    // Reference keywords need no escape.
+                    push_pointer(&mut location.pointer, &format!("/{keyword}"));
                     report.references.push(Reference {
                         location,
                         keyword: keyword.into(),
@@ -1697,13 +1688,64 @@ mod projection_tests {
                     panic!("strict projections map prefix origins")
                 };
                 out.clear();
-                let source = space.location_into(node, &mut out, &mut scratch);
-                assert_eq!(source, at.resource.as_deref(), "{key}");
-                assert_eq!(std::str::from_utf8(&out).unwrap(), at.pointer, "{key}");
+                assert!(space.location_into(node, &mut out, &mut scratch), "{key}");
+                assert_eq!(space.source_uri(node), at.resource.as_deref(), "{key}");
+                assert_eq!(at.pointer, std::str::from_utf8(&out).unwrap(), "{key}");
                 checked += 1;
             }
         }
         assert_eq!(checked, mapped.locations.len());
+    }
+    #[test]
+    fn origins_through_unpaired_names_are_left_to_the_exact_location() {
+        // An anchor reaches a schema beneath a name no reference can spell.
+        let document = RawDocument::parse(
+            r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://loc.test/r#an"}}}}"#,
+        )
+        .unwrap();
+        let resources = Supplied::new([ProjectedResource {
+            uri: "https://loc.test/r".into(),
+            document: JsonValue::parse(
+                r#"{"minimum":0,"$defs":{"\ud800/":{"$anchor":"an","minimum":3}}}"#,
+            )
+            .unwrap(),
+        }])
+        .unwrap();
+        let space = SchemaSpace::new(document, resources);
+        let entry = space
+            .document_node(
+                &space
+                    .document
+                    .value()
+                    .at("/operations/op/input")
+                    .unwrap()
+                    .to_owned(),
+            )
+            .unwrap();
+        let control = std::sync::atomic::AtomicBool::new(false);
+        let mapped = space.program(entry, &control).unwrap();
+        let unmapped = space.program_unmapped(entry, &control).unwrap();
+        let (mut out, mut scratch) = (b"held".to_vec(), Vec::new());
+        let mut declined = 0;
+        for &node in unmapped.definitions.iter().flatten() {
+            let at = space.location(node);
+            if space.location_into(node, &mut out, &mut scratch) {
+                assert_eq!(at.pointer, std::str::from_utf8(&out[4..]).unwrap());
+            } else {
+                // Nothing is appended, and the location keeps every unit, as the
+                // mapped projection's origin does.
+                assert_eq!(out, b"held");
+                assert!(at.pointer.as_str().is_none());
+                assert_eq!(at.resource.as_deref(), Some("https://loc.test/r"));
+                assert_eq!(at.pointer.to_string(), "/$defs/\\ud800~1");
+                assert!(mapped.locations.values().any(
+                    |origin| matches!(origin, ProgramOrigin::Prefix(mapped) if *mapped == at)
+                ));
+                declined += 1;
+            }
+            out.truncate(4);
+        }
+        assert_eq!(declined, 1);
     }
     #[test]
     fn generated_name_changes_preserve_dynamic_scope_annotations_opaque_strings_and_locations() {

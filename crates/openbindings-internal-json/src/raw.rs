@@ -426,21 +426,29 @@ impl Arena {
         let rest = pointer.strip_prefix('/')?;
         let mut current = id;
         for segment in rest.split('/') {
-            let mut name = String::with_capacity(segment.len());
-            let mut chars = segment.chars();
-            while let Some(c) = chars.next() {
-                if c == '~' {
-                    name.push(match chars.next()? {
-                        '0' => '~',
-                        '1' => '/',
-                        _ => return None,
-                    });
-                } else {
-                    name.push(c);
+            // Only a segment with escapes needs a decoded copy.
+            let decoded;
+            let name = if segment.contains('~') {
+                let mut name = String::with_capacity(segment.len());
+                let mut chars = segment.chars();
+                while let Some(c) = chars.next() {
+                    if c == '~' {
+                        name.push(match chars.next()? {
+                            '0' => '~',
+                            '1' => '/',
+                            _ => return None,
+                        });
+                    } else {
+                        name.push(c);
+                    }
                 }
-            }
+                decoded = name;
+                decoded.as_str()
+            } else {
+                segment
+            };
             current = match &self.nodes[current].kind {
-                Kind::Object(_) => self.get(current, &name)?,
+                Kind::Object(_) => self.get(current, name)?,
                 Kind::Array(values) => {
                     if name.len() > 1 && name.starts_with('0') {
                         return None;
@@ -456,44 +464,55 @@ impl Arena {
         Some(current)
     }
     pub fn pointer(&self, id: Id) -> Option<String> {
+        self.pointer_from(id, 0)
+    }
+    /// The scalar pointer of `id` from its ancestor `root`, which may be `id`.
+    pub fn pointer_from(&self, id: Id, root: Id) -> Option<String> {
         // Measure first: an unrepresentable ancestor makes the whole pointer
         // unavailable before anything is copied, and the pointer then takes one
         // exact allocation, written from its last segment back.
-        let size = self.pointer_len(id)?;
+        let size = self.pointer_len(id, root)?;
         let mut bytes = vec![0u8; size];
-        self.fill_pointer(id, &mut bytes);
+        self.fill_pointer(id, root, &mut bytes);
         Some(String::from_utf8(bytes).expect("segments are UTF-8"))
     }
     /// Append this node's pointer to `out`, as [`Self::pointer`] spells it;
     /// `false`, appending nothing, when it is unavailable.
     pub fn pointer_into(&self, id: Id, out: &mut Vec<u8>) -> bool {
-        let Some(size) = self.pointer_len(id) else {
+        let Some(size) = self.pointer_len(id, 0) else {
             return false;
         };
         let start = out.len();
         out.resize(start + size, 0);
-        self.fill_pointer(id, &mut out[start..]);
+        self.fill_pointer(id, 0, &mut out[start..]);
         true
     }
-    fn pointer_len(&self, id: Id) -> Option<usize> {
+    // The edges from `id` up to its ancestor `root`, last segment first.
+    fn edges(&self, mut current: Id, root: Id) -> impl Iterator<Item = Edge> + '_ {
+        std::iter::from_fn(move || {
+            (current != root).then(|| {
+                let (parent, edge) = self.nodes[current].parent.expect("an ancestor of the node");
+                current = parent;
+                edge
+            })
+        })
+    }
+    fn pointer_len(&self, id: Id, root: Id) -> Option<usize> {
         let mut size = 0usize;
-        let mut current = id;
-        while let Some((parent, edge)) = self.nodes[current].parent {
+        for edge in self.edges(id, root) {
             size += 1 + match edge {
                 Edge::Index(index) => index
                     .checked_ilog10()
                     .map_or(1, |digits| digits as usize + 1),
                 Edge::Key(key) => escaped_len(self.string(key)?),
             };
-            current = parent;
         }
         Some(size)
     }
     // Write a measured pointer into `bytes`, from its last segment back.
-    fn fill_pointer(&self, id: Id, bytes: &mut [u8]) {
+    fn fill_pointer(&self, id: Id, root: Id, bytes: &mut [u8]) {
         let mut end = bytes.len();
-        let mut current = id;
-        while let Some((parent, edge)) = self.nodes[current].parent {
+        for edge in self.edges(id, root) {
             match edge {
                 Edge::Index(mut index) => loop {
                     end -= 1;
@@ -531,9 +550,63 @@ impl Arena {
             }
             end -= 1;
             bytes[end] = b'/';
-            current = parent;
         }
         debug_assert_eq!(end, 0);
+    }
+    /// The exact pointer, including segments whose names hold unpaired units.
+    pub fn exact_pointer(&self, id: Id) -> crate::Pointer {
+        self.exact_pointer_from(id, 0)
+    }
+    /// The exact pointer of `id` from its ancestor `root`, which may be `id`.
+    pub fn exact_pointer_from(&self, id: Id, root: Id) -> crate::Pointer {
+        if let Some(text) = self.pointer_from(id, root) {
+            return crate::Pointer::escaped(text);
+        }
+        // An ancestor's name holds an unpaired unit: write escaped units.
+        let mut segments = Vec::new();
+        let mut current = id;
+        while current != root {
+            let (parent, edge) = self.nodes[current].parent.expect("an ancestor of the node");
+            segments.push(match edge {
+                Edge::Index(index) => index.to_string().encode_utf16().collect(),
+                Edge::Key(key) => self.units(key).expect("member name is a string"),
+            });
+            current = parent;
+        }
+        let escaped: usize = segments
+            .iter()
+            .map(|segment| {
+                1 + segment.len()
+                    + segment
+                        .iter()
+                        .filter(|&&unit| unit == u16::from(b'~') || unit == u16::from(b'/'))
+                        .count()
+            })
+            .sum();
+        let mut units = Vec::with_capacity(escaped);
+        for segment in segments.iter().rev() {
+            units.push(u16::from(b'/'));
+            for &unit in segment {
+                match u8::try_from(unit) {
+                    Ok(b'~') => units.extend([u16::from(b'~'), u16::from(b'0')]),
+                    Ok(b'/') => units.extend([u16::from(b'~'), u16::from(b'1')]),
+                    _ => units.push(unit),
+                }
+            }
+        }
+        crate::Pointer::from_escaped_units(units)
+    }
+    /// One-based line and byte column of a node's offset, found by one pass
+    /// over the bytes before it; nothing is indexed or retained.
+    pub fn line_and_column(&self, offset: usize) -> (usize, usize) {
+        let before = &self.source.as_bytes()[..offset];
+        // Counting compares every byte, which the compiler vectorizes.
+        let lines = before.iter().filter(|&&byte| byte == b'\n').count();
+        let line_start = before
+            .iter()
+            .rposition(|&byte| byte == b'\n')
+            .map_or(0, |at| at + 1);
+        (1 + lines, offset - line_start + 1)
     }
     pub fn position(&self, offset: usize) -> Option<(usize, usize)> {
         if offset > self.source.len() || !self.source.is_char_boundary(offset) {
@@ -937,8 +1010,11 @@ mod tests {
         }
         assert_eq!(members[2].name.utf16_units(), Some(vec![0xd800]));
         assert_eq!(members[4].name.utf16_units(), Some(vec![0xdc00]));
-        assert_eq!(members[2].value.location().pointer, None);
-        assert_eq!(members[1].name.location().pointer.as_deref(), Some("/a"));
+        // A name with an unpaired unit is still named exactly.
+        let exact = members[2].value.location().pointer.unwrap();
+        assert_eq!(exact.as_str(), None);
+        assert_eq!(exact.utf16_units().collect::<Vec<_>>(), [0x2f, 0xd800]);
+        assert_eq!(members[1].name.location().pointer.unwrap(), "/a");
         assert_eq!(members[1].name.location().byte_offset, offsets[0]);
     }
 
@@ -991,8 +1067,8 @@ mod tests {
                 .unwrap()
                 .location()
                 .pointer
-                .as_deref(),
-            Some("/outer/a~1~0/0/~01")
+                .unwrap(),
+            "/outer/a~1~0/0/~01"
         );
         // Small objects intentionally have no index.
         let small = retained.at("/a~1~0/0").unwrap();
@@ -1251,7 +1327,10 @@ mod tests {
                             let actual = leaf.location();
                             assert_eq!(actual.byte_offset, offset);
                             assert_eq!((actual.line, actual.byte_column), (line, column));
-                            assert_eq!(actual.pointer.as_deref(), pointer);
+                            assert_eq!(
+                                actual.pointer.as_ref().and_then(crate::Pointer::as_str),
+                                pointer
+                            );
                             assert_eq!(leaf.original_source(), source.as_bytes());
                         }
                     }
@@ -1358,11 +1437,44 @@ mod tests {
             segments.reverse();
             Some(segments.iter().map(|s| format!("/{s}")).collect())
         };
+        // The exact pointer keeps every unit, including those names.
+        let exact = |id: Id| -> Vec<u16> {
+            let mut segments = Vec::new();
+            let mut current = id;
+            while let Some((parent, edge)) = a.nodes[current].parent {
+                segments.push(match edge {
+                    Edge::Index(i) => i.to_string().encode_utf16().collect(),
+                    Edge::Key(k) => a
+                        .units(k)
+                        .unwrap()
+                        .iter()
+                        .flat_map(|&unit| match unit {
+                            0x7e => vec![0x7e, 0x30],
+                            0x2f => vec![0x7e, 0x31],
+                            _ => vec![unit],
+                        })
+                        .collect::<Vec<u16>>(),
+                });
+                current = parent;
+            }
+            segments
+                .iter()
+                .rev()
+                .flat_map(|s| std::iter::once(0x2f).chain(s.iter().copied()))
+                .collect()
+        };
         let mut unnamed = 0;
         for id in 0..a.nodes.len() {
             let expected = reference(id);
             unnamed += usize::from(expected.is_none());
             assert_eq!(a.pointer(id), expected, "node {id}");
+            let pointer = a.exact_pointer(id);
+            assert_eq!(pointer.as_str(), expected.as_deref(), "node {id}");
+            assert_eq!(
+                pointer.utf16_units().collect::<Vec<_>>(),
+                exact(id),
+                "node {id}"
+            );
             // Appending writes the same pointer after what the buffer holds.
             let mut out = b"held".to_vec();
             assert_eq!(

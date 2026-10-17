@@ -552,7 +552,7 @@ mod tests {
         backend::fixed_strings(|| {
             let _ = jsonschema::ob_work::bounded(work, 1024, || {
                 limited = map.locate(value.view(), |at| {
-                    paths.push(at.location().pointer.unwrap());
+                    paths.push(at.location().pointer.unwrap().to_string());
                     true
                 });
             });

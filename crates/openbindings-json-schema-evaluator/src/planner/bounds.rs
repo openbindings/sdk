@@ -1,7 +1,9 @@
 //! Compositional validity bounds. Strict and positive-only encodings stay separate.
 mod oneof;
 use super::*;
-use openbindings_internal_json::backend::{decoded_string_size, pointer_size};
+use openbindings_internal_json::backend::{
+    decoded_string_size, location_pointer_size, pointer_size, push_pointer,
+};
 use openbindings_internal_schema::ProgramOrigin;
 use std::{
     fmt::{self, Write},
@@ -272,15 +274,14 @@ impl SchemaSpace {
     fn bounds_location(&self, id: usize, suffix: &str, cap: Admission) -> Option<SchemaLocation> {
         let node = self.node(id);
         let source = self.source(node.source);
-        let full = pointer_size(node.value.view(), cap.scratch)?;
-        pointer_size(source.value.view(), cap.scratch)?;
+        let full = location_pointer_size(node.value.view(), cap.scratch)?;
         if full.checked_add(suffix.len())? > cap.scratch
             || source.uri.as_ref().is_some_and(|s| s.len() > cap.scratch)
         {
             return None;
         }
         let mut location = self.location(id);
-        location.pointer.push_str(suffix);
+        push_pointer(&mut location.pointer, suffix);
         Some(location)
     }
     fn bounds_failure(
@@ -619,7 +620,7 @@ impl SchemaSpace {
         let locations = Arc::new(locations);
         let unavailable = plan.first_hole.map(|id| {
             let mut location = self.location(id);
-            location.pointer.push_str("/$ref");
+            push_pointer(&mut location.pointer, "/$ref");
             let (reason, code, message) = plan.split_evidence();
             NoVerdict::new(reason, code, message).located(location)
         });
@@ -953,13 +954,15 @@ mod tests {
         for (generated, origin) in bounds.lower.locations.iter() {
             size += generated.len();
             if let ProgramOrigin::Prefix(at) | ProgramOrigin::Exact(at) = origin {
-                size += at.pointer.len() + at.resource.as_ref().map_or(0, String::len);
+                size += openbindings_internal_json::backend::pointer_bytes(&at.pointer)
+                    + at.resource.as_ref().map_or(0, String::len);
             }
         }
         if let Some(e) = &bounds.unavailable {
             size += e.code.len() + e.message.len();
             if let Some(at) = &e.location {
-                size += at.pointer.len() + at.resource.as_ref().map_or(0, String::len);
+                size += openbindings_internal_json::backend::pointer_bytes(&at.pointer)
+                    + at.resource.as_ref().map_or(0, String::len);
             }
         }
         size
@@ -991,7 +994,7 @@ mod tests {
             detail.location.unwrap(),
             SchemaLocation {
                 resource: None,
-                pointer: "/operations/op/input".into(),
+                pointer: "/operations/op/input".parse().unwrap(),
             }
         );
         assert!(
@@ -1440,7 +1443,7 @@ mod tests {
         assert_eq!(omitted.message, original.message);
         let precise = original.located(SchemaLocation {
             resource: Some("https://original.invalid/R".into()),
-            pointer: "/precise".into(),
+            pointer: "/precise".parse().unwrap(),
         });
         let retained = space.bounds_failure(
             precise.clone(),

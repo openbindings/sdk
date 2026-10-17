@@ -46,8 +46,7 @@ export function partialResourceCases(sdk) {
         check(
           result.problems.some(
             (p) =>
-              p.code === keyword &&
-              p.schemaLocation?.pointer.endsWith(`/${keyword}`),
+              p.code === keyword && p.schema.pointer.endsWith(`/${keyword}`),
           ),
           "original known diagnostic",
         );

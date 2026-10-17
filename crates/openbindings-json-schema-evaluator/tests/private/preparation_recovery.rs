@@ -174,6 +174,8 @@ fn transitive_holes_and_original_snapshot_evidence_survive_new_resource_sets() {
             .as_ref()
             .unwrap()
             .pointer
+            .as_str()
+            .unwrap()
             .ends_with("/a/$ref")
     );
     let ValueOutcome::NoVerdict { detail } = two.validate(&json(r#"{"b":1}"#)) else {
@@ -278,7 +280,7 @@ fn custom_evaluators_return_their_own_outcomes() {
     );
     own.location = Some(SchemaLocation {
         resource: None,
-        pointer: "/operations/op/input".into(),
+        pointer: "/operations/op/input".parse().unwrap(),
     });
     let custom = prepare("true", ResourceSet::default(), &Declared(own.clone()));
     assert_eq!(detail_json(&evidence(&custom)), detail_json(&own));
