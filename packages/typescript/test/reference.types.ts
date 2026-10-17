@@ -7,6 +7,7 @@ import {
   type ValueOutcome,
   type ValueCheck,
   type ValueContractPreparation,
+  type PreparedContract,
   type ValidationResult,
 } from "../dist/index.js";
 import { DiscoveryPublication } from "../dist/http-discovery.js";
@@ -23,12 +24,15 @@ export async function referenceExample(wasmBytes: Uint8Array, source: string) {
   if (proof.status !== "conformant") return proof;
   using validated = proof.document;
   using publication = new DiscoveryPublication(validated);
-  using context = validated.valueContracts({
+  using operation = validated.resolveOperation("run"); // primary name or alias
+  if (!operation) return { status: "operation-missing" as const };
+  using input = operation.input();
+  if (!input) return { status: "no-value-contract" as const };
+  const setup: ValueContractPreparation = input.prepare({
     limits: { evaluationSteps: 2000000 },
   });
-  const setup: ValueContractPreparation = context.prepare("run", "input");
   if (setup.status !== "ready") return setup;
-  using contract = setup.valueContract;
+  using contract: PreparedContract = setup.contract;
   const exact = parseJson("9007199254740993");
   if (exact.status !== "parsed") return exact.error;
   using value = exact.value;

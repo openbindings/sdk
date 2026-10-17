@@ -1,5 +1,5 @@
 use openbindings::*;
-use openbindings_json_schema_evaluator::{DefaultEvaluator, value_contracts};
+use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::{error::Error, sync::Arc};
 
 fn document(schema: &str) -> Conformant<Document> {
@@ -13,15 +13,19 @@ fn document(schema: &str) -> Conformant<Document> {
     .expect("conformant fixture")
 }
 
-fn contract(schema: &str) -> ValueContract {
-    value_contracts(&document(schema))
-        .prepare("find", Direction::Input)
-        .into_result()
+/// Prepare the input contract selected by its alias with the default evaluator.
+fn prepare(schema: &str) -> PreparedContract {
+    document(schema)
+        .resolve_operation("find")
+        .expect("declared alias")
+        .input()
+        .expect("declared input")
+        .prepare(&DefaultEvaluator::new())
         .unwrap()
 }
 
 #[test]
-fn default_context_matches_explicit_policy_and_retains_ready_work() {
+fn default_preparation_matches_explicit_policy_and_retains_ready_work() {
     for (schema, input) in [
         (r#"{"type":"integer"}"#, "7"),
         (r#"{"type":"integer"}"#, r#""seven""#),
@@ -29,19 +33,13 @@ fn default_context_matches_explicit_policy_and_retains_ready_work() {
         (r#"{"pattern":"x"}"#, r#""x""#),
     ] {
         let proof = document(schema);
-        let default = value_contracts(&proof);
-        let explicit =
-            proof.value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
-        let ready = default
-            .prepare("find", Direction::Input)
-            .into_result()
+        let operation = proof.resolve_operation("find").expect("declared alias");
+        let contract = operation.input().expect("declared input");
+        let ready = contract.prepare(&DefaultEvaluator::new()).unwrap();
+        let expected = contract
+            .prepare_with(&DefaultEvaluator::new(), &ResourceSet::default())
             .unwrap();
-        let expected = explicit
-            .prepare("find", Direction::Input)
-            .into_result()
-            .unwrap();
-        drop(default);
-        drop(explicit);
+        drop(operation);
         drop(proof);
         assert_eq!(
             serde_json::to_value(ready.validate_json(input).unwrap()).unwrap(),
@@ -52,7 +50,7 @@ fn default_context_matches_explicit_policy_and_retains_ready_work() {
         message,
         problems,
         problems_complete,
-    } = contract("false").validate_json("null").unwrap()
+    } = prepare("false").validate_json("null").unwrap()
     else {
         panic!("false schema must fail");
     };
@@ -63,32 +61,32 @@ fn default_context_matches_explicit_policy_and_retains_ready_work() {
     // The default pattern byte budget is applied before compilation.
     let pattern = "x".repeat(1_048_577);
     let proof = document(&serde_json::json!({"pattern": pattern}).to_string());
-    let error = value_contracts(&proof)
-        .prepare("find", Direction::Input)
-        .into_result()
+    let error = proof
+        .resolve_operation("find")
+        .expect("declared alias")
+        .input()
+        .expect("declared input")
+        .prepare(&DefaultEvaluator::new())
         .unwrap_err();
-    assert!(
-        matches!(error, ValueContractPreparationError::NoVerdict { detail }
-        if detail.reason == NoVerdictReason::LimitExceeded && detail.code == "pattern-byte-limit")
-    );
+    assert!(error.reason == NoVerdictReason::LimitExceeded && error.code == "pattern-byte-limit");
 }
 
 #[test]
 fn json_validation_returns_all_four_outcomes_after_admission() {
     assert!(matches!(
-        contract("true").validate_json(b"7").unwrap(),
+        prepare("true").validate_json(b"7").unwrap(),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
-        contract("false").validate_json("7").unwrap(),
+        prepare("false").validate_json("7").unwrap(),
         ValueOutcome::Fails { .. }
     ));
-    let undefined = contract(r##"{"$id":"https://example.invalid/root","$ref":"#missing"}"##);
+    let undefined = prepare(r##"{"$id":"https://example.invalid/root","$ref":"#missing"}"##);
     assert!(
         matches!(undefined.validate_json("7").unwrap(), ValueOutcome::Undefined { detail }
         if detail.code == "static-reference-defect")
     );
-    let missing = contract(r#"{"$ref":"https://example.invalid/missing"}"#);
+    let missing = prepare(r#"{"$ref":"https://example.invalid/missing"}"#);
     assert!(
         matches!(missing.validate_json("7").unwrap(), ValueOutcome::NoVerdict { detail }
         if detail.reason == NoVerdictReason::ResourceUnavailable)
@@ -99,7 +97,7 @@ fn json_validation_returns_all_four_outcomes_after_admission() {
 fn json_validation_preserves_duplicate_members_and_exact_numbers() {
     for text in [r#"{"a":1,"a":2}"#, r#"{"nested":{"a":1,"\u0061":2}}"#] {
         assert!(
-            matches!(contract("true").validate_json(text).unwrap(), ValueOutcome::NoVerdict { detail }
+            matches!(prepare("true").validate_json(text).unwrap(), ValueOutcome::NoVerdict { detail }
             if detail.code == "duplicate-instance-members")
         );
     }
@@ -116,7 +114,7 @@ fn json_validation_preserves_duplicate_members_and_exact_numbers() {
         ),
         (r#"{"const":1e400}"#, "10e399", "9e399"),
     ] {
-        let ready = contract(schema);
+        let ready = prepare(schema);
         assert!(matches!(
             ready.validate_json(satisfies).unwrap(),
             ValueOutcome::Satisfies
@@ -130,7 +128,7 @@ fn json_validation_preserves_duplicate_members_and_exact_numbers() {
 
 #[test]
 fn json_validation_returns_original_admission_errors() {
-    let ready = contract("true");
+    let ready = prepare("true");
     let deep = format!("{}0{}", "[".repeat(10_001), "]".repeat(10_001));
     for (bytes, kind) in [
         (&b"\xff"[..], InputErrorKind::InvalidUtf8),
@@ -150,43 +148,26 @@ fn json_validation_returns_original_admission_errors() {
 }
 
 #[test]
-fn preparation_result_preserves_selection_reasons_and_payloads() {
-    let context = value_contracts(&document("false"));
-    let absent = context
-        .prepare("find", Direction::Output)
-        .into_result()
-        .unwrap_err();
-    assert!(matches!(
-        absent,
-        ValueContractPreparationError::NoValueContract
-    ));
-    assert_eq!(absent.to_string(), "operation has no value contract");
-    assert!(absent.source().is_none());
-    let missing = context
-        .prepare("missing", Direction::Input)
-        .into_result()
-        .unwrap_err();
-    assert!(matches!(
-        missing,
-        ValueContractPreparationError::OperationMissing
-    ));
-    assert_eq!(missing.to_string(), "operation is missing");
-    assert!(missing.source().is_none());
+fn selection_distinguishes_absent_contracts_missing_and_ambiguous_operations() {
+    let proof = document("false");
+    let operation = proof.resolve_operation("find").expect("declared alias");
+    assert!(operation.output().is_none());
+    assert!(proof.resolve_operation("missing").is_none());
+    // Conformance excludes ambiguity; a plain document still reports its candidates.
+    let plain = Document::parse(
+        r#"{"openbindings":"0.2.0","operations":{"a":{"aliases":["shared"]},"b":{"aliases":["shared"]}}}"#,
+    )
+    .unwrap();
+    assert!(plain.validate().unwrap().conformant().is_none());
     let candidates = vec!["a".to_owned(), "b".to_owned()];
-    let ambiguous = ValueContractPreparation::OperationAmbiguous {
-        candidates: candidates.clone(),
-    }
-    .into_result()
-    .unwrap_err();
     assert!(
-        matches!(&ambiguous, ValueContractPreparationError::OperationAmbiguous { candidates: actual }
-        if actual == &candidates)
+        matches!(plain.resolve_operation("shared").unwrap(), OperationSelection::Ambiguous { candidates: actual }
+        if actual == candidates)
     );
-    assert_eq!(ambiguous.to_string(), "operation is ambiguous");
-    assert!(ambiguous.source().is_none());
-    let ready = context
-        .prepare("find", Direction::Input)
-        .into_result()
+    let ready = operation
+        .input()
+        .expect("declared input")
+        .prepare(&DefaultEvaluator::new())
         .unwrap();
     assert!(matches!(
         ready.validate_json("null").unwrap(),
@@ -195,7 +176,7 @@ fn preparation_result_preserves_selection_reasons_and_payloads() {
 }
 
 #[test]
-fn preparation_result_preserves_every_refusal_and_error_source() {
+fn preparation_refusal_is_the_original_record_and_propagates_as_an_error() {
     for reason in [
         NoVerdictReason::UnsupportedCapability,
         NoVerdictReason::ConservativePreparation,
@@ -214,21 +195,37 @@ fn preparation_result_preserves_every_refusal_and_error_source() {
             message: "custom message".into(),
             location: Some(location.clone()),
         };
-        let error = ValueContractPreparation::NoVerdict { detail }
-            .into_result()
-            .unwrap_err();
-        let ValueContractPreparationError::NoVerdict { detail } = &error else {
-            panic!("refusal lost")
-        };
+        let proof = document("true");
+        let operation = proof.resolve_operation("find").expect("declared alias");
+        let contract = operation.input().expect("declared input");
+        let error = contract.prepare(&Refuse(detail)).unwrap_err();
+        assert_eq!(error.reason, reason);
+        assert_eq!(error.code, "custom-code");
+        assert_eq!(error.message, "custom message");
+        assert_eq!(error.location.as_ref(), Some(&location));
+        // Propagating the refusal as an error keeps the original record.
+        let propagated = (|| -> Result<PreparedContract, Box<dyn Error>> {
+            Ok(contract.prepare(&Refuse(error.clone()))?)
+        })()
+        .unwrap_err();
+        let detail = propagated.downcast_ref::<NoVerdict>().unwrap();
         assert_eq!(detail.reason, reason);
         assert_eq!(detail.code, "custom-code");
         assert_eq!(detail.message, "custom message");
         assert_eq!(detail.location.as_ref(), Some(&location));
-        let source = error.source().unwrap().downcast_ref::<NoVerdict>().unwrap();
-        assert!(std::ptr::eq(source, detail));
-        assert_eq!(
-            error.to_string(),
-            "value contract preparation refused: custom message"
-        );
+        assert!(propagated.source().is_none());
+        assert_eq!(propagated.to_string(), "custom message");
+    }
+}
+
+/// Refuse every preparation with one caller-chosen record.
+struct Refuse(NoVerdict);
+impl SchemaEvaluator for Refuse {
+    fn prepare(
+        &self,
+        _: &SchemaRequest,
+        _: &dyn WorkControl,
+    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+        Err(self.0.clone())
     }
 }

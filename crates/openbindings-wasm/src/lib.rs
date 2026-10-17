@@ -3,7 +3,7 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use serde_json::json;
-use std::{cell::Cell, sync::Arc};
+use std::cell::Cell;
 use wasm_bindgen::prelude::*;
 
 /// Seed the engine's shared randomized tables while host entropy is available.
@@ -28,15 +28,21 @@ fn interpretation_error(e: InterpretationError) -> JsValue {
         json!({"code":"interpretation", "message":e.to_string(), "interpretation_code":e.code(), "location":e.source_location()}),
     ))
 }
-fn direction(direction: &str) -> Result<Direction, JsValue> {
-    match direction {
-        "input" => Ok(Direction::Input),
-        "output" => Ok(Direction::Output),
-        _ => Err(error(
-            "invalid-direction",
-            "direction must be input or output",
-        )),
-    }
+fn evaluator(limits: &str, diagnostics: &str) -> Result<DefaultEvaluator, JsValue> {
+    let limits: Limits =
+        serde_json::from_str(limits).map_err(|e| error("invalid-evaluator-limits", e))?;
+    Ok(
+        DefaultEvaluator::with_limits(limits).with_diagnostics(match diagnostics {
+            "coarse" => openbindings_json_schema_evaluator::Diagnostics::Coarse,
+            "upstream" => openbindings_json_schema_evaluator::Diagnostics::Upstream,
+            _ => {
+                return Err(error(
+                    "invalid-diagnostics",
+                    "diagnostics must be coarse or upstream",
+                ));
+            }
+        }),
+    )
 }
 fn control(cancelled: bool) -> std::sync::atomic::AtomicBool {
     std::sync::atomic::AtomicBool::new(cancelled)
@@ -684,33 +690,6 @@ impl WasmConformantDocument {
             handle: DocumentHandle::new(self.handle.document().clone()),
         }
     }
-    #[wasm_bindgen(js_name=valueContracts)]
-    pub fn value_contracts(
-        &self,
-        resources: &WasmResources,
-        limits: &str,
-        diagnostics: &str,
-    ) -> Result<WasmValueContracts, JsValue> {
-        let document = self.handle.proof("document-conformance")?;
-        let limits: Limits =
-            serde_json::from_str(limits).map_err(|e| error("invalid-evaluator-limits", e))?;
-        let contracts = document.value_contracts(
-            Arc::new(
-                DefaultEvaluator::with_limits(limits).with_diagnostics(match diagnostics {
-                    "coarse" => openbindings_json_schema_evaluator::Diagnostics::Coarse,
-                    "upstream" => openbindings_json_schema_evaluator::Diagnostics::Upstream,
-                    _ => {
-                        return Err(error(
-                            "invalid-diagnostics",
-                            "diagnostics must be coarse or upstream",
-                        ));
-                    }
-                }),
-            ),
-            resources.resources.clone(),
-        );
-        Ok(WasmValueContracts { contracts })
-    }
     pub fn value(&self) -> WasmJson {
         self.as_document().value()
     }
@@ -767,9 +746,28 @@ impl WasmConformantDocument {
     pub fn dependency(&self, key: &str) -> Result<Option<WasmDependency>, JsValue> {
         self.as_document().dependency(key)
     }
+    /// Select a primary key or alias of the proved revision; ambiguity is excluded by OBI-05.
     #[wasm_bindgen(js_name=resolveOperation)]
-    pub fn resolve_operation(&self, name: &str) -> Result<WasmOperationSelection, JsValue> {
-        self.as_document().resolve_operation(name)
+    pub fn resolve_operation(
+        &self,
+        name: &str,
+    ) -> Result<Option<WasmConformantOperation>, JsValue> {
+        let proof = self.handle.proof("document-conformance")?;
+        let Some(operation) = proof.resolve_operation(name) else {
+            return Ok(None);
+        };
+        let plain = match proof
+            .as_document()
+            .resolve_operation(name)
+            .map_err(interpretation_error)?
+        {
+            OperationSelection::Found(op) => op,
+            _ => unreachable!("the proved revision selects the same operation"),
+        };
+        Ok(Some(WasmConformantOperation {
+            plain: WasmOperation { op: plain },
+            operation,
+        }))
     }
     #[wasm_bindgen(js_name=dependencyAcceptsKind)]
     pub fn dependency_accepts_kind(
@@ -1162,37 +1160,117 @@ impl Default for WasmResources {
         Self::new()
     }
 }
+/// A selected operation of a proved revision. Reads delegate to the plain view;
+/// only this handle hands out value contracts.
 #[wasm_bindgen]
-pub struct WasmValueContracts {
-    contracts: ValueContracts,
+pub struct WasmConformantOperation {
+    plain: WasmOperation,
+    operation: ConformantOperationView,
 }
-impl std::fmt::Debug for WasmValueContracts {
+impl std::fmt::Debug for WasmConformantOperation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WasmValueContracts").finish_non_exhaustive()
+        f.debug_struct("WasmConformantOperation")
+            .finish_non_exhaustive()
     }
 }
-
+#[derive(Clone, Copy)]
+enum Side {
+    Input,
+    Output,
+}
 #[wasm_bindgen]
-impl WasmValueContracts {
+impl WasmConformantOperation {
+    pub fn key(&self) -> String {
+        self.plain.key()
+    }
+    pub fn value(&self) -> WasmJson {
+        self.plain.value()
+    }
+    pub fn input(&self) -> Option<WasmValueContract> {
+        self.contract(Side::Input)
+    }
+    pub fn output(&self) -> Option<WasmValueContract> {
+        self.contract(Side::Output)
+    }
+    pub fn metadata(&self) -> Result<String, JsValue> {
+        self.plain.metadata()
+    }
+    pub fn examples(&self) -> Result<String, JsValue> {
+        self.plain.examples()
+    }
+    pub fn example(&self, key: &str) -> Result<Option<WasmExample>, JsValue> {
+        self.plain.example(key)
+    }
+    pub fn bindings(&self) -> Result<String, JsValue> {
+        self.plain.bindings()
+    }
+}
+impl WasmConformantOperation {
+    fn contract(&self, side: Side) -> Option<WasmValueContract> {
+        WasmValueContract::select(&self.operation, side)?;
+        Some(WasmValueContract {
+            operation: self.operation.clone(),
+            side,
+        })
+    }
+}
+/// One declared value contract, retained with its proved operation.
+#[wasm_bindgen]
+pub struct WasmValueContract {
+    operation: ConformantOperationView,
+    side: Side,
+}
+impl std::fmt::Debug for WasmValueContract {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmValueContract").finish_non_exhaustive()
+    }
+}
+impl WasmValueContract {
+    fn select(operation: &ConformantOperationView, side: Side) -> Option<ValueContract<'_>> {
+        match side {
+            Side::Input => operation.input(),
+            Side::Output => operation.output(),
+        }
+    }
+    fn contract(&self) -> ValueContract<'_> {
+        Self::select(&self.operation, self.side)
+            .expect("a handle exists only for a declared contract")
+    }
+}
+#[wasm_bindgen]
+impl WasmValueContract {
+    pub fn schema(&self) -> WasmJson {
+        WasmJson {
+            value: self.contract().schema().to_owned(),
+        }
+    }
     pub fn prepare(
         &self,
-        operation: &str,
-        direction_name: &str,
+        resources: &WasmResources,
+        limits: &str,
+        diagnostics: &str,
         cancelled: bool,
     ) -> Result<WasmPreparation, JsValue> {
+        let evaluator = evaluator(limits, diagnostics)?;
         Ok(WasmPreparation {
-            preparation: Some(self.contracts.prepare_with_control(
-                operation,
-                direction(direction_name)?,
+            preparation: Some(self.contract().prepare_with_control(
+                &evaluator,
+                &resources.resources,
                 &control(cancelled),
             )),
         })
     }
+    pub fn retain(&self) -> WasmValueContract {
+        Self {
+            operation: self.operation.clone(),
+            side: self.side,
+        }
+    }
 }
-/// A private transfer wrapper. Dropping it drops any untaken compiled value contract.
+/// A private transfer wrapper. Dropping it drops any untaken prepared contract.
 #[wasm_bindgen]
 pub struct WasmPreparation {
-    preparation: Option<ValueContractPreparation>,
+    preparation: Option<Result<PreparedContract, NoVerdict>>,
 }
 impl std::fmt::Debug for WasmPreparation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1204,33 +1282,22 @@ impl std::fmt::Debug for WasmPreparation {
 impl WasmPreparation {
     pub fn result(&self) -> String {
         match &self.preparation {
-            Some(ValueContractPreparation::Ready(_)) => encoded(json!({"status":"ready"})),
-            Some(ValueContractPreparation::NoValueContract) => {
-                encoded(json!({"status":"no-value-contract"}))
-            }
-            Some(ValueContractPreparation::OperationMissing) => {
-                encoded(json!({"status":"operation-missing"}))
-            }
-            Some(ValueContractPreparation::OperationAmbiguous { candidates }) => {
-                encoded(json!({"status":"operation-ambiguous","candidates":candidates}))
-            }
-            Some(ValueContractPreparation::NoVerdict { detail }) => {
-                encoded(json!({"status":"no-verdict","detail":detail}))
-            }
+            Some(Ok(_)) => encoded(json!({"status":"ready"})),
+            Some(Err(detail)) => encoded(json!({"status":"no-verdict","detail":detail})),
             None => encoded(json!({"status":"consumed"})),
         }
     }
-    #[wasm_bindgen(js_name=takeValueContract)]
-    pub fn take_value_contract(&mut self) -> Option<WasmPrepared> {
+    #[wasm_bindgen(js_name=takeContract)]
+    pub fn take_contract(&mut self) -> Option<WasmPrepared> {
         match self.preparation.take()? {
-            ValueContractPreparation::Ready(prepared) => Some(WasmPrepared { prepared }),
-            _ => None,
+            Ok(prepared) => Some(WasmPrepared { prepared }),
+            Err(_) => None,
         }
     }
 }
 #[wasm_bindgen]
 pub struct WasmPrepared {
-    prepared: ValueContract,
+    prepared: PreparedContract,
 }
 impl std::fmt::Debug for WasmPrepared {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

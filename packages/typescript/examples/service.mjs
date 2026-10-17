@@ -4,18 +4,22 @@ import { SchemaResources, Document, parseJson } from "@openbindings/sdk";
 export function prepareService(documentBytes, entries = []) {
   const parsed = Document.parse(documentBytes);
   if (parsed.status !== "parsed") return parsed;
-  let proof, resources, context;
+  let proof, operation, contract, resources;
   try {
     const checked = parsed.value.validate();
     if (checked.status !== "conformant") return checked;
     proof = checked.document;
+    operation = proof.resolveOperation("lookup");
+    if (!operation) return { status: "operation-missing" };
+    contract = operation.input();
+    if (!contract) return { status: "no-value-contract" };
     resources = new SchemaResources(entries); // borrowed schema owners
-    context = proof.valueContracts({ resources });
-    // A ready result owns its contract independently of setup locals.
-    return context.prepare("lookup", "input");
+    // A ready result owns its prepared contract independently of setup locals.
+    return contract.prepare({ resources });
   } finally {
-    context?.dispose();
     resources?.dispose();
+    contract?.dispose();
+    operation?.dispose();
     proof?.dispose();
     parsed.value.dispose();
   }

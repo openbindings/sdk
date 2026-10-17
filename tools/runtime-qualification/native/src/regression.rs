@@ -1,23 +1,20 @@
-use openbindings::{
-    Conformance, Direction, Document, Evidence, JsonValue, ResourceSet, ValueContractPreparation,
-    ValueOutcome,
-};
+use openbindings::{Conformance, Document, Evidence, JsonValue, PreparedContract, ValueOutcome};
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::json;
-use std::{hint::black_box, sync::Arc, time::Instant};
+use std::{hint::black_box, time::Instant};
 
-fn prepare(source: &str) -> openbindings::ValueContract {
+fn prepare(source: &str) -> PreparedContract {
     let document = Document::parse(source).unwrap();
-    let context = document
+    let proof = document
         .validate()
         .unwrap()
         .conformant()
-        .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
-    let ValueContractPreparation::Ready(contract) = context.prepare("run", Direction::Input) else {
-        panic!("contract must prepare")
-    };
-    contract
+        .expect("conformant document");
+    let operation = proof.resolve_operation("run").expect("declared operation");
+    let input = operation.input().expect("declared input");
+    input
+        .prepare(&DefaultEvaluator::new())
+        .expect("contract must prepare")
 }
 
 fn main() {

@@ -13,24 +13,30 @@ fn document(schema: serde_json::Value) -> Document {
     )
     .unwrap()
 }
-fn context(document: &Document) -> ValueContracts {
+fn conformant(document: &Document) -> Conformant<Document> {
     document
         .validate()
         .unwrap()
         .conformant()
         .expect("conformant document")
-        .value_contracts(
-            Arc::new(
-                DefaultEvaluator::new()
-                    .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-            ),
-            ResourceSet::default(),
-        )
 }
-fn ready(document: &Document) -> ValueContract {
-    match context(document).prepare("op", Direction::Input) {
-        ValueContractPreparation::Ready(contract) => contract,
-        state => panic!("expected ready: {state:?}"),
+fn upstream() -> DefaultEvaluator {
+    DefaultEvaluator::new()
+        .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream)
+}
+/// Prepare operation `op` input with upstream diagnostics and the given resources.
+fn prepare(document: &Document, resources: &ResourceSet) -> Result<PreparedContract, NoVerdict> {
+    conformant(document)
+        .resolve_operation("op")
+        .expect("declared operation")
+        .input()
+        .expect("declared input")
+        .prepare_with(&upstream(), resources)
+}
+fn ready(document: &Document) -> PreparedContract {
+    match prepare(document, &ResourceSet::default()) {
+        Ok(contract) => contract,
+        Err(detail) => panic!("expected ready: {detail:?}"),
     }
 }
 fn safe(message: &str) {
@@ -42,7 +48,7 @@ fn safe(message: &str) {
     assert!(!message.chars().any(char::is_control));
 }
 #[test]
-fn namespace_is_checked_before_context_creation_or_any_selection() {
+fn namespace_is_checked_before_preparation_or_any_selection() {
     for (text, code, pointer) in [
         (r#"{"openbindings":"0.2.0"}"#, "missing-operations", ""),
         (
@@ -98,16 +104,21 @@ fn draft_metadata_and_semantic_setup_partitions_remain_distinct() {
         r#"{"openbindings":"0.2.0","operations":{"op":{"input":false},"other":{}}}"#,
     )
     .unwrap();
-    let context = context(&doc);
-    assert!(matches!(
-        context.prepare("missing", Direction::Input),
-        ValueContractPreparation::OperationMissing
-    ));
-    assert!(matches!(
-        context.prepare("other", Direction::Input),
-        ValueContractPreparation::NoValueContract
-    ));
-    let ValueContractPreparation::Ready(contract) = context.prepare("op", Direction::Input) else {
+    let proof = conformant(&doc);
+    assert!(proof.resolve_operation("missing").is_none());
+    assert!(
+        proof
+            .resolve_operation("other")
+            .expect("declared operation")
+            .input()
+            .is_none()
+    );
+    let operation = proof.resolve_operation("op").expect("declared operation");
+    let Ok(contract) = operation
+        .input()
+        .expect("declared input")
+        .prepare(&upstream())
+    else {
         panic!()
     };
     let outcome = contract.validate(&JsonValue::parse("null").unwrap());
@@ -120,9 +131,7 @@ fn cycles_are_conservative_even_with_a_dominating_success_branch() {
         serde_json::json!({"$ref":"#/operations/op/input"}),
         serde_json::json!({"anyOf":[true,{"$ref":"#/operations/op/input"}]}),
     ] {
-        let ValueContractPreparation::NoVerdict { detail } =
-            context(&document(schema)).prepare("op", Direction::Input)
-        else {
+        let Err(detail) = prepare(&document(schema), &ResourceSet::default()) else {
             panic!()
         };
         assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
@@ -171,20 +180,7 @@ fn pattern_preparation_failures_use_original_locations_and_safe_messages() {
                     "",
                 ),
             ] {
-                let context = document(entry)
-                    .validate()
-                    .unwrap()
-                    .conformant()
-                    .expect("conformant document")
-                    .value_contracts(
-                        Arc::new(DefaultEvaluator::new().with_diagnostics(
-                            openbindings_json_schema_evaluator::Diagnostics::Upstream,
-                        )),
-                        resources,
-                    );
-                let ValueContractPreparation::NoVerdict { detail } =
-                    context.prepare("op", Direction::Input)
-                else {
+                let Err(detail) = prepare(&document(entry), &resources) else {
                     panic!("an uncompilable pattern must refuse preparation")
                 };
                 assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
@@ -240,8 +236,8 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
         }
         // Valid absent carriers now defer refusal to validation; malformed URI
         // syntax still refuses during preparation. Privacy applies in both phases.
-        let detail = match context(&doc).prepare("op", Direction::Input) {
-            ValueContractPreparation::Ready(contract) => {
+        let detail = match prepare(&doc, &ResourceSet::default()) {
+            Ok(contract) => {
                 assert!(!reference.contains('\n'));
                 let ValueOutcome::NoVerdict { detail } =
                     contract.validate(&JsonValue::parse("null").unwrap())
@@ -251,11 +247,10 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
                 assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
                 detail
             }
-            ValueContractPreparation::NoVerdict { detail } => {
+            Err(detail) => {
                 assert!(reference.contains('\n'));
                 detail
             }
-            other => panic!("unexpected setup: {other:?}"),
         };
         safe(&detail.message);
     }
@@ -385,22 +380,18 @@ fn interpretation_name(reason: InterpretationError) -> &'static str {
 #[test]
 fn external_evaluator_construction_and_matching_stay_supported() {
     let calls = Arc::new(AtomicUsize::new(0));
-    let context = document(serde_json::json!(true))
-        .validate()
-        .unwrap()
-        .conformant()
-        .expect("conformant document")
-        .value_contracts(Arc::new(Custom(calls.clone())), ResourceSet::default());
-    let state = context.prepare("op", Direction::Input);
+    let proof = conformant(&document(serde_json::json!(true)));
+    let operation = proof.resolve_operation("op").expect("declared operation");
+    let state = operation
+        .input()
+        .expect("declared input")
+        .prepare(&Custom(calls.clone()));
     match state {
-        ValueContractPreparation::Ready(contract) => assert_eq!(
+        Ok(contract) => assert_eq!(
             outcome_name(contract.validate(&JsonValue::parse("null").unwrap())),
             "fails"
         ),
-        ValueContractPreparation::NoValueContract
-        | ValueContractPreparation::OperationMissing
-        | ValueContractPreparation::OperationAmbiguous { .. }
-        | ValueContractPreparation::NoVerdict { .. } => panic!(),
+        Err(NoVerdict { .. }) => panic!(),
     }
     let detail = UndefinedResult {
         code: "proof".into(),

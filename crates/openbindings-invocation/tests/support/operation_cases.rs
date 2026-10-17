@@ -1,12 +1,12 @@
 use openbindings::{
-    Direction, Document, JsonValue, NoVerdict, PreparedSchema, ResourceSet, SchemaEvaluator,
-    SchemaRequest, ValueOutcome,
+    Document, JsonValue, NoVerdict, PreparedSchema, ResourceSet, SchemaEvaluator, SchemaRequest,
+    ValueOutcome,
 };
 use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
     BindingRequest, InvocationError, ProviderIo,
     binding::BindingInvoker,
-    operation::{Attempt, Invoker, Request, ValidationStage},
+    operation::{Attempt, Direction, Invoker, Request, ValidationStage},
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::{

@@ -42,11 +42,14 @@ function checkInput(input: JsonInput) {
   if (checked.status !== "conformant") return checked;
   using proof = checked.document;
   const operations = proof.operations;
-  using context = proof.valueContracts();
-  const setup = context.prepare("find", "input"); // primary name or alias
+  using operation = proof.resolveOperation("find"); // primary name or alias
+  if (!operation) return { status: "operation-missing" } as const;
+  using contract = operation.input();
+  if (!contract) return { status: "no-input-contract" } as const;
+  const setup = contract.prepare();
   if (setup.status !== "ready") return setup;
-  using contract = setup.valueContract;
-  return { operations, result: contract.validate(input) };
+  using prepared = setup.contract;
+  return { operations, result: prepared.validate(input) };
 }
 
 console.log(checkInput(7));
@@ -60,9 +63,11 @@ include `ESNext.Disposable` in the compiler `lib` setting and target ES2022 for
 
 `Document.parse` retains an inspectable, editable document. `validate()` returns a
 `conformant` branch carrying a `ConformantDocument`, or a version refusal or
-conformance report. Only a conformant document creates value contracts. Preparation distinguishes a ready contract, an absent value
-contract, a missing operation and no-verdict. Handle each setup result before
-validating a value. Value results distinguish `satisfies`, `fails`, `undefined`
+conformance report. Only a conformant document's operations hand out value
+contracts: `resolveOperation` returns `undefined` for a missing operation, and
+`input()` or `output()` returns `undefined` when no contract is declared.
+`prepare()` returns a ready `PreparedContract` or a no-verdict refusal. Handle
+each result before validating a value. Value results distinguish `satisfies`, `fails`, `undefined`
 (the specification gives the value no defined validity), `no-verdict` (the SDK could
 not answer) and an `input-error` when ordinary JavaScript data cannot be admitted.
 
@@ -148,15 +153,15 @@ checks. Independently retained proofs and views keep their certified revision.
 
 ## Limits and diagnostics
 
-Schema resources are explicit and immutable. Supply `SchemaResources` when
-creating a value-contract context; the SDK never fetches a missing reference.
-Retain a ready contract for repeated validation. Ready does not promise a verdict
-for every value; missing resources, unsupported capabilities and exhausted work
-budgets can produce no-verdict. Replacing resources requires a new context.
+Schema resources are explicit and immutable. Pass `SchemaResources` to
+`prepare({ resources })`; the SDK never fetches a missing reference. Retain a
+prepared contract for repeated validation. Ready does not promise a verdict for
+every value; missing resources, unsupported capabilities and exhausted work
+budgets can produce no-verdict. Replacing resources means preparing again.
 
 Default `coarse` diagnostics return an established failure with no problem list
 and `problemsComplete: false`. Opt into `diagnostics: "upstream"` on
-`valueContracts` for the library's first error. That mode can allocate in proportion
+`prepare` for the library's first error. That mode can allocate in proportion
 to input and overflow the stack on deep values. Schema facts may disclose source
 operands and retain source snapshots. Messages are advisory; use result tags,
 codes and rule evidence for control flow.

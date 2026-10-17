@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import * as sdk from "../dist/index.js";
-import { conformantContracts } from "./conformant-contracts.mjs";
+import { prepareInput } from "./conformant-contracts.mjs";
 await sdk.initialize(
   await readFile(
     new URL("../dist/wasm/openbindings_wasm_bg.wasm", import.meta.url),
@@ -42,7 +42,7 @@ test("static reference matrix and concrete completions through Wasm", async () =
       sdk.parseJson(JSON.stringify(r.schema)).value,
     ]);
     const resources = new sdk.SchemaResources(values);
-    let context, contract;
+    let contract;
     try {
       const limits = Object.fromEntries(
         Object.entries(c.limits ?? {}).map(([key, value]) => [
@@ -50,9 +50,8 @@ test("static reference matrix and concrete completions through Wasm", async () =
           value,
         ]),
       );
-      context = conformantContracts(parsed.value, { resources, limits });
-      const setup = context.prepare("op", "input");
-      contract = setup.valueContract;
+      const setup = prepareInput(parsed.value, "op", { resources, limits });
+      contract = setup.contract;
       const result =
         setup.status === "ready"
           ? contract.validate(c.value)
@@ -90,7 +89,6 @@ test("static reference matrix and concrete completions through Wasm", async () =
       receipt.push({ id: c.id, actual });
     } finally {
       contract?.dispose();
-      context?.dispose();
       resources.dispose();
       for (const [, value] of values) value.dispose();
       parsed.value.dispose();

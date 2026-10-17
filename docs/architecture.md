@@ -12,11 +12,15 @@ typed part setters. Editing commits a new arena and fresh caches; clones and pro
 retain the earlier revision. `Conformant<Document>` exposes no mutable access. Source views keep their owner's storage, not borrowed external
 buffers; standalone document views rebase byte locations correctly.
 
-`ValueContracts` owns a document, an explicit immutable `ResourceSet` and evaluator.
-Each preparation compiles independently. A caller-retained `ValueContract` owns
-required compiled state and survives context or source-handle disposal. Cancellation and transient failures do
+A conformant operation hands out its `ValueContract`s; preparation borrows an
+evaluator and an explicit immutable `ResourceSet`. Each preparation compiles
+independently. A caller-retained `PreparedContract` owns required compiled state
+and survives document, resource and evaluator disposal. Cancellation and transient failures do
 not poison healthy subsequent preparation. Resources with the same URI in distinct
-contexts never share an implicit registry. The schema-space compiler builds a
+sets never share an implicit registry. A set indexes its resource identities once;
+a conformant revision assembles its resolution space only when an evaluator
+requests the core projection, retaining one space without
+supplied resources and one for the most recently used set. The schema-space compiler builds a
 private graph/projection preserving resource boundaries and dynamic scope. Only
 private generated names change; error locations resolve to original sources.
 

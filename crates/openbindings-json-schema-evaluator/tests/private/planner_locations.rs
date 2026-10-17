@@ -32,20 +32,37 @@ fn resources(entries: &[(&str, &str)]) -> ResourceSet {
     }))
     .unwrap()
 }
-fn request(document: &Document, resources: ResourceSet) -> SchemaRequest {
-    let capture = Arc::new(Capture(Mutex::new(None)));
-    let _ = document
+fn conformant(document: &Document) -> Conformant<Document> {
+    document
         .validate()
         .unwrap()
         .conformant()
         .expect("conformant document")
-        .value_contracts(capture.clone(), resources)
-        .prepare("op", Direction::Input);
+}
+fn operation(document: &Conformant<Document>, name: &str) -> ConformantOperationView {
+    document
+        .resolve_operation(name)
+        .expect("declared operation")
+}
+fn request(document: &Document, resources: ResourceSet) -> SchemaRequest {
+    let capture = Capture(Mutex::new(None));
+    let _ = operation(&conformant(document), "op")
+        .input()
+        .expect("declared input")
+        .prepare_with(&capture, &resources);
     capture.0.lock().unwrap().take().unwrap()
 }
-fn refused(context: &ValueContracts) -> NoVerdict {
-    let ValueContractPreparation::NoVerdict { detail } = context.prepare("op", Direction::Input)
-    else {
+fn prepare(
+    operation: &ConformantOperationView,
+    resources: &ResourceSet,
+) -> Result<PreparedContract, NoVerdict> {
+    operation
+        .input()
+        .expect("declared input")
+        .prepare_with(&DefaultEvaluator::new(), resources)
+}
+fn refused(operation: &ConformantOperationView, resources: &ResourceSet) -> NoVerdict {
+    let Err(detail) = prepare(operation, resources) else {
         panic!("expected refusal")
     };
     detail
@@ -85,13 +102,9 @@ fn frozen_fragment_witnesses_and_escaped_supplied_source_keep_original_locations
             let direct = request
                 .evaluation_bounds(&std::sync::atomic::AtomicBool::new(false))
                 .unwrap_err();
-            let context = doc
-                .validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant document")
-                .value_contracts(Arc::new(DefaultEvaluator::new()), entries);
-            let detail = refused(&context);
+            let proof = conformant(&doc);
+            let op = operation(&proof, "op");
+            let detail = refused(&op, &entries);
             let pointer = format!("{}{suffix}", if external { "" } else { INPUT });
             at(
                 &detail,
@@ -105,13 +118,10 @@ fn frozen_fragment_witnesses_and_escaped_supplied_source_keep_original_locations
                 serde_json::to_value(direct).unwrap()
             );
             assert_eq!(
-                serde_json::to_value(refused(&context)).unwrap(),
+                serde_json::to_value(refused(&op, &entries)).unwrap(),
                 serde_json::to_value(&detail).unwrap()
             );
-            assert!(matches!(
-                context.prepare("healthy", Direction::Input),
-                ValueContractPreparation::Ready(_)
-            ));
+            assert!(prepare(&operation(&proof, "healthy"), &entries).is_ok());
         }
     }
 }
@@ -141,14 +151,9 @@ fn direct_keyword_refusals_and_recovered_strict_holders_are_precise_and_stable()
             None,
             &format!("{INPUT}/properties/a/not"),
         );
-        let context = doc
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant document")
-            .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
+        let op = operation(&conformant(&doc), "op");
         assert_eq!(
-            serde_json::to_value(refused(&context)).unwrap(),
+            serde_json::to_value(refused(&op, &ResourceSet::default())).unwrap(),
             serde_json::to_value(strict).unwrap()
         );
     }
@@ -194,14 +199,9 @@ fn strict_and_partial_multinode_cycle_roots_are_stable() {
                 .evaluation_bounds(&std::sync::atomic::AtomicBool::new(false))
                 .unwrap_err();
             at(&direct, "in-place-cycle", None, &format!("{INPUT}/$defs/a"));
-            let context = doc
-                .validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant document")
-                .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
+            let op = operation(&conformant(&doc), "op");
             at(
-                &refused(&context),
+                &refused(&op, &ResourceSet::default()),
                 "in-place-cycle",
                 None,
                 &format!("{INPUT}/$defs/a"),
@@ -231,13 +231,8 @@ fn actual_production_node_and_edge_caps_preserve_known_limits_before_and_after_s
         assert_eq!(direct.reason, NoVerdictReason::LimitExceeded);
         for supplied in [false, true] {
             let entries = resources(&if supplied { vec![(U, "true")] } else { vec![] });
-            let context = doc
-                .validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant document")
-                .value_contracts(Arc::new(DefaultEvaluator::new()), entries);
-            let detail = refused(&context);
+            let proof = conformant(&doc);
+            let detail = refused(&operation(&proof, "op"), &entries);
             at(
                 &detail,
                 if supplied { "schema-node-limit" } else { code },
@@ -249,10 +244,7 @@ fn actual_production_node_and_edge_caps_preserve_known_limits_before_and_after_s
                 },
             );
             assert_eq!(detail.reason, NoVerdictReason::LimitExceeded);
-            assert!(matches!(
-                context.prepare("healthy", Direction::Input),
-                ValueContractPreparation::Ready(_)
-            ));
+            assert!(prepare(&operation(&proof, "healthy"), &entries).is_ok());
         }
     }
 }

@@ -1,23 +1,21 @@
 mod support;
-use openbindings::{Direction, Document, ResourceSet, ValueContractPreparation, ValueOutcome};
+use openbindings::{Document, ValueOutcome};
 use openbindings_interface_synthesis::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
-use std::sync::Arc;
 use support::*;
 #[tokio::test]
 async fn sdk_policy_cases_and_interface_output_shapes_are_distinct() {
     let interface =
         Document::parse(include_bytes!("fixtures/interface-synthesizer-0.2.json")).unwrap();
-    let context = interface
+    let proof = interface
         .validate()
         .unwrap()
         .conformant()
-        .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
-    let ValueContractPreparation::Ready(contract) = context.prepare(
-        "openbindings.interface-synthesizer.synthesizeInterfaceWithCoverage",
-        Direction::Output,
-    ) else {
+        .expect("conformant document");
+    let Some(contract) = proof
+        .resolve_operation("openbindings.interface-synthesizer.synthesizeInterfaceWithCoverage")
+        .and_then(|operation| operation.output()?.prepare(&DefaultEvaluator::new()).ok())
+    else {
         panic!("interface contract failed")
     };
     let corpus = corpus();
@@ -97,13 +95,14 @@ fn sdk_policy_fixture_file_satisfies_its_local_schema() {
         )
         .unwrap();
     let doc = draft.clone();
-    let context = doc
+    let proof = doc
         .validate()
         .unwrap()
         .conformant()
-        .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
-    let ValueContractPreparation::Ready(contract) = context.prepare("check", Direction::Input)
+        .expect("conformant document");
+    let Some(contract) = proof
+        .resolve_operation("check")
+        .and_then(|operation| operation.input()?.prepare(&DefaultEvaluator::new()).ok())
     else {
         panic!("fixture schema failed")
     };
@@ -117,16 +116,15 @@ fn sdk_policy_fixture_file_satisfies_its_local_schema() {
 fn independent_interface_examples_allow_variation_beyond_sdk_policy() {
     let interface =
         Document::parse(include_bytes!("fixtures/interface-synthesizer-0.2.json")).unwrap();
-    let context = interface
+    let proof = interface
         .validate()
         .unwrap()
         .conformant()
-        .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
-    let ValueContractPreparation::Ready(contract) = context.prepare(
-        "openbindings.interface-synthesizer.synthesizeInterfaceWithCoverage",
-        Direction::Output,
-    ) else {
+        .expect("conformant document");
+    let Some(contract) = proof
+        .resolve_operation("openbindings.interface-synthesizer.synthesizeInterfaceWithCoverage")
+        .and_then(|operation| operation.output()?.prepare(&DefaultEvaluator::new()).ok())
+    else {
         panic!("interface output contract failed")
     };
     let examples = json(include_str!("fixtures/interface-output-cases.json"));

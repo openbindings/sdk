@@ -22,18 +22,29 @@ fn resources(values: &[(&str, &str)]) -> ResourceSet {
     }))
     .unwrap()
 }
-fn context(schema: &str, supplied: ResourceSet, evaluator: DefaultEvaluator) -> ValueContracts {
-    document(schema)
+fn conformant(document: &Document) -> Conformant<Document> {
+    document
         .validate()
         .unwrap()
         .conformant()
         .expect("conformant document")
-        .value_contracts(Arc::new(evaluator), supplied)
 }
-fn ready(schema: &str) -> ValueContract {
-    let result = context(schema, ResourceSet::default(), DefaultEvaluator::new())
-        .prepare("op", Direction::Input);
-    let ValueContractPreparation::Ready(contract) = result else {
+/// Prepare operation `op` input of a fresh conformant fixture.
+fn prepare(
+    schema: &str,
+    supplied: ResourceSet,
+    evaluator: &dyn SchemaEvaluator,
+) -> Result<PreparedContract, NoVerdict> {
+    conformant(&document(schema))
+        .resolve_operation("op")
+        .expect("declared operation")
+        .input()
+        .expect("declared input")
+        .prepare_with(evaluator, &supplied)
+}
+fn ready(schema: &str) -> PreparedContract {
+    let result = prepare(schema, ResourceSet::default(), &DefaultEvaluator::new());
+    let Ok(contract) = result else {
         panic!("{result:?}")
     };
     contract
@@ -51,8 +62,8 @@ fn label(result: ValueOutcome) -> &'static str {
     }
 }
 fn refusal(schema: &str, supplied: ResourceSet) -> NoVerdict {
-    match context(schema, supplied, DefaultEvaluator::new()).prepare("op", Direction::Input) {
-        ValueContractPreparation::NoVerdict { detail } => detail,
+    match prepare(schema, supplied, &DefaultEvaluator::new()) {
+        Err(detail) => detail,
         other => panic!("expected preparation refusal: {other:?}"),
     }
 }
@@ -67,15 +78,8 @@ fn strict_refusal(schema: &str) -> NoVerdict {
             Err(request.evaluation_program(control).unwrap_err())
         }
     }
-    match document(schema)
-        .validate()
-        .unwrap()
-        .conformant()
-        .expect("conformant document")
-        .value_contracts(Arc::new(Strict), ResourceSet::default())
-        .prepare("op", Direction::Input)
-    {
-        ValueContractPreparation::NoVerdict { detail } => detail,
+    match prepare(schema, ResourceSet::default(), &Strict) {
+        Err(detail) => detail,
         other => panic!("{other:?}"),
     }
 }
@@ -182,15 +186,12 @@ fn all_positive_applicators_have_decided_and_dependent_witnesses() {
             r#"{"const":1}"#,
             r#"{"not":{"type":"number"}}"#,
         ] {
-            let full = context(
+            let full = prepare(
                 &schema,
                 resources(&[(U, completion)]),
-                DefaultEvaluator::new(),
-            )
-            .prepare("op", Direction::Input);
-            let ValueContractPreparation::Ready(full) = full else {
-                panic!("{full:?}")
-            };
+                &DefaultEvaluator::new(),
+            );
+            let Ok(full) = full else { panic!("{full:?}") };
             assert_eq!(
                 label(full.validate(&json(decided))),
                 expected,
@@ -226,9 +227,7 @@ fn active_unknown_can_fail_known_constraint_and_never_emits_lower_diagnostics() 
         format!(r#"{{"properties":{{"external":{{"$ref":"{U}"}}}},"required":["private-name"]}}"#);
     let evaluator = DefaultEvaluator::new()
         .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream);
-    let ValueContractPreparation::Ready(contract) =
-        context(&schema, ResourceSet::default(), evaluator).prepare("op", Direction::Input)
-    else {
+    let Ok(contract) = prepare(&schema, ResourceSet::default(), &evaluator) else {
         panic!()
     };
     let ValueOutcome::Fails {
@@ -251,9 +250,7 @@ fn active_unknown_can_fail_known_constraint_and_never_emits_lower_diagnostics() 
     let serialized = serde_json::to_string(&problems).unwrap();
     assert!(!serialized.contains("sdk-bounds"));
     let zero = DefaultEvaluator::with_limits(Limits::default());
-    let ValueContractPreparation::Ready(contract) =
-        context(&schema, ResourceSet::default(), zero).prepare("op", Direction::Input)
-    else {
+    let Ok(contract) = prepare(&schema, ResourceSet::default(), &zero) else {
         panic!()
     };
     assert!(
@@ -276,11 +273,12 @@ fn closed_nonpositive_subgraphs_remain_fixed_predicates() {
             r#"{"known":false}"#,
             r#"{"known":[1,2]}"#,
         ] {
-            let full = context(&schema, resources(&[(U, "false")]), DefaultEvaluator::new())
-                .prepare("op", Direction::Input);
-            let ValueContractPreparation::Ready(full) = full else {
-                panic!()
-            };
+            let full = prepare(
+                &schema,
+                resources(&[(U, "false")]),
+                &DefaultEvaluator::new(),
+            );
+            let Ok(full) = full else { panic!() };
             assert_eq!(
                 label(contract.validate(&json(text))),
                 label(full.validate(&json(text)))
@@ -358,12 +356,11 @@ fn missing_carriers_are_distinct_from_bad_fragments_or_known_targets() {
     }
     for fragment in ["#/type", "#missing"] {
         let schema = format!(r#"{{"anyOf":[true,{{"$ref":"{U}{fragment}"}}]}}"#);
-        let ctx = context(
+        let Ok(contract) = prepare(
             &schema,
             resources(&[(U, r#"{"type":"string"}"#)]),
-            DefaultEvaluator::new(),
-        );
-        let ValueContractPreparation::Ready(contract) = ctx.prepare("op", Direction::Input) else {
+            &DefaultEvaluator::new(),
+        ) else {
             panic!("semantic bounds prepare")
         };
         assert_eq!(label(contract.validate(&json("0"))), "satisfies");
@@ -415,17 +412,15 @@ fn old_owners_remain_independent_of_compatible_colliding_and_unsupported_complet
         r#"{{"properties":{{"external":{{"$ref":"{U}"}},"name":{{"$ref":"https://review.invalid/K"}}}}}}"#
     );
     let known = ("https://review.invalid/K", r#"{"type":"string"}"#);
-    let old_context = context(&schema, resources(&[known]), DefaultEvaluator::new());
-    let ValueContractPreparation::Ready(old) = old_context.prepare("op", Direction::Input) else {
+    // The helper drops its document and resources; the old owner keeps what it needs.
+    let Ok(old) = prepare(&schema, resources(&[known]), &DefaultEvaluator::new()) else {
         panic!()
     };
-    drop(old_context);
-    let compatible = context(
+    let Ok(new) = prepare(
         &schema,
         resources(&[known, (U, "true")]),
-        DefaultEvaluator::new(),
-    );
-    let ValueContractPreparation::Ready(new) = compatible.prepare("op", Direction::Input) else {
+        &DefaultEvaluator::new(),
+    ) else {
         panic!()
     };
     assert_eq!(
@@ -483,22 +478,16 @@ fn custom_evaluator_gets_original_request_and_is_not_retried_or_reinterpreted() 
         }
     }
     let schema = format!(r#"{{"anyOf":[true,{{"$ref":"{U}"}}]}}"#);
-    let custom = Arc::new(Custom {
+    let custom = Custom {
         calls: AtomicUsize::new(0),
         original: schema.clone(),
         captured: Mutex::new(None),
-    });
-    let contracts = document(&schema)
-        .validate()
-        .unwrap()
-        .conformant()
-        .expect("conformant document")
-        .value_contracts(
-            custom.clone(),
-            resources(&[("https://review.invalid/unused", "false")]),
-        );
-    let ValueContractPreparation::NoVerdict { detail } = contracts.prepare("op", Direction::Input)
-    else {
+    };
+    let Err(detail) = prepare(
+        &schema,
+        resources(&[("https://review.invalid/unused", "false")]),
+        &custom,
+    ) else {
         panic!()
     };
     assert_eq!(detail.code, "custom-refusal");
@@ -516,7 +505,6 @@ fn custom_evaluator_gets_original_request_and_is_not_retried_or_reinterpreted() 
         ..
     } = bounds;
     drop(request);
-    drop(contracts);
     drop(custom);
     assert_eq!(lower.entry_uri, upper.entry_uri);
     assert_eq!(
@@ -539,14 +527,16 @@ fn custom_evaluator_gets_original_request_and_is_not_retried_or_reinterpreted() 
 #[test]
 fn cancellation_limits_and_concurrent_calls_do_not_poison_prepared_owners() {
     let schema = format!(r#"{{"properties":{{"x":{{"$ref":"{U}"}}}},"type":"object"}}"#);
-    let contracts = context(&schema, ResourceSet::default(), DefaultEvaluator::new());
+    let proof = conformant(&document(&schema));
+    let operation = proof.resolve_operation("op").expect("declared operation");
+    let unprepared = operation.input().expect("declared input");
+    let evaluator = DefaultEvaluator::new();
     let cancelled = std::sync::atomic::AtomicBool::new(false);
     cancelled.store(true, std::sync::atomic::Ordering::Release);
     assert!(
-        matches!(contracts.prepare_with_control("op", Direction::Input, &cancelled), ValueContractPreparation::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled)
+        matches!(unprepared.prepare_with_control(&evaluator, &ResourceSet::default(), &cancelled), Err(detail) if detail.reason == NoVerdictReason::Cancelled)
     );
-    let ValueContractPreparation::Ready(contract) = contracts.prepare("op", Direction::Input)
-    else {
+    let Ok(contract) = unprepared.prepare(&evaluator) else {
         panic!()
     };
     assert!(
@@ -568,9 +558,7 @@ fn cancellation_limits_and_concurrent_calls_do_not_poison_prepared_owners() {
         evaluation_steps: 0,
         ..Limits::default()
     });
-    let ValueContractPreparation::Ready(limited) =
-        context(&schema, ResourceSet::default(), low).prepare("op", Direction::Input)
-    else {
+    let Ok(limited) = prepare(&schema, ResourceSet::default(), &low) else {
         panic!()
     };
     assert!(
@@ -628,30 +616,20 @@ fn original_five_frozen_values_and_empty_resource_sets() {
             include_str!("../fixtures/partial-resources/list.json"),
         ),
     ] {
-        let doc = Document::parse(source).unwrap();
-        let evaluator = Arc::new(
-            DefaultEvaluator::new()
-                .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-        );
-        let empty = doc
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant document")
-            .value_contracts(evaluator.clone(), ResourceSet::default());
-        let ValueContractPreparation::Ready(partial) = empty.prepare(operation, Direction::Input)
-        else {
+        let proof = conformant(&Document::parse(source).unwrap());
+        let evaluator = DefaultEvaluator::new()
+            .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream);
+        let view = proof
+            .resolve_operation(operation)
+            .expect("declared operation");
+        let contract = view.input().expect("declared input");
+        let Ok(partial) = contract.prepare_with(&evaluator, &ResourceSet::default()) else {
             panic!("{operation}")
         };
         let result = partial.validate(&json(input));
         assert_eq!(label(result.clone()), expected);
-        let full = doc
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant document")
-            .value_contracts(evaluator, resources(&[(supplied_uri, supplied_text)]));
-        let ValueContractPreparation::Ready(full) = full.prepare(operation, Direction::Input)
+        let Ok(full) =
+            contract.prepare_with(&evaluator, &resources(&[(supplied_uri, supplied_text)]))
         else {
             panic!()
         };
@@ -720,12 +698,11 @@ fn known_reference_errors_and_contained_id_anchor_identity_survive_holes() {
         r#"{{"properties":{{"external":{{"$ref":"{U}"}},"known":{{"$ref":"https://review.invalid/contained#value"}}}}}}"#
     );
     let known = r#"{"$defs":{"local":{"$id":"https://review.invalid/contained","$anchor":"value","const":9007199254740993}}}"#;
-    let ctx = context(
+    let Ok(contract) = prepare(
         &schema,
         resources(&[("https://review.invalid/K", known)]),
-        DefaultEvaluator::new(),
-    );
-    let ValueContractPreparation::Ready(contract) = ctx.prepare("op", Direction::Input) else {
+        &DefaultEvaluator::new(),
+    ) else {
         panic!()
     };
     assert_eq!(
@@ -748,9 +725,7 @@ fn partial_failure_survives_diagnostic_exhaustion_and_unsupported_known_evaluati
 
         ..Limits::default()
     });
-    let ValueContractPreparation::Ready(contract) =
-        context(&schema, ResourceSet::default(), limited).prepare("op", Direction::Input)
-    else {
+    let Ok(contract) = prepare(&schema, ResourceSet::default(), &limited) else {
         panic!()
     };
     assert!(matches!(

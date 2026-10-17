@@ -1,5 +1,5 @@
 import * as testing from "../dist/testing.js";
-import { conformantContracts } from "./conformant-contracts.mjs";
+import { prepareInput } from "./conformant-contracts.mjs";
 // Internal fault injection complements the installed public-consumer checks.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -16,8 +16,18 @@ test("owned selection and preparation wrappers release untaken children on decod
   const document = sdk.Document.parse(
     '{"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"}}}}',
   ).value;
-  const context = conformantContracts(document);
+  const checked = document.validate();
+  assert.equal(checked.status, "conformant");
+  const operation = checked.document.resolveOperation("run");
+  checked.document.dispose();
+  const contract = operation.input();
+  operation.dispose();
   try {
+    // The first preparation initializes instance-lifetime evaluator arenas;
+    // warm them so every fault compares against a settled baseline.
+    const warm = contract.prepare();
+    assert.equal(warm.status, "ready");
+    warm.contract.dispose();
     for (const [prototype, invoke, take] of [
       [
         bridge.WasmOperationSelection.prototype,
@@ -26,8 +36,8 @@ test("owned selection and preparation wrappers release untaken children on decod
       ],
       [
         bridge.WasmPreparation.prototype,
-        () => context.prepare("run", "input"),
-        "takeValueContract",
+        () => contract.prepare(),
+        "takeContract",
       ],
     ]) {
       for (const fault of [
@@ -77,12 +87,12 @@ test("owned selection and preparation wrappers release untaken children on decod
     const selected = document.resolveOperation("run");
     assert.equal(selected.status, "found");
     selected.operation.dispose();
-    const prepared = context.prepare("run", "input");
+    const prepared = contract.prepare();
     assert.equal(prepared.status, "ready");
-    assert.equal(prepared.valueContract.validate(7).outcome, "satisfies");
-    prepared.valueContract.dispose();
+    assert.equal(prepared.contract.validate(7).outcome, "satisfies");
+    prepared.contract.dispose();
   } finally {
-    context.dispose();
+    contract.dispose();
     document.dispose();
   }
 });
@@ -91,10 +101,9 @@ test("ordinary admission maps only known engine limits and preserves unexpected 
   const document = sdk.Document.parse(
     '{"openbindings":"0.2.0","operations":{"run":{"input":true}}}',
   ).value;
-  const context = conformantContracts(document);
-  const setup = context.prepare("run", "input");
+  const setup = prepareInput(document, "run");
   assert.equal(setup.status, "ready");
-  const prepared = setup.valueContract;
+  const prepared = setup.contract;
   const parse = bridge.WasmJson.parseText;
   try {
     const before = testing.liveStorageOwners();
@@ -121,7 +130,6 @@ test("ordinary admission maps only known engine limits and preserves unexpected 
   } finally {
     bridge.WasmJson.parseText = parse;
     prepared.dispose();
-    context.dispose();
     document.dispose();
   }
 });

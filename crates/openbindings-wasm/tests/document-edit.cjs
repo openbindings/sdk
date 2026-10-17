@@ -11,8 +11,17 @@ const proof = assessment.takeConformant();
 assert.ok(proof instanceof wasm.WasmConformantDocument);
 assert.equal(assessment.takeConformant(), undefined);
 assert.equal(proof.set, undefined);
-assert.equal(document.valueContracts, undefined);
 document.edit('[{"op":"set","pointer":"/operations/one","value":{"input":true}},{"op":"set","pointer":"/operations/two","value":{"output":false}}]');
+// A plain document's operation carries its exact schema, never a contract to prepare.
+const selection = document.resolveOperation('one');
+const operation = selection.takeOperation();
+selection.free();
+assert.equal(operation instanceof wasm.WasmConformantOperation, false);
+const schema = operation.input();
+assert.ok(schema instanceof wasm.WasmJson);
+assert.equal(schema.prepare, undefined);
+schema.free();
+operation.free();
 assert.equal(decode(proof), initial);
 assert.ok(decode(document).includes('"x-number":1e+003'));
 assert.ok(decode(document).includes('"operations":{"one":{"input":true},"two":{"output":false}}'));
@@ -29,10 +38,9 @@ assert.ok(decode(editable).includes('proof consumed'));
 const duplicate = parse('{"openbindings":"0.2.0","operations":{},"x":0,"x":1}');
 assert.throws(() => duplicate.setName('ambiguous'), e => JSON.parse(e).code === 'duplicate-members');
 const invalid = parse('{"openbindings":"0.2.0","operations":null}');
-const resources = new wasm.WasmResources();
 // A JS receiver's class is never authority for a proof-requiring raw export.
-assert.throws(() => wasm.WasmConformantDocument.prototype.valueContracts.call(invalid, resources, '{}', 'coarse'));
-for (const handle of [document, assessment, plain, editable, duplicate, invalid, resources]) handle.free();
+assert.throws(() => wasm.WasmConformantDocument.prototype.resolveOperation.call(invalid, 'one'));
+for (const handle of [document, assessment, plain, editable, duplicate, invalid]) handle.free();
 console.log('Wasm document editing, retained proof, consumption and raw receiver checks passed');
 
 // OBI-01's five surrogate fixtures and CONFORMANCE-06 cross the raw Wasm API.

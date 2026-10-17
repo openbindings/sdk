@@ -6,7 +6,6 @@ use std::{
     collections::BTreeMap,
     io::{BufRead, BufReader, Write},
     net::TcpListener,
-    sync::Arc,
     time::Duration,
 };
 fn exact(text: &str) -> JsonValue {
@@ -85,17 +84,20 @@ fn value_contracts(document: &Document) -> Result<(), Box<dyn std::error::Error>
         uri: "https://example.invalid/integer".into(),
         document: exact(r#"{"type":"integer","minimum":0}"#),
     }])?;
-    let context = document
+    let proof = document
         .validate()?
         .conformant()
-        .ok_or("document is not conformant")?
-        .value_contracts(Arc::new(DefaultEvaluator::new()), resources);
-    let ValueContractPreparation::Ready(input) = context.prepare("run", Direction::Input) else {
-        return Err("input contract did not prepare".into());
-    };
-    let ValueContractPreparation::Ready(output) = context.prepare("run", Direction::Output) else {
-        return Err("output contract did not prepare".into());
-    };
+        .ok_or("document is not conformant")?;
+    let evaluator = DefaultEvaluator::new();
+    let operation = proof.resolve_operation("run").ok_or("run is missing")?;
+    let input = operation
+        .input()
+        .ok_or("run has no input contract")?
+        .prepare_with(&evaluator, &resources)?;
+    let output = operation
+        .output()
+        .ok_or("run has no output contract")?
+        .prepare_with(&evaluator, &resources)?;
     for text in ["7", "9007199254740993"] {
         assert!(matches!(
             input.validate(&exact(text)),
@@ -110,21 +112,19 @@ fn value_contracts(document: &Document) -> Result<(), Box<dyn std::error::Error>
         output.validate(&JsonValue::null()),
         ValueOutcome::Fails { .. }
     ));
-    assert!(matches!(
-        context.prepare("no_contract", Direction::Input),
-        ValueContractPreparation::NoValueContract
-    ));
-    let unavailable = document
-        .validate()?
-        .conformant()
-        .ok_or("document is not conformant")?
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
+    let no_contract = proof
+        .resolve_operation("no_contract")
+        .ok_or("no_contract is missing")?;
+    assert!(no_contract.input().is_none());
     // Preparation may retain a resource-dependent schema; either way no value
     // verdict is available without the missing resource.
-    let unresolved = match unavailable.prepare("run", Direction::Input) {
-        ValueContractPreparation::Ready(contract) => contract.validate(&exact("7")),
-        ValueContractPreparation::NoVerdict { detail } => ValueOutcome::NoVerdict { detail },
-        _ => return Err("unexpected resource-dependent preparation".into()),
+    let unresolved = match operation
+        .input()
+        .ok_or("run has no input contract")?
+        .prepare(&evaluator)
+    {
+        Ok(contract) => contract.validate(&exact("7")),
+        Err(detail) => ValueOutcome::NoVerdict { detail },
     };
     assert!(matches!(
         unresolved,
@@ -135,7 +135,8 @@ fn value_contracts(document: &Document) -> Result<(), Box<dyn std::error::Error>
             }
         }
     ));
-    drop(context);
+    // Prepared contracts own what they need after the document and resources go.
+    drop((operation, proof, resources));
     assert!(matches!(
         input.validate(&exact("8")),
         ValueOutcome::Satisfies
@@ -236,7 +237,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(result.metadata.unwrap().status, 200);
     server.join().expect("example server")?;
     let report = openbindings_schema_evaluator_test_support::run(
-        Arc::new(DefaultEvaluator::new()),
+        &DefaultEvaluator::new(),
         &openbindings_schema_evaluator_test_support::Options::without_unicode_property_matching(),
     );
     assert!(report.is_success());

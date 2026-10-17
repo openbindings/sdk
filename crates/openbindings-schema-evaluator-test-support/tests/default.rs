@@ -4,7 +4,7 @@ use std::sync::Arc;
 #[test]
 fn pinned_suite_and_adversarial_contracts() {
     let report = run(
-        Arc::new(openbindings_json_schema_evaluator::DefaultEvaluator::new()),
+        &openbindings_json_schema_evaluator::DefaultEvaluator::new(),
         &Options::without_unicode_property_matching(),
     );
     for observation in &report.observations {
@@ -95,7 +95,7 @@ impl SchemaEvaluator for OriginalContextAdapter {
 #[test]
 fn external_adapter_receives_original_context_and_passes_the_kit() {
     let report = run(
-        Arc::new(OriginalContextAdapter),
+        &OriginalContextAdapter,
         &Options::without_unicode_property_matching(),
     );
     assert!(report.is_success());
@@ -122,7 +122,7 @@ fn controls_exercise_real_runner_and_reject_bad_options() {
     options
         .permitted_refusals
         .insert("not-a-case".into(), "unsupported".into());
-    let report = run(Arc::new(Wrong), &options);
+    let report = run(&Wrong, &options);
     assert!(!report.is_success());
     assert!(
         report
@@ -213,7 +213,7 @@ fn real_runner_rejects_malformed_outcomes_fabricated_sources_and_broad_refusals(
         Fault::FalseCancellation,
     ] {
         let report = run(
-            Arc::new(FaultyAdapter(fault)),
+            &FaultyAdapter(fault),
             &Options::without_unicode_property_matching(),
         );
         assert!(!report.is_success(), "missed {fault:?}");
@@ -241,7 +241,7 @@ impl SchemaEvaluator for LeakyAdapter {
 #[test]
 fn real_runner_rejects_cross_context_compiled_state_leaks() {
     let report = run(
-        Arc::new(LeakyAdapter(std::sync::Mutex::new(None))),
+        &LeakyAdapter(std::sync::Mutex::new(None)),
         &Options::default(),
     );
     assert!(!report.is_success());

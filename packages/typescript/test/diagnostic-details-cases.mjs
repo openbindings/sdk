@@ -1,5 +1,5 @@
 import * as testing from "../dist/testing.js";
-import { conformantContracts } from "./conformant-contracts.mjs";
+import { prepareInput } from "./conformant-contracts.mjs";
 /** Public-package detail/privacy/retention controls; portable across Node and browsers. */
 export function diagnosticDetailsCases(sdk) {
   let assertions = 0;
@@ -11,17 +11,15 @@ export function diagnosticDetailsCases(sdk) {
   function prepare(text, options = {}) {
     const parsed = sdk.Document.parse(text);
     check(parsed.status === "parsed", "parse");
-    let proof, context;
+    let proof;
     try {
       const checked = parsed.value.validate();
       check(checked.status === "conformant", "proof");
       proof = checked.document;
-      context = conformantContracts(proof, options);
-      const ready = context.prepare("op", "input");
+      const ready = prepareInput(proof, "op", options);
       check(ready.status === "ready", "ready");
-      return ready.valueContract;
+      return ready.contract;
     } finally {
-      context?.dispose();
       proof?.dispose();
       parsed.value.dispose();
     }
@@ -186,7 +184,7 @@ export function diagnosticDetailsCases(sdk) {
   try {
     let error;
     try {
-      conformantContracts(probe.value, { diagnostics: "yes" });
+      prepareInput(probe.value, "op", { diagnostics: "yes" });
     } catch (e) {
       error = e;
     }

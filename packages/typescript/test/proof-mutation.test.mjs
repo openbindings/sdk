@@ -39,7 +39,7 @@ test("runtime-private edit helpers cannot expose or mutate a proof's revision", 
   assert.deepEqual(proof.toBytes(), before);
   assert.equal(proof.name, "certified");
   assert.equal(proof.disposed, false);
-  proof.valueContracts().dispose();
+  assert.equal(proof.resolveOperation("absent"), undefined);
   proof.dispose();
   document.dispose();
 });
@@ -85,4 +85,29 @@ test("Wasm proof storage refuses every borrowed editing entry", () => {
   proof.free();
   validation.free();
   document.free();
+});
+
+test("a plain operation view cannot be borrowed as a conformant one to hand out contracts", () => {
+  const document = sdk.Document.parse(
+    '{"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"}}}}',
+  ).value;
+  const selection = document.resolveOperation("run");
+  assert.equal(selection.status, "found");
+  const plain = selection.operation;
+  const conformance = (error) =>
+    error instanceof sdk.SdkError && error.code === "document-conformance";
+  for (const method of ["input", "output"])
+    assert.throws(
+      () => sdk.ConformantOperationView.prototype[method].call(plain),
+      conformance,
+    );
+  const input = plain.input();
+  for (const method of ["schema", "prepare", "retain"])
+    assert.throws(
+      () => sdk.ValueContract.prototype[method].call(input),
+      conformance,
+    );
+  input.dispose();
+  plain.dispose();
+  document.dispose();
 });

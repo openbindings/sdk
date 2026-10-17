@@ -37,22 +37,23 @@ fn coarse_property_name_failures_do_not_request_diagnostics() {
             .to_string(),
         )
         .unwrap();
-        let context = document
+        let document = document
             .validate()
             .unwrap()
             .conformant()
-            .expect("conformant document")
-            .value_contracts(
-                std::sync::Arc::new(
-                    openbindings_json_schema_evaluator::DefaultEvaluator::with_limits(
-                        openbindings_json_schema_evaluator::Limits {
-                            ..Default::default()
-                        },
-                    ),
-                ),
-                ResourceSet::default(),
-            );
-        let ValueContractPreparation::Ready(contract) = context.prepare("op", Direction::Input)
+            .expect("conformant document");
+        let operation = document
+            .resolve_operation("op")
+            .expect("declared operation");
+        let evaluator = openbindings_json_schema_evaluator::DefaultEvaluator::with_limits(
+            openbindings_json_schema_evaluator::Limits {
+                ..Default::default()
+            },
+        );
+        let Ok(contract) = operation
+            .input()
+            .expect("declared input")
+            .prepare(&evaluator)
         else {
             panic!()
         };

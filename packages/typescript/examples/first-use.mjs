@@ -26,20 +26,24 @@ export function firstUse(
 ) {
   const parsed = Document.parse(documentBytes);
   if (parsed.status !== "parsed") return parsed;
-  let proof, context, contract;
+  let proof, selected, contract, prepared;
   try {
     const checked = parsed.value.validate();
     if (checked.status !== "conformant") return checked;
     proof = checked.document;
     const operations = proof.operations;
-    context = proof.valueContracts();
-    const setup = context.prepare(operation, "input"); // primary name or alias
+    selected = proof.resolveOperation(operation); // primary name or alias
+    if (!selected) return { status: "operation-missing" };
+    contract = selected.input();
+    if (!contract) return { status: "no-value-contract" };
+    const setup = contract.prepare();
     if (setup.status !== "ready") return setup;
-    contract = setup.valueContract;
-    return { status: "checked", operations, result: contract.validate(input) };
+    prepared = setup.contract;
+    return { status: "checked", operations, result: prepared.validate(input) };
   } finally {
+    prepared?.dispose();
     contract?.dispose();
-    context?.dispose();
+    selected?.dispose();
     proof?.dispose();
     parsed.value.dispose();
   }

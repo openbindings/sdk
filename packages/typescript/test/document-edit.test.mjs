@@ -31,11 +31,12 @@ test("proof constructors and plain-object forgeries cannot grant authority", () 
   );
   const forged = Object.create(sdk.ConformantDocument.prototype);
   assert.throws(
-    () => forged.valueContracts(),
+    () => forged.resolveOperation("run"),
     (e) => e.code === "disposed-handle",
   );
   assert.throws(
-    () => sdk.ConformantDocument.prototype.valueContracts.call(document),
+    () =>
+      sdk.ConformantDocument.prototype.resolveOperation.call(document, "run"),
     (e) => e.code === "document-conformance",
   );
   const proof = document.validate().document;
@@ -49,7 +50,15 @@ test("proof constructors and plain-object forgeries cannot grant authority", () 
     "setDescription",
   ])
     assert.equal(proof[method], undefined);
-  assert.equal(document.valueContracts, undefined);
+  // A plain document's operation hands out exact values, never value contracts.
+  const plain = document.resolveOperation("run");
+  assert.equal(plain.status, "found");
+  assert.equal(plain.operation instanceof sdk.ConformantOperationView, false);
+  const exactInput = plain.operation.input();
+  assert.ok(exactInput instanceof sdk.ExactJson);
+  assert.equal(exactInput.prepare, undefined);
+  exactInput.dispose();
+  plain.operation.dispose();
   document.dispose();
   proof.dispose();
 });
@@ -69,7 +78,7 @@ test("consuming proof revokes all aliases while retained proofs and editable cop
     () => alias.operations,
     () => alias.toBytes(),
     () => alias.value(),
-    () => alias.valueContracts(),
+    () => alias.resolveOperation("run"),
     () => alias.asDocument(),
     () => alias.intoDocument(),
   ])

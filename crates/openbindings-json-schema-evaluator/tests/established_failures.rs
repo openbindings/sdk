@@ -42,21 +42,24 @@ impl SchemaEvaluator for RetainPrepared {
     }
 }
 
-fn prepared(schema: Value) -> (ValueContract, Arc<dyn PreparedSchema>) {
+fn prepared(schema: Value) -> (PreparedContract, Arc<dyn PreparedSchema>) {
     let document = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
     .unwrap();
-    let evaluator = Arc::new(RetainPrepared::default());
-    let contracts = document
+    let evaluator = RetainPrepared::default();
+    let document = document
         .validate()
         .unwrap()
         .conformant()
-        .expect("conformant document")
-        .value_contracts(evaluator.clone(), ResourceSet::default());
-    let contract = contracts
-        .prepare("op", Direction::Input)
-        .into_result()
+        .expect("conformant document");
+    let operation = document
+        .resolve_operation("op")
+        .expect("declared operation");
+    let contract = operation
+        .input()
+        .expect("declared input")
+        .prepare(&evaluator)
         .unwrap();
     let schema = evaluator.0.lock().unwrap().take().unwrap();
     (contract, schema)

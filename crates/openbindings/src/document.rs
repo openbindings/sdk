@@ -10,13 +10,14 @@ mod edit;
 mod read_views;
 pub use edit::{Edit, EditError};
 mod conformant_views;
+use crate::schema_space::SchemaSpace;
 pub use conformant_views::*;
 use read_views::NamespaceCache;
 pub use read_views::{BindingView, DependencyView, ExampleView, SourceView};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt,
-    sync::{Arc, OnceLock},
+    sync::{Arc, Mutex, OnceLock, PoisonError},
 };
 
 /// Stable rule identifiers OBI-01 through OBI-13, in specification order.
@@ -173,6 +174,12 @@ pub struct Document {
 pub(crate) struct DocumentInner {
     pub value: JsonValue,
     pub schemas: OnceLock<SchemaIndex>,
+    // Value-contract resolution spaces, assembled only when an evaluator asks
+    // for the core projection: one without supplied resources, and one for the
+    // most recently used nonempty resource set. Both are released with this
+    // revision; a different set replaces the second.
+    resolution: OnceLock<Arc<SchemaSpace>>,
+    supplied_resolution: Mutex<Option<Arc<SchemaSpace>>>,
     validation: OnceLock<Result<Arc<ValidationReport>, VersionRefusal>>,
     interpretation: OnceLock<Result<(), InterpretationError>>,
     names: OnceLock<Result<NameIndex, InterpretationError>>,
@@ -221,10 +228,12 @@ pub struct DocumentValidation {
 /// use openbindings::{Conformant, Document};
 /// fn consume(proof: Conformant<Document>) { let document = proof.into_inner(); proof.operations(); }
 /// ```
-/// ```compile_fail
-/// use openbindings::{Document, ResourceSet, SchemaEvaluator};
-/// fn contracts(doc: Document, evaluator: std::sync::Arc<dyn SchemaEvaluator>) {
-///     doc.value_contracts(evaluator, ResourceSet::default());
+/// Only a conformant operation hands out value contracts:
+/// ```compile_fail,E0599
+/// use openbindings::{Document, SchemaEvaluator};
+/// fn contracts(doc: Document, evaluator: &dyn SchemaEvaluator) {
+///     let operations = doc.operations().unwrap();
+///     let _ = operations[0].input().unwrap().prepare(evaluator);
 /// }
 /// ```
 /// Obtain it through [`DocumentValidation::conformant`]; value contract preparation is still a separate evaluator-dependent step.
@@ -316,6 +325,8 @@ impl Document {
             inner: Arc::new(DocumentInner {
                 value,
                 schemas: OnceLock::new(),
+                resolution: OnceLock::new(),
+                supplied_resolution: Mutex::new(None),
                 validation: OnceLock::new(),
                 interpretation: OnceLock::new(),
                 names: OnceLock::new(),
@@ -601,7 +612,8 @@ impl OperationView {
     }
     /// The exact input field, without interpreting or preparing its schema.
     /// `None` means absence; JSON null and false remain present exact values.
-    /// Use [`crate::ValueContracts::prepare`] to establish value contract readiness.
+    /// Only a conformant operation's [`crate::ConformantOperationView::input`]
+    /// yields a value contract that can be prepared.
     pub fn input(&self) -> Option<JsonRef<'_>> {
         self.value.get("input")
     }
@@ -679,6 +691,37 @@ impl DocumentValidation {
     }
 }
 impl Conformant<Document> {
+    /// The resolution space layering `resources` over this revision, assembled
+    /// at most once per revision for an empty set and once for the most
+    /// recently used nonempty set; repeated preparation reuses it.
+    pub(crate) fn resolution(&self, resources: &ResourceSet) -> Arc<SchemaSpace> {
+        let inner = &self.document.inner;
+        if resources.is_empty() {
+            return inner
+                .resolution
+                .get_or_init(|| Arc::new(SchemaSpace::new(&self.document, resources.clone())))
+                .clone();
+        }
+        // The slot is only a cache: a panic elsewhere cannot leave it inconsistent.
+        let cached = inner
+            .supplied_resolution
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_ref()
+            .filter(|space| space.supplied.same_set(resources))
+            .cloned();
+        if let Some(space) = cached {
+            return space;
+        }
+        // Assemble outside the lock so concurrent preparations with other sets
+        // do not wait; the last assembled set stays cached.
+        let space = Arc::new(SchemaSpace::new(&self.document, resources.clone()));
+        *inner
+            .supplied_resolution
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(space.clone());
+        space
+    }
     /// Borrow the exact snapshot certified by this proof, for plain fallible reads.
     pub fn as_document(&self) -> &Document {
         &self.document
@@ -1399,5 +1442,105 @@ mod finding_identity_tests {
         assert_eq!(checks.findings.len(), MAX_FINDINGS);
         assert!(!checks.truncated);
         assert_eq!(checks.evidence[2], Evidence::Violated);
+    }
+}
+
+#[cfg(test)]
+mod resolution_reuse {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    /// Projects the core resolution space on every preparation, as custom evaluators may.
+    #[derive(Default)]
+    struct Projecting(AtomicUsize);
+    impl SchemaEvaluator for Projecting {
+        fn prepare(
+            &self,
+            request: &SchemaRequest,
+            control: &dyn WorkControl,
+        ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+            request.evaluation_program(control)?;
+            self.0.fetch_add(1, Ordering::Relaxed);
+            Ok(Arc::new(Accepting))
+        }
+    }
+    /// Never asks for the core projection, like the default evaluator.
+    struct Accepting;
+    impl SchemaEvaluator for Accepting {
+        fn prepare(
+            &self,
+            _: &SchemaRequest,
+            _: &dyn WorkControl,
+        ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+            Ok(Arc::new(Accepting))
+        }
+    }
+    impl PreparedSchema for Accepting {
+        fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
+            ValueOutcome::Satisfies
+        }
+    }
+    fn snapshot(schema: &str) -> ResourceSet {
+        ResourceSet::new([SchemaResource {
+            uri: "https://example.test/item".into(),
+            document: JsonValue::parse(schema).unwrap(),
+        }])
+        .unwrap()
+    }
+    fn cached(
+        proof: &Conformant<Document>,
+    ) -> (Option<Arc<SchemaSpace>>, Option<Arc<SchemaSpace>>) {
+        let inner = &proof.document.inner;
+        (
+            inner.resolution.get().cloned(),
+            inner.supplied_resolution.lock().unwrap().clone(),
+        )
+    }
+
+    #[test]
+    fn preparations_share_one_resolution_space_per_document_and_resource_set() {
+        let proof = Document::parse(
+            r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/item"},"output":true}}}"#,
+        )
+        .unwrap()
+        .validate()
+        .unwrap()
+        .conformant()
+        .unwrap();
+        let operation = proof.resolve_operation("op").unwrap();
+        let (input, output) = (operation.input().unwrap(), operation.output().unwrap());
+        let first = snapshot(r#"{"type":"integer"}"#);
+        // Validation, reads and evaluators that never project assemble nothing.
+        assert!(input.prepare_with(&Accepting, &first).is_ok());
+        assert!(matches!(cached(&proof), (None, None)));
+
+        // Repeated preparation with one set, or a clone of it, reuses one space,
+        // including for another contract of the same revision.
+        let projecting = Projecting::default();
+        input.prepare_with(&projecting, &first).unwrap();
+        let space = cached(&proof).1.unwrap();
+        input.prepare_with(&projecting, &first.clone()).unwrap();
+        output.prepare_with(&projecting, &first).unwrap();
+        assert!(Arc::ptr_eq(&space, &cached(&proof).1.unwrap()));
+        assert_eq!(projecting.0.load(Ordering::Relaxed), 3);
+
+        // Preparation without resources uses its own space, assembled once.
+        output.prepare(&projecting).unwrap();
+        output
+            .prepare_with(&projecting, &ResourceSet::default())
+            .unwrap();
+        let empty = cached(&proof).0.unwrap();
+        assert!(!Arc::ptr_eq(&empty, &space));
+        assert!(Arc::ptr_eq(&empty, &proof.resolution(ResourceSet::empty())));
+
+        // A different set, even with equal contents, replaces the supplied space:
+        // the revision retains at most one, so the replaced space is released.
+        let released = Arc::downgrade(&space);
+        drop(space);
+        let second = snapshot(r#"{"type":"integer"}"#);
+        input.prepare_with(&projecting, &second).unwrap();
+        assert!(released.upgrade().is_none());
+        let replacement = cached(&proof).1.unwrap();
+        assert!(replacement.supplied.same_set(&second));
+        assert!(Arc::ptr_eq(&empty, &cached(&proof).0.unwrap()));
     }
 }

@@ -1,4 +1,4 @@
-import { conformantContracts } from "./conformant-contracts.mjs";
+import { prepareInput } from "./conformant-contracts.mjs";
 /** Public diagnostic policy checks shared with a freshly installed package. */
 export function diagnosticPolicyCases(sdk) {
   let assertions = 0;
@@ -126,28 +126,27 @@ export function diagnosticPolicyCases(sdk) {
       input.resolveOperation("shared").status === "ambiguous",
       "parsed ambiguity remains visible",
     );
-    const ctx = own(
-      conformantContracts(
-        document({
-          openbindings: "0.2.0",
-          operations: { op: { input: false }, empty: {} },
-        }),
-      ),
+    const validated = document({
+      openbindings: "0.2.0",
+      operations: { op: { input: false }, empty: {} },
+    }).validate();
+    check(validated.status === "conformant", "conformant document has proof");
+    const proof = own(validated.document);
+    check(
+      proof.resolveOperation("missing") === undefined,
+      "missing operation is a selection outcome",
     );
     check(
-      ctx.prepare("missing", "input").status === "operation-missing",
-      "missing remains setup state",
+      own(proof.resolveOperation("empty")).input() === undefined,
+      "absent input declares no contract",
     );
-    check(
-      ctx.prepare("empty", "input").status === "no-value-contract",
-      "absent remains setup state",
-    );
-    const prepared = ctx.prepare("op", "input");
+    const declared = own(own(proof.resolveOperation("op")).input());
+    const prepared = declared.prepare();
     check(
       prepared.status === "ready",
       "conformant document allows preparation",
     );
-    const contract = own(prepared.valueContract);
+    const contract = own(prepared.contract);
     check(
       contract.validate(null).outcome === "fails",
       "false schema establishes fails",
@@ -156,10 +155,10 @@ export function diagnosticPolicyCases(sdk) {
       contract.validate(NaN).outcome === "input-error",
       "ordinary input errors remain admission outcomes",
     );
-    const error = thrown(() => ctx.prepare("op", "sideways"));
+    const error = thrown(() => declared.prepare({ diagnostics: "sideways" }));
     check(
       error instanceof sdk.SdkError &&
-        error.code === "invalid-direction" &&
+        error.code === "invalid-diagnostics" &&
         error.interpretationCode === undefined,
       "non-interpretation errors retain broad code only",
     );
@@ -167,9 +166,9 @@ export function diagnosticPolicyCases(sdk) {
       { $ref: "#/operations/op/input" },
       { anyOf: [true, { $ref: "#/operations/op/input" }] },
     ]) {
-      const state = own(
-        conformantContracts(withSchema(schema), { diagnostics: "upstream" }),
-      ).prepare("op", "input");
+      const state = prepareInput(withSchema(schema), "op", {
+        diagnostics: "upstream",
+      });
       check(
         state.status === "no-verdict" &&
           state.detail.reason === "conservative-preparation" &&
@@ -204,9 +203,7 @@ export function diagnosticPolicyCases(sdk) {
           ],
           [{ $ref: patternUri }, { resources }, patternUri, ""],
         ]) {
-          const state = own(
-            conformantContracts(withSchema(entry), options),
-          ).prepare("op", "input");
+          const state = prepareInput(withSchema(entry), "op", options);
           check(
             state.status === "no-verdict" &&
               state.detail.reason === "conservative-preparation" &&
@@ -249,10 +246,10 @@ export function diagnosticPolicyCases(sdk) {
         );
         continue;
       }
-      const state = own(conformantContracts(doc)).prepare("op", "input");
+      const state = prepareInput(doc, "op");
       if (qualified) {
         check(state.status === "ready", "qualified missing reference prepares");
-        const result = own(state.valueContract).validate(null);
+        const result = own(state.contract).validate(null);
         check(
           result.outcome === "no-verdict" &&
             result.detail.reason === "resource-unavailable",
@@ -321,11 +318,11 @@ export function diagnosticPolicyCases(sdk) {
         "object is missing a required member; inspect the required keyword at the schema location",
       ],
     ]) {
-      const state = own(
-        conformantContracts(withSchema(schema), { diagnostics: "upstream" }),
-      ).prepare("op", "input");
+      const state = prepareInput(withSchema(schema), "op", {
+        diagnostics: "upstream",
+      });
       check(state.status === "ready", "type/message contract prepared");
-      const outcome = own(state.valueContract).validate(instance);
+      const outcome = own(state.contract).validate(instance);
       check(
         outcome.outcome === "fails" && outcome.problems[0].message === expected,
         "useful expected type or safe generic guidance",

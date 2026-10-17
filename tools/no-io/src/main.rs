@@ -1,19 +1,18 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::json;
-use std::sync::Arc;
 
 fn evaluate(document: &Document, resources: ResourceSet) -> ValueOutcome {
-    let context = document
+    let proof = document
         .validate()
         .unwrap()
         .conformant()
-        .expect("conformant document")
-        .value_contracts(Arc::new(DefaultEvaluator::new()), resources);
-    match context.prepare("op", Direction::Input) {
-        ValueContractPreparation::Ready(contract) => contract.validate(&JsonValue::integer(7)),
-        ValueContractPreparation::NoVerdict { detail } => ValueOutcome::NoVerdict { detail },
-        other => panic!("unexpected setup: {other:?}"),
+        .expect("conformant document");
+    let operation = proof.resolve_operation("op").expect("declared operation");
+    let input = operation.input().expect("declared input");
+    match input.prepare_with(&DefaultEvaluator::new(), &resources) {
+        Ok(contract) => contract.validate(&JsonValue::integer(7)),
+        Err(detail) => ValueOutcome::NoVerdict { detail },
     }
 }
 

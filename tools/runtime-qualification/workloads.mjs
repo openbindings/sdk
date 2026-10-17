@@ -9,25 +9,36 @@ export function parsed(sdk, source, document = false) {
   check(result.status === "parsed", JSON.stringify(result));
   return result.value;
 }
-function valueContracts(document, options) {
+function conformant(document) {
   const result = document.validate();
   check(result.status === "conformant", JSON.stringify(result));
+  return result.document;
+}
+// Prepare one operation's input contract; the operation view and unprepared
+// contract are released, and the prepared contract survives them.
+function prepareInput(proof, name, options) {
+  const operation = proof.resolveOperation(name);
+  check(operation, "missing operation " + name);
+  let contract;
   try {
-    return result.document.valueContracts(options);
+    contract = operation.input();
+    check(contract, "absent input contract " + name);
+    const result = contract.prepare(options);
+    check(result.status === "ready", JSON.stringify(result));
+    return result.contract;
   } finally {
-    result.document.dispose();
+    contract?.dispose();
+    operation.dispose();
   }
 }
 export function prepare(sdk, source) {
   const document = parsed(sdk, source, true);
-  let context;
+  let proof;
   try {
-    context = valueContracts(document);
-    const result = context.prepare("check", "input");
-    check(result.status === "ready", JSON.stringify(result));
-    return result.valueContract;
+    proof = conformant(document);
+    return prepareInput(proof, "check");
   } finally {
-    context?.dispose();
+    proof?.dispose();
     document.dispose();
   }
 }
@@ -109,7 +120,7 @@ export function runTier(sdk, testing, fixture, timed = true) {
   ];
   let last;
   function once() {
-    let document, proof, context, contract, value, invalid;
+    let document, proof, operation, input, contract, value, invalid;
     const row = {};
     const take = (name, run) => {
       const t = clock();
@@ -125,10 +136,11 @@ export function runTier(sdk, testing, fixture, timed = true) {
       check(assessment.status === "conformant", JSON.stringify(assessment));
       proof = assessment.document;
       contract = take("contextAndPrepare", () => {
-        context = proof.valueContracts();
-        const result = context.prepare("check", "input");
+        operation = proof.resolveOperation("check");
+        input = operation.input();
+        const result = input.prepare();
         check(result.status === "ready", JSON.stringify(result));
-        return result.valueContract;
+        return result.contract;
       });
       value = take("parseValue", () => parsed(sdk, fixture.valid));
       const first = take("firstValidation", () => contract.validate(value));
@@ -156,7 +168,8 @@ export function runTier(sdk, testing, fixture, timed = true) {
         invalid?.dispose();
         value?.dispose();
         contract?.dispose();
-        context?.dispose();
+        input?.dispose();
+        operation?.dispose();
         proof?.dispose();
         document?.dispose();
       });
@@ -286,19 +299,15 @@ export function lifetime(sdk, testing, fixture, timed = true) {
       }),
       true,
     );
-    let context;
+    let proof;
     try {
-      context = valueContracts(document, { resources });
-      const result = context.prepare("run", "input");
-      check(result.status === "ready", JSON.stringify(result));
-      for (let n = 0; n < 6; n++) {
-        const other = context.prepare(`op${n}`, "input");
-        check(other.status === "ready", "cache entry");
-        other.valueContract.dispose();
-      }
-      return result.valueContract; // survives original cache eviction and all parent disposal
+      proof = conformant(document);
+      const contract = prepareInput(proof, "run", { resources });
+      for (let n = 0; n < 6; n++)
+        prepareInput(proof, `op${n}`, { resources }).dispose();
+      return contract; // survives later preparations and all parent disposal
     } finally {
-      context?.dispose();
+      proof?.dispose();
       document.dispose();
       resources.dispose();
       resource.dispose();

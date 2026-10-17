@@ -641,3 +641,17 @@ fn static_struct_fields_keep_duplicate_and_fused_admission_checks() {
     assert_eq!(error.kind(), ValueConversionErrorKind::Limit);
     assert_eq!(calls.get(), 0);
 }
+#[test]
+fn prepared_contracts_are_owned_and_contract_reads_stay_two_words() {
+    // A prepared contract outlives its document, resources and evaluator, across threads.
+    fn owned<T: Clone + Send + Sync + 'static>() {}
+    owned::<PreparedContract>();
+    fn borrowed<T: Copy + Send + Sync>() {}
+    borrowed::<ValueContract<'static>>();
+    // Asking whether an operation declares a contract costs what reading its exact
+    // schema did: both answers are two machine words.
+    assert_eq!(
+        std::mem::size_of::<Option<ValueContract<'static>>>(),
+        std::mem::size_of::<Option<JsonRef<'static>>>()
+    );
+}

@@ -201,16 +201,16 @@ mod tests {
             r#"{"openbindings":"0.2.0","operations":{"read":{"input":{"const":1e400}}}}"#,
         )
         .unwrap();
-        let context = document
+        let proof = document
             .validate()
             .unwrap()
             .conformant()
-            .expect("conformant document")
-            .value_contracts(Arc::new(ExactConstant), ResourceSet::default());
-        let ValueContractPreparation::Ready(contract) = context.prepare("read", Direction::Input)
-        else {
-            panic!("custom evaluator must prepare")
-        };
+            .expect("conformant document");
+        let operation = proof.resolve_operation("read").expect("declared operation");
+        let input: ValueContract<'_> = operation.input().expect("declared input");
+        let contract: PreparedContract = input
+            .prepare(&ExactConstant)
+            .expect("custom evaluator must prepare");
         assert!(matches!(
             contract.validate(&JsonValue::parse("1e400").unwrap()),
             ValueOutcome::Satisfies

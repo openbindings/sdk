@@ -46,15 +46,15 @@ plain data, while `schemas()` and schema access methods acquire new owners.
 
 | Legacy API | Replacement |
 | --- | --- |
-| Go `NewValueContractCompiler(evaluator, resources...)`, `Resolve(ctx, doc)`, `CompileInput` / `CompileOutput` | Select a `SchemaEvaluator`, create an immutable `ResourceSet`, call `conformant.value_contracts`, then `prepare(name, Direction::Input)` or `Direction::Output`. |
+| Go `NewValueContractCompiler(evaluator, resources...)`, `Resolve(ctx, doc)`, `CompileInput` / `CompileOutput` | Select a `SchemaEvaluator`, create an immutable `ResourceSet`, resolve the operation on a `Conformant<Document>`, then call `input()` or `output()` and `prepare_with(&evaluator, &resources)`. |
 | Go `ValueContract.Validate(ctx, value)` / `ValidateJSON(ctx, bytes)` and error classification | Admit ordinary data with `JsonValue::from_serializable` or exact bytes with `JsonValue::parse`; match `ValueOutcome::Satisfies`, `Fails`, `Undefined` or `NoVerdict`. |
-| TypeScript `compileOperationSchema(iface, name, position)` and `CompiledSchema.validate(value)` returning `valid` and failures | Create `conformant.valueContracts()`, call `prepare(name, "input" / "output")`, narrow to ready, then call `valueContract.validate(value)`. Handle `satisfies`, `fails`, `undefined`, `no-verdict` and ordinary-input admission errors. |
+| TypeScript `compileOperationSchema(iface, name, position)` and `CompiledSchema.validate(value)` returning `valid` and failures | Call `conformant.resolveOperation(name)`, then `input()` or `output()` and `prepare(options)`, narrow to ready, then call `contract.validate(value)`. Handle `satisfies`, `fails`, `undefined`, `no-verdict` and ordinary-input admission errors. |
 
-Preparation has its own outcomes. An absent value contract is not success against
-an implicit schema. Retain a ready contract for reuse; preparation compiles anew.
+Preparation has its own refusal. An absent value contract is not success against
+an implicit schema. Retain a prepared contract for reuse; preparation compiles anew.
 Resources are caller-supplied and immutable, with no automatic reference fetching.
-Changing resources creates a new context; old contracts keep their snapshots.
-A ready contract may still return no-verdict for individual values. An undefined
+Changing resources means preparing again; old contracts keep their snapshots.
+A prepared contract may still return no-verdict for individual values. An undefined
 result is its own outcome: match `ValueOutcome::Undefined { detail }` in Rust or
 `{ outcome: "undefined", detail }` in TypeScript. `UndefinedResult` carries a code,
 message and optional original schema location. Move handling of the former

@@ -13,8 +13,10 @@ impl Deref for SchemaSpace {
     }
 }
 impl SchemaSpace {
-    pub fn new(document: Document, supplied: ResourceSet) -> Self {
-        let resources = supplied.input_policy.clone();
+    /// Layer supplied resources over the document. Callers cache the result per
+    /// revision; validation keeps its own index so it pays nothing for spaces.
+    pub fn new(document: &Document, supplied: ResourceSet) -> Self {
+        let resources = supplied.input_policy().clone();
         Self {
             supplied,
             inner: embedding::SchemaSpace::new(
@@ -22,9 +24,6 @@ impl SchemaSpace {
                 resources,
             ),
         }
-    }
-    pub fn location(&self, node: usize) -> SchemaLocation {
-        crate::contracts::original_location(self.inner.location(node))
     }
     pub fn program(
         &self,
@@ -212,7 +211,7 @@ impl Document {
         control: &dyn WorkControl,
     ) -> Result<ReferenceReport, InterpretationError> {
         self.interpretable()?;
-        Ok(SchemaSpace::new(self.clone(), resources).references(control))
+        Ok(SchemaSpace::new(self, resources).references(control))
     }
 }
 
@@ -221,12 +220,12 @@ impl Conformant<Document> {
     pub fn references(&self) -> ReferenceReport {
         self.references_with_resources(ResourceSet::default(), &crate::work_control::NeverCancelled)
     }
-    /// Inspect references using an immutable supplied-resource context and control.
+    /// Inspect references using an immutable supplied resource set and control.
     pub fn references_with_resources(
         &self,
         resources: ResourceSet,
         control: &dyn WorkControl,
     ) -> ReferenceReport {
-        SchemaSpace::new(self.as_document().clone(), resources).references(control)
+        SchemaSpace::new(self.as_document(), resources).references(control)
     }
 }

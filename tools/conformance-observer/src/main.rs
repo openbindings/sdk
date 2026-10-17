@@ -113,25 +113,20 @@ fn observe(request: &Value) -> Value {
                     }),
             )
             .unwrap();
-            let contracts =
-                doc.validate()
-                    .unwrap()
-                    .conformant()
-                    .expect("conformant document")
-                    .value_contracts(
-                        std::sync::Arc::new(
-                            openbindings_json_schema_evaluator::DefaultEvaluator::new(),
-                        ),
-                        resources,
-                    );
+            let proof = doc
+                .validate()
+                .unwrap()
+                .conformant()
+                .expect("conformant document");
+            let evaluator = openbindings_json_schema_evaluator::DefaultEvaluator::new();
             let operation = given["operation"].as_str().unwrap();
             if request["action"] == "validate-operation-values" {
-                let direction = if given["side"] == "input" {
-                    Direction::Input
+                let side = if given["side"] == "input" {
+                    "input"
                 } else {
-                    Direction::Output
+                    "output"
                 };
-                let prepared = contracts.prepare(operation, direction);
+                let prepared = prepare(&proof, operation, side, &evaluator, &resources);
                 out["values"] = json!(
                     given["valuesJson"]
                         .as_array()
@@ -151,14 +146,14 @@ fn observe(request: &Value) -> Value {
                 let mut results = Vec::new();
                 if let Some(examples) = op.value().get("examples").and_then(|v| v.members()) {
                     for example in examples {
-                        for direction in [Direction::Input, Direction::Output] {
-                            if let Some(value) = example.value.get(direction.as_str()) {
+                        for side in ["input", "output"] {
+                            if let Some(value) = example.value.get(side) {
                                 let mut result = observe_value(
-                                    &contracts.prepare(operation, direction),
+                                    &prepare(&proof, operation, side, &evaluator, &resources),
                                     &value.to_owned(),
                                 );
                                 result["example"] = json!(example.name.as_str().unwrap());
-                                result["side"] = json!(direction.as_str());
+                                result["side"] = json!(side);
                                 results.push(result);
                             }
                         }
@@ -183,17 +178,39 @@ fn main() {
 
 // Corpus observation format predates setup/value separation. Preserve its wire
 // categories explicitly without manufacturing a compiled contract or value verdict.
-fn observe_value(preparation: &ValueContractPreparation, value: &JsonValue) -> Value {
+enum Preparation {
+    OperationMissing,
+    NoContract,
+    Prepared(Result<PreparedContract, NoVerdict>),
+}
+fn prepare(
+    proof: &Conformant<Document>,
+    operation: &str,
+    side: &str,
+    evaluator: &dyn SchemaEvaluator,
+    resources: &ResourceSet,
+) -> Preparation {
+    let Some(operation) = proof.resolve_operation(operation) else {
+        return Preparation::OperationMissing;
+    };
+    let contract = if side == "input" {
+        operation.input()
+    } else {
+        operation.output()
+    };
+    match contract {
+        Some(contract) => Preparation::Prepared(contract.prepare_with(evaluator, resources)),
+        None => Preparation::NoContract,
+    }
+}
+fn observe_value(preparation: &Preparation, value: &JsonValue) -> Value {
     match preparation {
-        ValueContractPreparation::Ready(contract) => {
+        Preparation::Prepared(Ok(contract)) => {
             serde_json::to_value(contract.validate(value)).unwrap()
         }
-        ValueContractPreparation::NoValueContract => json!({"outcome":"no-contract"}),
-        ValueContractPreparation::OperationMissing => json!({"outcome":"operation-missing"}),
-        ValueContractPreparation::OperationAmbiguous { .. } => {
-            json!({"outcome":"operation-missing"})
-        }
-        ValueContractPreparation::NoVerdict { detail } => {
+        Preparation::NoContract => json!({"outcome":"no-contract"}),
+        Preparation::OperationMissing => json!({"outcome":"operation-missing"}),
+        Preparation::Prepared(Err(detail)) => {
             json!({"outcome":"no-verdict","detail":detail})
         }
     }

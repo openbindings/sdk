@@ -3,16 +3,20 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Diagnostics};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 pub const ROOT: &str = "https://benchmark.invalid/root";
 #[derive(Clone, Default, Deserialize)]
 #[serde(transparent)]
 pub struct Limits(openbindings_json_schema_evaluator::Limits);
+// Reusable preparation inputs: the proof, one resource set and one evaluator.
+pub struct Context {
+    document: Conformant<Document>,
+    resources: ResourceSet,
+    evaluator: DefaultEvaluator,
+}
 #[repr(transparent)]
-pub struct Context(ValueContracts);
-#[repr(transparent)]
-pub struct Prepared(ValueContractPreparation);
+pub struct Prepared(Result<PreparedContract, NoVerdict>);
 #[repr(transparent)]
 pub struct ParsedValue(JsonValue);
 #[repr(transparent)]
@@ -44,27 +48,33 @@ pub fn context(
         uri: ROOT.into(),
         document: JsonValue::parse(schema).unwrap(),
     });
-    Context(validation.conformant().unwrap().value_contracts(
-        Arc::new(
-            DefaultEvaluator::with_limits(limits.0.clone()).with_diagnostics(if upstream {
-                Diagnostics::Upstream
-            } else {
-                Diagnostics::Coarse
-            }),
-        ),
-        ResourceSet::new(resources).unwrap(),
-    ))
+    Context {
+        document: validation.conformant().unwrap(),
+        resources: ResourceSet::new(resources).unwrap(),
+        evaluator: DefaultEvaluator::with_limits(limits.0.clone()).with_diagnostics(if upstream {
+            Diagnostics::Upstream
+        } else {
+            Diagnostics::Coarse
+        }),
+    }
 }
 impl Context {
+    // Selects the operation by name on every preparation, as the prior context did.
     #[inline(always)]
     pub fn prepare_input(&self) -> Prepared {
-        Prepared(self.0.prepare("op", Direction::Input))
+        let operation = self.document.resolve_operation("op").unwrap();
+        Prepared(
+            operation
+                .input()
+                .unwrap()
+                .prepare_with(&self.evaluator, &self.resources),
+        )
     }
 }
 impl Prepared {
     #[inline(always)]
     pub fn is_ready(&self) -> bool {
-        matches!(self.0, ValueContractPreparation::Ready(_))
+        self.0.is_ok()
     }
     // This SDK selects diagnostics during context construction. A later API
     // can implement this call per validation without changing the timing loop.
@@ -75,13 +85,13 @@ impl Prepared {
     #[inline(always)]
     pub fn validate(&self, value: &ParsedValue, cancelled: bool) -> Outcome {
         match &self.0 {
-            ValueContractPreparation::Ready(contract) => {
+            Ok(contract) => {
                 Outcome(contract.validate_with_control(
                     &value.0,
                     &std::sync::atomic::AtomicBool::new(cancelled),
                 ))
             }
-            other => panic!("fixture did not prepare: {other:?}"),
+            Err(detail) => panic!("fixture did not prepare: {detail:?}"),
         }
     }
 }
@@ -173,13 +183,12 @@ impl CheckedDocument {
             }
             if let Some(description) = operation.description() {
                 reads.descriptions += 1;
-                reads.text_bytes +=
-                    black_box(description.as_str().expect("scalar fixture text")).len();
+                reads.text_bytes += black_box(description).len();
             }
             if let Some(tags) = operation.tags() {
                 for tag in tags {
                     reads.tags += 1;
-                    reads.text_bytes += black_box(tag.as_str().expect("scalar fixture text")).len();
+                    reads.text_bytes += black_box(tag).len();
                 }
             }
             reads.inputs += usize::from(black_box(operation.input()).is_some());

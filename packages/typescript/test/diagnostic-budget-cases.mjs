@@ -1,4 +1,4 @@
-import { conformantContracts } from "./conformant-contracts.mjs";
+import { prepareInput } from "./conformant-contracts.mjs";
 /** Typed diagnostic mode parity, including removal of the old bounded-detail API. */
 export function diagnosticBudgetCases(sdk) {
   let assertions = 0;
@@ -14,39 +14,34 @@ export function diagnosticBudgetCases(sdk) {
   );
   try {
     for (const diagnostics of [undefined, "coarse", "upstream"]) {
-      const context = conformantContracts(parsed.value, { diagnostics });
+      const setup = prepareInput(parsed.value, "op", { diagnostics });
+      check(setup.status === "ready", "ready");
       try {
-        const setup = context.prepare("op", "input");
-        check(setup.status === "ready", "ready");
-        try {
-          const result = setup.valueContract.validate(42);
-          check(result.outcome === "fails", "same verdict");
-          check(
-            result.message === "value does not satisfy the contract",
-            "fixed explanation",
-          );
-          check(
-            !result.problemsComplete,
-            "first error never claims completeness",
-          );
-          check(
-            result.problems.length === (diagnostics === "upstream" ? 1 : 0),
-            "mode selects detail",
-          );
-          if (diagnostics === "upstream")
-            check(result.problems[0].code === "type", "library first error");
-        } finally {
-          setup.valueContract.dispose();
-        }
+        const result = setup.contract.validate(42);
+        check(result.outcome === "fails", "same verdict");
+        check(
+          result.message === "value does not satisfy the contract",
+          "fixed explanation",
+        );
+        check(
+          !result.problemsComplete,
+          "first error never claims completeness",
+        );
+        check(
+          result.problems.length === (diagnostics === "upstream" ? 1 : 0),
+          "mode selects detail",
+        );
+        if (diagnostics === "upstream")
+          check(result.problems[0].code === "type", "library first error");
       } finally {
-        context.dispose();
+        setup.contract.dispose();
       }
     }
     for (const field of ["diagnosticBytes", "maxProblems"]) {
       check(!(field in sdk.evaluatorLimits()), "retired default");
       let rejected = false;
       try {
-        conformantContracts(parsed.value, { limits: { [field]: 1 } });
+        prepareInput(parsed.value, "op", { limits: { [field]: 1 } });
       } catch {
         rejected = true;
       }
@@ -55,7 +50,7 @@ export function diagnosticBudgetCases(sdk) {
     for (const diagnostics of [true, false, "details", null]) {
       let rejected = false;
       try {
-        conformantContracts(parsed.value, { diagnostics });
+        prepareInput(parsed.value, "op", { diagnostics });
       } catch (e) {
         rejected = e.code === "invalid-diagnostics";
       }

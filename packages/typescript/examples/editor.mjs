@@ -23,14 +23,17 @@ export class DocumentEditor {
   update(text, value = { id: 7 }, diagnostics = "coarse") {
     const parsed = Document.parse(text);
     if (parsed.status !== "parsed") return parsed;
-    let proof, context, input;
+    let proof, operation, contract, input;
     try {
       const checked = parsed.value.validate();
       if (checked.status !== "conformant") return checked;
       proof = checked.document;
       const operations = proof.operations;
-      context = proof.valueContracts({ diagnostics });
-      const setup = context.prepare("find", "input");
+      operation = proof.resolveOperation("find");
+      if (!operation) return { status: "operation-missing" };
+      contract = operation.input();
+      if (!contract) return { status: "no-value-contract" };
+      const setup = contract.prepare({ diagnostics });
       if (setup.status !== "ready") {
         if (
           setup.status === "no-verdict" &&
@@ -39,7 +42,7 @@ export class DocumentEditor {
           return { status: "resources-missing", evidence: setup.detail };
         return setup;
       }
-      input = setup.valueContract;
+      input = setup.contract;
       const result = input.validate(value);
       const previous = this.#document;
       this.#document = proof; // transfer the conformant owner after successful setup
@@ -48,7 +51,8 @@ export class DocumentEditor {
       return { status: "updated", operations, result };
     } finally {
       input?.dispose();
-      context?.dispose();
+      contract?.dispose();
+      operation?.dispose();
       proof?.dispose();
       parsed.value.dispose();
     }
@@ -139,14 +143,12 @@ export function formatEditorResult(result) {
       ].join("\n");
     case "operation-missing":
       return 'Document is conformant; operation "find" is missing.';
-    case "operation-ambiguous":
-      return `Document is conformant; operation "find" is ambiguous: ${JSON.stringify(result.candidates)}.`;
     case "no-value-contract":
       return 'Document is conformant; operation "find" has no input contract.';
     case "no-verdict":
       return `Document is conformant; input setup was refused (${result.detail.reason}, ${result.detail.code}); ${schemaLocation(result.detail.location)}: ${result.detail.message}`;
     case "resources-missing":
-      return `Document is conformant; schema resources are missing. Previous prepared snapshot kept. One missing reference: ${schemaLocation(result.evidence.location)}. Supply resources in a new context before replacement.`;
+      return `Document is conformant; schema resources are missing. Previous prepared snapshot kept. One missing reference: ${schemaLocation(result.evidence.location)}. Prepare again with resources before replacement.`;
     case "updated":
       return [
         "Document is conformant; the input contract is ready.",

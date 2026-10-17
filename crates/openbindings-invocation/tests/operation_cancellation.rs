@@ -318,7 +318,10 @@ mod tests {
         );
         assert!(external.is_cancelled());
         let evidence = call.validation_failure().unwrap();
-        assert_eq!(evidence.direction(), openbindings::Direction::Output);
+        assert_eq!(
+            evidence.direction(),
+            openbindings_invocation::operation::Direction::Output
+        );
         assert!(matches!(evidence.outcome(), ValueOutcome::Fails { .. }));
         let control = call.control();
         control.cancel();

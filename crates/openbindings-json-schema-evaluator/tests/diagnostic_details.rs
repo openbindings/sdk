@@ -1,23 +1,24 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Diagnostics};
-use std::sync::Arc;
 
-fn prepare(text: &str, resources: ResourceSet, details: bool) -> ValueContract {
+fn prepare(text: &str, resources: ResourceSet, details: bool) -> PreparedContract {
     let doc = Document::parse(text).unwrap();
-    let context = doc
+    let doc = doc
         .validate()
         .unwrap()
         .conformant()
-        .expect("conformant document")
-        .value_contracts(
-            Arc::new(DefaultEvaluator::new().with_diagnostics(if details {
-                Diagnostics::Upstream
-            } else {
-                Diagnostics::Coarse
-            })),
-            resources,
-        );
-    let ValueContractPreparation::Ready(contract) = context.prepare("op", Direction::Input) else {
+        .expect("conformant document");
+    let evaluator = DefaultEvaluator::new().with_diagnostics(if details {
+        Diagnostics::Upstream
+    } else {
+        Diagnostics::Coarse
+    });
+    let operation = doc.resolve_operation("op").expect("declared operation");
+    let Ok(contract) = operation
+        .input()
+        .expect("declared input")
+        .prepare_with(&evaluator, &resources)
+    else {
         panic!("not ready")
     };
     contract

@@ -2,7 +2,6 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Diagnostics};
 use std::fmt::Debug;
-use std::sync::Arc;
 // A credential-shaped probe value; Debug output must never contain it.
 const SECRET: &str = "PROBE-BEARER-TOKEN-7391";
 const NUMBER: &str = "739173917391";
@@ -42,19 +41,17 @@ fn check_rows(rows: Vec<Row>, expected: usize) {
 fn debug_redacts_caller_text_at_every_boundary() {
     let parsed = Document::parse(serde_json::json!({"openbindings":"0.2.0", "operations":{"op":{"input":{"properties":{SECRET:{"type":"string"}}}}}}).to_string()).unwrap();
     let validated = parsed.validate().unwrap().conformant().unwrap();
+    let operation = validated.resolve_operation("op").unwrap();
     let mut rows = Vec::new();
     for diagnostics in [Diagnostics::Coarse, Diagnostics::Upstream] {
-        let contracts = validated.value_contracts(
-            Arc::new(DefaultEvaluator::new().with_diagnostics(diagnostics)),
-            ResourceSet::default(),
-        );
-        rows.push(row("ValueContracts", &contracts));
-        let prepared = contracts.prepare("op", Direction::Input);
-        rows.push(row("ValueContractPreparation::Ready", &prepared));
-        let ValueContractPreparation::Ready(contract) = prepared else {
+        let unprepared = operation.input().unwrap();
+        rows.push(row("ValueContract", &unprepared));
+        let prepared = unprepared.prepare(&DefaultEvaluator::new().with_diagnostics(diagnostics));
+        rows.push(row("Ok(PreparedContract)", &prepared));
+        let Ok(contract) = prepared else {
             panic!("not ready")
         };
-        rows.push(row("ValueContract", &contract));
+        rows.push(row("PreparedContract", &contract));
         let value = JsonValue::parse(serde_json::json!({SECRET:7}).to_string()).unwrap();
         let result = contract.validate(&value);
         assert!(matches!(result, ValueOutcome::Fails { .. }));
@@ -75,11 +72,11 @@ fn debug_redacts_caller_text_at_every_boundary() {
         .unwrap()
         .conformant()
         .unwrap();
-        let contracts = document.value_contracts(
-            Arc::new(DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream)),
-            ResourceSet::default(),
-        );
-        let ValueContractPreparation::Ready(contract) = contracts.prepare("op", Direction::Input)
+        let operation = document.resolve_operation("op").unwrap();
+        let Ok(contract) = operation
+            .input()
+            .unwrap()
+            .prepare(&DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream))
         else {
             panic!("not ready")
         };

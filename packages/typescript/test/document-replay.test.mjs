@@ -72,7 +72,7 @@ for (const diagnostics of ["coarse", "upstream"]) {
       const opened = sdk.Document.parse(group.document);
       assert.equal(opened.status, "parsed", group.id);
       const document = opened.value;
-      let proof, resources, context, prepared;
+      let proof, resources, contract, prepared;
       const inputs = [];
       try {
         const checked = document.validate();
@@ -86,19 +86,19 @@ for (const diagnostics of ["coarse", "upstream"]) {
             return [resource.uri, value];
           }),
         );
-        context = proof.valueContracts({ resources, diagnostics });
-        const setup = context.prepare("op", "input");
-        if (setup.status === "ready") prepared = setup.valueContract;
+        const operation = proof.resolveOperation("op");
+        try {
+          contract = operation?.input();
+        } finally {
+          operation?.dispose();
+        }
+        const setup = contract?.prepare({ resources, diagnostics });
+        if (setup?.status === "ready") prepared = setup.contract;
         const values = group.cases.map((entry) => {
           if (!prepared)
-            return setup.status === "no-verdict"
+            return setup?.status === "no-verdict"
               ? { outcome: "no-verdict", detail: setup.detail }
-              : {
-                  outcome:
-                    setup.status === "no-value-contract"
-                      ? "no-contract"
-                      : setup.status,
-                };
+              : { outcome: operation ? "no-contract" : "operation-missing" };
           const value = exact(entry.value);
           try {
             return prepared.validate(value);
@@ -109,7 +109,7 @@ for (const diagnostics of ["coarse", "upstream"]) {
         observations.push({ id: group.id, executed: true, values });
       } finally {
         prepared?.dispose();
-        context?.dispose();
+        contract?.dispose();
         resources?.dispose();
         for (const input of inputs) input.dispose();
         proof?.dispose();

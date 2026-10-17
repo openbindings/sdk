@@ -5,7 +5,7 @@ use openbindings::*;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::{Arc, OnceLock},
+    sync::OnceLock,
 };
 
 #[derive(Clone, Deserialize)]
@@ -334,10 +334,11 @@ impl Report {
             .count()
     }
 }
-/// Apply the kit through the public original-document/context route.
-/// Implementations must keep preparation independent between contexts, preserve
+/// Apply the kit through the public conformant-operation route: each group's
+/// input contract is prepared once with the borrowed evaluator and its supplied
+/// resources. Implementations must keep preparations independent, preserve
 /// borrowed input snapshots, and return honest unsupported/limit outcomes.
-pub fn run(evaluator: Arc<dyn SchemaEvaluator>, options: &Options) -> Report {
+pub fn run(evaluator: &dyn SchemaEvaluator, options: &Options) -> Report {
     let suite = suite();
     let mut report = Report {
         observations: Vec::new(),
@@ -373,30 +374,26 @@ pub fn run(evaluator: Arc<dyn SchemaEvaluator>, options: &Options) -> Report {
             .expect("supported fixture version")
             .conformant()
             .expect("conformant fixture document");
-        let context = validated.value_contracts(evaluator.clone(), resources);
-        let prepared = context.prepare("op", Direction::Input);
-        if !matches!(
-            prepared,
-            ValueContractPreparation::Ready(_) | ValueContractPreparation::NoVerdict { .. }
-        ) {
+        let operation = validated.resolve_operation("op");
+        let Some(input) = operation.as_ref().and_then(|operation| operation.input()) else {
             report.configuration_failures.push(format!(
-                "{}: expected a schema preparation, observed {prepared:?}",
+                "{}: expected an input value contract on operation op",
                 group.id
             ));
             continue;
-        }
+        };
+        let prepared = input.prepare_with(evaluator, &resources);
         for case in &group.cases {
             let value = JsonValue::parse(&case.value).expect("packaged instance JSON");
             let original = value.text().to_owned();
             let (outcome, preparation_refusal) = match &prepared {
-                ValueContractPreparation::Ready(contract) => (contract.validate(&value), None),
-                ValueContractPreparation::NoVerdict { detail } => (
+                Ok(contract) => (contract.validate(&value), None),
+                Err(detail) => (
                     ValueOutcome::NoVerdict {
                         detail: detail.clone(),
                     },
                     Some(detail.clone()),
                 ),
-                _ => unreachable!("setup state checked above"),
             };
             let allowed = options
                 .permitted_refusals

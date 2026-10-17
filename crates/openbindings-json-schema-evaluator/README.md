@@ -5,8 +5,8 @@ optional companion supports JSON Schema 2020-12, exact JSON numbers and explicit
 immutable schema resources. Use it alongside `openbindings`.
 
 ```rust
-use openbindings::{Direction, Document, ValueOutcome};
-use openbindings_json_schema_evaluator::value_contracts;
+use openbindings::{Document, ValueOutcome};
+use openbindings_json_schema_evaluator::DefaultEvaluator;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let document = Document::parse(
@@ -18,8 +18,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             validation.report().conclusion, validation.report().findings).into());
     }
     let proof = validation.conformant().ok_or("document is not conformant")?;
-    let context = value_contracts(&proof);
-    let input = context.prepare("lookup", Direction::Input).into_result()?;
+    let operation = proof.resolve_operation("lookup").ok_or("operation is missing")?;
+    let input = operation
+        .input()
+        .ok_or("operation has no input contract")?
+        .prepare(&DefaultEvaluator::new())?;
     match input.validate_json(r#""item""#)? {
         ValueOutcome::Satisfies => println!("input satisfies the contract"),
         ValueOutcome::Fails { message, problems, problems_complete } => {
@@ -36,43 +39,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-`value_contracts(&proof)` uses `Limits::default()`, coarse diagnostics and no extra
-resources. `into_result()` preserves every non-ready reason in
-`ValueContractPreparationError`, including the original no-verdict detail as its
-error source. Match `ValueContractPreparation` directly when setup states need
-individual handling. `validate_json` admits exact text or bytes under the default
-JSON limits; `Err` means admission failed and `Ok` contains any of the four value
-outcomes. Duplicate members yield no-verdict after admission.
+`prepare(&DefaultEvaluator::new())` uses `Limits::default()`, coarse diagnostics
+and no supplied resources. A missing operation and an absent contract are `None`;
+preparation refusal is a `NoVerdict` error that judges no instance. Ready means
+prepared, not decidable. `validate_json` admits exact text or bytes under the
+default JSON limits; `Err` means admission failed and `Ok` contains any of the
+four value outcomes. Duplicate members yield no-verdict after admission.
 
-Use `Conformant<Document>::value_contracts(evaluator, resources)` to share or
-configure an evaluator or supply resources. For example:
+Configure the evaluator or supply resources with `prepare_with`. The evaluator is
+borrowed for the call, and one `ResourceSet` can serve many preparations:
 
 ```rust,edition2024
-use openbindings::{ResourceSet, Conformant, Document, ValueContracts};
+use openbindings::{NoVerdict, PreparedContract, ResourceSet, ValueContract};
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Diagnostics};
-use std::sync::Arc;
 
-fn with_resources(proof: &Conformant<Document>, resources: ResourceSet) -> ValueContracts {
-    let evaluator = Arc::new(DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream));
-    proof.value_contracts(evaluator, resources)
+fn with_resources(
+    contract: ValueContract<'_>,
+    resources: &ResourceSet,
+) -> Result<PreparedContract, NoVerdict> {
+    let evaluator = DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream);
+    contract.prepare_with(&evaluator, resources)
 }
 ```
 
 Use `JsonValue::parse_with_limits` for custom admission limits, or
 `JsonValue::from_serializable` for ordinary Rust values. Keep admitted exact values
-and call `ValueContract::validate` to check them repeatedly without reparsing.
+and call `PreparedContract::validate` to check them repeatedly without reparsing.
 
-Retain and clone the ready contract for repeated validation. Each `prepare` call
-compiles independently. The packaged [first-use example](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/examples/first_use.rs)
+Retain and clone the prepared contract for repeated validation. Each `prepare`
+call compiles independently. The packaged [first-use example](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/examples/first_use.rs)
 adds aliases and exact wide integers; the [replacement example](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/examples/replacement.rs)
-keeps old work usable while installing a new document and resource context.
+keeps old work usable while installing a new document and resource set.
 
 ## Limits
 
 The evaluator never fetches references. Supply resources through `ResourceSet`;
-new resources require a new context. Some values can be decided despite missing
+new resources require a new preparation. Some values can be decided despite missing
 resources or undefined reference results when those results cannot affect the
-verdict. A ready contract does not promise a verdict for every value. Handle
+verdict. A prepared contract does not promise a verdict for every value. Handle
 no-verdict during both preparation and validation.
 
 `ValueOutcome::Undefined` establishes that whether the value satisfies its value
@@ -99,7 +103,7 @@ expose source operands and retain whole document/resource snapshots. Missing
 or incomplete diagnostics never weaken an established failure.
 
 Cancellation uses `WorkControl` and is cooperative. Cancelled preparation produces
-no ready owner; cancelled validation leaves a ready owner usable for a later
+no prepared owner; cancelled validation leaves a prepared owner usable for a later
 attempt. Use a fresh control for an independent retry.
 
 This unpublished package requires Rust 1.88. See
@@ -109,6 +113,6 @@ for the integration contract.
 
 ## Reference
 
-The crate reference documents `value_contracts`, `DefaultEvaluator`, `Limits` and `Diagnostics`.
+The crate reference documents `DefaultEvaluator`, `Limits` and `Diagnostics`.
 [Resolver and evaluation maintenance](https://github.com/openbindings/sdk/blob/main/docs/maintainers.md)
 links the resource-identity rules, partial evaluation proof and dependency patches.

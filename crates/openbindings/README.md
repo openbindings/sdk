@@ -21,7 +21,7 @@ assert_eq!(operation.key(), "lookup");
 Parsing retains a snapshot for inspection, including invalid editor drafts.
 Validation checks all document rules and returns evidence as met, violated or
 inconclusive where applicable. Only established conformance produces a
-`Conformant<Document>`, with infallible typed field reads and access to value contracts.
+`Conformant<Document>`, with infallible typed field reads and operations that hand out value contracts.
 An unsupported specification version is a separate refusal.
 
 Create an OBI with `Document::new()` or parse exact JSON with `Document::parse`.
@@ -48,24 +48,25 @@ Document validation works without a caller-supplied schema evaluator. Its fixed
 normative schema checks are part of core. Operation value validation requires an
 explicit `SchemaEvaluator`, including for `true`, `false` and empty schemas.
 Select the optional `openbindings-json-schema-evaluator` or implement the trait.
-The companion's `value_contracts(&conformant)` function supplies its default
-budgets, coarse diagnostics and no extra resources. For shared or configured
-evaluators and supplied resources, pass an `Arc<dyn SchemaEvaluator>` and an
-immutable `ResourceSet` to `Conformant<Document>::value_contracts`. Core does not
-depend on the companion.
+A conformant operation's `input()` and `output()` return its `ValueContract`s, or
+`None` when it declares none. `prepare(&evaluator)` borrows the evaluator and
+supplies no resources; `prepare_with(&evaluator, &resources)` adds an immutable
+`ResourceSet`. Core does not depend on the companion.
 The [evaluator integration guide](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md)
 explains the no-evaluator behavior and custom implementations.
 
-Prepare a direction, retain a ready `ValueContract`, and handle satisfies, fails, undefined
-and no-verdict for each value. Use `ValueContractPreparation::into_result()` to
-propagate a non-ready reason with `?`, preserving its payload. Use
-`ValueContract::validate_json` for exact JSON text or bytes; only admission failure
-returns `Err`. Retain a `JsonValue` and use `validate` for repeated checks or custom
-admission limits. Preparation can also report a missing operation,
-an absent value contract or no-verdict. Undefined means the value-contract rules
-leave whether the value satisfies its contract undefined; no-verdict means the
-evaluator could not answer. Each preparation compiles independently;
-cloning a ready contract reuses its retained document and resources.
+Prepare a contract, retain the `PreparedContract`, and handle satisfies, fails,
+undefined and no-verdict for each value. Preparation returns
+`Result<PreparedContract, NoVerdict>`, so `?` propagates a refusal with its
+payload. Use `PreparedContract::validate_json` for exact JSON text or bytes; only
+admission failure returns `Err`. Retain a `JsonValue` and use `validate` for
+repeated checks or custom admission limits. Undefined means the value-contract
+rules leave whether the value satisfies its contract undefined; no-verdict means
+the evaluator could not answer. Each preparation compiles independently; cloning a
+prepared contract shares its compiled state. A `ResourceSet` indexes its resource
+identities once, and a conformant revision assembles its resolution space only for
+evaluators that request the core projection, keeping one without supplied
+resources and one for the most recently used set.
 
 Core performs no resource acquisition, binding selection or invocation. Source
 and binding content remain opaque. Kind implementations interpret them outside

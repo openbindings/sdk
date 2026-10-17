@@ -5,10 +5,9 @@ contract route used by applications. The suite reports preparation refusals,
 value verdicts and diagnostic-location errors separately.
 
 ```rust
-use std::sync::Arc;
 use openbindings_schema_evaluator_test_support::{run, Options};
-let evaluator = Arc::new(openbindings_json_schema_evaluator::DefaultEvaluator::new());
-let report = run(evaluator, &Options::without_unicode_property_matching());
+let evaluator = openbindings_json_schema_evaluator::DefaultEvaluator::new();
+let report = run(&evaluator, &Options::without_unicode_property_matching());
 assert!(report.is_success());
 ```
 

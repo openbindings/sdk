@@ -18,7 +18,7 @@ try {
     [["https://schema.example/input", schema.value]],
   );
   if (setup.status !== "ready") throw new Error(JSON.stringify(setup));
-  service = new ValidationService(setup.valueContract);
+  service = new ValidationService(setup.contract);
   console.log(
     JSON.stringify({
       ordinary: service.check(7),

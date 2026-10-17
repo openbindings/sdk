@@ -1,5 +1,6 @@
 //! Reads whose field shapes are established by the retained document proof.
 use super::*;
+use crate::contracts::Side;
 
 fn text<'a>(value: JsonRef<'a>, field: &str) -> Option<&'a str> {
     value
@@ -143,13 +144,25 @@ impl ConformantOperationView {
             .get("deprecated")
             .map(|v| v.as_bool().expect("conformant boolean"))
     }
-    /// Borrow the exact input schema. Absence, true, false and object remain distinct.
-    pub fn input(&self) -> Option<JsonRef<'_>> {
-        self.view.input()
+    /// The input value contract, or `None` when the operation declares no input.
+    /// Present `true`, `false` and object schemas are all contracts; read the exact
+    /// schema with [`ValueContract::schema`]. Nothing is prepared here.
+    pub fn input(&self) -> Option<ValueContract<'_>> {
+        ValueContract::declared(self, Side::Input)
     }
-    /// Borrow the exact output schema without preparing it.
-    pub fn output(&self) -> Option<JsonRef<'_>> {
-        self.view.output()
+    /// The output value contract, or `None` when the operation declares no output.
+    /// Nothing is prepared here.
+    pub fn output(&self) -> Option<ValueContract<'_>> {
+        ValueContract::declared(self, Side::Output)
+    }
+    pub(crate) fn field(&self, side: Side) -> Option<JsonRef<'_>> {
+        match side {
+            Side::Input => self.view.input(),
+            Side::Output => self.view.output(),
+        }
+    }
+    pub(crate) fn proof(&self) -> &Conformant<Document> {
+        &self._document
     }
     /// Read binding keys without selecting or ranking them.
     pub fn bindings(&self) -> Vec<String> {

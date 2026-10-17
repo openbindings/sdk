@@ -13,12 +13,12 @@ cargo run -p openbindings-json-schema-evaluator --example replacement
 ```
 
 The first example adds exact values and verdict handling. The replacement example
-keeps old work usable while a new document and resource context are installed.
+keeps old work usable while a new document and resource set are installed.
 This caller diagnoses an unexpected document field, corrects it and prepares input:
 
 ```rust
-use openbindings::{Direction, Document};
-use openbindings_json_schema_evaluator::value_contracts;
+use openbindings::Document;
+use openbindings_json_schema_evaluator::DefaultEvaluator;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let text = r#"{"openbindings":"0.2.0","operations":{"lookup":{"inputSchema":{"type":"integer"}}}}"#;
@@ -40,8 +40,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let Some(proof) = validation.conformant() else {
         return Err(format!("document conformance: {:?}", validation.report().conclusion).into());
     };
-    let context = value_contracts(&proof);
-    let input = context.prepare("lookup", Direction::Input).into_result()?;
+    let operation = proof.resolve_operation("lookup").ok_or("operation is missing")?;
+    let input = operation
+        .input()
+        .ok_or("operation has no input contract")?
+        .prepare(&DefaultEvaluator::new())?;
     println!("value outcome: {:?}", input.validate_json("7")?);
     Ok(())
 }
@@ -56,35 +59,36 @@ lookup distinguishes found, missing and ambiguous.
 
 ## Validate values
 
-Create a context with `openbindings_json_schema_evaluator::value_contracts(&conformant)`,
-then `prepare(name, Direction::Input)` or `Direction::Output`. The function uses the
-default evaluator budgets, coarse diagnostics and no extra resources. Creating the context performs no preparation. The SDK never acquires resources. Use the explicit
-`conformant.value_contracts(evaluator, resources)` method for shared evaluators,
-custom budgets or diagnostics, supplied resources or custom evaluators.
+A conformant operation's `input()` and `output()` return its value contracts, or
+`None` when the operation declares none. `schema()` borrows the exact schema.
+`prepare(&DefaultEvaluator::new())` uses the default evaluator budgets, coarse
+diagnostics and no supplied resources; reading a contract prepares nothing. The SDK
+never acquires resources. Use `prepare_with(&evaluator, &resources)` for a shared or
+configured evaluator, custom budgets or diagnostics, supplied resources or a custom
+evaluator. The evaluator is borrowed for the call.
 
-Call `into_result()?` to retain a ready contract or propagate the full
-`ValueContractPreparationError`. It preserves missing operation, absent value
-contract, ambiguous operation and no-verdict reasons with their payloads. The
-ambiguity branch is unreachable from conformant documents. Match the original
-`ValueContractPreparation` directly when setup states need separate handling.
+Preparation returns `Result<PreparedContract, NoVerdict>`, so `?` propagates a
+refusal with its reason, code, message and location. A missing operation and an
+absent contract are `None` before preparation. Only a `Conformant<Document>` hands
+out contracts; a plain `Document` operation exposes the exact schema value.
 Document validation itself needs no caller-supplied evaluator. See
 [evaluator integration](schema-evaluators.md).
 
-A ready contract's `validate_json(text_or_bytes)` admits exact JSON under the
+A prepared contract's `validate_json(text_or_bytes)` admits exact JSON under the
 default limits: 64 MiB, 10,000 container levels and 1,000,000 nodes. `Err` means
 admission failed. `Ok` contains `Satisfies`, `Fails`, `Undefined` or `NoVerdict`.
 Duplicate members are preserved during admission and yield `NoVerdict` during
 validation. Number tokens retain their exact meaning.
 
 Use `JsonValue::parse_with_limits` for custom admission limits and
-`ValueContract::validate` for retained exact values without reparsing. Use
+`PreparedContract::validate` for retained exact values without reparsing. Use
 `JsonValue::from_serializable` for ordinary Rust data. The converter preserves
 integer digits but cannot recover a value already rounded by application code.
 It refuses exact wrappers; keep those on the parse/retain route.
 
 Preparation and validation refusals remain separate from an established failure.
-Retain and clone a ready contract to reuse compiled state. Every `prepare` call
-compiles independently. Ready does not imply that every value is decidable.
+Retain and clone a prepared contract to reuse compiled state. Every `prepare` call
+compiles independently. Prepared does not imply that every value is decidable.
 
 ## Edit an opaque value
 
@@ -136,16 +140,23 @@ additional numeric and error cases.
 
 ## Resources, diagnostics and lifetime
 
-The explicit context method accepts `Arc<dyn SchemaEvaluator>` and `ResourceSet`;
+`prepare_with` borrows a `&dyn SchemaEvaluator` and a `ResourceSet`;
 the [replacement example](../crates/openbindings-json-schema-evaluator/examples/replacement.rs)
 shows supplied resources and retained work. Schema resources are explicit and immutable. The SDK never fetches missing
-references. Construct a new context to change resources; retained contracts keep
+references. Prepare again with a new set to change resources; prepared contracts keep
 their original snapshots. An application can prepare a candidate before replacing
 its active contract and keep serving old work if preparation fails.
 
+A `ResourceSet` indexes its resource identities once when it is built, and clones
+share that index. Evaluators that request the core projection reuse one resolution
+space per document revision: one without supplied resources and one for the most
+recently used set. Repeated preparation
+with the same document and set reuses it; a different set replaces it, so a
+revision retains at most two.
+
 `prepare_with_control` and `validate_with_control` accept `WorkControl`, including
 an `AtomicBool` or a companion's `CancellationToken`. Cancellation is cooperative.
-Use a fresh flag or token for a retry. Cancelled preparation returns no ready
+Use a fresh flag or token for a retry. Cancelled preparation returns no prepared
 owner; cancelled validation leaves an existing owner usable.
 
 Document findings describe the assessed revision with JSON Pointers, zero-based UTF-8 byte offsets and

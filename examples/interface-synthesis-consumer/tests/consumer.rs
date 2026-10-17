@@ -280,7 +280,7 @@ async fn fixture_semantics_independently_check_emitted_paths_and_shared_analysis
         let id = binding.content().unwrap().as_str().unwrap();
         assert!(["echo", "limited"].contains(&id));
         let operation = doc.resolve_operation(binding.operation()).unwrap();
-        let input = operation.input().unwrap();
+        let input = operation.input().unwrap().schema();
         // These are the only schema forms this bounded fixture promises to emit.
         // Both upstream echo targets accept every JSON value; any advertised
         // admitted value must be in that set, and the lossy target narrows to null.

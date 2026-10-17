@@ -14,9 +14,7 @@ export function observe(sdk, request) {
   const preparationOutcome = (result) =>
     result.status === "no-verdict"
       ? { outcome: "no-verdict", detail: result.detail }
-      : result.status === "operation-ambiguous"
-        ? { outcome: "operation-missing" }
-        : { outcome: result.status === "no-value-contract" ? "no-contract" : result.status };
+      : { outcome: result.status };
   const output = { id: request.id, executed: true };
   const given = request.given;
   const bytes = Uint8Array.from(atob(given.documentBase64), (c) =>
@@ -80,16 +78,26 @@ export function observe(sdk, request) {
     const validation = doc.validate();
     if (validation.status !== "conformant") throw new Error("Fixture document lacks conformance proof");
     const conformant = own(validation.document);
-    const context = own(conformant.valueContracts({ resources }));
+    // A missing operation and an absent contract are setup states found before
+    // preparation; conformance excludes ambiguous selection.
+    const prepare = (name, side) => {
+      if (side !== "input" && side !== "output")
+        throw new Error("Unknown operation side: " + side);
+      const operation = own(conformant.resolveOperation(name));
+      if (!operation) return { status: "operation-missing" };
+      const contract = own(side === "input" ? operation.input() : operation.output());
+      if (!contract) return { status: "no-contract" };
+      return contract.prepare({ resources });
+    };
     if (request.action === "validate-operation-values") {
-      const preparation = context.prepare(given.operation, given.side);
+      const preparation = prepare(given.operation, given.side);
       if (preparation.status !== "ready")
         return {
           ...output,
-          preparation: { ...preparation, status: preparation.status === "no-value-contract" ? "no-contract" : preparation.status },
+          preparation,
           values: given.valuesJson.map(() => preparationOutcome(preparation)),
         };
-      const prepared = own(preparation.valueContract);
+      const prepared = own(preparation.contract);
       return {
         ...output,
         preparation: { status: "ready" },
@@ -117,10 +125,10 @@ export function observe(sdk, request) {
           for (const direction of ["input", "output"]) {
             const value = own(example.get(direction));
             if (value) {
-              const preparation = context.prepare(given.operation, direction);
+              const preparation = prepare(given.operation, direction);
               const outcome =
                 preparation.status === "ready"
-                  ? own(preparation.valueContract).validate(value)
+                  ? own(preparation.contract).validate(value)
                   : preparationOutcome(preparation);
               results.push({ ...outcome, example: name, side: direction });
             }

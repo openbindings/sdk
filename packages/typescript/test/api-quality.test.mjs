@@ -8,6 +8,6 @@ await sdk.initialize(
     new URL("../dist/wasm/openbindings_wasm_bg.wasm", import.meta.url),
   ),
 );
-test("accepted API valueContract: tagged states, exact/ordinary input, failure cleanup and shared realm", async () => {
+test("accepted API value contracts: tagged states, exact/ordinary input, failure cleanup and shared realm", async () => {
   await apiQualityCases(sdk, http);
 });

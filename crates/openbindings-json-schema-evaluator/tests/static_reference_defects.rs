@@ -1,7 +1,7 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use serde_json::{Value, json};
-use std::sync::{Arc, atomic::AtomicBool};
+use std::sync::atomic::AtomicBool;
 
 fn observe(case: &Value) -> Value {
     let document = case.get("document").cloned().unwrap_or_else(|| {
@@ -21,18 +21,16 @@ fn observe(case: &Value) -> Value {
     .unwrap();
     let limits: Limits =
         serde_json::from_value(case.get("limits").cloned().unwrap_or(json!({}))).unwrap();
-    let contracts =
-        proof.value_contracts(Arc::new(DefaultEvaluator::with_limits(limits)), supplied);
-    let (stage, result) = match contracts.prepare("op", Direction::Input) {
-        ValueContractPreparation::Ready(contract) => (
-            "ready",
-            contract.validate(&JsonValue::parse(case["value"].to_string()).unwrap()),
-        ),
-        ValueContractPreparation::NoVerdict { detail } => {
-            ("preparation", ValueOutcome::NoVerdict { detail })
-        }
-        other => panic!("{other:?}"),
-    };
+    let operation = proof.resolve_operation("op").expect("declared operation");
+    let contract = operation.input().expect("declared input");
+    let (stage, result) =
+        match contract.prepare_with(&DefaultEvaluator::with_limits(limits), &supplied) {
+            Ok(contract) => (
+                "ready",
+                contract.validate(&JsonValue::parse(case["value"].to_string()).unwrap()),
+            ),
+            Err(detail) => ("preparation", ValueOutcome::NoVerdict { detail }),
+        };
     match result {
         ValueOutcome::Satisfies => json!({"stage":stage,"outcome":"S"}),
         ValueOutcome::Fails { .. } => json!({"stage":stage,"outcome":"F"}),
@@ -80,16 +78,15 @@ fn matrix_and_concrete_reference_completions() {
 fn semantic_preparation_and_validation_honor_cancellation() {
     let parsed = Document::parse(r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$id":"https://controls.test/root","$ref":"#missing"}}}}"##).unwrap();
     let validation = parsed.validate().unwrap();
-    let contracts = validation
-        .conformant()
-        .unwrap()
-        .value_contracts(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
+    let proof = validation.conformant().unwrap();
+    let operation = proof.resolve_operation("op").unwrap();
+    let unprepared = operation.input().unwrap();
+    let evaluator = DefaultEvaluator::new();
     let cancelled = AtomicBool::new(true);
     assert!(
-        matches!(contracts.prepare_with_control("op", Direction::Input, &cancelled), ValueContractPreparation::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled)
+        matches!(unprepared.prepare_with_control(&evaluator, &ResourceSet::default(), &cancelled), Err(detail) if detail.reason == NoVerdictReason::Cancelled)
     );
-    let ValueContractPreparation::Ready(contract) = contracts.prepare("op", Direction::Input)
-    else {
+    let Ok(contract) = unprepared.prepare(&evaluator) else {
         panic!("prepared")
     };
     assert!(
