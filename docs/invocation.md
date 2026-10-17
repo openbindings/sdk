@@ -97,6 +97,11 @@ core `ValueOutcome`, including diagnostic completeness. The evidence is never
 portable error data. Debug redacts it; custom evaluator messages and locations
 require an application disclosure policy. Diagnostic limits come from the chosen
 evaluator, independently of invocation's portable-error byte limit.
+By default the gate runs the cheap check, so a failed value's outcome carries the
+verdict without problems. `with_validation_detail(Detail::Explain)` explains each
+rejected value before withholding it, so the evidence carries the evaluator's
+problems. Explaining costs more than the verdict and can disclose schema facts:
+ask for it where your disclosure policy allows, for values you trust.
 
 Carrier caches have slots only for declared source/binding keys; repeated unknown
 requests cannot grow them. Used carriers retain exact content and are decoded

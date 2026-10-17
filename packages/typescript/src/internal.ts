@@ -1806,6 +1806,11 @@ function prepareOptions(options: PrepareOptions): {
       "Preparation options must be an object.",
     );
   const { resources, limits, ...work } = options;
+  if (Object.prototype.hasOwnProperty.call(work, "diagnostics"))
+    throw new SdkError(
+      "invalid-work-options",
+      "The diagnostics option was removed: call explain(value) on the prepared contract to learn why a value fails.",
+    );
   return { resources, limits, signal: workSignal(work) };
 }
 function freezeCandidates(candidates: readonly string[]): void {

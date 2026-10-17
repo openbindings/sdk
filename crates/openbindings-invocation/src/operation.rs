@@ -12,8 +12,8 @@ use crate::{
     value::source_from_json,
 };
 use openbindings::{
-    Conformant, ConformantBindingView, ConformantOperationView, Document, JsonKind, JsonValue,
-    NoVerdict, NoVerdictReason, PreparedContract, ResourceSet, SchemaEvaluator, Source,
+    Conformant, ConformantBindingView, ConformantOperationView, Detail, Document, JsonKind,
+    JsonValue, NoVerdict, NoVerdictReason, PreparedContract, ResourceSet, SchemaEvaluator, Source,
     ValueContract, ValueOutcome,
 };
 use std::{
@@ -194,6 +194,7 @@ pub struct Invoker<P> {
     document: Conformant<Document>,
     binding: binding::Invoker<P>,
     evaluation: Option<Evaluation>,
+    validation_detail: Detail,
     sources: CarrierCache<Source>,
     bindings: CarrierCache<BindingValue>,
 }
@@ -221,6 +222,7 @@ impl<P: BindingInvoker> Invoker<P> {
             document,
             binding: binding::Invoker::new(provider),
             evaluation: None,
+            validation_detail: Detail::Outcome,
             sources: OnceLock::new(),
             bindings: OnceLock::new(),
         }
@@ -238,6 +240,18 @@ impl<P: BindingInvoker> Invoker<P> {
             evaluator,
             resources,
         });
+        self
+    }
+    /// Choose how much failure detail validation evidence carries; the default
+    /// is [`Detail::Outcome`]. Values are always withheld on the verdict alone.
+    /// With [`Detail::Explain`], a rejected value is explained before it is
+    /// withheld, so [`ValidationFailure::outcome`] carries the evaluator's
+    /// problems. Explanations cost more than the verdict, their cost is bounded
+    /// by the evaluator, and their schema facts can be sensitive: ask for them
+    /// where your disclosure policy allows, for values you trust.
+    #[must_use = "use the returned value to retain this configuration"]
+    pub fn with_validation_detail(mut self, detail: Detail) -> Self {
+        self.validation_detail = detail;
         self
     }
     /// Set the same finite handoff policy used by binding invocation.
@@ -486,6 +500,7 @@ impl<P: BindingInvoker> Invoker<P> {
     ) -> Option<Gate> {
         direction.contract(operation).map(|_| Gate {
             evaluation: self.evaluation.clone(),
+            detail: self.validation_detail,
             operation: operation.clone(),
             direction,
             prepared: prepared.cloned().map(Ok),
@@ -705,9 +720,8 @@ pub enum ValidationStage {
 /// Debug intentionally omits that evidence. Retaining this record retains its
 /// diagnostic storage, not a value, provider, document, or prepared value contract.
 ///
-/// The invoker withholds values with the cheap check, so an evaluation failure
-/// carries the evaluator's verdict without problems. To learn why a value
-/// fails, explain it with a contract prepared from the same operation.
+/// An evaluation failure carries the evaluator's verdict without problems unless
+/// the invoker asks for explanations with [`Invoker::with_validation_detail`].
 pub struct ValidationFailure {
     direction: Direction,
     stage: ValidationStage,
@@ -737,6 +751,7 @@ impl fmt::Debug for ValidationFailure {
 }
 pub(crate) struct Gate {
     evaluation: Option<Evaluation>,
+    detail: Detail,
     operation: ConformantOperationView,
     direction: Direction,
     prepared: Option<Result<PreparedContract, NoVerdict>>,
@@ -772,6 +787,10 @@ impl Gate {
             }
         });
         let (stage, outcome) = match prepared {
+            Ok(contract) if self.detail == Detail::Explain => (
+                ValidationStage::Evaluation,
+                contract.explain_with_control(value, local),
+            ),
             Ok(contract) => (
                 ValidationStage::Evaluation,
                 contract.validate_with_control(value, local),

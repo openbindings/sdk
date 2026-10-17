@@ -5,7 +5,10 @@ use openbindings::*;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::OnceLock,
+    sync::{
+        OnceLock,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 #[derive(Clone, Deserialize)]
@@ -343,6 +346,8 @@ impl Report {
 /// must keep preparations independent, preserve borrowed input snapshots, and
 /// return honest unsupported/limit outcomes. Both calls must reach the same
 /// verdict; a cheap check reports no problems and never claims completeness.
+/// Every failing value is also explained under cancellation after successively
+/// more control observations (see [`judge_interruptions`]).
 pub fn run(evaluator: &dyn SchemaEvaluator, options: &Options) -> Report {
     let suite = suite();
     let mut report = Report {
@@ -414,6 +419,12 @@ pub fn run(evaluator: &dyn SchemaEvaluator, options: &Options) -> Report {
                 }
             }
             failures.extend(judge_detail(&outcome, &explanation));
+            if let (Ok(contract), ValueOutcome::Fails { .. }) = (&prepared, &explanation) {
+                failures.extend(judge_interruptions(
+                    &explanation,
+                    &interrupted(contract, &value),
+                ));
+            }
             if value.text() != original {
                 failures.push("evaluator changed an immutable input".into());
             }
@@ -494,6 +505,73 @@ pub fn judge_detail(outcome: &ValueOutcome, explanation: &ValueOutcome) -> Vec<S
     {
         failures.push("a cheap check reported failure diagnostics".into());
     }
+    failures
+}
+// A control that cancels after a number of observations, counting them all.
+struct StopAfter(AtomicUsize, usize);
+impl WorkControl for StopAfter {
+    fn is_cancelled(&self) -> bool {
+        self.0.fetch_add(1, Ordering::Relaxed) >= self.1
+    }
+}
+// Explanations of one value cancelled after 0, 1, 2, 3, 5, 8 ... observations,
+// and finally after every observation an uninterrupted explanation makes.
+fn interrupted(contract: &PreparedContract, value: &JsonValue) -> Vec<(usize, ValueOutcome)> {
+    let all = StopAfter(AtomicUsize::new(0), usize::MAX);
+    let _ = contract.explain_with_control(value, &all);
+    let total = all.0.load(Ordering::Relaxed);
+    let (mut previous, mut stop) = (1, 0);
+    let mut stops = Vec::new();
+    while stop < total {
+        stops.push(stop);
+        (previous, stop) = (stop, stop + previous);
+    }
+    stops.push(total);
+    stops
+        .into_iter()
+        .map(|stop| {
+            let control = StopAfter(AtomicUsize::new(0), stop);
+            (stop, contract.explain_with_control(value, &control))
+        })
+        .collect()
+}
+/// Judge explanations of one failing value cancelled after increasing numbers of
+/// control observations, given as `(observations allowed, outcome)` in that
+/// order, the last allowing every observation an uninterrupted explanation
+/// makes. Before its verdict an evaluator may answer no verdict. An interrupted
+/// explanation never reaches another verdict; once one answers fails, every
+/// later one does, since cutting detail work short never undoes an established
+/// failure; and the last reproduces the uninterrupted explanation.
+pub fn judge_interruptions(
+    explanation: &ValueOutcome,
+    interrupted: &[(usize, ValueOutcome)],
+) -> Vec<String> {
+    let mut failures = Vec::new();
+    let mut established = false;
+    for (_, outcome) in interrupted {
+        match outcome {
+            ValueOutcome::Fails { .. } => established = true,
+            ValueOutcome::NoVerdict { .. } if !established => {}
+            ValueOutcome::NoVerdict { .. } => failures.push(
+                "an interrupted explanation turned an established failure into no verdict"
+                    .to_owned(),
+            ),
+            _ => failures.push("an interrupted explanation reached another verdict".to_owned()),
+        }
+    }
+    // Outcomes compare by their serialized form, which carries every field.
+    let same = |a: &ValueOutcome, b: &ValueOutcome| {
+        serde_json::to_value(a)
+            .ok()
+            .is_some_and(|a| serde_json::to_value(b).ok() == Some(a))
+    };
+    if interrupted
+        .last()
+        .is_some_and(|(_, last)| !same(last, explanation))
+    {
+        failures.push("an explanation allowed every observation differs from the first".into());
+    }
+    failures.dedup();
     failures
 }
 /// Judge one observation independently. Useful for host harnesses and controls.

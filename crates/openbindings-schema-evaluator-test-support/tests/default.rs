@@ -149,6 +149,8 @@ enum Fault {
     DetailedCheck,
     // The explanation reaches another verdict than the cheap check.
     DisagreeingExplanation,
+    // An interrupted explanation answers satisfies instead of no verdict.
+    InterruptedSatisfies,
 }
 struct FaultyAdapter(Fault);
 struct FaultyContract(Arc<dyn PreparedSchema>, Fault);
@@ -182,6 +184,15 @@ impl PreparedSchema for FaultyContract {
                 _ => ValueOutcome::Satisfies,
             },
             Fault::DisagreeingExplanation => outcome,
+            Fault::InterruptedSatisfies if detail == Detail::Explain => match outcome {
+                ValueOutcome::NoVerdict { detail }
+                    if detail.reason == NoVerdictReason::Cancelled =>
+                {
+                    ValueOutcome::Satisfies
+                }
+                other => other,
+            },
+            Fault::InterruptedSatisfies => outcome,
             Fault::EmptyMismatch => ValueOutcome::Fails {
                 message: "value does not satisfy the contract".into(),
                 problems: vec![],
@@ -231,6 +242,7 @@ fn real_runner_rejects_malformed_outcomes_fabricated_sources_and_broad_refusals(
         Fault::FalseCancellation,
         Fault::DetailedCheck,
         Fault::DisagreeingExplanation,
+        Fault::InterruptedSatisfies,
     ] {
         let report = run(
             &FaultyAdapter(fault),

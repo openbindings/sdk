@@ -861,14 +861,6 @@ pub fn live_arenas() -> usize {
     crate::raw::live_arenas()
 }
 
-/// Share the complete source text of a value that spans its whole arena, without
-/// copying. A caller can keep this text after the arena is released and read it
-/// with [`crate::text::TextValue`]. `None` for a subtree of a larger source.
-pub fn whole_source(value: &crate::JsonValue) -> Option<std::sync::Arc<str>> {
-    let source = value.owner.shared_source();
-    (value.owner.nodes[value.id].span == (0..source.len())).then(|| source.clone())
-}
-
 /// Borrow a token's byte range without constructing its pointer or line coordinates.
 pub fn byte_range(value: crate::JsonRef<'_>) -> std::ops::Range<usize> {
     value.owner.nodes[value.id].span.clone()

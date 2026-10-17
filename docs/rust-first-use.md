@@ -156,7 +156,8 @@ share that index. Evaluators that request the core projection reuse one resoluti
 space per live document revision and set, including when preparations alternate
 between sets. The space without supplied resources stays with the revision; a
 space with a set stays with that set and is released when the set or the revision
-is dropped. A prepared contract retains only its own document and resources.
+is dropped. A prepared contract retains at most its own document and resources,
+and only when its evaluator keeps them; the default evaluator's keeps neither.
 
 `prepare_with_control`, `validate_with_control` and `explain_with_control` accept
 `WorkControl`, including

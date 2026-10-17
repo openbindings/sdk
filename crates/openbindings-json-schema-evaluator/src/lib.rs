@@ -237,7 +237,8 @@ impl DefaultEvaluator {
         // const/enum subviews can still retain projection arenas.
         let explanation = explains
             .then(|| details::Explanation::new(&program, control))
-            .transpose()?;
+            .transpose()?
+            .flatten();
         program.resources = Vec::new();
         let program = explanation
             .as_ref()

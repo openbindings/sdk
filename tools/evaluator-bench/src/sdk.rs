@@ -3,7 +3,7 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 pub const ROOT: &str = "https://benchmark.invalid/root";
 #[derive(Clone, Default, Deserialize)]
@@ -13,14 +13,41 @@ pub struct Limits(openbindings_json_schema_evaluator::Limits);
 pub struct Context {
     document: Conformant<Document>,
     resources: ResourceSet,
-    evaluator: DefaultEvaluator,
-    upstream: bool,
+    evaluator: Evaluator,
 }
-// A request for upstream diagnostics asks every check of this contract to explain.
-pub struct Prepared {
-    contract: Result<PreparedContract, NoVerdict>,
-    explain: bool,
+// A request for upstream diagnostics asks every check of the contract to
+// explain: its evaluator answers each validation as an explanation.
+enum Evaluator {
+    Default(DefaultEvaluator),
+    Explaining(Explaining),
 }
+impl Evaluator {
+    #[inline(always)]
+    fn get(&self) -> &dyn SchemaEvaluator {
+        match self {
+            Self::Default(evaluator) => evaluator,
+            Self::Explaining(evaluator) => evaluator,
+        }
+    }
+}
+struct Explaining(DefaultEvaluator);
+struct Explained(Arc<dyn PreparedSchema>);
+impl SchemaEvaluator for Explaining {
+    fn prepare(
+        &self,
+        request: &SchemaRequest,
+        control: &dyn WorkControl,
+    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+        Ok(Arc::new(Explained(self.0.prepare(request, control)?)))
+    }
+}
+impl PreparedSchema for Explained {
+    fn validate(&self, value: &JsonValue, _: Detail, control: &dyn WorkControl) -> ValueOutcome {
+        self.0.validate(value, Detail::Explain, control)
+    }
+}
+#[repr(transparent)]
+pub struct Prepared(Result<PreparedContract, NoVerdict>);
 #[repr(transparent)]
 pub struct ParsedValue(JsonValue);
 #[repr(transparent)]
@@ -52,11 +79,15 @@ pub fn context(
         uri: ROOT.into(),
         document: JsonValue::parse(schema).unwrap(),
     });
+    let evaluator = DefaultEvaluator::with_limits(limits.0.clone());
     Context {
         document: validation.conformant().unwrap(),
         resources: ResourceSet::new(resources).unwrap(),
-        evaluator: DefaultEvaluator::with_limits(limits.0.clone()),
-        upstream,
+        evaluator: if upstream {
+            Evaluator::Explaining(Explaining(evaluator))
+        } else {
+            Evaluator::Default(evaluator)
+        },
     }
 }
 impl Context {
@@ -64,37 +95,33 @@ impl Context {
     #[inline(always)]
     pub fn prepare_input(&self) -> Prepared {
         let operation = self.document.resolve_operation("op").unwrap();
-        Prepared {
-            contract: operation
+        Prepared(
+            operation
                 .input()
                 .unwrap()
-                .prepare_with(&self.evaluator, &self.resources),
-            explain: self.upstream,
-        }
+                .prepare_with(self.evaluator.get(), &self.resources),
+        )
     }
 }
 impl Prepared {
     #[inline(always)]
     pub fn is_ready(&self) -> bool {
-        self.contract.is_ok()
+        self.0.is_ok()
     }
     // This SDK chooses detail per call.
     #[inline(always)]
     pub fn explain(&self, value: &ParsedValue, cancelled: bool) -> Outcome {
-        match &self.contract {
-            Ok(contract) => Outcome(contract.explain_with_control(
-                &value.0,
-                &std::sync::atomic::AtomicBool::new(cancelled),
-            )),
+        match &self.0 {
+            Ok(contract) => Outcome(
+                contract
+                    .explain_with_control(&value.0, &std::sync::atomic::AtomicBool::new(cancelled)),
+            ),
             Err(detail) => panic!("fixture did not prepare: {detail:?}"),
         }
     }
     #[inline(always)]
     pub fn validate(&self, value: &ParsedValue, cancelled: bool) -> Outcome {
-        if self.explain {
-            return self.explain(value, cancelled);
-        }
-        match &self.contract {
+        match &self.0 {
             Ok(contract) => {
                 Outcome(contract.validate_with_control(
                     &value.0,

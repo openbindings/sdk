@@ -332,9 +332,6 @@ impl Arena {
     pub fn source(&self) -> &str {
         &self.source
     }
-    pub(crate) fn shared_source(&self) -> &Arc<str> {
-        &self.source
-    }
     pub fn raw(&self, id: Id) -> &str {
         &self.source[self.nodes[id].span.clone()]
     }

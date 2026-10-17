@@ -194,8 +194,9 @@ export function diagnosticDetailsCases(sdk) {
       error = e;
     }
     check(
-      error?.code === "invalid-work-options",
-      "removed disclosure option rejected",
+      error?.code === "invalid-work-options" &&
+        /explain\(value\)/.test(error.message),
+      "removed disclosure option rejected, naming explain",
     );
   } finally {
     probe.value.dispose();

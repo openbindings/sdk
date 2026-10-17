@@ -243,6 +243,18 @@ async fn manual_alias_ordered_selection_and_invalid_suffix_are_explicit() {
 
 #[tokio::test]
 async fn schema_rejection_withholds_values_and_retains_only_local_evidence() {
+    for explain in [false, true] {
+        rejection_withholds_values(explain).await;
+    }
+}
+// By default the evidence is the cheap check's verdict; an invoker that asks for
+// explanations keeps the evaluator's problems.
+async fn rejection_withholds_values(explain: bool) {
+    let detail = if explain {
+        openbindings::Detail::Explain
+    } else {
+        openbindings::Detail::Outcome
+    };
     for (operation, direction, stage, code, effects) in [
         (
             r#"{"input":false}"#,
@@ -271,7 +283,8 @@ async fn schema_rejection_withholds_values_and_retains_only_local_evidence() {
             document(operation, r#"{"units":[{"id":"manual"}]}"#),
             &provider,
         )
-        .with_evaluator(Arc::new(Booleans::default()), ResourceSet::default());
+        .with_evaluator(Arc::new(Booleans::default()), ResourceSet::default())
+        .with_validation_detail(detail);
         let mut call = invoker.invoke(Request::operation("run"));
         let control = call.control();
         assert!(call.validation_failure().is_none());
@@ -283,9 +296,15 @@ async fn schema_rejection_withholds_values_and_retains_only_local_evidence() {
         let evidence = call.validation_failure().unwrap();
         assert_eq!(evidence.direction(), direction);
         assert_eq!(evidence.stage(), stage);
-        // The invoker keeps its own evaluator's outcome for the cheap check
-        // that withheld the value.
         match evidence.outcome() {
+            ValueOutcome::Fails {
+                problems,
+                problems_complete,
+                ..
+            } if explain => {
+                assert!(*problems_complete);
+                assert_eq!(problems[0].code, "consumer.false");
+            }
             ValueOutcome::Fails {
                 message,
                 problems,

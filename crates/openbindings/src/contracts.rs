@@ -643,6 +643,10 @@ pub trait PreparedSchema: Send + Sync {
     /// original sources, in which case `problems_complete` is false. Cutting
     /// detail work short, by cancellation or an exhausted budget, never turns an
     /// established failure into another outcome.
+    ///
+    /// `Detail` may gain variants. Answer one you do not recognize as for
+    /// [`Detail::Outcome`], since a failure without problems and with
+    /// `problems_complete` false is a truthful answer to every request.
     fn validate(
         &self,
         value: &JsonValue,
@@ -853,6 +857,8 @@ impl PreparedContract {
     ) -> ValueOutcome {
         self.check(value, Detail::Explain, control)
     }
+    // Inlined into each public call, so the cheap check costs no extra frame.
+    #[inline]
     fn check(
         &self,
         value: &JsonValue,

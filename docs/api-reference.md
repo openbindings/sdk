@@ -65,8 +65,8 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 | `Document.validate()` | Returns a union whose `conformant` branch owns an independent `ConformantDocument` and a plain report. |
 | `ConformantDocument` | Nominal, privately constructed proof with infallible typed reads. `resolveOperation(name)` returns a `ConformantOperationView` or `undefined`. It has no setters and does not inherit `Document`. |
 | `ConformantOperationView` | `input()` and `output()` return a disposable `ValueContract` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. |
-| `ValueContract` | `schema()` acquires the exact schema; `prepare(options)` takes `resources`, `limits`, `diagnostics` and `signal` and returns `{ status: "ready", contract }` or `{ status: "no-verdict", detail }`. |
-| `PreparedContract` | Disposable prepared contract with `validate(value, options)` and `retain()`, independent of its document, operation, resources and contract owners. |
+| `ValueContract` | `schema()` acquires the exact schema; `prepare(options)` takes `resources`, `limits` and `signal` and returns `{ status: "ready", contract }` or `{ status: "no-verdict", detail }`. |
+| `PreparedContract` | Disposable prepared contract with `validate(value, options)`, the cheap check, `explain(value, options)`, which adds problems to a failure, and `retain()`; independent of its document, operation, resources and contract owners. |
 | `asDocument()`, `intoDocument()` | Acquire an independent editable owner, or consume the proof. Consumption revokes all JavaScript aliases of that proof; retained owners survive. |
 | `toBytes()`, `dispose()`, `Symbol.dispose`, `disposed` | Detached exact current bytes and the existing deterministic lifecycle. |
 
@@ -189,8 +189,8 @@ futures and `Rc` providers are also supported.
 
 Value diagnostics are chosen per call: `validate` is the cheap check and `explain`
 asks for problems. See the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md).
-Custom Rust evaluators receive the call's `Detail` and constructing
-`ValueOutcome::Fails` supply a value-free `message` alongside `problems` and
+Custom Rust evaluators receive the call's `Detail`. An evaluator constructing
+`ValueOutcome::Fails` supplies a value-free `message` alongside `problems` and
 `problems_complete`. Empty incomplete diagnostics are valid established failures.
 Custom evaluators receive a `SchemaRequest` with the original document, supplied
 resources, entry and entry location. `evaluation_program(control)` provides the
@@ -331,8 +331,8 @@ Raw parser admission codes `byte-limit`, `node-limit` and `depth-limit` remain
 ## Conformant document reads
 
 A conformant operation's `input()` and `output()` return its `ValueContract`s;
-`operation::Invoker::new` takes `Conformant<Document>` and `with_evaluator` returns
-`Self`. Preparation still may refuse, and prepared does not mean decidable.
+`operation::Invoker::new` takes `Conformant<Document>`; `with_evaluator` and
+`with_validation_detail(Detail)` return `Self`. Preparation still may refuse, and prepared does not mean decidable.
 `SchemaRequest::document()` exposes the conformant document revision to custom evaluators.
 
 | Rust read | Result and presence |
@@ -463,7 +463,7 @@ consumers retain their existing cancellation outcomes. Invocation retains its
 synchronous relay and isolated local tokens. See the [cancellation definitions](../crates/openbindings-internal-cancellation/src/lib.rs).
 
 
-Document findings are independent of the value diagnostics mode. Locations identify
+Document findings are independent of value explanations. Locations identify
 original document positions or checked schema nodes. Missing detail and truncated
 findings do not change validity or rule evidence. Use rule, code and evidence for
 logic, not message text or finding count.

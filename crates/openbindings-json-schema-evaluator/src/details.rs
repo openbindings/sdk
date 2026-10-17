@@ -9,17 +9,17 @@
 //! references, so following them reaches the same structure as the original
 //! source. Library errors name only compiled keywords, so nothing an
 //! explanation reads is left out. `const` and `enum` values stay in the
-//! projected arenas that compiled literals keep anyway. When the program maps
-//! one prefix origin per definition, the copy also holds each definition's
-//! original location and replaces the program's location map; otherwise (the
-//! paired bounds of a oneOf over missing resources) the contract keeps that map.
+//! projected arenas that compiled literals keep anyway. The copy also holds the
+//! program location map's entries, including the exact and synthetic ones of
+//! paired oneOf bounds, and replaces that map; a map it cannot carry stays with
+//! the contract. Lookup slots, written with the copy, give every offset a lookup
+//! reads, so no explanation parses or indexes text first.
 use jsonschema::error::{TypeKind, ValidationErrorKind as Kind};
 use openbindings::*;
 use openbindings_internal_json::{backend, text::TextValue};
 use openbindings_internal_schema::{
     ChildShape, Program, ProgramOrigin, ProjectedResource, child_shape,
 };
-use std::sync::OnceLock;
 
 fn work(control: &dyn WorkControl, units: usize) -> bool {
     !control.is_cancelled() && jsonschema::ob_work::charge(units.max(1))
@@ -53,58 +53,61 @@ fn utf8(c: char) -> impl Iterator<Item = u8> {
 
 /// What an explaining contract keeps of its compiled program.
 pub(crate) struct Explanation {
-    // `[<common resource URI prefix>,{<resource key>:[<standard>,<source>,{<definition>:[<pointer>,<schema>]}]}]`.
+    // `[<common resource URI prefix>,{<resource key>:[<standard>,<source>,{<definition>:[<origin>,<schema>(,<keyword origins>)]}]}]`.
+    //
     // Each schema holds only compiled keywords. A child position holds
-    // `"<resource key>/<definition name>"`; `const` and `enum` hold
-    // `[<literal arena>,<arena position>]`. `<source>` and `<pointer>` are the
-    // definition's original location (a `null` source is the document), or both
-    // `null` when the program keeps its own location map. `<standard>` says
-    // whether the source is a packaged meta-schema.
+    // `"<resource key>/<definition name>"`. In a resource whose every origin is
+    // a prefix origin in its source, the children of `properties`,
+    // `patternProperties` and `dependentSchemas` are a list: each child's own
+    // pointer ends with its name, so the name is not kept twice. `const` and `enum` hold
+    // `[<literal arena>,<arena position>]`; a `required` array, or a
+    // `dependentRequired` list, whose names the library reports exactly holds
+    // `true`. `<source>` is the resource's original source (`null` for the
+    // document) and `<standard>` says whether it is a packaged meta-schema.
+    //
+    // An origin is the program map's entry for a generated URI: `"<pointer>"` is
+    // a prefix origin in the resource's source, `null` a synthetic one, and
+    // `[<exact>,"<pointer>"(,<source>,<standard>)]` an exact origin or one in
+    // another source. `<keyword origins>` lists `["<keyword path>",<origin>]` for
+    // the map's entries inside a definition, as paired oneOf bounds write. When
+    // the map holds anything else, every origin is `null` and the contract keeps
+    // the program's own map.
     text: Box<str>,
-    // Byte offsets of the prefix's characters and of the resources object.
-    prefix: (u32, u32),
+    // Resource slots sorted by key, then each resource's definition slots in
+    // name order, a closing definition slot, and every definition's keyword
+    // slots: every offset a lookup reads, so it parses no text to find one.
+    slots: Box<[Slot]>,
     resources: u32,
+    // Whether each resource's definitions are in name order, as the map writes
+    // them; the projected order of an unlocated text need not be.
+    ordered: bool,
+    // Byte length of the shared resource URI prefix, which starts at offset 2.
+    prefix: u32,
     // Projected resources whose arenas compiled literals keep anyway.
     literals: Vec<JsonValue>,
-    // Whether the text holds every original location, so the program's own
-    // location map is not needed.
+    // Whether the text holds every origin, so the program's map is not needed.
     locates: bool,
-    // Built by the first explanation that needs it; contracts that never
-    // explain build none.
-    index: OnceLock<Index>,
 }
-// Resources and their definitions sorted by name, with the byte offsets an
-// explanation reads, so a lookup parses no text.
-struct Index {
-    resources: Box<[ResourceEntry]>,
+// A resource, definition or keyword: its name, between its quotes in the text,
+// then for a resource the range of its definition slots; for a definition its
+// schema's offset and its first keyword slot (its last is before the next
+// definition's first); for a keyword its value's offset. A keyword slot with
+// a `NONE` name holds the offset of its definition's keyword origins. The value
+// after a resource's name starts two bytes past its end, and a definition's
+// origin three.
+#[derive(Clone, Copy, Default)]
+struct Slot {
+    name: u32,
+    len: u32,
+    first: u32,
+    last: u32,
 }
-struct ResourceEntry {
-    // The generated key between its quotes.
-    name: (u32, u32),
-    standard: bool,
-    // `None` for the document.
-    source: Option<Raw>,
-    definitions: Box<[DefinitionEntry]>,
-}
-struct DefinitionEntry {
-    name: (u32, u32),
-    // `None` when the program keeps its own location map.
-    pointer: Option<Raw>,
-    schema: u32,
-}
-// A string of the text: the start of its token and its unescaped characters
-// when it has no escapes.
+const NONE: u32 = u32::MAX;
+// A definition found by name, with its resource.
 #[derive(Clone, Copy)]
-struct Raw {
-    token: u32,
-    plain: Option<(u32, u32)>,
-}
-// A compact definition and what its resource says about its original source.
-struct Definition<'a> {
-    standard: bool,
-    source: Option<Raw>,
-    pointer: Option<Raw>,
-    schema: TextValue<'a>,
+struct Definition {
+    resource: Slot,
+    index: u32,
 }
 /// An explained failure's original location and the value there.
 pub(crate) struct Located<'a> {
@@ -121,8 +124,8 @@ pub(crate) enum Node<'a> {
 // Where a walk stands.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Mode {
-    // A schema whose members are compiled keywords.
-    Schema,
+    // A definition's schema, whose members are compiled keywords.
+    Schema(u32),
     // An applicator value holding child positions.
     Children(ChildShape),
     // A child position, referring to the child's own definition.
@@ -133,11 +136,26 @@ enum Mode {
 // A definition's original location: from this text or from the program's map.
 enum Original<'a> {
     Text {
-        source: Option<Raw>,
-        pointer: Raw,
+        source: Option<Token>,
+        pointer: Token,
         standard: bool,
     },
     Map(&'a openbindings_internal_schema::Location),
+}
+// A string token of the text by its byte range, so copying it scans no text.
+#[derive(Clone, Copy)]
+struct Token {
+    start: u32,
+    end: u32,
+}
+impl Token {
+    fn of(value: TextValue<'_>) -> Self {
+        let start = value.start();
+        Self {
+            start: offset(start),
+            end: offset(start + value.text().len()),
+        }
+    }
 }
 
 // How the compact text keeps one compiled keyword.
@@ -146,8 +164,12 @@ enum Kept {
     Children(ChildShape),
     // `const` and `enum`, kept in their literal arenas.
     Literal,
-    // Reference targets and patterns: strings no explanation reads.
+    // Reference targets, patterns and dynamic anchors: strings no explanation
+    // reads.
     Placeholder,
+    // `required` names, and `dependentRequired` lists of names.
+    Names,
+    NameLists,
     Copied,
 }
 // One match for what `operands::role` and [`child_shape`] say together; a unit test
@@ -167,21 +189,35 @@ fn kept(keyword: &str) -> Option<Kept> {
         | "then"
         | "else" => Kept::Children(ChildShape::Single),
         "const" | "enum" => Kept::Literal,
-        "$ref" | "$dynamicRef" | "pattern" => Kept::Placeholder,
+        "$ref" | "$dynamicRef" | "pattern" | "$dynamicAnchor" => Kept::Placeholder,
+        "required" => Kept::Names,
+        "dependentRequired" => Kept::NameLists,
         "minimum" | "maximum" | "exclusiveMinimum" | "exclusiveMaximum" | "multipleOf"
         | "minLength" | "maxLength" | "minItems" | "maxItems" | "minProperties"
-        | "maxProperties" | "minContains" | "maxContains" | "$dynamicAnchor" | "type"
-        | "uniqueItems" | "required" | "dependentRequired" => Kept::Copied,
+        | "maxProperties" | "minContains" | "maxContains" | "type" | "uniqueItems" => Kept::Copied,
         _ => return None,
     })
 }
-// Compact text writer, run once to measure and once to fill an exact buffer.
-struct Writer<'r, W> {
-    out: W,
-    prefix: usize,
-    // Literal arenas named so far; kept only when filling.
-    named: usize,
-    literals: Option<&'r mut Vec<JsonValue>>,
+// Whether the library reports every name of a `required` array exactly as the
+// original spells it. Its view presents names holding the presentation's
+// marker character otherwise (`openbindings_internal_json::backend`), so those
+// arrays keep their names; names with unpaired surrogates are refused before
+// projection, and the meta-schema check makes every element a string. A name
+// can hold the marker only through its UTF-8 lead byte or an escape, so most
+// arrays are decided by two byte searches of their text.
+fn reported_exactly(names: JsonRef<'_>) -> bool {
+    let text = names.text().as_bytes();
+    if !text.contains(&b'\\') && !text.contains(&0xee) {
+        return true;
+    }
+    names.elements().is_some_and(|mut names| {
+        names.all(|name| name.as_str().is_some_and(|name| !name.contains('\u{e000}')))
+    })
+}
+fn standard(uri: &str) -> bool {
+    openbindings_internal_schema::embedded_resources()
+        .iter()
+        .any(|resource| resource.uri == uri)
 }
 // Where the writer puts the text: a length count, then its exact buffer.
 trait Sink {
@@ -189,6 +225,7 @@ trait Sink {
     fn put_char(&mut self, c: char);
     // ASCII bytes, such as digits.
     fn put_ascii(&mut self, bytes: &[u8]);
+    fn len(&self) -> usize;
 }
 struct Count(usize);
 impl Sink for Count {
@@ -200,6 +237,9 @@ impl Sink for Count {
     }
     fn put_ascii(&mut self, bytes: &[u8]) {
         self.0 += bytes.len();
+    }
+    fn len(&self) -> usize {
+        self.0
     }
 }
 impl Sink for String {
@@ -213,6 +253,38 @@ impl Sink for String {
         debug_assert!(bytes.is_ascii());
         self.push_str(std::str::from_utf8(bytes).expect("ASCII"));
     }
+    fn len(&self) -> usize {
+        String::len(self)
+    }
+}
+// Slots the filling pass writes: resources from 0, definitions from
+// `definitions`, keywords from `keywords`.
+struct Slots<'r> {
+    slots: &'r mut [Slot],
+    definitions: usize,
+    keywords: usize,
+}
+// Compact text writer, run once to measure and once to fill an exact buffer and
+// its slots.
+struct Writer<'r, W> {
+    out: W,
+    prefix: usize,
+    // Literal arenas named so far; kept only when filling.
+    named: usize,
+    literals: Option<&'r mut Vec<JsonValue>>,
+    // Resources, definitions and keywords written so far.
+    resources: usize,
+    definitions: usize,
+    keywords: usize,
+    slots: Option<Slots<'r>>,
+    // Whether child maps are written as lists, their names left to each
+    // child's pointer.
+    unnamed: bool,
+}
+// An offset of the text being filled. [`Explanation::new`] keeps no text whose
+// offsets would not fit.
+fn offset(at: usize) -> u32 {
+    u32::try_from(at).expect("measured text fits 32-bit offsets")
 }
 impl<W: Sink> Writer<'_, W> {
     fn put(&mut self, text: &str) {
@@ -265,15 +337,92 @@ impl<W: Sink> Writer<'_, W> {
         }
         self.put_char('"');
     }
+    // A generated name between quotes: where it starts and its length.
+    fn name(&mut self, name: &str) -> (usize, usize) {
+        let start = self.out.len() + 1;
+        self.quoted(name);
+        (start, name.len())
+    }
+    fn resource_slot(&mut self, name: (usize, usize), first_definition: usize) {
+        if let Some(Slots {
+            slots, definitions, ..
+        }) = &mut self.slots
+        {
+            slots[self.resources] = Slot {
+                name: offset(name.0),
+                len: offset(name.1),
+                first: offset(*definitions + first_definition),
+                last: offset(*definitions + self.definitions),
+            };
+        }
+        self.resources += 1;
+    }
+    fn definition_slot(&mut self, name: (usize, usize), schema: usize, first_keyword: usize) {
+        if let Some(Slots {
+            slots,
+            definitions,
+            keywords,
+        }) = &mut self.slots
+        {
+            slots[*definitions + self.definitions] = Slot {
+                name: offset(name.0),
+                len: offset(name.1),
+                first: offset(schema),
+                last: offset(*keywords + first_keyword),
+            };
+        }
+        self.definitions += 1;
+    }
+    // A keyword's name and value offsets, or with no name the offset of its
+    // definition's keyword origins.
+    fn keyword_slot(&mut self, name: Option<(usize, usize)>, value: usize) {
+        if let Some(Slots {
+            slots, keywords, ..
+        }) = &mut self.slots
+        {
+            let (name, len) = name.map_or((NONE, 0), |(name, len)| (offset(name), offset(len)));
+            slots[*keywords + self.keywords] = Slot {
+                name,
+                len,
+                first: offset(value),
+                last: 0,
+            };
+        }
+        self.keywords += 1;
+    }
     fn begin(&mut self, resources: &[ProjectedResource]) {
         let prefix = &resources.first().map_or("", |r| r.uri.as_str())[..self.prefix];
         self.put_char('[');
         self.quoted(prefix);
         self.put(",{");
     }
-    // One prefix origin per generated definition: write each resource's
-    // definitions with their original locations. `Ok(false)` when the map holds
-    // anything else, such as the exact summaries of paired oneOf bounds.
+    // A program map entry, relative to the resource's original source.
+    fn origin(&mut self, origin: &ProgramOrigin, source: Option<&str>) {
+        let (exact, at) = match origin {
+            ProgramOrigin::Synthetic => return self.put("null"),
+            ProgramOrigin::Prefix(at) if at.resource.as_deref() == source => {
+                return self.escaped(&at.pointer);
+            }
+            ProgramOrigin::Prefix(at) => (false, at),
+            ProgramOrigin::Exact(at) => (true, at),
+        };
+        self.put(if exact { "[true," } else { "[false," });
+        self.escaped(&at.pointer);
+        let resource = at.resource.as_deref();
+        if resource != source {
+            match resource {
+                Some(uri) => {
+                    self.put_char(',');
+                    self.escaped(uri);
+                    self.put(if standard(uri) { ",true" } else { ",false" });
+                }
+                None => self.put(",null,false"),
+            }
+        }
+        self.put_char(']');
+    }
+    // Write each resource's definitions with the program map's entries for
+    // them. `Ok(false)` when the map holds an entry this text cannot carry.
     fn located(
         &mut self,
         resources: &[ProjectedResource],
@@ -283,63 +432,80 @@ impl<W: Sink> Writer<'_, W> {
         use std::ops::Bound;
         self.begin(resources);
         let mut written = 0usize;
-        let mut first_resource = true;
         for resource in resources {
             let uri = resource.uri.as_str();
-            // A resource's keys are `<uri>#/$defs/<name>`. Resource URIs hold no
-            // `#`, which sorts below every character another URI could add, so
-            // its keys are adjacent and start the map's range from `<uri>`.
-            let mut keys = locations
-                .range::<str, _>((Bound::Included(uri), Bound::Unbounded))
-                .map_while(|(key, origin)| {
-                    Some((key.strip_prefix(uri)?.strip_prefix('#')?, origin))
-                })
-                .peekable();
-            // A resource no location maps into holds nothing an error can name,
-            // such as the constant resource of a partial bound.
-            let Some(&(_, first)) = keys.peek() else {
-                continue;
+            // A resource's entries are `<uri>` and `<uri>#<fragment>`. Resource
+            // URIs hold no `#`, which sorts below every character another URI
+            // could add, so its entries are adjacent and start the map's range
+            // from `<uri>`.
+            let entries = || {
+                locations
+                    .range::<str, _>((Bound::Included(uri), Bound::Unbounded))
+                    .map_while(move |(key, origin)| match key.strip_prefix(uri)? {
+                        "" => Some((None, origin)),
+                        rest => Some((Some(rest.strip_prefix('#')?), origin)),
+                    })
             };
-            let (ProgramOrigin::Prefix(first), Some(definitions)) =
-                (first, resource.document.get("$defs"))
-            else {
+            let mut keys = entries().peekable();
+            // A URI with no fragment names no library error; its entry, which
+            // sorts first, can only be synthetic glue.
+            if let Some(&(None, origin)) = keys.peek() {
+                if !matches!(origin, ProgramOrigin::Synthetic) {
+                    return Ok(false);
+                }
+                keys.next();
+                written += 1;
+            }
+            // A resource no other entry maps into holds nothing an error can
+            // name, such as the constant resource of a partial bound.
+            if keys.peek().is_none() {
+                continue;
+            }
+            let Some(definitions) = resource.document.get("$defs") else {
                 return Ok(false);
             };
-            let source = first.resource.as_deref();
-            if !first_resource {
+            let source = entries()
+                .find_map(|(_, origin)| match origin {
+                    ProgramOrigin::Prefix(at) | ProgramOrigin::Exact(at) => Some(at),
+                    ProgramOrigin::Synthetic => None,
+                })
+                .and_then(|at| at.resource.as_deref());
+            // A projection places each child at its parent's pointer, keyword and
+            // name, so a child's own prefix origin names it.
+            self.unnamed = entries().all(|(fragment, origin)| {
+                fragment
+                    .and_then(|fragment| fragment.strip_prefix("/$defs/"))
+                    .is_some_and(|name| !name.contains('/'))
+                    && matches!(origin, ProgramOrigin::Prefix(at) if at.resource.as_deref() == source)
+            });
+            if self.resources != 0 {
                 self.put_char(',');
             }
-            first_resource = false;
-            self.quoted(&uri[self.prefix..]);
+            let key = self.name(&uri[self.prefix..]);
             self.put(":[");
-            let standard = source.is_some_and(|uri| {
-                openbindings_internal_schema::embedded_resources()
-                    .iter()
-                    .any(|resource| resource.uri == uri)
+            self.put(if source.is_some_and(standard) {
+                "true,"
+            } else {
+                "false,"
             });
-            self.put(if standard { "true," } else { "false," });
             match source {
                 Some(source) => self.escaped(source),
                 None => self.put("null"),
             }
             self.put(",{");
+            let first_definition = self.definitions;
             // Projections write definitions in the map's order.
             let mut next = 0;
             let mut arena = None;
-            for (position, (fragment, origin)) in keys.enumerate() {
+            while let Some((fragment, origin)) = keys.next() {
                 control.check()?;
-                let ProgramOrigin::Prefix(at) = origin else {
-                    return Ok(false);
-                };
+                // A definition's own entry precedes the entries inside it.
                 let Some(name) = fragment
-                    .strip_prefix("/$defs/")
+                    .and_then(|fragment| fragment.strip_prefix("/$defs/"))
                     .filter(|name| !name.contains('/'))
                 else {
                     return Ok(false);
                 };
-                if at.resource.as_deref() != source {
-                    return Ok(false);
-                }
                 let expected = backend::member_at(definitions, next)
                     .filter(|member| member.name.as_str() == Some(name));
                 let schema = match expected {
@@ -352,49 +518,91 @@ impl<W: Sink> Writer<'_, W> {
                         None => return Ok(false),
                     },
                 };
-                if position != 0 {
+                if self.definitions != first_definition {
                     self.put_char(',');
                 }
-                self.quoted(name);
+                let at = self.name(name);
                 self.put(":[");
-                self.escaped(&at.pointer);
+                self.origin(origin, source);
                 self.put_char(',');
+                let schema_at = self.out.len();
+                let first_keyword = self.keywords;
                 self.schema(resource, schema, &mut arena);
-                self.put_char(']');
                 written += 1;
+                let mut keywords = None;
+                while let Some(&(Some(fragment), origin)) = keys.peek() {
+                    let Some(path) = fragment
+                        .strip_prefix("/$defs/")
+                        .and_then(|path| path.strip_prefix(name))
+                        .and_then(|path| path.strip_prefix('/'))
+                    else {
+                        break;
+                    };
+                    keys.next();
+                    control.check()?;
+                    if keywords.is_none() {
+                        self.put_char(',');
+                        keywords = Some(self.out.len());
+                        self.put_char('[');
+                    } else {
+                        self.put_char(',');
+                    }
+                    self.put_char('[');
+                    self.escaped(path);
+                    self.put_char(',');
+                    self.origin(origin, source);
+                    self.put_char(']');
+                    written += 1;
+                }
+                if let Some(keywords) = keywords {
+                    self.put_char(']');
+                    self.keyword_slot(None, keywords);
+                }
+                self.put_char(']');
+                self.definition_slot(at, schema_at, first_keyword);
             }
             self.put("}]");
+            self.resource_slot(key, first_definition);
         }
         self.put("}]");
-        // Every key names a definition of one program resource.
+        // Every entry belongs to one program resource.
         Ok(written == locations.len())
     }
-    // Every projected definition without original locations, in projected order.
+    // Every projected definition without origins, in projected order.
     fn unlocated(
         &mut self,
         resources: &[ProjectedResource],
         control: &dyn WorkControl,
     ) -> Result<(), NoVerdict> {
         self.begin(resources);
-        for (position, resource) in resources.iter().enumerate() {
-            if position != 0 {
+        self.unnamed = false;
+        for resource in resources {
+            if self.resources != 0 {
                 self.put_char(',');
             }
-            self.quoted(&resource.uri[self.prefix..]);
+            let key = self.name(&resource.uri[self.prefix..]);
             self.put(":[false,null,{");
+            let first_definition = self.definitions;
             let mut arena = None;
             let definitions = resource.document.get("$defs").and_then(|d| d.members());
-            for (i, definition) in definitions.into_iter().flatten().enumerate() {
+            for definition in definitions.into_iter().flatten() {
                 control.check()?;
-                if i != 0 {
+                let Some(name) = definition.name.as_str() else {
+                    continue;
+                };
+                if self.definitions != first_definition {
                     self.put_char(',');
                 }
-                self.put(definition.name.text());
+                let at = self.name(name);
                 self.put(":[null,");
+                let schema_at = self.out.len();
+                let first_keyword = self.keywords;
                 self.schema(resource, definition.value, &mut arena);
                 self.put_char(']');
+                self.definition_slot(at, schema_at, first_keyword);
             }
             self.put("}]");
+            self.resource_slot(key, first_definition);
         }
         self.put("}]");
         Ok(())
@@ -418,9 +626,24 @@ impl<W: Sink> Writer<'_, W> {
                 self.put_char(',');
             }
             first = false;
-            self.put(field.name.text());
+            let keyword = field.name.text();
+            let name = self.out.len() + 1;
+            self.put(keyword);
             self.put_char(':');
+            // Projections write keyword names unescaped.
+            let len = keyword.len().saturating_sub(2);
+            self.keyword_slot(Some((name, len)), self.out.len());
             match kept {
+                Kept::Children(ChildShape::Map) if self.unnamed => {
+                    self.put_char('[');
+                    for (i, child) in field.value.members().into_iter().flatten().enumerate() {
+                        if i != 0 {
+                            self.put_char(',');
+                        }
+                        self.child(child.value);
+                    }
+                    self.put_char(']');
+                }
                 Kept::Children(ChildShape::Map) => {
                     self.put_char('{');
                     for (i, child) in field.value.members().into_iter().flatten().enumerate() {
@@ -464,10 +687,35 @@ impl<W: Sink> Writer<'_, W> {
                     self.put_char(']');
                 }
                 Kept::Placeholder => self.put("\"\""),
+                Kept::Names => self.names(field.value),
+                Kept::NameLists => match field.value.members() {
+                    Some(lists) => {
+                        self.put_char('{');
+                        for (i, list) in lists.enumerate() {
+                            if i != 0 {
+                                self.put_char(',');
+                            }
+                            self.put(list.name.text());
+                            self.put_char(':');
+                            self.names(list.value);
+                        }
+                        self.put_char('}');
+                    }
+                    None => self.put(field.value.text()),
+                },
                 Kept::Copied => self.put(field.value.text()),
             }
         }
         self.put_char('}');
+    }
+    // A `required` array: `true` when the library reports its names exactly,
+    // otherwise its original text.
+    fn names(&mut self, names: JsonRef<'_>) {
+        if reported_exactly(names) {
+            self.put("true");
+        } else {
+            self.put(names.text());
+        }
     }
     // A child position written by the projection as `{"$ref":<address>}`, its
     // only member.
@@ -501,13 +749,37 @@ fn owned(value: TextValue<'_>, extra: usize) -> Option<String> {
     }
     Some(out)
 }
+// Whether a generated suffix (`/a/b`) continues with a keyword path's segments
+// (`a`), ending there or at a `/`.
+fn continues_with(suffix: &str, path: TextValue<'_>) -> Option<usize> {
+    let path = path.string()?;
+    let rest = suffix.strip_prefix('/')?;
+    let matched = match path.as_unescaped() {
+        Some(path) => rest.starts_with(path).then_some(path.len()),
+        None => {
+            let mut chars = rest.chars();
+            let mut len = 0;
+            path.chars()
+                .all(|c| {
+                    len += c.len_utf8();
+                    chars.next() == Some(c)
+                })
+                .then_some(len)
+        }
+    }?;
+    matches!(rest.as_bytes().get(matched), None | Some(b'/')).then_some(1 + matched)
+}
 
 impl Explanation {
     /// Copy what explanations read from a compiled program's projected
-    /// resources, before they are released, with the program's original
-    /// locations when its map holds one prefix origin per definition. The text
-    /// is measured first, so it takes one exact allocation.
-    pub(crate) fn new(program: &Program, control: &dyn WorkControl) -> Result<Self, NoVerdict> {
+    /// resources, before they are released, with the program map's entries when
+    /// the text can carry them all. The text is measured first, so it and its
+    /// lookup slots take one exact allocation each. `None` when the text would
+    /// pass 4 GiB: explanations then report no problems.
+    pub(crate) fn new(
+        program: &Program,
+        control: &dyn WorkControl,
+    ) -> Result<Option<Self>, NoVerdict> {
         let resources = &program.resources;
         let mut prefix = resources.first().map_or(0, |r| r.uri.len());
         for resource in resources {
@@ -530,6 +802,11 @@ impl Explanation {
             prefix,
             named: 0,
             literals: None,
+            resources: 0,
+            definitions: 0,
+            keywords: 0,
+            slots: None,
+            unnamed: false,
         };
         let mut count = writer(Count(0));
         let locates = count.located(resources, &program.locations, control)?;
@@ -538,106 +815,70 @@ impl Explanation {
             count.unlocated(resources, control)?;
         }
         let len = count.out.0;
+        if u32::try_from(len).is_err() {
+            return Ok(None);
+        }
+        let (resource_count, definition_count, keyword_count) =
+            (count.resources, count.definitions, count.keywords);
+        // Definitions close with a slot whose first keyword ends the last one's.
+        let keywords = resource_count + definition_count + 1;
+        let mut slots = vec![Slot::default(); keywords + keyword_count].into_boxed_slice();
+        slots[keywords - 1].last = offset(keywords + keyword_count);
         let mut literals = Vec::with_capacity(count.named);
         let mut fill = Writer {
             out: String::with_capacity(len),
             prefix,
             named: 0,
             literals: Some(&mut literals),
+            resources: 0,
+            definitions: 0,
+            keywords: 0,
+            slots: Some(Slots {
+                slots: &mut slots,
+                definitions: resource_count,
+                keywords,
+            }),
+            unnamed: false,
         };
         if locates {
             fill.located(resources, &program.locations, control)?;
         } else {
             fill.unlocated(resources, control)?;
         }
-        debug_assert_eq!(fill.out.len(), len);
-        // The text starts `["<prefix>",{`.
-        let prefix_end = 2 + prefix;
-        Ok(Self {
-            text: fill.out.into_boxed_str(),
-            prefix: (2, prefix_end as u32),
-            resources: (prefix_end + 2) as u32,
+        debug_assert_eq!(
+            (
+                fill.out.len(),
+                fill.resources,
+                fill.definitions,
+                fill.keywords
+            ),
+            (len, resource_count, definition_count, keyword_count)
+        );
+        let text = fill.out.into_boxed_str();
+        let name = |slot: &Slot| &text[slot.name as usize..(slot.name + slot.len) as usize];
+        let (resource_slots, rest) = slots.split_at_mut(resource_count);
+        let ordered = resource_slots.iter().all(|resource| {
+            rest[resource.first as usize - resource_count..resource.last as usize - resource_count]
+                .windows(2)
+                .all(|pair| name(&pair[0]) < name(&pair[1]))
+        });
+        resource_slots.sort_unstable_by(|a, b| name(a).cmp(name(b)));
+        Ok(Some(Self {
+            text,
+            slots,
+            resources: offset(resource_count),
+            ordered,
+            prefix: offset(prefix),
             literals,
             locates,
-            index: OnceLock::new(),
-        })
+        }))
     }
     /// Whether explanations need the program's own location map.
     pub(crate) fn needs_locations(&self) -> bool {
         !self.locates
     }
-    fn resources(&self) -> TextValue<'_> {
-        TextValue::at(&self.text, self.resources as usize)
-    }
-    fn index(&self) -> &Index {
-        self.index.get_or_init(|| {
-            let name = |member: &openbindings_internal_json::text::TextMember<'_>| {
-                let start = member.name.start() + 1;
-                (start as u32, (start + member.name.text().len() - 2) as u32)
-            };
-            let mut resources: Vec<_> = self
-                .resources()
-                .members()
-                .map(|resource| {
-                    let mut parts = resource.value.elements();
-                    let standard = parts.next().is_some_and(|flag| flag.text() == "true");
-                    let source = parts.next().and_then(|source| self.raw(source));
-                    let mut definitions: Vec<_> = parts
-                        .next()
-                        .into_iter()
-                        .flat_map(TextValue::members)
-                        .map(|definition| {
-                            let mut parts = definition.value.elements();
-                            let pointer = parts.next().and_then(|p| self.raw(p));
-                            let schema = parts.next().map_or(0, |s| s.start() as u32);
-                            DefinitionEntry {
-                                name: name(&definition),
-                                pointer,
-                                schema,
-                            }
-                        })
-                        .collect();
-                    definitions.sort_unstable_by(|a, b| self.slice(a.name).cmp(self.slice(b.name)));
-                    ResourceEntry {
-                        name: name(&resource),
-                        standard,
-                        source,
-                        definitions: definitions.into_boxed_slice(),
-                    }
-                })
-                .collect();
-            resources.sort_unstable_by(|a, b| self.slice(a.name).cmp(self.slice(b.name)));
-            Index {
-                resources: resources.into_boxed_slice(),
-            }
-        })
-    }
-    fn slice(&self, range: (u32, u32)) -> &str {
-        &self.text[range.0 as usize..range.1 as usize]
-    }
-    // Where a string of this text starts, and its characters when unescaped.
-    fn raw(&self, value: TextValue<'_>) -> Option<Raw> {
-        let text = value.string()?;
-        let plain = text.as_unescaped().map(|plain| {
-            let start = value.start() as u32 + 1;
-            (start, start + plain.len() as u32)
-        });
-        Some(Raw {
-            token: value.start() as u32,
-            plain,
-        })
-    }
-    // A new owner of a string of this text, with room for `extra` bytes.
-    fn owned(&self, raw: Raw, extra: usize) -> Option<String> {
-        match raw.plain {
-            Some(plain) => {
-                let plain = self.slice(plain);
-                let mut out = String::with_capacity(plain.len() + extra);
-                out.push_str(plain);
-                Some(out)
-            }
-            None => owned(self.at(raw.token), extra),
-        }
+    fn name(&self, slot: Slot) -> &str {
+        &self.text[slot.name as usize..(slot.name + slot.len) as usize]
     }
     fn at(&self, offset: u32) -> TextValue<'_> {
         TextValue::at(&self.text, offset as usize)
@@ -648,51 +889,160 @@ impl Explanation {
         key: &str,
         name: &str,
         control: &dyn WorkControl,
-    ) -> Result<Option<Definition<'_>>, ()> {
+    ) -> Result<Option<Definition>, ()> {
         if !work(control, key.len().saturating_add(name.len())) {
             return Err(());
         }
-        let index = self.index();
-        let Ok(resource) = index
-            .resources
-            .binary_search_by(|entry| self.slice(entry.name).cmp(key))
-            .map(|i| &index.resources[i])
-        else {
+        let resources = &self.slots[..self.resources as usize];
+        let Ok(found) = resources.binary_search_by(|slot| self.name(*slot).cmp(key)) else {
             return Ok(None);
         };
-        let Ok(definition) = resource
-            .definitions
-            .binary_search_by(|entry| self.slice(entry.name).cmp(name))
-            .map(|i| &resource.definitions[i])
-        else {
-            return Ok(None);
+        let resource = resources[found];
+        let definitions = &self.slots[resource.first as usize..resource.last as usize];
+        let found = if self.ordered {
+            definitions
+                .binary_search_by(|slot| self.name(*slot).cmp(name))
+                .ok()
+        } else {
+            definitions.iter().position(|slot| self.name(*slot) == name)
         };
-        Ok(Some(Definition {
-            standard: resource.standard,
-            source: resource.source,
-            pointer: definition.pointer,
-            schema: self.at(definition.schema),
+        Ok(found.map(|found| Definition {
+            resource,
+            index: resource.first + found as u32,
         }))
+    }
+    // A resource's original source (`None` for the document) and whether it is a
+    // packaged meta-schema, at fixed offsets: its value starts `[true,` or
+    // `[false,` right after its name.
+    fn resource_source(&self, resource: Slot) -> (Option<Token>, bool) {
+        let flag = resource.name + resource.len + 3;
+        let standard = self.text.as_bytes()[flag as usize] == b't';
+        let start = flag + if standard { 5 } else { 6 };
+        if self.text.as_bytes()[start as usize] != b'"' {
+            return (None, standard);
+        }
+        // A source is followed by `,{"` and the name of the resource's first
+        // definition.
+        let token = match resource.first < resource.last {
+            true => Token {
+                start,
+                end: self.slots[resource.first as usize].name - 3,
+            },
+            false => Token::of(self.at(start)),
+        };
+        (Some(token), standard)
+    }
+    // A new owner of a string token's characters with room for `extra` bytes;
+    // one without escapes is copied as it is.
+    fn owned(&self, token: Token, extra: usize) -> Option<String> {
+        debug_assert_eq!(token.end, Token::of(self.at(token.start)).end);
+        let raw = &self.text[token.start as usize..token.end as usize];
+        match raw.strip_prefix('"').and_then(|raw| raw.strip_suffix('"')) {
+            Some(plain) if !plain.as_bytes().contains(&b'\\') => {
+                let mut out = String::with_capacity(plain.len() + extra);
+                out.push_str(plain);
+                Some(out)
+            }
+            _ => owned(self.at(token.start), extra),
+        }
+    }
+    fn schema(&self, definition: Definition) -> TextValue<'_> {
+        self.at(self.slots[definition.index as usize].first)
+    }
+    // A definition's keyword slots, the last of which may hold its keyword origins.
+    fn keywords(&self, index: u32) -> &[Slot] {
+        let index = index as usize;
+        &self.slots[self.slots[index].last as usize..self.slots[index + 1].last as usize]
+    }
+    // A compiled keyword of a definition, by pointer token.
+    fn keyword<'a>(
+        &'a self,
+        index: u32,
+        token: &str,
+        control: &dyn WorkControl,
+    ) -> Result<Option<(&'a str, TextValue<'a>)>, ()> {
+        // A definition has at most one slot per compiled keyword, so the scan
+        // is charged once, for every name it compared.
+        let mut compared = 0usize;
+        let mut found = None;
+        for slot in self.keywords(index) {
+            if slot.name == NONE {
+                continue;
+            }
+            let name = self.name(*slot);
+            compared = compared
+                .saturating_add(name.len())
+                .saturating_add(token.len());
+            if segment_eq(name.bytes(), token) {
+                found = Some((name, self.at(slot.first)));
+                break;
+            }
+        }
+        if !work(control, compared) {
+            return Err(());
+        }
+        Ok(found)
     }
     // The resource key of a generated base URI.
     fn key<'a>(&self, base: &'a str) -> Option<&'a str> {
-        base.strip_prefix(&self.text[self.prefix.0 as usize..self.prefix.1 as usize])
+        base.strip_prefix(&self.text[2..2 + self.prefix as usize])
     }
-    // The schema a child position refers to.
-    fn follow<'a>(
-        &'a self,
-        child: TextValue<'a>,
+    // The definition a child position refers to.
+    fn follow(
+        &self,
+        child: TextValue<'_>,
         control: &dyn WorkControl,
-    ) -> Result<Option<TextValue<'a>>, ()> {
+    ) -> Result<Option<Definition>, ()> {
         let Some(reference) = child.string().and_then(|s| s.as_unescaped()) else {
             return Ok(None);
         };
         let Some((key, name)) = reference.rsplit_once('/') else {
             return Ok(None);
         };
-        Ok(self
-            .definition(key, name, control)?
-            .map(|definition| definition.schema))
+        self.definition(key, name, control)
+    }
+    // The first child of a list of named children whose own pointer ends with
+    // the name a pointer token selects.
+    fn named_child<'a>(
+        &'a self,
+        children: TextValue<'a>,
+        token: &str,
+        control: &dyn WorkControl,
+    ) -> Result<Option<TextValue<'a>>, ()> {
+        for child in children.elements() {
+            let Some(definition) = self.follow(child, control)? else {
+                continue;
+            };
+            let slot = self.slots[definition.index as usize];
+            let Some(pointer) = self.at(slot.name + slot.len + 3).string() else {
+                continue;
+            };
+            if !work(control, pointer.len().saturating_add(token.len())) {
+                return Err(());
+            }
+            let pointer: std::borrow::Cow<'_, str> = match pointer.as_unescaped() {
+                Some(pointer) => pointer.into(),
+                None => pointer.chars().collect::<String>().into(),
+            };
+            let Some((_, segment)) = pointer.rsplit_once('/') else {
+                continue;
+            };
+            // Decode the segment's `~1` and `~0` escapes as the token's are.
+            let mut name = segment.bytes().peekable();
+            let decoded = std::iter::from_fn(|| match name.next()? {
+                b'~' => match name.next() {
+                    Some(b'1') => Some(b'/'),
+                    Some(b'0') => Some(b'~'),
+                    // A canonical pointer escapes nothing else.
+                    _ => Some(0),
+                },
+                byte => Some(byte),
+            });
+            if segment_eq(decoded, token) {
+                return Ok(Some(child));
+            }
+        }
+        Ok(None)
     }
     // A `const` or `enum` value kept in its projected arena.
     fn literal(&self, reference: TextValue<'_>) -> Option<JsonRef<'_>> {
@@ -711,30 +1061,42 @@ impl Explanation {
     ) -> Result<Option<(Node<'a>, Mode)>, ()> {
         let (node, mode) = match (node, mode) {
             (Node::Text(child), Mode::Child) => match self.follow(child, control)? {
-                Some(schema) => (Node::Text(schema), Mode::Schema),
+                Some(definition) => (
+                    Node::Text(self.schema(definition)),
+                    Mode::Schema(definition.index),
+                ),
                 None => return Ok(None),
             },
             other => other,
         };
+        if let Mode::Schema(index) = mode {
+            let Some((name, value)) = self.keyword(index, token, control)? else {
+                return Ok(None);
+            };
+            return Ok(Some(match child_shape(name) {
+                Some(ChildShape::Single) => (Node::Text(value), Mode::Child),
+                Some(shape) => (Node::Text(value), Mode::Children(shape)),
+                // `const` and `enum` values live in their literal arenas.
+                None if matches!(name, "const" | "enum") => match self.literal(value) {
+                    Some(literal) => (Node::Json(literal), Mode::Copied),
+                    None => return Ok(None),
+                },
+                None => (Node::Text(value), Mode::Copied),
+            }));
+        }
+        if let (Mode::Children(ChildShape::Map), Node::Text(children)) = (mode, node)
+            && children.kind() == JsonKind::Array
+        {
+            return Ok(self
+                .named_child(children, token, control)?
+                .map(|child| (Node::Text(child), Mode::Child)));
+        }
         match node.kind() {
             JsonKind::Object => {
-                let Some((value, name)) = member(node, token, control)? else {
+                let Some((value, _)) = member(node, token, control)? else {
                     return Ok(None);
                 };
                 Ok(Some(match mode {
-                    Mode::Schema => match name.and_then(child_shape) {
-                        Some(ChildShape::Single) => (value, Mode::Child),
-                        Some(shape) => (value, Mode::Children(shape)),
-                        // `const` and `enum` values live in their literal arenas.
-                        None if matches!(name, Some("const" | "enum")) => match value {
-                            Node::Text(reference) => match self.literal(reference) {
-                                Some(literal) => (Node::Json(literal), Mode::Copied),
-                                None => return Ok(None),
-                            },
-                            Node::Json(_) => (value, Mode::Copied),
-                        },
-                        None => (value, Mode::Copied),
-                    },
                     Mode::Children(ChildShape::Map) => (value, Mode::Child),
                     _ => (value, Mode::Copied),
                 }))
@@ -746,7 +1108,10 @@ impl Explanation {
                 {
                     return Ok(None);
                 }
-                let Some(value) = token.parse().ok().and_then(|i| node.element(i)) else {
+                let Some(index) = token.parse().ok() else {
+                    return Ok(None);
+                };
+                let Some(value) = node.element(index, control)? else {
                     return Ok(None);
                 };
                 Ok(Some(match mode {
@@ -773,43 +1138,7 @@ impl Explanation {
         control: &dyn WorkControl,
     ) -> Result<Option<Located<'_>>, ()> {
         if self.locates {
-            // Every mapped origin is a definition's prefix: the generated URI
-            // names `<resource>#/$defs/<definition>` and then a suffix.
-            let uri = match uri.split_once('#') {
-                Some((base, fragment)) if fragment.contains('%') => {
-                    let Some(mut decoded) =
-                        openbindings_internal_schema::uri::decode_fragment(fragment)
-                    else {
-                        return Ok(None);
-                    };
-                    decoded.insert(0, '#');
-                    decoded.insert_str(0, base);
-                    std::borrow::Cow::Owned(decoded)
-                }
-                _ => std::borrow::Cow::Borrowed(uri),
-            };
-            let Some((base, fragment)) = uri.split_once('#') else {
-                return Ok(None);
-            };
-            let Some(fragment) = fragment.strip_prefix("/$defs/") else {
-                return Ok(None);
-            };
-            let (name, suffix) = fragment.split_at(fragment.find('/').unwrap_or(fragment.len()));
-            let Some(key) = self.key(base) else {
-                return Ok(None);
-            };
-            let Some(definition) = self.definition(key, name, control)? else {
-                return Ok(None);
-            };
-            let Some(pointer) = definition.pointer else {
-                return Ok(None);
-            };
-            let original = Original::Text {
-                source: definition.source,
-                pointer,
-                standard: definition.standard,
-            };
-            return self.walk(definition.schema, "", suffix, original, control);
+            return self.located(uri, control);
         }
         let Some(Ok(Some(found))) = program.map(|program| program.origin(uri, usize::MAX)) else {
             return Ok(None);
@@ -829,31 +1158,136 @@ impl Explanation {
         }) else {
             return Ok(None);
         };
-        let Some(schema) = self
-            .definition(resource, name, control)?
-            .map(|definition| definition.schema)
-        else {
+        let Some(definition) = self.definition(resource, name, control)? else {
             return Ok(None);
         };
-        self.walk(schema, rest, suffix, Original::Map(at), control)
+        self.walk(definition, rest, suffix, Original::Map(at), control)
+    }
+    // The text's own entry for a generated URI: the longest map entry that
+    // prefixes it, as `Program::origin` finds one.
+    fn located(&self, uri: &str, control: &dyn WorkControl) -> Result<Option<Located<'_>>, ()> {
+        let Some((base, fragment)) = uri.split_once('#') else {
+            return Ok(None);
+        };
+        // Fragments are compared decoded; the base keeps its escapes.
+        let decoded;
+        let fragment = if fragment.contains('%') {
+            let Some(fragment) = openbindings_internal_schema::uri::decode_fragment(fragment)
+            else {
+                return Ok(None);
+            };
+            decoded = fragment;
+            decoded.as_str()
+        } else {
+            fragment
+        };
+        let Some(fragment) = fragment.strip_prefix("/$defs/") else {
+            return Ok(None);
+        };
+        let (name, mut suffix) = fragment.split_at(fragment.find('/').unwrap_or(fragment.len()));
+        let Some(key) = self.key(base) else {
+            return Ok(None);
+        };
+        let Some(definition) = self.definition(key, name, control)? else {
+            return Ok(None);
+        };
+        let slot = self.slots[definition.index as usize];
+        let mut origin = self.at(slot.name + slot.len + 3);
+        // The definition's own origin ends at the comma before its schema.
+        let mut origin_end = Some(slot.first - 1);
+        let mut path = None;
+        let keyword_origins = self
+            .keywords(definition.index)
+            .last()
+            .filter(|keyword| keyword.name == NONE);
+        if let Some(keyword_origins) = keyword_origins {
+            let mut longest = 0;
+            for entry in self.at(keyword_origins.first).elements() {
+                let mut parts = entry.elements();
+                let (Some(keyword), Some(entry_origin)) = (parts.next(), parts.next()) else {
+                    return Ok(None);
+                };
+                if !work(control, keyword.text().len()) {
+                    return Err(());
+                }
+                if let Some(matched) = continues_with(suffix, keyword).filter(|&m| m > longest) {
+                    longest = matched;
+                    path = Some(keyword);
+                    origin = entry_origin;
+                    origin_end = None;
+                }
+            }
+            suffix = &suffix[longest..];
+        }
+        let (exact, pointer, source, standard) = match origin.kind() {
+            JsonKind::String => {
+                let (source, standard) = self.resource_source(definition.resource);
+                let pointer = match origin_end {
+                    Some(end) => Token {
+                        start: offset(origin.start()),
+                        end,
+                    },
+                    None => Token::of(origin),
+                };
+                (false, pointer, source, standard)
+            }
+            JsonKind::Array => {
+                let mut parts = origin.elements();
+                let exact = parts.next().is_some_and(|flag| flag.text() == "true");
+                let Some(pointer) = parts.next().filter(|p| p.kind() == JsonKind::String) else {
+                    return Ok(None);
+                };
+                let (source, standard) = match parts.next() {
+                    Some(source) => (
+                        Some(source)
+                            .filter(|source| source.kind() == JsonKind::String)
+                            .map(Token::of),
+                        parts.next().is_some_and(|flag| flag.text() == "true"),
+                    ),
+                    None => self.resource_source(definition.resource),
+                };
+                (exact, Token::of(pointer), source, standard)
+            }
+            // A synthetic entry maps nothing.
+            _ => return Ok(None),
+        };
+        // An exact entry maps only itself, not what lies below it.
+        if exact && !suffix.is_empty() {
+            return Ok(None);
+        }
+        let path = match path {
+            None => std::borrow::Cow::Borrowed(""),
+            Some(path) => match path.string() {
+                Some(path) => match path.as_unescaped() {
+                    Some(path) => std::borrow::Cow::Borrowed(path),
+                    None => std::borrow::Cow::Owned(path.chars().collect()),
+                },
+                None => return Ok(None),
+            },
+        };
+        let original = Original::Text {
+            source,
+            pointer,
+            standard,
+        };
+        self.walk(definition, &path, suffix, original, control)
     }
     // Walk the keyword path inside a mapped key, which exists, then as much of
     // the generated suffix as exists.
     fn walk<'a>(
         &'a self,
-        schema: TextValue<'a>,
+        definition: Definition,
         key_rest: &str,
         suffix: &str,
         original: Original<'_>,
         control: &dyn WorkControl,
     ) -> Result<Option<Located<'a>>, ()> {
-        let mut node = Node::Text(schema);
-        let mut mode = Mode::Schema;
+        // Every step charges the names it compares with its token, or what it
+        // passes to reach an element.
+        let mut node = Node::Text(self.schema(definition));
+        let mut mode = Mode::Schema(definition.index);
         if !key_rest.is_empty() {
             for token in key_rest.split('/') {
-                if !work(control, token.len()) {
-                    return Err(());
-                }
                 let Some(next) = self.step(node, mode, token, control)? else {
                     return Ok(None);
                 };
@@ -863,9 +1297,6 @@ impl Explanation {
         let mut end = 0;
         if let Some(rest) = suffix.strip_prefix('/') {
             for token in rest.split('/') {
-                if !work(control, token.len()) {
-                    return Err(());
-                }
                 let Some(next) = self.step(node, mode, token, control)? else {
                     break;
                 };
@@ -929,10 +1360,20 @@ impl<'a> Node<'a> {
             Self::Json(value) => value.number_text(),
         }
     }
-    fn element(self, index: usize) -> Option<Self> {
+    // An array element; reaching one in the text scans the elements before it,
+    // which is charged.
+    fn element(self, index: usize, control: &dyn WorkControl) -> Result<Option<Self>, ()> {
         match self {
-            Self::Text(value) => value.elements().nth(index).map(Self::Text),
-            Self::Json(value) => value.element(index).map(Self::Json),
+            Self::Text(value) => {
+                let Some(element) = value.elements().nth(index) else {
+                    return Ok(None);
+                };
+                if !work(control, element.start() - value.start()) {
+                    return Err(());
+                }
+                Ok(Some(Self::Text(element)))
+            }
+            Self::Json(value) => Ok(value.element(index).map(Self::Json)),
         }
     }
     fn elements(self) -> impl Iterator<Item = Self> + 'a {
@@ -961,7 +1402,14 @@ type Member<'a> = Option<(Node<'a>, Option<&'a str>)>;
 fn member<'a>(node: Node<'a>, token: &str, control: &dyn WorkControl) -> Result<Member<'a>, ()> {
     match node {
         Node::Text(node) => {
+            // Passing a member scans its value: charge it when the next begins.
+            let mut passed = None;
             for m in node.members() {
+                if let Some(value_start) = passed.replace(m.value.start())
+                    && !work(control, m.name.start() - value_start)
+                {
+                    return Err(());
+                }
                 let Some(name) = m.name_string() else {
                     continue;
                 };
@@ -1051,28 +1499,36 @@ pub(crate) fn collect(
     let operand = operand?;
     match code {
         "required" => {
-            if operand.kind() != JsonKind::Array {
-                return None;
-            }
             let Kind::Required { property } = kind else {
                 return None;
             };
             // Recover only the missing member established by the library.
             let member = property.as_str()?;
             let cost = "required".len().saturating_add(member.len());
-            let mut verified = false;
-            for required in operand.elements() {
-                let (len, equal) = required.string_eq(member)?;
-                if !work(control, len.saturating_add(member.len())) {
-                    return None;
+            match operand.kind() {
+                // Names the library reports exactly as the original spells them.
+                JsonKind::Boolean => {
+                    if !work(control, cost) {
+                        return None;
+                    }
                 }
-                if equal {
-                    verified = true;
-                    break;
+                JsonKind::Array => {
+                    let mut verified = false;
+                    for required in operand.elements() {
+                        let (len, equal) = required.string_eq(member)?;
+                        if !work(control, len.saturating_add(member.len())) {
+                            return None;
+                        }
+                        if equal {
+                            verified = true;
+                            break;
+                        }
+                    }
+                    if !verified {
+                        return None;
+                    }
                 }
-            }
-            if !verified {
-                return None;
+                _ => return None,
             }
             copied(cost, 0);
             Some(ValueProblemDetails::Required {
@@ -1167,7 +1623,7 @@ mod tests {
         let (space, entry) = crate::planner::space(&request);
         let mut program = space.program(entry, &|| false).unwrap();
         let control = std::sync::atomic::AtomicBool::new(false);
-        let explanation = Explanation::new(&program, &control).unwrap();
+        let explanation = Explanation::new(&program, &control).unwrap().unwrap();
         // A strict projection maps one prefix origin per definition, so the
         // explanation holds every location itself.
         assert!(!explanation.needs_locations());
@@ -1465,18 +1921,20 @@ mod tests {
     #[test]
     fn copied_keyword_values_keep_their_structure_and_annotations_are_not_kept() {
         let (program, projection) = projected(
-            r#"{"dependentRequired":{"a/~b":["x","y"],"0":[]},"description":"not compiled","x-data":{"k":1}}"#,
+            r#"{"type":["object","null"],"dependentRequired":{"a/~b":["x","y"],"0":[]},"description":"not compiled","x-data":{"k":1}}"#,
         );
         let control = std::sync::atomic::AtomicBool::new(false);
         for (suffix, expected) in [
-            ("/dependentRequired/a~1~0b/1", "/dependentRequired/a~1~0b/1"),
-            ("/dependentRequired/a~1~0b/2", "/dependentRequired/a~1~0b"),
+            ("/type/1", "/type/1"),
+            ("/type/2", "/type"),
+            ("/dependentRequired/a~1~0b", "/dependentRequired/a~1~0b"),
+            ("/dependentRequired/c", "/dependentRequired"),
+            // Lists of names the library reports exactly keep no names: a path
+            // into one stops at the list. Library errors name only the keyword.
+            ("/dependentRequired/a~1~0b/1", "/dependentRequired/a~1~0b"),
             ("/dependentRequired/0/0", "/dependentRequired/0"),
             // Percent-encoded generated paths are decoded first.
-            (
-                "/dependentRequired/a~1~0%62/0",
-                "/dependentRequired/a~1~0b/0",
-            ),
+            ("/dependentRequired/a~1~0%62", "/dependentRequired/a~1~0b"),
             // No library error can name a keyword the validator never compiled.
             ("/description", ""),
             ("/x-data/k", ""),
@@ -1493,6 +1951,20 @@ mod tests {
             );
         }
         assert!(!projection.text.contains("not compiled"));
+        assert!(
+            projection
+                .text
+                .contains(r#""dependentRequired":{"a/~b":true,"0":true}"#)
+        );
+    }
+
+    #[test]
+    fn names_the_library_presents_otherwise_are_kept() {
+        // An unpaired surrogate unit and the presentation's marker character.
+        let (_, projection) =
+            projected(r#"{"required":["a","b"],"properties":{"y":{"required":["\ue000"]}}}"#);
+        assert!(projection.text.contains(r#""required":true"#));
+        assert!(projection.text.contains(r#""required":["\ue000"]"#));
     }
 
     #[test]
