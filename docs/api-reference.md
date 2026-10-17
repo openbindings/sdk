@@ -109,7 +109,7 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 | `ConformantOperationView` | `input()` and `output()` return a disposable `ValueContract` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. |
 | `ValueContract` | `schema()` acquires the exact schema; `prepare(options)` takes `resources`, `limits` and `signal` and returns `{ status: "ready", contract }` or `{ status: "no-verdict", detail }`. |
 | `PreparedContract` | Disposable prepared contract with `validate(value, options)`, the cheap check, `explain(value, options)`, which adds problems to a failure, and `retain()`; independent of its document, operation, resources and contract owners. |
-| `ExactJson.locate(pointer)`, `ConformantDocument.locate(at)`, `SchemaResources.locate(at)` | The `SourceLocation` of the node a problem's instance pointer or a `SchemaLocation` names, in the value, the document or the supplied resource with its URI, or `null`. A malformed schema location throws `SdkError` with code `invalid-schema-location`. |
+| `ExactJson.locate(pointer)`, `ConformantDocument.locate(at)`, `SchemaResources.locate(at)` | The `SourceLocation` of the node a problem's instance pointer or a `SchemaLocation` names, in the value, the document or the supplied resource with its URI, or `null`. A malformed pointer throws `SdkError` with code `invalid-pointer`, and a malformed schema location with code `invalid-schema-location`. |
 | `asDocument()`, `intoDocument()` | Acquire an independent editable owner, or consume the proof. Consumption revokes all JavaScript aliases of that proof; retained owners survive. |
 | `toBytes()`, `dispose()`, `Symbol.dispose`, `disposed` | Detached exact current bytes and the existing deterministic lifecycle. |
 
@@ -480,7 +480,10 @@ text, each with one pass over the bytes before the node and nothing retained:
 and `ResourceSet::locate` (TypeScript `ExactJson.locate`,
 `ConformantDocument.locate`, `SchemaResources.locate`). Each returns a
 `SourceLocation` whose pointer is the one asked for, or `None` when it names no
-node. An explanation computes no position. `NoVerdict` and `UndefinedResult`
+node. A resource's coordinates are in its own text: a resource built from a
+subtree of a larger value counts from the subtree's start, while `JsonValue::locate`
+on that subtree counts in the whole text it was parsed from. An explanation
+computes no position. `NoVerdict` and `UndefinedResult`
 carry an optional `SchemaLocation` of the same shape.
 
 `Pointer` holds RFC 6901 segments exactly. `as_str()` returns `None` for a

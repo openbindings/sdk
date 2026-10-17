@@ -295,7 +295,7 @@ impl DefaultEvaluator {
             .then(|| match origins {
                 Origins::Map => details::Explanation::new(&program, control),
                 Origins::Space { space, definitions } => {
-                    details::Explanation::projected(&mut program, space, definitions, control)
+                    details::Explanation::projected(&program, space, definitions, control)
                 }
             })
             .transpose()?

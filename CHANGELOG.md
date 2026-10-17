@@ -30,8 +30,7 @@
   library's first error, redacted, with original schema facts. TypeScript
   `PreparedContract` gains `explain` beside `validate`. A prepared contract keeps a
   compact copy of the keywords it compiled, with their original locations, and no
-  longer keeps its document or supplied resources; it keeps a location map only for
-  schemas beneath a member name holding an unpaired surrogate.
+  longer keeps its document, supplied resources or location map.
 - `operation::Invoker::with_validation_detail(Detail::Explain)` asks the invoker to
   explain a rejected value before withholding it, so `ValidationFailure::outcome()`
   carries the evaluator's problems; by default it carries the verdict only.

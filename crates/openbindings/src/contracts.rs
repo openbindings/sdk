@@ -483,9 +483,12 @@ impl ResourceSet {
     }
     /// Locate a schema location in one of these resources: the node its
     /// pointer names in the resource with its URI, with line and column in
-    /// that resource's text. `None` for a document location, a URI this set
-    /// does not hold (such as a packaged meta-schema's), or a pointer that
-    /// names no node. Positions are computed on this call.
+    /// that resource's own text. A resource built from a subtree of a larger
+    /// value is admitted as its own text, so its coordinates count from the
+    /// subtree's start, where [`JsonValue::locate`] on that subtree counts in
+    /// the whole text it was parsed from. `None` for a document location, a
+    /// URI this set does not hold (such as a packaged meta-schema's), or a
+    /// pointer that names no node. Positions are computed on this call.
     pub fn locate(&self, at: &SchemaLocation) -> Option<SourceLocation> {
         let uri = at.resource.as_deref()?;
         let resources = &self.inner.resources;
