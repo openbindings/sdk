@@ -30,8 +30,9 @@ Continue with [Rust first use](docs/rust-first-use.md) to prepare a value contra
 validate input, edit opaque values and retain prepared work. Rust needs no runtime
 initialization. A conformant operation hands out its contracts:
 `operation.input().ok_or("no input contract")?.prepare(&DefaultEvaluator::new())?`
-uses default budgets, coarse diagnostics and no supplied resources, then
-`contract.validate_json(input)?` checks JSON text or bytes. `prepare_with` borrows a
+uses default budgets and no supplied resources, then
+`contract.validate_json(input)?` checks JSON text or bytes; `contract.explain(&value)`
+reports why an admitted value fails. `prepare_with` borrows a
 configured evaluator and a `ResourceSet`. The [TypeScript guide](packages/typescript/README.md) starts with a
 complete document-to-verdict example and covers initialization and disposal.
 

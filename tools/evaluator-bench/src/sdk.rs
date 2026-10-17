@@ -1,6 +1,6 @@
 //! The only module that knows the SDK API. Keep this interface stable across API changes.
 use openbindings::*;
-use openbindings_json_schema_evaluator::{DefaultEvaluator, Diagnostics};
+use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -14,9 +14,13 @@ pub struct Context {
     document: Conformant<Document>,
     resources: ResourceSet,
     evaluator: DefaultEvaluator,
+    upstream: bool,
 }
-#[repr(transparent)]
-pub struct Prepared(Result<PreparedContract, NoVerdict>);
+// A request for upstream diagnostics asks every check of this contract to explain.
+pub struct Prepared {
+    contract: Result<PreparedContract, NoVerdict>,
+    explain: bool,
+}
 #[repr(transparent)]
 pub struct ParsedValue(JsonValue);
 #[repr(transparent)]
@@ -51,11 +55,8 @@ pub fn context(
     Context {
         document: validation.conformant().unwrap(),
         resources: ResourceSet::new(resources).unwrap(),
-        evaluator: DefaultEvaluator::with_limits(limits.0.clone()).with_diagnostics(if upstream {
-            Diagnostics::Upstream
-        } else {
-            Diagnostics::Coarse
-        }),
+        evaluator: DefaultEvaluator::with_limits(limits.0.clone()),
+        upstream,
     }
 }
 impl Context {
@@ -63,28 +64,37 @@ impl Context {
     #[inline(always)]
     pub fn prepare_input(&self) -> Prepared {
         let operation = self.document.resolve_operation("op").unwrap();
-        Prepared(
-            operation
+        Prepared {
+            contract: operation
                 .input()
                 .unwrap()
                 .prepare_with(&self.evaluator, &self.resources),
-        )
+            explain: self.upstream,
+        }
     }
 }
 impl Prepared {
     #[inline(always)]
     pub fn is_ready(&self) -> bool {
-        self.0.is_ok()
+        self.contract.is_ok()
     }
-    // This SDK selects diagnostics during context construction. A later API
-    // can implement this call per validation without changing the timing loop.
+    // This SDK chooses detail per call.
     #[inline(always)]
     pub fn explain(&self, value: &ParsedValue, cancelled: bool) -> Outcome {
-        self.validate(value, cancelled)
+        match &self.contract {
+            Ok(contract) => Outcome(contract.explain_with_control(
+                &value.0,
+                &std::sync::atomic::AtomicBool::new(cancelled),
+            )),
+            Err(detail) => panic!("fixture did not prepare: {detail:?}"),
+        }
     }
     #[inline(always)]
     pub fn validate(&self, value: &ParsedValue, cancelled: bool) -> Outcome {
-        match &self.0 {
+        if self.explain {
+            return self.explain(value, cancelled);
+        }
+        match &self.contract {
             Ok(contract) => {
                 Outcome(contract.validate_with_control(
                     &value.0,

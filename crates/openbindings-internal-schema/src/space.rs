@@ -58,6 +58,39 @@ impl std::fmt::Debug for Source {
     }
 }
 
+/// How a projected schema keyword holds its subschemas. A projection writes each
+/// child position as `{"$ref": <generated child address>}`; every other keyword
+/// value is copied from the original source unchanged.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChildShape {
+    /// An object whose member values are subschemas.
+    Map,
+    /// An array of subschemas.
+    List,
+    /// One subschema.
+    Single,
+}
+/// The child shape of a 2020-12 applicator keyword, or `None` for keywords whose
+/// values a projection copies unchanged. `then` and `else` are projected only
+/// beside `if`.
+pub fn child_shape(keyword: &str) -> Option<ChildShape> {
+    Some(match keyword {
+        "properties" | "patternProperties" | "dependentSchemas" => ChildShape::Map,
+        "allOf" | "anyOf" | "oneOf" | "prefixItems" => ChildShape::List,
+        "additionalProperties"
+        | "propertyNames"
+        | "unevaluatedProperties"
+        | "items"
+        | "contains"
+        | "unevaluatedItems"
+        | "not"
+        | "if"
+        | "then"
+        | "else" => ChildShape::Single,
+        _ => return None,
+    })
+}
+
 pub struct SchemaSpace {
     pub document: RawDocument,
     pub supplied: Supplied,
@@ -382,9 +415,14 @@ impl SchemaSpace {
         let source = &self.sources[node.source];
         let prefix = pointer(&source.value).unwrap_or_default();
         let full = pointer(&node.value).unwrap_or_default();
+        // A source at its document's root keeps the full pointer without a copy.
+        let pointer = match full.strip_prefix(&prefix) {
+            Some(relative) if !prefix.is_empty() => relative.into(),
+            _ => full,
+        };
         Location {
             resource: source.uri.clone(),
-            pointer: full.strip_prefix(&prefix).unwrap_or(&full).into(),
+            pointer,
         }
     }
     pub fn failure(
@@ -632,8 +670,8 @@ impl SchemaSpace {
                             })?;
                         Ok(reference(target))
                     };
-                    let value = match keyword {
-                        "properties" | "patternProperties" | "dependentSchemas" => {
+                    let value = match child_shape(keyword) {
+                        Some(ChildShape::Map) => {
                             let mut children = BTreeMap::new();
                             for m in member.value.members().expect("checked schema map") {
                                 children.insert(
@@ -643,7 +681,7 @@ impl SchemaSpace {
                             }
                             object(children)
                         }
-                        "allOf" | "anyOf" | "oneOf" | "prefixItems" => {
+                        Some(ChildShape::List) => {
                             let children: Result<Vec<_>, _> = member
                                 .value
                                 .elements()
@@ -652,17 +690,8 @@ impl SchemaSpace {
                                 .collect();
                             format!("[{}]", children?.join(","))
                         }
-                        "additionalProperties"
-                        | "propertyNames"
-                        | "unevaluatedProperties"
-                        | "items"
-                        | "contains"
-                        | "unevaluatedItems"
-                        | "not"
-                        | "if"
-                        | "then"
-                        | "else" => child_reference(member.value)?,
-                        _ => member.value.text().to_owned(),
+                        Some(ChildShape::Single) => child_reference(member.value)?,
+                        None => member.value.text().to_owned(),
                     };
                     fields.insert(keyword.to_owned(), value);
                 }

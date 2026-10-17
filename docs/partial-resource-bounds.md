@@ -221,7 +221,7 @@ its dynamic occurrence in an internal circuit. Some backend structured `evaluate
 APIs drop unary wrapper events; a location map cannot reconstruct an omitted event.
 Known diagnostics map to original constraints, with optional details read only
 from original snapshots. A first error never claims completeness; the flag remains
-false in both diagnostic modes. Coarse mode preserves failure with empty, incomplete diagnostics. Diagnostic exhaustion never erases established failure.
+false for both `validate` and `explain`. The cheap check preserves failure with empty, incomplete diagnostics. Diagnostic exhaustion never erases established failure.
 
 ## Fixed admission and ownership
 

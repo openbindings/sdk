@@ -1,5 +1,5 @@
 use openbindings::*;
-use openbindings_json_schema_evaluator::{DefaultEvaluator, Diagnostics};
+use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::{Value, json};
 use std::sync::{
     Arc, Mutex,
@@ -34,9 +34,7 @@ impl SchemaEvaluator for RetainPrepared {
         request: &SchemaRequest,
         control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-        let schema = DefaultEvaluator::new()
-            .with_diagnostics(Diagnostics::Upstream)
-            .prepare(request, control)?;
+        let schema = DefaultEvaluator::new().prepare(request, control)?;
         *self.0.lock().unwrap() = Some(schema.clone());
         Ok(schema)
     }
@@ -72,11 +70,17 @@ fn assert_interrupted_failure(schema: Value, instance: &str) {
         contract.validate(&value),
         ValueOutcome::Fails { .. }
     ));
+    assert!(matches!(
+        contract.explain(&value),
+        ValueOutcome::Fails { problems, .. } if !problems.is_empty()
+    ));
 
     // At the evaluator seam, the first observation is healthy and every later
     // observation is cancelled. The contract has one additional entry check.
     let outcomes = [
-        prepared.validate(&value, &CancelAfterChecks::new(1)),
+        prepared.validate(&value, Detail::Explain, &CancelAfterChecks::new(1)),
+        contract.explain_with_control(&value, &CancelAfterChecks::new(2)),
+        prepared.validate(&value, Detail::Outcome, &CancelAfterChecks::new(1)),
         contract.validate_with_control(&value, &CancelAfterChecks::new(2)),
     ];
     assert!(
@@ -120,10 +124,13 @@ fn cancellation_before_verdict_still_yields_no_verdict() {
         let (contract, prepared) = prepared(schema);
         let value = JsonValue::null();
         for outcome in [
-            prepared.validate(&value, &AtomicBool::new(true)),
+            prepared.validate(&value, Detail::Outcome, &AtomicBool::new(true)),
+            prepared.validate(&value, Detail::Explain, &AtomicBool::new(true)),
             contract.validate_with_control(&value, &AtomicBool::new(true)),
+            contract.explain_with_control(&value, &AtomicBool::new(true)),
             // Cancellation at the evaluator's entry is still before a verdict.
             contract.validate_with_control(&value, &CancelAfterChecks::new(1)),
+            contract.explain_with_control(&value, &CancelAfterChecks::new(1)),
         ] {
             assert!(
                 matches!(&outcome, ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled),
@@ -144,8 +151,10 @@ fn satisfaction_still_checks_cancellation_after_verdict() {
         let value = JsonValue::parse(instance).unwrap();
         assert!(matches!(contract.validate(&value), ValueOutcome::Satisfies));
         for outcome in [
-            prepared.validate(&value, &CancelAfterChecks::new(1)),
+            prepared.validate(&value, Detail::Outcome, &CancelAfterChecks::new(1)),
+            prepared.validate(&value, Detail::Explain, &CancelAfterChecks::new(1)),
             contract.validate_with_control(&value, &CancelAfterChecks::new(2)),
+            contract.explain_with_control(&value, &CancelAfterChecks::new(2)),
         ] {
             assert!(
                 matches!(&outcome, ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled),

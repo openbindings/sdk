@@ -20,7 +20,7 @@ export const editorDocument = `{
 // Each value check can still return no verdict.
 export class DocumentEditor {
   #document;
-  update(text, value = { id: 7 }, diagnostics = "coarse") {
+  update(text, value = { id: 7 }, explain = false) {
     const parsed = Document.parse(text);
     if (parsed.status !== "parsed") return parsed;
     let proof, operation, contract, input;
@@ -33,7 +33,7 @@ export class DocumentEditor {
       if (!operation) return { status: "operation-missing" };
       contract = operation.input();
       if (!contract) return { status: "no-value-contract" };
-      const setup = contract.prepare({ diagnostics });
+      const setup = contract.prepare();
       if (setup.status !== "ready") {
         if (
           setup.status === "no-verdict" &&
@@ -43,7 +43,8 @@ export class DocumentEditor {
         return setup;
       }
       input = setup.contract;
-      const result = input.validate(value);
+      // Explaining reports why a value fails; the cheap check only whether.
+      const result = explain ? input.explain(value) : input.validate(value);
       const previous = this.#document;
       this.#document = proof; // transfer the conformant owner after successful setup
       proof = undefined;
@@ -191,7 +192,7 @@ export async function mountEditor(root) {
     locate.disabled = true;
     try {
       await view.check(source.value, value.value, {
-        diagnostics: disclosure.checked ? "upstream" : "coarse",
+        explain: disclosure.checked,
       });
     } catch (error) {
       if (!closed && error.name !== "AbortError") {

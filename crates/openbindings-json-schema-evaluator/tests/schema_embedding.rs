@@ -5,11 +5,8 @@ use std::sync::atomic::AtomicBool;
 
 const BASE: &str = "https://probe.invalid/root";
 
-/// Prepare operation `op` input of a conformant document with upstream diagnostics.
-fn prepare_upstream(
-    doc: &Document,
-    resources: &ResourceSet,
-) -> Result<PreparedContract, NoVerdict> {
+/// Prepare operation `op` input of a conformant document with the default evaluator.
+fn prepare_input(doc: &Document, resources: &ResourceSet) -> Result<PreparedContract, NoVerdict> {
     doc.validate()
         .unwrap()
         .conformant()
@@ -18,11 +15,7 @@ fn prepare_upstream(
         .unwrap()
         .input()
         .unwrap()
-        .prepare_with(
-            &DefaultEvaluator::new()
-                .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-            resources,
-        )
+        .prepare_with(&DefaultEvaluator::new(), resources)
 }
 
 fn fixture(schema: &str, reference: &str, supplied: bool) -> (Document, ResourceSet) {
@@ -110,15 +103,15 @@ fn contained_draft_and_supplied_surrogate_collision_preserves_each_original_targ
                     let literal_pointer = literal_pointer
                         .strip_prefix("/schemas/R")
                         .unwrap_or(&literal_pointer);
-                    let Ok(contract) = prepare_upstream(&doc, &resources) else {
+                    let Ok(contract) = prepare_input(&doc, &resources) else {
                         panic!("expected ready")
                     };
                     assert!(matches!(
-                        contract.validate(&JsonValue::parse(r#""s""#).unwrap()),
+                        contract.explain(&JsonValue::parse(r#""s""#).unwrap()),
                         ValueOutcome::Satisfies
                     ));
                     let ValueOutcome::Fails { problems, .. } =
-                        contract.validate(&JsonValue::parse("3").unwrap())
+                        contract.explain(&JsonValue::parse("3").unwrap())
                     else {
                         panic!("expected string mismatch")
                     };
@@ -161,11 +154,11 @@ fn inspection_root_never_masks_missing_references_including_suffix_candidates() 
             let report = doc.references().unwrap();
             assert!(report.complete);
             assert!(report.references.iter().all(|r| matches!(&r.resolution, ReferenceResolution::Unresolved { detail } if detail.reason == ReferenceRefusalReason::ResourceUnavailable && detail.code == "resource-unavailable")), "{report:?}");
-            let Ok(contract) = prepare_upstream(&doc, &ResourceSet::default()) else {
+            let Ok(contract) = prepare_input(&doc, &ResourceSet::default()) else {
                 panic!("expected ready")
             };
             for value in ["null", r#""s""#, "3", "{}", "[]"] {
-                let outcome = contract.validate(&JsonValue::parse(value).unwrap());
+                let outcome = contract.explain(&JsonValue::parse(value).unwrap());
                 if dominant {
                     assert!(matches!(outcome, ValueOutcome::Satisfies));
                 } else {
@@ -203,18 +196,18 @@ fn unused_malformed_reference_sibling_is_isolated_but_malformed_id_stays_refused
                     matches!(&reference.resolution, ReferenceResolution::Unresolved { detail } if detail.code == "resource-inspection")
                 );
             }
-            let prepared = prepare_upstream(&doc, &resources);
+            let prepared = prepare_input(&doc, &resources);
             if bad.contains("$ref") {
                 let contract = match prepared {
                     Ok(contract) => contract,
                     Err(detail) => panic!("{detail:?}"),
                 };
                 assert!(matches!(
-                    contract.validate(&JsonValue::parse(r#""s""#).unwrap()),
+                    contract.explain(&JsonValue::parse(r#""s""#).unwrap()),
                     ValueOutcome::Satisfies
                 ));
                 assert!(matches!(
-                    contract.validate(&JsonValue::parse("1").unwrap()),
+                    contract.explain(&JsonValue::parse("1").unwrap()),
                     ValueOutcome::Fails { .. }
                 ));
             } else {

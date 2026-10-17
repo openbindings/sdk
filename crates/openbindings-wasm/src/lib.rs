@@ -28,21 +28,10 @@ fn interpretation_error(e: InterpretationError) -> JsValue {
         json!({"code":"interpretation", "message":e.to_string(), "interpretation_code":e.code(), "location":e.source_location()}),
     ))
 }
-fn evaluator(limits: &str, diagnostics: &str) -> Result<DefaultEvaluator, JsValue> {
+fn evaluator(limits: &str) -> Result<DefaultEvaluator, JsValue> {
     let limits: Limits =
         serde_json::from_str(limits).map_err(|e| error("invalid-evaluator-limits", e))?;
-    Ok(
-        DefaultEvaluator::with_limits(limits).with_diagnostics(match diagnostics {
-            "coarse" => openbindings_json_schema_evaluator::Diagnostics::Coarse,
-            "upstream" => openbindings_json_schema_evaluator::Diagnostics::Upstream,
-            _ => {
-                return Err(error(
-                    "invalid-diagnostics",
-                    "diagnostics must be coarse or upstream",
-                ));
-            }
-        }),
-    )
+    Ok(DefaultEvaluator::with_limits(limits))
 }
 fn control(cancelled: bool) -> std::sync::atomic::AtomicBool {
     std::sync::atomic::AtomicBool::new(cancelled)
@@ -1248,10 +1237,9 @@ impl WasmValueContract {
         &self,
         resources: &WasmResources,
         limits: &str,
-        diagnostics: &str,
         cancelled: bool,
     ) -> Result<WasmPreparation, JsValue> {
-        let evaluator = evaluator(limits, diagnostics)?;
+        let evaluator = evaluator(limits)?;
         Ok(WasmPreparation {
             preparation: Some(self.contract().prepare_with_control(
                 &evaluator,
@@ -1311,6 +1299,12 @@ impl WasmPrepared {
         encoded(
             self.prepared
                 .validate_with_control(&value.value, &control(cancelled)),
+        )
+    }
+    pub fn explain(&self, value: &WasmJson, cancelled: bool) -> String {
+        encoded(
+            self.prepared
+                .explain_with_control(&value.value, &control(cancelled)),
         )
     }
     pub fn retain(&self) -> WasmPrepared {

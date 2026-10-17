@@ -779,6 +779,18 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
 pub fn node_id(value: &crate::JsonValue) -> usize {
     value.id
 }
+/// The arena position of a borrowed value, for a later [`node`] lookup.
+pub fn ref_id(value: crate::JsonRef<'_>) -> usize {
+    value.id
+}
+/// Borrow the value at an arena position recorded by [`ref_id`] from any value
+/// sharing that arena. `None` when the position does not exist.
+pub fn node(value: &crate::JsonValue, id: usize) -> Option<crate::JsonRef<'_>> {
+    (id < value.owner.nodes.len()).then_some(crate::JsonRef {
+        owner: &value.owner,
+        id,
+    })
+}
 /// Rebase a retained child when it becomes an independent document resource.
 pub fn standalone(value: crate::JsonValue) -> crate::JsonValue {
     if value.id == 0 {
@@ -847,6 +859,14 @@ pub fn depth(value: &crate::JsonValue) -> usize {
 /// Logical live exact-storage owners, including process-lifetime fixed schemas.
 pub fn live_arenas() -> usize {
     crate::raw::live_arenas()
+}
+
+/// Share the complete source text of a value that spans its whole arena, without
+/// copying. A caller can keep this text after the arena is released and read it
+/// with [`crate::text::TextValue`]. `None` for a subtree of a larger source.
+pub fn whole_source(value: &crate::JsonValue) -> Option<std::sync::Arc<str>> {
+    let source = value.owner.shared_source();
+    (value.owner.nodes[value.id].span == (0..source.len())).then(|| source.clone())
 }
 
 /// Borrow a token's byte range without constructing its pointer or line coordinates.

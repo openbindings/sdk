@@ -1475,7 +1475,7 @@ mod resolution_reuse {
         }
     }
     impl PreparedSchema for Accepting {
-        fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
+        fn validate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
             ValueOutcome::Satisfies
         }
     }

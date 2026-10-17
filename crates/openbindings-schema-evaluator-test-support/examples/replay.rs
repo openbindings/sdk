@@ -1,10 +1,11 @@
-//! Emit a complete case-ID receipt through a custom evaluator outside core.
+//! Emit a complete case-ID receipt, checking and explaining every value, through
+//! a custom evaluator outside core.
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use openbindings_schema_evaluator_test_support::{Options, run, suite};
 use std::sync::Arc;
 
-struct OriginalContext(openbindings_json_schema_evaluator::Diagnostics);
+struct OriginalContext;
 impl SchemaEvaluator for OriginalContext {
     fn prepare(
         &self,
@@ -21,18 +22,12 @@ impl SchemaEvaluator for OriginalContext {
                 .semantic_eq(request.entry()),
             Some(true)
         );
-        DefaultEvaluator::new()
-            .with_diagnostics(self.0)
-            .prepare(request, control)
+        DefaultEvaluator::new().prepare(request, control)
     }
 }
 fn main() {
     let report = run(
-        &OriginalContext(if std::env::args().any(|arg| arg == "--upstream") {
-            openbindings_json_schema_evaluator::Diagnostics::Upstream
-        } else {
-            openbindings_json_schema_evaluator::Diagnostics::Coarse
-        }),
+        &OriginalContext,
         &Options::without_unicode_property_matching(),
     );
     let admission: Vec<_> = suite().groups.iter().map(|group| {

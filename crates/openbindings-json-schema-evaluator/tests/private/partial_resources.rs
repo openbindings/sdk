@@ -225,8 +225,7 @@ fn property_pattern_and_prefix_selection_survive_substitution() {
 fn active_unknown_can_fail_known_constraint_and_never_emits_lower_diagnostics() {
     let schema =
         format!(r#"{{"properties":{{"external":{{"$ref":"{U}"}}}},"required":["private-name"]}}"#);
-    let evaluator = DefaultEvaluator::new()
-        .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream);
+    let evaluator = DefaultEvaluator::new();
     let Ok(contract) = prepare(&schema, ResourceSet::default(), &evaluator) else {
         panic!()
     };
@@ -234,7 +233,7 @@ fn active_unknown_can_fail_known_constraint_and_never_emits_lower_diagnostics() 
         problems,
         problems_complete,
         ..
-    } = contract.validate(&json(r#"{"external":7}"#))
+    } = contract.explain(&json(r#"{"external":7}"#))
     else {
         panic!()
     };
@@ -617,8 +616,7 @@ fn original_five_frozen_values_and_empty_resource_sets() {
         ),
     ] {
         let proof = conformant(&Document::parse(source).unwrap());
-        let evaluator = DefaultEvaluator::new()
-            .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream);
+        let evaluator = DefaultEvaluator::new();
         let view = proof
             .resolve_operation(operation)
             .expect("declared operation");
@@ -626,14 +624,14 @@ fn original_five_frozen_values_and_empty_resource_sets() {
         let Ok(partial) = contract.prepare_with(&evaluator, &ResourceSet::default()) else {
             panic!("{operation}")
         };
-        let result = partial.validate(&json(input));
+        let result = partial.explain(&json(input));
         assert_eq!(label(result.clone()), expected);
         let Ok(full) =
             contract.prepare_with(&evaluator, &resources(&[(supplied_uri, supplied_text)]))
         else {
             panic!()
         };
-        let complete_result = full.validate(&json(input));
+        let complete_result = full.explain(&json(input));
         assert_eq!(
             serde_json::to_value(&result).unwrap(),
             serde_json::to_value(&complete_result).unwrap()

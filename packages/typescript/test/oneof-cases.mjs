@@ -13,7 +13,7 @@ export function oneOfCases(sdk, fixtures) {
     field,
     valueText,
     entries = {},
-    options = {},
+    { call = "explain", ...options } = {},
   ) => {
     const parsed = sdk.Document.parse(text);
     check(parsed.status === "parsed", "oneOf document admitted");
@@ -26,7 +26,6 @@ export function oneOfCases(sdk, fixtures) {
     try {
       const prepare = field === "output" ? prepareOutput : prepareInput;
       const setup = prepare(parsed.value, operation, {
-        diagnostics: "upstream",
         ...options,
         resources,
       });
@@ -38,7 +37,7 @@ export function oneOfCases(sdk, fixtures) {
       value = sdk.parseJson(valueText).value;
       parsed.value.dispose();
       resources.dispose();
-      const result = contract.validate(value);
+      const result = contract[call](value);
       if (result.outcome === "no-verdict")
         check(
           ["resource-unavailable", "limit-exceeded"].includes(
@@ -206,13 +205,15 @@ export function oneOfCases(sdk, fixtures) {
     "input",
     "null",
     {},
-    { diagnostics: "coarse" },
+    {
+      call: "validate",
+    },
   );
   check(
     coarse.outcome === "fails" &&
       coarse.problems.length === 0 &&
       !coarse.problemsComplete,
-    "coarse preserves failure",
+    "cheap check preserves failure",
   );
   const exhausted = run(
     doc(schema),

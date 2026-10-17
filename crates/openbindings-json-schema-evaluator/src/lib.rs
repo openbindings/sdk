@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]
-/// Finite default-evaluator budgets. Work counts are implementation units, not milliseconds; exhaustion yields no verdict unless an established failure only loses diagnostic completeness. Zero is literal. These budgets do not bound upstream diagnostic allocation or stack use.
+/// Finite default-evaluator budgets. Work counts are implementation units, not milliseconds; exhaustion yields no verdict unless an established failure only loses diagnostic completeness. Zero is literal. These budgets do not bound the allocation or stack use of an explanation's library diagnostics.
 pub struct Limits {
     /// Evaluation work units per verdict/diagnostic pass; default 2,000,000. A partial verdict shares this allowance across upper and lower evaluations.
     pub evaluation_steps: usize,
@@ -43,23 +43,17 @@ impl Default for Limits {
         }
     }
 }
-/// Diagnostic policy for established value failures. Neither mode changes rule evidence.
-#[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum Diagnostics {
-    /// Fixed value-free message, no problems, and incomplete diagnostics (default).
-    #[default]
-    Coarse,
-    /// The library's first error, with redacted messages and original schema facts.
-    /// Library-bounded: construction can allocate in proportion to inputs and can
-    /// overflow the stack on deep values. The SDK promises no stronger bound.
-    Upstream,
-}
 #[derive(Clone, Debug, Default)]
 /// Optional JSON Schema 2020-12 companion with exact numeric semantics and explicit resources only. It performs no network/filesystem acquisition. Format is annotation, Unicode property-escape matching is not qualified, and potential non-progressing cycles can conservatively refuse. Use a custom [`SchemaEvaluator`] when different qualified capabilities are required.
+///
+/// A cheap check ([`Detail::Outcome`]) decides with the library's validity test
+/// and reports a failure with a fixed message and no problems. An explanation
+/// ([`Detail::Explain`]) reports the library's first error, with redacted
+/// messages and original schema facts. It is library-bounded: building that
+/// error can allocate in proportion to the schema and value and can overflow
+/// the stack on deep values. The SDK promises no stronger bound.
 pub struct DefaultEvaluator {
     limits: Limits,
-    diagnostics: Diagnostics,
 }
 impl DefaultEvaluator {
     /// Construct the companion with [`Limits::default`]; no schemas are compiled or resources acquired yet.
@@ -68,19 +62,7 @@ impl DefaultEvaluator {
     }
     /// Construct the companion with explicit budgets; limits apply during preparation/evaluation, not as wall-clock deadlines.
     pub fn with_limits(limits: Limits) -> Self {
-        Self {
-            limits,
-            diagnostics: Diagnostics::Coarse,
-        }
-    }
-    /// Select value diagnostics; defaults to [`Diagnostics::Coarse`].
-    /// [`Diagnostics::Upstream`] requests the library's first error and retains
-    /// original source snapshots for schema facts, which may contain secrets.
-    /// Its allocations and stack use are library-bounded, not SDK-bounded.
-    #[must_use = "use the returned value to retain this configuration"]
-    pub fn with_diagnostics(mut self, diagnostics: Diagnostics) -> Self {
-        self.diagnostics = diagnostics;
-        self
+        Self { limits }
     }
     /// Borrow this evaluator's configured budgets without allocation.
     pub fn limits(&self) -> &Limits {
@@ -136,7 +118,7 @@ impl SchemaEvaluator for DefaultEvaluator {
         let (space, entry) = planner::space(request);
         let cancellation = || control.is_cancelled();
         match space.program(entry, &cancellation) {
-            Ok(program) => Ok(Arc::new(self.compile(program, request, control)?)),
+            Ok(program) => Ok(Arc::new(self.compile(program, true, control)?)),
             Err(detail)
                 if (detail.reason
                     == openbindings_internal_schema::FailureReason::ResourceUnavailable
@@ -155,9 +137,10 @@ impl SchemaEvaluator for DefaultEvaluator {
                     semantic_completions,
                 } = bounds;
                 let unavailable = unavailable.map(projection_failure);
-                let upper = self.compile(upper, request, control)?;
+                let upper = self.compile(upper, true, control)?;
                 control.check()?;
-                let lower = self.compile(lower, request, control)?;
+                // Explanations never read lower-bound failures.
+                let lower = self.compile(lower, false, control)?;
                 control.check()?;
                 Ok(Arc::new(PartialCompiled {
                     upper,
@@ -196,7 +179,7 @@ impl DefaultEvaluator {
     fn compile(
         &self,
         mut program: EvaluationProgram,
-        request: &SchemaRequest,
+        explains: bool,
         control: &dyn WorkControl,
     ) -> Result<Compiled, NoVerdict> {
         let mut registry = jsonschema::Registry::new().retriever(NoRetrieval);
@@ -248,25 +231,48 @@ impl DefaultEvaluator {
             .build(root.contents())
             .map_err(|error| preparation_error(error.kind()))?;
         control.check()?;
-        // Clear direct resource owners while keeping the original-location map.
-        // Compiled exact const/enum subviews can still retain projection arenas.
-        program.resources.clear();
+        // Keep, for explanations, a compact copy of the compiled keywords with
+        // their original locations; release the projection and, when that copy
+        // holds every location, the program's location map. Compiled exact
+        // const/enum subviews can still retain projection arenas.
+        let explanation = explains
+            .then(|| details::Explanation::new(&program, control))
+            .transpose()?;
+        program.resources = Vec::new();
+        let program = explanation
+            .as_ref()
+            .is_some_and(details::Explanation::needs_locations)
+            .then_some(program);
         Ok(Compiled {
             validator,
             program,
             limits: self.limits.clone(),
-            detail_source: (self.diagnostics == Diagnostics::Upstream).then(|| request.clone()),
+            explanation,
         })
     }
 }
 struct Compiled {
-    detail_source: Option<SchemaRequest>,
+    // The explanation source; never the document, its resources or the space.
+    explanation: Option<details::Explanation>,
     validator: jsonschema::Validator<FlatJson>,
-    program: EvaluationProgram,
+    // Kept only when the explanation needs the program's own location map.
+    program: Option<EvaluationProgram>,
     limits: Limits,
 }
+fn verdict_only_failure() -> ValueOutcome {
+    ValueOutcome::Fails {
+        message: "value does not satisfy the contract".into(),
+        problems: Vec::new(),
+        problems_complete: false,
+    }
+}
 impl PreparedSchema for Compiled {
-    fn validate(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
+    fn validate(
+        &self,
+        value: &JsonValue,
+        detail: Detail,
+        control: &dyn WorkControl,
+    ) -> ValueOutcome {
         if let Err(detail) = control.check() {
             let detail = detail.into();
             return ValueOutcome::NoVerdict { detail };
@@ -282,6 +288,7 @@ impl PreparedSchema for Compiled {
                     detail: detail.into(),
                 },
             },
+            Ok(false) if detail == Detail::Outcome => verdict_only_failure(),
             // An established failure survives interruption of optional diagnostics.
             Ok(false) => self.diagnostics(value, control, false),
         }
@@ -295,7 +302,7 @@ impl Compiled {
         original_only: bool,
     ) -> ValueOutcome {
         let mut problems = Vec::new();
-        if let Some(source) = &self.detail_source {
+        if let Some(explanation) = &self.explanation {
             // Validity is already established. Failure to obtain detail (including
             // cancellation or exhausted work) must never turn it into no-verdict.
             let diagnostic = verdict_pass(&self.limits, || {
@@ -303,23 +310,24 @@ impl Compiled {
                 let Err(error) = self.validator.validate(backend::view(value)) else {
                     return Ok(None);
                 };
-                let location = error.absolute_keyword_location().and_then(|uri| {
-                    self.program
-                        .original_location(uri.as_str())
-                        .map(original_location)
-                });
-                let location = match location {
-                    Some(at) => match details::enclosing_location(source, at, control) {
-                        Ok(location) => location,
-                        Err(()) => return Ok(None),
-                    },
+                let located = match error.absolute_keyword_location() {
+                    Some(uri) => {
+                        match explanation.locate(self.program.as_ref(), uri.as_str(), control) {
+                            Ok(located) => located,
+                            Err(()) => return Ok(None),
+                        }
+                    }
                     None => None,
                 };
                 // Generated partial-program errors are not original schema evidence.
-                if original_only && location.is_none() {
+                if original_only && located.is_none() {
                     return Ok(None);
                 }
-                let detail = details::collect(source, location.as_ref(), error.kind(), control);
+                let (location, operand) = match located {
+                    Some(located) => (Some(located.location), located.operand),
+                    None => (None, None),
+                };
+                let detail = details::collect(operand, error.kind(), control);
                 control.check()?;
                 Ok(Some(ValueProblem {
                     instance_pointer: error.instance_path().as_str().into(),
@@ -353,7 +361,12 @@ struct PartialCompiled {
     semantic_completions: bool,
 }
 impl PreparedSchema for PartialCompiled {
-    fn validate(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
+    fn validate(
+        &self,
+        value: &JsonValue,
+        detail: Detail,
+        control: &dyn WorkControl,
+    ) -> ValueOutcome {
         if let Err(detail) = control.check() {
             let detail = detail.into();
             return ValueOutcome::NoVerdict { detail };
@@ -369,6 +382,7 @@ impl PreparedSchema for PartialCompiled {
         });
         match result {
             Err(detail) => ValueOutcome::NoVerdict { detail },
+            Ok(Some(false)) if detail == Detail::Outcome => verdict_only_failure(),
             Ok(Some(false)) => self.upper.diagnostics(value, control, true),
             Ok(Some(true)) => ValueOutcome::Satisfies,
             Ok(None) => match self.unavailable.clone() {

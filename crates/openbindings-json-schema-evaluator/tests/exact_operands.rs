@@ -1,7 +1,23 @@
 use openbindings::*;
-use openbindings_json_schema_evaluator::{DefaultEvaluator, Diagnostics};
+use openbindings_json_schema_evaluator::DefaultEvaluator;
 
-fn prepare(schema: &str, mode: Diagnostics, resources: ResourceSet) -> PreparedContract {
+/// A prepared contract checked with one detail per call: the cheap check or an explanation.
+struct Checked {
+    contract: PreparedContract,
+    detail: Detail,
+}
+impl Checked {
+    fn validate(&self, value: &JsonValue) -> ValueOutcome {
+        match self.detail {
+            Detail::Outcome => self.contract.validate(value),
+            _ => self.contract.explain(value),
+        }
+    }
+    fn validate_json(&self, input: &str) -> Result<ValueOutcome, InputError> {
+        Ok(self.validate(&JsonValue::parse(input)?))
+    }
+}
+fn prepare(schema: &str, mode: Detail, resources: ResourceSet) -> Checked {
     let document = Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
     ))
@@ -10,14 +26,17 @@ fn prepare(schema: &str, mode: Diagnostics, resources: ResourceSet) -> PreparedC
     let proof = validation.conformant().expect("conformant schema");
     let operation = proof.resolve_operation("op").expect("declared operation");
     let contract = operation.input().expect("declared input");
-    match contract.prepare_with(&DefaultEvaluator::new().with_diagnostics(mode), &resources) {
-        Ok(contract) => contract,
+    match contract.prepare_with(&DefaultEvaluator::new(), &resources) {
+        Ok(contract) => Checked {
+            contract,
+            detail: mode,
+        },
         Err(detail) => panic!("{detail:?}"),
     }
 }
 
 #[test]
-fn every_numeric_family_uses_exact_values_in_both_diagnostic_modes() {
+fn every_numeric_family_uses_exact_values_in_both_detail_modes() {
     let cases = [
         (r#"{"type":"integer"}"#, "1.0", true),
         (r#"{"type":"integer"}"#, "1e400", true),
@@ -79,7 +98,7 @@ fn every_numeric_family_uses_exact_values_in_both_diagnostic_modes() {
             false,
         ),
     ];
-    for mode in [Diagnostics::Coarse, Diagnostics::Upstream] {
+    for mode in [Detail::Outcome, Detail::Explain] {
         for (schema, input, expected) in cases {
             let contract = prepare(schema, mode, ResourceSet::default());
             let outcome = contract.validate(&JsonValue::parse(input).unwrap());
@@ -92,7 +111,7 @@ fn every_numeric_family_uses_exact_values_in_both_diagnostic_modes() {
                 } => {
                     assert!(!expected, "{schema}: {input}");
                     assert!(!problems_complete);
-                    if mode == Diagnostics::Coarse {
+                    if mode == Detail::Outcome {
                         assert!(problems.is_empty());
                     }
                     for problem in problems {
@@ -109,11 +128,11 @@ fn every_numeric_family_uses_exact_values_in_both_diagnostic_modes() {
 }
 
 #[test]
-fn upstream_facts_use_original_tokens_and_never_numeric_handles() {
+fn explained_facts_use_original_tokens_and_never_numeric_handles() {
     let huge = format!("1e{}", "9".repeat(100_000));
     for bound in ["1e400", "9007199254740993", "-0.00", huge.as_str()] {
         let schema = format!(r#"{{"exclusiveMinimum":{bound}}}"#);
-        let contract = prepare(&schema, Diagnostics::Upstream, ResourceSet::default());
+        let contract = prepare(&schema, Detail::Explain, ResourceSet::default());
         let ValueOutcome::Fails { problems, .. } =
             contract.validate(&JsonValue::parse(bound).unwrap())
         else {
@@ -131,7 +150,7 @@ fn upstream_facts_use_original_tokens_and_never_numeric_handles() {
         );
     }
     let schema = format!(r#"{{"enum":[1e400,{huge},9007199254740993,-0.00]}}"#);
-    let contract = prepare(&schema, Diagnostics::Upstream, ResourceSet::default());
+    let contract = prepare(&schema, Detail::Explain, ResourceSet::default());
     let ValueOutcome::Fails { problems, .. } =
         contract.validate(&JsonValue::parse("-1e400").unwrap())
     else {
@@ -146,7 +165,7 @@ fn upstream_facts_use_original_tokens_and_never_numeric_handles() {
 #[test]
 fn substituted_resource_nodes_keep_distinct_original_provenance() {
     let resource = JsonValue::parse(r#"{"$id":"https://exact.test/root","$defs":{"a":{"$anchor":"a","maximum":1e400},"b":{"$id":"nested","maximum":2e400}}}"#).unwrap();
-    for mode in [Diagnostics::Coarse, Diagnostics::Upstream] {
+    for mode in [Detail::Outcome, Detail::Explain] {
         for (reference, pointer, bound) in [
             ("https://exact.test/root#a", "/$defs/a/maximum", "1e400"),
             (
@@ -167,7 +186,7 @@ fn substituted_resource_nodes_keep_distinct_original_provenance() {
             else {
                 panic!()
             };
-            if mode == Diagnostics::Upstream {
+            if mode == Detail::Explain {
                 let location = problems[0].schema_location.as_ref().unwrap();
                 assert_eq!(
                     location.resource.as_deref(),
@@ -197,7 +216,7 @@ fn compact_exponents_public_equality_and_arithmetic_refusal_remain_separate() {
             Some(true)
         );
     }
-    for mode in [Diagnostics::Coarse, Diagnostics::Upstream] {
+    for mode in [Detail::Outcome, Detail::Explain] {
         for token in [huge.as_str(), &"7".repeat(4097)] {
             let contract = prepare(r#"{"multipleOf":3}"#, mode, ResourceSet::default());
             let ValueOutcome::NoVerdict { detail } =
@@ -233,7 +252,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
         "9223372036854775807",
         "9223372036854775808",
     ];
-    for mode in [Diagnostics::Coarse, Diagnostics::Upstream] {
+    for mode in [Detail::Outcome, Detail::Explain] {
         for (i, bound) in tokens.iter().enumerate() {
             for spelling in [
                 bound.to_string(),

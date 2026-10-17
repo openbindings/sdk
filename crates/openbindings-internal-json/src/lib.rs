@@ -8,6 +8,7 @@ pub use json::*;
 
 pub mod decimal;
 pub mod numeric;
+pub mod text;
 
 #[warn(missing_docs)]
 mod conversion;

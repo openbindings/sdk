@@ -112,7 +112,7 @@ impl SchemaEvaluator for Wrong {
     }
 }
 impl PreparedSchema for WrongPrepared {
-    fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
+    fn validate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
         ValueOutcome::Satisfies
     }
 }
@@ -145,6 +145,10 @@ enum Fault {
     UnknownSource,
     BroadUnsupported,
     FalseCancellation,
+    // The cheap check returns the explanation's problems.
+    DetailedCheck,
+    // The explanation reaches another verdict than the cheap check.
+    DisagreeingExplanation,
 }
 struct FaultyAdapter(Fault);
 struct FaultyContract(Arc<dyn PreparedSchema>, Fault);
@@ -155,15 +159,29 @@ impl SchemaEvaluator for FaultyAdapter {
         control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         let prepared = openbindings_json_schema_evaluator::DefaultEvaluator::new()
-            .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream)
             .prepare(request, control)?;
         Ok(Arc::new(FaultyContract(prepared, self.0)))
     }
 }
 impl PreparedSchema for FaultyContract {
-    fn validate(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
-        let outcome = self.0.validate(value, control);
+    fn validate(
+        &self,
+        value: &JsonValue,
+        detail: Detail,
+        control: &dyn WorkControl,
+    ) -> ValueOutcome {
+        let outcome = self.0.validate(value, detail, control);
         match self.1 {
+            Fault::DetailedCheck => self.0.validate(value, Detail::Explain, control),
+            Fault::DisagreeingExplanation if detail == Detail::Explain => match outcome {
+                ValueOutcome::Satisfies => ValueOutcome::Fails {
+                    message: "value does not satisfy the contract".into(),
+                    problems: vec![],
+                    problems_complete: false,
+                },
+                _ => ValueOutcome::Satisfies,
+            },
+            Fault::DisagreeingExplanation => outcome,
             Fault::EmptyMismatch => ValueOutcome::Fails {
                 message: "value does not satisfy the contract".into(),
                 problems: vec![],
@@ -211,6 +229,8 @@ fn real_runner_rejects_malformed_outcomes_fabricated_sources_and_broad_refusals(
         Fault::UnknownSource,
         Fault::BroadUnsupported,
         Fault::FalseCancellation,
+        Fault::DetailedCheck,
+        Fault::DisagreeingExplanation,
     ] {
         let report = run(
             &FaultyAdapter(fault),
@@ -232,7 +252,6 @@ impl SchemaEvaluator for LeakyAdapter {
             return Ok(prepared.clone());
         }
         let prepared = openbindings_json_schema_evaluator::DefaultEvaluator::new()
-            .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream)
             .prepare(request, control)?;
         *cache = Some(prepared.clone());
         Ok(prepared)
@@ -246,6 +265,40 @@ fn real_runner_rejects_cross_context_compiled_state_leaks() {
     );
     assert!(!report.is_success());
     assert!(report.observations.iter().any(|o| !o.failures.is_empty()));
+}
+#[test]
+fn cheap_checks_report_no_problems_and_agree_with_explanations() {
+    let failure = |problems: Vec<ValueProblem>, problems_complete| ValueOutcome::Fails {
+        message: "value does not satisfy the contract".into(),
+        problems,
+        problems_complete,
+    };
+    let problem = ValueProblem {
+        details: None,
+        instance_pointer: String::new(),
+        schema_location: None,
+        code: "type".into(),
+        message: "expected string".into(),
+    };
+    assert!(
+        judge_detail(
+            &failure(vec![], false),
+            &failure(vec![problem.clone()], false)
+        )
+        .is_empty()
+    );
+    assert!(judge_detail(&ValueOutcome::Satisfies, &ValueOutcome::Satisfies).is_empty());
+    for (outcome, explanation) in [
+        (
+            failure(vec![problem.clone()], false),
+            failure(vec![problem.clone()], false),
+        ),
+        (failure(vec![], true), failure(vec![problem.clone()], true)),
+        (failure(vec![], false), ValueOutcome::Satisfies),
+        (ValueOutcome::Satisfies, failure(vec![problem], false)),
+    ] {
+        assert!(!judge_detail(&outcome, &explanation).is_empty());
+    }
 }
 #[test]
 fn optional_capability_declaration_does_not_authorize_other_refusal_reasons() {

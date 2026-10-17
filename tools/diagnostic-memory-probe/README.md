@@ -30,7 +30,7 @@ On this frozen input suite, validity must stay at or below **18 MiB**. Fixed che
 with guidance must stay below that input's measured validity peak **plus 10 MiB**;
 complete document validation must stay below validity **plus 12 MiB**. These are
 regression thresholds for these inputs and this implementation, not universal
-bounds for arbitrary documents or upstream value diagnostics.
+bounds for arbitrary documents or value explanations.
 
 The location walk keeps depth frames and one child candidate list, never a library
 error tree or a vector of all instance children. Its schema plan is fixed at

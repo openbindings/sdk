@@ -63,16 +63,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     let contract = operation.input().ok_or("operation has no input contract")?;
     // Conformant reads preserve presence; schema preparation remains separate.
     println!("input schema at {:?}", contract.schema().location().pointer);
-    // Default budgets, coarse diagnostics and no supplied resources.
+    // Default budgets and no supplied resources.
     let input = contract.prepare(&DefaultEvaluator::new())?;
     // Ordinary values have checked Serde admission. Exact text preserves its tokens.
     let ordinary = JsonValue::from_serializable(&Input {
         id: 9_007_199_254_740_993,
     })?;
-    for outcome in [
-        input.validate(&ordinary),
-        input.validate_json(r#"{"id":9007199254740992}"#)?,
-    ] {
+    let exact = JsonValue::parse(r#"{"id":9007199254740992}"#)?;
+    for value in [&ordinary, &exact] {
+        // The cheap check decides; an explanation of the same value says why.
+        let outcome = match input.validate(value) {
+            ValueOutcome::Fails { .. } => input.explain(value),
+            outcome => outcome,
+        };
         match outcome {
             ValueOutcome::Satisfies => println!("input satisfies the contract"),
             ValueOutcome::Fails {

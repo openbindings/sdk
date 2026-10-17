@@ -190,7 +190,7 @@ mod tests {
             }
         }
         impl PreparedSchema for Prepared {
-            fn validate(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
+            fn validate(&self, value: &JsonValue, _: Detail, control: &dyn WorkControl) -> ValueOutcome {
                 control.check().unwrap();
                 // This finite signature witness only calls the supported exact constant.
                 assert_eq!(value.semantic_eq(&self.0), Some(true));

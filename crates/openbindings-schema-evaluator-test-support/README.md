@@ -1,8 +1,9 @@
 # OpenBindings evaluator test support
 
 Check a `SchemaEvaluator` implementation through the same document and value
-contract route used by applications. The suite reports preparation refusals,
-value verdicts and diagnostic-location errors separately.
+contract route used by applications. Every value is both checked and explained.
+The suite reports preparation refusals, value verdicts, disagreement between the
+two calls and diagnostic-location errors separately.
 
 ```rust
 use openbindings_schema_evaluator_test_support::{run, Options};
@@ -32,7 +33,7 @@ responsibility. This unpublished package requires Rust 1.88.
 
 ## Reference
 
-Use `run`, `Options` and `Report` for the ordinary workflow. `suite` and `judge`
-support host-specific harnesses. The
+Use `run`, `Options` and `Report` for the ordinary workflow. `suite`, `judge`
+and `judge_detail` support host-specific harnesses. The
 [maintainer guide](https://github.com/openbindings/sdk/blob/main/docs/maintainers.md)
 links fixture provenance and implementation checks.

@@ -266,10 +266,12 @@ pub struct Observation {
     pub id: String,
     /// Expected fixture outcome, distinct from the actual observation.
     pub expected: String,
-    /// Setup refusal when no prepared owner was produced; outcome is absent in this case.
+    /// Setup refusal when no prepared owner was produced; both outcomes are absent in this case.
     pub preparation_refusal: Option<NoVerdict>,
-    /// Actual value outcome when preparation succeeded, including evaluation refusal.
+    /// Actual cheap-check outcome when preparation succeeded, including evaluation refusal.
     pub outcome: Option<ValueOutcome>,
+    /// Actual explanation outcome for the same value when preparation succeeded.
+    pub explanation: Option<ValueOutcome>,
     /// Contract-check failures for this observation; empty can include an allowed refusal.
     pub failures: Vec<String>,
 }
@@ -278,6 +280,7 @@ impl std::fmt::Debug for Observation {
         f.debug_struct("Observation")
             .field("preparation_refusal", &self.preparation_refusal)
             .field("outcome", &self.outcome)
+            .field("explanation", &self.explanation)
             .field("failure_count", &self.failures.len())
             .finish_non_exhaustive()
     }
@@ -336,8 +339,10 @@ impl Report {
 }
 /// Apply the kit through the public conformant-operation route: each group's
 /// input contract is prepared once with the borrowed evaluator and its supplied
-/// resources. Implementations must keep preparations independent, preserve
-/// borrowed input snapshots, and return honest unsupported/limit outcomes.
+/// resources, then every value is both checked and explained. Implementations
+/// must keep preparations independent, preserve borrowed input snapshots, and
+/// return honest unsupported/limit outcomes. Both calls must reach the same
+/// verdict; a cheap check reports no problems and never claims completeness.
 pub fn run(evaluator: &dyn SchemaEvaluator, options: &Options) -> Report {
     let suite = suite();
     let mut report = Report {
@@ -386,14 +391,14 @@ pub fn run(evaluator: &dyn SchemaEvaluator, options: &Options) -> Report {
         for case in &group.cases {
             let value = JsonValue::parse(&case.value).expect("packaged instance JSON");
             let original = value.text().to_owned();
-            let (outcome, preparation_refusal) = match &prepared {
-                Ok(contract) => (contract.validate(&value), None),
-                Err(detail) => (
-                    ValueOutcome::NoVerdict {
+            let (outcome, explanation, preparation_refusal) = match &prepared {
+                Ok(contract) => (contract.validate(&value), contract.explain(&value), None),
+                Err(detail) => {
+                    let refusal = ValueOutcome::NoVerdict {
                         detail: detail.clone(),
-                    },
-                    Some(detail.clone()),
-                ),
+                    };
+                    (refusal.clone(), refusal, Some(detail.clone()))
+                }
             };
             let allowed = options
                 .permitted_refusals
@@ -403,17 +408,26 @@ pub fn run(evaluator: &dyn SchemaEvaluator, options: &Options) -> Report {
                 used.insert(case.id.clone());
             }
             let mut failures = judge(case, &value, &outcome, allowed.is_some());
+            for failure in judge(case, &value, &explanation, allowed.is_some()) {
+                if !failures.contains(&failure) {
+                    failures.push(failure);
+                }
+            }
+            failures.extend(judge_detail(&outcome, &explanation));
             if value.text() != original {
                 failures.push("evaluator changed an immutable input".into());
             }
-            let locations: Vec<_> = match &outcome {
-                ValueOutcome::Fails { problems, .. } => problems
-                    .iter()
-                    .filter_map(|p| p.schema_location.as_ref())
-                    .collect(),
-                ValueOutcome::Undefined { detail } => detail.location.iter().collect(),
-                _ => Vec::new(),
-            };
+            let locations: Vec<_> = [&outcome, &explanation]
+                .into_iter()
+                .flat_map(|outcome| match outcome {
+                    ValueOutcome::Fails { problems, .. } => problems
+                        .iter()
+                        .filter_map(|p| p.schema_location.as_ref())
+                        .collect(),
+                    ValueOutcome::Undefined { detail } => detail.location.iter().collect(),
+                    _ => Vec::new(),
+                })
+                .collect();
             for location in locations {
                 let source = match &location.resource {
                     None => Some(document.value().clone()),
@@ -447,6 +461,7 @@ pub fn run(evaluator: &dyn SchemaEvaluator, options: &Options) -> Report {
                 id: case.id.clone(),
                 expected: case.expected.clone(),
                 outcome: preparation_refusal.is_none().then_some(outcome),
+                explanation: preparation_refusal.is_none().then_some(explanation),
                 preparation_refusal,
                 failures,
             });
@@ -460,6 +475,26 @@ pub fn run(evaluator: &dyn SchemaEvaluator, options: &Options) -> Report {
         }
     }
     report
+}
+/// Judge how a cheap check and an explanation of the same value relate: they
+/// reach the same verdict, and the cheap check reports no problems and does not
+/// claim complete diagnostics. Useful for host harnesses and controls.
+pub fn judge_detail(outcome: &ValueOutcome, explanation: &ValueOutcome) -> Vec<String> {
+    let tag = |outcome: &ValueOutcome| std::mem::discriminant(outcome);
+    let mut failures = Vec::new();
+    if tag(outcome) != tag(explanation) {
+        failures.push("the cheap check and the explanation reach different verdicts".into());
+    }
+    if let ValueOutcome::Fails {
+        problems,
+        problems_complete,
+        ..
+    } = outcome
+        && (!problems.is_empty() || *problems_complete)
+    {
+        failures.push("a cheap check reported failure diagnostics".into());
+    }
+    failures
 }
 /// Judge one observation independently. Useful for host harnesses and controls.
 pub fn judge(

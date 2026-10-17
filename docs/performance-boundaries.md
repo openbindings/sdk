@@ -230,12 +230,12 @@ nor Wasm capacity. Outputs are under `target/document-diagnostics`.
 | Fixed-schema validity | 17,573,888 bytes | 18 MiB |
 | Fixed checks above that input's validity peak | 8,472,586 bytes | 10 MiB |
 | Full validation above that input's validity peak | 8,797,823 bytes | 12 MiB |
-| Prepared coarse value decisions | 113 bytes | 65,536 bytes |
+| Prepared cheap value checks | 113 bytes | 65,536 bytes |
 
 The absolute full-validation peak was 17,949,677 bytes. Value cases exercise
 1,000- and 50,000-element arrays, including partial evaluation. These are bounds
 for the recorded fixtures, not all inputs. Document findings separately retain at
-most 4,096 entries and 8 MiB of pointers. Upstream value diagnostics have library
+most 4,096 entries and 8 MiB of pointers. Value explanations have library
 allocation and stack limits and may overflow on deep inputs. See
 [allocation methodology](../tools/diagnostic-memory-probe/README.md) and
 [MSRV and stack qualifications](support.md).

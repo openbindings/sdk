@@ -159,12 +159,13 @@ prepared contract for repeated validation. Ready does not promise a verdict for
 every value; missing resources, unsupported capabilities and exhausted work
 budgets can produce no-verdict. Replacing resources means preparing again.
 
-Default `coarse` diagnostics return an established failure with no problem list
-and `problemsComplete: false`. Opt into `diagnostics: "upstream"` on
-`prepare` for the library's first error. That mode can allocate in proportion
-to input and overflow the stack on deep values. Schema facts may disclose source
-operands and retain source snapshots. Messages are advisory; use result tags,
-codes and rule evidence for control flow.
+`validate` returns an established failure with no problem list and
+`problemsComplete: false`. Call `explain` on the same prepared contract for the
+library's first error. An explanation can allocate in proportion to input and
+overflow the stack on deep values, so keep `validate` for untrusted input. Schema
+facts may disclose source operands. A prepared contract keeps a compact copy of
+the keywords it compiled for explanations, never its document or resources.
+Messages are advisory; use result tags, codes and rule evidence for control flow.
 
 Document findings use JSON Pointers and UTF-8 byte coordinates in the assessed revision. Render
 pointers as text and convert byte offsets before selecting text in a JavaScript

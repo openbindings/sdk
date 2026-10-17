@@ -22,18 +22,14 @@ fn conformant(document: &Document) -> Conformant<Document> {
         .conformant()
         .expect("conformant document")
 }
-fn upstream(limits: Limits) -> DefaultEvaluator {
-    DefaultEvaluator::with_limits(limits)
-        .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream)
-}
-/// Prepare operation `probe` input with upstream diagnostics; preparation must succeed.
+/// Prepare operation `probe` input with the default evaluator; preparation must succeed.
 fn ready(document: &Document, resources: ResourceSet, limits: Limits) -> PreparedContract {
     match conformant(document)
         .resolve_operation("probe")
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare_with(&upstream(limits), &resources)
+        .prepare_with(&DefaultEvaluator::with_limits(limits), &resources)
     {
         Ok(contract) => contract,
         Err(detail) => panic!("expected ready: {detail:?}"),
@@ -58,7 +54,7 @@ fn frozen_c22_original_values_and_renamed_operation_keep_their_independent_truth
         let contract = match operation
             .output()
             .expect("declared output")
-            .prepare(&upstream(Limits::default()))
+            .prepare(&DefaultEvaluator::new())
         {
             Ok(contract) => contract,
             Err(detail) => panic!("expected ready: {detail:?}"),
@@ -68,7 +64,7 @@ fn frozen_c22_original_values_and_renamed_operation_keep_their_independent_truth
                 continue;
             };
             let value = JsonValue::parse(text).unwrap();
-            let outcome = contract.validate(&value);
+            let outcome = contract.explain(&value);
             assert_eq!(label(&outcome), case["expected"], "{}", case["caseId"]);
             if let ValueOutcome::Fails {
                 problems,
@@ -106,7 +102,7 @@ fn resources(entries: &[(&str, &str)]) -> ResourceSet {
 }
 fn evaluate(schema: &str, value: &str) -> ValueOutcome {
     ready(&document(schema), ResourceSet::default(), Limits::default())
-        .validate(&JsonValue::parse(value).unwrap())
+        .explain(&JsonValue::parse(value).unwrap())
 }
 #[test]
 fn nested_endpoint_success_does_not_prove_resource_independence() {
@@ -141,7 +137,7 @@ fn nested_endpoint_success_does_not_prove_resource_independence() {
             Some((u, v)) if u == v => "satisfies",
             Some(_) => "fails",
         };
-        assert_eq!(label(&contract.validate(&value)), expected);
+        assert_eq!(label(&contract.explain(&value)), expected);
     }
 }
 #[test]
@@ -162,7 +158,7 @@ fn frozen_owner_controls_cover_endpoints_siblings_nested_and_original_summaries(
             .collect();
         let contract = ready(&document(&schema), resources(&entries), Limits::default());
         let outcome =
-            contract.validate(&JsonValue::parse(case["valueText"].as_str().unwrap()).unwrap());
+            contract.explain(&JsonValue::parse(case["valueText"].as_str().unwrap()).unwrap());
         assert_eq!(
             label(&outcome),
             case["expected"],
@@ -251,7 +247,7 @@ fn distinct_hole_truth_tables_are_corroborated_by_all_small_complete_resource_se
                     })
                     .collect();
                 let complete = ready(&document, resources(&entries), Limits::default());
-                actual_truths.insert(label(&complete.validate(&JsonValue::null())));
+                actual_truths.insert(label(&complete.explain(&JsonValue::null())));
             }
             let expected = if actual_truths.len() == 1 {
                 *actual_truths.first().unwrap()
@@ -378,7 +374,7 @@ fn unsupported_influence_and_known_closure_defects_remain_refusals() {
     }
 }
 #[test]
-fn upstream_privacy_and_partial_work_do_not_fabricate_results() {
+fn explained_privacy_and_partial_work_do_not_fabricate_results() {
     let schema = r#"{"oneOf":[true,true,{"$ref":"https://oneof.invalid/U"}]}"#;
     let value = JsonValue::parse(r#"{"secret":"do-not-render"}"#).unwrap();
     let document = document(schema);
@@ -387,7 +383,7 @@ fn upstream_privacy_and_partial_work_do_not_fabricate_results() {
         problems,
         problems_complete,
         ..
-    } = regular.validate(&value)
+    } = regular.explain(&value)
     else {
         panic!()
     };
@@ -401,9 +397,9 @@ fn upstream_privacy_and_partial_work_do_not_fabricate_results() {
     let cancelled = std::sync::atomic::AtomicBool::new(false);
     cancelled.store(true, std::sync::atomic::Ordering::Release);
     assert!(
-        matches!(regular.validate_with_control(&value, &cancelled), ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled)
+        matches!(regular.explain_with_control(&value, &cancelled), ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled)
     );
-    assert_eq!(label(&regular.validate(&value)), "fails");
+    assert_eq!(label(&regular.explain(&value)), "fails");
     let limited = ready(
         &document,
         ResourceSet::default(),
@@ -413,7 +409,7 @@ fn upstream_privacy_and_partial_work_do_not_fabricate_results() {
         },
     );
     assert!(
-        matches!(limited.validate(&value), ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::LimitExceeded)
+        matches!(limited.explain(&value), ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::LimitExceeded)
     );
 }
 
@@ -520,9 +516,9 @@ fn old_partial_and_new_complete_snapshots_remain_independent() {
         (no_match, "satisfies"),
         (two_match, "fails"),
     ] {
-        assert_eq!(label(&contract.validate(&JsonValue::null())), expected);
+        assert_eq!(label(&contract.explain(&JsonValue::null())), expected);
     }
-    assert_eq!(label(&old.validate(&JsonValue::null())), "no-verdict");
+    assert_eq!(label(&old.explain(&JsonValue::null())), "no-verdict");
 }
 #[test]
 fn bounded_nested_runtime_and_original_exact_details_retain_separate_policies() {
@@ -540,7 +536,7 @@ fn bounded_nested_runtime_and_original_exact_details_retain_separate_policies() 
         },
     );
     assert!(
-        matches!(finite.validate(&JsonValue::parse("{}").unwrap()), ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::LimitExceeded)
+        matches!(finite.explain(&JsonValue::parse("{}").unwrap()), ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::LimitExceeded)
     );
     let schema = r#"{"minimum":0.290000000000000000001,"oneOf":[false,{"properties":{"p":{"$ref":"https://oneof.invalid/U"}}}]}"#;
     let proof = conformant(&self::document(schema));
@@ -550,12 +546,11 @@ fn bounded_nested_runtime_and_original_exact_details_retain_separate_policies() 
     let Ok(contract) = operation
         .input()
         .expect("declared input")
-        .prepare(&upstream(Limits::default()))
+        .prepare(&DefaultEvaluator::new())
     else {
         panic!()
     };
-    let ValueOutcome::Fails { problems, .. } =
-        contract.validate(&JsonValue::parse("0.29").unwrap())
+    let ValueOutcome::Fails { problems, .. } = contract.explain(&JsonValue::parse("0.29").unwrap())
     else {
         panic!()
     };

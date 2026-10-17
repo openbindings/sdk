@@ -233,7 +233,12 @@ impl SchemaEvaluator for Legacy {
     }
 }
 impl PreparedSchema for Legacy {
-    fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
+    fn validate(
+        &self,
+        _: &JsonValue,
+        _: openbindings::Detail,
+        _: &dyn WorkControl,
+    ) -> ValueOutcome {
         ValueOutcome::Satisfies
     }
 }
@@ -248,7 +253,12 @@ impl SchemaEvaluator for Declared {
     }
 }
 impl PreparedSchema for Declared {
-    fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
+    fn validate(
+        &self,
+        _: &JsonValue,
+        _: openbindings::Detail,
+        _: &dyn WorkControl,
+    ) -> ValueOutcome {
         ValueOutcome::NoVerdict {
             detail: self.0.clone(),
         }

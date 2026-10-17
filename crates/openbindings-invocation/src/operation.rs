@@ -703,6 +703,10 @@ pub enum ValidationStage {
 /// sensitive: inspect deliberately under your application's disclosure policy.
 /// Debug intentionally omits that evidence. Retaining this record retains its
 /// diagnostic storage, not a value, provider, document, or prepared value contract.
+///
+/// The invoker withholds values with the cheap check, so an evaluation failure
+/// carries the evaluator's verdict without problems. To learn why a value
+/// fails, explain it with a contract prepared from the same operation.
 pub struct ValidationFailure {
     direction: Direction,
     stage: ValidationStage,

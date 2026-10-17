@@ -70,25 +70,34 @@ impl SchemaEvaluator for Booleans {
     }
 }
 impl PreparedSchema for BooleanContract {
-    fn validate(&self, _: &JsonValue, control: &dyn openbindings::WorkControl) -> ValueOutcome {
+    fn validate(
+        &self,
+        _: &JsonValue,
+        detail: openbindings::Detail,
+        control: &dyn openbindings::WorkControl,
+    ) -> ValueOutcome {
         if let Err(detail) = control.check() {
             let detail = detail.into();
             return ValueOutcome::NoVerdict { detail };
         }
         if self.0 {
-            ValueOutcome::Satisfies
-        } else {
-            ValueOutcome::Fails {
-                message: "value does not satisfy the contract".into(),
-                problems: vec![ValueProblem {
+            return ValueOutcome::Satisfies;
+        }
+        // A cheap check reports the verdict only; an explanation says why.
+        let explain = detail == openbindings::Detail::Explain;
+        ValueOutcome::Fails {
+            message: "consumer: the false schema rejects every value".into(),
+            problems: explain
+                .then(|| ValueProblem {
                     details: None,
                     instance_pointer: String::new(),
                     schema_location: None,
                     code: "consumer.false".into(),
                     message: "false schema rejects the value".into(),
-                }],
-                problems_complete: true,
-            }
+                })
+                .into_iter()
+                .collect(),
+            problems_complete: explain,
         }
     }
 }
@@ -274,14 +283,17 @@ async fn schema_rejection_withholds_values_and_retains_only_local_evidence() {
         let evidence = call.validation_failure().unwrap();
         assert_eq!(evidence.direction(), direction);
         assert_eq!(evidence.stage(), stage);
+        // The invoker keeps its own evaluator's outcome for the cheap check
+        // that withheld the value.
         match evidence.outcome() {
             ValueOutcome::Fails {
+                message,
                 problems,
                 problems_complete,
-                ..
             } => {
-                assert!(*problems_complete);
-                assert_eq!(problems[0].code, "consumer.false");
+                assert_eq!(message, "consumer: the false schema rejects every value");
+                assert!(!*problems_complete);
+                assert!(problems.is_empty());
             }
             ValueOutcome::NoVerdict { .. } => assert_eq!(stage, ValidationStage::Preparation),
             ValueOutcome::Undefined { .. } => panic!("boolean schemas have no undefined result"),
@@ -468,4 +480,31 @@ async fn borrowed_provider_context_and_local_rc_survive_real_pending() {
     assert!(local_call.next().await.is_none());
     assert!(local_call.outcome().unwrap().is_ok());
     assert_eq!(local_calls.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn consumer_evaluator_explains_a_rejection_only_when_asked() {
+    let document = document(r#"{"input":false}"#, r#"{"units":[{"id":"manual"}]}"#);
+    let contract = document
+        .resolve_operation("run")
+        .unwrap()
+        .input()
+        .unwrap()
+        .prepare(&Booleans::default())
+        .unwrap();
+    assert!(matches!(
+        contract.validate(&JsonValue::null()),
+        ValueOutcome::Fails { problems, problems_complete: false, .. } if problems.is_empty()
+    ));
+    match contract.explain(&JsonValue::null()) {
+        ValueOutcome::Fails {
+            problems,
+            problems_complete,
+            ..
+        } => {
+            assert!(problems_complete);
+            assert_eq!(problems[0].code, "consumer.false");
+        }
+        other => panic!("{other:?}"),
+    }
 }

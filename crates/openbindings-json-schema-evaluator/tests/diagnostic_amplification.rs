@@ -1,4 +1,4 @@
-//! Coarse result-shape checks. Allocation is independently enforced by
+//! Cheap-check result-shape checks. Allocation is independently enforced by
 //! tools/diagnostic-memory-probe, including ordinary and both partial verdict paths.
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;

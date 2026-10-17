@@ -64,8 +64,8 @@ test("all 440 corpus documents use the same admission and proof evidence", () =>
     }
   }
 });
-for (const diagnostics of ["coarse", "upstream"]) {
-  test(`all 495 evaluator groups through ConformantDocument, ${diagnostics}`, () => {
+for (const call of ["validate", "explain"]) {
+  test(`all 495 evaluator groups through ConformantDocument, ${call}`, () => {
     assert.equal(fixture.groups.length, 495);
     const observations = [];
     for (const group of fixture.groups) {
@@ -92,7 +92,7 @@ for (const diagnostics of ["coarse", "upstream"]) {
         } finally {
           operation?.dispose();
         }
-        const setup = contract?.prepare({ resources, diagnostics });
+        const setup = contract?.prepare({ resources });
         if (setup?.status === "ready") prepared = setup.contract;
         const values = group.cases.map((entry) => {
           if (!prepared)
@@ -101,7 +101,7 @@ for (const diagnostics of ["coarse", "upstream"]) {
               : { outcome: operation ? "no-contract" : "operation-missing" };
           const value = exact(entry.value);
           try {
-            return prepared.validate(value);
+            return prepared[call](value);
           } finally {
             value.dispose();
           }

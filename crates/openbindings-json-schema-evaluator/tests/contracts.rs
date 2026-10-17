@@ -8,16 +8,22 @@ use std::sync::{
 // or value evaluation. Preparation-stage tests below assert the stage independently.
 trait EvaluateCase {
     fn validate(&self, value: &JsonValue) -> ValueOutcome;
-    fn validate_with_control(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome;
+    fn explain(&self, value: &JsonValue) -> ValueOutcome;
+    fn check(&self, value: &JsonValue, detail: Detail) -> ValueOutcome;
 }
 impl EvaluateCase for Result<PreparedContract, NoVerdict> {
     fn validate(&self, value: &JsonValue) -> ValueOutcome {
-        self.validate_with_control(value, &std::sync::atomic::AtomicBool::new(false))
+        self.check(value, Detail::Outcome)
     }
-    fn validate_with_control(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
-        match self {
-            Ok(contract) => contract.validate_with_control(value, control),
-            Err(detail) => ValueOutcome::NoVerdict {
+    fn explain(&self, value: &JsonValue) -> ValueOutcome {
+        self.check(value, Detail::Explain)
+    }
+    fn check(&self, value: &JsonValue, detail: Detail) -> ValueOutcome {
+        let control = std::sync::atomic::AtomicBool::new(false);
+        match (self, detail) {
+            (Ok(contract), Detail::Outcome) => contract.validate_with_control(value, &control),
+            (Ok(contract), _) => contract.explain_with_control(value, &control),
+            (Err(detail), _) => ValueOutcome::NoVerdict {
                 detail: detail.clone(),
             },
         }
@@ -36,10 +42,6 @@ fn conformant(document: &Document) -> Conformant<Document> {
         .conformant()
         .expect("conformant document")
 }
-fn upstream() -> DefaultEvaluator {
-    DefaultEvaluator::new()
-        .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream)
-}
 /// Prepare the input contract of operation `op` with no supplied resources.
 fn prepare_op(
     document: &Conformant<Document>,
@@ -53,7 +55,7 @@ fn prepare_op(
         .prepare(evaluator)
 }
 fn prepare(schema: &str) -> Result<PreparedContract, NoVerdict> {
-    prepare_op(&conformant(&doc(schema)), &upstream())
+    prepare_op(&conformant(&doc(schema)), &DefaultEvaluator::new())
 }
 fn value(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
@@ -69,27 +71,27 @@ fn numeric_arithmetic_admission_preserves_carriage_types_counts_and_bounds() {
         format!("{{\"const\":{huge}}}"),
     ] {
         assert!(matches!(
-            prepare(&schema).validate(&parsed),
+            prepare(&schema).explain(&parsed),
             ValueOutcome::Satisfies
         ));
     }
     assert!(matches!(
-        prepare(&format!("{{\"maxItems\":{huge}}}")).validate(&value("[]")),
+        prepare(&format!("{{\"maxItems\":{huge}}}")).explain(&value("[]")),
         ValueOutcome::Satisfies
     ));
     let multiple = prepare("{\"multipleOf\":3}");
     for token in [&huge, &"7".repeat(4097)] {
         assert!(
-            matches!(multiple.validate(&value(token)),ValueOutcome::NoVerdict {detail:NoVerdict {reason:NoVerdictReason::LimitExceeded,ref code,..}} if code=="numeric-arithmetic-limit")
+            matches!(multiple.explain(&value(token)),ValueOutcome::NoVerdict {detail:NoVerdict {reason:NoVerdictReason::LimitExceeded,ref code,..}} if code=="numeric-arithmetic-limit")
         );
         assert!(matches!(
-            multiple.validate(&value("3")),
+            multiple.explain(&value("3")),
             ValueOutcome::Satisfies
         ));
     }
     for token in ["7".repeat(4096), "1e10000".into(), "1e-10000".into()] {
         assert!(matches!(
-            multiple.validate(&value(&token)),
+            multiple.explain(&value(&token)),
             ValueOutcome::Fails { .. }
         ));
     }
@@ -107,10 +109,10 @@ fn deep_literal_and_opaque_data_do_not_inherit_compiler_tree_depth() {
         ] {
             let prepared = prepare(&schema);
             assert!(
-                matches!(prepared.validate(&value(&literal)), ValueOutcome::Satisfies),
+                matches!(prepared.explain(&value(&literal)), ValueOutcome::Satisfies),
                 "depth {depth}"
             );
-            let result = prepared.validate(&value(&different));
+            let result = prepared.explain(&value(&different));
             let ValueOutcome::Fails {
                 problems,
                 problems_complete,
@@ -127,7 +129,7 @@ fn deep_literal_and_opaque_data_do_not_inherit_compiler_tree_depth() {
             "{{\"type\":\"integer\",\"default\":{literal},\"x-opaque\":{literal}}}"
         ));
         assert!(matches!(
-            prepared.validate(&value("7")),
+            prepared.explain(&value("7")),
             ValueOutcome::Satisfies
         ));
     }
@@ -145,7 +147,7 @@ fn explicit_preparation_and_retained_validation_have_caller_owned_lifetimes() {
         }
     }
     impl PreparedSchema for Held {
-        fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
+        fn validate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
             ValueOutcome::Satisfies
         }
     }
@@ -205,14 +207,14 @@ fn explicit_preparation_and_retained_validation_have_caller_owned_lifetimes() {
 #[test]
 fn retained_contracts_outlive_documents_and_distinguish_absent_sides() {
     let document = conformant(&doc(r#"{"maximum":9007199254740992}"#));
-    let prepared = prepare_op(&document, &upstream());
+    let prepared = prepare_op(&document, &DefaultEvaluator::new());
     drop(document);
     assert!(matches!(
-        prepared.validate(&value("9007199254740992")),
+        prepared.explain(&value("9007199254740992")),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
-        prepared.validate(&value("9007199254740993")),
+        prepared.explain(&value("9007199254740993")),
         ValueOutcome::Fails { .. }
     ));
     let document = conformant(&doc("true"));
@@ -226,12 +228,12 @@ fn retained_contracts_outlive_documents_and_distinguish_absent_sides() {
 #[test]
 fn anonymous_scope_selects_outer_dynamic_anchor() {
     let document=Document::parse(r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://review.invalid/list"}}},"schemas":{"List":{"$id":"https://review.invalid/list","type":"array","items":{"$dynamicRef":"#element"},"$defs":{"element":{"$dynamicAnchor":"element","type":"string"}}},"Override":{"$dynamicAnchor":"element","type":"integer"}}}"##).unwrap();
-    let prepared = prepare_op(&conformant(&document), &upstream());
+    let prepared = prepare_op(&conformant(&document), &DefaultEvaluator::new());
     assert!(matches!(
-        prepared.validate(&value("[7]")),
+        prepared.explain(&value("[7]")),
         ValueOutcome::Satisfies
     ));
-    let result = prepared.validate(&value(r#"["x"]"#));
+    let result = prepared.explain(&value(r#"["x"]"#));
     let ValueOutcome::Fails { problems, .. } = result else {
         panic!("{result:?}");
     };
@@ -246,7 +248,7 @@ fn same_uri_resources_are_isolated_and_precancellation_does_not_poison() {
     let proof = conformant(&doc(r#"{"$ref":"https://review.invalid/shared"}"#));
     let operation = proof.resolve_operation("op").expect("declared operation");
     let contract = operation.input().expect("declared input");
-    let evaluator = upstream();
+    let evaluator = DefaultEvaluator::new();
     // Two resource sets supply different snapshots for the same retrieval URI.
     let snapshot = |schema: &str| {
         ResourceSet::new([SchemaResource {
@@ -271,13 +273,13 @@ fn same_uri_resources_are_isolated_and_precancellation_does_not_poison() {
     assert!(matches!(
         contract
             .prepare_with(&evaluator, &integer)
-            .validate(&value("7")),
+            .explain(&value("7")),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
         contract
             .prepare_with(&evaluator, &string)
-            .validate(&value("7")),
+            .explain(&value("7")),
         ValueOutcome::Fails { .. }
     ));
     std::thread::scope(|scope| {
@@ -289,7 +291,7 @@ fn same_uri_resources_are_isolated_and_precancellation_does_not_poison() {
                     assert!(matches!(
                         contract
                             .prepare_with(evaluator, &resources)
-                            .validate(&value("7")),
+                            .explain(&value("7")),
                         ValueOutcome::Satisfies
                     ));
                 }
@@ -345,7 +347,7 @@ fn cancellation_during_preparation_allows_independent_retries() {
 }
 #[test]
 fn conservative_preparation_is_not_semantic_undefinedness() {
-    let result = prepare(r#"{"anyOf":[true,{"pattern":"["}]}"#).validate(&value(r#""secret""#));
+    let result = prepare(r#"{"anyOf":[true,{"pattern":"["}]}"#).explain(&value(r#""secret""#));
     assert!(matches!(
         result,
         ValueOutcome::NoVerdict {
@@ -360,11 +362,11 @@ fn conservative_preparation_is_not_semantic_undefinedness() {
         r#"{"anyOf":[{"properties":{"x":{"type":"string"}}},true],"unevaluatedProperties":false}"#,
     );
     assert!(matches!(
-        prepared.validate(&value(r#"{"x":"ok"}"#)),
+        prepared.explain(&value(r#"{"x":"ok"}"#)),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
-        prepared.validate(&value(r#"{"x":7}"#)),
+        prepared.explain(&value(r#"{"x":7}"#)),
         ValueOutcome::Fails { .. }
     ));
 }
@@ -373,7 +375,7 @@ fn positive_missing_disjunct_establishes_satisfaction() {
     // Intentionally expanded capability: missing positive disjuncts now use bounds.
     assert!(matches!(
         prepare(r#"{"anyOf":[true,{"$ref":"https://absent.invalid/x"}]}"#)
-            .validate(&value(r#""secret""#)),
+            .explain(&value(r#""secret""#)),
         ValueOutcome::Satisfies
     ));
 }
@@ -427,7 +429,7 @@ fn diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
 fn diagnostics_are_original_and_do_not_expose_instance_values() {
     let prepared =
         prepare(r#"{"properties":{"a/b":{"type":"string"}},"unevaluatedProperties":false}"#);
-    let result = prepared.validate(&value(r#"{"a/b":789,"secret":"SYNTHETIC_SECRET_VALUE"}"#));
+    let result = prepared.explain(&value(r#"{"a/b":789,"secret":"SYNTHETIC_SECRET_VALUE"}"#));
     let encoded = serde_json::to_string(&result).unwrap();
     assert!(!encoded.contains("789"));
     assert!(!encoded.contains("SYNTHETIC_SECRET_VALUE"));
@@ -442,11 +444,11 @@ fn diagnostics_are_original_and_do_not_expose_instance_values() {
 fn property_escape_refusal_is_lazy_and_does_not_poison_thread_state() {
     let prepared = prepare(r#"{"pattern":"\\p{Lu}"}"#);
     assert!(matches!(
-        prepared.validate(&value("3")),
+        prepared.explain(&value("3")),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
-        prepared.validate(&value(r#""A""#)),
+        prepared.explain(&value(r#""A""#)),
         ValueOutcome::NoVerdict {
             detail: NoVerdict {
                 reason: NoVerdictReason::UnsupportedCapability,
@@ -455,11 +457,11 @@ fn property_escape_refusal_is_lazy_and_does_not_poison_thread_state() {
         }
     ));
     assert!(matches!(
-        prepared.validate(&value("3")),
+        prepared.explain(&value("3")),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
-        prepare(r#"{"pattern":"^A$"}"#).validate(&value(r#""A""#)),
+        prepare(r#"{"pattern":"^A$"}"#).explain(&value(r#""A""#)),
         ValueOutcome::Satisfies
     ));
 }
@@ -528,7 +530,7 @@ fn upstream_test_dispositions_use_the_supported_exact_ecma_u_path() {
     // The SDK exclusively uses ECMAScript Unicode-mode matching.
     for (pattern, expected) in [(r"^\s$", false), (r"^\S$", true), (r"^[^\s]$", true)] {
         let schema = serde_json::json!({"pattern": pattern}).to_string();
-        let result = prepare(&schema).validate(&value(r#""\u0085""#));
+        let result = prepare(&schema).explain(&value(r#""\u0085""#));
         assert_eq!(
             matches!(result, ValueOutcome::Satisfies),
             expected,
@@ -543,21 +545,21 @@ fn upstream_test_dispositions_use_the_supported_exact_ecma_u_path() {
     for pattern in [r"^[\w--z]$", r"^[\d--z]$", r"^[[a]]$"] {
         let schema = serde_json::json!({"pattern": pattern}).to_string();
         assert!(matches!(
-            prepare(&schema).validate(&value(r#""-""#)),
+            prepare(&schema).explain(&value(r#""-""#)),
             ValueOutcome::NoVerdict { .. }
         ));
     }
     // The original test expected an engine failure for a valid empty match.
     let prepared = prepare(r#"{"pattern":"^.{0,404600}$"}"#);
     assert!(matches!(
-        prepared.validate(&value(r#""""#)),
+        prepared.explain(&value(r#""""#)),
         ValueOutcome::Satisfies
     ));
     // Huge finite decimal exponents do not become infinity or cease to be integers.
     let prepared = prepare(r#"{"type":"integer"}"#);
     for number in ["1e1000001", "-1e1000001"] {
         assert!(matches!(
-            prepared.validate(&value(number)),
+            prepared.explain(&value(number)),
             ValueOutcome::Satisfies
         ));
     }
@@ -565,7 +567,7 @@ fn upstream_test_dispositions_use_the_supported_exact_ecma_u_path() {
     // public adapter, selected property matching can never become false validity.
     let schema = serde_json::json!({"patternProperties": {r"^\p{L}{300}$": {"type":"integer"}}, "unevaluatedProperties": false}).to_string();
     let result =
-        prepare(&schema).validate(&value(&serde_json::json!({"a".repeat(300): 1}).to_string()));
+        prepare(&schema).explain(&value(&serde_json::json!({"a".repeat(300): 1}).to_string()));
     assert!(matches!(
         result,
         ValueOutcome::NoVerdict {
@@ -589,7 +591,7 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
     ));
     let d = Document::parse(r#"{"openbindings":"0.2.0","operations":{"absent":{},"yes":{"input":true},"no":{"input":false}}}"#).unwrap();
     let c = conformant(&d);
-    let evaluator = upstream();
+    let evaluator = DefaultEvaluator::new();
     assert!(
         c.resolve_operation("absent")
             .expect("declared operation")
@@ -613,7 +615,7 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
     let cancel = std::sync::atomic::AtomicBool::new(false);
     cancel.store(true, std::sync::atomic::Ordering::Release);
     assert!(matches!(
-        ready.validate_with_control(&value("null"), &cancel),
+        ready.explain_with_control(&value("null"), &cancel),
         ValueOutcome::NoVerdict {
             detail: NoVerdict {
                 reason: NoVerdictReason::Cancelled,
@@ -624,11 +626,11 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
     drop(c);
     drop(d);
     assert!(matches!(
-        ready.validate(&value("null")),
+        ready.explain(&value("null")),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
-        no.validate(&value("null")),
+        no.explain(&value("null")),
         ValueOutcome::Fails { .. }
     ));
     for (text, pointer) in [

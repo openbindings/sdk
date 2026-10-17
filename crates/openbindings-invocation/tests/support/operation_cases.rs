@@ -466,9 +466,14 @@ impl SchemaEvaluator for Counted {
     }
 }
 impl PreparedSchema for Prepared {
-    fn validate(&self, v: &JsonValue, c: &dyn openbindings::WorkControl) -> ValueOutcome {
+    fn validate(
+        &self,
+        v: &JsonValue,
+        d: openbindings::Detail,
+        c: &dyn openbindings::WorkControl,
+    ) -> ValueOutcome {
         self.evaluations.fetch_add(1, Ordering::SeqCst);
-        self.inner.validate(v, c)
+        self.inner.validate(v, d, c)
     }
 }
 #[tokio::test(flavor = "current_thread")]
@@ -585,7 +590,12 @@ fn failed_or_cancelled_prepare_releases_partial_work_and_can_retry() {
         }
     }
     impl PreparedSchema for Held {
-        fn validate(&self, _: &JsonValue, _: &dyn openbindings::WorkControl) -> ValueOutcome {
+        fn validate(
+            &self,
+            _: &JsonValue,
+            _: openbindings::Detail,
+            _: &dyn openbindings::WorkControl,
+        ) -> ValueOutcome {
             ValueOutcome::Satisfies
         }
     }
