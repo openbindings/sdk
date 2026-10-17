@@ -288,6 +288,30 @@ impl<'a> TextValue<'a> {
             escaped: true,
         })
     }
+    /// Return a string token's UTF-16 units, keeping each unit an escape
+    /// denotes unpaired, or None for other kinds.
+    pub fn utf16_units(self) -> Option<Vec<u16>> {
+        if self.kind() != JsonKind::String {
+            return None;
+        }
+        let end = string_end(self.text.as_bytes(), self.start);
+        let raw = &self.text[self.start + 1..end - 1];
+        let bytes = raw.as_bytes();
+        let mut units = Vec::with_capacity(raw.len());
+        let mut at = 0;
+        while at < bytes.len() {
+            // Each `\u` escape is one unit, paired or not.
+            if bytes[at] == b'\\' && bytes.get(at + 1) == Some(&b'u') {
+                units.push(u16::try_from(hex(bytes, at + 2)?).ok()?);
+                at += 6;
+                continue;
+            }
+            let (c, next) = decode(bytes, raw, at)?;
+            units.extend_from_slice(c.encode_utf16(&mut [0; 2]));
+            at = next;
+        }
+        Some(units)
+    }
 }
 impl<'a> TextString<'a> {
     /// Decoded UTF-8 length in bytes.
@@ -334,6 +358,7 @@ mod tests {
         assert_eq!(arena.kind(), text.kind());
         assert_eq!(arena.text(), text.text());
         assert_eq!(arena.number_text(), text.number_text());
+        assert_eq!(arena.utf16_units(), text.utf16_units());
         assert_eq!(
             arena.as_str(),
             text.string()
@@ -388,6 +413,12 @@ mod tests {
         for source in [r#""\ud800""#, r#""\udc00x""#, r#""\ud800\u0041""#] {
             assert!(TextValue::root(source).string().is_none(), "{source}");
         }
+        // The units keep them, an escaped pair as its two units.
+        assert_eq!(
+            TextValue::root(r#""\ud800\u0041\ud83d\ude00é\n""#).utf16_units(),
+            Some(vec![0xd800, 0x41, 0xd83d, 0xde00, 0xe9, 0x0a])
+        );
+        assert_eq!(TextValue::root("[]").utf16_units(), None);
         let pair = TextValue::root(r#""\ud83d\ude00""#).string().unwrap();
         assert_eq!(pair.len(), 4);
         assert!(pair.eq_str("\u{1f600}"));

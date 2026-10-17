@@ -64,7 +64,10 @@ fn main() {
             for f in &report.findings {
                 let at = f.location.as_ref().unwrap();
                 assert_eq!(f.code, "duplicate-member");
-                assert_eq!(at.pointer.as_ref(), Some(&pointer));
+                assert_eq!(
+                    at.pointer.as_ref().and_then(openbindings::Pointer::as_str),
+                    Some(pointer.as_str())
+                );
                 assert_eq!(at.byte_offset, offset);
             }
         } else {
@@ -77,7 +80,7 @@ fn main() {
                 assert_eq!(f.code, "duplicate-operation-name");
                 let at = f.location.as_ref().unwrap();
                 assert_eq!(
-                    at.pointer.as_deref(),
+                    at.pointer.as_ref().and_then(openbindings::Pointer::as_str),
                     Some(format!("/operations/run/aliases/{index}").as_str())
                 );
                 assert_eq!(at.byte_offset, offset);
@@ -85,7 +88,7 @@ fn main() {
                 offset += format!("\"op{index}\",\n").len();
             }
         }
-        json!({"conclusion":report.conclusion,"evidence":report.evidence,"findings":report.findings.len(),"truncated":report.findings_truncated,"pointer_bytes":report.findings.iter().map(|f|f.location.as_ref().and_then(|at|at.pointer.as_ref()).map_or(0,String::len)).sum::<usize>()})
+        json!({"conclusion":report.conclusion,"evidence":report.evidence,"findings":report.findings.len(),"truncated":report.findings_truncated,"pointer_bytes":report.findings.iter().filter_map(|f|f.location.as_ref()?.pointer.as_ref()).map(pointer_bytes).sum::<usize>()})
     };
     if args.get(5).is_some_and(|x| x == "--check") {
         println!(
@@ -136,4 +139,10 @@ fn main() {
         "{}",
         json!({"variant":variant,"fixture":name,"lane":lane,"repetitions":repetitions,"samples_ns":samples,"observation":observation})
     );
+}
+// The bytes a pointer retains: its UTF-8 text, or two per UTF-16 unit.
+fn pointer_bytes(pointer: &openbindings::Pointer) -> usize {
+    pointer
+        .as_str()
+        .map_or_else(|| 2 * pointer.utf16_units().count(), str::len)
 }

@@ -75,7 +75,10 @@ fn namespace_is_checked_before_preparation_or_any_selection() {
         let error = doc.resolve_operation("op").unwrap_err();
         assert_eq!(error.code(), code);
         let at = error.source_location().unwrap();
-        assert_eq!(at.pointer.as_deref(), Some(pointer));
+        assert_eq!(
+            at.pointer.as_ref().and_then(openbindings::Pointer::as_str),
+            Some(pointer)
+        );
         let raw = doc.value().at(pointer).unwrap();
         assert_eq!(at, &raw.location());
         assert_eq!(calls.load(Ordering::SeqCst), 0);
@@ -189,7 +192,7 @@ fn pattern_preparation_failures_use_original_locations_and_safe_messages() {
                     detail.location,
                     Some(SchemaLocation {
                         resource,
-                        pointer: format!("{pointer}/{keyword}")
+                        pointer: format!("{pointer}/{keyword}").parse().unwrap()
                     })
                 );
                 safe(&detail.message);
@@ -327,15 +330,15 @@ fn messages_use_only_bounded_fixed_type_names_and_never_instance_or_schema_value
 // public diagnostics, exhaustively match semantic partitions, and retain a
 // wildcard for cause families that may acquire new diagnostic distinctions.
 struct Custom(Arc<AtomicUsize>);
-struct CustomPrepared;
+struct CustomPrepared(SchemaLocation);
 impl SchemaEvaluator for Custom {
     fn prepare(
         &self,
-        _: &SchemaRequest,
+        request: &SchemaRequest,
         _: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         self.0.fetch_add(1, Ordering::SeqCst);
-        Ok(Arc::new(CustomPrepared))
+        Ok(Arc::new(CustomPrepared(request.entry_location())))
     }
 }
 impl PreparedSchema for CustomPrepared {
@@ -344,8 +347,8 @@ impl PreparedSchema for CustomPrepared {
             message: "value does not satisfy the contract".into(),
             problems: vec![ValueProblem {
                 details: None,
-                instance_pointer: "".into(),
-                schema_location: None,
+                instance: "".parse().unwrap(),
+                schema: self.0.clone(),
                 code: "custom".into(),
                 message: "custom evaluator failure".into(),
             }],
@@ -401,7 +404,7 @@ fn external_evaluator_construction_and_matching_stay_supported() {
     let detail = UndefinedResult::new("custom", "established by a custom evaluator").with_location(
         SchemaLocation {
             resource: None,
-            pointer: "/operations/op/input".into(),
+            pointer: "/operations/op/input".parse().unwrap(),
         },
     );
     assert_eq!(detail.location.unwrap().pointer, "/operations/op/input");

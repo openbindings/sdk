@@ -36,12 +36,24 @@ pub enum NoVerdictReason {
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize)]
-/// Location in an original schema source; generated evaluation-program identities are mapped back before exposure.
+/// A keyword or schema in an original schema source, by resource and exact
+/// pointer; generated evaluation-program identities are mapped back before
+/// exposure. Line and column come from the source's holder:
+/// [`Conformant::locate`] for the document and [`ResourceSet::locate`] for a
+/// supplied resource. A prepared contract keeps no source text. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 pub struct SchemaLocation {
     /// Original supplied-resource URI, or `None` for the OpenBindings document. A URI is an identity, never an instruction to fetch.
     pub resource: Option<String>,
-    /// RFC 6901 JSON Pointer within the original source; the empty string denotes its root. Escape for presentation without changing `~0`/`~1` semantics.
-    pub pointer: String,
+    /// Exact RFC 6901 pointer from the source's root; an empty pointer denotes the root. Escape for presentation without changing `~0`/`~1` semantics.
+    pub pointer: Pointer,
+}
+impl SchemaLocation {
+    /// A location in the document (`resource` `None`) or in the supplied resource
+    /// with this URI. [`SchemaRequest::location`] builds one for a schema node an
+    /// evaluator was given.
+    pub fn new(resource: Option<String>, pointer: Pointer) -> Self {
+        Self { resource, pointer }
+    }
 }
 #[derive(Clone, Serialize)]
 /// Structured explanation for why no schema verdict was established. This public record may be constructed by custom evaluators.
@@ -161,12 +173,20 @@ pub enum ValueProblemDetails {
 }
 
 #[derive(Clone, Serialize)]
-/// One established instance failure with an optional original schema coordinate. Custom evaluators can construct this public record.
+/// One established instance failure, located in the value and in the schema.
+/// Custom evaluators can construct this public record. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 pub struct ValueProblem {
-    /// RFC 6901 pointer to an existing location in the input instance; empty means the root.
-    pub instance_pointer: String,
-    /// Original schema keyword location when mapping is available.
-    pub schema_location: Option<SchemaLocation>,
+    /// Exact RFC 6901 pointer to the failing node, from the value passed to
+    /// validation (the instance's root, also when that value is a subtree of
+    /// a larger text). The caller holds the value, so it finds the byte offset,
+    /// line and column when asked: [`JsonValue::locate`].
+    pub instance: Pointer,
+    /// The failing keyword in its original schema source, from that
+    /// document's or resource's root; [`Conformant::locate`] and
+    /// [`ResourceSet::locate`] find its line and column. When an evaluator
+    /// cannot map a keyword to the original source, this names the selected
+    /// schema rather than a guessed keyword.
+    pub schema: SchemaLocation,
     /// Stable evaluator-defined problem code, commonly the failed JSON Schema keyword.
     pub code: String,
     /// Explanatory text; custom evaluators should avoid exposing instance values or source-controlled strings by default.
@@ -215,14 +235,37 @@ impl std::fmt::Debug for ValueProblem {
         };
         f.debug_struct("ValueProblem")
             .field("code", &code)
-            .field("schema_location", &self.schema_location)
+            .field("instance", &self.instance)
+            .field("schema", &self.schema)
             .field("details", &self.details)
             .finish_non_exhaustive()
+    }
+}
+impl ValueProblem {
+    /// A problem without schema facts; set the public `details` field to add
+    /// them. `instance` is the failing node's pointer from the validated value
+    /// (`Pointer::from_str` parses one, [`JsonRef::at_pointer`] checks it);
+    /// [`SchemaRequest::location`] at preparation names `schema`.
+    pub fn new(
+        instance: Pointer,
+        schema: SchemaLocation,
+        code: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            instance,
+            schema,
+            code: code.into(),
+            message: message.into(),
+            details: None,
+        }
     }
 }
 #[derive(Clone, Serialize)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
 /// Closed result partition for the selected schema and instance: satisfies, fails, undefined, or no verdict. No value outcome proves that the surrounding OpenBindings document conforms.
+///
+/// Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 #[must_use = "inspect the outcome before continuing"]
 pub enum ValueOutcome {
     /// The instance was established to satisfy the selected schema.
@@ -398,6 +441,22 @@ impl ResourceSet {
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &SchemaResource> {
         self.inner.resources.iter()
     }
+    /// Locate a schema location in one of these resources: the node its
+    /// pointer names in the resource with its URI, with line and column in
+    /// that resource's own text. A resource built from a subtree of a larger
+    /// value is admitted as its own text, so its coordinates count from the
+    /// subtree's start, where [`JsonValue::locate`] on that subtree counts in
+    /// the whole text it was parsed from. `None` for a document location, a
+    /// URI this set does not hold (such as a packaged meta-schema's), or a
+    /// pointer that names no node. Positions are computed on this call.
+    pub fn locate(&self, at: &SchemaLocation) -> Option<SourceLocation> {
+        let uri = at.resource.as_deref()?;
+        let resources = &self.inner.resources;
+        let found = resources
+            .binary_search_by(|resource| resource.uri.as_str().cmp(uri))
+            .ok()?;
+        resources[found].document.locate(&at.pointer)
+    }
     pub(crate) fn input_policy(&self) -> &openbindings_internal_schema::Supplied {
         &self.inner.input_policy
     }
@@ -451,6 +510,19 @@ impl ResourceSet {
     }
 }
 
+impl Conformant<Document> {
+    /// Locate a schema location in this document: the node its pointer names,
+    /// with line and column in the document's text. `None` for a location in a
+    /// supplied resource, or a pointer that names no node in this revision.
+    /// Positions are computed on this call; a prepared contract keeps none.
+    pub fn locate(&self, at: &SchemaLocation) -> Option<SourceLocation> {
+        if at.resource.is_some() {
+            return None;
+        }
+        self.as_document().value().locate(&at.pointer)
+    }
+}
+
 /// Original snapshots and an entry point. Evaluators may use the checked projection
 /// helper or evaluate this request directly; generated identifiers are never API identity.
 #[derive(Clone)]
@@ -482,8 +554,30 @@ impl SchemaRequest {
     pub fn entry_location(&self) -> SchemaLocation {
         SchemaLocation {
             resource: None,
-            pointer: openbindings_internal_json::backend::pointer(&self.entry).unwrap_or_default(),
+            pointer: openbindings_internal_json::backend::exact_pointer(self.entry.view()),
         }
+    }
+    /// Allocate the original location of a schema node from this request's
+    /// document (such as one inside [`Self::entry`]) or from one of its
+    /// supplied resources, or `None` for a node from another source, including
+    /// a projected [`EvaluationProgram`] resource. Builds only the pointer.
+    pub fn location(&self, node: JsonRef<'_>) -> Option<SchemaLocation> {
+        use openbindings_internal_json::backend::{exact_pointer, same_source};
+        let resource = if same_source(node, self.document.as_document().value()) {
+            None
+        } else {
+            Some(
+                self.resources
+                    .iter()
+                    .find(|resource| same_source(node, &resource.document))?
+                    .uri
+                    .clone(),
+            )
+        };
+        Some(SchemaLocation {
+            resource,
+            pointer: exact_pointer(node),
+        })
     }
     /// Build a finite evaluator projection with private resource identities, original-location mapping and cooperative cancellation. Refuses unsupported/ambiguous/unavailable references instead of retrieving data.
     ///
@@ -764,7 +858,7 @@ impl<'a> ValueContract<'a> {
             )
             .located(SchemaLocation {
                 resource: None,
-                pointer: schema.location().pointer.unwrap_or_default(),
+                pointer: openbindings_internal_json::backend::exact_pointer(schema),
             }));
         }
         let request = SchemaRequest {

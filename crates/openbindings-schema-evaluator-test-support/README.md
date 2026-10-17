@@ -28,7 +28,9 @@ This is a finite qualification suite, not proof of complete JSON Schema support.
 A successful report may contain explicitly permitted capability refusals.
 `Options` declares exact cases and reasons; a wrong verdict cannot be exempted.
 Unknown or unused declarations fail. Incomplete diagnostics are permitted, but
-reported paths must exist in the original instance or schema resource.
+reported paths must exist in the original instance or schema resource. Instance
+pointers start at the value passed: explaining a failing value inside a larger
+text must not change its problems.
 
 Fixtures and licenses are packaged, so the suite needs neither network access
 nor another checkout. Fixture provenance and policy translations are maintained

@@ -116,11 +116,10 @@ fn contained_draft_and_supplied_surrogate_collision_preserves_each_original_targ
                         panic!("expected string mismatch")
                     };
                     assert!(
-                        problems.iter().any(|p| p
-                            .schema_location
-                            .as_ref()
-                            .is_some_and(|at| at.pointer == format!("{literal_pointer}/type")
-                                && at.resource.as_deref() == Some(BASE))),
+                        problems
+                            .iter()
+                            .any(|p| p.schema.pointer == format!("{literal_pointer}/type")
+                                && p.schema.resource.as_deref() == Some(BASE)),
                         "{problems:?}"
                     );
                 }

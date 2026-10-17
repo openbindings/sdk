@@ -44,7 +44,8 @@ fn document(operation: &str, content: &str) -> openbindings::Conformant<openbind
 struct Booleans {
     preparations: AtomicUsize,
 }
-struct BooleanContract(bool);
+// The schema's value and its original location, for explanations.
+struct BooleanContract(bool, openbindings::SchemaLocation);
 impl SchemaEvaluator for Booleans {
     fn prepare(
         &self,
@@ -59,7 +60,9 @@ impl SchemaEvaluator for Booleans {
             .entry()
             .view()
             .as_bool()
-            .map(|value| Arc::new(BooleanContract(value)) as Arc<dyn PreparedSchema>)
+            .map(|value| {
+                Arc::new(BooleanContract(value, request.entry_location())) as Arc<dyn PreparedSchema>
+            })
             .ok_or_else(|| {
                 NoVerdict::new(
                     NoVerdictReason::UnsupportedCapability,
@@ -88,12 +91,13 @@ impl PreparedSchema for BooleanContract {
         ValueOutcome::Fails {
             message: "consumer: the false schema rejects every value".into(),
             problems: explain
-                .then(|| ValueProblem {
-                    details: None,
-                    instance_pointer: String::new(),
-                    schema_location: None,
-                    code: "consumer.false".into(),
-                    message: "false schema rejects the value".into(),
+                .then(|| {
+                    ValueProblem::new(
+                        "".parse().expect("the root pointer"),
+                        self.1.clone(),
+                        "consumer.false",
+                        "false schema rejects the value",
+                    )
                 })
                 .into_iter()
                 .collect(),

@@ -583,7 +583,9 @@ impl SchemaSpace {
                 let origin = match original {
                     Some(id) => {
                         let mut at = self.location(id);
-                        pointer_keyword(&mut at.pointer, keyword).expect("String writer");
+                        let mut suffix = String::new();
+                        pointer_keyword(&mut suffix, keyword).expect("String writer");
+                        push_pointer(&mut at.pointer, &suffix);
                         match kind {
                             OriginKind::Prefix => ProgramOrigin::Prefix(at),
                             OriginKind::Exact => ProgramOrigin::Exact(at),
@@ -599,7 +601,7 @@ impl SchemaSpace {
         let locations = Arc::new(locations);
         let unavailable = plan.first_hole.map(|id| {
             let mut at = self.location(id);
-            at.pointer.push_str("/$ref");
+            push_pointer(&mut at.pointer, "/$ref");
             let (reason, code, message) = plan.split_evidence();
             NoVerdict::new(reason, code, message).located(at)
         });
@@ -814,7 +816,11 @@ mod tests {
             .locations
             .iter()
             .find_map(|(uri, origin)| match origin {
-                ProgramOrigin::Exact(at) if at.pointer.ends_with("/oneOf") => Some((uri, at)),
+                ProgramOrigin::Exact(at)
+                    if at.pointer.as_str().is_some_and(|p| p.ends_with("/oneOf")) =>
+                {
+                    Some((uri, at))
+                }
                 _ => None,
             })
             .unwrap();
@@ -822,11 +828,17 @@ mod tests {
         assert!(p.original_location(&(uri.to_owned() + "/0")).is_none());
         assert!(p.original_location(&(uri.to_owned() + "/0/$ref")).is_none());
         assert_eq!(
-            p.original_location_bounded(uri, at.pointer.len() - 1),
+            p.original_location_bounded(
+                uri,
+                openbindings_internal_json::backend::pointer_bytes(&at.pointer) - 1
+            ),
             Err(LocationBudgetExceeded)
         );
         assert_eq!(
-            p.original_location_bounded(uri, at.pointer.len()),
+            p.original_location_bounded(
+                uri,
+                openbindings_internal_json::backend::pointer_bytes(&at.pointer)
+            ),
             Ok(Some(at.clone()))
         );
         for (uri, origin) in p.locations.iter() {

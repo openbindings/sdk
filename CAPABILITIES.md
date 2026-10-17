@@ -22,7 +22,8 @@ precision already lost by the application. Document conformance rejects an escap
 unpaired surrogate in any member name or string value as OBI-01, including opaque
 content and embedded schemas. OBI-02 through OBI-13 then do not apply. Escaped
 surrogate pairs and noncharacters remain permitted. Draft inspection, caller
-values and supplied schema resources still retain unpaired UTF-16 units exactly.
+values and supplied schema resources still retain unpaired UTF-16 units exactly,
+and so do the JSON Pointers that locate their nodes.
 
 Default parsing admits 64 MiB, 10,000 container levels and 1,000,000 nodes.
 Ordinary Rust Serde conversion has a 128-container ceiling. Document reports
@@ -63,9 +64,12 @@ force; these are measured examples, not latency guarantees. See
 Each value check chooses its detail. `validate` reports a failure without
 problems; `explain` reports the library's first error, an explicit choice with
 library allocation and stack limits. It can allocate in proportion to input and
-overflow on deep values. A prepared contract keeps a compact copy of the keywords
-it compiled for explanations, never its document or supplied resources.
-Diagnostic completeness is separate from the established value outcome.
+overflow on deep values. Each explained problem names the failing node by exact
+pointer from the value and the failing keyword by resource and exact pointer; the
+value, document or resource set finds line and column on demand. A prepared
+contract keeps a compact copy of the keywords it compiled for explanations, never
+its document, supplied resources or any position. Diagnostic completeness is
+separate from the established value outcome.
 
 ## Discovery and kind implementations
 

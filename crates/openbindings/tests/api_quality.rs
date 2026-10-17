@@ -34,7 +34,12 @@ fn typed_inspection_checks_the_namespace_and_retains_unrelated_metadata() {
     assert_eq!(op.input().unwrap().as_bool(), Some(false));
     assert_eq!(op.output().unwrap().kind(), JsonKind::Null);
     assert_eq!(
-        op.input().unwrap().location().pointer.as_deref(),
+        op.input()
+            .unwrap()
+            .location()
+            .pointer
+            .as_ref()
+            .and_then(openbindings::Pointer::as_str),
         Some("/operations/z/input")
     );
     let held = op.input().unwrap().to_owned();
@@ -50,7 +55,8 @@ fn typed_inspection_checks_the_namespace_and_retains_unrelated_metadata() {
             .source_location()
             .unwrap()
             .pointer
-            .as_deref(),
+            .as_ref()
+            .and_then(openbindings::Pointer::as_str),
         Some("/operations/good/description")
     );
     assert!(unrelated.operations().is_ok());
@@ -122,7 +128,11 @@ fn authoring_collision_has_native_draft_path_and_source_is_separate() {
     let e = Document::from_json(wrong).operations().unwrap_err();
     assert_eq!(e.code(), "invalid-operation-aliases");
     assert_eq!(
-        e.source_location().unwrap().pointer.as_deref(),
+        e.source_location()
+            .unwrap()
+            .pointer
+            .as_ref()
+            .and_then(openbindings::Pointer::as_str),
         Some("/operations/x/aliases")
     );
     let mut b = Document::new();

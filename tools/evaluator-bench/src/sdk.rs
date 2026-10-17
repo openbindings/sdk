@@ -158,7 +158,27 @@ impl Outcome {
                 problems_complete,
                 ..
             } => {
-                value["problems"] = serde_json::to_value(problems).unwrap();
+                // Observations keep one shape across SDK revisions: each
+                // problem's instance pointer and schema location.
+                let problems: Vec<Value> = problems
+                    .iter()
+                    .map(|problem| {
+                        let mut observed = json!({
+                            "instance_pointer": problem.instance.to_string(),
+                            "schema_location": {
+                                "resource": problem.schema.resource,
+                                "pointer": problem.schema.pointer.to_string(),
+                            },
+                            "code": problem.code,
+                            "message": problem.message,
+                        });
+                        if let Some(details) = &problem.details {
+                            observed["details"] = serde_json::to_value(details).unwrap();
+                        }
+                        observed
+                    })
+                    .collect();
+                value["problems"] = json!(problems);
                 value["problems_complete"] = json!(problems_complete);
             }
             _ => {}

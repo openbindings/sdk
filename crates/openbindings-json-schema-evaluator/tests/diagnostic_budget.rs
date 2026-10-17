@@ -66,7 +66,7 @@ fn cheap_checks_are_value_free_and_explanations_are_one_first_error() {
     assert_eq!(problems.len(), 1);
     assert_eq!(problems[0].code, "type");
     assert_eq!(
-        problems[0].schema_location.as_ref().unwrap().pointer,
+        problems[0].schema.pointer,
         "/operations/op/input/allOf/0/type"
     );
     assert!(!problems_complete);

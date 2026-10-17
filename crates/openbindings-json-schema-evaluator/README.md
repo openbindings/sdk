@@ -102,11 +102,15 @@ failure has a fixed message, an empty problem list and `problems_complete =
 false`. `explain` returns the library's first error for the same verdict, with
 redacted messages and original schema facts. Building that error can allocate in
 proportion to the schema and value and can overflow the stack on deep values, so
-keep `validate` on paths that check untrusted input. Explained paths map to
-original sources. Schema facts may expose source operands. A prepared contract
-keeps the text of the schemas it reached for these facts, never the document or
-its supplied resources. Missing or incomplete diagnostics never weaken an
-established failure.
+keep `validate` on paths that check untrusted input. Each explained problem
+names the failing node by its exact pointer from the value passed (`instance`)
+and the failing keyword by resource and exact pointer (`schema`); a keyword the
+original sources do not hold is named by the selected schema itself, never
+guessed. `JsonValue::locate`, `Conformant::locate` and `ResourceSet::locate`
+find line and column on demand, so an explanation costs no position. Schema facts may expose
+source operands. A prepared contract keeps the text of the schemas it reached
+for these facts, never the document, its supplied resources or any position.
+Missing or incomplete diagnostics never weaken an established failure.
 
 Cancellation uses `WorkControl` and is cooperative. Cancelled preparation produces
 no prepared owner; cancelled validation leaves a prepared owner usable for a later

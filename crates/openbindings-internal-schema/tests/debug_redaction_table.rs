@@ -24,7 +24,7 @@ fn row(label: &'static str, value: &(impl Debug + ?Sized)) -> Row {
 fn internal_rows(context: &JsonValue) -> Vec<Row> {
     let location = schema::Location {
         resource: Some(SECRET.into()),
-        pointer: format!("/{SECRET}"),
+        pointer: format!("/{SECRET}").parse().unwrap(),
     };
     let failure = schema::Failure {
         reason: schema::FailureReason::EvaluatorFailure,

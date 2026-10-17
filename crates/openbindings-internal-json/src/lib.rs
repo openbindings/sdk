@@ -5,6 +5,9 @@ pub mod backend;
 mod json;
 mod raw;
 pub use json::*;
+#[warn(missing_docs)]
+mod pointer;
+pub use pointer::{Pointer, PointerError};
 
 pub mod decimal;
 pub mod numeric;

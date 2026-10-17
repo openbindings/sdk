@@ -104,7 +104,7 @@ function valueLines(result) {
         "Selected input does not satisfy the input contract.",
         ...result.problems.map(
           (problem) =>
-            `Instance ${JSON.stringify(problem.instancePointer)}; ${schemaLocation(problem.schemaLocation)}: ${problem.message}${detailLine(problem.details)}`,
+            `Instance ${JSON.stringify(problem.instance)}; ${schemaLocation(problem.schema)}: ${problem.message}${detailLine(problem.details)}`,
         ),
         `Selected input diagnostics complete: ${result.problemsComplete}.`,
       ];

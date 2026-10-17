@@ -1,4 +1,5 @@
 use crate::*;
+use openbindings_internal_json::backend::{pointer_bytes, push_pointer};
 use std::{collections::BTreeMap, fmt, sync::Arc};
 /// A closed JSON Schema projection with an original-source map. Names are private
 /// to this program; consumers must not rely on their spelling or numbering.
@@ -67,14 +68,13 @@ impl Program {
             .resource
             .as_ref()
             .map_or(0, String::len)
-            .saturating_add(location.pointer.len())
+            .saturating_add(pointer_bytes(&location.pointer))
             .saturating_add(suffix.len());
         if bytes > max_bytes {
             return Err(LocationBudgetExceeded);
         }
-        let mut pointer = String::with_capacity(location.pointer.len() + suffix.len());
-        pointer.push_str(&location.pointer);
-        pointer.push_str(suffix);
+        let mut pointer = location.pointer.clone();
+        push_pointer(&mut pointer, suffix);
         Ok(Some(Location {
             resource: location.resource.clone(),
             pointer,

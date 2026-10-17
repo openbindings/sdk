@@ -80,7 +80,7 @@ fn evidence() -> BTreeMap<String, JsonValue> {
 fn location() -> SchemaLocation {
     SchemaLocation {
         resource: Some(SECRET.into()),
-        pointer: format!("/{SECRET}"),
+        pointer: format!("/{SECRET}").parse().unwrap(),
     }
 }
 fn refusal() -> NoVerdict {
@@ -182,7 +182,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
     let validation = parsed.validate().unwrap();
     let validated = validation.conformant().unwrap();
     let source_location = SourceLocation {
-        pointer: Some(format!("/{SECRET}")),
+        pointer: Some(format!("/{SECRET}").parse().unwrap()),
         byte_offset: 42,
         line: 2,
         byte_column: 3,
@@ -213,8 +213,8 @@ fn debug_redacts_caller_text_at_every_boundary() {
         },
     };
     let problem = ValueProblem {
-        instance_pointer: format!("/{SECRET}"),
-        schema_location: Some(location()),
+        instance: format!("/{SECRET}").parse().unwrap(),
+        schema: location(),
         code: SECRET.into(),
         message: SECRET.into(),
         details: Some(ValueProblemDetails::Required {
@@ -297,7 +297,9 @@ fn debug_redacts_caller_text_at_every_boundary() {
             .unwrap()
             .contains(SECRET)
     );
-    assert!(format!("{problem:?}").contains("schema_location"));
+    // Both locations are shown structurally, without their pointers.
+    assert!(format!("{problem:?}").contains("instance: Pointer"));
+    assert!(format!("{problem:?}").contains("schema: SchemaLocation"));
     assert!(format!("{:?}", refusal()).contains("EvaluatorFailure"));
     for detail in [
         ValueProblemDetails::Type {
@@ -468,7 +470,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
     for finding in &decision.report().findings {
         let mut known = finding.clone();
         known.message = SECRET.into();
-        known.location.as_mut().unwrap().pointer = Some(format!("/{SECRET}"));
+        known.location.as_mut().unwrap().pointer = Some(format!("/{SECRET}").parse().unwrap());
         rows.push(row_with_fields(
             "Finding fixed reason",
             &known,
@@ -499,7 +501,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
             code: "schema-mismatch",
             status: Evidence::Violated,
             location: Some(SourceLocation {
-                pointer: Some(format!("/{SECRET}")),
+                pointer: Some(format!("/{SECRET}").parse().unwrap()),
                 byte_offset: 42,
                 line: 2,
                 byte_column: 3,

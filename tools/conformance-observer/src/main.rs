@@ -2,7 +2,7 @@ use base64::Engine;
 use openbindings::*;
 use serde_json::{Value, json};
 use std::io::{self, BufRead};
-fn observe(request: &Value) -> Value {
+fn observe(request: &Value) -> String {
     let given = &request["given"];
     let data = base64::engine::general_purpose::STANDARD
         .decode(given["documentBase64"].as_str().unwrap())
@@ -30,21 +30,7 @@ fn observe(request: &Value) -> Value {
                         })
                         .collect::<std::collections::BTreeMap<_, _>>()
                 );
-                out["findings"] = json!(report.findings);
-                if let Some(findings) = out["findings"].as_array_mut() {
-                    for finding in findings {
-                        if finding["status"] == "met" {
-                            finding["status"] = json!("satisfied");
-                        }
-                        if matches!(
-                            (finding["rule"].as_str(), finding["code"].as_str()),
-                            (Some("OBI-06" | "OBI-08"), Some("unknown-operation"))
-                                | (Some("OBI-07"), Some("unknown-source"))
-                        ) {
-                            finding["code"] = json!("missing-target");
-                        }
-                    }
-                }
+                return with_findings(out, &report.findings);
             }
             Err(error) => {
                 out["outcome"] = json!("version-refused");
@@ -127,16 +113,17 @@ fn observe(request: &Value) -> Value {
                     "output"
                 };
                 let prepared = prepare(&proof, operation, side, &evaluator, &resources);
-                out["values"] = json!(
-                    given["valuesJson"]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .map(|v| observe_value(
-                            &prepared,
-                            &JsonValue::parse(v.as_str().unwrap()).unwrap()
-                        ))
-                        .collect::<Vec<_>>()
+                let values: Vec<String> = given["valuesJson"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| {
+                        observe_value(&prepared, &JsonValue::parse(v.as_str().unwrap()).unwrap())
+                    })
+                    .collect();
+                return extended(
+                    out.to_string(),
+                    &[("values", format!("[{}]", values.join(",")))],
                 );
             } else {
                 let OperationSelection::Found(op) = doc.resolve_operation(operation).unwrap()
@@ -148,18 +135,28 @@ fn observe(request: &Value) -> Value {
                     for example in examples {
                         for side in ["input", "output"] {
                             if let Some(value) = example.value.get(side) {
-                                let mut result = observe_value(
+                                let result = observe_value(
                                     &prepare(&proof, operation, side, &evaluator, &resources),
                                     &value.to_owned(),
                                 );
-                                result["example"] = json!(example.name.as_str().unwrap());
-                                result["side"] = json!(side);
-                                results.push(result);
+                                results.push(extended(
+                                    result,
+                                    &[
+                                        (
+                                            "example",
+                                            json!(example.name.as_str().unwrap()).to_string(),
+                                        ),
+                                        ("side", json!(side).to_string()),
+                                    ],
+                                ));
                             }
                         }
                     }
                 }
-                out["examples"] = json!(results);
+                return extended(
+                    out.to_string(),
+                    &[("examples", format!("[{}]", results.join(",")))],
+                );
             }
         }
         _ => {
@@ -167,7 +164,53 @@ fn observe(request: &Value) -> Value {
             out["outcome"] = json!("not-implemented");
         }
     }
-    out
+    out.to_string()
+}
+// Findings in the frozen protocol's vocabulary, written as JSON text: an exact
+// pointer through a member name with an unpaired unit has no `Value` form.
+fn with_findings(out: Value, findings: &[Finding]) -> String {
+    let rows: Vec<String> = findings
+        .iter()
+        .map(|finding| {
+            let status = if finding.status == Evidence::Met {
+                json!("satisfied")
+            } else {
+                json!(finding.status)
+            };
+            let code = match (finding.rule, finding.code) {
+                ("OBI-06" | "OBI-08", "unknown-operation") | ("OBI-07", "unknown-source") => {
+                    "missing-target"
+                }
+                (_, code) => code,
+            };
+            format!(
+                r#"{{"code":{},"location":{},"message":{},"rule":{},"status":{status}}}"#,
+                serde_json::to_string(code).unwrap(),
+                serde_json::to_string(&finding.location).unwrap(),
+                serde_json::to_string(&finding.message).unwrap(),
+                serde_json::to_string(finding.rule).unwrap(),
+            )
+        })
+        .collect();
+    extended(
+        out.to_string(),
+        &[("findings", format!("[{}]", rows.join(",")))],
+    )
+}
+// A JSON object's text with fields of JSON text appended.
+fn extended(object: String, fields: &[(&str, String)]) -> String {
+    let mut text = object;
+    assert_eq!(text.pop(), Some('}'), "an object's text");
+    for (key, value) in fields {
+        if !text.ends_with('{') {
+            text.push(',');
+        }
+        text.push_str(&json!(key).to_string());
+        text.push(':');
+        text.push_str(value);
+    }
+    text.push('}');
+    text
 }
 fn main() {
     for line in io::stdin().lock().lines() {
@@ -203,15 +246,17 @@ fn prepare(
         None => Preparation::NoContract,
     }
 }
-fn observe_value(preparation: &Preparation, value: &JsonValue) -> Value {
+// Outcomes and refusals carry exact pointers, so they are written as JSON text.
+fn observe_value(preparation: &Preparation, value: &JsonValue) -> String {
     match preparation {
         Preparation::Prepared(Ok(contract)) => {
-            serde_json::to_value(contract.validate(value)).unwrap()
+            serde_json::to_string(&contract.validate(value)).unwrap()
         }
-        Preparation::NoContract => json!({"outcome":"no-contract"}),
-        Preparation::OperationMissing => json!({"outcome":"operation-missing"}),
-        Preparation::Prepared(Err(detail)) => {
-            json!({"outcome":"no-verdict","detail":detail})
-        }
+        Preparation::NoContract => json!({"outcome":"no-contract"}).to_string(),
+        Preparation::OperationMissing => json!({"outcome":"operation-missing"}).to_string(),
+        Preparation::Prepared(Err(detail)) => extended(
+            json!({"outcome":"no-verdict"}).to_string(),
+            &[("detail", serde_json::to_string(detail).unwrap())],
+        ),
     }
 }

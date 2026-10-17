@@ -43,7 +43,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
     )
     .unwrap();
     let source_location = SourceLocation {
-        pointer: Some(format!("/{SECRET}")),
+        pointer: Some(format!("/{SECRET}").parse().unwrap()),
         byte_offset: 42,
         line: 2,
         byte_column: 3,
@@ -60,6 +60,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
             &context.view().get(SECRET).unwrap().as_string().unwrap(),
         ),
         row("SourceLocation", &source_location),
+        row("Pointer", source_location.pointer.as_ref().unwrap()),
         row(
             "InputError",
             &InputError {
@@ -134,7 +135,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
         &[("code", "<redacted>")],
     ));
 
-    check_rows(rows, 44);
+    check_rows(rows, 45);
 }
 
 fn row_with_fields(label: &'static str, value: &impl Debug, fields: &[(&str, &str)]) -> Row {
