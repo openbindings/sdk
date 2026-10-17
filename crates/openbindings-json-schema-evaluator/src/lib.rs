@@ -46,7 +46,7 @@ const STEPS_NODES: usize = 65_536;
 impl Limits {
     // The work allowance of one pass over `value`.
     fn steps_for(&self, value: &JsonValue) -> usize {
-        let nodes = backend::node_count(value);
+        let nodes = backend::node_count(value.view());
         if nodes <= STEPS_NODES {
             return self.evaluation_steps;
         }

@@ -878,16 +878,6 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
     true
 }
 
-/// The nodes of a value: itself and, in a container, every member name and
-/// value or element below it. Constant time for a parsed root.
-pub fn node_count(value: &crate::JsonValue) -> usize {
-    let nodes = &value.owner.nodes;
-    if value.id == 0 {
-        return nodes.len();
-    }
-    let end = nodes[value.id].span.end;
-    nodes[value.id..].partition_point(|node| node.span.start < end)
-}
 pub fn node_id(value: &crate::JsonValue) -> usize {
     value.id
 }
@@ -983,9 +973,13 @@ pub fn duplicate_member_names(
 }
 
 /// Count a value's nodes, including itself and its member-name tokens: the
-/// measure [`crate::JsonLimits::max_nodes`] admits. A subtree's ids are
-/// contiguous in source order, so this is one logarithmic search.
+/// measure [`crate::JsonLimits::max_nodes`] admits. Constant time for a parsed
+/// root; a subtree's ids are contiguous in source order, so otherwise this is
+/// one logarithmic search.
 pub fn node_count(value: crate::JsonRef<'_>) -> usize {
+    if value.id == 0 {
+        return value.owner.nodes.len();
+    }
     let nodes = &value.owner.nodes[value.id..];
     let end = nodes[0].span.end;
     nodes.partition_point(|node| node.span.start < end)
@@ -1053,15 +1047,11 @@ mod tests {
         let value = crate::JsonValue::parse(source).unwrap();
         // The root, its two member names, the array and its two elements,
         // the inner name and null, and the string.
-        assert_eq!(node_count(&value), 9);
+        assert_eq!(node_count(value.view()), 9);
         for (pointer, nodes) in [("/a", 5), ("/a/1", 3), ("/a/0", 1), ("/c", 1)] {
-            assert_eq!(
-                node_count(&value.at(pointer).unwrap().to_owned()),
-                nodes,
-                "{pointer}"
-            );
+            assert_eq!(node_count(value.at(pointer).unwrap()), nodes, "{pointer}");
         }
-        assert_eq!(node_count(&crate::JsonValue::parse("7").unwrap()), 1);
+        assert_eq!(node_count(crate::JsonValue::parse("7").unwrap().view()), 1);
     }
     #[test]
     fn indexed_members_preserve_each_exact_occurrence() {
