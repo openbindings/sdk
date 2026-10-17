@@ -68,10 +68,12 @@ pub(crate) struct Explanation {
     // An origin is the program map's entry for a generated URI: `"<pointer>"` is
     // a prefix origin in the resource's source, `null` a synthetic one, and
     // `[<exact>,"<pointer>"(,<source>,<standard>)]` an exact origin or one in
-    // another source. `<keyword origins>` lists `["<keyword path>",<origin>]` for
-    // the map's entries inside a definition, as paired oneOf bounds write. When
-    // the map holds anything else, every origin is `null` and the contract keeps
-    // the program's own map.
+    // another source. A pointer through a member name holding unpaired units
+    // writes each such unit as a `\uXXXX` escape and is read back exactly.
+    // `<keyword origins>` lists `["<keyword path>",<origin>]` for the map's
+    // entries inside a definition, as paired oneOf bounds write. When the map
+    // holds an entry no projection writes, every origin is `null` and the
+    // contract keeps the program's own map.
     text: Box<str>,
     // Resource slots sorted by key, then each resource's definition slots in
     // name order, a closing definition slot, and every definition's keyword
@@ -261,16 +263,34 @@ impl Sink for String {
 }
 // Where the text takes each definition's origin from: the program's location
 // map, or the space it was projected from, with each projected resource's
-// definition nodes and their original pointers, built once for both passes:
-// definition `k`'s pointer ends at `ends[k]` in `pointers`.
+// definition nodes and their original pointers.
 enum Origins<'a> {
     Map(&'a std::collections::BTreeMap<String, ProgramOrigin>),
     Space {
         space: &'a SchemaSpace,
         definitions: &'a [Vec<usize>],
-        pointers: Vec<u8>,
-        ends: Vec<usize>,
+        pointers: Pointers,
     },
+}
+// Every projected definition's original pointer, built once for both passes:
+// definition `k`'s ends at `ends[k]` in `bytes`. `tokens` lists, in order, the
+// definitions whose pointer passes through a name holding unpaired units, held
+// already as the JSON string the text writes.
+struct Pointers {
+    bytes: Vec<u8>,
+    ends: Vec<usize>,
+    tokens: Vec<usize>,
+}
+impl Pointers {
+    // Definition `k`'s pointer, and whether it is already a JSON string.
+    fn get(&self, k: usize) -> (&str, bool) {
+        let start = k.checked_sub(1).map_or(0, |k| self.ends[k]);
+        let pointer = std::str::from_utf8(&self.bytes[start..self.ends[k]]);
+        (
+            pointer.expect("pointers are UTF-8"),
+            self.tokens.binary_search(&k).is_ok(),
+        )
+    }
 }
 // Slots the filling pass writes: resources from 0, definitions from
 // `definitions`, keywords from `keywords`.
@@ -300,6 +320,35 @@ struct Writer<'r, W> {
 // offsets would not fit.
 fn offset(at: usize) -> u32 {
     u32::try_from(at).expect("measured text fits 32-bit offsets")
+}
+// A pointer through a name holding unpaired units as a JSON string: its scalar
+// text escaped as [`Writer::escaped`] escapes it, each unpaired unit as `\uXXXX`.
+#[cold]
+#[inline(never)]
+fn units_token(pointer: &Pointer) -> String {
+    use std::fmt::Write;
+    let mut token = String::from('"');
+    for unit in char::decode_utf16(pointer.utf16_units()) {
+        let escape = match unit {
+            Ok('"') => {
+                token.push_str("\\\"");
+                continue;
+            }
+            Ok('\\') => {
+                token.push_str("\\\\");
+                continue;
+            }
+            Ok(c) if (c as u32) >= 0x20 => {
+                token.push(c);
+                continue;
+            }
+            Ok(c) => c as u32,
+            Err(unit) => u32::from(unit.unpaired_surrogate()),
+        };
+        write!(token, "\\u{escape:04x}").expect("String writer");
+    }
+    token.push('"');
+    token
 }
 impl<W: Sink> Writer<'_, W> {
     fn put(&mut self, text: &str) {
@@ -411,29 +460,25 @@ impl<W: Sink> Writer<'_, W> {
         self.quoted(prefix);
         self.put(",{");
     }
-    // A program map entry, relative to the resource's original source. `false`,
-    // writing nothing, for a pointer through a name with an unpaired unit, which
-    // this text does not spell: the program's own map keeps it exactly.
-    fn origin(&mut self, origin: &ProgramOrigin, source: Option<&str>) -> bool {
+    // An original pointer as a JSON string.
+    fn pointer(&mut self, pointer: &Pointer) {
+        match pointer.as_str() {
+            Some(text) => self.escaped(text),
+            None => self.put(&units_token(pointer)),
+        }
+    }
+    // A program map entry, relative to the resource's original source.
+    fn origin(&mut self, origin: &ProgramOrigin, source: Option<&str>) {
         let (exact, at) = match origin {
-            ProgramOrigin::Synthetic => {
-                self.put("null");
-                return true;
-            }
-            ProgramOrigin::Prefix(at) | ProgramOrigin::Exact(at)
-                if at.pointer.as_str().is_none() =>
-            {
-                return false;
-            }
+            ProgramOrigin::Synthetic => return self.put("null"),
             ProgramOrigin::Prefix(at) if at.resource.as_deref() == source => {
-                self.escaped(at.pointer.as_str().expect("text pointer"));
-                return true;
+                return self.pointer(&at.pointer);
             }
             ProgramOrigin::Prefix(at) => (false, at),
             ProgramOrigin::Exact(at) => (true, at),
         };
         self.put(if exact { "[true," } else { "[false," });
-        self.escaped(at.pointer.as_str().expect("text pointer"));
+        self.pointer(&at.pointer);
         let resource = at.resource.as_deref();
         if resource != source {
             match resource {
@@ -446,7 +491,6 @@ impl<W: Sink> Writer<'_, W> {
             }
         }
         self.put_char(']');
-        true
     }
     // Write each resource's definitions with the program map's entries for
     // them. `Ok(false)` when the map holds an entry this text cannot carry.
@@ -550,9 +594,7 @@ impl<W: Sink> Writer<'_, W> {
                 }
                 let at = self.name(name);
                 self.put(":[");
-                if !self.origin(origin, source) {
-                    return Ok(false);
-                }
+                self.origin(origin, source);
                 self.put_char(',');
                 let schema_at = self.out.len();
                 let first_keyword = self.keywords;
@@ -579,9 +621,7 @@ impl<W: Sink> Writer<'_, W> {
                     self.put_char('[');
                     self.escaped(path);
                     self.put_char(',');
-                    if !self.origin(origin, source) {
-                        return Ok(false);
-                    }
+                    self.origin(origin, source);
                     self.put_char(']');
                     written += 1;
                 }
@@ -613,9 +653,8 @@ impl<W: Sink> Writer<'_, W> {
                 space,
                 definitions,
                 pointers,
-                ends,
             } => {
-                self.projected(resources, space, definitions, pointers, ends, control)?;
+                self.projected(resources, space, definitions, pointers, control)?;
                 Ok(true)
             }
         }
@@ -628,8 +667,7 @@ impl<W: Sink> Writer<'_, W> {
         resources: &[ProjectedResource],
         space: &SchemaSpace,
         definitions: &[Vec<usize>],
-        pointers: &[u8],
-        ends: &[usize],
+        pointers: &Pointers,
         control: &dyn WorkControl,
     ) -> Result<(), NoVerdict> {
         self.begin(resources);
@@ -670,14 +708,17 @@ impl<W: Sink> Writer<'_, W> {
                     continue;
                 };
                 debug_assert_eq!(space.source_uri(node), source);
-                let k = first_node + k;
-                let pointer = &pointers[k.checked_sub(1).map_or(0, |k| ends[k])..ends[k]];
+                let (pointer, token) = pointers.get(first_node + k);
                 if self.definitions != first_definition {
                     self.put_char(',');
                 }
                 let at = self.name(name);
                 self.put(":[");
-                self.escaped(std::str::from_utf8(pointer).expect("pointers are UTF-8"));
+                if token {
+                    self.put(pointer);
+                } else {
+                    self.escaped(pointer);
+                }
                 self.put_char(',');
                 let schema_at = self.out.len();
                 let first_keyword = self.keywords;
@@ -899,44 +940,35 @@ impl Explanation {
     }
     /// The same text for a program projected without a location map, its
     /// origins written from `space`: `definitions` holds each projected
-    /// resource's definition nodes in `$defs` order. When an origin passes
-    /// through a name holding unpaired units, which the text cannot carry, the
-    /// program takes the map [`SchemaSpace::program`] builds and the
-    /// explanation is [`Self::new`]'s, reading that map.
+    /// resource's definition nodes in `$defs` order.
     pub(crate) fn projected(
-        program: &mut Program,
+        program: &Program,
         space: &SchemaSpace,
         definitions: &[Vec<usize>],
         control: &dyn WorkControl,
     ) -> Result<Option<Self>, NoVerdict> {
         // Each pointer is built once, for both passes.
         let mut ends = Vec::with_capacity(definitions.iter().map(Vec::len).sum());
-        let (mut pointers, mut scratch) = (Vec::new(), Vec::new());
-        for &node in definitions.iter().flatten() {
+        let (mut bytes, mut scratch, mut tokens) = (Vec::new(), Vec::new(), Vec::new());
+        for (k, &node) in definitions.iter().flatten().enumerate() {
             control.check()?;
-            if !space.location_into(node, &mut pointers, &mut scratch) {
-                return Self::mapped(program, space, definitions, control);
+            if !space.location_into(node, &mut bytes, &mut scratch) {
+                let pointer = space.location(node).pointer;
+                bytes.extend_from_slice(units_token(&pointer).as_bytes());
+                tokens.push(k);
             }
-            ends.push(pointers.len());
+            ends.push(bytes.len());
         }
         let origins = Origins::Space {
             space,
             definitions,
-            pointers,
-            ends,
+            pointers: Pointers {
+                bytes,
+                ends,
+                tokens,
+            },
         };
         Self::build(program, origins, control)
-    }
-    #[cold]
-    #[inline(never)]
-    fn mapped(
-        program: &mut Program,
-        space: &SchemaSpace,
-        definitions: &[Vec<usize>],
-        control: &dyn WorkControl,
-    ) -> Result<Option<Self>, NoVerdict> {
-        program.locations = space.definition_locations(program, definitions);
-        Self::new(program, control)
     }
     fn build(
         program: &Program,
@@ -1201,7 +1233,13 @@ impl Explanation {
                 JsonKind::Array => origin.elements().nth(1),
                 _ => Some(origin),
             };
-            let Some(pointer) = origin.and_then(TextValue::string) else {
+            let Some(origin) = origin.filter(|origin| origin.kind() == JsonKind::String) else {
+                continue;
+            };
+            let Some(pointer) = origin.string() else {
+                if self.units_segment_is(origin, token, control)? {
+                    return Ok(Some(child));
+                }
                 continue;
             };
             if !work(control, pointer.len().saturating_add(token.len())) {
@@ -1230,6 +1268,59 @@ impl Explanation {
             }
         }
         Ok(None)
+    }
+    // An origin's pointer through a name holding unpaired units, written as
+    // `\uXXXX` escapes, followed by the walked suffix.
+    #[cold]
+    #[inline(never)]
+    fn units_pointer(&self, token: Token, suffix: &str) -> Option<Pointer> {
+        let mut units = self.at(token.start).utf16_units()?;
+        units.extend(suffix.encode_utf16());
+        Pointer::from_utf16(&units).ok()
+    }
+    // Whether the last segment of a pointer through a name holding unpaired
+    // units, as `named_child` decodes one, is the token's name.
+    #[cold]
+    #[inline(never)]
+    fn units_segment_is(
+        &self,
+        pointer: TextValue<'_>,
+        token: &str,
+        control: &dyn WorkControl,
+    ) -> Result<bool, ()> {
+        let Some(units) = pointer.utf16_units() else {
+            return Ok(false);
+        };
+        if !work(control, units.len().saturating_add(token.len())) {
+            return Err(());
+        }
+        let Some(slash) = units.iter().rposition(|&unit| unit == u16::from(b'/')) else {
+            return Ok(false);
+        };
+        // Decode both sides' `~1` and `~0` escapes, as `segment_eq` does.
+        let mut expected = Vec::with_capacity(token.len());
+        let mut token = token.encode_utf16();
+        while let Some(unit) = token.next() {
+            expected.push(match unit {
+                0x7e => match token.next() {
+                    Some(0x30) => 0x7e,
+                    Some(0x31) => 0x2f,
+                    _ => return Ok(false),
+                },
+                unit => unit,
+            });
+        }
+        let mut name = units[slash + 1..].iter().copied();
+        let name = std::iter::from_fn(|| match name.next()? {
+            0x7e => match name.next() {
+                Some(0x31) => Some(0x2f),
+                Some(0x30) => Some(0x7e),
+                // A canonical pointer escapes nothing else.
+                _ => Some(0),
+            },
+            unit => Some(unit),
+        });
+        Ok(name.eq(expected))
     }
     // A `const` or `enum` value kept in its projected arena.
     fn literal(&self, reference: TextValue<'_>) -> Option<JsonRef<'_>> {
@@ -1591,9 +1682,14 @@ impl Explanation {
                     Some(source) => Some(self.owned(source, 0).ok_or(())?),
                     None => None,
                 };
-                let mut pointer = self.owned(pointer, end).ok_or(())?;
-                pointer.push_str(&suffix[..end]);
-                (resource, backend::escaped_pointer(pointer), standard)
+                let pointer = match self.owned(pointer, end) {
+                    Some(mut text) => {
+                        text.push_str(&suffix[..end]);
+                        backend::escaped_pointer(text)
+                    }
+                    None => self.units_pointer(pointer, &suffix[..end]).ok_or(())?,
+                };
+                (resource, pointer, standard)
             }
         };
         Ok(Some(Located {
@@ -2292,18 +2388,94 @@ mod tests {
             let (space, entry) = crate::planner::space(&request);
             let control = std::sync::atomic::AtomicBool::new(false);
             let mapped = space.program(entry, &|| false).unwrap();
-            let mut unmapped = space.program_unmapped(entry, &|| false).unwrap();
+            let unmapped = space.program_unmapped(entry, &|| false).unwrap();
             let from_map = Explanation::new(&mapped, &control).unwrap().unwrap();
-            let from_space = Explanation::projected(
-                &mut unmapped.program,
-                &space,
-                &unmapped.definitions,
-                &control,
-            )
-            .unwrap()
-            .unwrap();
+            let from_space =
+                Explanation::projected(&unmapped.program, &space, &unmapped.definitions, &control)
+                    .unwrap()
+                    .unwrap();
             assert_eq!(from_map.text, from_space.text, "{schema}");
             assert!(!from_space.needs_locations());
+        }
+    }
+
+    #[test]
+    fn origins_through_unpaired_names_are_written_as_escapes_and_read_exactly() {
+        #[derive(Default)]
+        struct Capture(std::sync::Mutex<Option<SchemaRequest>>);
+        impl SchemaEvaluator for Capture {
+            fn prepare(
+                &self,
+                request: &SchemaRequest,
+                control: &dyn WorkControl,
+            ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+                *self.0.lock().unwrap() = Some(request.clone());
+                DefaultEvaluator::new().prepare(request, control)
+            }
+        }
+        // An anchor reaches a schema beneath a name no reference can spell.
+        let resources = ResourceSet::new(vec![SchemaResource {
+            uri: "https://loc.test/r".into(),
+            document: JsonValue::parse(
+                r#"{"minimum":0,"$defs":{"\ud800/":{"$anchor":"an","properties":{"p":{"minimum":3}}}}}"#,
+            )
+            .unwrap(),
+        }])
+        .unwrap();
+        let document = Document::parse(
+            r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://loc.test/r#an"}}}}"#,
+        )
+        .unwrap();
+        let document = document.validate().unwrap().conformant().unwrap();
+        let operation = document.resolve_operation("op").unwrap();
+        let capture = Capture::default();
+        assert!(
+            operation
+                .input()
+                .unwrap()
+                .prepare_with(&capture, &resources)
+                .is_ok()
+        );
+        let request = capture.0.lock().unwrap().take().unwrap();
+        let (space, entry) = crate::planner::space(&request);
+        let control = std::sync::atomic::AtomicBool::new(false);
+        let mapped = space.program(entry, &|| false).unwrap();
+        let unmapped = space.program_unmapped(entry, &|| false).unwrap();
+        let from_map = Explanation::new(&mapped, &control).unwrap().unwrap();
+        let from_space =
+            Explanation::projected(&unmapped.program, &space, &unmapped.definitions, &control)
+                .unwrap()
+                .unwrap();
+        // Both write the same text, holding the pointer's unit as an escape, so
+        // neither needs the program's map.
+        assert_eq!(from_map.text, from_space.text);
+        assert!(!from_space.needs_locations());
+        assert!(from_space.text.contains(r#""/$defs/\ud800~1""#));
+        let key = mapped
+            .locations
+            .iter()
+            .find_map(|(key, origin)| match origin {
+                ProgramOrigin::Prefix(at) if at.pointer.as_str().is_none() => Some(key),
+                _ => None,
+            })
+            .unwrap();
+        // The definition's own origin, and a walk through its children, which
+        // finds the child by the last segment of its own pointer.
+        for (suffix, expected) in [
+            ("", r"/$defs/\ud800~1"),
+            (
+                "/properties/p/minimum",
+                r"/$defs/\ud800~1/properties/p/minimum",
+            ),
+        ] {
+            let at = from_space
+                .locate(None, &format!("{key}{suffix}"), &control)
+                .unwrap()
+                .unwrap()
+                .location;
+            assert_eq!(at.resource.as_deref(), Some("https://loc.test/r"));
+            assert!(at.pointer.as_str().is_none());
+            assert_eq!(at.pointer.to_string(), expected, "{suffix}");
         }
     }
 

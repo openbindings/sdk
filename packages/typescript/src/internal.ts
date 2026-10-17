@@ -824,7 +824,7 @@ export class ExactJson extends Managed {
     const found = handle<wasm.WasmJson>(this).at(pointer);
     return found ? new ExactJson(found) : undefined;
   }
-  /** Locate an exact RFC 6901 pointer relative to this value, such as a value problem's instance, in the text it was parsed from: the node's byte offset, line and byte column with the given pointer, or null when it names no node. A segment may hold an unpaired UTF-16 unit. Computed on this call; nothing is retained. */
+  /** Locate an exact RFC 6901 pointer relative to this value, such as a value problem's instance, in the text it was parsed from: the node's byte offset, line and byte column with the given pointer, or null when it names no node. A segment may hold an unpaired UTF-16 unit. Computed on this call; nothing is retained. A malformed pointer throws SdkError with code invalid-pointer. */
   locate(pointer: string): SourceLocation | null {
     if (typeof pointer !== "string")
       throw new TypeError("A JSON Pointer string is required.");
@@ -1760,7 +1760,7 @@ export class SchemaResources extends Managed {
   retain(): SchemaResources {
     return SchemaResources.fromRaw(handle<wasm.WasmResources>(this).retain());
   }
-  /** Locate a schema location in one of these resources: the node its pointer names in the resource with its URI, with line and column in that resource's text. null for a document location, a URI this set does not hold (such as a packaged meta-schema's), or a pointer that names no node. Positions are computed on this call. A malformed location throws SdkError with code invalid-schema-location. */
+  /** Locate a schema location in one of these resources: the node its pointer names in the resource with its URI, with line and column in that resource's own text. A resource built from a subtree of a larger value is admitted as its own text, so its coordinates count from the subtree's start, where ExactJson.locate on that subtree counts in the whole text it was parsed from. null for a document location, a URI this set does not hold (such as a packaged meta-schema's), or a pointer that names no node. Positions are computed on this call. A malformed location throws SdkError with code invalid-schema-location. */
   locate(at: SchemaLocation): SourceLocation | null {
     const raw = handle<wasm.WasmResources>(this);
     return decode(sdkCall(() => raw.locate(schemaLocationText(at))));

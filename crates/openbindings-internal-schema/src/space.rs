@@ -781,24 +781,6 @@ impl SchemaSpace {
             definitions,
         })
     }
-    /// The location map [`Self::program`] builds, for the projection
-    /// [`Self::program_unmapped`] returned with these definition nodes.
-    pub fn definition_locations(
-        &self,
-        program: &Program,
-        definitions: &[Vec<usize>],
-    ) -> std::sync::Arc<BTreeMap<String, crate::ProgramOrigin>> {
-        let mut locations = BTreeMap::new();
-        for (resource, nodes) in program.resources.iter().zip(definitions) {
-            for &node in nodes {
-                locations.insert(
-                    format!("{}#/$defs/n{}", resource.uri, self.node_number(node)),
-                    crate::ProgramOrigin::Prefix(self.location(node)),
-                );
-            }
-        }
-        std::sync::Arc::new(locations)
-    }
     pub fn project(
         &self,
         entry: usize,
@@ -1713,27 +1695,9 @@ mod projection_tests {
             }
         }
         assert_eq!(checked, mapped.locations.len());
-        assert_same_map(
-            &space.definition_locations(&unmapped.program, &unmapped.definitions),
-            &mapped.locations,
-        );
-    }
-    fn assert_same_map(
-        built: &BTreeMap<String, ProgramOrigin>,
-        mapped: &BTreeMap<String, ProgramOrigin>,
-    ) {
-        assert!(built.keys().eq(mapped.keys()));
-        for (key, origin) in built {
-            let (ProgramOrigin::Prefix(built), ProgramOrigin::Prefix(mapped)) =
-                (origin, &mapped[key])
-            else {
-                panic!("strict projections map prefix origins")
-            };
-            assert!(built == mapped, "{key}");
-        }
     }
     #[test]
-    fn unmapped_origins_through_unpaired_names_are_left_to_the_map() {
+    fn origins_through_unpaired_names_are_left_to_the_exact_location() {
         // An anchor reaches a schema beneath a name no reference can spell.
         let document = RawDocument::parse(
             r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://loc.test/r#an"}}}}"#,
@@ -1768,20 +1732,20 @@ mod projection_tests {
             if space.location_into(node, &mut out, &mut scratch) {
                 assert_eq!(at.pointer, std::str::from_utf8(&out[4..]).unwrap());
             } else {
-                // Nothing is appended, and the location keeps every unit.
+                // Nothing is appended, and the location keeps every unit, as the
+                // mapped projection's origin does.
                 assert_eq!(out, b"held");
                 assert!(at.pointer.as_str().is_none());
                 assert_eq!(at.resource.as_deref(), Some("https://loc.test/r"));
                 assert_eq!(at.pointer.to_string(), "/$defs/\\ud800~1");
+                assert!(mapped.locations.values().any(
+                    |origin| matches!(origin, ProgramOrigin::Prefix(mapped) if *mapped == at)
+                ));
                 declined += 1;
             }
             out.truncate(4);
         }
         assert_eq!(declined, 1);
-        assert_same_map(
-            &space.definition_locations(&unmapped.program, &unmapped.definitions),
-            &mapped.locations,
-        );
     }
     #[test]
     fn generated_name_changes_preserve_dynamic_scope_annotations_opaque_strings_and_locations() {
