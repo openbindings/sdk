@@ -151,6 +151,14 @@ the job. Heap flags require both >10% and >128 KiB for retained baseline, total
 peak, incremental peak or requested bytes/op; count flags require both >5% and
 >32/op.
 
+A change that intends to alter a workload's outcome declares it in that
+workload's fixture expectation. The comparison then checks the merge-base binary
+against the merge base's expectation and the candidate against its own, reports
+the row as outcome changed by this change with both expectations, and leaves it
+out of timing and memory decisions. Either side missing its own expectation, or
+any observation difference on a row whose expectation did not change, still fails
+the job. Workloads present in only one fixture set are reported, not compared.
+
 The harness isolates SDK calls in `tools/evaluator-bench/src/sdk.rs`. It also
 measures document validation directly from bytes (including the conformant
 proof), conformant operation/text reads and full available failure diagnostics.

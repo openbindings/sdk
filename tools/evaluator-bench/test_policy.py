@@ -140,6 +140,148 @@ class Policy(unittest.TestCase):
                 self.assertEqual(report['advisory'], not enforce)
                 self.assertTrue(report['timing_advisory'])
 
+class OutcomeChanges(unittest.TestCase):
+    """An expectation that differs from the merge base's declares an intended outcome change."""
+    @staticmethod
+    def workload(value, **expected):
+        return dict(schema='true', value=value, expected=expected, modes=['eval'])
+
+    def compare(self, candidate, baseline, observed, pair=None):
+        """Run the enforced driver; fake binaries check their request's expectation as the instrument does."""
+        calls = []
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output = root/'output'
+            output.mkdir()
+            if baseline is not None:
+                (output/compare.BASELINE_FIXTURES).write_text(json.dumps(baseline))
+            if pair is not None:
+                (output/'instrument-pair.json').write_text(json.dumps(pair))
+            arguments = ['compare.py', '--output', str(output), '--enforce']
+            for key in ['baseline', 'candidate', 'baseline-alloc', 'candidate-alloc']:
+                (root/key).write_text(key)
+                arguments.extend(['--'+key, str(root/key)])
+
+            def invoke(binary, request, log, rss=False):
+                side = 'candidate' if binary.name.startswith('candidate') else 'baseline'
+                n = request['iterations']
+                if request['mode'] == 'empty-process':
+                    observation = dict(status='empty-process')
+                else:
+                    observation = observed[side][request['value']]
+                    calls.append((side, request['value'], n, request['expected']))
+                    for key, value in request['expected'].items():
+                        if observation.get(key) != value:
+                            raise RuntimeError(f'{binary.name} exited 101: unexpected {key}: {observation}')
+                memory = {key: 1024 for key in ['baseline_live_bytes', 'peak_live_bytes', 'incremental_peak_bytes',
+                                                'requested_bytes_per_op', 'allocations_per_op']}
+                return dict(iterations=n, outcomes={observation['status']: n}, observation=observation,
+                            nanoseconds=n*200_000_000, memory=memory, rss_bytes=1024*1024)
+
+            with patch.object(sys, 'argv', arguments), \
+                 patch.object(compare, 'fixtures', return_value=candidate), \
+                 patch.object(compare, 'invoke', side_effect=invoke):
+                try:
+                    compare.main()
+                    code = 0
+                except SystemExit as error:
+                    code = error.code
+            def read(name):
+                path = output/name
+                return path.read_text() if path.exists() else None
+            report = read('comparison.json')
+            return code, report and json.loads(report), read('summary.md'), calls
+
+    def test_a_changed_expectation_is_checked_per_side_and_excluded_from_decisions(self):
+        old, new = dict(status='no-verdict', code='work'), dict(status='no-verdict', code='depth')
+        candidate = dict(stop=self.workload('stop', **new), same=self.workload('same', status='satisfies'))
+        baseline = dict(stop=self.workload('stop', **old), same=self.workload('same', status='satisfies'))
+        observed = dict(baseline=dict(stop=old, same=dict(status='satisfies')),
+                        candidate=dict(stop=new, same=dict(status='satisfies')))
+        code, report, summary, calls = self.compare(candidate, baseline, observed)
+        self.assertEqual(code, 0)
+        self.assertEqual(report['errors'], [])
+        stop, same = report['rows']
+        self.assertEqual(stop['comparison'], compare.OUTCOME_CHANGED)
+        self.assertEqual(stop['expected'], dict(baseline=old, candidate=new))
+        self.assertEqual(stop['observations'], dict(baseline=old, candidate=new))
+        self.assertEqual(stop['batches'], [])
+        for key in ['time_decision', 'memory', 'heap_regression', 'allocation_regression', 'rss']:
+            self.assertNotIn(key, stop)
+        # One untimed check per binary, each against its own side's expectation.
+        self.assertEqual([call for call in calls if call[1] == 'stop'],
+                         [('baseline', 'stop', 1, old), ('candidate', 'stop', 1, new)])
+        # Every other row is compared exactly as before.
+        self.assertEqual(same['comparison'], compare.COMPARED)
+        self.assertEqual(same['observation'], dict(status='satisfies'))
+        self.assertEqual(same['time_decision'], 'within-threshold')
+        self.assertFalse(same['heap_regression'] or same['allocation_regression'])
+        self.assertIn('| stop | eval | n/a | outcome changed by this change; not timed | n/a |', summary)
+        self.assertIn('| stop | eval | `{"status":"no-verdict","code":"work"}` | '
+                      '`{"status":"no-verdict","code":"depth"}` |', summary)
+
+    def test_an_unchanged_expectation_still_requires_identical_outcomes(self):
+        expected = dict(status='no-verdict', code='work')
+        fixture = dict(stop=self.workload('stop', **expected))
+        for case, before, after in [
+                ('candidate misses the shared expectation', expected, dict(status='no-verdict', code='depth')),
+                ('only an undeclared field differs', dict(expected, detail='old'), dict(expected, detail='new'))]:
+            with self.subTest(case):
+                code, report, summary, _ = self.compare(fixture, fixture,
+                                                        dict(baseline=dict(stop=before), candidate=dict(stop=after)))
+                self.assertEqual(code, 1)
+                self.assertEqual(report['rows'][0]['comparison'], compare.COMPARED)
+                self.assertEqual([error['workload'] for error in report['errors']], ['stop'])
+                self.assertIn('| stop | eval | n/a | error | n/a |', summary)
+
+    def test_a_changed_expectation_still_requires_each_side_to_meet_its_own(self):
+        old, new = dict(status='no-verdict', code='work'), dict(status='no-verdict', code='depth')
+        candidate, baseline = dict(stop=self.workload('stop', **new)), dict(stop=self.workload('stop', **old))
+        for case, before, after in [('candidate misses its new expectation', old, old),
+                                    ('baseline misses its old expectation', new, new)]:
+            with self.subTest(case):
+                code, report, summary, _ = self.compare(candidate, baseline,
+                                                        dict(baseline=dict(stop=before), candidate=dict(stop=after)))
+                self.assertEqual(code, 1)
+                self.assertEqual(report['rows'][0]['comparison'], compare.OUTCOME_CHANGED)
+                self.assertEqual([error['workload'] for error in report['errors']], ['stop'])
+                self.assertIn('| stop | eval | n/a | error | n/a |', summary)
+
+    def test_workloads_in_one_fixture_set_are_reported_not_compared(self):
+        candidate = dict(new=self.workload('new', status='satisfies'))
+        baseline = dict(removed=self.workload('removed', status='satisfies'))
+        code, report, summary, calls = self.compare(candidate, baseline,
+                                                    dict(baseline={}, candidate=dict(new=dict(status='satisfies'))))
+        self.assertEqual(code, 0)
+        self.assertEqual(report['rows'][0]['comparison'], compare.CANDIDATE_ONLY)
+        self.assertEqual(report['rows'][0]['batches'], [])
+        self.assertEqual(calls, [('candidate', 'new', 1, dict(status='satisfies'))])
+        self.assertEqual(report['baseline_only_workloads'], ['removed'])
+        self.assertIn('- `new`: candidate only', summary)
+        self.assertIn('- `removed`: merge base only', summary)
+        # The candidate's own expectation is still enforced.
+        code, report, _, _ = self.compare(candidate, baseline,
+                                          dict(baseline={}, candidate=dict(new=dict(status='fails'))))
+        self.assertEqual(code, 1)
+        self.assertEqual([error['workload'] for error in report['errors']], ['new'])
+
+    def test_the_merge_base_fixtures_read_must_be_the_ones_the_build_recorded(self):
+        import hashlib
+        fixture = dict(same=self.workload('same', status='satisfies'))
+        observed = dict(baseline=dict(same=dict(status='satisfies')), candidate=dict(same=dict(status='satisfies')))
+        recorded = hashlib.sha256(json.dumps(fixture).encode()).hexdigest()
+        code, report, _, _ = self.compare(fixture, fixture, observed,
+                                          pair=dict(kind='identical', baseline_fixtures_sha256=recorded))
+        self.assertEqual(code, 0)
+        self.assertEqual(report['baseline_fixtures_sha256'], recorded)
+        for baseline, pair_digest in [(fixture, '0'*64), (fixture, None), (None, recorded)]:
+            with self.subTest(recorded=pair_digest, saved=baseline is not None):
+                code, report, _, calls = self.compare(fixture, baseline, observed,
+                                                      pair=dict(kind='identical', baseline_fixtures_sha256=pair_digest))
+                self.assertIn('not the merge-base fixture set', code)
+                self.assertIsNone(report)
+                self.assertEqual(calls, [])
+
 class InstrumentConfinement(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -240,7 +382,10 @@ class InstrumentConfinement(unittest.TestCase):
             (sources[1]/'tools/evaluator-bench/src/main.rs').write_text('changed timing\n')
         calls = []
         target = self.root/'target'
+        real_run = subprocess.run
         def run(command, **options):
+            if command[0] == sys.executable:
+                return real_run(command, **options)
             if command[1:] == ['--provenance']:
                 return subprocess.CompletedProcess(command, 0, stdout=Path(command[0]).read_text(), stderr='')
             manifest = Path(command[command.index('--manifest-path')+1])
@@ -281,6 +426,32 @@ class InstrumentConfinement(unittest.TestCase):
         self.assertTrue(Path(builds['baseline-identical']['instrument']).name.startswith('evaluator-candidate-'))
         self.assertEqual(builds['baseline-identical']['instrument_digest'], builds['candidate']['instrument_digest'])
         self.assertNotEqual(builds['baseline-identical']['sdk_digest'], builds['candidate']['sdk_digest'])
+
+    def test_the_build_saves_the_merge_base_fixture_set(self):
+        # The merge base's generator runs against its own tree: a sibling
+        # import resolves there, and it leaves no bytecode behind.
+        (self.base/'expectations.py').write_text("EXPECTED = {'status': 'fails'}\n")
+        (self.base/'fixtures.py').write_text('from expectations import EXPECTED\n'
+            "def fixtures():\n    return {'w': {'value': '1', 'expected': EXPECTED, 'modes': ['eval']}}\n")
+        metadata, _ = self.build(identical_builds=True)
+        saved = self.root/'output'/compare.BASELINE_FIXTURES
+        self.assertEqual(json.loads(saved.read_text()),
+                         {'w': {'value': '1', 'expected': {'status': 'fails'}, 'modes': ['eval']}})
+        self.assertEqual(metadata['baseline_fixtures_sha256'], compare.digest(saved))
+        self.assertFalse((self.root/'sources/baseline/tools/evaluator-bench/__pycache__').exists())
+
+    def test_a_merge_base_without_fixtures_leaves_no_saved_set(self):
+        (self.root/'output').mkdir()
+        (self.root/'output'/compare.BASELINE_FIXTURES).write_text('{"stale": {}}')
+        metadata, _ = self.build(identical_builds=True)
+        self.assertIsNone(metadata['baseline_fixtures_sha256'])
+        self.assertFalse((self.root/'output'/compare.BASELINE_FIXTURES).exists())
+
+    def test_a_failing_merge_base_fixture_generator_fails_the_build(self):
+        (self.base/'fixtures.py').write_text("def fixtures():\n    raise ValueError('broken generator')\n")
+        with self.assertRaisesRegex(RuntimeError, '(?s)did not produce fixtures.*broken generator'):
+            self.build(identical_builds=True)
+        self.assertFalse((self.root/'target').exists())
 
     def test_reused_target_directories_are_refused_before_building(self):
         (self.root/'target/baseline-identical').mkdir(parents=True)
@@ -358,7 +529,7 @@ class FixtureCoverage(unittest.TestCase):
         self.assertEqual(len(existing), 32)
         serialized = (json.dumps(existing, indent=2)+'\n').encode()
         self.assertEqual(hashlib.sha256(serialized).hexdigest(),
-                         '1a358b13151775452f266be52b2e775ff5b2673d1741c8816d1372609f13d8f1')
+                         '5b37f03b822485b96d6745e387a3f847100e241051113ccbe9e014c396dda85d')
 
     def test_document_scales_shared_definitions_and_complete_reads(self):
         rows = fixtures()

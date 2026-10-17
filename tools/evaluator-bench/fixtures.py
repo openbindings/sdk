@@ -66,6 +66,8 @@ def fixtures():
                        ('work-stop', 'evaluation-work-limit'), ('regex-stop', 'regex-work-limit'), ('cancelled', 'caller-cancelled')]:
         rows[name]['expected']['code'] = code
     rows['undefined-pointer']['expected']['code'] = 'static-reference-defect'
+    rows['work-stop']['expected']['detail'] = dict(code='evaluation-work-limit', location=None,
+        message='evaluation work limit reached', reason='limit-exceeded')
     rows['source-diagnostics']['expected'].update(problems_complete=False, problems=[dict(
         code='maximum', details=dict(bound='9223372036854775807', kind='numeric-bound'), instance_pointer='',
         message='number exceeds the inclusive upper bound; inspect maximum at the schema location',
