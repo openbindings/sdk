@@ -15,7 +15,7 @@ document and `ResourceSet` also saves work, but still prepares a fresh contract 
 each `prepare` call. The SDK does not transparently cache arbitrary custom
 evaluator results.
 
-On 2026-10-15, paired release measurements against revision `7013a36` on macOS
+On 2026-10-15, paired release measurements against revision `3fd152c` on macOS
 arm64 / Rust 1.99.0 produced the following medians, including shared carrier inspection
 and compact reference routing. Preparation includes schema parsing, minimal document proof, resource
 contexts, compilation and destruction; evaluation retains the contract and parsed
@@ -40,15 +40,15 @@ against the faster of two peers. Exact decimal-array evaluation changed by
 arithmetic costs.
 
 On 2026-10-16, preparing contracts from the operation instead of a retained
-context was compared with revision `3cb5783` by the benchmark harness's cross-API
+context was compared with revision `37bfd7f` by the benchmark harness's cross-API
 pairs (macOS arm64, Rust 1.99.0, two batches of 20 adjacent randomized pairs).
 Preparation no longer assembles a core resolution space unless an evaluator asks
 for the core projection, so one-shot preparation (`compile`) fell by 1–20% and
 `full` by up to 20%; repeated preparation with the same document and resources
 (`context`) stayed within 0.992–1.008. Allocation counts per operation fell for
-one-shot preparation and were unchanged elsewhere. Evaluation code is unchanged,
-and its small rows moved by up to ±4% between builds with byte-identical hot
-machine code; that is code placement, not a contract cost.
+one-shot preparation and were unchanged elsewhere. The evaluation path's machine
+code is byte-identical apart from addresses; sub-microsecond evaluation rows
+measured up to 4% slower in these builds, which is not yet attributed.
 
 A fan-in workload has 100 distinct referring resources pointing to one supplied
 integer schema with 5,000 unused definitions. Twelve adjacent fresh-child pairs

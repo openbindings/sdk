@@ -1493,6 +1493,7 @@ export class ConformantDocument extends DocumentReads {
     return raw ? adopt(raw, ConformantOperationView.fromRaw) : undefined;
   }
 }
+type OperationRaw = wasm.WasmOperation | wasm.WasmConformantOperation;
 /** Reads shared by plain and conformant operation views. */
 abstract class OperationReads extends Managed {
   #metadata?: OperationMetadata;
@@ -1504,22 +1505,22 @@ abstract class OperationReads extends Managed {
   }
   /** Allocate the selected primary key, even when lookup used an alias. */
   get key(): string {
-    return handle<wasm.WasmOperation>(this).key();
+    return handle<OperationRaw>(this).key();
   }
   /** Return a NEW independently disposable ExactJson owner on every call. It survives operation/document disposal and can retain the original arena. */
   value(): ExactJson {
-    return new ExactJson(handle<wasm.WasmOperation>(this).value());
+    return new ExactJson(handle<OperationRaw>(this).value());
   }
   /** Cached frozen metadata for this selected operation only; no disposable owner is created. */
   get metadata(): OperationMetadata {
-    const raw = handle<wasm.WasmOperation>(this);
+    const raw = handle<OperationRaw>(this);
     return (this.#metadata ??= freezeMetadata(
       decode<OperationMetadata>(sdkCall(() => raw.metadata())),
     ));
   }
   /** Cached frozen example metadata in lexical key order; null means absent, empty means present-empty. Checks every example row but transports no values. */
   get examples(): readonly ExampleMetadata[] | null {
-    const raw = handle<wasm.WasmOperation>(this);
+    const raw = handle<OperationRaw>(this);
     if (this.#examples === undefined)
       this.#examples = metadataRows<ExampleMetadata>(
         sdkCall(() => raw.examples()),
@@ -1529,12 +1530,12 @@ abstract class OperationReads extends Managed {
   /** Acquire a selected independent example view, or undefined for absence; unrelated row metadata is not interpreted. */
   example(key: string): ExampleView | undefined {
     scalar(key);
-    const raw = sdkCall(() => handle<wasm.WasmOperation>(this).example(key));
+    const raw = sdkCall(() => handle<OperationRaw>(this).example(key));
     return raw ? adopt(raw, ExampleView.fromRaw) : undefined;
   }
   /** Allocate a plain array of binding keys in lexical order. No owner disposal, ranking or invocation is involved. */
   get bindings(): readonly string[] {
-    return decode(sdkCall(() => handle<wasm.WasmOperation>(this).bindings()));
+    return decode(sdkCall(() => handle<OperationRaw>(this).bindings()));
   }
 }
 /** Retained operation of a Document, selected by primary key or alias. It survives parent disposal; dispose it independently. Exact value inspection is not normative proof or a prepared schema. */
@@ -1762,21 +1763,19 @@ export class ValueContract extends Managed {
     requireReady();
     const raw = contractRaw(this);
     const { resources, limits, diagnostics, signal } = prepareOptions(options);
-    const encoded = encodedLimits(limits),
-      empty = resources ? undefined : new SchemaResources();
-    let preparation: wasm.WasmPreparation;
-    try {
-      preparation = sdkCall(() =>
-        raw.prepare(
-          resourceRaw(resources ?? empty!),
-          encoded,
-          diagnostics,
-          isAborted(signal),
-        ),
-      );
-    } finally {
-      empty?.dispose();
-    }
+    // Omitted resources and limits cross the bridge as absent: the engine uses
+    // its shared empty set and default budgets without building either.
+    const encoded = limits === undefined ? undefined : encodedLimits(limits);
+    const preparation = sdkCall(() =>
+      resources === undefined
+        ? raw.prepare(encoded, diagnostics, isAborted(signal))
+        : raw.prepareWith(
+            resourceRaw(resources),
+            encoded,
+            diagnostics,
+            isAborted(signal),
+          ),
+    );
     try {
       const result = decode<
         | Exclude<ValueContractPreparation, { status: "ready" }>

@@ -1,7 +1,11 @@
 //! Retained value contracts and the optional evaluator interface.
-use crate::*;
+use crate::{document::DocumentInner, schema_space::SchemaSpace, *};
 use serde::Serialize;
-use std::{collections::BTreeMap, fmt, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    fmt,
+    sync::{Arc, Mutex, PoisonError, Weak},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -277,15 +281,51 @@ pub struct SchemaResource {
 /// Immutable caller-supplied resources. Separate sets can use the same URI
 /// for different snapshots; this is not a process-wide registry or an acquirer.
 /// Clones share storage, including the identity index built by [`Self::new`],
-/// so passing one set to many preparations indexes its resources once.
+/// so passing one set to many preparations indexes its resources once. A
+/// resolution space assembled for this set and a document revision is kept
+/// with the set while both are alive, and released when either is dropped.
 #[derive(Clone, Default)]
 pub struct ResourceSet {
     inner: Arc<ResourceSetInner>,
 }
 #[derive(Default)]
-struct ResourceSetInner {
+pub(crate) struct ResourceSetInner {
     resources: Vec<SchemaResource>,
     input_policy: openbindings_internal_schema::Supplied,
+    // One space per live revision this set was projected with. A revision's
+    // entry leaves when the revision is dropped; all leave with the set.
+    spaces: Mutex<Vec<(Weak<DocumentInner>, Arc<SchemaSpace>)>>,
+}
+impl Drop for ResourceSetInner {
+    fn drop(&mut self) {
+        let set: *const Self = self;
+        let spaces = std::mem::take(
+            self.spaces
+                .get_mut()
+                .unwrap_or_else(PoisonError::into_inner),
+        );
+        // Live revisions stop tracking this set; the spaces go with it.
+        for (revision, _) in &spaces {
+            if let Some(revision) = revision.upgrade() {
+                revision.forget_set(set);
+            }
+        }
+    }
+}
+impl ResourceSetInner {
+    /// Release the space kept for a revision that is being dropped.
+    pub(crate) fn release(&self, document: *const DocumentInner) {
+        // Drop the released space after unlocking: it can own large snapshots.
+        let released: Vec<_> = {
+            let mut spaces = self.spaces.lock().unwrap_or_else(PoisonError::into_inner);
+            let (released, kept) = std::mem::take(&mut *spaces)
+                .into_iter()
+                .partition(|(revision, _)| std::ptr::eq(revision.as_ptr(), document));
+            *spaces = kept;
+            released
+        };
+        drop(released);
+    }
 }
 #[derive(Clone, PartialEq, Eq)]
 /// Invalid supplied-resource configuration, separate from schema preparation and value outcomes.
@@ -350,6 +390,7 @@ impl ResourceSet {
             inner: Arc::new(ResourceSetInner {
                 resources,
                 input_policy,
+                spaces: Mutex::default(),
             }),
         })
     }
@@ -363,9 +404,45 @@ impl ResourceSet {
     pub(crate) fn is_empty(&self) -> bool {
         self.inner.resources.is_empty()
     }
-    /// Whether both handles share one admitted set, not merely equal contents.
-    pub(crate) fn same_set(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.inner, &other.inner)
+    /// The space kept for this set and a live revision, if one was assembled.
+    pub(crate) fn kept_space(&self, document: &Arc<DocumentInner>) -> Option<Arc<SchemaSpace>> {
+        let spaces = self
+            .inner
+            .spaces
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        spaces
+            .iter()
+            .find(|(revision, _)| std::ptr::eq(revision.as_ptr(), Arc::as_ptr(document)))
+            .map(|(_, space)| space.clone())
+    }
+    /// Keep `space` for this set and a live revision; when a concurrent
+    /// preparation kept one first, that space wins and is returned.
+    pub(crate) fn keep_space(
+        &self,
+        document: &Arc<DocumentInner>,
+        space: Arc<SchemaSpace>,
+    ) -> Arc<SchemaSpace> {
+        let mut spaces = self
+            .inner
+            .spaces
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if let Some((_, kept)) = spaces
+            .iter()
+            .find(|(revision, _)| std::ptr::eq(revision.as_ptr(), Arc::as_ptr(document)))
+        {
+            return kept.clone();
+        }
+        spaces.push((Arc::downgrade(document), space.clone()));
+        space
+    }
+    pub(crate) fn downgrade(&self) -> Weak<ResourceSetInner> {
+        Arc::downgrade(&self.inner)
+    }
+    #[cfg(test)]
+    pub(crate) fn kept_spaces(&self) -> usize {
+        self.inner.spaces.lock().unwrap().len()
     }
     /// One shared empty set, so preparation without resources allocates nothing.
     pub(crate) fn empty() -> &'static Self {
@@ -412,7 +489,8 @@ impl SchemaRequest {
     ///
     /// The first projection for a document revision and resource set assembles
     /// their resolution space using the set's identity index; later preparations
-    /// with the same pair reuse it.
+    /// with the same live pair reuse it, and dropping the set or every owner of
+    /// the revision releases it.
     ///
     /// # Errors
     /// Returns a refusal if references cannot be resolved soundly, a required capability or resource is unavailable, work limits are exceeded, or cancellation is observed. A refusal is not an instance failure.
@@ -572,7 +650,7 @@ pub trait PreparedSchema: Send + Sync {
 /// Preparation borrows the evaluator and any supplied resources. Each call
 /// prepares anew; retain the [`PreparedContract`] to validate repeatedly. The
 /// document's resolution space is assembled only when an evaluator requests the
-/// core projection, at most once per revision for each resource set in turn. See the
+/// core projection, once per live revision and resource set. See the
 /// [Rust lifecycle guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md#resources-diagnostics-and-lifetime).
 #[derive(Clone, Copy)]
 pub struct ValueContract<'a> {
@@ -614,7 +692,8 @@ impl<'a> ValueContract<'a> {
         self.prepare_with(evaluator, ResourceSet::empty())
     }
     /// Prepare with immutable supplied resources; nothing is fetched. Passing
-    /// the same set again reuses its index and the document's resolution space.
+    /// the same set again reuses its index, and its resolution space with this
+    /// document while both are alive.
     ///
     /// # Errors
     /// Returns a [`NoVerdict`] refusal when preparation is not established. A

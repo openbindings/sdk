@@ -23,12 +23,13 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-/// The side of an operation a value travels on.
+/// The direction in which a caller-facing value crosses the operation's
+/// boundary, and so which value contract governs it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Direction {
-    /// The operation's input, sent to the provider.
+    /// A value crossing to the operation, governed by its input contract.
     Input,
-    /// The operation's output, produced by the provider.
+    /// A value crossing from the operation, governed by its output contract.
     Output,
 }
 impl Direction {

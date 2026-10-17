@@ -28,9 +28,14 @@ fn interpretation_error(e: InterpretationError) -> JsValue {
         json!({"code":"interpretation", "message":e.to_string(), "interpretation_code":e.code(), "location":e.source_location()}),
     ))
 }
-fn evaluator(limits: &str, diagnostics: &str) -> Result<DefaultEvaluator, JsValue> {
-    let limits: Limits =
-        serde_json::from_str(limits).map_err(|e| error("invalid-evaluator-limits", e))?;
+// Absent limits mean the defaults, so ordinary preparation parses nothing.
+fn evaluator(limits: Option<String>, diagnostics: &str) -> Result<DefaultEvaluator, JsValue> {
+    let limits: Limits = match limits {
+        Some(text) => {
+            serde_json::from_str(&text).map_err(|e| error("invalid-evaluator-limits", e))?
+        }
+        None => Limits::default(),
+    };
     Ok(
         DefaultEvaluator::with_limits(limits).with_diagnostics(match diagnostics {
             "coarse" => openbindings_json_schema_evaluator::Diagnostics::Coarse,
@@ -752,22 +757,11 @@ impl WasmConformantDocument {
         &self,
         name: &str,
     ) -> Result<Option<WasmConformantOperation>, JsValue> {
-        let proof = self.handle.proof("document-conformance")?;
-        let Some(operation) = proof.resolve_operation(name) else {
-            return Ok(None);
-        };
-        let plain = match proof
-            .as_document()
+        Ok(self
+            .handle
+            .proof("document-conformance")?
             .resolve_operation(name)
-            .map_err(interpretation_error)?
-        {
-            OperationSelection::Found(op) => op,
-            _ => unreachable!("the proved revision selects the same operation"),
-        };
-        Ok(Some(WasmConformantOperation {
-            plain: WasmOperation { op: plain },
-            operation,
-        }))
+            .map(|operation| WasmConformantOperation { operation }))
     }
     #[wasm_bindgen(js_name=dependencyAcceptsKind)]
     pub fn dependency_accepts_kind(
@@ -893,7 +887,11 @@ impl WasmOperation {
     pub fn example(&self, key: &str) -> Result<Option<WasmExample>, JsValue> {
         self.op
             .example(key)
-            .map(|v| v.map(|view| WasmExample { view }))
+            .map(|v| {
+                v.map(|view| WasmExample {
+                    view: ExampleSource::Document(view),
+                })
+            })
             .map_err(interpretation_error)
     }
     pub fn bindings(&self) -> Result<String, JsValue> {
@@ -917,6 +915,27 @@ fn exact_metadata(fields: serde_json::Value, exact: &[(&str, Option<String>)]) -
     }
     result.push('}');
     result
+}
+fn token(value: Option<JsonRef<'_>>) -> Option<String> {
+    value.map(|v| v.text().to_owned())
+}
+fn tokens(value: Option<JsonRef<'_>>) -> Option<String> {
+    value.map(|v| {
+        format!(
+            "[{}]",
+            v.elements()
+                .expect("proved array")
+                .map(|v| v.text())
+                .collect::<Vec<_>>()
+                .join(",")
+        )
+    })
+}
+fn conformant_example_metadata(view: &ConformantExampleView) -> String {
+    exact_metadata(
+        json!({"key":view.key(),"has_input":view.input().is_some(),"has_output":view.output().is_some()}),
+        &[("description", token(view.value().get("description")))],
+    )
 }
 fn text_token(value: Option<JsonStringRef<'_>>) -> Option<String> {
     value.map(|v| v.json().text().to_owned())
@@ -1089,7 +1108,32 @@ impl WasmDependency {
 }
 #[wasm_bindgen]
 pub struct WasmExample {
-    view: ExampleView,
+    view: ExampleSource,
+}
+#[derive(Clone)]
+enum ExampleSource {
+    Document(ExampleView),
+    Conformant(ConformantExampleView),
+}
+impl ExampleSource {
+    fn value(&self) -> JsonRef<'_> {
+        match self {
+            Self::Document(view) => view.value(),
+            Self::Conformant(view) => view.value(),
+        }
+    }
+    fn input(&self) -> Option<JsonRef<'_>> {
+        match self {
+            Self::Document(view) => view.input(),
+            Self::Conformant(view) => view.input(),
+        }
+    }
+    fn output(&self) -> Option<JsonRef<'_>> {
+        match self {
+            Self::Document(view) => view.output(),
+            Self::Conformant(view) => view.output(),
+        }
+    }
 }
 impl std::fmt::Debug for WasmExample {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1105,7 +1149,10 @@ impl WasmExample {
         }
     }
     pub fn metadata(&self) -> Result<String, JsValue> {
-        example_metadata(&self.view)
+        match &self.view {
+            ExampleSource::Document(view) => example_metadata(view),
+            ExampleSource::Conformant(view) => Ok(conformant_example_metadata(view)),
+        }
     }
     pub fn value(&self) -> WasmJson {
         WasmJson {
@@ -1164,7 +1211,6 @@ impl Default for WasmResources {
 /// only this handle hands out value contracts.
 #[wasm_bindgen]
 pub struct WasmConformantOperation {
-    plain: WasmOperation,
     operation: ConformantOperationView,
 }
 impl std::fmt::Debug for WasmConformantOperation {
@@ -1181,10 +1227,12 @@ enum Side {
 #[wasm_bindgen]
 impl WasmConformantOperation {
     pub fn key(&self) -> String {
-        self.plain.key()
+        self.operation.key().to_owned()
     }
     pub fn value(&self) -> WasmJson {
-        self.plain.value()
+        WasmJson {
+            value: self.operation.value().to_owned(),
+        }
     }
     pub fn input(&self) -> Option<WasmValueContract> {
         self.contract(Side::Input)
@@ -1192,17 +1240,36 @@ impl WasmConformantOperation {
     pub fn output(&self) -> Option<WasmValueContract> {
         self.contract(Side::Output)
     }
-    pub fn metadata(&self) -> Result<String, JsValue> {
-        self.plain.metadata()
+    // Proof establishes these shapes; exact tokens come from the original members.
+    pub fn metadata(&self) -> String {
+        let view = &self.operation;
+        let field = |name| view.value().get(name);
+        exact_metadata(
+            json!({"key":view.key(),"aliases":view.aliases().map(|v|v.collect::<Vec<_>>()),
+          "deprecated":view.deprecated(),
+          "has_input":view.input().is_some(),"has_output":view.output().is_some()}),
+            &[
+                ("description", token(field("description"))),
+                ("tags", tokens(field("tags"))),
+            ],
+        )
     }
-    pub fn examples(&self) -> Result<String, JsValue> {
-        self.plain.examples()
+    pub fn examples(&self) -> String {
+        self.operation.examples().map_or_else(
+            || "null".into(),
+            |rows| {
+                let rows: Vec<_> = rows.iter().map(conformant_example_metadata).collect();
+                format!("[{}]", rows.join(","))
+            },
+        )
     }
-    pub fn example(&self, key: &str) -> Result<Option<WasmExample>, JsValue> {
-        self.plain.example(key)
+    pub fn example(&self, key: &str) -> Option<WasmExample> {
+        self.operation.example(key).map(|view| WasmExample {
+            view: ExampleSource::Conformant(view),
+        })
     }
-    pub fn bindings(&self) -> Result<String, JsValue> {
-        self.plain.bindings()
+    pub fn bindings(&self) -> String {
+        encoded(self.operation.bindings())
     }
 }
 impl WasmConformantOperation {
@@ -1226,6 +1293,22 @@ impl std::fmt::Debug for WasmValueContract {
     }
 }
 impl WasmValueContract {
+    fn prepare_in(
+        &self,
+        resources: &ResourceSet,
+        limits: Option<String>,
+        diagnostics: &str,
+        cancelled: bool,
+    ) -> Result<WasmPreparation, JsValue> {
+        let evaluator = evaluator(limits, diagnostics)?;
+        Ok(WasmPreparation {
+            preparation: Some(self.contract().prepare_with_control(
+                &evaluator,
+                resources,
+                &control(cancelled),
+            )),
+        })
+    }
     fn select(operation: &ConformantOperationView, side: Side) -> Option<ValueContract<'_>> {
         match side {
             Side::Input => operation.input(),
@@ -1244,21 +1327,30 @@ impl WasmValueContract {
             value: self.contract().schema().to_owned(),
         }
     }
+    /// Prepare without supplied resources, sharing one empty set.
     pub fn prepare(
         &self,
-        resources: &WasmResources,
-        limits: &str,
+        limits: Option<String>,
         diagnostics: &str,
         cancelled: bool,
     ) -> Result<WasmPreparation, JsValue> {
-        let evaluator = evaluator(limits, diagnostics)?;
-        Ok(WasmPreparation {
-            preparation: Some(self.contract().prepare_with_control(
-                &evaluator,
-                &resources.resources,
-                &control(cancelled),
-            )),
-        })
+        static EMPTY: std::sync::OnceLock<ResourceSet> = std::sync::OnceLock::new();
+        self.prepare_in(
+            EMPTY.get_or_init(ResourceSet::default),
+            limits,
+            diagnostics,
+            cancelled,
+        )
+    }
+    #[wasm_bindgen(js_name=prepareWith)]
+    pub fn prepare_with(
+        &self,
+        resources: &WasmResources,
+        limits: Option<String>,
+        diagnostics: &str,
+        cancelled: bool,
+    ) -> Result<WasmPreparation, JsValue> {
+        self.prepare_in(&resources.resources, limits, diagnostics, cancelled)
     }
     pub fn retain(&self) -> WasmValueContract {
         Self {
