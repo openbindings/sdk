@@ -128,15 +128,20 @@ are not exported by the TypeScript facade.
 | `INTERFACE_VERSION`, `APPLIED_INTERFACE_REVISION` | In invocation, source inspection and interface synthesis: the published interface version implemented, independent of the crate's own version, and the revision of the interfaces repository applied. HTTP discovery keeps its separate companion constants. |
 | `CoverageClaim::complete(entries)` | Claims an exhaustive inventory with no limitation; the synthesis facade checks correspondence before returning `SynthesisCoverage`. |
 | `ProviderInput: futures_core::Stream<Item = JsonValue>` | Poll-based input delivery sharing the inherent `next` implementation; preserves backpressure, cancellation, validation failure suspension and terminal ordering. `close` discards unread input. |
-| `binding::BindingPreflight` | Optional provider trait extending `BindingInvoker`; its `Preflight<'a>` associated future and `preflight` method report advisory context requirements or no prediction. |
-| `binding::Invoker::preflight_with_provider`, `operation::Invoker::preflight_with_provider` | Opt into the provider hook after checked admission; require `P: BindingPreflight`. |
-| `binding::Invoker::preflight_with_provider_and_control`, `operation::Invoker::preflight_with_provider_and_control` | The same provider preflight with caller cancellation, isolated from sibling attempts. |
+| `binding::BindingInvoker::preflight` | Provided method declaring the provider's advisory preflight hook; `None` by default. A hook returns a `Self::Invocation` job that completes with `Ok(())` for no prediction or with the `CONTEXT_REQUIRED` challenge invocation would raise. |
+| `binding::Invoker::preflight`, `operation::Invoker::preflight` | Run the SDK's admission checks (and, for operations, selection) for every provider, then the provider's hook when it declares one. |
+| `binding::Invoker::preflight_with_control`, `operation::Invoker::preflight_with_control` | The same provider preflight with caller cancellation, isolated from sibling attempts. |
 | `InspectionLimitation::additional_fields` | `BTreeMap<String, JsonValue>` retaining additional exact evidence; `code`, `message` and `details` cannot be shadowed. |
 
-Implement `BindingPreflight` to provide advisory preflight. The facades' ordinary
-`preflight` methods admit the request and make no prediction. Provider preflight
-is `Send` when the provider is `Sync` and its associated future is `Send`; local
-futures and `Rc` providers are also supported.
+Override `BindingInvoker::preflight` to provide advisory preflight. The
+facades' `preflight` methods always admit the request and, when the provider
+declares a hook, return its answer; a provider without one makes no prediction,
+and invocation never requires preflight. The hook's job is the provider's
+`Invocation` future, so stable Rust callers can bound it: binding preflight is
+`Send` when the provider is `Sync` and `P::Invocation<'a>` is `Send`. Operation
+preflight and operation invocations also need a `Send` provider, because the
+operation invoker shares its provider with prepared operations. Local futures
+and `Rc` providers are also supported.
 
 ## Boundaries to preserve
 
@@ -462,8 +467,13 @@ it can report in the original sources, in which case `problems_complete` is fals
 ## Caller-owned operation preparation
 
 `operation::Invoker::prepare(name)` and `prepare_with_control(name, &control)`
-return `Result<PreparedOperation<'_, P>, InvocationError>`. The handle borrows the
-invoker, eagerly prepares both declared directions and owns their compiled state.
+return `Result<PreparedOperation<P>, InvocationError>`. The handle shares the
+invoker's document, provider and decoded carriers through one reference count,
+keeps the limits and validation detail in effect at preparation, eagerly prepares
+both declared directions and owns their compiled state. It can outlive the invoker
+and is `Send`, `Sync` and `'static` when the provider is, so one handle wrapped in
+an `Arc` can serve spawned tasks. The invoker is likewise `Send` and `Sync` only
+when the provider is both.
 Absent directions need no evaluator. Failed or cancelled preparation releases all
 partial work and returns no handle. Preparation does not select bindings or call
 providers; ready means prepared, not that every value is decidable.
@@ -475,7 +485,7 @@ supported binding; `Attempt::ordered(&[..])` chooses the first supported binding
 in the supplied list; `Attempt::binding(key)` selects one exact binding. Every
 ordered key must belong to the prepared operation, including keys after the first
 supported entry. An exact binding belonging to another operation returns
-`ERR_OPERATION_NOT_FOUND` before provider work. `.with_context(&context)` forwards
+`ERR_BINDING_NOT_FOUND` before provider work. `.with_context(&context)` forwards
 an opaque object; Debug redacts binding choices and context contents. Binding
 support and selection are checked anew, and cancellation, queues and validation
 evidence are independent. Plain `Invoker::invoke` keeps `Request` and still

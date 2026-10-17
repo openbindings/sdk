@@ -1,0 +1,189 @@
+{
+  "cluster": "default-supported",
+  "description": "Candidate-set formation: the candidate set is the operation's bindings whose sources have kinds the invoker can act on, by exact identifier. Unsupported bindings are excluded before sole-candidate or ambiguity resolution; no invocable binding fails with ERR_BINDING_NOT_FOUND.",
+  "tests": [
+    {
+      "description": "an unsupported binding is skipped, leaving the supported binding as the sole candidate",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getThing": {}
+        },
+        "sources": {
+          "rest": {
+            "kind": "openbindings.openapi-3.1@1",
+            "content": {
+              "location": "https://example.com/things/openapi.json"
+            }
+          },
+          "rpc": {
+            "kind": "openbindings.grpc@1",
+            "content": {
+              "location": "https://example.com/things/things.protoset"
+            }
+          }
+        },
+        "bindings": {
+          "getThing.rest": {
+            "operation": "getThing",
+            "source": "rest",
+            "content": {
+              "selector": "#/paths/~1things~1{id}/get"
+            },
+            "preference": 1
+          },
+          "getThing.rpc": {
+            "operation": "getThing",
+            "source": "rpc",
+            "content": {
+              "selector": "things.v1.Things/GetThing"
+            },
+            "preference": 100
+          }
+        }
+      },
+      "operation": "getThing",
+      "supported": [
+        "openbindings.openapi-3.1@1"
+      ],
+      "expected": {
+        "binding": "getThing.rest"
+      }
+    },
+    {
+      "description": "the sole candidate's specification is unsupported: no invocable candidate exists",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getThing": {}
+        },
+        "sources": {
+          "rpc": {
+            "kind": "openbindings.grpc@1",
+            "content": {
+              "location": "https://example.com/things/things.protoset"
+            }
+          }
+        },
+        "bindings": {
+          "getThing.rpc": {
+            "operation": "getThing",
+            "source": "rpc",
+            "content": {
+              "selector": "things.v1.Things/GetThing"
+            }
+          }
+        }
+      },
+      "operation": "getThing",
+      "supported": [
+        "openbindings.openapi-3.1@1"
+      ],
+      "expected": {
+        "error": true,
+        "kind": "no-candidate"
+      }
+    },
+    {
+      "description": "the document declares no bindings at all: the candidate set is empty",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getThing": {}
+        }
+      },
+      "operation": "getThing",
+      "supported": [
+        "openbindings.openapi-3.1@1"
+      ],
+      "expected": {
+        "error": true,
+        "kind": "no-candidate"
+      }
+    },
+    {
+      "description": "bindings exist but none targets the addressed operation: another operation's bindings are never candidates",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getThing": {},
+          "listThings": {}
+        },
+        "sources": {
+          "rest": {
+            "kind": "openbindings.openapi-3.1@1",
+            "content": {
+              "location": "https://example.com/things/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "listThings.rest": {
+            "operation": "listThings",
+            "source": "rest",
+            "content": {
+              "selector": "#/paths/~1things/get"
+            },
+            "preference": 100
+          }
+        }
+      },
+      "operation": "getThing",
+      "supported": [
+        "openbindings.openapi-3.1@1"
+      ],
+      "expected": {
+        "error": true,
+        "kind": "no-candidate"
+      }
+    },
+    {
+      "description": "candidate filtering leaves a deprecated supported binding as the sole invocable candidate",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getThing": {}
+        },
+        "sources": {
+          "rest": {
+            "kind": "openbindings.openapi-3.1@1",
+            "content": {
+              "location": "https://example.com/things/openapi.json"
+            }
+          },
+          "rpc": {
+            "kind": "openbindings.grpc@1",
+            "content": {
+              "location": "https://example.com/things/things.protoset"
+            }
+          }
+        },
+        "bindings": {
+          "getThing.rest": {
+            "operation": "getThing",
+            "source": "rest",
+            "content": {
+              "selector": "#/paths/~1things~1{id}/get"
+            },
+            "deprecated": true
+          },
+          "getThing.rpc": {
+            "operation": "getThing",
+            "source": "rpc",
+            "content": {
+              "selector": "things.v1.Things/GetThing"
+            },
+            "preference": 100
+          }
+        }
+      },
+      "operation": "getThing",
+      "supported": [
+        "openbindings.openapi-3.1@1"
+      ],
+      "expected": {
+        "binding": "getThing.rest"
+      }
+    }
+  ]
+}

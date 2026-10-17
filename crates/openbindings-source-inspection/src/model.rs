@@ -243,6 +243,7 @@ impl SourceInspection {
     /// Returns an inspection error if the inventory fails carrier validation, cannot be serialized, or its encoded JSON exceeds the admission limits.
     pub fn to_json_with_limits(&self, limits: JsonLimits) -> Result<JsonValue, InspectionError> {
         self.validate()?;
+        // Invocation and synthesis keep the same bounded writer for their own errors.
         struct Output {
             bytes: Vec<u8>,
             max: usize,

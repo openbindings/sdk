@@ -10,6 +10,11 @@ release or website deployment.
 | `coverage-fixture.schema.json` | SDK policy regression | `57763fc6d43ece95e52cbd717190c6b78b58bd4fcbb941a040118e478708f5d8` |
 | `interface-output-cases.json` | Pinned interface source | `c957f42f3aff41fd85c88360656f6a8a3d2482c128bee4a8b63c9f9ae79dd7c7` |
 | `interface-synthesizer-0.2.json` | Pinned interface source | `379da04078b19770d9ce2b60a1b3c747bbf20645ba739460abfc2181b52929ee` |
+| `conformance/kind-support/cases.json` | Pinned interface source | `109d33ceb52bb77264e0856d37506a46cfa474516d0ffbeff8496b3041609740` |
+
+`conformance/kind-support/cases.json` is a verbatim copy of the same path in that
+revision's published corpus; `conformance_corpus.rs` runs every case through the
+synthesis facade.
 
 `interface-synthesizer-0.2.json` and `interface-output-cases.json` are verbatim
 interface snapshots. The latter comes from `conformance/synthesis-coverage/cases.json`.

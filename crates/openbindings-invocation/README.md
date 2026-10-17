@@ -88,8 +88,12 @@ more values. Poll both halves concurrently for bidirectional work.
 Without an evaluator, `operation::Invoker::prepare` refuses any stated value
 contract, even `true`; absent value contracts need no evaluator. Plain `invoke`
 prepares each direction lazily on its first value, so an output refusal can follow
-provider effects. Kind interpretation and transport belong to the provider. Preflight is optional,
-advisory and separate from invocation.
+provider effects. Kind interpretation and transport belong to the provider.
+Preflight is advisory and separate from invocation: both facades' `preflight`
+run the SDK's checks for every provider and ask the provider's hook when it
+overrides `BindingInvoker::preflight`; by default there is none. A prepared
+operation owns a share of its invoker's document and provider, so an `Arc` of
+one handle can serve spawned tasks.
 
 Providers may borrow configuration and return local futures. Cancellation is
 cooperative; it cannot preempt a blocking poll. This SDK's carrier admission,

@@ -17,7 +17,7 @@ use support::*;
 
 #[tokio::test]
 async fn complete_claim_still_requires_facade_correspondence_checks() {
-    // CA-3: complete claims an exhaustive inventory without bypassing validation.
+    // A complete claim states an exhaustive inventory without bypassing validation.
     let s = source(None);
     let mut c = candidate(&s);
     c.coverage = CoverageClaim::complete(Vec::new());

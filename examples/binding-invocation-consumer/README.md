@@ -29,7 +29,9 @@ rejects duplicate `(scope,id)` pairs and wrong typed present fields, and never
 chooses by array order. The optional unit `interaction` field adds explicit test-only modes:
 `unary` echoes one value and closes input; `server` repeats one input seven times;
 `count` counts inputs and returns one count; `empty` closes input and completes
-with zero outputs. These are fixture semantics, not an OpenAPI kind definition.
+with zero outputs. Catalog and `invoker-only` declare no preflight hook, so their
+preflight runs the SDK's checks and makes no prediction. These are fixture
+semantics, not an OpenAPI kind definition.
 The shared [fixture authority](../interface-synthesis-consumer/README.md#fixture-authority)
 requires all four interface operations (inspection, strict/coverage synthesis and
 invocation) to refuse wrong-typed or unknown interactions throughout the artifact.

@@ -57,7 +57,7 @@ impl std::fmt::Debug for SupportedKind {
 }
 
 /// Authoritative answer for this provider's synthesis job.
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct KindSupportVerdict {
     /// Unchanged kind label.
     pub kind: String,

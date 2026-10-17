@@ -40,14 +40,18 @@ or whole-graph readiness gate.
 
 For repeated attempts, call `let prepared = invoker.prepare("echo")?` and then
 `prepared.invoke(Attempt::new())`. The `operation::PreparedOperation`
-handle borrows the invoker and eagerly retains both declared value contracts.
-It performs no provider work and pins no binding or context. Each call takes an
+handle shares the invoker's document, provider and decoded carriers and eagerly
+retains both declared value contracts. It owns what it uses, so it can outlive the
+invoker, and it is `Send` and `Sync` when the provider is both: wrap it in an `Arc`
+to share one handle across spawned tasks. It keeps the limits and validation detail
+in effect when it was prepared. It performs no provider work and pins no binding
+or context. Each call takes an
 `Attempt` with no operation name: `Attempt::new()` requires a sole supported
 binding, `Attempt::ordered(&["preferred", "fallback"])` supplies an ordered list,
 and `Attempt::binding("exact-key")` selects one binding of the prepared operation.
 Use `.with_context(&context)` to supply an opaque object per attempt. Every
 ordered key must belong to the operation; an exact binding belonging to another
-operation returns `ERR_OPERATION_NOT_FOUND` before provider work. Attempt Debug
+operation returns `ERR_BINDING_NOT_FOUND` before provider work. Attempt Debug
 output redacts binding choices and context contents. Absent directions need no
 evaluator.
 Preparation returns `ERR_OPERATION_NOT_FOUND` for an unknown operation, `ERR_REFUSED`
@@ -77,8 +81,10 @@ document editor reads still report malformed fields and ambiguous names.
 escape in a source kind or other document metadata violates OBI-01, so that draft
 cannot supply the proof required by the invoker. Other interface carrier failures
 return `ERR_REFUSED` before dispatch, with a local `boundary_error()` identifying
-the field. `preflight` uses the same selection rules
-and never prepares value contracts.
+the field. `preflight` uses the same selection rules and admission checks for
+every provider, then asks the provider's hook (`BindingInvoker::preflight`) when
+it declares one; it never prepares value contracts. A provider without a hook,
+the default, makes no prediction.
 
 Input is validated before delivery to the provider; successful output is validated
 before entering the committed output queue. Invalid input **does not become clean
@@ -100,13 +106,18 @@ evaluator, independently of invocation's portable-error byte limit.
 By default the gate runs the cheap check, so a failed value's outcome carries the
 verdict without problems. `with_validation_detail(Detail::Explain)` explains each
 rejected value before withholding it, so the evidence carries the evaluator's
-problems. Explaining costs more than the verdict and can disclose schema facts:
-ask for it where your disclosure policy allows, for values you trust.
+problems. One setting covers both directions: caller input and provider output
+are explained alike. Explaining costs more than the verdict and discloses more:
+schema facts, and each problem's `instance` pointer, which spells the rejected
+value's member names. An explained input therefore carries the caller's member
+names and an explained output the provider's. Ask for explanations where your
+disclosure policy allows that for both directions.
 
 Carrier caches have slots only for declared source/binding keys; repeated unknown
 requests cannot grow them. Used carriers retain exact content and are decoded
-once, without serializing or copying a whole document per call. Drop the invoker
-to release its cache owners. Caller-retained documents, prepared contracts, and
+once, without serializing or copying a whole document per call. Prepared
+operations share these caches; drop the invoker and its prepared operations to
+release the cache owners. Caller-retained documents, prepared contracts, and
 values can independently retain their own backing storage.
 
 ## Ownership and progress
@@ -174,8 +185,10 @@ A provider must uphold that remaining guarantee. An oversized result or a
 post-output challenge becomes `ERR_EXECUTION_FAILED`, with a bounded value-free
 `boundary_error()` finding. No automatic preflight, context resolution or retry
 occurs. Preflight is advisory and separately cancellable; failure does not gate
-a later invocation. Preflight requirements belong in `Ok(Some(challenge))`; an
-erroneous provider `Err(CONTEXT_REQUIRED)` becomes `ERR_EXECUTION_FAILED`.
+a later invocation. A hook's job reports requirements as the `CONTEXT_REQUIRED`
+challenge invocation would raise, and preflight returns that challenge as
+`Ok(Some(challenge))`, never as an error carrying a retry path. A job completing
+with `Ok(())` makes no prediction.
 
 ## Resource policy
 
@@ -207,7 +220,7 @@ ownership, queue and cancellation policy.
 | Input/output frames | Owned native endpoints and terminal sequence; no production frame transport. |
 | `input_closed` | `Input::is_closed`, `closed`, `Control::input_is_closed`; nonterminal. |
 | `complete` / `error` | Job return, fallible output sequence and owned outcome snapshot. |
-| `preflightBinding` | `Invoker::preflight` for no prediction, or `preflight_with_provider` for the optional hook; no operation I/O or dispatch. |
+| `preflightBinding` | `Invoker::preflight`: checked admission, then the provider's `BindingInvoker::preflight` hook when it declares one (none by default, no prediction); no operation I/O or dispatch. |
 | `invokeOperation`, `preflightOperation` | `operation::Invoker` with `operation::Request`; shared lifecycle and explicit evaluator. |
 | Declared schema failures | Code-only portable error plus local `validation_failure()` evidence. |
 | Context/effect semantics | Checked structure plus documented provider obligations; no resolver. |
@@ -217,5 +230,6 @@ Provider errors using operation-invoker-owned resolution or validation codes are
 refused at the provider boundary as `ERR_EXECUTION_FAILED`, without their data.
 Invocation retains a value-free `reserved-provider-code` boundary finding. The
 facade's own selection and validation errors retain their reserved codes and
-local evidence. `InvocationError` displays its code in both Display and Debug;
-application data remains redacted.
+local evidence. `InvocationError` Display shows every code. Debug is structural:
+it shows the codes the invoker interfaces govern and redacts application-defined
+codes. Application data is redacted in both.

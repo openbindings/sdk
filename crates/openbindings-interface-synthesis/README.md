@@ -51,11 +51,17 @@ checked result. Invalid provider output has a separate rejected candidate.
 ## Limits
 
 The SDK validates document conformance, source preservation, coverage identities
-and output paths. Providers remain responsible for truthful inventory and sound
-framing under each source's kind. Partial coverage never excuses an unsound
-binding. Strict eligibility requires exhaustive accounting with no unsupported
-unit; it can still include genuine exclusions, invalid units or sound lossy
-framing. Check `fully_represented()` when that stronger condition is needed.
+and output paths. Two of these checks are SDK policies beyond the published
+Interface Synthesizer, not obligations of every interface adopter, and both refuse
+output the interface allows. Coverage identities must be unique, so repeated
+identical evidence rows are refused as `duplicate-unit`. Every input source must
+appear in the emitted document, including one that contributes no target, or the
+result is refused as `source-preservation`. Providers remain responsible for
+truthful inventory and sound framing under each source's kind. Partial coverage
+never excuses an unsound binding. Strict eligibility requires exhaustive
+accounting with no unsupported unit; it can still include genuine exclusions,
+invalid units or sound lossy framing. Check `fully_represented()` when that
+stronger condition is needed.
 
 Sources and requests are borrowed; checked results retain their exact values.
 Source equality compares numbers by exact decimal value. Serialization preserves
