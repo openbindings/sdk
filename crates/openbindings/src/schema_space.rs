@@ -98,7 +98,9 @@ pub enum ReferenceRefusalReason {
 }
 
 /// A reference-inspection refusal, separate from a value outcome.
+/// Later versions may add fields: read them by name and match with `..`.
 #[derive(Clone, serde::Serialize)]
+#[non_exhaustive]
 pub struct ReferenceRefusal {
     /// Broad refusal category.
     pub reason: ReferenceRefusalReason,
@@ -169,6 +171,8 @@ pub enum ReferenceResolution {
 }
 #[derive(Clone, Serialize)]
 /// One `$ref` or `$dynamicRef` encountered in supported schema positions; opaque JSON content is not traversed as schema.
+/// Later versions may add fields: read them by name and match with `..`.
+#[non_exhaustive]
 pub struct Reference {
     /// Original location of the reference keyword.
     pub location: SchemaLocation,
@@ -189,6 +193,8 @@ impl std::fmt::Debug for Reference {
 }
 #[derive(Clone, Debug, Serialize)]
 /// Bounded original-context reference inspection, not conformance proof or successful schema preparation.
+/// Later versions may add fields: read them by name and match with `..`.
+#[non_exhaustive]
 pub struct ReferenceReport {
     /// Retained reference observations in traversal order.
     pub references: Vec<Reference>,

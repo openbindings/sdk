@@ -66,74 +66,67 @@ async fn synthesis_rows(source: &Source, parsed: &Document) -> Vec<Row> {
     assert_eq!(error.code(), SECRET);
     assert!(error.to_string().contains(SECRET));
     assert!(format!("{error:?}").contains("ProviderFailure"));
-    let entry = synthesis::CoverageEntry {
-        source_index: 0,
-        source_ref: SECRET.into(),
-        scope: synthesis::CoverageScope::Target,
-        status: synthesis::CoverageStatus::Represented,
-        source_key: Some(SECRET.into()),
-        operation_key: Some(SECRET.into()),
-        binding_key: Some(SECRET.into()),
-        dependency_key: Some(SECRET.into()),
-        reason_code: Some(SECRET.into()),
-        rule: Some(SECRET.into()),
-        message: Some(SECRET.into()),
-        requirements: Some(vec![SECRET.into()]),
-        details: Some(evidence()),
-        additional_fields: evidence(),
+    let mut entry = synthesis::CoverageEntry::new(
+        0,
+        SECRET,
+        synthesis::CoverageScope::Target,
+        synthesis::CoverageStatus::Represented,
+    );
+    entry.source_key = Some(SECRET.into());
+    entry.operation_key = Some(SECRET.into());
+    entry.binding_key = Some(SECRET.into());
+    entry.dependency_key = Some(SECRET.into());
+    entry.reason_code = Some(SECRET.into());
+    entry.rule = Some(SECRET.into());
+    entry.message = Some(SECRET.into());
+    entry.requirements = Some(vec![SECRET.into()]);
+    entry.details = Some(evidence());
+    entry.additional_fields = evidence();
+    let limitation = synthesis::CoverageLimitation::new(SECRET, SECRET)
+        .with_details(evidence())
+        .with_additional_fields(evidence());
+    let mut coverage = synthesis::CoverageClaim::partial(vec![entry.clone()], limitation.clone());
+    coverage.additional_fields = evidence();
+    let candidate = synthesis::SynthesisCandidate::new(parsed.clone(), coverage.clone());
+    let plain = synthesis::SynthesisRequest {
+        sources: &sources,
+        ..Default::default()
     };
-    let limitation = synthesis::CoverageLimitation {
-        code: SECRET.into(),
-        message: SECRET.into(),
-        details: Some(evidence()),
-        additional_fields: evidence(),
-    };
-    let coverage = synthesis::CoverageClaim {
-        entries: vec![entry.clone()],
-        exhaustive: false,
-        limitation: Some(limitation.clone()),
-        additional_fields: evidence(),
-    };
-    let candidate = synthesis::SynthesisCandidate {
-        document: parsed.clone(),
-        coverage: coverage.clone(),
-    };
-    let finding = synthesis::SynthesisFinding {
-        code: SECRET.into(),
-        path: format!("/{SECRET}"),
-        message: SECRET.into(),
-    };
+    let rejected = synthesis::Synthesizer::new(Provider(Ok(candidate.clone())))
+        .synthesize_with_coverage(&plain)
+        .await
+        .unwrap_err();
+    // The facade builds rejections and findings; a caller receives them and can
+    // reassign their public fields, so these probes fill actual records with
+    // caller text.
+    let mut rejection = rejected.rejected().expect("a rejected candidate").clone();
+    let mut finding = rejection.finding.clone().expect("a correspondence finding");
+    finding.code = SECRET.into();
+    finding.path = format!("/{SECRET}");
+    finding.message = SECRET.into();
+    rejection.candidate = candidate.clone();
+    rejection.validation = Some(parsed.validate().unwrap());
+    rejection.finding = Some(finding.clone());
     let mut rows = vec![
         row("SynthesisSource", &sources[0]),
         row("SynthesisRequest", &request),
         row("SynthesisError::provider", &error),
         row(
             "synthesis SupportedKind",
-            &synthesis::SupportedKind {
-                kind: SECRET.into(),
-                description: Some(SECRET.into()),
-            },
+            &synthesis::SupportedKind::new(SECRET).with_description(SECRET),
         ),
         row(
             "synthesis KindSupportVerdict",
-            &synthesis::KindSupportVerdict {
-                kind: SECRET.into(),
-                supported: true,
-            },
+            &synthesis::Synthesizer::new(Provider(Ok(candidate.clone())))
+                .check_kind_support([SECRET])
+                .unwrap()[0],
         ),
         row("CoverageEntry", &entry),
         row("CoverageLimitation", &limitation),
         row("CoverageClaim", &coverage),
         row("SynthesisCandidate", &candidate),
         row("SynthesisFinding", &finding),
-        row(
-            "RejectedSynthesis",
-            &synthesis::RejectedSynthesis {
-                candidate: candidate.clone(),
-                validation: Some(parsed.validate().unwrap()),
-                finding: Some(finding),
-            },
-        ),
+        row("RejectedSynthesis", &rejection),
     ];
     // A secret-named key with a nonsecret null value.
     let mut key_only = entry;
@@ -142,29 +135,15 @@ async fn synthesis_rows(source: &Source, parsed: &Document) -> Vec<Row> {
         JsonValue::null(),
     )]));
     rows.push(row("CoverageEntry key only", &key_only));
-    let request = synthesis::SynthesisRequest {
-        sources: &sources,
-        ..Default::default()
-    };
-    let rejected = synthesis::Synthesizer::new(Provider(Ok(candidate)))
-        .synthesize_with_coverage(&request)
-        .await
-        .unwrap_err();
     assert!(rejected.rejected().is_some());
     rows.push(row("SynthesisError::rejected", &rejected));
     let mut document = Document::new();
     document.set_source(SECRET, source).unwrap();
-    let candidate = synthesis::SynthesisCandidate {
-        document: document.clone(),
-        coverage: synthesis::CoverageClaim {
-            exhaustive: false,
-            limitation: Some(limitation),
-            additional_fields: evidence(),
-            ..Default::default()
-        },
-    };
+    let mut coverage = synthesis::CoverageClaim::partial(Vec::new(), limitation);
+    coverage.additional_fields = evidence();
+    let candidate = synthesis::SynthesisCandidate::new(document.clone(), coverage);
     let facade = synthesis::Synthesizer::new(Provider(Ok(candidate)));
-    let checked = facade.synthesize_with_coverage(&request).await.unwrap();
+    let checked = facade.synthesize_with_coverage(&plain).await.unwrap();
     rows.extend([
         row("Synthesizer", &facade),
         row("Synthesis", &checked),
@@ -176,13 +155,13 @@ async fn synthesis_rows(source: &Source, parsed: &Document) -> Vec<Row> {
             .unwrap()
             .contains(SECRET)
     );
-    let incomplete = facade.synthesize(&request).await.unwrap_err();
+    let incomplete = facade.synthesize(&plain).await.unwrap_err();
     assert!(incomplete.partial().is_some());
     rows.push(row("SynthesisError::partial", &incomplete));
     let provider =
         synthesis::SynthesisError::new(synthesis::SynthesisErrorKind::Incomplete, SECRET, SECRET);
     let wrapped = synthesis::Synthesizer::new(Provider(Err(provider)))
-        .synthesize(&request)
+        .synthesize(&plain)
         .await
         .unwrap_err();
     assert!(std::error::Error::source(&wrapped).is_some());

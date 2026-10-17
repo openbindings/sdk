@@ -43,16 +43,13 @@ impl SchemaEvaluator for PrivateEvaluator {
         redacted(&control);
         redacted(request.supplied_resources());
         redacted(&request.evaluation_program(control)?);
-        // Public records remain constructible by a downstream evaluator.
-        Err(NoVerdict {
-            reason: NoVerdictReason::UnsupportedCapability,
-            code: "test-only".into(),
-            message: "test evaluator".into(),
-            location: Some(SchemaLocation {
-                resource: None,
-                pointer: "".parse().unwrap(),
-            }),
-        })
+        // A downstream evaluator builds its refusal with the public constructors.
+        Err(NoVerdict::new(
+            NoVerdictReason::UnsupportedCapability,
+            "test-only",
+            "test evaluator",
+        )
+        .with_location(SchemaLocation::new(None, "".parse().unwrap())))
     }
 }
 

@@ -127,12 +127,7 @@ impl From<AuthoringError> for EditError {
     }
 }
 fn limit(limits: JsonLimits) -> EditError {
-    InputError {
-        kind: InputErrorKind::Limit,
-        code: "byte-limit",
-        byte_offset: limits.max_bytes,
-    }
-    .into()
+    backend::input_error(InputErrorKind::Limit, "byte-limit", limits.max_bytes).into()
 }
 fn escape(s: &str) -> String {
     s.replace('~', "~0").replace('/', "~1")
@@ -390,12 +385,7 @@ impl Document {
     pub fn edit(&mut self, edits: &[Edit<'_>]) -> Result<(), EditError> {
         let limits = JsonLimits::default();
         if edits.len() > limits.max_nodes {
-            return Err(InputError {
-                kind: InputErrorKind::Limit,
-                code: "node-limit",
-                byte_offset: 0,
-            }
-            .into());
+            return Err(backend::input_error(InputErrorKind::Limit, "node-limit", 0).into());
         }
         let mut requests = Vec::with_capacity(edits.len());
         for edit in edits {

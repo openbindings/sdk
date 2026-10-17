@@ -80,18 +80,44 @@ fn evidence() -> BTreeMap<String, JsonValue> {
     )])
 }
 fn location() -> SchemaLocation {
-    SchemaLocation {
-        resource: Some(SECRET.into()),
-        pointer: format!("/{SECRET}").parse().unwrap(),
-    }
+    SchemaLocation::new(Some(SECRET.into()), format!("/{SECRET}").parse().unwrap())
 }
 fn refusal() -> NoVerdict {
-    NoVerdict {
-        reason: NoVerdictReason::EvaluatorFailure,
-        code: SECRET.into(),
-        message: format!("provider refused schema operand {SECRET}"),
-        location: Some(location()),
-    }
+    NoVerdict::new(
+        NoVerdictReason::EvaluatorFailure,
+        SECRET,
+        format!("provider refused schema operand {SECRET}"),
+    )
+    .with_location(location())
+}
+// Validation builds findings, locations and reports; a caller receives them and
+// can reassign their public fields, so these probes fill actual records with
+// caller text.
+const UNKNOWN_TARGETS: &str = r#"{"openbindings":"0.2.0","operations":{},"bindings":{"b":{"operation":"missing","source":"missing"}}}"#;
+fn probe_location() -> SourceLocation {
+    let mut at = JsonValue::null().location();
+    at.pointer = Some(format!("/{SECRET}").parse().unwrap());
+    at.byte_offset = 42;
+    at.line = 2;
+    at.byte_column = 3;
+    at
+}
+fn probe_finding(
+    rule: &'static str,
+    code: &'static str,
+    location: Option<SourceLocation>,
+) -> Finding {
+    let mut finding = validate_document(UNKNOWN_TARGETS)
+        .unwrap()
+        .report()
+        .findings[0]
+        .clone();
+    finding.rule = rule;
+    finding.status = Evidence::Violated;
+    finding.code = code;
+    finding.location = location;
+    finding.message = SECRET.into();
+    finding
 }
 /// Accepts every value, so a prepared contract exists to inspect.
 struct Accept;
@@ -183,46 +209,46 @@ fn debug_redacts_caller_text_at_every_boundary() {
     let parsed = Document::parse(serde_json::json!({"openbindings":"0.2.0", "operations":{"op":{"input":{"properties":{SECRET:{"type":"string"}}}}}}).to_string()).unwrap();
     let validation = parsed.validate().unwrap();
     let validated = validation.conformant().unwrap();
-    let source_location = SourceLocation {
-        pointer: Some(format!("/{SECRET}").parse().unwrap()),
-        byte_offset: 42,
-        line: 2,
-        byte_column: 3,
+    let source_location = probe_location();
+    let finding = probe_finding(SECRET, SECRET, Some(source_location.clone()));
+    let mut report = validation.report().clone();
+    report.release = SECRET;
+    report.revision = SECRET;
+    report.conclusion = Conformance::NonConformant;
+    report.evidence = BTreeMap::from([(SECRET, Evidence::Violated)]);
+    report.findings = vec![finding.clone()];
+    report.findings_truncated = false;
+    let mut version = VersionRefusal::new("0.3.0").unwrap();
+    version.declared = SECRET.into();
+    version.supported = SECRET;
+    let mut references = parsed_ref.references().unwrap();
+    let mut reference_item = references.references[0].clone();
+    let ReferenceResolution::Unresolved { detail } = &reference_item.resolution else {
+        panic!("an unsupplied resource leaves its reference unresolved")
     };
-    let finding = Finding {
-        rule: SECRET,
-        status: Evidence::Violated,
-        code: SECRET,
-        location: Some(source_location.clone()),
-        message: SECRET.into(),
+    let mut reference_refusal = detail.clone();
+    reference_refusal.reason = ReferenceRefusalReason::ResourceUnavailable;
+    reference_refusal.code = SECRET.into();
+    reference_refusal.message = SECRET.into();
+    reference_refusal.location = Some(location());
+    reference_item.location = location();
+    reference_item.keyword = SECRET.into();
+    reference_item.spelling = Some(reference.clone());
+    reference_item.resolution = ReferenceResolution::Unresolved {
+        detail: reference_refusal.clone(),
     };
-    let version = VersionRefusal {
-        declared: SECRET.into(),
-        supported: SECRET,
-    };
-    let reference_refusal = ReferenceRefusal {
-        reason: ReferenceRefusalReason::ResourceUnavailable,
-        code: SECRET.into(),
-        message: SECRET.into(),
-        location: Some(location()),
-    };
-    let reference_item = Reference {
-        location: location(),
-        keyword: SECRET.into(),
-        spelling: Some(reference.clone()),
-        resolution: ReferenceResolution::Unresolved {
-            detail: reference_refusal.clone(),
-        },
-    };
-    let problem = ValueProblem {
-        instance: format!("/{SECRET}").parse().unwrap(),
-        schema: location(),
-        code: SECRET.into(),
-        message: SECRET.into(),
-        details: Some(ValueProblemDetails::Required {
-            member: SECRET.into(),
-        }),
-    };
+    references.references = vec![reference_item.clone()];
+    references.complete = false;
+    references.limitation = Some(reference_refusal.clone());
+    let problem = ValueProblem::new(
+        format!("/{SECRET}").parse().unwrap(),
+        location(),
+        SECRET,
+        SECRET,
+    )
+    .with_details(ValueProblemDetails::Required {
+        member: SECRET.into(),
+    });
     let outcome = ValueOutcome::Fails {
         message: SECRET.into(),
         problems: vec![problem.clone()],
@@ -231,17 +257,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
     let mut rows = vec![
         row("SchemaLocation", &location()),
         row("Finding", &finding),
-        row(
-            "ValidationReport",
-            &ValidationReport {
-                release: SECRET,
-                revision: SECRET,
-                conclusion: Conformance::NonConformant,
-                evidence: BTreeMap::from([(SECRET, Evidence::Violated)]),
-                findings: vec![finding],
-                findings_truncated: false,
-            },
-        ),
+        row("ValidationReport", &report),
         row("VersionRefusal", &version),
         row(
             "InterpretationError::Version",
@@ -272,14 +288,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
                 dynamic_lookup: true,
             },
         ),
-        row(
-            "ReferenceReport",
-            &ReferenceReport {
-                references: vec![reference_item],
-                complete: false,
-                limitation: Some(reference_refusal),
-            },
-        ),
+        row("ReferenceReport", &references),
         row("actual reference report", &parsed_ref.references().unwrap()),
         row("NoVerdict", &refusal()),
         row("ValueProblem", &problem),
@@ -377,19 +386,16 @@ fn debug_redacts_caller_text_at_every_boundary() {
         assert!(item.text.iter().all(|text| text.contains(reason)));
         rows.push(item);
     }
-    let error = ResourceError {
+    let mut error = ResourceSet::new([SchemaResource {
         uri: SECRET.into(),
-        message: "invalid retrieval URI".into(),
-    };
+        document: JsonValue::null(),
+    }])
+    .unwrap_err();
+    error.message = "invalid retrieval URI".into();
     assert!(format!("{error:?}").contains("invalid retrieval URI"));
     rows.push(row("ResourceError::invalid", &error));
-    rows.push(row(
-        "ResourceError::custom",
-        &ResourceError {
-            uri: SECRET.into(),
-            message: SECRET.into(),
-        },
-    ));
+    error.message = SECRET.into();
+    rows.push(row("ResourceError::custom", &error));
 
     let mut draft = Document::new();
     let mut operation = Operation::default();
@@ -446,7 +452,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
     }
 
     // A binding whose operation and source are both missing yields both findings.
-    let decision = validate_document(r#"{"openbindings":"0.2.0","operations":{},"bindings":{"b":{"operation":"missing","source":"missing"}}}"#).unwrap();
+    let decision = validate_document(UNKNOWN_TARGETS).unwrap();
     assert_eq!(
         decision
             .report()
@@ -478,19 +484,15 @@ fn debug_redacts_caller_text_at_every_boundary() {
             &known,
             &[("rule", known.rule), ("code", known.code)],
         ));
-        let custom_code = Finding {
-            code: SECRET,
-            ..known.clone()
-        };
+        let mut custom_code = known.clone();
+        custom_code.code = SECRET;
         rows.push(row_with_fields(
             "Finding custom code",
             &custom_code,
             &[("rule", known.rule), ("code", "<redacted>")],
         ));
-        let custom_rule = Finding {
-            rule: SECRET,
-            ..known
-        };
+        let mut custom_rule = known;
+        custom_rule.rule = SECRET;
         rows.push(row_with_fields(
             "Finding custom rule",
             &custom_rule,
@@ -498,18 +500,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
         ));
     }
     for rule in DOCUMENT_RULES {
-        let finding = Finding {
-            rule,
-            code: "schema-mismatch",
-            status: Evidence::Violated,
-            location: Some(SourceLocation {
-                pointer: Some(format!("/{SECRET}").parse().unwrap()),
-                byte_offset: 42,
-                line: 2,
-                byte_column: 3,
-            }),
-            message: SECRET.into(),
-        };
+        let finding = probe_finding(rule, "schema-mismatch", Some(probe_location()));
         rows.push(row_with_fields(
             "Finding known OBI rule",
             &finding,
@@ -517,13 +508,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
         ));
     }
     for rule in ["OBI-14", "OBI-01-PROBE-BEARER-TOKEN-7391"] {
-        let finding = Finding {
-            rule,
-            code: "schema-mismatch",
-            status: Evidence::Violated,
-            location: None,
-            message: SECRET.into(),
-        };
+        let finding = probe_finding(rule, "schema-mismatch", None);
         rows.push(row_with_fields(
             "Finding unknown OBI rule",
             &finding,

@@ -666,6 +666,35 @@ pub fn location_pointer_size(value: crate::JsonRef<'_>, limit: usize) -> Option<
     (unpaired && size <= limit).then_some(size)
 }
 
+/// The location of an admission failure in the bytes it refused: no pointer,
+/// since no value was parsed, at `byte_offset` clamped to the input, with the
+/// line and UTF-8 byte column counted over the bytes before it. The bytes need
+/// not be UTF-8.
+pub fn input_location(input: &[u8], byte_offset: usize) -> crate::SourceLocation {
+    let byte_offset = byte_offset.min(input.len());
+    let prefix = &input[..byte_offset];
+    crate::SourceLocation {
+        pointer: None,
+        byte_offset,
+        line: 1 + prefix.iter().filter(|&&b| b == b'\n').count(),
+        byte_column: 1 + prefix.iter().rev().take_while(|&&b| b != b'\n').count(),
+    }
+}
+
+/// An admission refusal decided before any byte is parsed, such as an edit
+/// batch that already exceeds a limit.
+pub fn input_error(
+    kind: crate::InputErrorKind,
+    code: &'static str,
+    byte_offset: usize,
+) -> crate::InputError {
+    crate::InputError {
+        kind,
+        byte_offset,
+        code,
+    }
+}
+
 /// Locate a bounded diagnostic batch while scanning each arena's source prefix
 /// once. Sorting is validation-local; healthy documents build no line index.
 /// Output order matches input order, including repeated nodes and mixed arenas.

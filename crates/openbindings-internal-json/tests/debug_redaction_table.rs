@@ -42,12 +42,24 @@ fn debug_redacts_caller_text_at_every_boundary() {
         serde_json::json!({"authorization":format!("Bearer {SECRET}"), SECRET: SECRET}).to_string(),
     )
     .unwrap();
-    let source_location = SourceLocation {
-        pointer: Some(format!("/{SECRET}").parse().unwrap()),
-        byte_offset: 42,
-        line: 2,
-        byte_column: 3,
-    };
+    // Records reach callers built; reassigning public fields probes caller text.
+    let mut source_location = context.location();
+    source_location.pointer = Some(format!("/{SECRET}").parse().unwrap());
+    source_location.byte_offset = 42;
+    source_location.line = 2;
+    source_location.byte_column = 3;
+    let mut secret_error = JsonValue::parse("]").unwrap_err();
+    secret_error.code = SECRET;
+    secret_error.byte_offset = 42;
+    let mut custom_prefix = JsonValue::parse_with_limits(
+        "[0]",
+        JsonLimits {
+            max_bytes: 0,
+            ..Default::default()
+        },
+    )
+    .unwrap_err();
+    custom_prefix.code = "byte-limit-PROBE-BEARER-TOKEN-7391";
     let mut rows = vec![
         row("JsonValue", &context),
         row("JsonRef", &context.view()),
@@ -61,14 +73,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
         ),
         row("SourceLocation", &source_location),
         row("Pointer", source_location.pointer.as_ref().unwrap()),
-        row(
-            "InputError",
-            &InputError {
-                kind: InputErrorKind::Syntax,
-                byte_offset: 42,
-                code: SECRET,
-            },
-        ),
+        row("InputError", &secret_error),
         row(
             "Decimal",
             &openbindings_internal_json::decimal::Decimal::parse(NUMBER),
@@ -125,13 +130,13 @@ fn debug_redacts_caller_text_at_every_boundary() {
             code,
         );
     }
+    assert_eq!(
+        (secret_error.kind.clone(), custom_prefix.kind.clone()),
+        (InputErrorKind::Syntax, InputErrorKind::Limit)
+    );
     rows.push(row_with_fields(
         "InputError custom prefix",
-        &InputError {
-            kind: InputErrorKind::Limit,
-            byte_offset: 0,
-            code: "byte-limit-PROBE-BEARER-TOKEN-7391",
-        },
+        &custom_prefix,
         &[("code", "<redacted>")],
     ));
 

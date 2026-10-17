@@ -3,7 +3,6 @@ use openbindings::{Document, JsonLimits, VersionRefusal};
 use openbindings_interface_synthesis::CancellationToken;
 use openbindings_interface_synthesis::*;
 use std::{
-    collections::BTreeMap,
     error::Error,
     future::Future,
     pin::Pin,
@@ -311,12 +310,7 @@ async fn every_boundary_failure_retains_a_repairable_candidate() {
             5 => bad.coverage.exhaustive = false,
             6 => {
                 bad.coverage.exhaustive = false;
-                bad.coverage.limitation = Some(CoverageLimitation {
-                    code: "".into(),
-                    message: "unknown".into(),
-                    details: None,
-                    additional_fields: BTreeMap::new(),
-                });
+                bad.coverage.limitation = Some(CoverageLimitation::new("", "unknown"));
             }
             7 => bad
                 .coverage
@@ -644,4 +638,33 @@ async fn unpaired_source_content_cannot_be_published_as_a_conformant_document() 
             .text()
             .contains("\\ud800")
     );
+}
+
+#[test]
+fn provider_constructors_fill_the_fields_they_name() {
+    let kind = SupportedKind::new(KIND).with_description("echo values");
+    assert_eq!(
+        (kind.kind.as_str(), kind.description.as_deref()),
+        (KIND, Some("echo values"))
+    );
+    let evidence = std::collections::BTreeMap::from([(
+        "count".to_owned(),
+        openbindings::JsonValue::parse("2").unwrap(),
+    )]);
+    let limitation = CoverageLimitation::new("example.remaining", "two units were not read")
+        .with_details(evidence.clone())
+        .with_additional_fields(evidence);
+    assert_eq!(
+        (limitation.code.as_str(), limitation.message.as_str()),
+        ("example.remaining", "two units were not read")
+    );
+    assert!(limitation.details.is_some() && limitation.additional_fields.len() == 1);
+    let entry = CoverageEntry::new(0, "echo", CoverageScope::Target, CoverageStatus::Lossy);
+    let partial = CoverageClaim::partial(vec![entry.clone()], limitation);
+    assert!(!partial.exhaustive && partial.limitation.is_some());
+    assert_eq!(partial.entries.len(), 1);
+    let complete = CoverageClaim::complete(vec![entry]);
+    assert!(complete.exhaustive && complete.limitation.is_none());
+    let candidate = SynthesisCandidate::new(Document::new(), complete);
+    assert!(candidate.coverage.exhaustive);
 }

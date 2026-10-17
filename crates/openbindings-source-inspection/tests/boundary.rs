@@ -22,12 +22,19 @@ fn source() -> Source {
     }
 }
 fn target() -> BindableTarget {
-    BindableTarget {
-        source_ref: "one".into(),
-        binding: BindingFragment::default(),
-        operation_key: None,
-        operation: None,
-    }
+    BindableTarget::new("one", BindingFragment::default())
+}
+// A provider can still assign the public flag and return an incomplete
+// inventory without evidence; the facade refuses it.
+fn incomplete_without_evidence() -> SourceInspection {
+    let mut inventory = SourceInspection::complete(Vec::new());
+    inventory.exhaustive = false;
+    inventory
+}
+fn without_source_ref() -> BindableTarget {
+    let mut item = target();
+    item.source_ref = String::new();
+    item
 }
 
 struct Echo {
@@ -41,13 +48,7 @@ impl SourceInspector for Echo {
         kind == KIND
     }
     fn supported_kinds(&self) -> Vec<SupportedKind> {
-        self.listed
-            .iter()
-            .map(|kind| SupportedKind {
-                kind: kind.clone(),
-                description: None,
-            })
-            .collect()
+        self.listed.iter().map(SupportedKind::new).collect()
     }
     fn inspect<'a>(&'a self, source: &'a Source, _: CancellationToken) -> Self::Inspection<'a> {
         self.calls.set(self.calls.get() + 1);
@@ -217,33 +218,10 @@ async fn consumer_rejects_provider_author_keys_unknown_binding_fields_and_bad_fr
 #[tokio::test]
 async fn incomplete_results_require_evidence_and_complete_empty_is_valid() {
     let invalid = [
-        SourceInspection {
-            targets: vec![],
-            exhaustive: false,
-            limitation: None,
-        },
-        SourceInspection::partial(
-            vec![],
-            InspectionLimitation {
-                code: "".into(),
-                message: "missing".into(),
-                details: None,
-                additional_fields: Default::default(),
-            },
-        ),
-        SourceInspection::partial(
-            vec![],
-            InspectionLimitation {
-                code: "example.limit".into(),
-                message: "".into(),
-                details: None,
-                additional_fields: Default::default(),
-            },
-        ),
-        SourceInspection::complete(vec![BindableTarget {
-            source_ref: "".into(),
-            ..target()
-        }]),
+        incomplete_without_evidence(),
+        SourceInspection::partial(vec![], InspectionLimitation::new("", "missing")),
+        SourceInspection::partial(vec![], InspectionLimitation::new("example.limit", "")),
+        SourceInspection::complete(vec![without_source_ref()]),
     ];
     for result in invalid {
         let (inspector, _) = inspector(Some(result));
@@ -255,20 +233,13 @@ async fn incomplete_results_require_evidence_and_complete_empty_is_valid() {
     let (inspector, _) = inspector(Some(SourceInspection::complete(vec![])));
     assert!(inspector.inspect(&source()).await.unwrap().exhaustive);
     // The abstract schema permits a limitation on an exhaustive inventory.
-    SourceInspection {
-        exhaustive: true,
-        ..SourceInspection::partial(
-            vec![],
-            InspectionLimitation {
-                code: "example.note".into(),
-                message: "complete within the kind's admitted set".into(),
-                details: None,
-                additional_fields: Default::default(),
-            },
-        )
-    }
-    .validate()
-    .unwrap();
+    SourceInspection::complete(vec![])
+        .with_limitation(InspectionLimitation::new(
+            "example.note",
+            "complete within the kind's admitted set",
+        ))
+        .validate()
+        .unwrap();
 }
 
 #[test]
@@ -354,11 +325,7 @@ fn exact_encoding_budgets_and_opaque_values_are_preserved() {
             InspectionErrorKind::Encoding
         );
     }
-    let invalid = SourceInspection {
-        targets: vec![],
-        exhaustive: false,
-        limitation: None,
-    };
+    let invalid = incomplete_without_evidence();
     assert_eq!(
         invalid.to_json().unwrap_err().kind(),
         InspectionErrorKind::InvalidResult
@@ -522,10 +489,7 @@ async fn every_inventory_output_path_refuses_the_same_invalid_results() {
         )]),
         ..Default::default()
     });
-    let empty_id = BindableTarget {
-        source_ref: "".into(),
-        ..target()
-    };
+    let empty_id = without_source_ref();
     for item in [&forbidden_framing, &empty_id] {
         assert!(
             serde_json::to_string(item).is_err(),
@@ -533,20 +497,8 @@ async fn every_inventory_output_path_refuses_the_same_invalid_results() {
         );
     }
     let invalid = [
-        SourceInspection {
-            exhaustive: false,
-            limitation: None,
-            targets: vec![],
-        },
-        SourceInspection::partial(
-            vec![],
-            InspectionLimitation {
-                code: "".into(),
-                message: "why".into(),
-                details: None,
-                additional_fields: Default::default(),
-            },
-        ),
+        incomplete_without_evidence(),
+        SourceInspection::partial(vec![], InspectionLimitation::new("", "why")),
         SourceInspection::complete(vec![forbidden_framing]),
         SourceInspection::complete(vec![empty_id]),
         SourceInspection::complete(vec![target(), target()]),
@@ -585,16 +537,10 @@ fn source_ref_uniqueness_is_exact_and_valid_serializers_agree() {
 #[tokio::test]
 async fn operation_framing_refuses_unknown_non_extension_members() {
     for key in ["foo", "idempotent", "input", "x-evidence"] {
-        let item = BindableTarget {
-            operation: Some(Operation {
-                additional_fields: BTreeMap::from([(
-                    key.into(),
-                    JsonValue::parse("1e9999").unwrap(),
-                )]),
-                ..Default::default()
-            }),
-            ..target()
-        };
+        let item = target().with_operation(Operation {
+            additional_fields: BTreeMap::from([(key.into(), JsonValue::parse("1e9999").unwrap())]),
+            ..Default::default()
+        });
         let valid = key.starts_with("x-");
         assert_eq!(serde_json::to_string(&item).is_ok(), valid);
         let inventory = SourceInspection::complete(vec![item]);
@@ -648,4 +594,40 @@ async fn forwarded_inspectors_preserve_exact_encoding_and_byte_limits() {
                 .is_err()
         );
     }
+}
+
+#[test]
+fn provider_constructors_fill_the_fields_they_name() {
+    let kind = SupportedKind::new(KIND).with_description("echo values");
+    assert_eq!(
+        (kind.kind.as_str(), kind.description.as_deref()),
+        (KIND, Some("echo values"))
+    );
+    assert!(SupportedKind::new(KIND).description.is_none());
+    let operation = Operation {
+        input: Some(JsonValue::parse("true").unwrap()),
+        ..Default::default()
+    };
+    let target = BindableTarget::new("one", BindingFragment::default())
+        .with_operation_key("get")
+        .with_operation(operation);
+    assert_eq!(target.source_ref, "one");
+    assert_eq!(target.operation_key.as_deref(), Some("get"));
+    assert!(target.operation.is_some());
+    let evidence = BTreeMap::from([("count".to_owned(), JsonValue::parse("2").unwrap())]);
+    let limitation = InspectionLimitation::new("example.note", "two records were skipped")
+        .with_details(evidence.clone())
+        .with_additional_fields(BTreeMap::from([("x-hint".to_owned(), JsonValue::null())]));
+    assert_eq!(limitation.details.as_ref().map(BTreeMap::len), Some(1));
+    // Evidence on a complete inventory keeps it complete.
+    let complete =
+        SourceInspection::complete(vec![target.clone()]).with_limitation(limitation.clone());
+    assert!(complete.exhaustive);
+    assert_eq!(
+        complete.to_json().unwrap().text(),
+        r#"{"targets":[{"sourceRef":"one","binding":{},"operationKey":"get","operation":{"input":true}}],"exhaustive":true,"limitation":{"code":"example.note","message":"two records were skipped","details":{"count":2},"x-hint":null}}"#
+    );
+    let partial = SourceInspection::partial(vec![target], limitation);
+    assert!(!partial.exhaustive && partial.limitation.is_some());
+    assert!(partial.validate().is_ok());
 }

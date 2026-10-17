@@ -190,10 +190,10 @@ fn pattern_preparation_failures_use_original_locations_and_safe_messages() {
                 );
                 assert_eq!(
                     detail.location,
-                    Some(SchemaLocation {
+                    Some(SchemaLocation::new(
                         resource,
-                        pointer: format!("{pointer}/{keyword}").parse().unwrap()
-                    })
+                        format!("{pointer}/{keyword}").parse().unwrap()
+                    ))
                 );
                 safe(&detail.message);
                 let serialized = serde_json::to_string(&detail).unwrap();
@@ -345,13 +345,12 @@ impl PreparedSchema for CustomPrepared {
     fn validate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
         ValueOutcome::Fails {
             message: "value does not satisfy the contract".into(),
-            problems: vec![ValueProblem {
-                details: None,
-                instance: "".parse().unwrap(),
-                schema: self.0.clone(),
-                code: "custom".into(),
-                message: "custom evaluator failure".into(),
-            }],
+            problems: vec![ValueProblem::new(
+                "".parse().unwrap(),
+                self.0.clone(),
+                "custom",
+                "custom evaluator failure",
+            )],
             problems_complete: true,
         }
     }
@@ -392,20 +391,13 @@ fn external_evaluator_construction_and_matching_stay_supported() {
         ),
         Err(NoVerdict { .. }) => panic!(),
     }
-    let detail = UndefinedResult {
-        code: "proof".into(),
-        message: "established by a custom evaluator".into(),
-        location: None,
-    };
+    let detail = UndefinedResult::new("proof", "established by a custom evaluator");
     assert_eq!(
         outcome_name(ValueOutcome::Undefined { detail }),
         "undefined"
     );
     let detail = UndefinedResult::new("custom", "established by a custom evaluator").with_location(
-        SchemaLocation {
-            resource: None,
-            pointer: "/operations/op/input".parse().unwrap(),
-        },
+        SchemaLocation::new(None, "/operations/op/input".parse().unwrap()),
     );
     assert_eq!(detail.location.unwrap().pointer, "/operations/op/input");
     assert_eq!(
