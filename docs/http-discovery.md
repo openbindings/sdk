@@ -1,9 +1,12 @@
 # HTTP discovery policy
 
-Origins are parsed and serialized with the same WHATWG `url` implementation as
-reqwest. They must have no credentials, resource path, query or fragment; a root
-slash is accepted. HTTPS is required except for normalized literal IPv4 127/8
-and IPv6 `::1`. Names such as `localhost`, `.localhost` or `127.example` do not
+Origins must first be RFC 3986 URIs, which are ASCII only: a non-ASCII domain
+name such as `https://bücher.example` is refused in Rust and TypeScript, so pass
+its IDNA A-label form, `https://xn--bcher-kva.example`. An admitted origin is
+then parsed and serialized with the same WHATWG `url` implementation as reqwest.
+It must have no credentials, resource path, query or fragment; a root slash is
+accepted. HTTPS is required except for normalized literal IPv4 127/8 and IPv6
+`::1`. Names such as `localhost`, `.localhost` or `127.example` do not
 establish loopback. Alternate IP spellings are normalized before admission and
 `requested_url` records the normalized URL actually supplied to the transport.
 
@@ -24,6 +27,14 @@ every hop, as well as the scheme and redirect-limit obligations. A visible
 redirect-policy refusal, including malformed Location that bypassed its callback.
 An already-built client is accepted only by `Client::with_delegated_policy`.
 Observing a final HTTPS URL cannot prove that all intermediate hops used HTTPS.
+
+The application scopes credentials on redirects. On a cross-origin hop, reqwest
+removes only `Authorization`, `Cookie`, `Proxy-Authorization` and
+`WWW-Authenticate`; any other credential header, such as an `x-api-key` set
+through `ClientBuilder::default_headers`, reaches the redirect target. Carry a
+credential in `Authorization` where the service accepts it, or build a client
+whose redirect policy refuses foreign-origin hops and pass it to
+`Client::with_delegated_policy`, which then owns the per-hop obligations above.
 
 Application policy still controls TLS roots, credentials, proxies and resolved
 network addresses. URL admission is not an IP allowlist. For restricted native
@@ -53,16 +64,23 @@ Every attempt has one thirty-second whole-attempt deadline. It includes connect,
 TLS, response headers, the redirect chain, body acquisition and validation.
 `AttemptTimeout::After(Duration)` accepts a positive finite override;
 `AttemptTimeout::Unbounded` explicitly omits the deadline. Zero is an error.
-Native discovery owns one Tokio timer. A shorter application-client timeout is
-an additional bound and yields `Timeout`. Caller `CancellationToken` cancellation
-remains `Cancelled`; caller cancellation wins when both sources are ready at the
-same poll, and the first observed terminal cause ends acquisition.
+Native discovery owns one Tokio timer, so it must run on a Tokio runtime with
+timers enabled (`enable_time` or `enable_all`), as reqwest's own timeouts do;
+without them, Tokio panics when the timer is created. A shorter
+application-client timeout is an additional bound and yields `Timeout`. Caller
+`CancellationToken` cancellation remains `Cancelled`; caller cancellation wins
+when both sources are ready at the same poll, and the first observed terminal
+cause ends acquisition.
 
 Portable `discover(origin, &options, &control, &timer, transport)` requires a host `DiscoveryTimer`
 providing monotonic time and a wake-capable absolute timer. Its repeatable
 callback returns one hop, never follows redirects internally, dispatches the
 supplied normalized URL unchanged, delivers decoded bytes or a typed refusal,
-and releases work when dropped. Observable hidden following is a policy failure;
+and releases work when dropped. The SDK calls it again for each admitted
+redirect, including one to another origin, and passes only the URL: the callback
+decides which credentials that URL's origin receives, as a browser or reqwest
+does for its standard credential headers. Portable results record the URL the SDK
+last dispatched as `final_url`. Observable hidden following is a policy failure;
 this contract cannot sandbox arbitrary callback code. Local
 non-Send futures are supported. The SDK races and drops one host timer per attempt;
 redirects and chunk reads never reset it.
@@ -70,13 +88,17 @@ redirects and chunk reads never reset it.
 TypeScript `discover` owns its timer and AbortController. `timeoutMs` defaults to
 30,000; it accepts a positive finite override or `"unbounded"`, and rejects zero.
 It uses Fetch `redirect: "follow"` and refuses an observable final HTTPS-to-HTTP
-downgrade. Browser per-hop mixed-content blocking in secure contexts and
+downgrade. A 301, 302, 303, 307 or 308 response that still carries a visible
+Location was left unfollowed and is a `redirect-policy` transport error, as in
+Rust. Browser per-hop mixed-content blocking in secure contexts and
 private-network rules belong to the browser. The SDK cannot observe hidden hops
 or enforce its native ten-hop limit in browser Fetch. Opaque and opaqueredirect
 responses are typed policy failures because policy cannot be established, never
 absence or document violations. A supplied Fetch callback must honor the URL,
-redirect mode and cancellation contract. A standard TimeoutError caller signal
-is a timeout; ordinary abort is cancellation.
+redirect mode and cancellation contract. Fetch removes `Authorization` on a
+cross-origin redirect but keeps other request headers, so a custom credential
+header the callback adds reaches every followed origin. A standard TimeoutError
+caller signal is a timeout; ordinary abort is cancellation.
 
 Timers cannot preempt a blocking Rust poll or synchronous Wasm validation. Each
 path checks monotonic time and cancellation at validation boundaries and discards

@@ -120,6 +120,17 @@ impl WasmJson {
             value: v.to_owned(),
         })
     }
+    /// Resolve a pointer, given as an exact JSON string, as `locate` reads it;
+    /// a malformed pointer selects nothing, as it does for `at`.
+    #[wasm_bindgen(js_name=atPointer)]
+    pub fn at_pointer(&self, pointer: &str) -> Option<WasmJson> {
+        let pointer = JsonValue::parse(pointer)
+            .ok()
+            .and_then(|text| openbindings_internal_json::backend::string_pointer(text.view()))?;
+        self.value.at_pointer(&pointer).map(|v| Self {
+            value: v.to_owned(),
+        })
+    }
     /// Locate a pointer, given as an exact JSON string, relative to this value.
     pub fn locate(&self, pointer: &str) -> Result<String, JsValue> {
         let pointer = JsonValue::parse(pointer)
@@ -945,6 +956,11 @@ impl WasmOperation {
             .map(encoded)
             .map_err(interpretation_error)
     }
+    pub fn retain(&self) -> WasmOperation {
+        Self {
+            op: self.op.clone(),
+        }
+    }
 }
 // Exact text crosses the bridge as escaped JSON, never through Rust scalar strings.
 fn exact_metadata(fields: serde_json::Value, exact: &[(&str, Option<String>)]) -> String {
@@ -1256,6 +1272,38 @@ impl Default for WasmResources {
         Self::new()
     }
 }
+/// Entries collected for one `ResourceSet::new`, so a set is admitted once
+/// rather than rebuilt for each added resource.
+#[wasm_bindgen]
+#[derive(Default)]
+pub struct WasmResourceEntries {
+    resources: Vec<SchemaResource>,
+}
+impl std::fmt::Debug for WasmResourceEntries {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmResourceEntries")
+            .finish_non_exhaustive()
+    }
+}
+#[wasm_bindgen]
+impl WasmResourceEntries {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> WasmResourceEntries {
+        Self::default()
+    }
+    pub fn push(&mut self, uri: &str, value: &WasmJson) {
+        self.resources.push(SchemaResource {
+            uri: uri.into(),
+            document: value.value.clone(),
+        });
+    }
+    /// Admit every collected entry as one set; the entries are taken.
+    pub fn build(&mut self) -> Result<WasmResources, JsValue> {
+        ResourceSet::new(std::mem::take(&mut self.resources))
+            .map(|resources| WasmResources { resources })
+            .map_err(|e| error("resource", e))
+    }
+}
 /// A selected operation of a proved revision. Reads delegate to the plain view;
 /// only this handle hands out value contracts.
 #[wasm_bindgen]
@@ -1319,6 +1367,11 @@ impl WasmConformantOperation {
     }
     pub fn bindings(&self) -> String {
         encoded(self.operation.bindings())
+    }
+    pub fn retain(&self) -> WasmConformantOperation {
+        Self {
+            operation: self.operation.clone(),
+        }
     }
 }
 impl WasmConformantOperation {
@@ -1451,6 +1504,13 @@ impl WasmPrepared {
             self.prepared
                 .explain_with_control(&value.value, &control(cancelled)),
         )
+    }
+    #[wasm_bindgen(js_name=validateJson)]
+    pub fn validate_json(&self, bytes: &[u8]) -> Result<String, JsValue> {
+        self.prepared
+            .validate_json(bytes)
+            .map(encoded)
+            .map_err(input_error)
     }
     pub fn retain(&self) -> WasmPrepared {
         Self {

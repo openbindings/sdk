@@ -388,7 +388,7 @@ async fn cancellation_during_pending_io_wakes_without_transport_cooperation() {
     assert!(matches!(healthy.outcome, DiscoveryOutcome::Found { .. }));
 }
 #[tokio::test(flavor = "current_thread")]
-async fn incomplete_body_transport_failure_and_missing_final_url_are_distinct() {
+async fn incomplete_body_and_transport_failure_are_distinct() {
     let options = ClientOptions::default();
     let control = CancellationToken::new();
     let counts = Rc::new(RefCell::new(Counts::default()));
@@ -407,7 +407,11 @@ async fn incomplete_body_transport_failure_and_missing_final_url_are_distinct() 
     .await
     .unwrap();
     assert!(matches!(r.outcome, DiscoveryOutcome::BodyError { .. }));
-    assert!(r.metadata.unwrap().final_url.is_none());
+    // A transport that cannot report a URL still dispatched the SDK's own.
+    assert_eq!(
+        r.metadata.unwrap().final_url.as_deref(),
+        Some("https://example.test/.well-known/openbindings")
+    );
     assert!(r.body.is_none());
     let r = discover::<Body, _, _, _>(
         "https://example.test",
@@ -765,6 +769,61 @@ async fn portable_redirects_obey_statuses_relative_location_limit_and_total_time
             ));
             assert_eq!(calls.get(), MAX_REDIRECTS + 1);
         }
+    }
+}
+
+// the SDK follows portable hops itself, so it reports the URL it resolved
+// even when the transport reports none or another spelling of it.
+#[tokio::test(flavor = "current_thread")]
+async fn portable_discovery_reports_the_url_it_resolved() {
+    for (reported, redirect) in [
+        (None, false),
+        (None, true),
+        (Some("HTTPS://B.TEST:443/moved"), true),
+    ] {
+        let calls = std::cell::Cell::new(0);
+        let r = discover(
+            "https://a.test",
+            &ClientOptions::default(),
+            &CancellationToken::new(),
+            &Clock::default(),
+            |request| {
+                let n = calls.get();
+                calls.set(n + 1);
+                async move {
+                    let mut r = response(
+                        if redirect && n == 0 { 302 } else { 200 },
+                        DOCUMENT,
+                        Rc::default(),
+                    );
+                    r.final_url = None;
+                    if redirect && n == 0 {
+                        r.headers
+                            .push(Header::new("location", "https://b.test/moved"));
+                    } else if redirect {
+                        assert_eq!(request.url, "https://b.test/moved");
+                        r.final_url = reported.map(Into::into);
+                    }
+                    Ok(r)
+                }
+            },
+        )
+        .await
+        .unwrap();
+        assert!(matches!(r.outcome, DiscoveryOutcome::Found { .. }));
+        let metadata = r.metadata.unwrap();
+        assert_eq!(
+            metadata.requested_url,
+            "https://a.test/.well-known/openbindings"
+        );
+        assert_eq!(
+            metadata.final_url.as_deref(),
+            Some(if redirect {
+                "https://b.test/moved"
+            } else {
+                "https://a.test/.well-known/openbindings"
+            })
+        );
     }
 }
 

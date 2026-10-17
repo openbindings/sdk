@@ -317,6 +317,15 @@ export type ValueCheck =
       /** Structured expected failure for this branch. */
       error: ValueAdmissionFailure;
     };
+/** Exact JSON text validation result: input-error when the text is not admitted as JSON, with the same error parseJson reports; after admission, the same selected-schema ValueOutcome as for an ExactJson root. */
+export type JsonCheck =
+  | ValueOutcome
+  | {
+      /** Semantic result discriminant; narrow before reading branch-specific data. */
+      outcome: "input-error";
+      /** Exact-input refusal: stable code, optional kind and zero-based byte offset, and message. */
+      error: InputFailure["error"];
+    };
 /** Known causes of a static reference-inspection refusal in this SDK version. */
 export type ReferenceRefusalReason =
   | "resource-unavailable"
@@ -572,20 +581,22 @@ function failure(error: unknown): InputFailure {
   if (!info || typeof info.code !== "string") throw error;
   return { status: "input-error", error: info };
 }
-function scalar(text: string): void {
+// Whether text holds no unpaired UTF-16 unit, so it crosses the bridge exactly as UTF-8.
+function wellFormed(text: string): boolean {
   for (let i = 0; i < text.length; i++) {
     const c = text.charCodeAt(i);
     if (c >= 0xd800 && c <= 0xdbff) {
       const next = text.charCodeAt(++i);
-      if (!(next >= 0xdc00 && next <= 0xdfff))
-        throw new TypeError(
-          "Unpaired UTF-16 in JSON text; use a JSON \\u escape or exact UTF-8 bytes.",
-        );
-    } else if (c >= 0xdc00 && c <= 0xdfff)
-      throw new TypeError(
-        "Unpaired UTF-16 in JSON text; use a JSON \\u escape or exact UTF-8 bytes.",
-      );
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+    } else if (c >= 0xdc00 && c <= 0xdfff) return false;
   }
+  return true;
+}
+function scalar(text: string): void {
+  if (!wellFormed(text))
+    throw new TypeError(
+      "Unpaired UTF-16 in JSON text; use a JSON \\u escape or exact UTF-8 bytes.",
+    );
 }
 function bytes(input: ExactInput): Uint8Array {
   if (typeof input === "string") {
@@ -818,10 +829,14 @@ export class ExactJson extends Managed {
   } {
     return decode(handle<wasm.WasmJson>(this).metadata());
   }
-  /** Resolve a relative RFC 6901 pointer and return a NEW disposable subtree owner, or undefined. Empty selects this value; repeated names select the first occurrence. The owner can retain the entire source. */
+  /** Resolve a relative RFC 6901 pointer and return a NEW disposable subtree owner, or undefined for a malformed pointer or one that names no node. Empty selects this value; repeated names select the first occurrence. A segment may hold an unpaired UTF-16 unit, so a value problem's instance resolves to the node locate() reports. The owner can retain the entire source. */
   at(pointer: string): ExactJson | undefined {
-    scalar(pointer);
-    const found = handle<wasm.WasmJson>(this).at(pointer);
+    const raw = handle<wasm.WasmJson>(this);
+    // Only a pointer holding an unpaired unit needs the exact JSON route that
+    // locate() uses; JSON.stringify escapes that unit.
+    const found = wellFormed(pointer)
+      ? raw.at(pointer)
+      : raw.atPointer(JSON.stringify(pointer));
     return found ? new ExactJson(found) : undefined;
   }
   /** Locate an exact RFC 6901 pointer relative to this value, such as a value problem's instance, in the text it was parsed from: the node's byte offset, line and byte column with the given pointer, or null when it names no node. A segment may hold an unpaired UTF-16 unit. Computed on this call; nothing is retained. A malformed pointer throws SdkError with code invalid-pointer. */
@@ -1558,6 +1573,10 @@ export class OperationView extends OperationReads {
   /** @internal */ constructor(raw: wasm.WasmOperation) {
     super(raw);
   }
+  /** Acquire a separate owner sharing this immutable selected operation. */
+  retain(): OperationView {
+    return new OperationView(handle<wasm.WasmOperation>(this).retain());
+  }
   /** Acquire a NEW independently disposable input value; undefined means absent. JSON null, true, false and objects remain present values. */
   input(): ExactJson | undefined {
     const raw = handle<wasm.WasmOperation>(this).input();
@@ -1578,6 +1597,12 @@ export class ConformantOperationView extends OperationReads {
     raw: wasm.WasmConformantOperation,
   ): ConformantOperationView {
     return new ConformantOperationView(raw);
+  }
+  /** Acquire a separate owner of this conformant operation, which hands out value contracts as this one does. */
+  retain(): ConformantOperationView {
+    return ConformantOperationView.fromRaw(
+      conformantOperationRaw(this).retain(),
+    );
   }
   /** Acquire a NEW disposable input value contract; undefined means the operation declares no input. Present true, false and object schemas are all contracts. Nothing is prepared here. */
   input(): ValueContract | undefined {
@@ -1725,21 +1750,28 @@ export class SchemaResources extends Managed {
       super(entries as wasm.WasmResources);
       return;
     }
-    let raw = new wasm.WasmResources();
+    if (entries === undefined) {
+      super(new wasm.WasmResources());
+      return;
+    }
+    // Collect every entry, then admit the set once in Rust.
+    let pending: wasm.WasmResourceEntries | undefined;
+    let raw: wasm.WasmResources;
     try {
-      if (entries !== undefined) {
-        for (const [uri, document] of entries as Iterable<
-          readonly [string, ExactJson]
-        >) {
-          scalar(uri);
-          const next = sdkCall(() => raw.add(uri, jsonRaw(document)));
-          raw.free();
-          raw = next;
-        }
+      for (const [uri, document] of entries as Iterable<
+        readonly [string, ExactJson]
+      >) {
+        scalar(uri);
+        (pending ??= new wasm.WasmResourceEntries()).push(
+          uri,
+          jsonRaw(document),
+        );
       }
-    } catch (error) {
-      raw.free();
-      throw error;
+      raw = pending
+        ? sdkCall(() => pending!.build())
+        : new wasm.WasmResources();
+    } finally {
+      pending?.free();
     }
     super(raw);
   }
@@ -1897,11 +1929,25 @@ export class PreparedContract extends Managed {
   /** The cheap check of an exact root: a failure carries no problems and problemsComplete is false. Cancellation cannot preempt synchronous Wasm. */
   validate(value: ExactJson, options?: WorkOptions): ValueOutcome;
   /** Admit ordinary JSON (including nested exact owners), then check it cheaply.
+   * A string is a JSON string value, so validate("7") checks the string "7"; use validateJson for JSON text.
    * Expected admission failures return input-error. Caller exceptions and handle misuse throw.
    */
   validate(value: JsonInput, options?: WorkOptions): ValueCheck;
   validate(value: JsonInput, options: WorkOptions = {}): ValueCheck {
     return checkValue(this, value, options, false);
+  }
+  /** Admit exact JSON text or UTF-8 bytes as parseJson does, under the default limits, then check it cheaply: validateJson("7") checks the number 7. Every value outcome is returned, including undefined and no-verdict; input-error is admission failure only. Duplicate members yield no-verdict and numbers are never rounded. Wrong input types and literal unpaired UTF-16 text throw, as for parseJson; a pre-aborted signal returns cancellation first. Parse once with parseJson to check one value repeatedly; cancellation cannot preempt synchronous Wasm. */
+  validateJson(input: ExactInput, options: WorkOptions = {}): JsonCheck {
+    requireReady();
+    const prepared = handle<wasm.WasmPrepared>(this);
+    const signal = workSignal(options);
+    if (isAborted(signal)) return cancelledValue();
+    const data = bytes(input);
+    try {
+      return decode(prepared.validateJson(data));
+    } catch (error) {
+      return { outcome: "input-error", error: failure(error).error };
+    }
   }
   /** Explain an exact root: the verdict validate() returns, and for a failure the library's first error with redacted messages and original schema facts. Explanation costs more than the cheap check and is library-bounded: it can allocate in proportion to the schema and value and can overflow the stack on deeply nested values, so keep validate() on paths that check untrusted input. Cancellation after the verdict keeps an established failure with problemsComplete false. */
   explain(value: ExactJson, options?: WorkOptions): ValueOutcome;
@@ -2002,7 +2048,7 @@ export function discoveryPolicy(): DiscoveryPolicy {
   requireReady();
   return decode(wasm.discoveryPolicy());
 }
-/** Construct the fixed discovery URL from an absolute HTTP(S) origin. Refuses credentials, resource paths, query and fragment; accepts an optional root slash. Does not fetch. The transport owns connection and redirect policy. */
+/** Construct the fixed discovery URL from an absolute HTTP(S) origin. The origin must be ASCII: a non-ASCII domain name is refused, so pass its IDNA A-label form. Refuses credentials, resource paths, query and fragment; accepts an optional root slash. Does not fetch. The transport owns connection and redirect policy. */
 export function discoveryEndpoint(origin: string): string {
   requireReady();
   scalar(origin);
@@ -2021,7 +2067,7 @@ export interface DiscoveryOptions {
   timeoutMs?: number | "unbounded";
   /** Caller cancellation; aborts I/O and is checked around synchronous assessment. */
   signal?: AbortSignal;
-  /** Local asynchronous Fetch-compatible callback; omitted uses host fetch. Honor redirect: "follow", cancellation and the supplied normalized URL; configure credentials and connection restrictions here. */
+  /** Local asynchronous Fetch-compatible callback; omitted uses host fetch. Honor redirect: "follow", cancellation and the supplied normalized URL; configure credentials and connection restrictions here. Fetch removes Authorization on a cross-origin redirect but keeps other request headers, so a custom credential header added here reaches every followed origin. */
   fetch?: DiscoveryFetch;
 }
 /** Observed response facts retained even when body reading or document assessment fails. The final URL is metadata only, not an implicit schema base. */
@@ -2066,7 +2112,7 @@ type DiscoveryBodyResult =
         supported: string;
       };
     };
-/** Finite discovery receipt. Only found carries normative proof. Only HTTP 404 means absent; 401/403 are gated; other non-200 statuses are http-status. Complete bounded 200 bytes can accompany refused/invalid documents; partial bodies are never returned. Dispose any returned document owner independently. */
+/** Finite discovery receipt. Only found carries normative proof. Only HTTP 404 means absent; 401/403 are gated; other non-200 statuses are http-status, except that a 301, 302, 303, 307 or 308 with a visible Location was left unfollowed and is a redirect-policy transport-error. Complete bounded 200 bytes can accompany refused/invalid documents; partial bodies are never returned. Dispose any returned document owner independently. */
 export type DiscoveryResult = (
   | DiscoveryBodyResult
   | {
@@ -2279,6 +2325,14 @@ export async function discover(
           "Final response URL violates discovery destination or downgrade policy.",
         );
     }
+    // Fetch follows these redirects, so one still carrying Location was left unfollowed.
+    if (
+      [301, 302, 303, 307, 308].includes(response.status) &&
+      response.headers.has("location")
+    )
+      return policyRefusal(
+        "Host did not follow the observed redirect Location.",
+      );
     if (response.status !== 200) {
       void response.body?.cancel().catch(() => {});
       return {

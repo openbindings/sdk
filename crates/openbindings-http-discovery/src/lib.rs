@@ -53,9 +53,11 @@ impl std::fmt::Display for ConfigurationError {
 }
 impl std::error::Error for ConfigurationError {}
 
-/// Construct and admit the normalized discovery URL using the same WHATWG parser
-/// as reqwest. HTTP is permitted only for literal IPv4 127/8 or IPv6 ::1.
-/// Credentials, resource paths, query and fragment are refused before I/O.
+/// Construct and admit the normalized discovery URL. The origin must first be
+/// an RFC 3986 URI, which is ASCII only, so a non-ASCII domain name is refused;
+/// pass its IDNA A-label form. It is then parsed and serialized with the same
+/// WHATWG parser as reqwest. HTTP is permitted only for literal IPv4 127/8 or
+/// IPv6 ::1. Credentials, resource paths, query and fragment are refused before I/O.
 ///
 /// # Errors
 /// Returns a configuration error for a malformed origin, a non-HTTP(S) scheme, non-loopback HTTP, credentials, a resource path, query, or fragment.

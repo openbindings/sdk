@@ -143,6 +143,16 @@ const incompleteOutcome: ValueOutcome = preparedContract.validate(7);
 if (ordinaryOutcome.outcome === "input-error") {
   ordinaryOutcome.error.instancePointer satisfies string | null;
 }
+const textOutcome: import("../dist/index.js").JsonCheck =
+  preparedContract.validateJson(new Uint8Array());
+// @ts-expect-error exact text admission may return input-error
+const unadmittedText: ValueOutcome = preparedContract.validateJson("7");
+// @ts-expect-error validateJson takes exact text or bytes, not ordinary values
+preparedContract.validateJson({ nested: exactInput });
+if (textOutcome.outcome === "input-error") {
+  textOutcome.error.byteOffset satisfies number | undefined;
+}
+void unadmittedText;
 const selection = parsedOnly.resolveOperation("run");
 if (selection.status === "ambiguous") {
   // @ts-expect-error ambiguity candidates are immutable
@@ -306,7 +316,10 @@ parsedOperation.input()?.prepare();
 // @ts-expect-error a parsed operation view is not a conformant operation view
 const forgedOperation: import("../dist/index.js").ConformantOperationView =
   parsedOperation;
-void forgedOperation;
+// @ts-expect-error retaining a parsed operation view keeps it unproven
+const retainedForgery: import("../dist/index.js").ConformantOperationView =
+  parsedOperation.retain();
+void [forgedOperation, retainedForgery];
 
 function validatedReads(proof: ConformantDocument, parsed: Document) {
   proof.openbindings satisfies string;
@@ -318,6 +331,8 @@ function validatedReads(proof: ConformantDocument, parsed: Document) {
   using editor = proof.asDocument();
   // Conformance excludes ambiguity: selection is the view or undefined.
   using conformantOperation = proof.resolveOperation("run");
+  using retainedOperation = conformantOperation?.retain();
+  retainedOperation?.input()?.dispose();
   using contract = conformantOperation?.input();
   using schema = contract?.schema();
   schema satisfies ExactJson | undefined;
