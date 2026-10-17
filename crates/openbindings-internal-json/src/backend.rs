@@ -527,6 +527,11 @@ pub fn view(value: &crate::JsonValue) -> View<'_> {
 pub fn pointer(value: &crate::JsonValue) -> Option<String> {
     value.owner.pointer(value.id)
 }
+/// Append the JSON Pointer [`pointer()`] builds to `out` without another
+/// allocation; `false`, appending nothing, when it is unavailable.
+pub fn pointer_into(value: &crate::JsonValue, out: &mut Vec<u8>) -> bool {
+    value.owner.pointer_into(value.id, out)
+}
 /// Measure separately owned decoded UTF-8 strings in a borrowed exact subtree,
 /// including member names. Raw source bytes are excluded. Unescaped strings borrow
 /// their source; escaped scalar strings own their complete decoded value. This
@@ -778,6 +783,18 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
 
 pub fn node_id(value: &crate::JsonValue) -> usize {
     value.id
+}
+/// The arena position of a borrowed value, for a later [`node`] lookup.
+pub fn ref_id(value: crate::JsonRef<'_>) -> usize {
+    value.id
+}
+/// Borrow the value at an arena position recorded by [`ref_id`] from any value
+/// sharing that arena. `None` when the position does not exist.
+pub fn node(value: &crate::JsonValue, id: usize) -> Option<crate::JsonRef<'_>> {
+    (id < value.owner.nodes.len()).then_some(crate::JsonRef {
+        owner: &value.owner,
+        id,
+    })
 }
 /// Rebase a retained child when it becomes an independent document resource.
 pub fn standalone(value: crate::JsonValue) -> crate::JsonValue {

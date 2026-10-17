@@ -456,33 +456,84 @@ impl Arena {
         Some(current)
     }
     pub fn pointer(&self, id: Id) -> Option<String> {
-        // An unrepresentable ancestor makes the whole pointer unavailable. Check
-        // before copying any other (possibly large) segments. Scalar-only arenas
-        // keep the ordinary single walk.
-        if !self.unpaired.is_empty() {
-            let mut current = id;
-            while let Some((parent, edge)) = self.nodes[current].parent {
-                if let Edge::Key(key) = edge {
-                    self.string(key)?;
-                }
-                current = parent;
-            }
-        }
-        let mut segments = Vec::new();
+        // Measure first: an unrepresentable ancestor makes the whole pointer
+        // unavailable before anything is copied, and the pointer then takes one
+        // exact allocation, written from its last segment back.
+        let size = self.pointer_len(id)?;
+        let mut bytes = vec![0u8; size];
+        self.fill_pointer(id, &mut bytes);
+        Some(String::from_utf8(bytes).expect("segments are UTF-8"))
+    }
+    /// Append this node's pointer to `out`, as [`Self::pointer`] spells it;
+    /// `false`, appending nothing, when it is unavailable.
+    pub fn pointer_into(&self, id: Id, out: &mut Vec<u8>) -> bool {
+        let Some(size) = self.pointer_len(id) else {
+            return false;
+        };
+        let start = out.len();
+        out.resize(start + size, 0);
+        self.fill_pointer(id, &mut out[start..]);
+        true
+    }
+    fn pointer_len(&self, id: Id) -> Option<usize> {
+        let mut size = 0usize;
         let mut current = id;
         while let Some((parent, edge)) = self.nodes[current].parent {
-            segments.push(match edge {
-                Edge::Index(i) => i.to_string(),
-                Edge::Key(k) => self.string(k)?.replace('~', "~0").replace('/', "~1"),
-            });
+            size += 1 + match edge {
+                Edge::Index(index) => index
+                    .checked_ilog10()
+                    .map_or(1, |digits| digits as usize + 1),
+                Edge::Key(key) => escaped_len(self.string(key)?),
+            };
             current = parent;
         }
-        segments.reverse();
-        Some(if segments.is_empty() {
-            String::new()
-        } else {
-            format!("/{}", segments.join("/"))
-        })
+        Some(size)
+    }
+    // Write a measured pointer into `bytes`, from its last segment back.
+    fn fill_pointer(&self, id: Id, bytes: &mut [u8]) {
+        let mut end = bytes.len();
+        let mut current = id;
+        while let Some((parent, edge)) = self.nodes[current].parent {
+            match edge {
+                Edge::Index(mut index) => loop {
+                    end -= 1;
+                    bytes[end] = b'0' + (index % 10) as u8;
+                    index /= 10;
+                    if index == 0 {
+                        break;
+                    }
+                },
+                Edge::Key(key) => {
+                    let name = self.string(key).expect("measured segment");
+                    let start = end - escaped_len(name);
+                    if start + name.len() == end {
+                        bytes[start..end].copy_from_slice(name.as_bytes());
+                    } else {
+                        let mut at = start;
+                        for byte in name.bytes() {
+                            let escape = match byte {
+                                b'~' => Some(b'0'),
+                                b'/' => Some(b'1'),
+                                _ => None,
+                            };
+                            if let Some(code) = escape {
+                                bytes[at] = b'~';
+                                bytes[at + 1] = code;
+                                at += 2;
+                            } else {
+                                bytes[at] = byte;
+                                at += 1;
+                            }
+                        }
+                    }
+                    end = start;
+                }
+            }
+            end -= 1;
+            bytes[end] = b'/';
+            current = parent;
+        }
+        debug_assert_eq!(end, 0);
     }
     pub fn position(&self, offset: usize) -> Option<(usize, usize)> {
         if offset > self.source.len() || !self.source.is_char_boundary(offset) {
@@ -728,6 +779,10 @@ impl Parser {
     }
 }
 
+// A pointer segment's length once `~` and `/` are escaped.
+fn escaped_len(name: &str) -> usize {
+    name.len() + name.bytes().filter(|&b| b == b'~' || b == b'/').count()
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1283,6 +1338,49 @@ mod tests {
             assert_eq!(a.is_ok(), depth <= 10000);
             drop(a);
         }
+    }
+    #[test]
+    fn pointers_name_every_node_with_escaped_segments() {
+        // Escapes, empty and multibyte names, multi-digit indices, nesting, and a
+        // name with an unpaired surrogate that makes its descendants unnamed.
+        let source = r#"{"":{"a/b~c":[0,1,2,3,4,5,6,7,8,9,{"é":[[true]],"~~//":null}]},"x":{"\ud800":{"y":[1]},"ok":"\u0041"}}"#;
+        let a = Arena::parse(source.as_bytes(), Limits::default()).unwrap();
+        let reference = |id: Id| -> Option<String> {
+            let mut segments = Vec::new();
+            let mut current = id;
+            while let Some((parent, edge)) = a.nodes[current].parent {
+                segments.push(match edge {
+                    Edge::Index(i) => i.to_string(),
+                    Edge::Key(k) => a.string(k)?.replace('~', "~0").replace('/', "~1"),
+                });
+                current = parent;
+            }
+            segments.reverse();
+            Some(segments.iter().map(|s| format!("/{s}")).collect())
+        };
+        let mut unnamed = 0;
+        for id in 0..a.nodes.len() {
+            let expected = reference(id);
+            unnamed += usize::from(expected.is_none());
+            assert_eq!(a.pointer(id), expected, "node {id}");
+            // Appending writes the same pointer after what the buffer holds.
+            let mut out = b"held".to_vec();
+            assert_eq!(
+                a.pointer_into(id, &mut out),
+                expected.is_some(),
+                "node {id}"
+            );
+            assert_eq!(&out[..4], b"held");
+            assert_eq!(
+                out[4..],
+                *expected.unwrap_or_default().as_bytes(),
+                "node {id}"
+            );
+        }
+        assert!(unnamed > 0);
+        let id = a.at("//a~1b~0c/10/é/0/0").unwrap();
+        assert_eq!(a.pointer(id).as_deref(), Some("//a~1b~0c/10/é/0/0"));
+        assert_eq!(a.pointer(0).as_deref(), Some(""));
     }
     #[test]
     fn source_locations() {

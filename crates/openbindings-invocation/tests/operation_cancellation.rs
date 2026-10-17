@@ -46,7 +46,12 @@ mod tests {
         }
     }
     impl PreparedSchema for Prepared {
-        fn validate(&self, _: &JsonValue, c: &dyn openbindings::WorkControl) -> ValueOutcome {
+        fn validate(
+            &self,
+            _: &JsonValue,
+            _: openbindings::Detail,
+            c: &dyn openbindings::WorkControl,
+        ) -> ValueOutcome {
             if let Some(barrier) = &self.barrier {
                 barrier.wait();
                 let until = Instant::now() + Duration::from_secs(2);

@@ -34,8 +34,15 @@ Implement `SchemaEvaluator::prepare` and return an owned `PreparedSchema`.
 Pass a borrowed implementation, and an immutable `ResourceSet` when resources are
 supplied, to a conformant operation's `ValueContract::prepare_with`. Implement
 `PreparedSchema::validate` to return satisfies, fails, undefined or no-verdict.
-Observe `WorkControl` during both stages and retain everything needed after the
-document, resources and request are dropped.
+Each call passes a `Detail`. With `Detail::Outcome`, the caller's cheap check, a
+failure carries no problems and `problems_complete` is false. With
+`Detail::Explain`, a failure carries at least one problem unless detail work was
+cut short or found no problem it can report in the original sources, in which
+case `problems_complete` is false; cutting detail work short
+never turns an established failure into another outcome. Both details reach the
+same verdict. Observe `WorkControl` during both stages and retain everything
+needed after the document, resources and request are dropped, including what
+explanations read.
 
 `SchemaRequest` gives the original document, entry, source location and supplied
 resources. Its `evaluation_program()` helper supplies the OpenBindings embedding
@@ -60,5 +67,6 @@ Run the [boolean evaluator example](../crates/openbindings-schema-evaluator-test
 for a minimal implementation. It supports boolean schemas and explicitly refuses
 other forms. Qualify a broader implementation with
 [`openbindings-schema-evaluator-test-support`](../crates/openbindings-schema-evaluator-test-support/README.md).
-The suite distinguishes permitted refusals from wrong verdicts and checks that
-reported locations exist in the original sources.
+The suite checks and explains every value. It distinguishes permitted refusals
+from wrong verdicts, checks that both calls agree and that a cheap check reports
+no problems, and checks that reported locations exist in the original sources.

@@ -60,10 +60,12 @@ requested heap versus 55.01 MiB before. Exact fallbacks and budgets remain in
 force; these are measured examples, not latency guarantees. See
 [methodology and heap tradeoffs](docs/performance-boundaries.md).
 
-Coarse failure diagnostics are the default. Upstream diagnostics are an explicit
-choice with library allocation and stack limits. They can allocate in proportion
-to input and overflow on deep values. Diagnostic completeness is separate from
-the established value outcome.
+Each value check chooses its detail. `validate` reports a failure without
+problems; `explain` reports the library's first error, an explicit choice with
+library allocation and stack limits. It can allocate in proportion to input and
+overflow on deep values. A prepared contract keeps a compact copy of the keywords
+it compiled for explanations, never its document or supplied resources.
+Diagnostic completeness is separate from the established value outcome.
 
 ## Discovery and kind implementations
 

@@ -40,10 +40,6 @@ fn conformant(doc: &Document) -> Conformant<Document> {
         .conformant()
         .expect("conformant document")
 }
-fn upstream() -> DefaultEvaluator {
-    DefaultEvaluator::new()
-        .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream)
-}
 /// Prepare the input contract of the named operation.
 fn prepare_with(
     proof: &Conformant<Document>,
@@ -63,7 +59,7 @@ fn prepare(
     supplied: &ResourceSet,
     operation: &str,
 ) -> Result<PreparedContract, NoVerdict> {
-    prepare_with(proof, supplied, operation, &upstream())
+    prepare_with(proof, supplied, operation, &DefaultEvaluator::new())
 }
 fn ready_with(
     proof: &Conformant<Document>,
@@ -81,7 +77,7 @@ fn ready(
     supplied: &ResourceSet,
     operation: &str,
 ) -> PreparedContract {
-    ready_with(proof, supplied, operation, &upstream())
+    ready_with(proof, supplied, operation, &DefaultEvaluator::new())
 }
 fn label(result: ValueOutcome) -> &'static str {
     match result {
@@ -93,7 +89,7 @@ fn label(result: ValueOutcome) -> &'static str {
 }
 fn verdicts(contract: &PreparedContract, cases: &[(&str, &str)]) {
     for (text, expected) in cases {
-        assert_eq!(label(contract.validate(&value(text))), *expected, "{text}");
+        assert_eq!(label(contract.explain(&value(text))), *expected, "{text}");
     }
 }
 // Exercise the strict public projection and private bounds independently of the adapter's
@@ -101,7 +97,12 @@ fn verdicts(contract: &PreparedContract, cases: &[(&str, &str)]) {
 struct Project(bool);
 struct Projected;
 impl PreparedSchema for Projected {
-    fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
+    fn validate(
+        &self,
+        _: &JsonValue,
+        _: openbindings::Detail,
+        _: &dyn WorkControl,
+    ) -> ValueOutcome {
         ValueOutcome::Satisfies
     }
 }
@@ -132,7 +133,7 @@ fn refusal(prepared: Result<PreparedContract, NoVerdict>) -> NoVerdict {
 }
 fn identity_refusal(doc: &Document, supplied: &ResourceSet, operation: &str) {
     for evaluator in [
-        &upstream() as &dyn SchemaEvaluator,
+        &DefaultEvaluator::new() as &dyn SchemaEvaluator,
         &Project(false),
         &Project(true),
     ] {
@@ -202,7 +203,7 @@ fn unresolved_identity(doc: &Document, supplied: &ResourceSet, pointer: &str) {
     }
 }
 fn failed_location(contract: &PreparedContract, text: &str) -> SchemaLocation {
-    let ValueOutcome::Fails { problems, .. } = contract.validate(&value(text)) else {
+    let ValueOutcome::Fails { problems, .. } = contract.explain(&value(text)) else {
         panic!("expected failure")
     };
     problems
@@ -237,7 +238,7 @@ fn ri01_03_exact_b32_original_and_edited_resources() {
     ] {
         let doc = Document::parse(text).unwrap();
         let proof = conformant(&doc);
-        let evaluator = upstream();
+        let evaluator = DefaultEvaluator::new();
         let local = ResourceSet::default();
         for case in expectations["valueCases"].as_array().unwrap() {
             let resources = if case["setup"] == "runner-result-supplied" {
@@ -255,7 +256,7 @@ fn ri01_03_exact_b32_original_and_edited_resources() {
             };
             let actual = match contract.map(|c| c.prepare_with(&evaluator, resources)) {
                 Some(Ok(contract)) => {
-                    label(contract.validate(&value(case["valueText"].as_str().unwrap())))
+                    label(contract.explain(&value(case["valueText"].as_str().unwrap())))
                 }
                 None => "no-contract",
                 Some(Err(detail)) => panic!("{} edited={edited}: {detail:?}", case["id"]),
@@ -286,7 +287,7 @@ fn ri01_03_exact_b32_original_and_edited_resources() {
                 panic!("finished example setup")
             };
             assert_eq!(
-                label(contract.validate(&example)),
+                label(contract.explain(&example)),
                 expected,
                 "finished example edited={edited}"
             );
@@ -309,9 +310,7 @@ fn ri04_05_contained_authority_ignores_supplied_body_and_keeps_raw_catalog() {
                 .iter()
                 .map(|r| r.document.text().to_owned())
                 .collect();
-            DefaultEvaluator::new()
-                .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream)
-                .prepare(request, control)
+            DefaultEvaluator::new().prepare(request, control)
         }
     }
     for text in [
@@ -723,7 +722,7 @@ fn ri20_34_missing_winner_fragments_never_fall_back_to_loser() {
         let code = if keyword == "$ref" {
             let contract = ready(&conformant(&doc), &supplied, "op");
             let ValueOutcome::Undefined { detail } =
-                contract.validate(&JsonValue::parse("null").unwrap())
+                contract.explain(&JsonValue::parse("null").unwrap())
             else {
                 panic!("semantic hole")
             };
@@ -798,7 +797,7 @@ fn ri22_23_original_dialect_follows_selected_resource() {
     helpers_ready(&doc, &supplied, "owner");
     identity_refusal(&doc, &supplied, "alias");
     for engine in [
-        &upstream() as &dyn SchemaEvaluator,
+        &DefaultEvaluator::new() as &dyn SchemaEvaluator,
         &Project(false),
         &Project(true),
     ] {
@@ -971,7 +970,10 @@ fn ri28_29_conflicts_do_not_poison_healthy_preparation_or_become_holes() {
     }
     // Strict preparation first sees a real absent resource; bounds subsequently
     // must propagate the conflict rather than creating an incomplete owner.
-    for engine in [&upstream() as &dyn SchemaEvaluator, &Project(true)] {
+    for engine in [
+        &DefaultEvaluator::new() as &dyn SchemaEvaluator,
+        &Project(true),
+    ] {
         let detail = refusal(prepare_with(&conformant(&doc), &supplied, "mixed", engine));
         assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
         assert_eq!(detail.code, "resource-identity-conflict");
@@ -990,7 +992,7 @@ fn ri30_precancellation_and_fresh_retry_preserve_identity_policy() {
             operation
                 .input()
                 .expect("declared input")
-                .prepare_with_control(&upstream(), &supplied, &control)
+                .prepare_with_control(&DefaultEvaluator::new(), &supplied, &control)
         )
         .reason,
         NoVerdictReason::Cancelled
@@ -1021,7 +1023,7 @@ fn ri30_oversized_supplied_closure_keeps_limits_and_healthy_catalog_entries() {
         json!({"healthy":{"input":{"$ref":U}},"deep":{"input":{"$ref":A}}}),
     );
     for evaluator in [
-        &upstream() as &dyn SchemaEvaluator,
+        &DefaultEvaluator::new() as &dyn SchemaEvaluator,
         &Project(false),
         &Project(true),
     ] {
@@ -1041,7 +1043,7 @@ fn identity_refusal_location_is_optional_and_measured_before_copy() {
         let supplied = resources(&[(V, json!({"properties":{key:{"$id":U}}}))]);
         let doc = one(owner(), json!({"$ref":V}));
         for engine in [
-            &upstream() as &dyn SchemaEvaluator,
+            &DefaultEvaluator::new() as &dyn SchemaEvaluator,
             &Project(false),
             &Project(true),
         ] {
@@ -1250,7 +1252,7 @@ fn collision_policy_matrix_used_and_unused() {
                 );
             } else {
                 for engine in [
-                    &upstream() as &dyn SchemaEvaluator,
+                    &DefaultEvaluator::new() as &dyn SchemaEvaluator,
                     &Project(false),
                     &Project(true),
                 ] {

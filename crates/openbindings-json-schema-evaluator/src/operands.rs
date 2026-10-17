@@ -29,6 +29,59 @@ impl<'i> Keyword<'i, FlatJson> for Constraint {
         }
     }
 }
+/// How the compiled validator receives one projected keyword.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Role {
+    /// An exact numeric operand handled by the SDK's numeric keywords.
+    Number,
+    /// A size operand normalized for the library.
+    Size,
+    /// An exact literal handled by the SDK's literal keywords.
+    Const,
+    /// Exact literal choices handled by the SDK's literal keywords.
+    Enum,
+    /// A value the library reads as it is.
+    Read,
+}
+/// The role of a projected keyword, or `None` for keywords the validator never
+/// compiles: annotations and unknown keywords. No library error names them.
+pub(crate) fn role(keyword: &str) -> Option<Role> {
+    Some(match keyword {
+        "minimum" | "maximum" | "exclusiveMinimum" | "exclusiveMaximum" | "multipleOf" => {
+            Role::Number
+        }
+        "minLength" | "maxLength" | "minItems" | "maxItems" | "minProperties" | "maxProperties"
+        | "minContains" | "maxContains" => Role::Size,
+        "const" => Role::Const,
+        "enum" => Role::Enum,
+        "$ref"
+        | "$dynamicRef"
+        | "$dynamicAnchor"
+        | "type"
+        | "pattern"
+        | "uniqueItems"
+        | "required"
+        | "dependentRequired"
+        | "properties"
+        | "patternProperties"
+        | "additionalProperties"
+        | "propertyNames"
+        | "dependentSchemas"
+        | "unevaluatedProperties"
+        | "items"
+        | "prefixItems"
+        | "contains"
+        | "unevaluatedItems"
+        | "not"
+        | "if"
+        | "then"
+        | "else"
+        | "allOf"
+        | "anyOf"
+        | "oneOf" => Role::Read,
+        _ => return None,
+    })
+}
 impl Operands {
     pub(crate) fn resource(
         &mut self,
@@ -58,29 +111,24 @@ impl Operands {
                             let mut schema = Map::new();
                             for field in member.value.members().expect("admitted schema object") {
                                 let key = field.name.as_str().expect("admitted scalar name");
-                                let value = match key {
-                                    "minimum" | "maximum" | "exclusiveMinimum"
-                                    | "exclusiveMaximum" | "multipleOf" => {
-                                        self.numbers.insert(field.value.text())
-                                    }
+                                let value = match role(key) {
+                                    Some(Role::Number) => self.numbers.insert(field.value.text()),
                                     // No finite JSON collection can reach u64::MAX elements.
                                     // Preserve contains annotations by keeping its native keyword;
                                     // normalize every size operand without exponent expansion.
-                                    "minLength" | "maxLength" | "minItems" | "maxItems"
-                                    | "minProperties" | "maxProperties" | "minContains"
-                                    | "maxContains" => Value::from(
+                                    Some(Role::Size) => Value::from(
                                         openbindings_internal_json::decimal::Decimal::parse(
                                             field.value.text(),
                                         )
                                         .nonnegative_integer_u64_saturating()
                                         .expect("admitted size operand"),
                                     ),
-                                    "const" => {
+                                    Some(Role::Const) => {
                                         let id = self.literals.len();
                                         self.literals.push(Arc::from([field.value.to_owned()]));
                                         Value::from(id)
                                     }
-                                    "enum" => {
+                                    Some(Role::Enum) => {
                                         let choices: Vec<_> = field
                                             .value
                                             .elements()
@@ -91,34 +139,10 @@ impl Operands {
                                         self.literals.push(choices.into());
                                         Value::Array(vec![Value::from(id)])
                                     }
+                                    Some(Role::Read) => read(field.value, limits)?,
                                     // Annotations and unknown-keyword data do not affect this
                                     // validity-only API. Their original bytes stay in the SDK.
-                                    "$ref"
-                                    | "$dynamicRef"
-                                    | "$dynamicAnchor"
-                                    | "type"
-                                    | "pattern"
-                                    | "uniqueItems"
-                                    | "required"
-                                    | "dependentRequired"
-                                    | "properties"
-                                    | "patternProperties"
-                                    | "additionalProperties"
-                                    | "propertyNames"
-                                    | "dependentSchemas"
-                                    | "unevaluatedProperties"
-                                    | "items"
-                                    | "prefixItems"
-                                    | "contains"
-                                    | "unevaluatedItems"
-                                    | "not"
-                                    | "if"
-                                    | "then"
-                                    | "else"
-                                    | "allOf"
-                                    | "anyOf"
-                                    | "oneOf" => read(field.value, limits)?,
-                                    _ => continue,
+                                    None => continue,
                                 };
                                 schema.insert(key.into(), value);
                             }

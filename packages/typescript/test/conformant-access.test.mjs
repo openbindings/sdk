@@ -36,7 +36,7 @@ test("Rust proof transfer is single-use and unavailable to parsed or forged hand
   assert.ok(operation instanceof bridge.WasmConformantOperation);
   const contract = operation.input();
   assert.ok(contract instanceof bridge.WasmValueContract);
-  const preparation = contract.prepareWith(resources, "{}", "coarse", false);
+  const preparation = contract.prepareWith(resources, "{}", false);
   assert.equal(JSON.parse(preparation.result()).status, "ready");
   preparation.free();
   contract.free();
@@ -181,12 +181,16 @@ test("raw document receiver substitution rechecks proof at every authority entry
     retained.free();
     const contract = operation.input();
     operation.free();
-    const preparation = contract.prepareWith(resources, "{}", "coarse", false);
+    const preparation = contract.prepareWith(resources, "{}", false);
     assert.equal(JSON.parse(preparation.result()).status, "ready");
     const prepared = preparation.takeContract();
     const value = bridge.WasmJson.parseBytes(new TextEncoder().encode("42"));
     assert.equal(
       JSON.parse(prepared.validate(value, false)).outcome,
+      "satisfies",
+    );
+    assert.equal(
+      JSON.parse(prepared.explain(value, false)).outcome,
       "satisfies",
     );
     value.free();

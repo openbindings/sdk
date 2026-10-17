@@ -39,8 +39,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-`prepare(&DefaultEvaluator::new())` uses `Limits::default()`, coarse diagnostics
-and no supplied resources. A missing operation and an absent contract are `None`;
+`prepare(&DefaultEvaluator::new())` uses `Limits::default()` and no supplied
+resources. A missing operation and an absent contract are `None`;
 preparation refusal is a `NoVerdict` error that judges no instance. Ready means
 prepared, not decidable. `validate_json` admits exact text or bytes under the
 default JSON limits; `Err` means admission failed and `Ok` contains any of the
@@ -51,13 +51,16 @@ borrowed for the call, and one `ResourceSet` can serve many preparations:
 
 ```rust,edition2024
 use openbindings::{NoVerdict, PreparedContract, ResourceSet, ValueContract};
-use openbindings_json_schema_evaluator::{DefaultEvaluator, Diagnostics};
+use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 
 fn with_resources(
     contract: ValueContract<'_>,
     resources: &ResourceSet,
 ) -> Result<PreparedContract, NoVerdict> {
-    let evaluator = DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream);
+    let evaluator = DefaultEvaluator::with_limits(Limits {
+        regex_steps: 100_000,
+        ..Limits::default()
+    });
     contract.prepare_with(&evaluator, resources)
 }
 ```
@@ -94,13 +97,16 @@ strings. Unicode property matching is unsupported when applied. `format` is an
 annotation; another declared schema dialect is not treated as 2020-12.
 See [measured behavior](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md).
 
-`Diagnostics::Coarse` is the default. An established failure has a fixed message,
-an empty problem list and `problems_complete = false`. Choose
-`with_diagnostics(Diagnostics::Upstream)` to request the library's first error.
-That mode can allocate in proportion to inputs and overflow the stack on deep
-values. Available paths map to original sources. Optional exact schema facts may
-expose source operands and retain whole document/resource snapshots. Missing
-or incomplete diagnostics never weaken an established failure.
+Each call chooses its detail. `validate` is the cheap check: an established
+failure has a fixed message, an empty problem list and `problems_complete =
+false`. `explain` returns the library's first error for the same verdict, with
+redacted messages and original schema facts. Building that error can allocate in
+proportion to the schema and value and can overflow the stack on deep values, so
+keep `validate` on paths that check untrusted input. Explained paths map to
+original sources. Schema facts may expose source operands. A prepared contract
+keeps the text of the schemas it reached for these facts, never the document or
+its supplied resources. Missing or incomplete diagnostics never weaken an
+established failure.
 
 Cancellation uses `WorkControl` and is cooperative. Cancelled preparation produces
 no prepared owner; cancelled validation leaves a prepared owner usable for a later
@@ -113,6 +119,6 @@ for the integration contract.
 
 ## Reference
 
-The crate reference documents `DefaultEvaluator`, `Limits` and `Diagnostics`.
+The crate reference documents `DefaultEvaluator` and `Limits`.
 [Resolver and evaluation maintenance](https://github.com/openbindings/sdk/blob/main/docs/maintainers.md)
 links the resource-identity rules, partial evaluation proof and dependency patches.

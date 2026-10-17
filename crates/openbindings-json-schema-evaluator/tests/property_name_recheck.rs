@@ -2,7 +2,7 @@ use openbindings::*;
 use openbindings_internal_json::backend::{self, FlatJson};
 use serde_json::json;
 #[test]
-fn coarse_property_name_failures_do_not_request_diagnostics() {
+fn cheap_property_name_failures_do_not_request_diagnostics() {
     let key = "x".repeat(65_536);
     let value = JsonValue::parse(json!({key:0}).to_string()).unwrap();
     for (name, schema) in [

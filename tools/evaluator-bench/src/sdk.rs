@@ -1,9 +1,9 @@
 //! The only module that knows the SDK API. Keep this interface stable across API changes.
 use openbindings::*;
-use openbindings_json_schema_evaluator::{DefaultEvaluator, Diagnostics};
+use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 pub const ROOT: &str = "https://benchmark.invalid/root";
 #[derive(Clone, Default, Deserialize)]
@@ -13,7 +13,38 @@ pub struct Limits(openbindings_json_schema_evaluator::Limits);
 pub struct Context {
     document: Conformant<Document>,
     resources: ResourceSet,
-    evaluator: DefaultEvaluator,
+    evaluator: Evaluator,
+}
+// A request for upstream diagnostics asks every check of the contract to
+// explain: its evaluator answers each validation as an explanation.
+enum Evaluator {
+    Default(DefaultEvaluator),
+    Explaining(Explaining),
+}
+impl Evaluator {
+    #[inline(always)]
+    fn get(&self) -> &dyn SchemaEvaluator {
+        match self {
+            Self::Default(evaluator) => evaluator,
+            Self::Explaining(evaluator) => evaluator,
+        }
+    }
+}
+struct Explaining(DefaultEvaluator);
+struct Explained(Arc<dyn PreparedSchema>);
+impl SchemaEvaluator for Explaining {
+    fn prepare(
+        &self,
+        request: &SchemaRequest,
+        control: &dyn WorkControl,
+    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+        Ok(Arc::new(Explained(self.0.prepare(request, control)?)))
+    }
+}
+impl PreparedSchema for Explained {
+    fn validate(&self, value: &JsonValue, _: Detail, control: &dyn WorkControl) -> ValueOutcome {
+        self.0.validate(value, Detail::Explain, control)
+    }
 }
 #[repr(transparent)]
 pub struct Prepared(Result<PreparedContract, NoVerdict>);
@@ -48,14 +79,15 @@ pub fn context(
         uri: ROOT.into(),
         document: JsonValue::parse(schema).unwrap(),
     });
+    let evaluator = DefaultEvaluator::with_limits(limits.0.clone());
     Context {
         document: validation.conformant().unwrap(),
         resources: ResourceSet::new(resources).unwrap(),
-        evaluator: DefaultEvaluator::with_limits(limits.0.clone()).with_diagnostics(if upstream {
-            Diagnostics::Upstream
+        evaluator: if upstream {
+            Evaluator::Explaining(Explaining(evaluator))
         } else {
-            Diagnostics::Coarse
-        }),
+            Evaluator::Default(evaluator)
+        },
     }
 }
 impl Context {
@@ -67,7 +99,7 @@ impl Context {
             operation
                 .input()
                 .unwrap()
-                .prepare_with(&self.evaluator, &self.resources),
+                .prepare_with(self.evaluator.get(), &self.resources),
         )
     }
 }
@@ -76,11 +108,16 @@ impl Prepared {
     pub fn is_ready(&self) -> bool {
         self.0.is_ok()
     }
-    // This SDK selects diagnostics during context construction. A later API
-    // can implement this call per validation without changing the timing loop.
+    // This SDK chooses detail per call.
     #[inline(always)]
     pub fn explain(&self, value: &ParsedValue, cancelled: bool) -> Outcome {
-        self.validate(value, cancelled)
+        match &self.0 {
+            Ok(contract) => Outcome(
+                contract
+                    .explain_with_control(&value.0, &std::sync::atomic::AtomicBool::new(cancelled)),
+            ),
+            Err(detail) => panic!("fixture did not prepare: {detail:?}"),
+        }
     }
     #[inline(always)]
     pub fn validate(&self, value: &ParsedValue, cancelled: bool) -> Outcome {

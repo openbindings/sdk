@@ -158,7 +158,7 @@ export function diagnosticPolicyCases(sdk) {
     const error = thrown(() => declared.prepare({ diagnostics: "sideways" }));
     check(
       error instanceof sdk.SdkError &&
-        error.code === "invalid-diagnostics" &&
+        error.code === "invalid-work-options" &&
         error.interpretationCode === undefined,
       "non-interpretation errors retain broad code only",
     );
@@ -166,9 +166,7 @@ export function diagnosticPolicyCases(sdk) {
       { $ref: "#/operations/op/input" },
       { anyOf: [true, { $ref: "#/operations/op/input" }] },
     ]) {
-      const state = prepareInput(withSchema(schema), "op", {
-        diagnostics: "upstream",
-      });
+      const state = prepareInput(withSchema(schema), "op");
       check(
         state.status === "no-verdict" &&
           state.detail.reason === "conservative-preparation" &&
@@ -318,11 +316,9 @@ export function diagnosticPolicyCases(sdk) {
         "object is missing a required member; inspect the required keyword at the schema location",
       ],
     ]) {
-      const state = prepareInput(withSchema(schema), "op", {
-        diagnostics: "upstream",
-      });
+      const state = prepareInput(withSchema(schema), "op");
       check(state.status === "ready", "type/message contract prepared");
-      const outcome = own(state.contract).validate(instance);
+      const outcome = own(state.contract).explain(instance);
       check(
         outcome.outcome === "fails" && outcome.problems[0].message === expected,
         "useful expected type or safe generic guidance",

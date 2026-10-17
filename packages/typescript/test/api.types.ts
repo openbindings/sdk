@@ -48,14 +48,19 @@ async function caller(
     if (!contract) return undefined;
     const prepared = contract.prepare({
       resources,
-      diagnostics: "upstream",
       limits: { evaluationSteps: 2000000 },
       signal: new AbortController().signal,
     });
     if (prepared.status !== "ready") return undefined;
     using input = prepared.contract;
     using value = ExactJson.from(7);
-    const result: ValueOutcome = input.validate(value);
+    input.validate(value) satisfies ValueOutcome;
+    // Preparation chooses no detail; each call does.
+    contract.prepare({
+      // @ts-expect-error diagnostics are chosen per call, not at preparation
+      diagnostics: "upstream",
+    });
+    const result: ValueOutcome = input.explain(value);
     if (result.outcome === "fails") {
       result.problems[0]!.instancePointer satisfies string;
       const detail: ValueProblemDetails | undefined =

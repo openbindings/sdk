@@ -21,25 +21,29 @@ impl SchemaEvaluator for BooleanEvaluator {
     }
 }
 impl PreparedSchema for BooleanContract {
-    fn validate(&self, _: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
+    fn validate(&self, _: &JsonValue, detail: Detail, control: &dyn WorkControl) -> ValueOutcome {
         if let Err(detail) = control.check() {
             let detail = detail.into();
             return ValueOutcome::NoVerdict { detail };
         }
         if self.0 {
-            ValueOutcome::Satisfies
-        } else {
-            ValueOutcome::Fails {
-                message: "value does not satisfy the contract".into(),
-                problems: vec![ValueProblem {
+            return ValueOutcome::Satisfies;
+        }
+        // A cheap check reports the verdict only; an explanation says why.
+        let explain = detail == Detail::Explain;
+        ValueOutcome::Fails {
+            message: "value does not satisfy the contract".into(),
+            problems: explain
+                .then(|| ValueProblem {
                     details: None,
                     instance_pointer: String::new(),
                     schema_location: None,
                     code: "false-schema".into(),
                     message: "a false schema permits no values".into(),
-                }],
-                problems_complete: true,
-            }
+                })
+                .into_iter()
+                .collect(),
+            problems_complete: explain,
         }
     }
 }
@@ -66,7 +70,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert!(matches!(input.validate(&value), ValueOutcome::Satisfies));
     assert!(matches!(
         output.validate(&value),
-        ValueOutcome::Fails { .. }
+        ValueOutcome::Fails { problems, .. } if problems.is_empty()
+    ));
+    assert!(matches!(
+        output.explain(&value),
+        ValueOutcome::Fails { problems, problems_complete: true, .. } if problems.len() == 1
     ));
     Ok(())
 }

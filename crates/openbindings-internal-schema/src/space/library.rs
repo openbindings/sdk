@@ -34,7 +34,7 @@ impl Refusal {
 // A reference's original spelling is already owned by its immutable source.
 // Route by schema node and keyword slot, without owning another copy of it.
 const REFERENCE_KEYWORDS: [&str; 2] = ["$ref", "$dynamicRef"];
-type Key = (usize, usize);
+pub(super) type Key = (usize, usize);
 type Targets = HashMap<Key, Result<Target, Refusal>>;
 struct Queries {
     references: Vec<Key>,
@@ -81,6 +81,108 @@ pub(super) struct Inspection {
     carriers: BTreeMap<usize, Carrier>,
     absent: Mutex<Option<BTreeMap<String, Vec<Key>>>>,
     missing: OnceLock<Targets>,
+}
+
+pub(super) type PackagedLookup = (Key, usize, Lookup<String>);
+// Where inspection finds one reference's carrier, before identities are selected.
+pub(super) enum Lookup<S> {
+    // The absolute name of the resource the reference names.
+    Name(S),
+    // A malformed reference in a resource with a malformed scope: its carrier
+    // is the holder's own resource, under its base.
+    Scope(S),
+    Invalid,
+}
+impl Lookup<&str> {
+    fn owned(self) -> Lookup<String> {
+        match self {
+            Self::Name(name) => Lookup::Name(name.to_owned()),
+            Self::Scope(base) => Lookup::Scope(base.to_owned()),
+            Self::Invalid => Lookup::Invalid,
+        }
+    }
+}
+impl Lookup<String> {
+    fn borrowed(&self) -> Lookup<&str> {
+        match self {
+            Self::Name(name) => Lookup::Name(name),
+            Self::Scope(base) => Lookup::Scope(base),
+            Self::Invalid => Lookup::Invalid,
+        }
+    }
+}
+fn inspection_registry() -> Registry<'static> {
+    Registry::new()
+        .retriever(Recording::default())
+        .prepare()
+        .expect("empty registry")
+}
+// Routes and carrier groups as references are added in node order.
+#[derive(Default)]
+struct Index {
+    routes: HashMap<Key, Route>,
+    groups: BTreeMap<usize, Queries>,
+    absent: BTreeMap<String, Vec<Key>>,
+}
+impl Index {
+    fn add(&mut self, space: &SchemaSpace, key: Key, resource: usize, found: Lookup<&str>) {
+        let name = match found {
+            Lookup::Name(name) => name,
+            Lookup::Scope(base) => {
+                self.groups
+                    .entry(resource)
+                    .or_insert_with(|| Queries::new(base))
+                    .push(key, base);
+                return;
+            }
+            Lookup::Invalid => {
+                self.routes.insert(
+                    key,
+                    Route::Refused(Refusal::invalid(
+                        "invalid-reference",
+                        "reference is not a well-formed URI reference",
+                    )),
+                );
+                return;
+            }
+        };
+        // This association table is the contained/supplied identity policy,
+        // not a pointer or plain-name resolver. A losing carrier cannot
+        // become authoritative because a registry happened to index it last.
+        match space.name(name) {
+            Some(NameSelection {
+                carrier: Some(id), ..
+            }) if space.eligible(id) => {
+                self.groups
+                    .entry(id)
+                    .or_insert_with(|| Queries::new(name))
+                    .push(key, name);
+            }
+            Some(NameSelection {
+                carrier: Some(_), ..
+            }) => {
+                self.routes.insert(key,Route::Refused(Refusal::invalid("resource-identity-conflict","the reached resource is not the selected carrier of its canonical identifier")));
+            }
+            Some(_) => {
+                self.routes.insert(
+                    key,
+                    Route::Refused(Refusal::invalid(
+                        "ambiguous-resource",
+                        "more than one resource carries the referenced identifier",
+                    )),
+                );
+            }
+            None => {
+                // BTreeMap entry would allocate another copy even for
+                // an existing name; borrow first and own only new names.
+                if let Some(keys) = self.absent.get_mut(name) {
+                    keys.push(key);
+                } else {
+                    self.absent.insert(name.to_owned(), vec![key]);
+                }
+            }
+        }
+    }
 }
 
 #[derive(Clone, Default)]
@@ -254,7 +356,7 @@ impl SchemaSpace {
         let key = REFERENCE_KEYWORDS
             .iter()
             .position(|keyword| {
-                self.nodes[holder]
+                self.node(holder)
                     .value
                     .get(keyword)
                     .and_then(|v| v.as_str())
@@ -302,7 +404,7 @@ impl SchemaSpace {
         };
         match result {
             Some(Ok(target)) => {
-                self.check_resource(self.nodes[target.node].resource, holder)?;
+                self.check_resource(self.node(target.node).resource, holder)?;
                 Ok(target)
             }
             Some(Err(refusal)) => {
@@ -323,102 +425,97 @@ impl SchemaSpace {
         }
     }
     fn inspection_reference(&self, key: Key) -> &str {
-        self.nodes[key.0]
+        self.node(key.0)
             .value
             .get(REFERENCE_KEYWORDS[key.1])
             .and_then(|v| v.as_str())
             .expect("indexed scalar reference")
     }
-    fn index_inspection(&self) -> Inspection {
-        let mut routes = HashMap::new();
-        let uri_registry = Registry::new()
-            .retriever(Recording::default())
-            .prepare()
-            .expect("empty registry");
-        let mut groups: BTreeMap<usize, Queries> = BTreeMap::new();
-        let mut absent: BTreeMap<String, Vec<Key>> = BTreeMap::new();
-        for (holder, node) in self.nodes.iter().enumerate() {
-            let resource = &self.resources[node.resource];
-            for (slot, keyword) in REFERENCE_KEYWORDS.iter().enumerate() {
-                let Some(reference) = node.value.get(keyword).and_then(|v| v.as_str()) else {
-                    continue;
-                };
-                if resource.anonymous && !uri::absolute(reference) {
-                    continue;
-                }
-                let key = (holder, slot);
-                let base = resource
-                    .base
-                    .as_deref()
-                    .unwrap_or("urn:openbindings:anonymous-inspection");
-                let absolute = Uri::parse(base)
-                    .ok()
-                    .and_then(|base| uri_registry.resolve_uri(&base, reference).ok());
-                let Some(absolute) = absolute else {
-                    if !uri::valid(reference) && self.malformed_reference_scope(holder) {
-                        // A malformed invocation has no target to resolve. Use
-                        // the existing carrier preparation path to establish
-                        // that repairing it isolates the supported defect.
-                        groups
-                            .entry(node.resource)
-                            .or_insert_with(|| Queries::new(base))
-                            .push(key, base);
-                        continue;
-                    }
-                    routes.insert(
-                        key,
-                        Route::Refused(Refusal::invalid(
-                            "invalid-reference",
-                            "reference is not a well-formed URI reference",
-                        )),
-                    );
-                    continue;
-                };
-                let (name, _) = absolute
-                    .as_str()
-                    .split_once('#')
-                    .unwrap_or((absolute.as_str(), ""));
-                // URI normalization selects the carrier only. Preserve the
-                // authored fragment for Resolver::lookup; resolve_uri can
-                // normalize a percent-encoded plain name that lookup refuses.
-                // This association table is the contained/supplied identity policy,
-                // not a pointer or plain-name resolver. A losing carrier cannot
-                // become authoritative because a registry happened to index it last.
-                match self.names.get(name) {
-                    Some(NameSelection {
-                        carrier: Some(id), ..
-                    }) if self.resources[*id].eligible => {
-                        groups
-                            .entry(*id)
-                            .or_insert_with(|| Queries::new(name))
-                            .push(key, name);
-                    }
-                    Some(NameSelection {
-                        carrier: Some(_), ..
-                    }) => {
-                        routes.insert(key,Route::Refused(Refusal::invalid("resource-identity-conflict","the reached resource is not the selected carrier of its canonical identifier")));
-                    }
-                    Some(_) => {
-                        routes.insert(
-                            key,
-                            Route::Refused(Refusal::invalid(
-                                "ambiguous-resource",
-                                "more than one resource carries the referenced identifier",
-                            )),
-                        );
-                    }
-                    None => {
-                        // BTreeMap entry would allocate another copy even for
-                        // an existing name; borrow first and own only new names.
-                        if let Some(keys) = absent.get_mut(name) {
-                            keys.push(key);
-                        } else {
-                            absent.insert(name.to_owned(), vec![key]);
-                        }
-                    }
-                }
+    // How inspection reaches one reference's carrier, before identities are
+    // selected. `None` for a relative reference in the anonymous document,
+    // which same-document lookup serves.
+    fn look_up(
+        &self,
+        registry: &Registry<'_>,
+        holder: usize,
+        reference: &str,
+        base: &str,
+        found: impl FnOnce(Lookup<&str>),
+    ) {
+        let absolute = Uri::parse(base)
+            .ok()
+            .and_then(|base| registry.resolve_uri(&base, reference).ok());
+        let Some(absolute) = absolute else {
+            if !uri::valid(reference) && self.malformed_reference_scope(holder) {
+                // A malformed invocation has no target to resolve. Use
+                // the existing carrier preparation path to establish
+                // that repairing it isolates the supported defect.
+                return found(Lookup::Scope(base));
             }
+            return found(Lookup::Invalid);
+        };
+        let (name, _) = absolute
+            .as_str()
+            .split_once('#')
+            .unwrap_or((absolute.as_str(), ""));
+        // URI normalization selects the carrier only. Preserve the
+        // authored fragment for Resolver::lookup; resolve_uri can
+        // normalize a percent-encoded plain name that lookup refuses.
+        found(Lookup::Name(name));
+    }
+    // Every scalar reference with the base it resolves against, in node order.
+    fn references_in<'a>(
+        &'a self,
+        nodes: impl Iterator<Item = (usize, &'a SpaceNode)>,
+    ) -> impl Iterator<Item = (Key, usize, &'a str, &'a str)> {
+        nodes.flat_map(move |(holder, node)| {
+            let resource = self.resource(node.resource);
+            REFERENCE_KEYWORDS
+                .iter()
+                .enumerate()
+                .filter_map(move |(slot, keyword)| {
+                    let reference = node.value.get(keyword).and_then(|v| v.as_str())?;
+                    if resource.anonymous && !uri::absolute(reference) {
+                        return None;
+                    }
+                    let base = resource
+                        .base
+                        .as_deref()
+                        .unwrap_or("urn:openbindings:anonymous-inspection");
+                    Some(((holder, slot), node.resource, reference, base))
+                })
+        })
+    }
+    // The packaged layer's lookups, the same in every space: they read only
+    // packaged nodes and resources. Computed once, with the shared layer.
+    fn packaged_lookups(&self) -> &[PackagedLookup] {
+        self.packaged.lookups.get_or_init(|| {
+            let registry = inspection_registry();
+            let mut lookups = Vec::new();
+            for (key, resource, reference, base) in self.references_in(self.packaged.nodes()) {
+                self.look_up(&registry, key.0, reference, base, |found| {
+                    lookups.push((key, resource, found.owned()));
+                });
+            }
+            lookups
+        })
+    }
+    fn index_inspection(&self) -> Inspection {
+        let uri_registry = inspection_registry();
+        let mut index = Index::default();
+        for (key, resource, reference, base) in self.references_in(self.local.nodes()) {
+            self.look_up(&uri_registry, key.0, reference, base, |found| {
+                index.add(self, key, resource, found);
+            });
         }
+        for (key, resource, found) in self.packaged_lookups() {
+            index.add(self, *key, *resource, found.borrowed());
+        }
+        let Index {
+            mut routes,
+            groups,
+            absent,
+        } = index;
         for (&id, queries) in &groups {
             for &key in &queries.references {
                 routes.insert(key, Route::Carrier(id));
@@ -457,9 +554,7 @@ impl SchemaSpace {
             // Known reference carriers are already in `names`; borrow the
             // remaining carrier names rather than copying all identity strings.
             let mut inspection_uri = "urn:openbindings:missing-inspection".to_owned();
-            while self.names.contains_key(&inspection_uri)
-                || absent.contains_key(inspection_uri.as_str())
-            {
+            while self.has_name(&inspection_uri) || absent.contains_key(inspection_uri.as_str()) {
                 inspection_uri.push('-');
             }
             let recording = Recording::default();
@@ -499,14 +594,14 @@ impl SchemaSpace {
     fn inspect_carrier(&self, resource_id: usize, queries: Queries) -> Targets {
         let mut targets = Targets::new();
 
-        let resource = &self.resources[resource_id];
+        let resource = self.resource(resource_id);
         let Some(root) = resource.root else {
             return targets;
         };
-        let original = &self.nodes[root].value;
+        let original = &self.node(root).value;
         let (mut tree, identity) = copy(
             original,
-            &self.sources[self.nodes[root].source].positions,
+            &self.source(self.node(root).source).positions,
             |id| self.malformed_reference_scope(id),
         );
         let canonical = resource.base.as_deref().unwrap_or(&queries.first_name);
@@ -535,7 +630,7 @@ impl SchemaSpace {
                     "invalid-reference",
                     "reference is not a well-formed URI reference",
                 );
-                if registry.is_ok() && resource.eligible {
+                if registry.is_ok() && self.eligible(resource_id) {
                     refusal = refusal.semantic(StaticReferenceDefect::MalformedReference);
                 }
                 targets.insert(key, Err(refusal));
@@ -586,7 +681,8 @@ impl SchemaSpace {
                     }
                     // A fresh resolver has no dynamic history. This is the
                     // initial static target, never a runtime dynamic winner.
-                    let base = self.resources[self.nodes[key.0].resource]
+                    let base = self
+                        .resource(self.node(key.0).resource)
                         .base
                         .as_deref()
                         .unwrap_or("urn:openbindings:anonymous-inspection");
@@ -600,7 +696,8 @@ impl SchemaSpace {
                             Some(&node) => Ok(Target {
                                 node,
                                 dynamic_name: (!fragment.is_empty()
-                                    && self.nodes[node]
+                                    && self
+                                        .node(node)
                                         .value
                                         .get("$dynamicAnchor")
                                         .and_then(|v| v.as_str())
@@ -705,7 +802,7 @@ mod tests {
             index
                 .carriers
                 .iter()
-                .filter(|(id, _)| **id != space.nodes[target.node].resource)
+                .filter(|(id, _)| **id != space.node(target.node).resource)
                 .all(|(_, carrier)| carrier.targets.get().is_none())
         );
         // Preparing a carrier does not inspect references authored inside it.
@@ -724,7 +821,7 @@ mod tests {
         assert!(index.missing.get().is_some());
         assert!(index.absent.lock().unwrap().is_none());
         assert!(
-            index.carriers[&space.nodes[target.node].resource]
+            index.carriers[&space.node(target.node).resource]
                 .queries
                 .lock()
                 .unwrap()
@@ -753,7 +850,8 @@ mod tests {
         ] {
             let target = space.resolve(holder, uri).unwrap();
             assert_eq!(
-                space.resources[space.nodes[target.node].resource]
+                space
+                    .resource(space.node(target.node).resource)
                     .base
                     .as_deref(),
                 Some(uri)
@@ -833,9 +931,7 @@ mod tests {
                 for _ in 0..4 {
                     let cold = &cold;
                     scope.spawn(move || {
-                        for (id, node) in
-                            cold.nodes.iter().enumerate().filter(|(_, n)| n.source == 0)
-                        {
+                        for (id, node) in cold.nodes().filter(|(_, n)| n.source == 0) {
                             if let Some(reference) = node.value.get("$ref").and_then(|v| v.as_str())
                             {
                                 let target = cold.resolve(id, reference).unwrap();

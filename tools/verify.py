@@ -29,8 +29,7 @@ run([sys.executable, 'tools/attribution.py', '--check'])
 run([sys.executable, 'tools/verify-consumer-compat.py'])
 for example in ['first_use', 'replacement', 'regex_budget']:
     run(['cargo', 'run', '--locked', '-p', 'openbindings-json-schema-evaluator', '--example', example])
-for mode in [[], ['--upstream']]:
-    run(['cargo', 'run', '--locked', '-p', 'openbindings-schema-evaluator-test-support', '--example', 'replay', '--', *mode])
+run(['cargo', 'run', '--locked', '-p', 'openbindings-schema-evaluator-test-support', '--example', 'replay'])
 run([sys.executable, 'tools/verify-rust-snippets.py'])
 run([sys.executable, 'tools/verify-source-inspection.py'])
 run([sys.executable, 'tools/verify-interface-synthesis.py'])

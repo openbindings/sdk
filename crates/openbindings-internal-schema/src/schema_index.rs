@@ -118,12 +118,28 @@ impl SchemaIndex {
                 }
             }
         }
-        Self::build_roots(roots, None, false)
+        Self::build_roots(roots, None, false, true)
     }
     pub fn supplied(value: &JsonValue, retrieval_uri: &str) -> Self {
-        Self::build_roots(vec![value.view()], Some(retrieval_uri.to_owned()), true)
+        Self::build_roots(
+            vec![value.view()],
+            Some(retrieval_uri.to_owned()),
+            true,
+            true,
+        )
     }
-    fn build_roots(roots: Vec<JsonRef<'_>>, base: Option<String>, ordinary: bool) -> Self {
+    /// A supplied resource's schema nodes alone: the same walk, order, depths
+    /// and resource numbering as [`Self::supplied`], without bases, positions,
+    /// identifiers or anchors. A schema space needs only these.
+    pub fn supplied_nodes(value: &JsonValue) -> Self {
+        Self::build_roots(vec![value.view()], None, true, false)
+    }
+    fn build_roots(
+        roots: Vec<JsonRef<'_>>,
+        base: Option<String>,
+        ordinary: bool,
+        full: bool,
+    ) -> Self {
         let mut stack: Vec<_> = roots
             .into_iter()
             .rev()
@@ -139,7 +155,9 @@ impl SchemaIndex {
             } else {
                 parent_resource
             };
-            let base = if let Some(id) = id {
+            let base = if !full {
+                None
+            } else if let Some(id) = id {
                 id.as_str().and_then(|s| {
                     if ordinary {
                         crate::input_policy::resolve_identifier(parent_base.as_deref(), s)
@@ -150,7 +168,8 @@ impl SchemaIndex {
             } else {
                 parent_base
             };
-            if id.is_some()
+            if full
+                && id.is_some()
                 && let Some(base) = &base
             {
                 out.identifiers
@@ -159,10 +178,11 @@ impl SchemaIndex {
                     .push(value.to_owned());
             }
             for keyword in ["$anchor", "$dynamicAnchor"] {
-                if let Some(name) = value
-                    .get(keyword)
-                    .and_then(|v| v.as_str())
-                    .filter(|s| plain_name(s))
+                if full
+                    && let Some(name) = value
+                        .get(keyword)
+                        .and_then(|v| v.as_str())
+                        .filter(|s| plain_name(s))
                 {
                     out.anchors
                         .entry((resource, name.into()))
@@ -174,7 +194,9 @@ impl SchemaIndex {
                 stack.push((child, depth + 1, resource, base.clone()));
             }
             let owned = value.to_owned();
-            out.positions.insert(node_id(&owned), out.nodes.len());
+            if full {
+                out.positions.insert(node_id(&owned), out.nodes.len());
+            }
             out.nodes.push(SchemaNode {
                 value: owned,
                 depth,
@@ -263,6 +285,38 @@ mod tests {
                 index.same_document(&document, "#/schemas/absent"),
                 SameDocument::Missing
             ));
+        }
+    }
+
+    #[test]
+    fn supplied_nodes_walk_the_supplied_positions() {
+        let nested = JsonValue::parse(
+            r##"{"$defs":{"a":{"$id":"nested","$anchor":"x","items":[{"$id":"#bad"}],"properties":{"p":{"$id":"https://other.test/p","not":true}}}},"allOf":[{"$ref":"#x"},false]}"##,
+        )
+        .unwrap();
+        let resources = crate::space::embedded_resources()
+            .iter()
+            .map(|r| (r.document.clone(), r.uri.clone()))
+            .chain([(nested, "https://supplied.test/r".to_owned())]);
+        for (value, uri) in resources {
+            let (full, nodes) = (
+                SchemaIndex::supplied(&value, &uri),
+                SchemaIndex::supplied_nodes(&value),
+            );
+            assert_eq!(full.nodes.len(), nodes.nodes.len(), "{uri}");
+            for (a, b) in full.nodes.iter().zip(&nodes.nodes) {
+                assert_eq!(node_id(&a.value), node_id(&b.value));
+                assert_eq!(
+                    (a.depth, a.resource, a.parent_resource, a.obi_position),
+                    (b.depth, b.resource, b.parent_resource, b.obi_position)
+                );
+                assert!(b.base.is_none());
+            }
+            assert!(
+                nodes.positions.is_empty()
+                    && nodes.anchors.is_empty()
+                    && nodes.identifiers.is_empty()
+            );
         }
     }
 

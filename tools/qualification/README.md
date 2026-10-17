@@ -18,11 +18,10 @@ kit in `crates/openbindings-schema-evaluator-test-support/fixtures` contains the
 frozen raw cases and the admission/expectation policies consumed by native and
 browser replay. These policies remain live contract inputs.
 
-Run both diagnostic modes through the public evaluator API:
+Check and explain every case through the public evaluator API:
 
 ```sh
 cargo run --locked -p openbindings-schema-evaluator-test-support --example replay
-cargo run --locked -p openbindings-schema-evaluator-test-support --example replay -- --upstream
 ```
 
 The live allocation thresholds and generators are described in

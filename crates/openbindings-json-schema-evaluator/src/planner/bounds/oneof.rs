@@ -21,22 +21,29 @@ enum Symbol {
     Summary(usize),
     Hole(Polarity),
 }
-fn symbol_name(out: &mut impl Write, symbol: Symbol) -> fmt::Result {
+// Generated names number nodes densely (`node_number`).
+fn symbol_name(out: &mut impl Write, space: &SchemaSpace, symbol: Symbol) -> fmt::Result {
+    let n = |id| space.node_number(id);
     match symbol {
-        Symbol::Variant(id, p) => write!(out, "n{id}{}", p.suffix()),
-        Symbol::Body(id, p) => write!(out, "b{id}{}", p.suffix()),
-        Symbol::UpperOne(id) => write!(out, "p{id}"),
-        Symbol::Summary(id) => write!(out, "s{id}"),
+        Symbol::Variant(id, p) => write!(out, "n{}{}", n(id), p.suffix()),
+        Symbol::Body(id, p) => write!(out, "b{}{}", n(id), p.suffix()),
+        Symbol::UpperOne(id) => write!(out, "p{}", n(id)),
+        Symbol::Summary(id) => write!(out, "s{}", n(id)),
         Symbol::Hole(p) => write!(out, "hole{}", p.suffix()),
     }
 }
 fn dual_uri(out: &mut impl Write, namespace: usize) -> fmt::Result {
     write!(out, "{NAMESPACE}{namespace}/dual")
 }
-fn symbol_uri(out: &mut impl Write, namespace: usize, symbol: Symbol) -> fmt::Result {
+fn symbol_uri(
+    out: &mut impl Write,
+    space: &SchemaSpace,
+    namespace: usize,
+    symbol: Symbol,
+) -> fmt::Result {
     dual_uri(out, namespace)?;
     out.write_str("#/$defs/")?;
-    symbol_name(out, symbol)
+    symbol_name(out, space, symbol)
 }
 fn variant(plan: &Plan, id: usize, polarity: Polarity) -> Symbol {
     // A closed node is exact and needs only one definition per registry.
@@ -180,7 +187,7 @@ impl<'a> Emitter<'a> {
             self.graph.entry(from).or_default().push(target);
         }
         self.sink.write_char('"')?;
-        symbol_uri(&mut self.sink, self.plan.namespace, target)?;
+        symbol_uri(&mut self.sink, self.space, self.plan.namespace, target)?;
         self.sink.write_char('"')
     }
     fn reference(&mut self, target: Symbol, inplace: bool) -> fmt::Result {
@@ -200,11 +207,11 @@ impl<'a> Emitter<'a> {
         polarity: Polarity,
         inplace: bool,
     ) -> fmt::Result {
-        let target = self.space.sources[source].positions[&node_id(&value.to_owned())];
+        let target = self.space.source(source).positions[&node_id(&value.to_owned())];
         self.child_ref(variant(self.plan, target, polarity), inplace)
     }
     fn branch_refs(&mut self, id: usize, polarity: Polarity) -> fmt::Result {
-        let node = &self.space.nodes[id];
+        let node = self.space.node(id);
         let children = node.value.get("oneOf").expect("transformed oneOf");
         for (i, value) in children.elements().expect("checked list").enumerate() {
             if i != 0 {
@@ -216,7 +223,7 @@ impl<'a> Emitter<'a> {
     }
     fn ordinary(&mut self, id: usize, polarity: Polarity, body: bool) -> fmt::Result {
         self.node()?;
-        let node = &self.space.nodes[id];
+        let node = self.space.node(id);
         if node.value.kind() == JsonKind::Boolean {
             return self.sink.write_str(node.value.text());
         }
@@ -363,7 +370,7 @@ impl<'a> Emitter<'a> {
             self.sink.write_char(',')?;
         }
         self.sink.write_char('"')?;
-        symbol_name(&mut self.sink, symbol)?;
+        symbol_name(&mut self.sink, self.space, symbol)?;
         self.sink.write_str("\":")?;
         self.definition(symbol)
     }
@@ -477,7 +484,7 @@ impl SchemaSpace {
                     if matches!(symbol, Symbol::Body(..)) || !plan.oneofs.contains(&id) =>
                 {
                     visit(Some(symbol), None, Some(id), OriginKind::Exact)?;
-                    let node = &self.nodes[id];
+                    let node = self.node(id);
                     let has_if = node.value.get("if").is_some();
                     for member in node.value.view().members().into_iter().flatten() {
                         control.check()?;
@@ -534,7 +541,7 @@ impl SchemaSpace {
             |symbol, keyword, original, _| {
                 let mut key = Sink::count(cap.text);
                 if let Some(symbol) = symbol {
-                    symbol_uri(&mut key, plan.namespace, symbol)
+                    symbol_uri(&mut key, self, plan.namespace, symbol)
                 } else {
                     dual_uri(&mut key, plan.namespace)
                 }
@@ -567,7 +574,7 @@ impl SchemaSpace {
             |symbol, keyword, original, kind| {
                 let mut key = String::new();
                 if let Some(symbol) = symbol {
-                    symbol_uri(&mut key, plan.namespace, symbol)
+                    symbol_uri(&mut key, self, plan.namespace, symbol)
                 } else {
                     dual_uri(&mut key, plan.namespace)
                 }

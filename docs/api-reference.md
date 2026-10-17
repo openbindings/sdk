@@ -65,8 +65,8 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 | `Document.validate()` | Returns a union whose `conformant` branch owns an independent `ConformantDocument` and a plain report. |
 | `ConformantDocument` | Nominal, privately constructed proof with infallible typed reads. `resolveOperation(name)` returns a `ConformantOperationView` or `undefined`. It has no setters and does not inherit `Document`. |
 | `ConformantOperationView` | `input()` and `output()` return a disposable `ValueContract` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. |
-| `ValueContract` | `schema()` acquires the exact schema; `prepare(options)` takes `resources`, `limits`, `diagnostics` and `signal` and returns `{ status: "ready", contract }` or `{ status: "no-verdict", detail }`. |
-| `PreparedContract` | Disposable prepared contract with `validate(value, options)` and `retain()`, independent of its document, operation, resources and contract owners. |
+| `ValueContract` | `schema()` acquires the exact schema; `prepare(options)` takes `resources`, `limits` and `signal` and returns `{ status: "ready", contract }` or `{ status: "no-verdict", detail }`. |
+| `PreparedContract` | Disposable prepared contract with `validate(value, options)`, the cheap check, `explain(value, options)`, which adds problems to a failure, and `retain()`; independent of its document, operation, resources and contract owners. |
 | `asDocument()`, `intoDocument()` | Acquire an independent editable owner, or consume the proof. Consumption revokes all JavaScript aliases of that proof; retained owners survive. |
 | `toBytes()`, `dispose()`, `Symbol.dispose`, `disposed` | Detached exact current bytes and the existing deterministic lifecycle. |
 
@@ -94,6 +94,8 @@ known bytes and stops before exceeding the budget. A refusal discards that buffe
 | `ValueContract::prepare(&self, &dyn SchemaEvaluator) -> Result<PreparedContract, NoVerdict>` | Prepares with no supplied resources. A `&DefaultEvaluator` coerces; the evaluator is borrowed for the call. |
 | `ValueContract::prepare_with(&self, &dyn SchemaEvaluator, &ResourceSet)`, `prepare_with_control(.., &dyn WorkControl)` | The same with immutable supplied resources and cooperative cancellation. A refusal judges no instance and does not prove undefinedness. |
 | `PreparedContract::validate_json(input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError>` | Admits through `JsonValue::parse` with default limits, then validates. `Err` is admission failure only; all four value outcomes are `Ok`. Duplicate members yield no-verdict and numbers retain exact semantics. |
+| `PreparedContract::validate(&self, &JsonValue)`, `validate_with_control(.., &dyn WorkControl) -> ValueOutcome` | The cheap check: a failure carries no problems and `problems_complete` is false. |
+| `PreparedContract::explain(&self, &JsonValue)`, `explain_with_control(.., &dyn WorkControl) -> ValueOutcome` | The same verdict, with problems that explain a failure. Library-bounded; see [value diagnostics](#value-diagnostics). |
 
 `PreparedContract` is `Clone + Send + Sync + 'static` and owns what it needs after
 the document, resources and evaluator are dropped. Core has no default evaluator
@@ -185,11 +187,11 @@ futures and `Rc` providers are also supported.
   editors. A report's independent rule evidence survives finding-count and aggregate
   pointer-byte caps; diagnostic truncation must remain visible.
 
-Value diagnostics use the typed `Diagnostics::{Coarse, Upstream}` policy, default
-Coarse. See the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md).
-Custom Rust evaluators constructing `ValueOutcome::Fails` supply a value-free
-`message` alongside `problems` and `problems_complete`. Empty incomplete diagnostics
-are valid established failures.
+Value diagnostics are chosen per call: `validate` is the cheap check and `explain`
+asks for problems. See the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md).
+Custom Rust evaluators receive the call's `Detail`. An evaluator constructing
+`ValueOutcome::Fails` supplies a value-free `message` alongside `problems` and
+`problems_complete`. Empty incomplete diagnostics are valid established failures.
 Custom evaluators receive a `SchemaRequest` with the original document, supplied
 resources, entry and entry location. `evaluation_program(control)` provides the
 strict §7 projection; read-only `EvaluationProgram::entry_uri()` and `resources()`
@@ -329,8 +331,8 @@ Raw parser admission codes `byte-limit`, `node-limit` and `depth-limit` remain
 ## Conformant document reads
 
 A conformant operation's `input()` and `output()` return its `ValueContract`s;
-`operation::Invoker::new` takes `Conformant<Document>` and `with_evaluator` returns
-`Self`. Preparation still may refuse, and prepared does not mean decidable.
+`operation::Invoker::new` takes `Conformant<Document>`; `with_evaluator` and
+`with_validation_detail(Detail)` return `Self`. Preparation still may refuse, and prepared does not mean decidable.
 `SchemaRequest::document()` exposes the conformant document revision to custom evaluators.
 
 | Rust read | Result and presence |
@@ -396,20 +398,29 @@ See the [maintainer guide](maintainers.md) for rendering and verification comman
 
 ## Value diagnostics
 
-`Diagnostics::Coarse`
-(the default) returns `Fails` with the fixed message “value does not satisfy the
-contract”, no problems, and `problems_complete = false`. TypeScript uses
-`diagnostics: "coarse"`, `message`, and `problemsComplete: false`.
+One prepared contract serves both calls. `validate` (and `validate_with_control`,
+`validate_json`) is the cheap check: it returns `Fails` with the fixed message
+“value does not satisfy the contract”, no problems, and `problems_complete =
+false`. TypeScript's `validate` returns `message`, no problems and
+`problemsComplete: false`.
 
-Select `DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream)` or
-`contract.prepare({ diagnostics: "upstream" })` to request the library's own
-first error through `validate()`. Messages remain value-free; available paths map
-to original locations and optional schema facts may expose source operands.
-This mode is **library-bounded**: construction can allocate in proportion to inputs
-and can overflow the stack on deep values. The SDK promises nothing stronger than
-the library. One first error does not establish diagnostic completeness, so the
-flag remains false. Work/regex limits and cancellation can omit detail after a
-verdict; missing detail never weakens failure and never counts as rule evidence.
+`explain` (and `explain_with_control`; TypeScript `explain`) returns the same
+verdict and, for a failure, the default evaluator's report of the library's own
+first error. Messages remain value-free; available paths map to original
+locations and optional schema facts may expose source operands. An explanation
+is **library-bounded**: building it can allocate in proportion to inputs and can
+overflow the stack on deep values. The SDK promises nothing stronger than the
+library, so keep `validate` on paths that check untrusted input. One first error
+does not establish diagnostic completeness, so the flag remains false.
+Work/regex limits and cancellation can omit detail after a verdict; missing
+detail never weakens failure and never counts as rule evidence.
+
+A prepared contract keeps what its own explanation reads (a compact copy of the
+keywords it compiled) and never its document, supplied resources or schema space.
+Custom evaluators receive the call's `Detail`: with `Detail::Outcome` a failure
+carries no problems and `problems_complete` is false; with `Detail::Explain` it
+carries at least one problem unless detail work was cut short or found no problem
+it can report in the original sources, in which case `problems_complete` is false.
 
 ## Caller-owned operation preparation
 
@@ -452,7 +463,7 @@ consumers retain their existing cancellation outcomes. Invocation retains its
 synchronous relay and isolated local tokens. See the [cancellation definitions](../crates/openbindings-internal-cancellation/src/lib.rs).
 
 
-Document findings are independent of the value diagnostics mode. Locations identify
+Document findings are independent of value explanations. Locations identify
 original document positions or checked schema nodes. Missing detail and truncated
 findings do not change validity or rule evidence. Use rule, code and evidence for
 logic, not message text or finding count.

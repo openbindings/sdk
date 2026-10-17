@@ -1,18 +1,14 @@
 use openbindings::*;
-use openbindings_json_schema_evaluator::{DefaultEvaluator, Diagnostics};
+use openbindings_json_schema_evaluator::DefaultEvaluator;
 
-fn prepare(text: &str, resources: ResourceSet, details: bool) -> PreparedContract {
+fn prepare(text: &str, resources: ResourceSet) -> PreparedContract {
     let doc = Document::parse(text).unwrap();
     let doc = doc
         .validate()
         .unwrap()
         .conformant()
         .expect("conformant document");
-    let evaluator = DefaultEvaluator::new().with_diagnostics(if details {
-        Diagnostics::Upstream
-    } else {
-        Diagnostics::Coarse
-    });
+    let evaluator = DefaultEvaluator::new();
     let operation = doc.resolve_operation("op").expect("declared operation");
     let Ok(contract) = operation
         .input()
@@ -23,9 +19,16 @@ fn prepare(text: &str, resources: ResourceSet, details: bool) -> PreparedContrac
     };
     contract
 }
+/// Check a value cheaply, or explain it when `details` is set.
 fn run(schema: &str, input: &str, details: bool) -> ValueOutcome {
     let text = format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#);
-    prepare(&text, ResourceSet::default(), details).validate(&JsonValue::parse(input).unwrap())
+    let contract = prepare(&text, ResourceSet::default());
+    let value = JsonValue::parse(input).unwrap();
+    if details {
+        contract.explain(&value)
+    } else {
+        contract.validate(&value)
+    }
 }
 fn failure(result: &ValueOutcome) -> (&[ValueProblem], bool) {
     let ValueOutcome::Fails {
@@ -39,7 +42,7 @@ fn failure(result: &ValueOutcome) -> (&[ValueProblem], bool) {
     (problems, *problems_complete)
 }
 #[test]
-fn upstream_locations_exist_in_original_document_and_supplied_resources() {
+fn explained_locations_exist_in_original_document_and_supplied_resources() {
     let uri = "https://example.test/schema";
     for (schema, input, expected) in [
         (
@@ -105,9 +108,10 @@ fn upstream_locations_exist_in_original_document_and_supplied_resources() {
             let text =
                 format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{entry}}}}}}}"#);
             let value = JsonValue::parse(input).unwrap();
-            let coarse = prepare(&text, resources.clone(), false).validate(&value);
+            let contract = prepare(&text, resources);
+            let coarse = contract.validate(&value);
             assert!(failure(&coarse).0.is_empty());
-            let upstream = prepare(&text, resources, true).validate(&value);
+            let upstream = contract.explain(&value);
             let location = failure(&upstream).0[0].schema_location.as_ref().unwrap();
             assert_eq!(location.resource.as_deref(), external.then_some(uri));
             assert_eq!(
@@ -179,15 +183,13 @@ fn external_old_snapshot_nested_coordinates_and_escaped_names() {
     let old = prepare(
         document,
         resource(r#"{"allOf":[{"properties":{"a/~":{"minimum":9007199254740993}}}]}"#),
-        true,
     );
     let new = prepare(
         document,
         resource(r#"{"properties":{"a/~":{"minimum":7}}}"#),
-        true,
     );
     let value = JsonValue::parse(r#"{"a/~":6}"#).unwrap();
-    let result = old.validate(&value);
+    let result = old.explain(&value);
     let problem = &failure(&result).0[0];
     assert_eq!(problem.instance_pointer, "/a~1~0");
     assert_eq!(
@@ -206,7 +208,7 @@ fn external_old_snapshot_nested_coordinates_and_escaped_names() {
     assert!(
         matches!(&problem.details,Some(ValueProblemDetails::NumericBound{bound}) if bound=="9007199254740993")
     );
-    let result = new.validate(&value);
+    let result = new.explain(&value);
     assert!(
         matches!(&failure(&result).0[0].details,Some(ValueProblemDetails::NumericBound{bound}) if bound=="7")
     );

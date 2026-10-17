@@ -26,12 +26,13 @@ export function diagnosticDetailsCases(sdk) {
   }
   const doc = (schema) =>
     `{"openbindings":"0.2.0","operations":{"op":{"input":${schema}}}}`;
-  function run(schema, input, options = {}) {
-    const contract = prepare(doc(schema), options);
+  // Check cheaply, or explain when `call` is "explain".
+  function run(schema, input, call = "validate") {
+    const contract = prepare(doc(schema));
     const value = sdk.parseJson(input);
     check(value.status === "parsed", "exact input");
     try {
-      return contract.validate(value.value);
+      return contract[call](value.value);
     } finally {
       value.value.dispose();
       contract.dispose();
@@ -55,14 +56,12 @@ export function diagnosticDetailsCases(sdk) {
     "9007199254740993",
     "-0.00",
   ]) {
-    for (const diagnostics of ["coarse", "upstream"]) {
-      const result = run(`{"exclusiveMinimum":${token}}`, token, {
-        diagnostics,
-      });
+    for (const call of ["validate", "explain"]) {
+      const result = run(`{"exclusiveMinimum":${token}}`, token, call);
       check(result.outcome === "fails", "exact exclusive bound");
       check(!result.problemsComplete, "truthful first-error completeness");
-      if (diagnostics === "coarse")
-        check(result.problems.length === 0, "coarse omits payloads");
+      if (call === "validate")
+        check(result.problems.length === 0, "cheap check omits payloads");
       else {
         const problem = result.problems[0];
         check(
@@ -84,7 +83,7 @@ export function diagnosticDetailsCases(sdk) {
   const examples = [];
   for (const [schema, input, kind] of cases) {
     const ordinary = run(schema, input),
-      detailed = run(schema, input, { diagnostics: "upstream" });
+      detailed = run(schema, input, "explain");
     check(
       ordinary.outcome === "fails" && detailed.outcome === "fails",
       "same failure",
@@ -118,12 +117,10 @@ export function diagnosticDetailsCases(sdk) {
     examples.push(detailed);
   }
   const largeName = "é".repeat(10000);
-  const large = run(JSON.stringify({ required: [largeName] }), "{}", {
-    diagnostics: "upstream",
-  });
+  const large = run(JSON.stringify({ required: [largeName] }), "{}", "explain");
   check(
     large.problems[0].details.member === largeName,
-    "upstream retains library-provided name",
+    "explanation retains library-provided name",
   );
   const resourceText =
     '{"allOf":[{"properties":{"a/~":{"minimum":9007199254740993}}}],"x-padding":"' +
@@ -134,7 +131,7 @@ export function diagnosticDetailsCases(sdk) {
     '{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/schema"}}},"x-padding":"' +
     "y".repeat(32768) +
     '"}';
-  function fromResource(text, diagnostics) {
+  function fromResource(text) {
     const parsed = sdk.parseJson(text);
     check(parsed.status === "parsed", "resource parse");
     let resources;
@@ -142,25 +139,27 @@ export function diagnosticDetailsCases(sdk) {
       resources = new sdk.SchemaResources([
         ["https://example.test/schema", parsed.value],
       ]);
-      return prepare(documentText, { resources, diagnostics });
+      return prepare(documentText, { resources });
     } finally {
       resources?.dispose();
       parsed.value.dispose();
     }
   }
   // Warm all process-global schema arenas before comparing application retention.
-  let warm = fromResource(resourceText, "coarse");
+  let warm = fromResource(resourceText);
   warm.dispose();
   const baseline = testing.liveStorageOwners();
-  const defaultContract = fromResource(resourceText, "coarse");
+  const defaultContract = fromResource(resourceText);
   const defaultArenas = testing.liveStorageOwners();
   defaultContract.dispose();
-  const old = fromResource(resourceText, "upstream");
-  const optInArenas = testing.liveStorageOwners();
-  const newer = fromResource(replacementText, "upstream");
+  const old = fromResource(resourceText);
+  const newer = fromResource(replacementText);
+  const preparedArenas = testing.liveStorageOwners();
+  let explainedArenas;
   try {
-    const oldResult = old.validate({ "a/~": 6 }),
-      newResult = newer.validate({ "a/~": 6 });
+    const oldResult = old.explain({ "a/~": 6 }),
+      newResult = newer.explain({ "a/~": 6 });
+    explainedArenas = testing.liveStorageOwners();
     check(
       oldResult.problems[0].details.bound === "9007199254740993" &&
         newResult.problems[0].details.bound === "7",
@@ -178,19 +177,26 @@ export function diagnosticDetailsCases(sdk) {
   }
   const released = testing.liveStorageOwners();
   check(released === baseline, "all application owners released");
-  check(optInArenas > defaultArenas, "opt-in source retention observable");
+  // An explaining contract keeps neither its document nor its resources.
+  check(
+    defaultArenas === baseline &&
+      preparedArenas === baseline &&
+      explainedArenas === baseline,
+    "explanations retain no source arenas",
+  );
   const probe = sdk.Document.parse(doc("true"));
   check(probe.status === "parsed", "option probe");
   try {
     let error;
     try {
-      prepareInput(probe.value, "op", { diagnostics: "yes" });
+      prepareInput(probe.value, "op", { diagnostics: "upstream" });
     } catch (e) {
       error = e;
     }
     check(
-      error?.code === "invalid-diagnostics",
-      "bad disclosure option rejected",
+      error?.code === "invalid-work-options" &&
+        /explain\(value\)/.test(error.message),
+      "removed disclosure option rejected, naming explain",
     );
   } finally {
     probe.value.dispose();
@@ -206,9 +212,9 @@ export function diagnosticDetailsCases(sdk) {
       retention: {
         baseline,
         defaultArenas,
-        optInArenas,
+        explainedArenas,
         released,
-        optInOriginalSourceBytes: utf8(documentText) + utf8(resourceText),
+        unretainedOriginalSourceBytes: utf8(documentText) + utf8(resourceText),
         meaning:
           "logical exact arenas and known original byte extent; not heap, RSS or Wasm capacity",
       },

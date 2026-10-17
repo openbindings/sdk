@@ -1,5 +1,5 @@
 import { prepareInput } from "./conformant-contracts.mjs";
-/** Typed diagnostic mode parity, including removal of the old bounded-detail API. */
+/** Per-call detail parity, including removal of the old bounded-detail and mode options. */
 export function diagnosticBudgetCases(sdk) {
   let assertions = 0;
   const check = (condition, label) => {
@@ -13,11 +13,11 @@ export function diagnosticBudgetCases(sdk) {
     }),
   );
   try {
-    for (const diagnostics of [undefined, "coarse", "upstream"]) {
-      const setup = prepareInput(parsed.value, "op", { diagnostics });
-      check(setup.status === "ready", "ready");
-      try {
-        const result = setup.contract.validate(42);
+    const setup = prepareInput(parsed.value, "op");
+    check(setup.status === "ready", "ready");
+    try {
+      for (const call of ["validate", "explain"]) {
+        const result = setup.contract[call](42);
         check(result.outcome === "fails", "same verdict");
         check(
           result.message === "value does not satisfy the contract",
@@ -28,14 +28,14 @@ export function diagnosticBudgetCases(sdk) {
           "first error never claims completeness",
         );
         check(
-          result.problems.length === (diagnostics === "upstream" ? 1 : 0),
-          "mode selects detail",
+          result.problems.length === (call === "explain" ? 1 : 0),
+          "call selects detail",
         );
-        if (diagnostics === "upstream")
+        if (call === "explain")
           check(result.problems[0].code === "type", "library first error");
-      } finally {
-        setup.contract.dispose();
       }
+    } finally {
+      setup.contract.dispose();
     }
     for (const field of ["diagnosticBytes", "maxProblems"]) {
       check(!(field in sdk.evaluatorLimits()), "retired default");
@@ -47,14 +47,22 @@ export function diagnosticBudgetCases(sdk) {
       }
       check(rejected, "retired limit rejected");
     }
-    for (const diagnostics of [true, false, "details", null]) {
+    // Detail is chosen per call; preparation has no mode option.
+    for (const diagnostics of [
+      true,
+      false,
+      "details",
+      null,
+      "coarse",
+      "upstream",
+    ]) {
       let rejected = false;
       try {
         prepareInput(parsed.value, "op", { diagnostics });
       } catch (e) {
-        rejected = e.code === "invalid-diagnostics";
+        rejected = e.code === "invalid-work-options";
       }
-      check(rejected, "invalid mode rejected");
+      check(rejected, "removed mode option rejected");
     }
   } finally {
     parsed.value.dispose();
@@ -62,7 +70,7 @@ export function diagnosticBudgetCases(sdk) {
   return {
     diagnosticBudget: {
       assertions,
-      scope: "coarse or library-bounded first error",
+      scope: "cheap check or library-bounded first error",
     },
   };
 }

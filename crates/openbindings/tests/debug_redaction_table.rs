@@ -103,7 +103,7 @@ impl SchemaEvaluator for Accept {
     }
 }
 impl PreparedSchema for Accept {
-    fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
+    fn validate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
         ValueOutcome::Satisfies
     }
 }

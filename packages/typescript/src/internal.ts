@@ -378,7 +378,7 @@ export interface WorkOptions {
   /** Optional caller-owned cooperative cancellation signal; synchronous Wasm only observes same-thread cancellation at call boundaries. */
   signal?: AbortSignal;
 }
-/** Default-evaluator finite budgets, each a nonnegative 32-bit integer. Work counts are implementation units, not milliseconds. Zero is literal; upstream diagnostic allocation and stack use are library-bounded; exhaustion produces no-verdict unless only post-verdict diagnostics are incomplete. */
+/** Default-evaluator finite budgets, each a nonnegative 32-bit integer. Work counts are implementation units, not milliseconds. Zero is literal; the allocation and stack use of an explanation's library diagnostics are library-bounded; exhaustion produces no-verdict unless only post-verdict diagnostics are incomplete. */
 export interface EvaluatorLimits {
   /** Work units per verdict/diagnostic pass; default 2,000,000. */
   evaluationSteps: number;
@@ -399,8 +399,6 @@ export interface PrepareOptions extends WorkOptions {
   resources?: SchemaResources;
   /** Overrides for built-in evaluator budgets; unspecified entries use evaluatorLimits(). */
   limits?: Partial<EvaluatorLimits>;
-  /** Coarse (default) returns a fixed message and no problems. Upstream requests the library's first error and source schema facts, which may contain secrets. Library-bounded construction can allocate in proportion to inputs and overflow the stack on deep values; the SDK promises no stronger bound. Both modes leave problemsComplete false on failure. */
-  diagnostics?: "coarse" | "upstream";
 }
 /** Explicit resources and cooperative cancellation for reference inspection; no retrieval or global resource registry is used. */
 export interface ReferenceOptions extends WorkOptions {
@@ -1762,19 +1760,14 @@ export class ValueContract extends Managed {
   prepare(options: PrepareOptions = {}): ValueContractPreparation {
     requireReady();
     const raw = contractRaw(this);
-    const { resources, limits, diagnostics, signal } = prepareOptions(options);
+    const { resources, limits, signal } = prepareOptions(options);
     // Omitted resources and limits cross the bridge as absent: the engine uses
     // its shared empty set and default budgets without building either.
     const encoded = limits === undefined ? undefined : encodedLimits(limits);
     const preparation = sdkCall(() =>
       resources === undefined
-        ? raw.prepare(encoded, diagnostics, isAborted(signal))
-        : raw.prepareWith(
-            resourceRaw(resources),
-            encoded,
-            diagnostics,
-            isAborted(signal),
-          ),
+        ? raw.prepare(encoded, isAborted(signal))
+        : raw.prepareWith(resourceRaw(resources), encoded, isAborted(signal)),
     );
     try {
       const result = decode<
@@ -1805,7 +1798,6 @@ export class ValueContract extends Managed {
 function prepareOptions(options: PrepareOptions): {
   resources?: SchemaResources;
   limits?: Partial<EvaluatorLimits>;
-  diagnostics: "coarse" | "upstream";
   signal?: AbortSignal;
 } {
   if (!options || typeof options !== "object" || Array.isArray(options))
@@ -1813,13 +1805,13 @@ function prepareOptions(options: PrepareOptions): {
       "invalid-work-options",
       "Preparation options must be an object.",
     );
-  const { resources, limits, diagnostics = "coarse", ...work } = options;
-  if (diagnostics !== "coarse" && diagnostics !== "upstream")
+  const { resources, limits, ...work } = options;
+  if (Object.prototype.hasOwnProperty.call(work, "diagnostics"))
     throw new SdkError(
-      "invalid-diagnostics",
-      "diagnostics must be coarse or upstream.",
+      "invalid-work-options",
+      "The diagnostics option was removed: call explain(value) on the prepared contract to learn why a value fails.",
     );
-  return { resources, limits, diagnostics, signal: workSignal(work) };
+  return { resources, limits, signal: workSignal(work) };
 }
 function freezeCandidates(candidates: readonly string[]): void {
   if (
@@ -1880,71 +1872,94 @@ export class PreparedContract extends Managed {
   /** @internal */ static fromRaw(raw: wasm.WasmPrepared): PreparedContract {
     return new PreparedContract(raw);
   }
-  /** Borrow an exact root; cancellation cannot preempt synchronous Wasm. */
+  /** The cheap check of an exact root: a failure carries no problems and problemsComplete is false. Cancellation cannot preempt synchronous Wasm. */
   validate(value: ExactJson, options?: WorkOptions): ValueOutcome;
-  /** Admit ordinary JSON (including nested exact owners), then validate.
+  /** Admit ordinary JSON (including nested exact owners), then check it cheaply.
    * Expected admission failures return input-error. Caller exceptions and handle misuse throw.
    */
   validate(value: JsonInput, options?: WorkOptions): ValueCheck;
   validate(value: JsonInput, options: WorkOptions = {}): ValueCheck {
-    requireReady();
-    const prepared = handle<wasm.WasmPrepared>(this);
-    const exact = isExact(value) ? jsonRaw(value) : undefined;
-    const signal = workSignal(options);
-    if (isAborted(signal)) return cancelledValue();
-    if (exact) return decode(prepared.validate(exact, isAborted(signal)));
-    let temporary: ExactJson | undefined;
-    try {
-      let text: string;
-      try {
-        text = encodeOrdinary(value, { origins: new WeakMap() });
-      } catch (error) {
-        if (!(error instanceof PartSerializationError)) throw error;
-        return {
-          outcome: "input-error",
-          error: {
-            code: (error.code === "authoring-limit"
-              ? "input-limit"
-              : error.code) as ValueAdmissionFailure["code"],
-            instancePointer: error.partPointer,
-            message: error.message,
-          },
-        };
-      }
-      try {
-        temporary = new ExactJson(wasm.WasmJson.parseText(text));
-      } catch (error) {
-        // Only known JSON admission limits can refuse text produced by the checked encoder.
-        let info: { kind?: string } | undefined;
-        if (typeof error === "string") {
-          try {
-            info = JSON.parse(error);
-          } catch {
-            /* unexpected engine exception */
-          }
-        }
-        if (info?.kind !== "Limit") throw error;
-        return {
-          outcome: "input-error",
-          error: {
-            code: "input-limit",
-            instancePointer: null,
-            message: "The ordinary value exceeds the admitted JSON limits.",
-          },
-        };
-      }
-      if (isAborted(signal)) return cancelledValue();
-      return decode(prepared.validate(jsonRaw(temporary), false));
-    } finally {
-      temporary?.dispose();
-    }
+    return checkValue(this, value, options, false);
   }
-
+  /** Explain an exact root: the verdict validate() returns, and for a failure the library's first error with redacted messages and original schema facts. Explanation costs more than the cheap check and is library-bounded: it can allocate in proportion to the schema and value and can overflow the stack on deeply nested values, so keep validate() on paths that check untrusted input. Cancellation after the verdict keeps an established failure with problemsComplete false. */
+  explain(value: ExactJson, options?: WorkOptions): ValueOutcome;
+  /** Admit ordinary JSON (including nested exact owners), then explain it.
+   * Expected admission failures return input-error. Caller exceptions and handle misuse throw.
+   */
+  explain(value: JsonInput, options?: WorkOptions): ValueCheck;
+  explain(value: JsonInput, options: WorkOptions = {}): ValueCheck {
+    return checkValue(this, value, options, true);
+  }
   /** Return a NEW independently disposable owner sharing compiled state; it remains valid after the prior prepared owner is disposed. */
   retain(): PreparedContract {
     return PreparedContract.fromRaw(handle<wasm.WasmPrepared>(this).retain());
   }
 }
+function checkValue(
+  contract: PreparedContract,
+  value: JsonInput,
+  options: WorkOptions,
+  explain: boolean,
+): ValueCheck {
+  requireReady();
+  const prepared = handle<wasm.WasmPrepared>(contract);
+  const exact = isExact(value) ? jsonRaw(value) : undefined;
+  const signal = workSignal(options);
+  if (isAborted(signal)) return cancelledValue();
+  const run = (raw: wasm.WasmJson, cancelled: boolean): ValueOutcome =>
+    decode(
+      explain
+        ? prepared.explain(raw, cancelled)
+        : prepared.validate(raw, cancelled),
+    );
+  if (exact) return run(exact, isAborted(signal));
+  let temporary: ExactJson | undefined;
+  try {
+    let text: string;
+    try {
+      text = encodeOrdinary(value, { origins: new WeakMap() });
+    } catch (error) {
+      if (!(error instanceof PartSerializationError)) throw error;
+      return {
+        outcome: "input-error",
+        error: {
+          code: (error.code === "authoring-limit"
+            ? "input-limit"
+            : error.code) as ValueAdmissionFailure["code"],
+          instancePointer: error.partPointer,
+          message: error.message,
+        },
+      };
+    }
+    try {
+      temporary = new ExactJson(wasm.WasmJson.parseText(text));
+    } catch (error) {
+      // Only known JSON admission limits can refuse text produced by the checked encoder.
+      let info: { kind?: string } | undefined;
+      if (typeof error === "string") {
+        try {
+          info = JSON.parse(error);
+        } catch {
+          /* unexpected engine exception */
+        }
+      }
+      if (info?.kind !== "Limit") throw error;
+      return {
+        outcome: "input-error",
+        error: {
+          code: "input-limit",
+          instancePointer: null,
+          message: "The ordinary value exceeds the admitted JSON limits.",
+        },
+      };
+    }
+    if (isAborted(signal)) return cancelledValue();
+    return run(jsonRaw(temporary), false);
+  } finally {
+    temporary?.dispose();
+  }
+}
+
 /** Pinned HTTP discovery companion identity and wire defaults, independent of package/spec core versions. */
 export interface DiscoveryPolicy {
   /** Applied companion version. */

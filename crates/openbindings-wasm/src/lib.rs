@@ -29,25 +29,14 @@ fn interpretation_error(e: InterpretationError) -> JsValue {
     ))
 }
 // Absent limits mean the defaults, so ordinary preparation parses nothing.
-fn evaluator(limits: Option<String>, diagnostics: &str) -> Result<DefaultEvaluator, JsValue> {
+fn evaluator(limits: Option<String>) -> Result<DefaultEvaluator, JsValue> {
     let limits: Limits = match limits {
         Some(text) => {
             serde_json::from_str(&text).map_err(|e| error("invalid-evaluator-limits", e))?
         }
         None => Limits::default(),
     };
-    Ok(
-        DefaultEvaluator::with_limits(limits).with_diagnostics(match diagnostics {
-            "coarse" => openbindings_json_schema_evaluator::Diagnostics::Coarse,
-            "upstream" => openbindings_json_schema_evaluator::Diagnostics::Upstream,
-            _ => {
-                return Err(error(
-                    "invalid-diagnostics",
-                    "diagnostics must be coarse or upstream",
-                ));
-            }
-        }),
-    )
+    Ok(DefaultEvaluator::with_limits(limits))
 }
 fn control(cancelled: bool) -> std::sync::atomic::AtomicBool {
     std::sync::atomic::AtomicBool::new(cancelled)
@@ -1297,10 +1286,9 @@ impl WasmValueContract {
         &self,
         resources: &ResourceSet,
         limits: Option<String>,
-        diagnostics: &str,
         cancelled: bool,
     ) -> Result<WasmPreparation, JsValue> {
-        let evaluator = evaluator(limits, diagnostics)?;
+        let evaluator = evaluator(limits)?;
         Ok(WasmPreparation {
             preparation: Some(self.contract().prepare_with_control(
                 &evaluator,
@@ -1331,26 +1319,19 @@ impl WasmValueContract {
     pub fn prepare(
         &self,
         limits: Option<String>,
-        diagnostics: &str,
         cancelled: bool,
     ) -> Result<WasmPreparation, JsValue> {
         static EMPTY: std::sync::OnceLock<ResourceSet> = std::sync::OnceLock::new();
-        self.prepare_in(
-            EMPTY.get_or_init(ResourceSet::default),
-            limits,
-            diagnostics,
-            cancelled,
-        )
+        self.prepare_in(EMPTY.get_or_init(ResourceSet::default), limits, cancelled)
     }
     #[wasm_bindgen(js_name=prepareWith)]
     pub fn prepare_with(
         &self,
         resources: &WasmResources,
         limits: Option<String>,
-        diagnostics: &str,
         cancelled: bool,
     ) -> Result<WasmPreparation, JsValue> {
-        self.prepare_in(&resources.resources, limits, diagnostics, cancelled)
+        self.prepare_in(&resources.resources, limits, cancelled)
     }
     pub fn retain(&self) -> WasmValueContract {
         Self {
@@ -1403,6 +1384,12 @@ impl WasmPrepared {
         encoded(
             self.prepared
                 .validate_with_control(&value.value, &control(cancelled)),
+        )
+    }
+    pub fn explain(&self, value: &WasmJson, cancelled: bool) -> String {
+        encoded(
+            self.prepared
+                .explain_with_control(&value.value, &control(cancelled)),
         )
     }
     pub fn retain(&self) -> WasmPrepared {

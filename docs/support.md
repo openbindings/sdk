@@ -32,8 +32,8 @@ own evaluator and qualify it with the evaluator test-support crate. TypeScript
 custom evaluator callbacks are not currently provided. The complete boundaries
 are in [CAPABILITIES.md](../CAPABILITIES.md).
 
-For untrusted request validation, keep the default Coarse diagnostics. Upstream
-mode is an explicit choice for callers that accept library allocation and stack
+For untrusted request validation, use `validate`, the cheap check. `explain` is an
+explicit per-call choice for callers that accept library allocation and stack
 limits; it can allocate in proportion to inputs and overflow on deep values.
 An empty problem list never turns an established failure into success.
 See the [evaluator policy](../crates/openbindings-json-schema-evaluator/README.md).

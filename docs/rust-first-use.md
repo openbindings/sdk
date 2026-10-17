@@ -46,6 +46,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("operation has no input contract")?
         .prepare(&DefaultEvaluator::new())?;
     println!("value outcome: {:?}", input.validate_json("7")?);
+    // The cheap check says whether a value fails; explaining it says why.
+    let seven = openbindings::JsonValue::parse(r#""seven""#)?;
+    println!("explained outcome: {:?}", input.explain(&seven));
     Ok(())
 }
 ```
@@ -61,11 +64,12 @@ lookup distinguishes found, missing and ambiguous.
 
 A conformant operation's `input()` and `output()` return its value contracts, or
 `None` when the operation declares none. `schema()` borrows the exact schema.
-`prepare(&DefaultEvaluator::new())` uses the default evaluator budgets, coarse
-diagnostics and no supplied resources; reading a contract prepares nothing. The SDK
-never acquires resources. Use `prepare_with(&evaluator, &resources)` for a shared or
-configured evaluator, custom budgets or diagnostics, supplied resources or a custom
-evaluator. The evaluator is borrowed for the call.
+`prepare(&DefaultEvaluator::new())` uses the default evaluator budgets and no
+supplied resources; reading a contract prepares nothing. The SDK never acquires
+resources. Use `prepare_with(&evaluator, &resources)` for a shared or configured
+evaluator, custom budgets, supplied resources or a custom evaluator. The evaluator
+is borrowed for the call. Each check chooses its detail: `validate` is cheap and
+reports only whether a value fails; `explain` on the same contract reports why.
 
 Preparation returns `Result<PreparedContract, NoVerdict>`, so `?` propagates a
 refusal with its reason, code, message and location. A missing operation and an
@@ -152,9 +156,11 @@ share that index. Evaluators that request the core projection reuse one resoluti
 space per live document revision and set, including when preparations alternate
 between sets. The space without supplied resources stays with the revision; a
 space with a set stays with that set and is released when the set or the revision
-is dropped. A prepared contract retains only its own document and resources.
+is dropped. A prepared contract retains at most its own document and resources,
+and only when its evaluator keeps them; the default evaluator's keeps neither.
 
-`prepare_with_control` and `validate_with_control` accept `WorkControl`, including
+`prepare_with_control`, `validate_with_control` and `explain_with_control` accept
+`WorkControl`, including
 an `AtomicBool` or a companion's `CancellationToken`. Cancellation is cooperative.
 Use a fresh flag or token for a retry. Cancelled preparation returns no prepared
 owner; cancelled validation leaves an existing owner usable.
@@ -162,7 +168,8 @@ owner; cancelled validation leaves an existing owner usable.
 Document findings describe the assessed revision with JSON Pointers, zero-based UTF-8 byte offsets and
 one-based lines and byte columns. Quote pointers when displaying them. Truncation
 leaves rule evidence intact. Use codes and evidence for logic; messages are
-advisory. Value failures use coarse diagnostics by default. Upstream diagnostics
-are an explicit choice with library allocation and stack limits, including possible
-stack overflow on deep values. See the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md)
+advisory. `validate` reports value failures without problems. `explain` is an
+explicit per-call choice with library allocation and stack limits, including
+possible stack overflow on deep values. A prepared contract keeps a compact copy
+of the keywords it compiled for explanations, never its document or resources. See the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md)
 and [host support](support.md).

@@ -595,7 +595,7 @@ pub(crate) fn projection_failure(f: openbindings_internal_schema::Failure) -> No
 ///     }
 /// }
 /// impl PreparedSchema for TrueOnly {
-///     fn validate(&self, _: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
+///     fn validate(&self, _: &JsonValue, _: Detail, control: &dyn WorkControl) -> ValueOutcome {
 ///         match control.check() {
 ///             Ok(()) => ValueOutcome::Satisfies,
 ///             Err(detail) => ValueOutcome::NoVerdict { detail: detail.into() },
@@ -621,10 +621,38 @@ pub trait SchemaEvaluator: Send + Sync {
         control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict>;
 }
+/// How much failure detail one validation call asks for. The verdict does not
+/// depend on it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Detail {
+    /// The verdict only. A failure carries no problems and `problems_complete`
+    /// is false.
+    Outcome,
+    /// The verdict with problems that explain a failure.
+    Explain,
+}
 /// Thread-safe retained validator returned by a [`SchemaEvaluator`]. Repeated calls must preserve caller input and retain no accidental borrow of a completed request. Only claim established semantic verdicts; bound diagnostic work separately and report incompleteness.
 pub trait PreparedSchema: Send + Sync {
     /// Return only established verdicts. Resource/capability/work failures are NoVerdict.
-    fn validate(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome;
+    ///
+    /// The requested [`Detail`] changes only what a failure carries. With
+    /// [`Detail::Outcome`], problems are empty and `problems_complete` is false.
+    /// With [`Detail::Explain`], a failure carries at least one problem unless
+    /// detail work was cut short or found no problem it can report in the
+    /// original sources, in which case `problems_complete` is false. Cutting
+    /// detail work short, by cancellation or an exhausted budget, never turns an
+    /// established failure into another outcome.
+    ///
+    /// `Detail` may gain variants. Answer one you do not recognize as for
+    /// [`Detail::Outcome`], since a failure without problems and with
+    /// `problems_complete` false is a truthful answer to every request.
+    fn validate(
+        &self,
+        value: &JsonValue,
+        detail: Detail,
+        control: &dyn WorkControl,
+    ) -> ValueOutcome;
 }
 /// An operation's input or output schema as a normative value contract, not yet
 /// prepared. Only a conformant operation hands one out, through
@@ -786,18 +814,55 @@ impl PreparedContract {
     /// (the specification gives the value no defined validity) and no-verdict (the
     /// evaluator could not answer). For ordinary Rust data first use [`JsonValue::from_serializable`];
     /// for exact JSON text/bytes use [`JsonValue::parse`]. Admission failure is
-    /// separate from validation. Failure diagnostics can be incomplete; inspect
-    /// `problems_complete` rather than assuming every failed keyword is reported.
+    /// separate from validation.
+    ///
+    /// This is the cheap check: a failure carries no problems and
+    /// `problems_complete` is false. Call [`Self::explain`] with the same value
+    /// to learn why it fails.
     pub fn validate(&self, value: &JsonValue) -> ValueOutcome {
         self.validate_with_control(value, &crate::work_control::NeverCancelled)
     }
     /// Validate with cooperative cancellation. Cancellation before a verdict yields
     /// no-verdict and leaves this owner usable with a fresh healthy control.
-    /// Cancellation of optional diagnostics does not weaken an established failure.
     /// This is not a preemptive wall-clock deadline; applications schedule work.
     pub fn validate_with_control(
         &self,
         value: &JsonValue,
+        control: &dyn WorkControl,
+    ) -> ValueOutcome {
+        self.check(value, Detail::Outcome, control)
+    }
+    /// Validate and explain a failure with problems that name where and why the
+    /// value fails. The verdict is the one [`Self::validate`] returns.
+    ///
+    /// Explanation costs more than the cheap check, and its cost is bounded
+    /// by the evaluator, not the SDK. The default evaluator reports the JSON
+    /// Schema library's first error, with redacted messages and original schema
+    /// facts: building it can allocate in proportion to the schema and value and
+    /// can overflow the stack on deeply nested values. Explain values you trust,
+    /// or values that already passed size and depth limits, and keep
+    /// [`Self::validate`] on paths that check untrusted input. Failure
+    /// diagnostics can be incomplete; inspect `problems_complete` rather than
+    /// assuming every failed keyword is reported.
+    pub fn explain(&self, value: &JsonValue) -> ValueOutcome {
+        self.explain_with_control(value, &crate::work_control::NeverCancelled)
+    }
+    /// Explain with cooperative cancellation. Cancellation before a verdict yields
+    /// no-verdict. Cancellation of the explanation after a verdict does not weaken
+    /// an established failure: it keeps `Fails` with `problems_complete` false.
+    pub fn explain_with_control(
+        &self,
+        value: &JsonValue,
+        control: &dyn WorkControl,
+    ) -> ValueOutcome {
+        self.check(value, Detail::Explain, control)
+    }
+    // Inlined into each public call, so the cheap check costs no extra frame.
+    #[inline]
+    fn check(
+        &self,
+        value: &JsonValue,
+        requested: Detail,
         control: &dyn WorkControl,
     ) -> ValueOutcome {
         if let Err(detail) = control.check() {
@@ -813,7 +878,7 @@ impl PreparedContract {
                 ),
             };
         }
-        self.schema.validate(value, control)
+        self.schema.validate(value, requested, control)
     }
 }
 

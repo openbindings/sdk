@@ -61,6 +61,7 @@ fn kit_rows(outcome: &ValueOutcome) -> Vec<Row> {
         expected: SECRET.into(),
         preparation_refusal: Some(refusal()),
         outcome: Some(outcome.clone()),
+        explanation: Some(outcome.clone()),
         failures: vec![SECRET.into()],
     };
     vec![

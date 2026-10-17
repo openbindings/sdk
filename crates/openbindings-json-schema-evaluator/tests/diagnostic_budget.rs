@@ -19,8 +19,8 @@ fn prepared(schema: Value, limits: Limits, resources: ResourceSet) -> PreparedCo
         Err(detail) => panic!("{detail:?}"),
     }
 }
-/// Prepare operation `op` input with upstream diagnostics and no supplied resources.
-fn prepare_upstream(doc: &Document) -> Result<PreparedContract, NoVerdict> {
+/// Prepare operation `op` input with the default evaluator and no supplied resources.
+fn prepare_input(doc: &Document) -> Result<PreparedContract, NoVerdict> {
     doc.validate()
         .unwrap()
         .conformant()
@@ -29,13 +29,10 @@ fn prepare_upstream(doc: &Document) -> Result<PreparedContract, NoVerdict> {
         .unwrap()
         .input()
         .unwrap()
-        .prepare(
-            &DefaultEvaluator::new()
-                .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream),
-        )
+        .prepare(&DefaultEvaluator::new())
 }
 #[test]
-fn coarse_is_value_free_and_upstream_is_one_first_error() {
+fn cheap_checks_are_value_free_and_explanations_are_one_first_error() {
     let schema = json!({"allOf":[{"type":"string"},false]});
     let value = JsonValue::parse("42").unwrap();
     let contract = prepared(schema.clone(), Limits::default(), ResourceSet::default());
@@ -55,14 +52,14 @@ fn coarse_is_value_free_and_upstream_is_one_first_error() {
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
     .unwrap();
-    let Ok(contract) = prepare_upstream(&doc) else {
+    let Ok(contract) = prepare_input(&doc) else {
         panic!()
     };
     let ValueOutcome::Fails {
         problems,
         problems_complete,
         ..
-    } = contract.validate(&value)
+    } = contract.explain(&value)
     else {
         panic!()
     };
@@ -75,17 +72,21 @@ fn coarse_is_value_free_and_upstream_is_one_first_error() {
     assert!(!problems_complete);
 }
 #[test]
-fn removed_limits_are_rejected_and_modes_are_typed() {
+fn removed_limits_and_evaluator_detail_settings_are_rejected() {
     for field in ["diagnostic_bytes", "max_problems"] {
         assert!(serde_json::from_str::<Limits>(&format!("{{\"{field}\":1}}")).is_err());
     }
-    use openbindings_json_schema_evaluator::Diagnostics;
-    assert_eq!(Diagnostics::default(), Diagnostics::Coarse);
-    assert!(serde_json::from_str::<Diagnostics>("true").is_err());
+    // Detail is chosen per call, never in the evaluator's configuration.
+    for setting in [
+        r#"{"diagnostics":"upstream"}"#,
+        r#"{"diagnostics":"coarse"}"#,
+    ] {
+        assert!(serde_json::from_str::<Limits>(setting).is_err());
+    }
 }
 
 #[test]
-fn interrupted_upstream_detail_cannot_weaken_an_established_failure() {
+fn interrupted_explanation_cannot_weaken_an_established_failure() {
     use std::sync::atomic::{AtomicUsize, Ordering};
     struct CancelAfterVerdict(AtomicUsize);
     impl WorkControl for CancelAfterVerdict {
@@ -95,11 +96,11 @@ fn interrupted_upstream_detail_cannot_weaken_an_established_failure() {
     }
     let doc =
         Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":false}}}"#).unwrap();
-    let Ok(contract) = prepare_upstream(&doc) else {
+    let Ok(contract) = prepare_input(&doc) else {
         panic!()
     };
-    let result = contract
-        .validate_with_control(&JsonValue::null(), &CancelAfterVerdict(AtomicUsize::new(0)));
+    let result =
+        contract.explain_with_control(&JsonValue::null(), &CancelAfterVerdict(AtomicUsize::new(0)));
     assert!(
         matches!(result, ValueOutcome::Fails { problems, problems_complete:false, .. } if problems.is_empty())
     );

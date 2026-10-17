@@ -20,18 +20,14 @@ fn conformant(document: &Document) -> Conformant<Document> {
         .conformant()
         .expect("conformant document")
 }
-fn upstream() -> DefaultEvaluator {
-    DefaultEvaluator::new()
-        .with_diagnostics(openbindings_json_schema_evaluator::Diagnostics::Upstream)
-}
-/// Prepare operation `op` input with upstream diagnostics and the given resources.
+/// Prepare operation `op` input with the default evaluator and the given resources.
 fn prepare(document: &Document, resources: &ResourceSet) -> Result<PreparedContract, NoVerdict> {
     conformant(document)
         .resolve_operation("op")
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare_with(&upstream(), resources)
+        .prepare_with(&DefaultEvaluator::new(), resources)
 }
 fn ready(document: &Document) -> PreparedContract {
     match prepare(document, &ResourceSet::default()) {
@@ -117,11 +113,11 @@ fn draft_metadata_and_semantic_setup_partitions_remain_distinct() {
     let Ok(contract) = operation
         .input()
         .expect("declared input")
-        .prepare(&upstream())
+        .prepare(&DefaultEvaluator::new())
     else {
         panic!()
     };
-    let outcome = contract.validate(&JsonValue::parse("null").unwrap());
+    let outcome = contract.explain(&JsonValue::parse("null").unwrap());
     assert!(matches!(outcome, ValueOutcome::Fails { .. }));
     assert_eq!(serde_json::to_value(outcome).unwrap()["outcome"], "fails");
 }
@@ -240,7 +236,7 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
             Ok(contract) => {
                 assert!(!reference.contains('\n'));
                 let ValueOutcome::NoVerdict { detail } =
-                    contract.validate(&JsonValue::parse("null").unwrap())
+                    contract.explain(&JsonValue::parse("null").unwrap())
                 else {
                     panic!()
                 };
@@ -315,7 +311,7 @@ fn messages_use_only_bounded_fixed_type_names_and_never_instance_or_schema_value
     ];
     for (schema, instance, expected) in cases {
         let ValueOutcome::Fails { problems, .. } =
-            ready(&document(schema)).validate(&JsonValue::parse(instance).unwrap())
+            ready(&document(schema)).explain(&JsonValue::parse(instance).unwrap())
         else {
             panic!()
         };
@@ -343,7 +339,7 @@ impl SchemaEvaluator for Custom {
     }
 }
 impl PreparedSchema for CustomPrepared {
-    fn validate(&self, _: &JsonValue, _: &dyn WorkControl) -> ValueOutcome {
+    fn validate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
         ValueOutcome::Fails {
             message: "value does not satisfy the contract".into(),
             problems: vec![ValueProblem {
@@ -421,13 +417,13 @@ fn external_evaluator_construction_and_matching_stay_supported() {
 }
 
 #[test]
-fn retained_upstream_schema_facts_are_redacted_from_debug() {
+fn explained_schema_facts_are_redacted_from_debug() {
     let doc = document(serde_json::json!({"enum":["SECRET-schema-choice"]}));
     let contract = ready(&doc);
     for text in [format!("{contract:?}"), format!("{contract:#?}")] {
         assert!(!text.contains("SECRET"));
     }
-    let outcome = contract.validate(&JsonValue::string("SECRET-instance").unwrap());
+    let outcome = contract.explain(&JsonValue::string("SECRET-instance").unwrap());
     let ValueOutcome::Fails { problems, .. } = &outcome else {
         panic!("expected failure")
     };

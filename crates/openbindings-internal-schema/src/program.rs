@@ -54,7 +54,46 @@ impl Program {
         generated_uri: &str,
         max_bytes: usize,
     ) -> Result<Option<Location>, LocationBudgetExceeded> {
-        let normalized = match generated_uri.split_once('#') {
+        let Some(found) = self.origin(generated_uri, max_bytes)? else {
+            return Ok(None);
+        };
+        let suffix = found.suffix();
+        let location = match found.origin {
+            ProgramOrigin::Prefix(location) => location,
+            ProgramOrigin::Exact(location) if suffix.is_empty() => location,
+            ProgramOrigin::Exact(_) | ProgramOrigin::Synthetic => return Ok(None),
+        };
+        let bytes = location
+            .resource
+            .as_ref()
+            .map_or(0, String::len)
+            .saturating_add(location.pointer.len())
+            .saturating_add(suffix.len());
+        if bytes > max_bytes {
+            return Err(LocationBudgetExceeded);
+        }
+        let mut pointer = String::with_capacity(location.pointer.len() + suffix.len());
+        pointer.push_str(&location.pointer);
+        pointer.push_str(suffix);
+        Ok(Some(Location {
+            resource: location.resource.clone(),
+            pointer,
+        }))
+    }
+    /// Find the closest mapped origin of a generated URI: the entry for its
+    /// longest prefix ending at a `/` or at its end. The match keeps the
+    /// normalized URI, so callers can read the generated suffix beyond that
+    /// origin. Admission and decoding follow [`Self::original_location_bounded`].
+    ///
+    /// # Errors
+    /// Returns [`LocationBudgetExceeded`] when decoding a percent-encoded
+    /// fragment would exceed `max_bytes`.
+    pub fn origin<'a>(
+        &'a self,
+        generated_uri: &'a str,
+        max_bytes: usize,
+    ) -> Result<Option<OriginMatch<'a>>, LocationBudgetExceeded> {
+        let uri = match generated_uri.split_once('#') {
             Some((base, fragment)) if fragment.contains('%') => {
                 if generated_uri.len() > max_bytes {
                     return Err(LocationBudgetExceeded);
@@ -71,38 +110,40 @@ impl Program {
             }
             _ => std::borrow::Cow::Borrowed(generated_uri),
         };
-        let generated_uri = normalized.as_ref();
-        let mut end = generated_uri.len();
+        let mut end = uri.len();
         loop {
-            if let Some(origin) = self.locations.get(&generated_uri[..end]) {
-                let location = match origin {
-                    ProgramOrigin::Prefix(location) => location,
-                    ProgramOrigin::Exact(location) if end == generated_uri.len() => location,
-                    ProgramOrigin::Exact(_) | ProgramOrigin::Synthetic => return Ok(None),
-                };
-                let bytes = location
-                    .resource
-                    .as_ref()
-                    .map_or(0, String::len)
-                    .saturating_add(location.pointer.len())
-                    .saturating_add(generated_uri.len() - end);
-                if bytes > max_bytes {
-                    return Err(LocationBudgetExceeded);
-                }
-                let mut pointer =
-                    String::with_capacity(location.pointer.len() + generated_uri.len() - end);
-                pointer.push_str(&location.pointer);
-                pointer.push_str(&generated_uri[end..]);
-                return Ok(Some(Location {
-                    resource: location.resource.clone(),
-                    pointer,
+            if let Some(origin) = self.locations.get(&uri[..end]) {
+                return Ok(Some(OriginMatch {
+                    uri,
+                    key: end,
+                    origin,
                 }));
             }
-            let Some(previous) = generated_uri[..end].rfind('/') else {
+            let Some(previous) = uri[..end].rfind('/') else {
                 return Ok(None);
             };
             end = previous;
         }
+    }
+}
+/// A generated URI matched to the program entry for its longest mapped prefix.
+pub struct OriginMatch<'a> {
+    /// The generated URI with its fragment percent-decoded.
+    pub uri: std::borrow::Cow<'a, str>,
+    /// Byte length of the matched entry's key, a prefix of `uri`.
+    pub key: usize,
+    /// The matched entry's origin.
+    pub origin: &'a ProgramOrigin,
+}
+impl OriginMatch<'_> {
+    /// The generated suffix beyond the matched key: empty or starting with `/`.
+    pub fn suffix(&self) -> &str {
+        &self.uri[self.key..]
+    }
+}
+impl std::fmt::Debug for OriginMatch<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OriginMatch").finish_non_exhaustive()
     }
 }
 

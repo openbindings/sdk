@@ -20,7 +20,7 @@ export function partialResourceCases(sdk) {
     const document = parsed.value;
     let contract;
     try {
-      const setup = prepareInput(document, "op", { diagnostics: "upstream" });
+      const setup = prepareInput(document, "op");
       if (expected === "refuse") {
         check(
           setup.status === "no-verdict",
@@ -31,7 +31,7 @@ export function partialResourceCases(sdk) {
       check(setup.status === "ready", "qualified partial preparation is ready");
       contract = setup.contract;
       document.dispose();
-      const result = contract.validate(value);
+      const result = contract.explain(value);
       check(
         result.outcome === expected,
         `partial result: ${JSON.stringify(result)}`,

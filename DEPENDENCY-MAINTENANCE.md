@@ -63,10 +63,10 @@ payloads. These documented cold APIs cannot represent every exact JSON number.
 They are never the source of a verdict or a reported instance/schema fact:
 equality, uniqueness, integer classification and numeric keywords have exact
 implementations. The SDK does not expose library error Display/Debug or payloads.
-Upstream diagnostic kind/path metadata still comes from validate(); bounds and
-enum choices are read from original schema tokens. Coarse mode never requests
-library errors. Upstream mode retains its documented library allocation/stack
-exposure; this is not a new bounded diagnostic implementation.
+Explanation kind/path metadata still comes from the library's validate(); bounds
+and enum choices are read from original schema tokens. The cheap check never
+requests library errors. An explanation retains the library's documented
+allocation/stack exposure; this is not a new bounded diagnostic implementation.
 
 Shared serde_json enables raw_value and unbounded_depth for exact RawValue
 interoperation and admitted schema decoding. Upstream jsonschema/value additionally
@@ -117,10 +117,11 @@ package/regress identities and ordinary upstream value/registry/serde dependenci
 The entire diagnostic patch is removed: admission/count/metadata/copy/payload and
 schema-detail scopes, the property-name copy hook, diagnostic_text, lazy custom
 error alterations, error-vector guards and validator-list coordinate alteration.
-Fixed checks use is_valid and build_map/get/is_valid; value diagnostics are Coarse
-by default and validate() first-error only on explicit Upstream request.
-`tools/verify-diagnostics.py` continues to enforce the pinned allocation ceilings
-and value allocation checks. No construction-memory guarantee is made for Upstream.
+Fixed checks use is_valid and build_map/get/is_valid; value checks use is_valid,
+and validate() runs for its first error only when a caller explains a failing
+value. `tools/verify-diagnostics.py` continues to enforce the pinned allocation
+ceilings and value allocation checks. No construction-memory guarantee is made for
+an explanation's library diagnostics.
 
 ## regress
 

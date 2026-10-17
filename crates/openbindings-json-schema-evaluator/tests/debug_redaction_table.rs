@@ -1,6 +1,6 @@
 //! Debug is structural. Explicit display/accessors/serialization retain payloads.
 use openbindings::*;
-use openbindings_json_schema_evaluator::{DefaultEvaluator, Diagnostics};
+use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::fmt::Debug;
 // A credential-shaped probe value; Debug output must never contain it.
 const SECRET: &str = "PROBE-BEARER-TOKEN-7391";
@@ -43,22 +43,25 @@ fn debug_redacts_caller_text_at_every_boundary() {
     let validated = parsed.validate().unwrap().conformant().unwrap();
     let operation = validated.resolve_operation("op").unwrap();
     let mut rows = Vec::new();
-    for diagnostics in [Diagnostics::Coarse, Diagnostics::Upstream] {
+    for detail in [Detail::Outcome, Detail::Explain] {
         let unprepared = operation.input().unwrap();
         rows.push(row("ValueContract", &unprepared));
-        let prepared = unprepared.prepare(&DefaultEvaluator::new().with_diagnostics(diagnostics));
+        let prepared = unprepared.prepare(&DefaultEvaluator::new());
         rows.push(row("Ok(PreparedContract)", &prepared));
         let Ok(contract) = prepared else {
             panic!("not ready")
         };
         rows.push(row("PreparedContract", &contract));
         let value = JsonValue::parse(serde_json::json!({SECRET:7}).to_string()).unwrap();
-        let result = contract.validate(&value);
+        let result = match detail {
+            Detail::Outcome => contract.validate(&value),
+            _ => contract.explain(&value),
+        };
         assert!(matches!(result, ValueOutcome::Fails { .. }));
         rows.push(row("actual evaluator outcome", &result));
     }
 
-    // Three Upstream-mode probes, including their operands.
+    // Three explanation probes, including their operands.
     let mut rendered = Vec::new();
     for (code, schema, instance) in [
         ("type", serde_json::json!({"type":"string"}), "7"),
@@ -73,20 +76,16 @@ fn debug_redacts_caller_text_at_every_boundary() {
         .conformant()
         .unwrap();
         let operation = document.resolve_operation("op").unwrap();
-        let Ok(contract) = operation
-            .input()
-            .unwrap()
-            .prepare(&DefaultEvaluator::new().with_diagnostics(Diagnostics::Upstream))
-        else {
+        let Ok(contract) = operation.input().unwrap().prepare(&DefaultEvaluator::new()) else {
             panic!("not ready")
         };
-        let mut result = contract.validate(&JsonValue::parse(instance).unwrap());
+        let mut result = contract.explain(&JsonValue::parse(instance).unwrap());
         let ValueOutcome::Fails { problems, .. } = &result else {
             panic!("expected failure")
         };
         assert_eq!(problems.len(), 1);
         assert_eq!(problems[0].code, code);
-        let item = row_with_fields("Upstream fixed problem code", &result, &[("code", code)]);
+        let item = row_with_fields("Explained fixed problem code", &result, &[("code", code)]);
         rendered.push(item.text[0].clone());
         rows.push(item);
         let ValueOutcome::Fails { problems, .. } = &mut result else {
@@ -95,7 +94,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
         problems[0].code = format!("{code}-{SECRET}");
         assert!(serde_json::to_string(&result).unwrap().contains(SECRET));
         rows.push(row_with_fields(
-            "Upstream replaced problem code",
+            "Explained replaced problem code",
             &result,
             &[("code", "<redacted>")],
         ));

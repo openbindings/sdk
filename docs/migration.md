@@ -65,9 +65,10 @@ replacement or decidability equivalent here.
 
 Rust core requires an explicit operation value evaluator, including for boolean
 schemas. TypeScript supplies the bundled evaluator. See
-[custom evaluator integration](schema-evaluators.md). Default failure diagnostics
-are coarse; requesting upstream detail accepts the library's allocation and stack
-limits. Diagnostic count and prose are not compatibility contracts.
+[custom evaluator integration](schema-evaluators.md). `validate` reports a failure
+without problems; `explain` asks for the library's first error and accepts its
+allocation and stack limits. Diagnostic count and prose are not compatibility
+contracts.
 
 ## Invoke
 
