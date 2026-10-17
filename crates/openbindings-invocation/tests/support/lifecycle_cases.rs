@@ -91,10 +91,7 @@ impl BindingInvoker for Fixture<'_> {
         k == "fixture"
     }
     fn supported_kinds(&self) -> Vec<SupportedKind> {
-        vec![SupportedKind {
-            kind: "fixture".into(),
-            description: Some("test only".into()),
-        }]
+        vec![SupportedKind::new("fixture").with_description("test only")]
     }
     fn invoke<'a>(
         &'a self,

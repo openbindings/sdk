@@ -32,9 +32,51 @@ text is omitted, including reference spellings, URLs, origins, JSON Pointers,
 evidence-map keys and values, diagnostic messages, schema operands, bodies,
 credentials, provider state and invocation context. `Display`, accessors and
 serialization retain their existing output; use them when disclosure is intended.
-Debug formatting is not a stable serialization format. Typed authoring parts and evaluator records retain struct-literal construction.
+Debug formatting is not a stable serialization format.
 `Document` owns private exact storage; construct and edit it through its methods. Result-returning APIs document caller-visible failures
 under `# Errors`; validation outcomes (including `DocumentValidation`) and configuration methods warn when ignored.
+
+## Records that may gain fields
+
+Output records, the structs the SDK builds and hands to callers, are
+`#[non_exhaustive]`: reports, findings, source and schema locations, value
+problems, refusals, reference reports, kit receipts, discovery and publication
+results, companion results and errors. Their fields stay public to read and
+assign, and later versions may add fields without a breaking release. Outside the
+SDK they cannot be built with a struct literal, and a destructuring pattern needs
+`..`. Records an evaluator, provider or transport must build have a constructor
+for their required fields and `with_*` methods for optional ones:
+
+| Builder | Records |
+| --- | --- |
+| Custom evaluators | `NoVerdict::new(reason, code, message).with_location(..)`, `UndefinedResult::new(code, message).with_location(..)`, `ValueProblem::new(instance, schema, code, message).with_details(..)`, `SchemaLocation::new(resource, pointer)` |
+| Source inspectors | `SourceInspection::complete(targets)` or `partial(targets, limitation)` and `with_limitation(..)`, `BindableTarget::new(source_ref, binding).with_operation_key(..).with_operation(..)`, `InspectionLimitation::new(code, message).with_details(..).with_additional_fields(..)`, `SupportedKind::new(kind).with_description(..)` |
+| Interface synthesizers | `SynthesisCandidate::new(document, coverage)`, `CoverageClaim::complete(entries)` or `partial(entries, limitation)`, `CoverageEntry::new(..)` then its assignable evidence fields, `CoverageLimitation::new(code, message)` with the same builders, `SupportedKind::new(kind)` |
+| Binding invokers and transports | `binding::SupportedKind::new(kind).with_description(..)`, HTTP discovery `RequestError::new(kind, message)` |
+| Version checks | `VersionRefusal::new(declared)`, `Some` only for a well-formed version outside the supported line |
+
+Input records, which callers build and the SDK reads, keep struct-literal
+construction: typed authoring parts and `BindingFragment`, `SchemaResource`,
+`JsonLimits`, evaluator `Limits`, kit `Options`, discovery `ClientOptions`,
+`PublicationOptions`, `HttpResponse`, synthesis requests, invocation carriers and
+`InvocationLimits`. Add `..Default::default()` where a record implements
+`Default`. `JsonMember` and discovery's `Header` are each a name and a value, built
+on both sides, and stay exhaustive.
+
+Closed partitions stay exhaustive, so a `match` can name every variant:
+`Evidence`, `Conformance`, `ValueOutcome`, `VersionDecision`, `JsonKind`,
+`OperationSelection`, `ReferenceResolution`, `CoverageScope`, `CoverageStatus`,
+`operation::Direction` and `ValidationStage`. Adding a variant to one is a
+breaking change, as is adding a field to a variant (an evaluator builds
+`ValueOutcome::Fails { message, problems, problems_complete }` directly). Open
+categories are `#[non_exhaustive]` and need a fallback arm: refusal and cause
+reasons, error kinds, `InputErrorKind`, `Detail`, `DiscoveryOutcome`, discovery
+`ErrorKind`, `PublicationError` and `WriteError`.
+
+TypeScript has no equivalent annotation. Its result objects may likewise gain
+properties in later versions: read the properties you use rather than relying on
+an exact key set, and keep a default branch when switching on an open reason or
+kind union.
 
 ## Rust document lifecycle
 
@@ -150,8 +192,9 @@ futures and `Rc` providers are also supported.
   Interpretation and no-verdict cause families are extensible. Rust matchers need a
   fallback for these causes. TypeScript exposes the known reason union for its
   version and is distributed with the matching Wasm engine; it does not add an
-  arbitrary-string or unknown-outcome branch. Public report/problem records remain
-  constructible by custom evaluator authors.
+  arbitrary-string or unknown-outcome branch. Custom evaluator authors build
+  problems and refusals with the constructors in
+  [records that may gain fields](#records-that-may-gain-fields).
 - Rust borrowed views do not create new owners. Rust clones and TypeScript `retain()`
   share immutable state. TypeScript `Document.value()`, `OperationView.value()`,
   `ExactJson.get()` and `ExactJson.at()` create **new disposable owners** on each call.
@@ -198,8 +241,9 @@ Custom Rust evaluators receive the call's `Detail`. An evaluator constructing
 Custom evaluators receive a `SchemaRequest` with the original document, supplied
 resources, entry and entry location; `location(node)` names a node of the document
 or a supplied resource. They build problems with `ValueProblem::new(instance,
-schema, code, message)`, an instance pointer from the validated value and
-`SchemaLocation::new(resource, pointer)`. `evaluation_program(control)` provides the
+schema, code, message)` and `with_details(details)`, an instance pointer from the
+validated value and `SchemaLocation::new(resource, pointer)`, and refusals with
+`NoVerdict::new(reason, code, message)` and `with_location(location)`. `evaluation_program(control)` provides the
 strict §7 projection; read-only `EvaluationProgram::entry_uri()` and `resources()`
 keep its contents aligned with provenance, and `original_location` recovers
 original coordinates. See [evaluator integration](schema-evaluators.md) for the custom evaluator contract.
@@ -229,8 +273,9 @@ Rust deadline and outcome items are defined in
 Rust `ClientOptions` literals must supply `timeout` or use `..ClientOptions::default()`.
 Native callers pass a builder to `Client::new`; built clients use the explicit
 delegated constructor. Portable discovery requires an explicit host timer. Admission codes
-are `origin-policy`, `invalid-timeout` and `http-client-build`. Exhaustive outcome
-matches must handle `DiscoveryOutcome::Timeout`.
+are `origin-policy`, `invalid-timeout` and `http-client-build`. `DiscoveryOutcome`
+and transport `ErrorKind` may gain variants, so matches need a fallback arm;
+transports report failures with `RequestError::new(kind, message)`.
 
 TypeScript items are exported by
 [`http-discovery.ts`](../packages/typescript/src/http-discovery.ts) and defined in

@@ -211,10 +211,7 @@ async fn borrowed_and_shared_non_clone_provider_keep_the_same_state_and_send_fut
             kind == CATALOG_KIND
         }
         fn supported_kinds(&self) -> Vec<SupportedKind> {
-            vec![SupportedKind {
-                kind: CATALOG_KIND.into(),
-                description: None,
-            }]
+            vec![SupportedKind::new(CATALOG_KIND)]
         }
         fn inspect<'a>(
             &'a self,

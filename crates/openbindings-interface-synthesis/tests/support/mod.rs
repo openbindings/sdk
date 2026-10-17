@@ -26,10 +26,7 @@ pub fn candidate(s: &Source) -> SynthesisCandidate {
         serde_json::to_string(s).unwrap()
     ))
     .unwrap();
-    SynthesisCandidate {
-        document: b.clone(),
-        coverage: CoverageClaim::complete(Vec::new()),
-    }
+    SynthesisCandidate::new(b.clone(), CoverageClaim::complete(Vec::new()))
 }
 pub struct Fixed {
     pub output: Result<SynthesisCandidate, SynthesisError>,
@@ -126,26 +123,28 @@ pub fn entry(v: JsonRef<'_>) -> CoverageEntry {
     e
 }
 pub fn from_case(v: JsonRef<'_>) -> SynthesisCandidate {
-    SynthesisCandidate {
-        document: Document::parse(v.get("interface").unwrap().text()).unwrap(),
-        coverage: CoverageClaim {
-            entries: v
-                .get("entries")
-                .unwrap()
-                .elements()
-                .unwrap()
-                .map(entry)
-                .collect(),
-            exhaustive: v.get("exhaustive").unwrap().as_bool().unwrap(),
-            limitation: v.get("limitation").map(|l| CoverageLimitation {
-                code: optional(l, "code").unwrap(),
-                message: optional(l, "message").unwrap(),
-                details: fields(l.get("details")),
-                additional_fields: BTreeMap::new(),
-            }),
-            ..Default::default()
-        },
-    }
+    let mut coverage = CoverageClaim::complete(
+        v.get("entries")
+            .unwrap()
+            .elements()
+            .unwrap()
+            .map(entry)
+            .collect(),
+    );
+    // A case states each field as the provider returned it, valid or not.
+    coverage.exhaustive = v.get("exhaustive").unwrap().as_bool().unwrap();
+    coverage.limitation = v.get("limitation").map(|l| {
+        let mut limitation = CoverageLimitation::new(
+            optional(l, "code").unwrap(),
+            optional(l, "message").unwrap(),
+        );
+        limitation.details = fields(l.get("details"));
+        limitation
+    });
+    SynthesisCandidate::new(
+        Document::parse(v.get("interface").unwrap().text()).unwrap(),
+        coverage,
+    )
 }
 pub fn corpus() -> JsonValue {
     json(include_str!("../fixtures/coverage-cases.json"))

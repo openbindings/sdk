@@ -170,7 +170,9 @@ and its `schema` names the failing keyword by `resource` and `pointer`.
 facts may disclose source operands. A prepared contract keeps a compact copy of
 the keywords it compiled for explanations, never its document, resources or any
 position. Messages are advisory; use result tags, codes and rule evidence for
-control flow.
+control flow. Result objects (reports, findings, outcomes, problems, locations,
+refusals and discovery results) may gain properties in later versions: read the
+properties you use rather than relying on an exact key set.
 
 Document findings use exact JSON Pointers and UTF-8 byte coordinates in the assessed revision.
 A pointer keeps a member name's unpaired UTF-16 unit, as a JavaScript string can,

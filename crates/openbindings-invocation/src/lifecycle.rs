@@ -63,8 +63,29 @@ impl InvocationLimits {
         }
     }
 }
-/// A local write result, never the authoritative invocation outcome.
+/// A local write result, never the authoritative invocation outcome. Later
+/// versions may add causes, so a `match` needs a fallback arm:
+/// ```compile_fail,E0004
+/// use openbindings_invocation::WriteError;
+/// fn closed(error: WriteError) -> bool {
+///     match error {
+///         WriteError::Closed => true,
+///         WriteError::ValueTooLarge => false,
+///     }
+/// }
+/// ```
+/// ```
+/// use openbindings_invocation::WriteError;
+/// fn closed(error: WriteError) -> bool {
+///     match error {
+///         WriteError::Closed => true,
+///         WriteError::ValueTooLarge => false,
+///         _ => false,
+///     }
+/// }
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum WriteError {
     /// Input stopped accepting values. Read the output terminal for its outcome.
     Closed,

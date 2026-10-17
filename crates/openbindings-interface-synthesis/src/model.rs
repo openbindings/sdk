@@ -42,13 +42,31 @@ impl std::fmt::Debug for SynthesisRequest<'_> {
 }
 
 /// Advisory exact kind. An omitted kind has no implied support verdict.
+///
+/// Providers build one with [`Self::new`] and [`Self::with_description`]. Later
+/// versions may add fields: read them by name and match with `..`.
 #[derive(Clone, Serialize)]
+#[non_exhaustive]
 pub struct SupportedKind {
     /// Exact opaque kind label.
     pub kind: String,
     /// Optional display text.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+}
+impl SupportedKind {
+    /// An exact kind without display text.
+    pub fn new(kind: impl Into<String>) -> Self {
+        Self {
+            kind: kind.into(),
+            description: None,
+        }
+    }
+    /// Attach display text.
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
 }
 impl std::fmt::Debug for SupportedKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -57,7 +75,9 @@ impl std::fmt::Debug for SupportedKind {
 }
 
 /// Authoritative answer for this provider's synthesis job.
+/// Later versions may add fields: read them by name and match with `..`.
 #[derive(Clone, Serialize)]
+#[non_exhaustive]
 pub struct KindSupportVerdict {
     /// Unchanged kind label.
     pub kind: String,
@@ -102,7 +122,30 @@ pub enum CoverageStatus {
 }
 /// Editable provider evidence. Its correspondence is checked against the request
 /// and document before delivery; it is not independently serializable as success.
+///
+/// Providers start one with [`Self::new`] and assign the evidence and path
+/// fields its disposition requires. Later versions may add fields: read them by
+/// name and match with `..`.
+/// ```compile_fail,E0639
+/// use openbindings_interface_synthesis::{CoverageEntry, CoverageScope, CoverageStatus};
+/// let _ = CoverageEntry { source_index: 0, source_ref: "echo".into(),
+///     scope: CoverageScope::Target, status: CoverageStatus::Excluded,
+///     source_key: None, operation_key: None, binding_key: None, dependency_key: None,
+///     reason_code: None, rule: None, message: None, requirements: None, details: None,
+///     additional_fields: Default::default() };
+/// ```
+/// ```
+/// use openbindings_interface_synthesis::{CoverageEntry, CoverageScope, CoverageStatus};
+/// let mut entry = CoverageEntry::new(0, "echo", CoverageScope::Target, CoverageStatus::Excluded);
+/// entry.reason_code = Some("example.excluded".into());
+/// entry.rule = Some("urn:example:kind:v1".into());
+/// entry.message = Some("excluded by the kind".into());
+/// let CoverageEntry { source_index, source_ref, scope, status, source_key, operation_key,
+///     binding_key, dependency_key, reason_code, rule, message, requirements, details,
+///     additional_fields, .. } = entry;
+/// ```
 #[derive(Clone)]
+#[non_exhaustive]
 pub struct CoverageEntry {
     /// Index in the original request's source slice.
     pub source_index: usize,
@@ -170,7 +213,12 @@ impl CoverageEntry {
     }
 }
 /// Evidence explaining an unknown remainder, distinct from known unsupported units.
+///
+/// Providers build one with [`Self::new`], [`Self::with_details`] and
+/// [`Self::with_additional_fields`]. Later versions may add fields: read them by
+/// name and match with `..`.
 #[derive(Clone)]
+#[non_exhaustive]
 pub struct CoverageLimitation {
     /// Nonempty stable namespaced code.
     pub code: String,
@@ -181,6 +229,27 @@ pub struct CoverageLimitation {
     /// Additional evidence; cannot shadow known fields.
     pub additional_fields: BTreeMap<String, JsonValue>,
 }
+impl CoverageLimitation {
+    /// Evidence with a stable namespaced code and an explanation, both nonempty.
+    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
+            details: None,
+            additional_fields: BTreeMap::new(),
+        }
+    }
+    /// Attach exact structured evidence.
+    pub fn with_details(mut self, details: BTreeMap<String, JsonValue>) -> Self {
+        self.details = Some(details);
+        self
+    }
+    /// Attach additional evidence members; they must not shadow known fields.
+    pub fn with_additional_fields(mut self, fields: BTreeMap<String, JsonValue>) -> Self {
+        self.additional_fields = fields;
+        self
+    }
+}
 impl std::fmt::Debug for CoverageLimitation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CoverageLimitation").finish_non_exhaustive()
@@ -188,7 +257,12 @@ impl std::fmt::Debug for CoverageLimitation {
 }
 
 /// Provider-authored report before request/document correspondence checks.
+///
+/// Providers build one with [`Self::complete`] or [`Self::partial`]; the public
+/// fields stay assignable. Later versions may add fields: read them by name and
+/// match with `..`.
 #[derive(Clone, Default)]
+#[non_exhaustive]
 pub struct CoverageClaim {
     /// One disposition per observed unit identity.
     pub entries: Vec<CoverageEntry>,
@@ -210,6 +284,18 @@ impl CoverageClaim {
             ..Self::default()
         }
     }
+    /// Claim an incomplete inventory of the supplied dispositions, with evidence
+    /// for the unknown remainder.
+    ///
+    /// The facade still checks this claim against the request and candidate document.
+    pub fn partial(entries: Vec<CoverageEntry>, limitation: CoverageLimitation) -> Self {
+        Self {
+            entries,
+            exhaustive: false,
+            limitation: Some(limitation),
+            ..Self::default()
+        }
+    }
 }
 impl std::fmt::Debug for CoverageClaim {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -222,12 +308,22 @@ impl std::fmt::Debug for CoverageClaim {
 }
 
 /// Provider output; neither core conformance nor coverage correspondence is implied.
+///
+/// Providers build one with [`Self::new`]. Later versions may add fields: read
+/// them by name and match with `..`.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct SynthesisCandidate {
     /// Editable exact candidate document to validate.
     pub document: Document,
     /// Editable coverage claim.
     pub coverage: CoverageClaim,
+}
+impl SynthesisCandidate {
+    /// A candidate document with its coverage claim.
+    pub fn new(document: Document, coverage: CoverageClaim) -> Self {
+        Self { document, coverage }
+    }
 }
 /// Checked immutable report. Its flags express evidence, not proof of provider honesty.
 #[derive(Clone)]

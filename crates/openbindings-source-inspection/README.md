@@ -22,15 +22,13 @@ impl SourceInspector for EchoInspector {
     fn inspect<'a>(&'a self, source: &'a Source, _: CancellationToken)
         -> Self::Inspection<'a>
     {
-        ready(Ok(SourceInspection::complete(vec![BindableTarget {
-            source_ref: "value".into(),
-            binding: BindingFragment {
+        ready(Ok(SourceInspection::complete(vec![BindableTarget::new(
+            "value",
+            BindingFragment {
                 content: source.content.clone(),
                 ..Default::default()
             },
-            operation_key: None,
-            operation: None,
-        }])))
+        )])))
     }
 }
 
@@ -46,6 +44,12 @@ async fn select(source: Source) -> Result<openbindings::Binding, InspectionError
 Applications choose targets and assign operation and source keys with
 `BindingFragment::bind`. Missing operation framing is permitted; the author can
 supply it before building and validating the final document.
+
+Providers build results with `SourceInspection::complete` or `partial`,
+`BindableTarget::new` (with `with_operation_key` and `with_operation`),
+`InspectionLimitation::new` and `SupportedKind::new`. These records may gain
+fields in later versions, so match them with `..`. A `BindingFragment` is
+authoring data like `openbindings::Binding` and keeps struct-literal construction.
 
 ## Limits
 

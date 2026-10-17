@@ -26,7 +26,9 @@ pub enum SynthesisErrorKind {
 }
 
 /// Located report/request error. Paths use JSON Pointer syntax.
+/// Later versions may add fields: read them by name and match with `..`.
 #[derive(Clone)]
+#[non_exhaustive]
 pub struct SynthesisFinding {
     /// Machine-readable reason.
     pub code: String,
@@ -42,7 +44,9 @@ impl std::fmt::Debug for SynthesisFinding {
 }
 
 /// Rejected provider candidate, never a checked partial success.
+/// Later versions may add fields: read them by name and match with `..`.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct RejectedSynthesis {
     /// Original candidate, available for diagnosis or explicit repair.
     pub candidate: SynthesisCandidate,
@@ -137,11 +141,7 @@ impl SynthesisError {
         e.cause = Some(Box::new(Cause::Provider(Box::new(self))));
         e
     }
-    pub(crate) fn unsupported_version(declared: &str) -> Self {
-        let refusal = VersionRefusal {
-            declared: declared.into(),
-            supported: openbindings::SUPPORTED_VERSIONS,
-        };
+    pub(crate) fn unsupported_version(refusal: VersionRefusal) -> Self {
         let mut e = Self::simple(
             SynthesisErrorKind::InvalidInput,
             "unsupported-version",

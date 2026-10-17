@@ -9,13 +9,31 @@ use serde::Serialize;
 use std::collections::HashSet;
 
 /// Advisory kind description; omission conveys no negative support verdict.
+///
+/// Providers build one with [`Self::new`] and [`Self::with_description`]. Later
+/// versions may add fields: read them by name and match with `..`.
 #[derive(Clone, Serialize)]
+#[non_exhaustive]
 pub struct SupportedKind {
     /// Exact opaque kind label.
     pub kind: String,
     /// Optional human-facing description.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+}
+impl SupportedKind {
+    /// An exact kind without a description.
+    pub fn new(kind: impl Into<String>) -> Self {
+        Self {
+            kind: kind.into(),
+            description: None,
+        }
+    }
+    /// Attach a human-facing description.
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
 }
 impl std::fmt::Debug for SupportedKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -24,7 +42,9 @@ impl std::fmt::Debug for SupportedKind {
 }
 
 /// Exact support for this provider’s invocation job.
+/// Later versions may add fields: read them by name and match with `..`.
 #[derive(Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct KindSupportVerdict {
     /// Exact requested kind, unchanged.
     pub kind: String,
