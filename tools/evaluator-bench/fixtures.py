@@ -36,7 +36,7 @@ def fixtures():
     add('one-of', dict(oneOf=[dict(const=i) for i in range(128)]), '127')
     add('explicit-resource', {'$ref': 'https://benchmark.invalid/item'}, '1', resources={'https://benchmark.invalid/item': '{"type":"integer"}'}, modes=ordinary)
     # Many independent referring resources share one large supplied carrier.
-    # context isolates public contract preparation from input construction.
+    # context isolates public ValueContracts::prepare from input construction.
     add('reference-fan-in', {'allOf': [
         {'$id': f'https://scale.test/caller/{i}', '$ref': 'https://scale.test/target'}
         for i in range(100)]}, '1', resources={'https://scale.test/target': compact({
