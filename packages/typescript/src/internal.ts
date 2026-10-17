@@ -2067,12 +2067,12 @@ export function discoveryEndpoint(origin: string): string {
   scalar(origin);
   return sdkCall(() => wasm.discoveryEndpoint(origin));
 }
-/** A local asynchronous Fetch callback; native function overloads are not required. */
+/** A local asynchronous Fetch callback; native function overloads are not required. Called once per hop with that hop's URL; it must scope any credentials it adds by that URL, because the SDK cannot strip headers the callback adds itself. */
 export type DiscoveryFetch = (
   url: string,
   init: RequestInit,
 ) => Promise<Response>;
-/** One discovery attempt with an SDK-owned timer and AbortController. Fetch follows redirects; browser per-hop mixed-content and private-network policy is browser-owned and invisible to the SDK. */
+/** One discovery attempt with an SDK-owned timer and AbortController. Where the host exposes redirect responses, the SDK checks and follows each hop itself; a host that hides them follows redirects under its own policy and the SDK checks only the final URL. */
 export interface DiscoveryOptions {
   /** Decoded-body byte limit; omitted selects 1 MiB. Must be a positive safe integer; zero is refused. Bounds accepted/retained document bytes; Fetch may deliver a larger chunk before overflow is detected, so this does not bound host buffering. */
   maxDocumentBytes?: number;
@@ -2080,14 +2080,14 @@ export interface DiscoveryOptions {
   timeoutMs?: number | "unbounded";
   /** Caller cancellation; aborts I/O and is checked around synchronous assessment. */
   signal?: AbortSignal;
-  /** Local asynchronous Fetch-compatible callback; omitted uses host fetch. Honor redirect: "follow", cancellation and the supplied normalized URL; configure credentials and connection restrictions here. Fetch removes Authorization on a cross-origin redirect but keeps other request headers, so a custom credential header added here reaches every followed origin. */
+  /** Local asynchronous Fetch-compatible callback; omitted uses host fetch. Honor the supplied normalized URL, redirect mode and cancellation; configure credentials and connection restrictions here. The callback is called once per hop: the SDK requests redirect: "manual" and calls it again for each admitted redirect, including one to another origin, passing only Accept. It must scope any credentials it adds by the URL it is given, as the Rust portable callback must: the SDK cannot strip headers the callback adds itself, so a credential added unconditionally reaches every admitted hop. When this callback answers manual mode with an opaqueredirect, as browser fetch does, the SDK repeats that request with redirect: "follow" and remembers the observation for this callback, so later discoveries through it use follow directly; Fetch then removes Authorization on a cross-origin redirect but keeps other request headers. */
   fetch?: DiscoveryFetch;
 }
 /** Observed response facts retained even when body reading or document assessment fails. The final URL is metadata only, not an implicit schema base. */
 export interface DiscoveryMetadata {
   /** Constructed discovery URL requested from the transport. */
   requestedUrl: string;
-  /** Final URL when exposed by the host, otherwise null; not a schema base. */
+  /** URL of the observed response, not a schema base: the URL the SDK last dispatched when it follows hops itself, the host's final URL when the host follows them, otherwise null. */
   finalUrl: string | null;
   /** Observed HTTP status. */
   status: number;
@@ -2125,7 +2125,7 @@ type DiscoveryBodyResult =
         supported: string;
       };
     };
-/** Finite discovery receipt. Only found carries normative proof. Only HTTP 404 means absent; 401/403 are gated; other non-200 statuses are http-status, except that a 301, 302, 303, 307 or 308 with a visible Location was left unfollowed and is a redirect-policy transport-error. Complete bounded 200 bytes can accompany refused/invalid documents; partial bodies are never returned. Dispose any returned document owner independently. */
+/** Finite discovery receipt. Only found carries normative proof. Only HTTP 404 means absent; 401/403 are gated; other non-200 statuses are http-status, except that a 301, 302, 303, 307 or 308 with a visible Location is followed or refused: a refused destination, the eleventh redirect, or one a following host left unfollowed is a redirect-policy transport-error. Complete bounded 200 bytes can accompany refused/invalid documents; partial bodies are never returned. Dispose any returned document owner independently. */
 export type DiscoveryResult = (
   | DiscoveryBodyResult
   | {
@@ -2166,6 +2166,57 @@ export type DiscoveryResult = (
   body?: Uint8Array;
 };
 const aborted = Symbol("discovery cancelled");
+/** Redirects the SDK follows itself, as the Rust checked paths' MAX_REDIRECTS. */
+const maxRedirects = 10;
+/**
+ * Transports observed to hide redirects: one answered redirect: "manual" with an
+ * opaqueredirect, as browsers do. Set only by that observation, never by host detection.
+ * Keyed by the supplied callback, or by the host fetch function for the default transport,
+ * so a callback that exposes hops keeps its checks in a runtime whose own fetch hides them.
+ */
+const hidesRedirects = new WeakSet<object>();
+const redirectStatuses = [301, 302, 303, 307, 308];
+/** HTTPS, or HTTP to normalized literal IPv4 127/8 or IPv6 ::1, without credentials. */
+function admitUrl(url: URL): boolean {
+  const loopback =
+    url.hostname === "[::1]" || /^127\.\d+\.\d+\.\d+$/.test(url.hostname);
+  return (
+    !url.username &&
+    !url.password &&
+    (url.protocol === "https:" || (url.protocol === "http:" && loopback))
+  );
+}
+/** Destination admission plus refusal of every HTTPS-to-HTTP hop, as in Rust. */
+function admitRedirect(previous: URL, next: URL): boolean {
+  return (
+    !(previous.protocol === "https:" && next.protocol === "http:") &&
+    admitUrl(next)
+  );
+}
+/** Resolve a visible Location against the dispatched URL; undefined when refused. */
+function redirectTarget(current: string, location: string): string | undefined {
+  // As the Rust checked paths: printable ASCII without backslashes, then WHATWG resolution.
+  if (!/^[\x21-\x7e]*$/.test(location) || location.includes("\\"))
+    return undefined;
+  let previous: URL, next: URL;
+  try {
+    previous = new URL(current);
+    next = new URL(location, previous);
+  } catch {
+    return undefined;
+  }
+  next.hash = "";
+  return admitRedirect(previous, next) ? next.href : undefined;
+}
+/** Whether a response URL names the dispatched URL; parses only a differing spelling. */
+function sameUrl(observed: string, dispatched: string): boolean {
+  if (observed === dispatched) return true;
+  try {
+    return new URL(observed).href === new URL(dispatched).href;
+  } catch {
+    return false;
+  }
+}
 function interruptible<T>(
   promise: Promise<T>,
   signal: AbortSignal,
@@ -2197,8 +2248,14 @@ function interruptible<T>(
  * The SDK timer covers headers, followed redirects, decoded reads and validation boundaries.
  * Caller cancellation wins a same-observation tie; the first observed cause is retained.
  * Synchronous Wasm assessment requires a Worker and responsive supervisor for a hard latency bound.
- * Fetch uses redirect: "follow". Only the final URL is observable: per-hop mixed-content
- * and private-network rules belong to the browser, and an HTTPS final URL proves no hop history.
+ * Fetch uses redirect: "manual". Where the host exposes the redirect response, as Node does,
+ * the SDK checks each Location before dispatching it, as the Rust checked paths do: it refuses
+ * every HTTPS-to-HTTP hop, a destination the origin rules refuse and an eleventh redirect, and
+ * calls the transport again for each admitted hop. A host that hides redirects answers with an
+ * opaqueredirect, as browsers do; the SDK then repeats the request with redirect: "follow" and
+ * checks the final URL, and later discoveries through the same transport use follow directly.
+ * Per-hop mixed-content and private-network rules then belong to the browser, and an HTTPS
+ * final URL proves no hop history.
  */
 export async function discover(
   origin: string,
@@ -2219,8 +2276,10 @@ export async function discover(
       "invalid-timeout",
       "timeoutMs must be positive and finite, or explicitly unbounded.",
     );
-  const fetcher = options.fetch ?? globalThis.fetch?.bind(globalThis);
-  if (!fetcher)
+  const host = globalThis.fetch,
+    transport: object | undefined = options.fetch ?? host,
+    fetcher = options.fetch ?? host?.bind(globalThis);
+  if (!fetcher || !transport)
     throw new SdkError(
       "fetch-unavailable",
       "Supply a Fetch callback in this host.",
@@ -2275,77 +2334,115 @@ export async function discover(
     reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   let phase: "transport" | "body" | "assessment" = "transport";
   try {
-    if (check()) return cancellation();
-    const pending = fetcher(requestedUrl, {
-      method: "GET",
-      headers: { Accept: policy.accept },
-      signal,
-      redirect: "follow",
-    });
-    const response = await interruptible(
-      Promise.resolve(pending).then((response) => {
-        if (signal.aborted) void response.body?.cancel().catch(() => {});
-        return response;
-      }),
-      signal,
-    );
-    metadata = {
-      requestedUrl,
-      finalUrl: ["opaque", "opaqueredirect"].includes(response.type)
-        ? null
-        : response.url || null,
-      status: response.status,
-      responseType: response.type,
-      headers: Object.freeze(Object.fromEntries(response.headers.entries())),
-    };
-    if (check()) {
-      void response.body?.cancel().catch(() => {});
-      return { ...cancellation(), metadata };
-    }
-    const policyRefusal = (message: string): DiscoveryResult => {
-      void response.body?.cancel().catch(() => {});
-      return {
-        status: "transport-error",
-        metadata,
-        error: { kind: "redirect-policy", message },
-      };
-    };
-    if (response.type === "opaque" || response.type === "opaqueredirect")
-      return policyRefusal(
-        "Discovery policy cannot be established for an opaque response.",
+    let current = requestedUrl,
+      // A transport already seen hiding redirects follows them without the repeated request.
+      redirect: "manual" | "follow" = hidesRedirects.has(transport)
+        ? "follow"
+        : "manual",
+      followed = 0,
+      response: Response;
+    while (true) {
+      if (check()) return { ...cancellation(), metadata };
+      const pending = fetcher(current, {
+        method: "GET",
+        headers: { Accept: policy.accept },
+        signal,
+        redirect,
+      });
+      const observed = await interruptible(
+        Promise.resolve(pending).then((response) => {
+          if (signal.aborted) void response.body?.cancel().catch(() => {});
+          return response;
+        }),
+        signal,
       );
-    if (response.url) {
-      let final: URL;
-      try {
-        final = new URL(response.url);
-      } catch {
-        return policyRefusal(
-          "Final response URL cannot establish discovery policy.",
-        );
-      }
-      const loopback =
-        final.hostname === "[::1]" ||
-        /^127\.\d+\.\d+\.\d+$/.test(final.hostname);
+      response = observed;
+      const release = () => void observed.body?.cancel().catch(() => {});
+      // The host hides this redirect, so no hop can be checked before dispatch:
+      // let the host follow under its own policy and check the final URL.
       if (
-        final.username ||
-        final.password ||
-        (final.protocol !== "https:" &&
-          !(final.protocol === "http:" && loopback)) ||
-        (new URL(requestedUrl).protocol === "https:" &&
-          final.protocol === "http:")
-      )
+        redirect === "manual" &&
+        followed === 0 &&
+        observed.type === "opaqueredirect"
+      ) {
+        release();
+        hidesRedirects.add(transport);
+        redirect = "follow";
+        continue;
+      }
+      const opaque =
+        observed.type === "opaque" || observed.type === "opaqueredirect";
+      metadata = {
+        requestedUrl,
+        finalUrl: opaque
+          ? null
+          : observed.url || (redirect === "manual" ? current : null),
+        status: observed.status,
+        responseType: observed.type,
+        headers: Object.freeze(Object.fromEntries(observed.headers.entries())),
+      };
+      if (check()) {
+        release();
+        return { ...cancellation(), metadata };
+      }
+      const policyRefusal = (message: string): DiscoveryResult => {
+        release();
+        return {
+          status: "transport-error",
+          metadata,
+          error: { kind: "redirect-policy", message },
+        };
+      };
+      if (opaque)
         return policyRefusal(
-          "Final response URL violates discovery destination or downgrade policy.",
+          "Discovery policy cannot be established for an opaque response.",
         );
+      const location = redirectStatuses.includes(observed.status)
+        ? observed.headers.get("location")
+        : null;
+      if (redirect === "manual") {
+        // The SDK dispatched `current` itself; another observed URL means the host followed unchecked hops.
+        if (
+          observed.redirected ||
+          (observed.url && !sameUrl(observed.url, current))
+        )
+          return policyRefusal(
+            "Transport response URL violates the hop contract or destination policy.",
+          );
+        metadata.finalUrl = current;
+        if (location === null) break;
+        const next = redirectTarget(current, location);
+        if (!next || followed >= maxRedirects)
+          return policyRefusal(
+            "Redirect destination or redirect limit refused.",
+          );
+        // No redirect body is an OBI; release it before the next dispatch.
+        release();
+        current = next;
+        followed++;
+        continue;
+      }
+      if (observed.url) {
+        let final: URL;
+        try {
+          final = new URL(observed.url);
+        } catch {
+          return policyRefusal(
+            "Final response URL cannot establish discovery policy.",
+          );
+        }
+        if (!admitRedirect(new URL(requestedUrl), final))
+          return policyRefusal(
+            "Final response URL violates discovery destination or downgrade policy.",
+          );
+      }
+      // A following host follows these redirects, so one still carrying Location was left unfollowed.
+      if (location !== null)
+        return policyRefusal(
+          "Host did not follow the observed redirect Location.",
+        );
+      break;
     }
-    // Fetch follows these redirects, so one still carrying Location was left unfollowed.
-    if (
-      [301, 302, 303, 307, 308].includes(response.status) &&
-      response.headers.has("location")
-    )
-      return policyRefusal(
-        "Host did not follow the observed redirect Location.",
-      );
     if (response.status !== 200) {
       void response.body?.cancel().catch(() => {});
       return {
@@ -2423,7 +2520,8 @@ export async function discover(
       return { status: "timeout", metadata, body };
     if (phase === "assessment") throw error;
     return {
-      status: metadata ? "body-error" : "transport-error",
+      // A failed later hop keeps the earlier redirect metadata but is still acquisition.
+      status: phase === "body" ? "body-error" : "transport-error",
       metadata,
       body,
       error: {

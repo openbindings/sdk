@@ -241,7 +241,11 @@ test("Fetch discovery keeps assessment and transport distinctions with complete 
     });
     assert.equal(r.status, "found");
     assert.equal(new TextDecoder().decode(r.body), text);
-    assert.equal(r.metadata.finalUrl, null);
+    // The SDK follows hops itself, so the final URL is the URL it dispatched.
+    assert.equal(
+      r.metadata.finalUrl,
+      "https://example.test/.well-known/openbindings",
+    );
     r.document.dispose();
   }
   for (const [status, expected] of [

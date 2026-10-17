@@ -407,8 +407,13 @@ export async function discovery(sdk, testing, http, fixtures, timed = true, orig
         origin ?? "https://qualification.invalid",
         {
           maxDocumentBytes: 64 * 1024 * 1024,
+          // Dispatch the URL the SDK supplies, as the transport contract requires.
           fetch: origin
-            ? () => fetch(`${origin}/document/${tier}`)
+            ? (url, init) =>
+                fetch(url, {
+                  ...init,
+                  headers: { ...init.headers, "x-qualification-tier": tier },
+                })
             : async () =>
                 new Response(fixture.document, {
                   headers: { "content-type": "application/json" },
