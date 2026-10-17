@@ -34,13 +34,16 @@ credentials, provider state and invocation context. `Display`, accessors and
 serialization retain their existing output; use them when disclosure is intended.
 Debug formatting is not a stable serialization format. Typed authoring parts and evaluator records retain struct-literal construction.
 `Document` owns private exact storage; construct and edit it through its methods. Result-returning APIs document caller-visible failures
-under `# Errors`; validation outcomes (including `DocumentValidation`) and configuration methods warn when ignored.
+under `# Errors`. `DocumentValidation`, `VersionDecision`, `ValueOutcome` and
+`DiscoveryOutcome` are `#[must_use]`, as are the invocation builders' `with_context`,
+`with_evaluator` and `with_validation_detail`; core methods that return a modified
+value, such as `UndefinedResult::with_location`, are not.
 
 ## Rust document lifecycle
 
 | Public item | Contract |
 | --- | --- |
-| `Document::parse`, `Document::from_json` | Admit exact JSON without a conformance claim, including malformed documents. |
+| `Document::parse`, `Document::from_json` | Admit exact JSON without a conformance claim, including documents with missing or mistyped fields. `parse` returns `InputError` for invalid UTF-8, a byte order mark, a JSON syntax error or an exceeded admission limit. |
 | `is_valid_name` | Tests the specification's ASCII name grammar without normalizing the name. |
 | `Document::new` | Create an empty OBI declaring the authoring version. |
 | `Document::set`, `remove`, `edit(&[Edit])` | Require a mutable borrow. One atomic splice and parse per batch, exact untouched bytes, compact insertions, default JSON limits. |
@@ -58,7 +61,7 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 
 | Public item | Contract |
 | --- | --- |
-| `Document.parse(bytes)` | Returns the existing parse-result union; admits exact JSON, including broken documents. Typed reads may throw. |
+| `Document.parse(bytes)` | Returns the existing parse-result union; admits exact JSON without a conformance claim, including documents with missing or mistyped fields, and returns `input-error` for an encoding or JSON syntax error or an exceeded admission limit. Typed reads may throw. |
 | `Document.create()` | Creates an empty OBI for construction through setters. |
 | `set`, `remove`, `edit(edits)` | Mutable pointer edits; a batch crosses the bridge once, including exact inputs, and preserves untouched bytes. Exact inputs are borrowed. Failure leaves bytes and caches unchanged. |
 | Typed field and whole-part setters | Accept typed part values; map setters commit bulk construction once. |

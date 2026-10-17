@@ -153,6 +153,31 @@ if (textOutcome.outcome === "input-error") {
   textOutcome.error.byteOffset satisfies number | undefined;
 }
 void unadmittedText;
+// An untyped or JsonInput-typed value can fail ordinary admission, so its
+// result keeps the input-error branch; only an ExactJson argument drops it.
+declare const untyped: any;
+declare const ordinaryInput: import("../dist/index.js").JsonInput;
+const untypedCheck = preparedContract.validate(untyped);
+if (untypedCheck.outcome === "input-error")
+  untypedCheck.error.instancePointer satisfies string | null;
+const untypedExplain = preparedContract.explain(untyped);
+if (untypedExplain.outcome === "input-error")
+  untypedExplain.error.instancePointer satisfies string | null;
+const ordinaryCheck = preparedContract.validate(ordinaryInput);
+if (ordinaryCheck.outcome === "input-error")
+  ordinaryCheck.error.instancePointer satisfies string | null;
+const ordinaryExplain = preparedContract.explain(ordinaryInput);
+if (ordinaryExplain.outcome === "input-error")
+  ordinaryExplain.error.instancePointer satisfies string | null;
+const untypedText = preparedContract.validateJson(untyped);
+if (untypedText.outcome === "input-error")
+  untypedText.error.code satisfies string;
+// @ts-expect-error an untyped value can return input-error
+const untypedOutcome: ValueOutcome = preparedContract.validate(untyped);
+// @ts-expect-error an untyped value can return input-error
+const untypedExplanation: ValueOutcome = preparedContract.explain(untyped);
+const exactExplanation: ValueOutcome = preparedContract.explain(exactInput);
+void [untypedOutcome, untypedExplanation, exactExplanation];
 const selection = parsedOnly.resolveOperation("run");
 if (selection.status === "ambiguous") {
   // @ts-expect-error ambiguity candidates are immutable

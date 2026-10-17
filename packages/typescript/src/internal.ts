@@ -1926,12 +1926,19 @@ export class PreparedContract extends Managed {
   /** @internal */ static fromRaw(raw: wasm.WasmPrepared): PreparedContract {
     return new PreparedContract(raw);
   }
-  /** The cheap check of an exact root: a failure carries no problems and problemsComplete is false. Cancellation cannot preempt synchronous Wasm. */
-  validate(value: ExactJson, options?: WorkOptions): ValueOutcome;
+  // Overload order matters: an untyped (any) argument takes the first
+  // signature, so it must be one whose result keeps input-error.
   /** Admit ordinary JSON (including nested exact owners), then check it cheaply.
    * A string is a JSON string value, so validate("7") checks the string "7"; use validateJson for JSON text.
    * Expected admission failures return input-error. Caller exceptions and handle misuse throw.
    */
+  validate(
+    value: Exclude<JsonInput, ExactJson>,
+    options?: WorkOptions,
+  ): ValueCheck;
+  /** The cheap check of an exact root: a failure carries no problems and problemsComplete is false. Cancellation cannot preempt synchronous Wasm. */
+  validate(value: ExactJson, options?: WorkOptions): ValueOutcome;
+  /** Check a value that may be ordinary or exact: an ordinary one is admitted first, so input-error remains possible. */
   validate(value: JsonInput, options?: WorkOptions): ValueCheck;
   validate(value: JsonInput, options: WorkOptions = {}): ValueCheck {
     return checkValue(this, value, options, false);
@@ -1949,11 +1956,17 @@ export class PreparedContract extends Managed {
       return { outcome: "input-error", error: failure(error).error };
     }
   }
-  /** Explain an exact root: the verdict validate() returns, and for a failure the library's first error with redacted messages and original schema facts. Explanation costs more than the cheap check and is library-bounded: it can allocate in proportion to the schema and value and can overflow the stack on deeply nested values, so keep validate() on paths that check untrusted input. Cancellation after the verdict keeps an established failure with problemsComplete false. */
-  explain(value: ExactJson, options?: WorkOptions): ValueOutcome;
+  // As for validate, the first signature is the one an untyped argument takes.
   /** Admit ordinary JSON (including nested exact owners), then explain it.
    * Expected admission failures return input-error. Caller exceptions and handle misuse throw.
    */
+  explain(
+    value: Exclude<JsonInput, ExactJson>,
+    options?: WorkOptions,
+  ): ValueCheck;
+  /** Explain an exact root: the verdict validate() returns, and for a failure the library's first error with redacted messages and original schema facts. Explanation costs more than the cheap check and is library-bounded: it can allocate in proportion to the schema and value and can overflow the stack on deeply nested values, so keep validate() on paths that check untrusted input. Cancellation after the verdict keeps an established failure with problemsComplete false. */
+  explain(value: ExactJson, options?: WorkOptions): ValueOutcome;
+  /** Explain a value that may be ordinary or exact: an ordinary one is admitted first, so input-error remains possible. */
   explain(value: JsonInput, options?: WorkOptions): ValueCheck;
   explain(value: JsonInput, options: WorkOptions = {}): ValueCheck {
     return checkValue(this, value, options, true);
