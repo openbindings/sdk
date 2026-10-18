@@ -18,6 +18,8 @@ compilers may need larger stacks in debug builds. The independent MSRV lane uses
 and excludes only the exact workspace tests in the
 [stack-margin inventory](../tools/stack-margin-tests.json). Development-toolchain
 workspace tests run without exclusions, including cold compilation on 256 KiB.
+The pattern stack test is ignored in Windows debug builds, and `tools/verify.py`
+runs it in release builds on every host.
 
 ```sh
 cargo install wasm-bindgen-cli --version 0.2.129 --locked

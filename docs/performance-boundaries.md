@@ -79,10 +79,22 @@ in debug builds for the benchmark's `deep` schema, so the admitted 10,000 levels
 would not fit an 8 MiB main-thread stack. Its stop is reported as
 `evaluation-depth-limit`.
 
-Patterns nested to the default depth of 32 prepare within a 256 KiB thread
-stack: debug preparation needs about 224 KiB at depth 32, release about 51 KiB.
-The regular-expression engine works recursively at every nesting level, and
-release builds fit about 166 lookaround or 191 group levels on that stack.
+Patterns nested to the default depth of 32 prepare, and values are checked
+against them, within a 256 KiB thread stack in release builds. Measured on
+2026-10-17 with Rust 1.99.0, the smallest stack on which a cold preparation
+completes at every depth up to 32 is 52 KiB on macOS arm64 and at most 128 KiB
+on the Windows x64 runner, which reserves thread stacks in 64 KiB units; checks
+need at most 16 KiB and 64 KiB. The regular-expression parser recurses at each
+group level, using about 1.3 KiB per level in release builds (1.4 KiB on
+Windows) and 5 KiB in debug builds, and the matcher recurses at each lookaround,
+about 0.5 KiB per level in release builds. Debug builds are dominated instead by
+the matcher's unoptimized frames of about 90 to 100 KiB. The meta-schema check
+of every projected schema runs a pattern (the 2020-12 `$id` rule) through them,
+so debug preparation needs 212 KiB on macOS whatever the pattern (228 KiB for
+32 nested lookarounds) and between 256 and 320 KiB on Windows, where the
+pattern stack test is therefore verified in release builds. Each nested
+lookaround adds one such frame while a value is checked: two need 276 KiB in a
+macOS debug build.
 
 A fan-in workload has 100 distinct referring resources pointing to one supplied
 integer schema with 5,000 unused definitions. Twelve adjacent fresh-child pairs

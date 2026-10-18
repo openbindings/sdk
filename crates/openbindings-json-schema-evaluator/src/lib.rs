@@ -38,9 +38,12 @@ pub struct Limits {
     /// Maximum UTF-8 bytes in each schema regular expression; default 1 MiB (1,048,576 bytes).
     pub pattern_bytes: usize,
     /// Maximum parenthesis nesting in a schema regular expression; default 32.
-    /// The regular-expression engine parses, compiles and matches nested groups
-    /// recursively, so this also bounds the stack preparation uses: at the
-    /// default, preparation fits a 256 KiB thread stack.
+    /// The regular-expression engine parses nested groups and matches nested
+    /// lookarounds recursively, so this also bounds the stack those use. At the
+    /// default, release builds prepare such patterns, and check values against
+    /// them, on a 256 KiB thread stack. Debug builds need more; the
+    /// [support policy](https://github.com/openbindings/sdk/blob/main/docs/support.md)
+    /// records where they are qualified.
     pub pattern_depth: usize,
 }
 // The default work allowance and the value size, in nodes, it is stated for.
