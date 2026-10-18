@@ -106,7 +106,12 @@ impl<P: SourceInspector> Inspector<P> {
     ) -> Result<Vec<KindSupportVerdict>, InspectionError> {
         let kinds: Vec<_> = kinds.into_iter().collect();
         if kinds.iter().any(|kind| kind.as_ref().is_empty()) {
-            return Err(InspectionError::input("kind must be nonempty"));
+            // The invocation and synthesis facades name this refusal `empty-kind` too.
+            return Err(InspectionError::new(
+                InspectionErrorKind::InvalidInput,
+                "openbindings.inspection.empty-kind",
+                "kind must be nonempty",
+            ));
         }
         let mut seen = HashSet::new();
         Ok(kinds

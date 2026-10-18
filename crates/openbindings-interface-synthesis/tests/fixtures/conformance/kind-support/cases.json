@@ -1,0 +1,90 @@
+{
+  "format": "openbindings.kind-support-cases@1",
+  "tests": [
+    {
+      "description": "exact matching refuses unknown and prefix-adjacent tokens while preserving first-occurrence order",
+      "warranted": [
+        "openbindings.openapi-3.1@1",
+        "openbindings.grpc@1"
+      ],
+      "listed": [
+        "openbindings.openapi-3.1@1",
+        "openbindings.grpc@1"
+      ],
+      "kinds": [
+        "openbindings.openapi-3.1@1",
+        "openbindings.openapi",
+        "openbindings.openapi-3.1@10",
+        "openbindings.grpc@1",
+        "openbindings.openapi-3.1@1"
+      ],
+      "expected": [
+        {
+          "kind": "openbindings.openapi-3.1@1",
+          "supported": true
+        },
+        {
+          "kind": "openbindings.openapi",
+          "supported": false
+        },
+        {
+          "kind": "openbindings.openapi-3.1@10",
+          "supported": false
+        },
+        {
+          "kind": "openbindings.grpc@1",
+          "supported": true
+        }
+      ]
+    },
+    {
+      "description": "empty input produces an empty verdict list",
+      "warranted": [
+        "openbindings.openapi-3.1@1"
+      ],
+      "listed": [],
+      "kinds": [],
+      "expected": []
+    },
+    {
+      "description": "an advisory listing may omit support but every listed identifier is warranted",
+      "warranted": [
+        "openbindings.openapi-3.1@1",
+        "openbindings.grpc@1"
+      ],
+      "listed": [
+        "openbindings.openapi-3.1@1"
+      ],
+      "kinds": [
+        "openbindings.openapi-3.1@1"
+      ],
+      "expected": [
+        {
+          "kind": "openbindings.openapi-3.1@1",
+          "supported": true
+        }
+      ]
+    },
+    {
+      "description": "a private code-defined kind is supported without a published defining document",
+      "warranted": [
+        "acme.private@1"
+      ],
+      "listed": [],
+      "kinds": [
+        "acme.private@1",
+        "ACME.private@1"
+      ],
+      "expected": [
+        {
+          "kind": "acme.private@1",
+          "supported": true
+        },
+        {
+          "kind": "ACME.private@1",
+          "supported": false
+        }
+      ]
+    }
+  ]
+}

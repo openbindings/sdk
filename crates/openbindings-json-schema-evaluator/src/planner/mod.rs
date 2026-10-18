@@ -62,10 +62,16 @@ impl Deref for SchemaSpace {
 pub(super) struct EvaluationBounds {
     pub(crate) lower: EvaluationProgram,
     pub(crate) upper: EvaluationProgram,
+    /// Each `const` and `enum` value both programs name by index, in one
+    /// arena holding only them.
+    pub(crate) literals: Vec<JsonValue>,
     pub(crate) unavailable: Option<NoVerdict>,
     /// The projections themselves are admissible all-false/all-true
     /// completions of proven semantic holes, with no absent carriers.
     pub(crate) semantic_completions: bool,
+    /// Whether the projections replace exactly one hole, so that a value they
+    /// disagree on has a validity that depends on that hole's reference.
+    pub(crate) sole_hole: bool,
 }
 impl EvaluationBounds {
     /// Borrow the closed lower projection. Its failures alone prove nothing

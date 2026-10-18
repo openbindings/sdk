@@ -91,7 +91,7 @@ cached resolvable graph, not a crates.io-head claim.
 
 Upstream revision: `55ac1664384793c5d3b20745d3f9c169dfe2c06f`.
 Applied package: `openbindings-internal-jsonschema 0.58.6-ob.1`.
-The complete remaining Rust delta is **+305/-19 lines in eleven files** against the
+The complete remaining Rust delta is **+300/-14 lines in ten files** against the
 0.58.6 archive (physical added/removed lines, including comments and blanks):
 
 | File under src/ | Added | Removed | Why retained |
@@ -100,17 +100,17 @@ The complete remaining Rust delta is **+305/-19 lines in eleven files** against 
 | compiler.rs | 3 | 3 | Cache and compile that same matcher, preserving authored pattern syntax. |
 | keywords/additional_properties.rs | 2 | 2 | Route both specialized patternProperties/additionalProperties paths through ECMA matching. |
 | keywords/unevaluated_properties.rs | 1 | 1 | Keep annotation matching on the same ECMA engine. |
-| lib.rs | 6 | 1 | Export private adapter work and regex controls; align explanatory vocabulary. |
+| lib.rs | 5 | 0 | Export private adapter work and regex controls. |
 | node.rs | 38 | 1 | Charge schema entries/depth and signal detected cycles; the outer adapter refuses any stopped result. |
 | ob_ecma.rs | 117 | 0 | Select regress ES2020 Unicode behavior, scoped regex work, and the qualified Unicode-property refusal. |
 | ob_work.rs | 127 | 0 | Scoped work/depth/cycle/arithmetic stop accounting, including nested scope restoration. |
 | properties.rs | 1 | 1 | Use the same matcher type for property validators. |
 | regex.rs | 4 | 4 | Route the library's internal matcher/builder through regress. |
-| validator.rs | 4 | 4 | Rename test-local identifiers while preserving upstream fixture values. |
 
 These guards have no complete equivalent in documented upstream APIs. All
 ordinary resolution, compilation, applicators and error construction remain the
-library's implementation. Numeric semantics use its public extension APIs instead
+library's implementation. Upstream code, tests and comments keep their own wording:
+the SDK's vocabulary governs its own sources, not retained upstream text. Numeric semantics use its public extension APIs instead
 of forked equality/type/size internals. Cargo changes only select the private
 package/regress identities and ordinary upstream value/registry/serde dependencies.
 
@@ -153,8 +153,8 @@ Before adopting an upstream update:
 
 1. Archive/checksum the new upstream sources and record its Git revision. Compare every old patch against the new API and behavior; never copy a Cargo registry cache over the production fork.
 2. Prefer an equivalent upstream hook and remove a patch when original-value, scope, work and diagnostic invariants remain provable. Keep unique private names until the unmodified upstream can satisfy them.
-3. Rebase the change in isolation. Re-run the full pinned 435-case OpenBindings corpus, 1,566 evaluator cases and exact-case refusal ledger on native and real Wasm. Run the affected upstream library tests, negative controls, no-I/O feature-unification traps, dynamic-scope/isolation, cancellation, deep literals, exact arithmetic and ownership probes.
-4. Repeat the six finite fuzz campaigns, frozen representative performance/memory series and packed consumer tests. A verdict becoming a refusal is a regression unless the governing authority intentionally changes; update scope only through an explicit separate decision.
+3. Rebase the change in isolation. Re-run the full pinned 440-case OpenBindings corpus and the evaluator kit's 1,564 observations, with its exact-case refusal declarations, natively and in real Wasm (`python3 tools/verify.py --browser`). Run the affected upstream library tests, negative controls, no-I/O feature-unification traps, dynamic-scope/isolation, cancellation, deep literals, exact arithmetic and ownership probes.
+4. Repeat the frozen representative performance/memory series (`tools/evaluator-bench`) and packed consumer tests. A verdict becoming a refusal is a regression unless the governing authority intentionally changes; update scope only through an explicit separate decision.
 5. Refresh RustSec and license inventories. Retain missing upstream notices from exact source revisions. Document all intentional translations, APIs removed from the fork, failed attempts and new limits.
 6. Regenerate the full patch manifests, source archive and package hashes only after review; do not silently rewrite the pinned baseline.
 

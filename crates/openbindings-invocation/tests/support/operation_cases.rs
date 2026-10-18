@@ -123,24 +123,12 @@ impl BindingInvoker for Provider<'_> {
             Ok(())
         })
     }
-}
-impl openbindings_invocation::binding::BindingPreflight for Provider<'_> {
-    type Preflight<'a>
-        = Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        Option<openbindings_invocation::ContextChallenge>,
-                        InvocationError,
-                    >,
-                > + Send
-                + 'a,
-        >,
-    >
-    where
-        Self: 'a;
-    fn preflight<'a>(&'a self, _: BindingRequest<'a>, _: CancellationToken) -> Self::Preflight<'a> {
-        Box::pin(async move { Ok(challenge().context_required()) })
+    fn preflight<'a>(
+        &'a self,
+        _: BindingRequest<'a>,
+        _: CancellationToken,
+    ) -> Option<Self::Invocation<'a>> {
+        Some(Box::pin(async move { Err(challenge()) }))
     }
 }
 
@@ -235,7 +223,7 @@ async fn names_ordered_choices_and_explicit_bindings_do_not_invent_policy() {
     assert_eq!(p.calls.load(Ordering::SeqCst), 2);
     assert_eq!(
         invoke
-            .preflight_with_provider(Request::ordered("say", &["a", "absent"]))
+            .preflight(Request::ordered("say", &["a", "absent"]))
             .await
             .unwrap_err()
             .code(),
@@ -243,7 +231,7 @@ async fn names_ordered_choices_and_explicit_bindings_do_not_invent_policy() {
     );
     assert!(
         invoke
-            .preflight_with_provider(Request::binding("a"))
+            .preflight(Request::binding("a"))
             .await
             .unwrap()
             .is_some()
@@ -384,7 +372,7 @@ async fn preparation_is_lazy_absence_is_not_true_and_no_verdict_is_not_failure()
     );
     outcome(&i, Request::operation("echo")).await.unwrap();
     assert!(
-        i.preflight_with_provider(Request::operation("echo"))
+        i.preflight(Request::operation("echo"))
             .await
             .unwrap()
             .is_some()
@@ -481,20 +469,22 @@ async fn prepared_contracts_reused_across_values_and_attempts() {
     let p = Provider::new(Mode::Echo);
     let prepares = Arc::new(AtomicUsize::new(0));
     let evaluations = Arc::new(AtomicUsize::new(0));
-    let i = Invoker::new(
-        one(r#"{"input":true,"output":true}"#)
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant invocation document"),
-        &p,
-    )
-    .with_evaluator(
-        Arc::new(Counted {
-            prepares: prepares.clone(),
-            evaluations: evaluations.clone(),
-        }),
-        ResourceSet::default(),
+    let i = Arc::new(
+        Invoker::new(
+            one(r#"{"input":true,"output":true}"#)
+                .validate()
+                .unwrap()
+                .conformant()
+                .expect("conformant invocation document"),
+            &p,
+        )
+        .with_evaluator(
+            Arc::new(Counted {
+                prepares: prepares.clone(),
+                evaluations: evaluations.clone(),
+            }),
+            ResourceSet::default(),
+        ),
     );
     let prepared = i.prepare("echo").unwrap();
     assert_eq!(prepares.load(Ordering::SeqCst), 2);
@@ -632,15 +622,17 @@ fn failed_or_cancelled_prepare_releases_partial_work_and_can_retry() {
             cancel: cancel.then(|| control.clone()),
         });
         let p = Provider::new(Mode::Empty);
-        let i = Invoker::new(
-            one(r#"{"input":true,"output":true}"#)
-                .validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant invocation document"),
-            &p,
-        )
-        .with_evaluator(probe.clone(), ResourceSet::default());
+        let i = Arc::new(
+            Invoker::new(
+                one(r#"{"input":true,"output":true}"#)
+                    .validate()
+                    .unwrap()
+                    .conformant()
+                    .expect("conformant invocation document"),
+                &p,
+            )
+            .with_evaluator(probe.clone(), ResourceSet::default()),
+        );
         let cancelled = CancellationToken::new();
         cancelled.cancel();
         assert_eq!(
@@ -676,27 +668,27 @@ fn failed_or_cancelled_prepare_releases_partial_work_and_can_retry() {
 #[test]
 fn explicit_prepare_handles_absence_missing_names_and_missing_evaluator() {
     let p = Provider::new(Mode::Empty);
-    let i = Invoker::new(
+    let i = Arc::new(Invoker::new(
         one(r#"{"aliases":["say"]}"#)
             .validate()
             .unwrap()
             .conformant()
             .expect("conformant invocation document"),
         &p,
-    );
+    ));
     assert!(i.prepare("say").is_ok());
     assert_eq!(
         i.prepare("absent").err().unwrap().code(),
         "ERR_OPERATION_NOT_FOUND"
     );
-    let i = Invoker::new(
+    let i = Arc::new(Invoker::new(
         one(r#"{"input":true}"#)
             .validate()
             .unwrap()
             .conformant()
             .expect("conformant invocation document"),
         &p,
-    );
+    ));
     assert_eq!(
         i.prepare("echo").err().unwrap().code(),
         "ERR_SCHEMA_UNRESOLVED"
@@ -733,11 +725,11 @@ async fn shared_prepared_attempts_keep_selection_context_and_cancellation_separa
         }
     }
     let prepares = Arc::new(AtomicUsize::new(0));
-    let i = Invoker::new(doc(
+    let i = Arc::new(Invoker::new(doc(
         r#"{"echo":{"aliases":["say"],"input":{"type":"integer"},"output":true},"other":{}}"#,
         r#"{"a":{"operation":"echo","source":"s","content":1},"b":{"operation":"echo","source":"s","content":2},"foreign":{"operation":"other","source":"s","content":3}}"#,
         r#"{"s":{"kind":"fixture"}}"#,
-    ).validate().unwrap().conformant().expect("conformant invocation document"), ContextEcho).with_evaluator(Arc::new(Counted { prepares: prepares.clone(), evaluations: Arc::default() }), ResourceSet::default());
+    ).validate().unwrap().conformant().expect("conformant invocation document"), ContextEcho).with_evaluator(Arc::new(Counted { prepares: prepares.clone(), evaluations: Arc::default() }), ResourceSet::default()));
     // Preparing does not require a sole supported binding.
     let prepared = i.prepare("say").unwrap();
     let first_context = json(r#"{"attempt":1}"#);
@@ -771,7 +763,7 @@ async fn shared_prepared_attempts_keep_selection_context_and_cancellation_separa
     let mut wrong = prepared.invoke(Attempt::binding("foreign"));
     assert_eq!(
         wrong.next().await.unwrap().unwrap_err().code(),
-        "ERR_OPERATION_NOT_FOUND"
+        "ERR_BINDING_NOT_FOUND"
     );
     // A failing attempt's evidence cannot leak into another attempt or the handle.
     let mut invalid = prepared.invoke(Attempt::binding("a").with_context(&first_context));
@@ -791,7 +783,7 @@ async fn shared_prepared_attempts_keep_selection_context_and_cancellation_separa
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn prepared_foreign_exact_binding_is_refused_before_any_provider_work() {
+async fn prepared_foreign_exact_binding_is_not_found_before_any_provider_work() {
     struct NoProviderWork;
     impl BindingInvoker for NoProviderWork {
         type Invocation<'a> = std::future::Ready<Result<(), InvocationError>>;
@@ -807,7 +799,7 @@ async fn prepared_foreign_exact_binding_is_refused_before_any_provider_work() {
             panic!("foreign binding must be refused before constructing provider work");
         }
     }
-    let i = Invoker::new(
+    let i = Arc::new(Invoker::new(
         doc(
             r#"{"echo":{"aliases":["say"]},"other":{}}"#,
             r#"{"foreign":{"operation":"other","source":"s"}}"#,
@@ -818,12 +810,13 @@ async fn prepared_foreign_exact_binding_is_refused_before_any_provider_work() {
         .conformant()
         .expect("conformant invocation document"),
         NoProviderWork,
-    );
+    ));
+    // The prepared operation resolved; the key names no binding of it.
     let prepared = i.prepare("say").unwrap();
     let mut call = prepared.invoke(Attempt::binding("foreign"));
     assert_eq!(
         call.next().await.unwrap().unwrap_err().code(),
-        "ERR_OPERATION_NOT_FOUND"
+        "ERR_BINDING_NOT_FOUND"
     );
     assert!(call.next().await.is_none());
     assert!(call.validation_failure().is_none());
@@ -832,14 +825,14 @@ async fn prepared_foreign_exact_binding_is_refused_before_any_provider_work() {
 #[tokio::test(flavor = "current_thread")]
 async fn prepared_attempt_binding_choices_validate_the_entire_selection() {
     let p = Provider::new(Mode::Empty);
-    let i = Invoker::new(
+    let i = Arc::new(Invoker::new(
         doc(
             r#"{"echo":{},"other":{}}"#,
             r#"{"a":{"operation":"echo","source":"s"},"b":{"operation":"echo","source":"s"},"foreign":{"operation":"other","source":"s"}}"#,
             r#"{"s":{"kind":"fixture"}}"#,
         ).validate().unwrap().conformant().expect("conformant invocation document"),
         &p,
-    );
+    ));
     let prepared = i.prepare("echo").unwrap();
     for (attempt, code) in [
         (Attempt::new(), "ERR_BINDING_SELECTION_REQUIRED"),

@@ -24,13 +24,18 @@ export async function discoveryPage(browser, pageOrigin) {
     response.writeHead(published.status, Object.fromEntries(published.headers));
     response.end(Buffer.from(await published.arrayBuffer()));
   });
-  const redirect = http.createServer((request, response) => {
-    response.writeHead(302, {
-      Location: targetOrigin + "/.well-known/openbindings",
-      "Access-Control-Allow-Origin": "*",
-    });
-    response.end();
-  });
+  // Two redirecting origins, so each redirected discovery's requests are counted apart.
+  const redirectRequests = [0, 0];
+  const redirects = redirectRequests.map((_, index) =>
+    http.createServer((request, response) => {
+      redirectRequests[index]++;
+      response.writeHead(302, {
+        Location: targetOrigin + "/.well-known/openbindings",
+        "Access-Control-Allow-Origin": "*",
+      });
+      response.end();
+    }),
+  );
   const slowHeaders = http.createServer(() => {});
   const slowBody = http.createServer((request, response) => {
     response.writeHead(200, {
@@ -40,7 +45,7 @@ export async function discoveryPage(browser, pageOrigin) {
     response.flushHeaders();
     response.write("{");
   });
-  const servers = [target, redirect, slowHeaders, slowBody];
+  const servers = [target, ...redirects, slowHeaders, slowBody];
   let page;
   const listen = async (server) => {
     await new Promise((resolve, reject) => {
@@ -53,7 +58,8 @@ export async function discoveryPage(browser, pageOrigin) {
     targetOrigin = await listen(target);
     const origins = [
       targetOrigin,
-      await listen(redirect),
+      await listen(redirects[0]),
+      await listen(redirects[1]),
       await listen(slowHeaders),
       await listen(slowBody),
     ];
@@ -73,8 +79,11 @@ export async function discoveryPage(browser, pageOrigin) {
     }, origins);
     assert.deepEqual(
       results.map((r) => r.status),
-      ["found", "found", "timeout", "timeout"],
+      ["found", "found", "found", "timeout", "timeout"],
     );
+    // The browser hides the first redirect, so the SDK repeats that request with
+    // follow mode once; the observation makes the next redirected discovery send one.
+    assert.deepEqual(redirectRequests, [2, 1]);
     assert.equal(results[0].metadata.responseType, "cors");
     assert.equal(
       results[1].metadata.requestedUrl,
@@ -84,8 +93,12 @@ export async function discoveryPage(browser, pageOrigin) {
       results[1].metadata.finalUrl,
       targetOrigin + "/.well-known/openbindings",
     );
-    assert.equal(results[2].metadata, undefined);
-    assert.equal(results[3].metadata.status, 200);
+    assert.equal(
+      results[2].metadata.finalUrl,
+      targetOrigin + "/.well-known/openbindings",
+    );
+    assert.equal(results[3].metadata, undefined);
+    assert.equal(results[4].metadata.status, 200);
     return results;
   } finally {
     await page?.close();

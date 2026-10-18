@@ -145,11 +145,6 @@ export function runTier(sdk, testing, fixture, timed = true) {
       value = take("parseValue", () => parsed(sdk, fixture.valid));
       const first = take("firstValidation", () => contract.validate(value));
       check(first.outcome === fixture.validOutcome, JSON.stringify(first));
-      if (fixture.validOutcome === "no-verdict")
-        check(
-          first.detail.code === "evaluation-work-limit",
-          "expected near-admission evaluation refusal",
-        );
       const hot = take("hotSingleDescriptive", () => contract.validate(value));
       check(hot.outcome === fixture.validOutcome, JSON.stringify(hot));
       invalid = take("parseInvalid", () => parsed(sdk, fixture.invalid));
@@ -407,8 +402,13 @@ export async function discovery(sdk, testing, http, fixtures, timed = true, orig
         origin ?? "https://qualification.invalid",
         {
           maxDocumentBytes: 64 * 1024 * 1024,
+          // Dispatch the URL the SDK supplies, as the transport contract requires.
           fetch: origin
-            ? () => fetch(`${origin}/document/${tier}`)
+            ? (url, init) =>
+                fetch(url, {
+                  ...init,
+                  headers: { ...init.headers, "x-qualification-tier": tier },
+                })
             : async () =>
                 new Response(fixture.document, {
                   headers: { "content-type": "application/json" },

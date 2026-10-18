@@ -401,7 +401,7 @@ fn explained_privacy_and_partial_work_do_not_fabricate_results() {
         &document,
         ResourceSet::default(),
         Limits {
-            evaluation_steps: 0,
+            evaluation_steps: Some(0),
             ..Limits::default()
         },
     );
@@ -528,7 +528,7 @@ fn bounded_nested_runtime_and_original_exact_details_retain_separate_policies() 
         &document,
         ResourceSet::default(),
         Limits {
-            evaluation_steps: 30,
+            evaluation_steps: Some(30),
             ..Limits::default()
         },
     );

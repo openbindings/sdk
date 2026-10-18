@@ -8,7 +8,7 @@ use openbindings_internal_json::backend;
 use serde::Serialize;
 mod edit;
 mod read_views;
-pub use edit::{Edit, EditError};
+pub use edit::{Edit, EditError, PointerRef};
 mod conformant_views;
 use crate::{contracts::ResourceSetInner, schema_space::SchemaSpace};
 pub use conformant_views::*;
@@ -33,7 +33,7 @@ pub enum Evidence {
     Met,
     /// A rule violation was established, even if other work is inconclusive.
     Violated,
-    /// The implementation could not establish satisfaction or violation.
+    /// The implementation could not establish whether the rule was met or violated.
     Inconclusive,
     /// The rule does not apply after an earlier prerequisite fails.
     NotApplicable,
@@ -49,7 +49,7 @@ pub enum Conformance {
     /// No violation was established, but evidence is insufficient to prove conformance.
     Undetermined,
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 /// One explanatory normative-rule finding. Findings may be bounded; the report's independent rule evidence determines its conclusion. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 ///
 /// Only validation builds findings. Later versions may add fields: read them by
@@ -137,7 +137,7 @@ impl std::fmt::Debug for Finding {
     }
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 /// Assessment of all normative document rules at the pinned specification revision. At most 4096 findings and 8 MiB of aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate) are retained. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 ///
 /// Only validation builds reports. Later versions may add fields: read them by
@@ -280,7 +280,7 @@ pub struct DocumentValidation {
     report: Arc<ValidationReport>,
 }
 #[derive(Clone, Debug)]
-/// Retained proof that a document revision satisfied every applicable normative rule.
+/// Retained proof that a document revision met every applicable normative rule.
 /// Proof has no public unchecked constructor or deserializer:
 /// ```compile_fail
 /// use openbindings::*;
@@ -408,7 +408,7 @@ impl Document {
         &self.inner.value
     }
     /// Borrow the current revision's exact bytes, including surrounding whitespace.
-    pub fn to_bytes(&self) -> &[u8] {
+    pub fn as_bytes(&self) -> &[u8] {
         self.value().original_source()
     }
     /// Assess every document rule, retaining findings at original source locations.
@@ -533,6 +533,9 @@ impl Document {
     pub fn operation_bindings(&self, key: &str) -> Result<Vec<String>, InterpretationError> {
         self.interpretable()?;
         let index = self.names()?;
+        if index.unpaired_binding_key {
+            return Err(InterpretationError::UnpairedString);
+        }
         if !index.operations.contains_key(key) {
             return Ok(Vec::new());
         }
@@ -565,6 +568,8 @@ pub(crate) struct NameIndex {
     primary_keys: Vec<Arc<str>>,
     names: HashMap<String, Vec<usize>>,
     bindings: HashMap<String, Vec<String>>,
+    // Like the bindings namespace, binding names refuse when a key cannot be text.
+    unpaired_binding_key: bool,
 }
 struct OperationEntry {
     value: JsonValue,
@@ -581,9 +586,10 @@ impl NameIndex {
             .ok_or_else(|| InterpretationError::invalid("invalid-operations-object", operations))?;
         {
             for member in operations {
-                let Some(key) = member.name.as_str() else {
-                    continue;
-                };
+                let key = member
+                    .name
+                    .as_str()
+                    .ok_or(InterpretationError::UnpairedString)?;
                 if member.value.kind() != JsonKind::Object {
                     return Err(InterpretationError::invalid(
                         "invalid-operation-object",
@@ -616,10 +622,12 @@ impl NameIndex {
         }
         if let Some(bindings) = value.get("bindings").and_then(|v| v.members()) {
             for member in bindings {
-                if let (Some(name), Some(operation)) = (
-                    member.name.as_str(),
-                    member.value.get("operation").and_then(|v| v.as_str()),
-                ) {
+                let Some(name) = member.name.as_str() else {
+                    index.unpaired_binding_key = true;
+                    index.bindings = HashMap::new();
+                    break;
+                };
+                if let Some(operation) = member.value.get("operation").and_then(|v| v.as_str()) {
                     index
                         .bindings
                         .entry(operation.into())
@@ -799,8 +807,8 @@ impl Conformant<Document> {
         self.document
     }
     /// Borrow the exact bytes certified by this proof, including original formatting.
-    pub fn to_bytes(&self) -> &[u8] {
-        self.document.to_bytes()
+    pub fn as_bytes(&self) -> &[u8] {
+        self.document.as_bytes()
     }
 }
 /// Assess bytes even when parsing fails. A version refusal is never conformance evidence.

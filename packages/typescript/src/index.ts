@@ -21,6 +21,7 @@ export {
   ValueContractPreparation,
   ValueAdmissionFailure,
   ValueCheck,
+  JsonCheck,
   Reference,
   ReferenceRefusal,
   ReferenceRefusalReason,

@@ -1,4 +1,4 @@
-/** Optional HTTP discovery companion. Fetch follows redirects under browser per-hop policy; the SDK checks the final URL and owns the attempt timer. */
+/** Optional HTTP discovery companion. Where the host exposes redirect responses, as Node does, the SDK checks every hop before dispatching it, as the Rust checked paths do; a browser hides them, so it follows redirects under its own per-hop policy and the SDK checks the final URL. The SDK owns the attempt timer. */
 export {
   discover,
   discoveryEndpoint,

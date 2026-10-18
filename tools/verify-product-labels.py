@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SLICE = r'S(?:10|[1-9])(?:[a-f]{1,2}(?:/[a-f])?)?'
-FINDING_PREFIX = r'(?:CR|EV|API|HD|RO|N|PKG|OAC|HYG|LABEL|MSRV|RG|PERF|DOC|SIZE|PR1|PR2)'
+FINDING_PREFIX = r'(?:CR|EV|API|HD|RO|N|PKG|OAC|HYG|LABEL|MSRV|RG|PERF|DOC|SIZE|PR1|PR2|CA)'
 PATTERNS = [
     # Bare numbered tokens also name upstream products. Require record syntax
     # for those; suffixed units and identifier/path prefixes are distinctive.
@@ -83,7 +83,7 @@ def self_test():
     for label in labels:
         assert violations('src/check.rs', '// ' + label), label
     for prefix in ['CR', 'EV', 'API', 'HD', 'RO', 'N', 'PKG', 'OAC', 'HYG',
-                   'LABEL', 'MSRV', 'RG', 'PERF', 'DOC', 'SIZE', 'PR1', 'PR2']:
+                   'LABEL', 'MSRV', 'RG', 'PERF', 'DOC', 'SIZE', 'PR1', 'PR2', 'CA']:
         for suffix in ['-1', '-1.3', '-1.3.2', '-12a']:
             label = prefix + suffix
             assert violations('src/check.rs', '// ' + label), label

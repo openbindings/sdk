@@ -60,6 +60,8 @@ fn preparation_refusals_redact_payloads_like_no_verdict() {
         let error = contract.prepare(&Refuse(code)).unwrap_err();
         // A preparation refusal is the evaluator's NoVerdict: same redaction, no code text.
         assert_eq!(error.code, code);
+        // Only the broad reason is shown, never the code, even a recognized one.
+        assert!(!format!("{error:?}").contains(code));
         rows.push(row("preparation refusal code", &error));
         assert!(error.to_string().contains(SECRET));
         let error: &dyn std::error::Error = &error;

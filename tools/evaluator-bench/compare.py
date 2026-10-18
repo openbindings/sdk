@@ -99,6 +99,47 @@ VARIANTS = ['candidate', 'candidate-alloc', 'baseline-identical', 'baseline-allo
             'baseline', 'baseline-alloc']
 INSTRUMENT_SOURCES = ['src', 'Cargo.toml', 'Cargo.lock', 'build.rs']
 SDK_SOURCES = ['crates', 'vendor']
+BASELINE_FIXTURES = 'baseline-fixtures.json'
+COMPARED = 'compared'
+OUTCOME_CHANGED = 'outcome changed by this change'
+CANDIDATE_ONLY = 'only in candidate fixtures'
+
+
+def source_fixtures(source):
+    """The rows a source tree's own fixture generator produces, or None without one.
+
+    The generator runs in an isolated interpreter whose only local import path
+    is that tree's harness directory, so it never resolves against another
+    tree's modules, and it writes no bytecode into the tree.
+    """
+    directory = source/'tools/evaluator-bench'
+    if not (directory/'fixtures.py').is_file():
+        return None
+    program = ('import json, sys; sys.path.insert(0, sys.argv[1]); '
+               'from fixtures import fixtures; print(json.dumps(fixtures()))')
+    run = subprocess.run([sys.executable, '-I', '-B', '-c', program, str(directory)],
+                         capture_output=True, text=True)
+    if run.returncode:
+        raise RuntimeError(f'{directory}/fixtures.py did not produce fixtures: {run.stderr}')
+    return json.loads(run.stdout)
+
+
+def workload_comparison(name, fixture, baseline_fixtures):
+    """How one candidate workload is compared, and the baseline expectation if it changed.
+
+    Without the merge base's fixtures every workload uses the candidate's
+    expectations. Otherwise an expectation that differs between the two
+    fixture sets declares an intended outcome change.
+    """
+    if baseline_fixtures is None:
+        return COMPARED, None
+    if name not in baseline_fixtures:
+        return CANDIDATE_ONLY, None
+    # Compare JSON values, so tuple/list spellings cannot hide or invent a change.
+    before = baseline_fixtures[name].get('expected')
+    if json.loads(json.dumps(fixture.get('expected'))) != before:
+        return OUTCOME_CHANGED, before
+    return COMPARED, None
 
 
 def tree_digest(root, entries):
@@ -152,12 +193,21 @@ def build_instruments(baseline_source, candidate_source, output, binaries, targe
         raise RuntimeError(f'Refusing to reuse target directories {reused} under {target}; pass a new --target')
     output.mkdir(parents=True, exist_ok=True)
     binaries.mkdir(parents=True, exist_ok=True)
+    # The measuring step checks the baseline binary against the merge base's
+    # own expectations wherever this change declares a different outcome.
+    baseline_rows = source_fixtures(baseline_source)
+    fixture_path = output/BASELINE_FIXTURES
+    if baseline_rows is None:
+        fixture_path.unlink(missing_ok=True)
+    else:
+        fixture_path.write_text(json.dumps(baseline_rows, indent=2)+'\n')
     base = baseline_source/'tools/evaluator-bench'
     candidate = candidate_source/'tools/evaluator-bench'
     audit = instrument_diff(base, candidate, sdk_crates(baseline_source, candidate_source))
     (output/'instrument.diff').write_text(audit.pop('diff'))
     metadata = dict(kind='identical', instrument_diff=audit,
                     baseline_source=str(baseline_source.resolve()), candidate_source=str(candidate_source.resolve()))
+    metadata['baseline_fixtures_sha256'] = None if baseline_rows is None else digest(fixture_path)
     metadata['lock_sha256'] = dict(baseline=digest(base/'Cargo.lock'), candidate=digest(candidate/'Cargo.lock'))
     metadata['builds'] = {}
     roots = [baseline_source, candidate_source]
@@ -330,7 +380,14 @@ def main():
     instrument_pair = json.loads(pair_path.read_text()) if pair_path.exists() else dict(kind='identical')
     if instrument_pair['kind'] == 'not comparable':
         raise SystemExit('Refusing to measure a pair marked not comparable')
-    selected = fixtures()
+    # The build driver saves the merge base's fixtures beside its pair record.
+    baseline_path = args.output/BASELINE_FIXTURES
+    baseline_fixtures = json.loads(baseline_path.read_text()) if baseline_path.exists() else None
+    baseline_sha256 = digest(baseline_path) if baseline_fixtures is not None else None
+    if instrument_pair.get('baseline_fixtures_sha256', baseline_sha256) != baseline_sha256:
+        raise SystemExit(f'{baseline_path} is not the merge-base fixture set the build recorded')
+    candidate_fixtures = fixtures()
+    selected = candidate_fixtures
     if args.workloads:
         selected = {name:selected[name] for name in args.workloads.split(',')}
     rng = random.Random(20261015)
@@ -341,6 +398,8 @@ def main():
                   rows=[], errors=[])
     (args.output/'fixtures.json').write_text(json.dumps(selected, indent=2)+'\n')
     report['fixtures_sha256'] = digest(args.output/'fixtures.json')
+    report['baseline_fixtures_sha256'] = baseline_sha256
+    report['baseline_only_workloads'] = sorted(set(baseline_fixtures or ()) - set(candidate_fixtures))
     for command in [['rustc','-Vv'], ['cargo','-V']]:
         run = subprocess.run(command, capture_output=True, text=True)
         report[command[0]] = run.stdout
@@ -349,13 +408,29 @@ def main():
                                    for key in ['baseline','candidate','baseline_alloc','candidate_alloc']}
         for name, fixture in selected.items():
             request = {key:value for key,value in fixture.items() if key != 'modes'}
+            comparison, baseline_expected = workload_comparison(name, fixture, baseline_fixtures)
+            # Both binaries run the candidate's workload. A changed expectation
+            # replaces only what the baseline binary is checked against.
+            requests = dict(baseline=request, candidate=request)
+            if comparison == OUTCOME_CHANGED:
+                requests['baseline'] = dict(request, expected=baseline_expected)
             for mode in fixture['modes']:
-                row = dict(workload=name, mode=mode, samples=[], memory_samples=[], batches=[])
+                row = dict(workload=name, mode=mode, comparison=comparison, samples=[], memory_samples=[], batches=[])
+                if comparison == OUTCOME_CHANGED:
+                    row['expected'] = dict(baseline=baseline_expected, candidate=fixture.get('expected'))
                 report['rows'].append(row)
                 try:
                     def run(variant, n, allocation=False, rss=False):
                         binary = getattr(args,variant+('_alloc' if allocation else ''))
-                        return invoke(binary, dict(request, mode=mode, iterations=n), log, rss)
+                        return invoke(binary, dict(requests[variant], mode=mode, iterations=n), log, rss)
+                    if comparison != COMPARED:
+                        # Each binary aborts unless it meets its own side's
+                        # expectation. Differing outcomes have no comparable
+                        # cost, so these rows make no timing or memory decision.
+                        sides = ['baseline','candidate'] if comparison == OUTCOME_CHANGED else ['candidate']
+                        row['observations'] = {v:run(v, 1)['observation'] for v in sides}
+                        print(name,mode,comparison,flush=True)
+                        continue
                     # Complete observations (including refusal codes and source
                     # diagnostics) must agree before either timing is considered.
                     initial = {v:run(v, 1) for v in ['baseline','candidate']}
@@ -411,12 +486,43 @@ def main():
                     row['error'] = str(error)
                     report['errors'].append(dict(workload=name,mode=mode,error=str(error)))
                     print(name,mode,'ERROR',error,flush=True)
-                result_path.write_text(json.dumps(report,indent=2)+'\n')
+                finally:
+                    result_path.write_text(json.dumps(report,indent=2)+'\n')
     failures = enforcement_fails(report)
-    (args.output/'summary.md').write_text('# Evaluator performance\n\nPair: '+instrument_pair['kind']+'.\n\n'+('Advisory run: outcome errors and heap/count flags are reported without failing.\n\n' if not args.enforce else 'Outcome checks and requested heap/allocation-count thresholds are enforced. Timing and RSS remain advisory.\n\n')+
-        '| Workload | Mode | Candidate/base | Time decision | Heap/count flag |\n| --- | --- | ---: | --- | --- |\n'+''.join(
-            f"| {r['workload']} | {r['mode']} | {r['batches'][-1]['ratio']:.3f} | {r.get('time_decision','error')} | {bool(r.get('heap_regression') or r.get('allocation_regression'))} |\n" if r['batches'] else f"| {r['workload']} | {r['mode']} | n/a | error | n/a |\n" for r in report['rows']))
+    (args.output/'summary.md').write_text(summary_markdown(report, instrument_pair, args.enforce, baseline_fixtures is not None))
     if args.enforce and failures: raise SystemExit(1)
+
+
+def summary_markdown(report, instrument_pair, enforce, has_baseline_fixtures):
+    def cell(value):
+        return '`'+json.dumps(value, separators=(',', ':')).replace('|', '\\|')+'`'
+    def line(r):
+        if 'error' not in r and r['comparison'] != COMPARED:
+            return f"| {r['workload']} | {r['mode']} | n/a | {r['comparison']}; not timed | n/a |\n"
+        if r['batches']:
+            return f"| {r['workload']} | {r['mode']} | {r['batches'][-1]['ratio']:.3f} | {r.get('time_decision','error')} | {bool(r.get('heap_regression') or r.get('allocation_regression'))} |\n"
+        return f"| {r['workload']} | {r['mode']} | n/a | error | n/a |\n"
+    text = '# Evaluator performance\n\nPair: '+instrument_pair['kind']+'.\n\n'
+    text += ('Advisory run: outcome errors and heap/count flags are reported without failing.\n\n' if not enforce
+             else 'Outcome checks and requested heap/allocation-count thresholds are enforced. Timing and RSS remain advisory.\n\n')
+    if not has_baseline_fixtures:
+        text += 'Merge-base fixtures were unavailable; both binaries are checked against the candidate\'s expectations.\n\n'
+    text += '| Workload | Mode | Candidate/base | Time decision | Heap/count flag |\n| --- | --- | ---: | --- | --- |\n'
+    text += ''.join(line(r) for r in report['rows'])
+    changed = [r for r in report['rows'] if r['comparison'] == OUTCOME_CHANGED]
+    if changed:
+        text += ('\n## Outcomes changed by this change\n\nThe merge base and the candidate expect different outcomes. '
+                 'Each binary is checked against its own side\'s expectation; these rows are excluded from timing '
+                 'and memory decisions.\n\n| Workload | Mode | Baseline expectation | Candidate expectation |\n'
+                 '| --- | --- | --- | --- |\n')
+        text += ''.join(f"| {r['workload']} | {r['mode']} | {cell(r['expected']['baseline'])} | {cell(r['expected']['candidate'])} |\n"
+                        for r in changed)
+    candidate_only = sorted({r['workload'] for r in report['rows'] if r['comparison'] == CANDIDATE_ONLY})
+    if candidate_only or report['baseline_only_workloads']:
+        text += '\n## Workloads in one fixture set only\n\nReported, not compared. Candidate-only workloads are checked against the candidate\'s expectations.\n\n'
+        text += ''.join(f'- `{name}`: candidate only\n' for name in candidate_only)
+        text += ''.join(f'- `{name}`: merge base only\n' for name in report['baseline_only_workloads'])
+    return text
 
 if __name__ == '__main__':
     if sys.argv[1:2] == ['build']:

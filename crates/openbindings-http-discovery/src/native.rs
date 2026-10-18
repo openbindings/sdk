@@ -1,5 +1,10 @@
 //! Native discovery with SDK redirect policy and one Tokio attempt timer.
 //! Application builders retain TLS, credentials, proxy, resolver and decoding choices.
+//!
+//! Discovery must run on a Tokio runtime with timers enabled (`enable_time` or
+//! `enable_all`), as reqwest's own timeouts require; without them Tokio panics
+//! when the attempt timer is created. Tokio offers no way to detect a disabled
+//! timer driver before that point, so the SDK cannot return an error instead.
 use crate::CancellationToken;
 use crate::*;
 
@@ -22,6 +27,13 @@ impl Client {
     /// HTTP is allowed only for literal loopback; every HTTPS-to-HTTP hop is
     /// refused before dispatch, and at most ten redirects are followed. A foreign-origin
     /// hop followed by a same-origin hop is refused to prevent upstream header replay.
+    ///
+    /// The application scopes credentials across origins. On a cross-origin hop
+    /// reqwest removes only `Authorization`, `Cookie`, `Proxy-Authorization` and
+    /// `WWW-Authenticate`; another credential header, such as an `x-api-key` in
+    /// the builder's default headers, reaches the redirect target. Carry such a
+    /// credential in `Authorization`, or refuse foreign-origin hops in a client
+    /// passed to [`Self::with_delegated_policy`].
     ///
     /// # Errors
     /// Returns a configuration error for invalid byte or timeout limits, or if the configured HTTP client cannot be built.

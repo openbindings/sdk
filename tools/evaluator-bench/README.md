@@ -63,6 +63,24 @@ checks expected outcomes before timing (cold first use checks immediately after
 its single timed preparation). Complete baseline/candidate observations must
 agree, including refusal codes and original diagnostic locations. Every timed
 iteration counts its actual outcome. A new refusal cannot pass as throughput.
+
+A change that intends to alter a workload's outcome states the new outcome in
+that workload's expectation. The build driver saves the merge base's own fixture
+rows as `baseline-fixtures.json` and records its SHA-256 in
+`instrument-pair.json`; the measuring step reads both from its output directory
+and refuses a saved set the build did not record. Where the two expectations
+differ, both binaries still run the candidate's workload, but each is checked once
+against its own side's expectation. The row is reported as **outcome changed by
+this change**, with both expectations, in `comparison.json` and the summary, and
+makes no timing or memory decision; either side missing its own expectation is
+an error. Every other row is compared as above: an observation that differs where
+the expectation did not change remains an error, even when both sides meet that
+expectation, so a changed outcome must be declared to pass. A workload in only
+one fixture set is reported, not compared; a candidate-only workload is still
+checked against the candidate's expectation. Without a saved merge-base set (a
+new output directory or a merge base without the harness), every workload uses
+the candidate's expectations. To replay with the build's view, copy
+`instrument-pair.json` and `baseline-fixtures.json` into the new output directory.
 The `reference-fan-in` fixture sends 100 distinct referring resources to one
 supplied carrier with 5,000 unused definitions. Its `context` mode measures
 public contract preparation; a counted unit test also requires one carrier

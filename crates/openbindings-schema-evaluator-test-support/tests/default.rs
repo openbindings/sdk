@@ -383,3 +383,84 @@ fn undefined_is_an_answer_and_not_an_optional_refusal() {
     };
     assert!(!judge(case, &value, &unexplained, false).is_empty());
 }
+
+#[test]
+fn other_dialect_cases_accept_the_specification_verdict_or_a_truthful_refusal() {
+    // A schema reached through an external URI follows its own dialect, so a
+    // capable evaluator answers with JSON Schema's verdict; one that does not
+    // read the dialect may refuse it, needing no declaration.
+    let cases: Vec<_> = suite()
+        .groups
+        .iter()
+        .flat_map(|g| &g.cases)
+        .filter(|c| {
+            c.optional_capability.is_none()
+                && c.expected != "no-verdict"
+                && c.refusal_kind.as_deref() == Some("unsupported-capability")
+        })
+        .collect();
+    assert_eq!(cases.len(), 10);
+    let failure = || ValueOutcome::Fails {
+        message: "value does not satisfy the contract".into(),
+        problems: vec![],
+        problems_complete: false,
+    };
+    let refusal = |reason| ValueOutcome::NoVerdict {
+        detail: NoVerdict::new(reason, "schema-dialect", "the dialect is not read"),
+    };
+    for case in cases {
+        let value = JsonValue::parse(&case.value).unwrap();
+        let (right, wrong) = match case.expected.as_str() {
+            "satisfies" => (ValueOutcome::Satisfies, failure()),
+            "fails" => (failure(), ValueOutcome::Satisfies),
+            other => panic!("{other}"),
+        };
+        assert!(judge(case, &value, &right, false).is_empty(), "{}", case.id);
+        assert!(
+            !judge(case, &value, &wrong, false).is_empty(),
+            "{}",
+            case.id
+        );
+        let truthful = refusal(NoVerdictReason::UnsupportedCapability);
+        assert!(
+            judge(case, &value, &truthful, false).is_empty(),
+            "{}",
+            case.id
+        );
+        let other = refusal(NoVerdictReason::ConservativePreparation);
+        assert!(!judge(case, &value, &other, true).is_empty(), "{}", case.id);
+    }
+}
+
+#[test]
+fn format_is_an_annotation_where_the_assertion_vocabulary_is_declared_false() {
+    // OBI 5.2 reads `format` as an annotation where JSON Schema leaves its
+    // assertion optional, so an invalid address satisfies a schema whose
+    // meta-schema declares the format-assertion vocabulary false. The suite's
+    // `fails` is the verdict of an implementation that asserts the vocabulary.
+    let case = suite()
+        .groups
+        .iter()
+        .flat_map(|g| &g.cases)
+        .find(|c| {
+            c.id.starts_with("suite/draft2020-12/optional/format-assertion.json#0/1 ")
+        })
+        .unwrap();
+    assert_eq!(case.expected, "satisfies");
+    let value = JsonValue::parse(&case.value).unwrap();
+    assert!(judge(case, &value, &ValueOutcome::Satisfies, false).is_empty());
+    let failure = ValueOutcome::Fails {
+        message: "value does not satisfy the contract".into(),
+        problems: vec![],
+        problems_complete: false,
+    };
+    assert!(!judge(case, &value, &failure, false).is_empty());
+    let refusal = ValueOutcome::NoVerdict {
+        detail: NoVerdict::new(
+            NoVerdictReason::UnsupportedCapability,
+            "schema-dialect",
+            "the dialect is not read",
+        ),
+    };
+    assert!(judge(case, &value, &refusal, false).is_empty());
+}

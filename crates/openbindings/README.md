@@ -36,7 +36,7 @@ A `Conformant<Document>` has infallible reads and no mutable access. Use
 `as_document()` for plain fallible reads, or consume it with `into_inner()` to edit
 again. Clones, views, validation reports and proofs retain their own revision;
 editing another owner cannot change them. Positions refer to each revision's
-current bytes, available from `to_bytes()`. Duplicate-member input remains
+current bytes, available from `as_bytes()`. Duplicate-member input remains
 inspectable but is refused by typed reads, editing and conformance proof.
 
 The [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)

@@ -190,9 +190,9 @@ The evaluator compiles upper first, checks cancellation, then compiles lower.
 Failure of either compilation produces no prepared owner. Compilation uses the same
 exact literals/numbers, pattern limits and closed no-retrieval registry as the
 complete-resource path. Compilation clears the direct projection-resource owners.
-Exact `const` and `enum` constraints can retain subviews of those arenas, keeping
-the full projected text alive until the compiled owners are released, even with
-schema details disabled. Retained-memory measurements must include that lifetime.
+Both programs name each exact `const` and `enum` value by index into one arena
+that holds only those values, so the compiled constraints of both, and an
+explanation, share one copy and keep no projected text alive.
 Backend compilation has cooperative checks at its existing boundaries; this adds
 no claim of preemptive cancellation inside a backend compile.
 
@@ -251,7 +251,8 @@ missing-reference code/message/location text. An escaped JSON string owns its co
 decoded UTF-8 value in addition to its serialized token; both count. This applies
 to member names and strings anywhere inside copied annotations or exact literals.
 The two programs share one immutable source map, counted once; copied text is
-counted for every retained copy. No separate hole-identity strings are retained:
+counted for every retained copy. A separated literal counts, text and decoded
+strings, with each program that names it, although both share its one copy. No separate hole-identity strings are retained:
 integer holder identities in the temporary graph refer to the immutable original
 request during construction. The retained evidence names an original `$ref`.
 A counting sink separately measures serialized and decoded bytes without copying
@@ -387,7 +388,12 @@ partial run nor a lower-bound diagnostic is used as semantic evidence.
 
 Semantic holes share all node/edge/hole/depth/scratch admission caps. Provenance is
 fixed-size enum metadata. Refusal locations identify recorded source evidence
-for the closure; the completions establish dependence collectively. The one
+for the closure; the completions establish dependence collectively. When the
+bounds disagree on a value, an undefined result or a `resource-unavailable`
+no-verdict names the reference only when the closure has one hole: its two
+completions are then the two ways that reference's result comes out, so the
+verdict depends on it. With several holes the evaluator does not establish which
+one a value reaches, so it names none rather than one the value may never reach. The one
 retained evidence location, code and message are counted before copying along with both programs and their source maps.
 
 Durable controls are `static_reference_defects.rs`, the matching TypeScript test,

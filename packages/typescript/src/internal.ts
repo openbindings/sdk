@@ -317,6 +317,15 @@ export type ValueCheck =
       /** Structured expected failure for this branch. */
       error: ValueAdmissionFailure;
     };
+/** Exact JSON text validation result: input-error when the text is not admitted as JSON, with the same error parseJson reports; after admission, the same selected-schema ValueOutcome as for an ExactJson root. */
+export type JsonCheck =
+  | ValueOutcome
+  | {
+      /** Semantic result discriminant; narrow before reading branch-specific data. */
+      outcome: "input-error";
+      /** Exact-input refusal: stable code, optional kind and zero-based byte offset, and message. */
+      error: InputFailure["error"];
+    };
 /** Known causes of a static reference-inspection refusal in this SDK version. */
 export type ReferenceRefusalReason =
   | "resource-unavailable"
@@ -378,11 +387,11 @@ export interface WorkOptions {
   /** Optional caller-owned cooperative cancellation signal; synchronous Wasm only observes same-thread cancellation at call boundaries. */
   signal?: AbortSignal;
 }
-/** Default-evaluator finite budgets, each a nonnegative 32-bit integer. Work counts are implementation units, not milliseconds. Zero is literal; the allocation and stack use of an explanation's library diagnostics are library-bounded; exhaustion produces no-verdict unless only post-verdict diagnostics are incomplete. */
+/** Default-evaluator finite budgets, each a nonnegative 32-bit integer; `evaluationSteps` may also be `null` for its default. Work counts are implementation units, not milliseconds. Zero is literal; the allocation and stack use of an explanation's library diagnostics are library-bounded; exhaustion produces no-verdict unless only post-verdict diagnostics are incomplete. */
 export interface EvaluatorLimits {
-  /** Work units per verdict/diagnostic pass; default 2,000,000. */
-  evaluationSteps: number;
-  /** Nested evaluation depth; default 1024. */
+  /** Work units per verdict/diagnostic pass. `null`, the default, grows with the value: 2,000,000 units for a value of up to 65,536 nodes (member names count) and proportionally more for a larger one. A number caps every pass at exactly that many units, whatever the value's size. */
+  evaluationSteps: number | null;
+  /** Nested evaluation depth; default 1024. It bounds stack use; a deeper value yields the `evaluation-depth-limit` no-verdict. */
   evaluationDepth: number;
   /** Regex evaluation/backtracking work budget; default 2,000,000. */
   regexSteps: number;
@@ -390,7 +399,7 @@ export interface EvaluatorLimits {
   compileJsonDepth: number;
   /** Maximum UTF-8 bytes per schema regex; default 1,048,576 (1 MiB). */
   patternBytes: number;
-  /** Maximum regex parenthesis nesting; default 256. */
+  /** Maximum regex parenthesis nesting; default 32, which keeps preparation within a 256 KiB stack. */
   patternDepth: number;
 }
 /** Inputs for one preparation with the built-in JSON Schema 2020-12 evaluator, which performs no resource I/O, treats format as annotation, declines unqualified Unicode property-escape matching, and may conservatively refuse potential non-progressing cycles. A pre-aborted signal returns no-verdict. */
@@ -412,14 +421,20 @@ export function evaluatorLimits(): Readonly<EvaluatorLimits> {
 }
 function encodedLimits(limits: Partial<EvaluatorLimits> = {}): string {
   const defaults = evaluatorLimits();
-  const encoded: Record<string, number> = {};
+  const encoded: Record<string, number | null> = {};
   for (const [key, value] of ownEntries(limits)) {
+    // A null limit is accepted only where the default itself is null.
+    const budget =
+      typeof value === "number" &&
+      Number.isSafeInteger(value) &&
+      value >= 0 &&
+      value <= 0xffffffff;
     if (
       !Object.hasOwn(defaults, key) ||
-      typeof value !== "number" ||
-      !Number.isSafeInteger(value) ||
-      value < 0 ||
-      value > 0xffffffff
+      !(
+        budget ||
+        (value === null && defaults[key as keyof EvaluatorLimits] === null)
+      )
     )
       throw new SdkError(
         "invalid-evaluator-limits",
@@ -450,7 +465,7 @@ export interface OperationMetadata {
 export interface BindingMetadata {
   /** Binding declaration key. */ readonly key: string;
   /** Declared primary operation key. */ readonly operation: string;
-  /** Declared source key; its target may be missing. */ readonly source: string;
+  /** Declared key into the `sources` map; no source need be present under it. */ readonly source: string;
   /** Declared description or null for absence. */ readonly description:
     | string
     | null;
@@ -572,20 +587,22 @@ function failure(error: unknown): InputFailure {
   if (!info || typeof info.code !== "string") throw error;
   return { status: "input-error", error: info };
 }
-function scalar(text: string): void {
+// Whether text holds no unpaired UTF-16 unit, so it crosses the bridge exactly as UTF-8.
+function wellFormed(text: string): boolean {
   for (let i = 0; i < text.length; i++) {
     const c = text.charCodeAt(i);
     if (c >= 0xd800 && c <= 0xdbff) {
       const next = text.charCodeAt(++i);
-      if (!(next >= 0xdc00 && next <= 0xdfff))
-        throw new TypeError(
-          "Unpaired UTF-16 in JSON text; use a JSON \\u escape or exact UTF-8 bytes.",
-        );
-    } else if (c >= 0xdc00 && c <= 0xdfff)
-      throw new TypeError(
-        "Unpaired UTF-16 in JSON text; use a JSON \\u escape or exact UTF-8 bytes.",
-      );
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+    } else if (c >= 0xdc00 && c <= 0xdfff) return false;
   }
+  return true;
+}
+function scalar(text: string): void {
+  if (!wellFormed(text))
+    throw new TypeError(
+      "Unpaired UTF-16 in JSON text; use a JSON \\u escape or exact UTF-8 bytes.",
+    );
 }
 function bytes(input: ExactInput): Uint8Array {
   if (typeof input === "string") {
@@ -818,10 +835,14 @@ export class ExactJson extends Managed {
   } {
     return decode(handle<wasm.WasmJson>(this).metadata());
   }
-  /** Resolve a relative RFC 6901 pointer and return a NEW disposable subtree owner, or undefined. Empty selects this value; repeated names select the first occurrence. The owner can retain the entire source. */
+  /** Resolve a relative RFC 6901 pointer and return a NEW disposable subtree owner, or undefined for a malformed pointer or one that names no node. Empty selects this value; repeated names select the first occurrence. A segment may hold an unpaired UTF-16 unit, so a value problem's instance resolves to the node locate() reports. The owner can retain the entire source. */
   at(pointer: string): ExactJson | undefined {
-    scalar(pointer);
-    const found = handle<wasm.WasmJson>(this).at(pointer);
+    const raw = handle<wasm.WasmJson>(this);
+    // Only a pointer holding an unpaired unit needs the exact JSON route that
+    // locate() uses; JSON.stringify escapes that unit.
+    const found = wellFormed(pointer)
+      ? raw.at(pointer)
+      : raw.atPointer(JSON.stringify(pointer));
     return found ? new ExactJson(found) : undefined;
   }
   /** Locate an exact RFC 6901 pointer relative to this value, such as a value problem's instance, in the text it was parsed from: the node's byte offset, line and byte column with the given pointer, or null when it names no node. A segment may hold an unpaired UTF-16 unit. Computed on this call; nothing is retained. A malformed pointer throws SdkError with code invalid-pointer. */
@@ -1116,7 +1137,7 @@ export type Edit =
   | {
       /** Replace or insert a JSON value at the specified pointer. */
       op: "set";
-      /** RFC 6901 path into the revision before the batch. */
+      /** RFC 6901 path into the revision before the batch; a segment may hold an unpaired UTF-16 unit, as a finding's pointer can. */
       pointer: string;
       /** Borrowed exact or checked ordinary JSON; never consumed. */
       value: JsonInput;
@@ -1124,7 +1145,7 @@ export type Edit =
   | {
       /** Remove an existing member or array element. */
       op: "remove";
-      /** RFC 6901 path; removing the root is refused. */
+      /** RFC 6901 path, which may hold an unpaired UTF-16 unit; removing the root is refused. */
       pointer: string;
     }
   | {
@@ -1271,16 +1292,18 @@ export class Document extends DocumentReads {
     editableRaw(this);
     this.#encoded(edits, { origins: new WeakMap(), editBatch: true });
   }
-  /** Replace or insert a value at an RFC 6901 pointer. Exact owners are borrowed; ordinary values are checked without invoking getters/toJSON. */
+  /** Replace or insert a value at an RFC 6901 pointer. A segment may hold an unpaired UTF-16 unit, so a finding's pointer addresses the member it reports. Exact owners are borrowed; ordinary values are checked without invoking getters/toJSON. */
   set(pointer: string, value: JsonInput): void {
-    scalar(pointer);
-    if (isExact(value)) this.#commit((raw) => raw.set(pointer, jsonRaw(value)));
+    // Only a pointer holding an unpaired unit needs the batch route, whose JSON
+    // escapes keep it exact across the bridge.
+    if (isExact(value) && wellFormed(pointer))
+      this.#commit((raw) => raw.set(pointer, jsonRaw(value)));
     else this.edit([{ op: "set", pointer, value }]);
   }
-  /** Remove an existing member/array element. Throws EditError on refusal; removing the root is not supported. */
+  /** Remove an existing member/array element at an RFC 6901 pointer, which may hold an unpaired UTF-16 unit as a finding's can. Throws EditError on refusal; removing the root is not supported. */
   remove(pointer: string): void {
-    scalar(pointer);
-    this.#commit((raw) => raw.remove(pointer));
+    if (wellFormed(pointer)) this.#commit((raw) => raw.remove(pointer));
+    else this.edit([{ op: "remove", pointer }]);
   }
   /** Set the version declaration; conformance is assessed separately. */
   setOpenbindings(value: string): void {
@@ -1558,6 +1581,10 @@ export class OperationView extends OperationReads {
   /** @internal */ constructor(raw: wasm.WasmOperation) {
     super(raw);
   }
+  /** Acquire a separate owner sharing this immutable selected operation. */
+  retain(): OperationView {
+    return new OperationView(handle<wasm.WasmOperation>(this).retain());
+  }
   /** Acquire a NEW independently disposable input value; undefined means absent. JSON null, true, false and objects remain present values. */
   input(): ExactJson | undefined {
     const raw = handle<wasm.WasmOperation>(this).input();
@@ -1578,6 +1605,12 @@ export class ConformantOperationView extends OperationReads {
     raw: wasm.WasmConformantOperation,
   ): ConformantOperationView {
     return new ConformantOperationView(raw);
+  }
+  /** Acquire a separate owner of this conformant operation, which hands out value contracts as this one does. */
+  retain(): ConformantOperationView {
+    return ConformantOperationView.fromRaw(
+      conformantOperationRaw(this).retain(),
+    );
   }
   /** Acquire a NEW disposable input value contract; undefined means the operation declares no input. Present true, false and object schemas are all contracts. Nothing is prepared here. */
   input(): ValueContract | undefined {
@@ -1725,21 +1758,28 @@ export class SchemaResources extends Managed {
       super(entries as wasm.WasmResources);
       return;
     }
-    let raw = new wasm.WasmResources();
+    if (entries === undefined) {
+      super(new wasm.WasmResources());
+      return;
+    }
+    // Collect every entry, then admit the set once in Rust.
+    let pending: wasm.WasmResourceEntries | undefined;
+    let raw: wasm.WasmResources;
     try {
-      if (entries !== undefined) {
-        for (const [uri, document] of entries as Iterable<
-          readonly [string, ExactJson]
-        >) {
-          scalar(uri);
-          const next = sdkCall(() => raw.add(uri, jsonRaw(document)));
-          raw.free();
-          raw = next;
-        }
+      for (const [uri, document] of entries as Iterable<
+        readonly [string, ExactJson]
+      >) {
+        scalar(uri);
+        (pending ??= new wasm.WasmResourceEntries()).push(
+          uri,
+          jsonRaw(document),
+        );
       }
-    } catch (error) {
-      raw.free();
-      throw error;
+      raw = pending
+        ? sdkCall(() => pending!.build())
+        : new wasm.WasmResources();
+    } finally {
+      pending?.free();
     }
     super(raw);
   }
@@ -1894,20 +1934,47 @@ export class PreparedContract extends Managed {
   /** @internal */ static fromRaw(raw: wasm.WasmPrepared): PreparedContract {
     return new PreparedContract(raw);
   }
-  /** The cheap check of an exact root: a failure carries no problems and problemsComplete is false. Cancellation cannot preempt synchronous Wasm. */
-  validate(value: ExactJson, options?: WorkOptions): ValueOutcome;
+  // Overload order matters: an untyped (any) argument takes the first
+  // signature, so it must be one whose result keeps input-error.
   /** Admit ordinary JSON (including nested exact owners), then check it cheaply.
+   * A string is a JSON string value, so validate("7") checks the string "7"; use validateJson for JSON text.
    * Expected admission failures return input-error. Caller exceptions and handle misuse throw.
    */
+  validate(
+    value: Exclude<JsonInput, ExactJson>,
+    options?: WorkOptions,
+  ): ValueCheck;
+  /** The cheap check of an exact root: a failure carries no problems and problemsComplete is false. Cancellation cannot preempt synchronous Wasm. */
+  validate(value: ExactJson, options?: WorkOptions): ValueOutcome;
+  /** Check a value that may be ordinary or exact: an ordinary one is admitted first, so input-error remains possible. */
   validate(value: JsonInput, options?: WorkOptions): ValueCheck;
   validate(value: JsonInput, options: WorkOptions = {}): ValueCheck {
     return checkValue(this, value, options, false);
   }
-  /** Explain an exact root: the verdict validate() returns, and for a failure the library's first error with redacted messages and original schema facts. Explanation costs more than the cheap check and is library-bounded: it can allocate in proportion to the schema and value and can overflow the stack on deeply nested values, so keep validate() on paths that check untrusted input. Cancellation after the verdict keeps an established failure with problemsComplete false. */
-  explain(value: ExactJson, options?: WorkOptions): ValueOutcome;
+  /** Admit exact JSON text or UTF-8 bytes as parseJson does, under the default limits, then check it cheaply: validateJson("7") checks the number 7. Every value outcome is returned, including undefined and no-verdict; input-error is admission failure only. Duplicate members yield no-verdict and numbers are never rounded. Wrong input types and literal unpaired UTF-16 text throw, as for parseJson; a pre-aborted signal returns cancellation first. Parse once with parseJson to check one value repeatedly; cancellation cannot preempt synchronous Wasm. */
+  validateJson(input: ExactInput, options: WorkOptions = {}): JsonCheck {
+    requireReady();
+    const prepared = handle<wasm.WasmPrepared>(this);
+    const signal = workSignal(options);
+    if (isAborted(signal)) return cancelledValue();
+    const data = bytes(input);
+    try {
+      return decode(prepared.validateJson(data));
+    } catch (error) {
+      return { outcome: "input-error", error: failure(error).error };
+    }
+  }
+  // As for validate, the first signature is the one an untyped argument takes.
   /** Admit ordinary JSON (including nested exact owners), then explain it.
    * Expected admission failures return input-error. Caller exceptions and handle misuse throw.
    */
+  explain(
+    value: Exclude<JsonInput, ExactJson>,
+    options?: WorkOptions,
+  ): ValueCheck;
+  /** Explain an exact root: the verdict validate() returns, and for a failure the library's first error with redacted messages and original schema facts. Explanation costs more than the cheap check and is library-bounded: it can allocate in proportion to the schema and value and can overflow the stack on deeply nested values, so keep validate() on paths that check untrusted input. Cancellation after the verdict keeps an established failure with problemsComplete false. */
+  explain(value: ExactJson, options?: WorkOptions): ValueOutcome;
+  /** Explain a value that may be ordinary or exact: an ordinary one is admitted first, so input-error remains possible. */
   explain(value: JsonInput, options?: WorkOptions): ValueCheck;
   explain(value: JsonInput, options: WorkOptions = {}): ValueCheck {
     return checkValue(this, value, options, true);
@@ -2002,18 +2069,18 @@ export function discoveryPolicy(): DiscoveryPolicy {
   requireReady();
   return decode(wasm.discoveryPolicy());
 }
-/** Construct the fixed discovery URL from an absolute HTTP(S) origin. Refuses credentials, resource paths, query and fragment; accepts an optional root slash. Does not fetch. The transport owns connection and redirect policy. */
+/** Construct the fixed discovery URL from an absolute HTTP(S) origin. The origin must be ASCII: a non-ASCII domain name is refused, so pass its IDNA A-label form. Refuses credentials, resource paths, query and fragment; accepts an optional root slash. Does not fetch. The transport owns connection and redirect policy. */
 export function discoveryEndpoint(origin: string): string {
   requireReady();
   scalar(origin);
   return sdkCall(() => wasm.discoveryEndpoint(origin));
 }
-/** A local asynchronous Fetch callback; native function overloads are not required. */
+/** A local asynchronous Fetch callback; native function overloads are not required. Called once per hop with that hop's URL; it must scope any credentials it adds by that URL, because the SDK cannot strip headers the callback adds itself. */
 export type DiscoveryFetch = (
   url: string,
   init: RequestInit,
 ) => Promise<Response>;
-/** One discovery attempt with an SDK-owned timer and AbortController. Fetch follows redirects; browser per-hop mixed-content and private-network policy is browser-owned and invisible to the SDK. */
+/** One discovery attempt with an SDK-owned timer and AbortController. Where the host exposes redirect responses, the SDK checks and follows each hop itself; a host that hides them follows redirects under its own policy and the SDK checks only the final URL. */
 export interface DiscoveryOptions {
   /** Decoded-body byte limit; omitted selects 1 MiB. Must be a positive safe integer; zero is refused. Bounds accepted/retained document bytes; Fetch may deliver a larger chunk before overflow is detected, so this does not bound host buffering. */
   maxDocumentBytes?: number;
@@ -2021,14 +2088,14 @@ export interface DiscoveryOptions {
   timeoutMs?: number | "unbounded";
   /** Caller cancellation; aborts I/O and is checked around synchronous assessment. */
   signal?: AbortSignal;
-  /** Local asynchronous Fetch-compatible callback; omitted uses host fetch. Honor redirect: "follow", cancellation and the supplied normalized URL; configure credentials and connection restrictions here. */
+  /** Local asynchronous Fetch-compatible callback; omitted uses host fetch. Honor the supplied normalized URL, redirect mode and cancellation; configure credentials and connection restrictions here. The callback is called once per hop: the SDK requests redirect: "manual" and calls it again for each admitted redirect, including one to another origin, passing only Accept. It must scope any credentials it adds by the URL it is given, as the Rust portable callback must: the SDK cannot strip headers the callback adds itself, so a credential added unconditionally reaches every admitted hop. When this callback answers manual mode with an opaqueredirect, as browser fetch does, the SDK repeats that request with redirect: "follow" and remembers the observation for this callback, so later discoveries through it use follow directly; Fetch then removes Authorization on a cross-origin redirect but keeps other request headers. */
   fetch?: DiscoveryFetch;
 }
 /** Observed response facts retained even when body reading or document assessment fails. The final URL is metadata only, not an implicit schema base. */
 export interface DiscoveryMetadata {
   /** Constructed discovery URL requested from the transport. */
   requestedUrl: string;
-  /** Final URL when exposed by the host, otherwise null; not a schema base. */
+  /** URL of the observed response, not a schema base: the URL the SDK last dispatched when it follows hops itself, the host's final URL when the host follows them, otherwise null. */
   finalUrl: string | null;
   /** Observed HTTP status. */
   status: number;
@@ -2066,7 +2133,7 @@ type DiscoveryBodyResult =
         supported: string;
       };
     };
-/** Finite discovery receipt. Only found carries normative proof. Only HTTP 404 means absent; 401/403 are gated; other non-200 statuses are http-status. Complete bounded 200 bytes can accompany refused/invalid documents; partial bodies are never returned. Dispose any returned document owner independently. */
+/** Finite discovery receipt. Only found carries normative proof. Only HTTP 404 means absent; 401/403 are gated; other non-200 statuses are http-status, except that a 301, 302, 303, 307 or 308 with a visible Location is followed or refused: a refused destination, the eleventh redirect, or one a following host left unfollowed is a redirect-policy transport-error. Complete bounded 200 bytes can accompany refused/invalid documents; partial bodies are never returned. Dispose any returned document owner independently. */
 export type DiscoveryResult = (
   | DiscoveryBodyResult
   | {
@@ -2107,6 +2174,57 @@ export type DiscoveryResult = (
   body?: Uint8Array;
 };
 const aborted = Symbol("discovery cancelled");
+/** Redirects the SDK follows itself, as the Rust checked paths' MAX_REDIRECTS. */
+const maxRedirects = 10;
+/**
+ * Transports observed to hide redirects: one answered redirect: "manual" with an
+ * opaqueredirect, as browsers do. Set only by that observation, never by host detection.
+ * Keyed by the supplied callback, or by the host fetch function for the default transport,
+ * so a callback that exposes hops keeps its checks in a runtime whose own fetch hides them.
+ */
+const hidesRedirects = new WeakSet<object>();
+const redirectStatuses = [301, 302, 303, 307, 308];
+/** HTTPS, or HTTP to normalized literal IPv4 127/8 or IPv6 ::1, without credentials. */
+function admitUrl(url: URL): boolean {
+  const loopback =
+    url.hostname === "[::1]" || /^127\.\d+\.\d+\.\d+$/.test(url.hostname);
+  return (
+    !url.username &&
+    !url.password &&
+    (url.protocol === "https:" || (url.protocol === "http:" && loopback))
+  );
+}
+/** Destination admission plus refusal of every HTTPS-to-HTTP hop, as in Rust. */
+function admitRedirect(previous: URL, next: URL): boolean {
+  return (
+    !(previous.protocol === "https:" && next.protocol === "http:") &&
+    admitUrl(next)
+  );
+}
+/** Resolve a visible Location against the dispatched URL; undefined when refused. */
+function redirectTarget(current: string, location: string): string | undefined {
+  // As the Rust checked paths: printable ASCII without backslashes, then WHATWG resolution.
+  if (!/^[\x21-\x7e]*$/.test(location) || location.includes("\\"))
+    return undefined;
+  let previous: URL, next: URL;
+  try {
+    previous = new URL(current);
+    next = new URL(location, previous);
+  } catch {
+    return undefined;
+  }
+  next.hash = "";
+  return admitRedirect(previous, next) ? next.href : undefined;
+}
+/** Whether a response URL names the dispatched URL; parses only a differing spelling. */
+function sameUrl(observed: string, dispatched: string): boolean {
+  if (observed === dispatched) return true;
+  try {
+    return new URL(observed).href === new URL(dispatched).href;
+  } catch {
+    return false;
+  }
+}
 function interruptible<T>(
   promise: Promise<T>,
   signal: AbortSignal,
@@ -2138,8 +2256,14 @@ function interruptible<T>(
  * The SDK timer covers headers, followed redirects, decoded reads and validation boundaries.
  * Caller cancellation wins a same-observation tie; the first observed cause is retained.
  * Synchronous Wasm assessment requires a Worker and responsive supervisor for a hard latency bound.
- * Fetch uses redirect: "follow". Only the final URL is observable: per-hop mixed-content
- * and private-network rules belong to the browser, and an HTTPS final URL proves no hop history.
+ * Fetch uses redirect: "manual". Where the host exposes the redirect response, as Node does,
+ * the SDK checks each Location before dispatching it, as the Rust checked paths do: it refuses
+ * every HTTPS-to-HTTP hop, a destination the origin rules refuse and an eleventh redirect, and
+ * calls the transport again for each admitted hop. A host that hides redirects answers with an
+ * opaqueredirect, as browsers do; the SDK then repeats the request with redirect: "follow" and
+ * checks the final URL, and later discoveries through the same transport use follow directly.
+ * Per-hop mixed-content and private-network rules then belong to the browser, and an HTTPS
+ * final URL proves no hop history.
  */
 export async function discover(
   origin: string,
@@ -2160,8 +2284,10 @@ export async function discover(
       "invalid-timeout",
       "timeoutMs must be positive and finite, or explicitly unbounded.",
     );
-  const fetcher = options.fetch ?? globalThis.fetch?.bind(globalThis);
-  if (!fetcher)
+  const host = globalThis.fetch,
+    transport: object | undefined = options.fetch ?? host,
+    fetcher = options.fetch ?? host?.bind(globalThis);
+  if (!fetcher || !transport)
     throw new SdkError(
       "fetch-unavailable",
       "Supply a Fetch callback in this host.",
@@ -2216,68 +2342,114 @@ export async function discover(
     reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   let phase: "transport" | "body" | "assessment" = "transport";
   try {
-    if (check()) return cancellation();
-    const pending = fetcher(requestedUrl, {
-      method: "GET",
-      headers: { Accept: policy.accept },
-      signal,
-      redirect: "follow",
-    });
-    const response = await interruptible(
-      Promise.resolve(pending).then((response) => {
-        if (signal.aborted) void response.body?.cancel().catch(() => {});
-        return response;
-      }),
-      signal,
-    );
-    metadata = {
-      requestedUrl,
-      finalUrl: ["opaque", "opaqueredirect"].includes(response.type)
-        ? null
-        : response.url || null,
-      status: response.status,
-      responseType: response.type,
-      headers: Object.freeze(Object.fromEntries(response.headers.entries())),
-    };
-    if (check()) {
-      void response.body?.cancel().catch(() => {});
-      return { ...cancellation(), metadata };
-    }
-    const policyRefusal = (message: string): DiscoveryResult => {
-      void response.body?.cancel().catch(() => {});
-      return {
-        status: "transport-error",
-        metadata,
-        error: { kind: "redirect-policy", message },
-      };
-    };
-    if (response.type === "opaque" || response.type === "opaqueredirect")
-      return policyRefusal(
-        "Discovery policy cannot be established for an opaque response.",
+    let current = requestedUrl,
+      // A transport already seen hiding redirects follows them without the repeated request.
+      redirect: "manual" | "follow" = hidesRedirects.has(transport)
+        ? "follow"
+        : "manual",
+      followed = 0,
+      response: Response;
+    while (true) {
+      if (check()) return { ...cancellation(), metadata };
+      const pending = fetcher(current, {
+        method: "GET",
+        headers: { Accept: policy.accept },
+        signal,
+        redirect,
+      });
+      const observed = await interruptible(
+        Promise.resolve(pending).then((response) => {
+          if (signal.aborted) void response.body?.cancel().catch(() => {});
+          return response;
+        }),
+        signal,
       );
-    if (response.url) {
-      let final: URL;
-      try {
-        final = new URL(response.url);
-      } catch {
-        return policyRefusal(
-          "Final response URL cannot establish discovery policy.",
-        );
-      }
-      const loopback =
-        final.hostname === "[::1]" ||
-        /^127\.\d+\.\d+\.\d+$/.test(final.hostname);
+      response = observed;
+      const release = () => void observed.body?.cancel().catch(() => {});
+      // The host hides this redirect, so no hop can be checked before dispatch:
+      // let the host follow under its own policy and check the final URL.
       if (
-        final.username ||
-        final.password ||
-        (final.protocol !== "https:" &&
-          !(final.protocol === "http:" && loopback)) ||
-        (new URL(requestedUrl).protocol === "https:" &&
-          final.protocol === "http:")
-      )
+        redirect === "manual" &&
+        followed === 0 &&
+        observed.type === "opaqueredirect"
+      ) {
+        release();
+        hidesRedirects.add(transport);
+        redirect = "follow";
+        continue;
+      }
+      const opaque =
+        observed.type === "opaque" || observed.type === "opaqueredirect";
+      metadata = {
+        requestedUrl,
+        finalUrl: opaque
+          ? null
+          : observed.url || (redirect === "manual" ? current : null),
+        status: observed.status,
+        responseType: observed.type,
+        headers: Object.freeze(Object.fromEntries(observed.headers.entries())),
+      };
+      if (check()) {
+        release();
+        return { ...cancellation(), metadata };
+      }
+      const policyRefusal = (message: string): DiscoveryResult => {
+        release();
+        return {
+          status: "transport-error",
+          metadata,
+          error: { kind: "redirect-policy", message },
+        };
+      };
+      if (opaque)
         return policyRefusal(
-          "Final response URL violates discovery destination or downgrade policy.",
+          "Discovery policy cannot be established for an opaque response.",
         );
+      const location = redirectStatuses.includes(observed.status)
+        ? observed.headers.get("location")
+        : null;
+      if (redirect === "manual") {
+        // The SDK dispatched `current` itself; another observed URL means the host followed unchecked hops.
+        if (
+          observed.redirected ||
+          (observed.url && !sameUrl(observed.url, current))
+        )
+          return policyRefusal(
+            "Transport response URL violates the hop contract or destination policy.",
+          );
+        metadata.finalUrl = current;
+        if (location === null) break;
+        const next = redirectTarget(current, location);
+        if (!next || followed >= maxRedirects)
+          return policyRefusal(
+            "Redirect destination or redirect limit refused.",
+          );
+        // No redirect body is an OBI; release it before the next dispatch.
+        release();
+        current = next;
+        followed++;
+        continue;
+      }
+      if (observed.url) {
+        let final: URL;
+        try {
+          final = new URL(observed.url);
+        } catch {
+          return policyRefusal(
+            "Final response URL cannot establish discovery policy.",
+          );
+        }
+        if (!admitRedirect(new URL(requestedUrl), final))
+          return policyRefusal(
+            "Final response URL violates discovery destination or downgrade policy.",
+          );
+      }
+      // A following host follows these redirects, so one still carrying Location was left unfollowed.
+      if (location !== null)
+        return policyRefusal(
+          "Host did not follow the observed redirect Location.",
+        );
+      break;
     }
     if (response.status !== 200) {
       void response.body?.cancel().catch(() => {});
@@ -2356,7 +2528,8 @@ export async function discover(
       return { status: "timeout", metadata, body };
     if (phase === "assessment") throw error;
     return {
-      status: metadata ? "body-error" : "transport-error",
+      // A failed later hop keeps the earlier redirect metadata but is still acquisition.
+      status: phase === "body" ? "body-error" : "transport-error",
       metadata,
       body,
       error: {

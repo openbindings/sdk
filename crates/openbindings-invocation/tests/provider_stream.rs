@@ -1,4 +1,4 @@
-// CA-4: every existing receive lifecycle case also drives the provider via poll_next.
+// Every receive lifecycle case also drives the provider through `Stream::poll_next`.
 // This includes backpressure, half-close, cancellation, failed validation, and terminals.
 async fn receive(
     input: &mut openbindings_invocation::ProviderInput,

@@ -50,6 +50,52 @@ one-shot preparation and were unchanged elsewhere. The evaluation path's machine
 code is byte-identical apart from addresses; sub-microsecond evaluation rows
 measured up to 4% slower in these builds, which is not yet attributed.
 
+On 2026-10-17, separating `const` and `enum` literals from the projection, a
+work allowance that grows with the value and a default `pattern_depth` of 32
+were compared with revision `fa2d0b9` by the benchmark harness's identical
+instrument pairs (macOS arm64, Rust 1.99.0, two batches of 20 adjacent
+randomized pairs, shared host). Literals are now parsed once, into an arena that
+holds only them, so `large-literal` preparation fell 1.5–2% and a 128-branch
+`oneOf` of constants retains 2,533,394 instead of 2,636,468 bytes. A contract no
+longer keeps the annotations of the schemas its literals came from: an `enum`
+beside an 8 MiB `description` retains 2.4 KB instead of 8.4 MB. Requested heap
+and allocation counts were within policy on every row. Reference-chain evaluation
+rows (`refs`, `reference-fan-in`, `reference-text-*`) measured 2–16% slower in
+these builds, with instruction-identical hot functions at other alignments; with
+64-byte function alignment for both builds the same rows measured 0.97–0.98.
+`full` rows of 20,000-item arrays measured about 1–2% slower while their
+preparation, parse and evaluation rows measured 0.99–1.00.
+
+The default work allowance is 2,000,000 units per pass for values of up to
+65,536 nodes and grows in proportion above that. Ordinary schemas used about
+three units per value node (an array of records, an object of integer members,
+an integer array and referenced records measured 2.77–3.08), so values up to the
+default 1,000,000-node admission limit are decided. Examples that previously
+returned `evaluation-work-limit`: 40,000 records (7.8 MB) satisfy in 66 ms;
+340,000 and 499,999 members satisfy in 27 ms and 39 ms; 999,999 integers satisfy
+in 24 ms. Evaluation depth is not scaled: the walk recurses, using about
+0.75 KiB of stack per level of a recursive value in release builds and 2.9 KiB
+in debug builds for the benchmark's `deep` schema, so the admitted 10,000 levels
+would not fit an 8 MiB main-thread stack. Its stop is reported as
+`evaluation-depth-limit`.
+
+Patterns nested to the default depth of 32 prepare, and values are checked
+against them, within a 256 KiB thread stack in release builds. Measured on
+2026-10-17 with Rust 1.99.0, the smallest stack on which a cold preparation
+completes at every depth up to 32 is 52 KiB on macOS arm64 and at most 128 KiB
+on the Windows x64 runner, which reserves thread stacks in 64 KiB units; checks
+need at most 16 KiB and 64 KiB. The regular-expression parser recurses at each
+group level, using about 1.3 KiB per level in release builds (1.4 KiB on
+Windows) and 5 KiB in debug builds, and the matcher recurses at each lookaround,
+about 0.5 KiB per level in release builds. Debug builds are dominated instead by
+the matcher's unoptimized frames of about 90 to 100 KiB. The meta-schema check
+of every projected schema runs a pattern (the 2020-12 `$id` rule) through them,
+so debug preparation needs 212 KiB on macOS whatever the pattern (228 KiB for
+32 nested lookarounds) and between 256 and 320 KiB on Windows, where the
+pattern stack test is therefore verified in release builds. Each nested
+lookaround adds one such frame while a value is checked: two need 276 KiB in a
+macOS debug build.
+
 A fan-in workload has 100 distinct referring resources pointing to one supplied
 integer schema with 5,000 unused definitions. Twelve adjacent fresh-child pairs
 measure public preparation alone, after the proof and resources are built:
@@ -116,6 +162,14 @@ heap and allocation counts enforce now: failed checks or a heap/count flag fail
 the job. Heap flags require both >10% and >128 KiB for retained baseline, total
 peak, incremental peak or requested bytes/op; count flags require both >5% and
 >32/op.
+
+A change that intends to alter a workload's outcome declares it in that
+workload's fixture expectation. The comparison then checks the merge-base binary
+against the merge base's expectation and the candidate against its own, reports
+the row as outcome changed by this change with both expectations, and leaves it
+out of timing and memory decisions. Either side missing its own expectation, or
+any observation difference on a row whose expectation did not change, still fails
+the job. Workloads present in only one fixture set are reported, not compared.
 
 The harness isolates SDK calls in `tools/evaluator-bench/src/sdk.rs`. It also
 measures document validation directly from bytes (including the conformant

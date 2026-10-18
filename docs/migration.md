@@ -80,7 +80,8 @@ jobs or move the integration to Rust.
 In Rust, implement `binding::BindingInvoker` or select a kind implementation that
 does. Use `binding::Invoker` for source and binding values, or
 `operation::Invoker::new(conformant, provider)` for document operations. Select an
-evaluator with `with_evaluator`, prepare an operation and invoke an `Attempt`.
+evaluator with `with_evaluator`, hold the invoker in an `Arc`, prepare an operation
+and invoke an `Attempt`.
 Read output through its terminal result and close input when finished. See the
 [invocation guide](invocation.md). Legacy `prepareOperation` is an advisory
 context/preflight job; it is not equivalent to Rust's retained `prepare` handle.

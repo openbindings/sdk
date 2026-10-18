@@ -18,8 +18,12 @@ def current_fixture(fixture):
         assert case['value']==change['original_value']
         assert case['expected']==change['from_expected']
         assert case['refusal_kind']==change['from_refusal_kind']
-        assert change['to_expected'] in ('satisfies', 'no-verdict')
-        assert (change['to_expected']=='no-verdict') == (change.get('to_refusal_kind') is not None)
+        assert change['to_expected'] in ('satisfies', 'fails', 'no-verdict')
+        # A verdict may also accept an unsupported-capability refusal.
+        if change['to_expected']=='no-verdict':
+            assert change.get('to_refusal_kind') is not None
+        else:
+            assert change.get('to_refusal_kind') in (None, 'unsupported-capability')
         case.update(expected=change['to_expected'],refusal_kind=change.get('to_refusal_kind'),refusal_reason=change.get('to_refusal_reason',''))
     migrations=json.loads((provenance.parent/'document-admission.json').read_text())
     for change in migrations['reexpressions']:
@@ -55,7 +59,9 @@ def pointer_exists(value,pointer):
 
 def judge_value(case,result,sources):
     failures=[];tag=result.get('outcome');detail=result.get('detail',{})
-    permitted=case['optional_capability'] is not None and tag=='no-verdict' and detail.get('reason')=='unsupported-capability'
+    # Optional capabilities, and dialects an evaluator may not read, accept a truthful refusal beside their verdict.
+    accepts_refusal=case['optional_capability'] is not None or (case['expected'] not in ('no-verdict','undefined') and case.get('refusal_kind')=='unsupported-capability')
+    permitted=accepts_refusal and tag=='no-verdict' and detail.get('reason')=='unsupported-capability'
     if tag!=('fails' if case['expected']=='mismatch' else case['expected']) and not permitted:failures.append('wrong verdict')
     if tag=='no-verdict':
         if detail.get('reason')!=case.get('refusal_kind'):failures.append('wrong refusal distinction')
@@ -139,6 +145,14 @@ def controls():
     assert raw_group['cases'][0]['expected']=='no-verdict' and new_case['expected']=='satisfies'
     assert not judge_value(new_case,{'outcome':'satisfies'}, {})
     assert judge_value(new_case,{'outcome':'no-verdict','detail':{'reason':'conservative-preparation','code':'old','message':'old policy'}}, {})
+    # A schema in another dialect expects JSON Schema's verdict or a truthful refusal.
+    dialect=next(c for g in changed['groups'] for c in g['cases'] if c['id'].startswith('suite/draft2020-12/optional/cross-draft.json#0/0 '))
+    refusal={'outcome':'no-verdict','detail':{'reason':'unsupported-capability','code':'schema-dialect','message':'dialect not read'}}
+    assert dialect['expected']=='satisfies' and dialect['optional_capability'] is None
+    assert not judge_value(dialect,{'outcome':'satisfies'},{})
+    assert not judge_value(dialect,refusal,{})
+    assert judge_value(dialect,{'outcome':'fails','problems':[]},{})
+    assert judge_value(dialect,{**refusal,'detail':{**refusal['detail'],'reason':'conservative-preparation'}},{})
     for field in ['id','expected','refusal_kind','value','document','resource_uri','resource_document']:
         altered=copy.deepcopy(raw)
         g=next(g for g in altered['groups'] if g['id']==target)
@@ -149,7 +163,7 @@ def controls():
         try:current_fixture(altered)
         except AssertionError:pass
         else:raise AssertionError('changed input inherited policy translation: '+field)
-    return {'status':'pass','wrong_results_rejected':len(bad)+11,'accounting_mutations_rejected':6,'policy_input_mutations_rejected':7}
+    return {'status':'pass','wrong_results_rejected':len(bad)+13,'accounting_mutations_rejected':6,'policy_input_mutations_rejected':7}
 
 
 def main():

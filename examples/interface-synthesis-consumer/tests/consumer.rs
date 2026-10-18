@@ -42,7 +42,7 @@ async fn standalone_and_shared_provider_consumers() {
     let result = work.await.unwrap();
     // Stable member order produces these exact consumer document bytes.
     assert_eq!(
-        result.document().to_bytes(),
+        result.document().as_bytes(),
         include_str!("fixtures/consumer-emission.json")
             .trim_end()
             .as_bytes()
@@ -106,7 +106,7 @@ async fn strict_recovery_is_one_call_and_preserves_evidence() {
         assert!(e.rejected().is_none());
         let partial = e.into_partial().unwrap();
         assert!(!partial.coverage().fully_represented());
-        assert!(!partial.document().as_document().to_bytes().is_empty());
+        assert!(!partial.document().as_document().as_bytes().is_empty());
         assert_eq!(provider.calls.load(Ordering::Relaxed), 1);
         let encoded = partial.to_json().unwrap();
         assert!(encoded.get("coverage").is_some());
@@ -480,7 +480,7 @@ fn construction_bytes_preserve_member_order_for_dependency_and_target_units() {
     };
     let candidate = derive(&request, &CancellationToken::new(), false).unwrap();
     assert_eq!(
-        candidate.document.to_bytes(),
+        candidate.document.as_bytes(),
         include_str!("fixtures/catalog-emission.json")
             .trim_end()
             .as_bytes()

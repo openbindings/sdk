@@ -3,6 +3,39 @@ use super::*;
 use crate::authoring::Part;
 use std::{io::Write, ops::Range};
 
+/// The RFC 6901 pointer an edit addresses, borrowed from escaped text such as
+/// `"/a~1b/0"` (with no URI-fragment decoding) or from an exact [`Pointer`].
+/// A finding's or problem's pointer can name a member whose name holds an
+/// unpaired UTF-16 unit, which no Rust text spells; the exact form addresses it.
+/// Convert either with `into()`. `Debug` shows no segment.
+#[derive(Clone, Copy)]
+pub struct PointerRef<'a>(PointerRepr<'a>);
+#[derive(Clone, Copy)]
+enum PointerRepr<'a> {
+    Text(&'a str),
+    Exact(&'a Pointer),
+}
+impl<'a> From<&'a str> for PointerRef<'a> {
+    fn from(text: &'a str) -> Self {
+        Self(PointerRepr::Text(text))
+    }
+}
+impl<'a> From<&'a String> for PointerRef<'a> {
+    fn from(text: &'a String) -> Self {
+        Self(PointerRepr::Text(text))
+    }
+}
+impl<'a> From<&'a Pointer> for PointerRef<'a> {
+    fn from(pointer: &'a Pointer) -> Self {
+        Self(PointerRepr::Exact(pointer))
+    }
+}
+impl fmt::Debug for PointerRef<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PointerRef { .. }")
+    }
+}
+
 /// One edit in an atomic batch. All pointers address the revision before the batch.
 /// Parents must exist. Missing object members and array `-` append compactly.
 #[derive(Clone, Copy)]
@@ -10,8 +43,8 @@ use std::{io::Write, ops::Range};
 pub enum Edit<'a> {
     /// Replace a value or insert a missing member; preserve the value's exact token bytes.
     Set {
-        /// RFC 6901 pointer, with no URI-fragment decoding.
-        pointer: &'a str,
+        /// RFC 6901 pointer, from text or an exact [`Pointer`].
+        pointer: PointerRef<'a>,
         /// Exact replacement value. Duplicate members are refused.
         value: &'a JsonValue,
     },
@@ -37,8 +70,9 @@ pub enum Edit<'a> {
     },
     /// Remove an existing member or array element, including an adjacent separator.
     Remove {
-        /// RFC 6901 pointer. Removing the root is refused.
-        pointer: &'a str,
+        /// RFC 6901 pointer, from text or an exact [`Pointer`]. Removing the root
+        /// is refused.
+        pointer: PointerRef<'a>,
     },
 }
 
@@ -247,10 +281,154 @@ fn key_size(key: &str) -> usize {
         })
         .sum::<usize>()
 }
-// Build each parent's removal range index once per batch.
+const SLASH: u16 = b'/' as u16;
+const TILDE: u16 = b'~' as u16;
+// A checked edit pointer: escaped text, or the escaped UTF-16 units of an exact
+// pointer whose segment holds an unpaired unit.
+enum Address<'a> {
+    Text(&'a str),
+    Units(&'a Pointer, Vec<u16>),
+}
+impl<'a> Address<'a> {
+    fn check(pointer: PointerRef<'a>, limits: JsonLimits) -> Result<Self, EditError> {
+        let text = match pointer.0 {
+            PointerRepr::Text(text) => text,
+            PointerRepr::Exact(exact) => match exact.as_str() {
+                Some(text) => text,
+                // A `Pointer` is already well formed. One unit takes at least one
+                // byte, so its units bound the bytes it can name.
+                None => {
+                    let units: Vec<u16> = exact.utf16_units().collect();
+                    if units.len() > limits.max_bytes {
+                        return Err(limit(limits));
+                    }
+                    return Ok(Self::Units(exact, units));
+                }
+            },
+        };
+        if text.len() > limits.max_bytes {
+            return Err(limit(limits));
+        }
+        if !text.is_empty() && !text.starts_with('/') {
+            return Err(EditError::InvalidPointer);
+        }
+        // Validate every escape, including segments leading to existing values.
+        for token in text.split('/').skip(1) {
+            decode(token)?;
+        }
+        Ok(Self::Text(text))
+    }
+    fn target<'v>(&self, root: &'v JsonValue) -> Option<JsonRef<'v>> {
+        match self {
+            Self::Text(text) => root.at(text),
+            Self::Units(exact, _) => root.at_pointer(exact),
+        }
+    }
+    fn parent<'v>(&self, root: &'v JsonValue) -> Result<JsonRef<'v>, EditError> {
+        let parent = match self {
+            Self::Text(text) => {
+                let (parent, _) = text.rsplit_once('/').ok_or(EditError::InvalidPointer)?;
+                root.at(parent)
+            }
+            Self::Units(_, units) => {
+                let slash = units.iter().rposition(|&unit| unit == SLASH);
+                let parent = Pointer::from_utf16(&units[..slash.ok_or(EditError::InvalidPointer)?])
+                    .map_err(|_| EditError::InvalidPointer)?;
+                root.at_pointer(&parent)
+            }
+        };
+        parent.ok_or(EditError::MissingParent)
+    }
+    // The decoded last segment, as the member name an insertion writes.
+    fn name(&self) -> Result<Name, EditError> {
+        match self {
+            Self::Text(text) => {
+                let (_, token) = text.rsplit_once('/').ok_or(EditError::InvalidPointer)?;
+                decode(token).map(Name::Text)
+            }
+            Self::Units(_, units) => {
+                let start = units
+                    .iter()
+                    .rposition(|&unit| unit == SLASH)
+                    .map_or(0, |i| i + 1);
+                let mut name = Vec::with_capacity(units.len() - start);
+                let mut token = units[start..].iter().copied();
+                // A checked pointer follows every `~` with `0` or `1`.
+                while let Some(unit) = token.next() {
+                    name.push(if unit == TILDE {
+                        if token.next() == Some(u16::from(b'0')) {
+                            TILDE
+                        } else {
+                            SLASH
+                        }
+                    } else {
+                        unit
+                    });
+                }
+                Ok(match String::from_utf16(&name) {
+                    Ok(text) => Name::Text(text),
+                    Err(_) => Name::Token(units_token(&name)),
+                })
+            }
+        }
+    }
+}
+// An inserted member's name: decoded text, or the JSON string token of a name
+// holding an unpaired UTF-16 unit, which only a `\u` escape can write. A token
+// never denotes the same name as text.
+#[derive(PartialEq, Eq, Hash)]
+enum Name {
+    Text(String),
+    Token(String),
+}
+impl Name {
+    fn size(&self) -> usize {
+        match self {
+            Self::Text(name) => key_size(name),
+            Self::Token(token) => token.len(),
+        }
+    }
+    fn write(&self, out: &mut BoundedWriter) -> Result<(), EditError> {
+        match self {
+            Self::Text(name) => Typed(name).write(out),
+            Self::Token(token) => out
+                .write_all(token.as_bytes())
+                .map_err(|_| limit(out.limits)),
+        }
+    }
+}
+// Scalar runs take serde_json's escapes; each unpaired unit is a `\u` escape.
+fn units_token(units: &[u16]) -> String {
+    let mut token = String::from("\"");
+    let mut run = String::new();
+    let flush = |token: &mut String, run: &mut String| {
+        let quoted = serde_json::to_string(run.as_str()).expect("text serializes");
+        token.push_str(&quoted[1..quoted.len() - 1]);
+        run.clear();
+    };
+    for unit in char::decode_utf16(units.iter().copied()) {
+        match unit {
+            Ok(c) => run.push(c),
+            Err(unit) => {
+                flush(&mut token, &mut run);
+                let _ = fmt::Write::write_fmt(
+                    &mut token,
+                    format_args!("\\u{:04x}", unit.unpaired_surrogate()),
+                );
+            }
+        }
+    }
+    flush(&mut token, &mut run);
+    token.push('"');
+    token
+}
+// Build each parent's removal range index once per batch. Removed children are
+// planned together once every request is known, so adjacent removals share
+// separators instead of each claiming one alone.
 struct RemovalIndex {
     children: Vec<Range<usize>>,
     by_end: HashMap<usize, usize>,
+    removed: Vec<usize>,
 }
 #[cfg(test)]
 thread_local! { static PLANNING_WORK: std::cell::Cell<(usize, usize, usize)> = const { std::cell::Cell::new((0, 0, 0)) }; }
@@ -275,27 +453,58 @@ impl RemovalIndex {
             .enumerate()
             .map(|(i, r)| (r.end, i))
             .collect();
-        Ok(Self { children, by_end })
+        Ok(Self {
+            children,
+            by_end,
+            removed: Vec::new(),
+        })
     }
-    fn range(&self, end: usize) -> Result<Range<usize>, EditError> {
+    fn remove(&mut self, end: usize) -> Result<(), EditError> {
         #[cfg(test)]
         PLANNING_WORK.with(|work| {
             let (p, c, l) = work.get();
             work.set((p, c, l + 1));
         });
         let i = *self.by_end.get(&end).ok_or(EditError::MissingValue)?;
-        let children = &self.children;
-        Ok(if i + 1 < children.len() {
-            children[i].start..children[i + 1].start
-        } else if i > 0 {
-            children[i - 1].end..children[i].end
-        } else {
-            children[i].clone()
-        })
+        self.removed.push(i);
+        Ok(())
+    }
+    // Each run of adjacent removed children takes the separator after it. A run
+    // reaching the last child takes the separator before it instead, and with no
+    // child kept the removal spans first to last child. Removing one child twice
+    // overlaps. Returns whether every child is removed.
+    fn plan(&mut self, splices: &mut Vec<Splice<'_>>) -> Result<bool, EditError> {
+        let (children, removed) = (&self.children, &mut self.removed);
+        removed.sort_unstable();
+        if removed.windows(2).any(|pair| pair[0] == pair[1]) {
+            return Err(EditError::Overlap);
+        }
+        let last = children.len() - 1;
+        let mut runs = removed.iter().copied().peekable();
+        while let Some(first) = runs.next() {
+            let mut end = first;
+            while runs.next_if_eq(&(end + 1)).is_some() {
+                end += 1;
+            }
+            let range = if end < last {
+                children[first].start..children[end + 1].start
+            } else if first > 0 {
+                children[first - 1].end..children[end].end
+            } else {
+                children[0].start..children[last].end
+            };
+            splices.push(Splice {
+                range,
+                value: None,
+                insertion: None,
+                size: 0,
+            });
+        }
+        Ok(removed.len() == children.len())
     }
 }
 struct Request<'a> {
-    pointer: &'a str,
+    pointer: PointerRef<'a>,
     value: Option<&'a dyn WriteJson>,
 }
 struct Splice<'a> {
@@ -306,7 +515,7 @@ struct Splice<'a> {
     size: usize,
 }
 struct Insertion {
-    key: Option<String>,
+    key: Option<Name>,
     comma: bool,
 }
 
@@ -323,23 +532,35 @@ impl Document {
         ))
         .expect("constant OBI")
     }
-    /// Replace or insert an exact value at an RFC 6901 pointer.
+    /// Replace or insert an exact value at an RFC 6901 pointer: escaped text,
+    /// or an exact [`Pointer`] such as a finding's.
     ///
     /// # Errors
     /// Returns an editing error without changing the document.
-    pub fn set(&mut self, pointer: &str, value: &JsonValue) -> Result<(), EditError> {
-        self.edit(&[Edit::Set { pointer, value }])
+    pub fn set<'p>(
+        &mut self,
+        pointer: impl Into<PointerRef<'p>>,
+        value: &JsonValue,
+    ) -> Result<(), EditError> {
+        self.edit(&[Edit::Set {
+            pointer: pointer.into(),
+            value,
+        }])
     }
-    /// Remove an existing member or array element.
+    /// Remove an existing member or array element at an RFC 6901 pointer:
+    /// escaped text, or an exact [`Pointer`] such as a finding's.
     ///
     /// # Errors
     /// Returns an editing error without changing the document.
-    pub fn remove(&mut self, pointer: &str) -> Result<(), EditError> {
-        self.edit(&[Edit::Remove { pointer }])
+    pub fn remove<'p>(&mut self, pointer: impl Into<PointerRef<'p>>) -> Result<(), EditError> {
+        self.edit(&[Edit::Remove {
+            pointer: pointer.into(),
+        }])
     }
     /// Commit a batch with one splice and one parse, under the default JSON limits.
     /// All paths refer to the pre-edit revision. Sibling insertions share a boundary
-    /// in batch order. Overlapping replacements/removals are refused. Untouched bytes
+    /// in batch order. Removing adjacent siblings, up to every member of a container,
+    /// is not an overlap. Overlapping replacements/removals are refused. Untouched bytes
     /// retain their exact spelling, formatting and order. Positions describe current
     /// bytes; retained views and proofs continue to describe their earlier revision.
     ///
@@ -358,19 +579,19 @@ impl Document {
                 Edit::Set { pointer, .. } | Edit::Remove { pointer } => *pointer,
                 Edit::SetOperations { value } => {
                     value.check(&["operations"])?;
-                    "/operations"
+                    "/operations".into()
                 }
                 Edit::SetSources { value } => {
                     value.check(&["sources"])?;
-                    "/sources"
+                    "/sources".into()
                 }
                 Edit::SetBindings { value } => {
                     value.check(&["bindings"])?;
-                    "/bindings"
+                    "/bindings".into()
                 }
                 Edit::SetDependencies { value } => {
                     value.check(&["dependencies"])?;
-                    "/dependencies"
+                    "/dependencies".into()
                 }
             };
             requests.push(Request {
@@ -392,42 +613,28 @@ impl Document {
             return Err(EditError::DuplicateMembers);
         }
         let mut splices = Vec::with_capacity(edits.len());
-        let mut emptied = HashSet::new();
+        // Removals are indexed by their parent's closing position.
         let mut removal_indexes = HashMap::new();
         for edit in edits {
-            let pointer = edit.pointer;
-            if pointer.len() > limits.max_bytes {
-                return Err(limit(limits));
-            }
-            if !pointer.is_empty() && !pointer.starts_with('/') {
-                return Err(EditError::InvalidPointer);
-            }
-            // Validate every escape, including segments leading to existing values.
-            for token in pointer.split('/').skip(1) {
-                decode(token)?;
-            }
+            let address = Address::check(edit.pointer, limits)?;
             let size = edit
                 .value
                 .map(|v| v.size())
                 .transpose()?
                 .flatten()
                 .unwrap_or(0);
-            if let Some(target) = self.value().at(pointer) {
-                let mut range = backend::byte_range(target);
+            if let Some(target) = address.target(self.value()) {
+                let range = backend::byte_range(target);
                 if edit.value.is_none() {
-                    let (parent, _) = pointer.rsplit_once('/').ok_or(EditError::InvalidPointer)?;
-                    let parent = self.value().at(parent).ok_or(EditError::MissingParent)?;
-                    let parent_range = backend::byte_range(parent);
-                    let index = match removal_indexes.entry(parent_range.start) {
+                    let parent = address.parent(self.value())?;
+                    let index = match removal_indexes.entry(backend::byte_range(parent).end - 1) {
                         std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
                         std::collections::hash_map::Entry::Vacant(entry) => {
                             entry.insert(RemovalIndex::new(parent)?)
                         }
                     };
-                    if index.children.len() == 1 {
-                        emptied.insert(parent_range.end - 1);
-                    }
-                    range = index.range(range.end)?;
+                    index.remove(range.end)?;
+                    continue;
                 }
                 splices.push(Splice {
                     range,
@@ -437,18 +644,17 @@ impl Document {
                 });
             } else {
                 let value = edit.value.ok_or(EditError::MissingValue)?;
-                let (parent, token) = pointer.rsplit_once('/').ok_or(EditError::InvalidPointer)?;
-                let key = decode(token)?;
-                let parent = self.value().at(parent).ok_or(EditError::MissingParent)?;
+                let key = address.name()?;
+                let parent = address.parent(self.value())?;
                 let comma = parent.is_empty() == Some(false);
                 let key = match parent.kind() {
                     JsonKind::Object => Some(key),
-                    JsonKind::Array if key == "-" => None,
+                    JsonKind::Array if matches!(&key, Name::Text(key) if key == "-") => None,
                     JsonKind::Array => return Err(EditError::InvalidPointer),
                     _ => return Err(EditError::NotContainer),
                 };
                 let prefix = match &key {
-                    Some(key) => key_size(key).checked_add(1).ok_or_else(|| limit(limits))?,
+                    Some(key) => key.size().checked_add(1).ok_or_else(|| limit(limits))?,
                     None => 0,
                 };
                 let size = size
@@ -462,6 +668,13 @@ impl Document {
                     insertion: Some(Insertion { key, comma }),
                     size,
                 });
+            }
+        }
+        // An insertion into a parent whose every child is removed needs no comma.
+        let mut emptied = HashSet::new();
+        for (close, index) in &mut removal_indexes {
+            if index.plan(&mut splices)? {
+                emptied.insert(*close);
             }
         }
         for splice in &mut splices {
@@ -498,12 +711,12 @@ impl Document {
         let mut inserted = HashSet::new();
         for splice in &splices {
             if let Some(Insertion { key: Some(key), .. }) = &splice.insertion
-                && !inserted.insert((splice.range.start, key.as_str()))
+                && !inserted.insert((splice.range.start, key))
             {
                 return Err(EditError::Overlap);
             }
         }
-        let old = self.to_bytes();
+        let old = self.as_bytes();
         // Subtract all removed bytes first, so a replacement does not temporarily
         // charge both revisions or depend on the order of requests.
         let removed: usize = splices.iter().map(|s| s.range.len()).sum();
@@ -526,7 +739,7 @@ impl Document {
                     out.write_all(b",").map_err(|_| limit(limits))?;
                 }
                 if let Some(key) = insert.key {
-                    Typed(&key).write(&mut out)?;
+                    key.write(&mut out)?;
                     out.write_all(b":").map_err(|_| limit(limits))?;
                 }
             }
@@ -551,7 +764,7 @@ impl Document {
     ) -> Result<(), EditError> {
         self.apply(
             &[Request {
-                pointer,
+                pointer: pointer.into(),
                 value: Some(&Typed(value)),
             }],
             JsonLimits::default(),
@@ -699,12 +912,12 @@ mod tests {
             }
         }
         let mut document = Document::new();
-        let original = document.to_bytes().to_vec();
+        let original = document.as_bytes().to_vec();
         let witness = Witness(Cell::new(false));
         let error = document
             .apply(
                 &[Request {
-                    pointer: "/description",
+                    pointer: "/description".into(),
                     value: Some(&witness),
                 }],
                 JsonLimits {
@@ -715,11 +928,11 @@ mod tests {
             .unwrap_err();
         assert_eq!(error.code(), "byte-limit");
         assert!(!witness.0.get());
-        assert_eq!(document.to_bytes(), original);
+        assert_eq!(document.as_bytes(), original);
         let error = document
             .apply(
                 &[Request {
-                    pointer: "/description",
+                    pointer: "/description".into(),
                     value: Some(&Typed(&"a".repeat(100))),
                 }],
                 JsonLimits {
@@ -729,7 +942,7 @@ mod tests {
             )
             .unwrap_err();
         assert_eq!(error.code(), "byte-limit");
-        assert_eq!(document.to_bytes(), original);
+        assert_eq!(document.as_bytes(), original);
     }
 
     #[test]
@@ -746,19 +959,19 @@ mod tests {
             },
         ] {
             let mut doc = Document::new();
-            let before = doc.to_bytes().to_vec();
+            let before = doc.as_bytes().to_vec();
             let value = JsonValue::parse("[[[1]]]").unwrap();
             let error = doc
                 .apply(
                     &[Request {
-                        pointer: "/x",
+                        pointer: "/x".into(),
                         value: Some(&value),
                     }],
                     limits,
                 )
                 .unwrap_err();
             assert!(matches!(error.code(), "node-limit" | "depth-limit"));
-            assert_eq!(doc.to_bytes(), before);
+            assert_eq!(doc.as_bytes(), before);
         }
     }
     #[test]
@@ -792,7 +1005,9 @@ mod tests {
                 .collect();
             let edits: Vec<_> = paths
                 .iter()
-                .map(|pointer| Edit::Remove { pointer })
+                .map(|pointer| Edit::Remove {
+                    pointer: pointer.into(),
+                })
                 .collect();
             PLANNING_WORK.with(|work| work.set((0, 0, 0)));
             document.edit(&edits).unwrap();
@@ -809,7 +1024,7 @@ mod tests {
             } else {
                 format!("[{remaining}]")
             };
-            assert_eq!(document.to_bytes(), expected.as_bytes());
+            assert_eq!(document.as_bytes(), expected.as_bytes());
         }
     }
     #[test]
@@ -838,13 +1053,13 @@ mod tests {
         let mut document = Document::new();
         document.set_typed("/x", &witness).unwrap();
         assert_eq!(witness.calls.get(), 1);
-        let before = document.to_bytes().to_vec();
+        let before = document.as_bytes().to_vec();
         witness.calls.set(0);
         witness.fields.set(0);
         let error = document
             .apply(
                 &[Request {
-                    pointer: "/x",
+                    pointer: "/x".into(),
                     value: Some(&Typed(&witness)),
                 }],
                 JsonLimits {
@@ -856,7 +1071,7 @@ mod tests {
         assert_eq!(error.code(), "byte-limit");
         assert_eq!(witness.calls.get(), 1);
         assert!(witness.fields.get() < 10);
-        assert_eq!(document.to_bytes(), before);
+        assert_eq!(document.as_bytes(), before);
         let limits = JsonLimits {
             max_bytes: 7,
             ..Default::default()

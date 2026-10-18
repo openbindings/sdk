@@ -65,7 +65,7 @@ fn explained_problems_locate_the_failing_node_and_the_documents_keyword() {
     assert_eq!(problem.schema.resource, None);
     assert_eq!(problem.schema.pointer, keyword);
     let located = document.locate(&problem.schema).unwrap();
-    let source = std::str::from_utf8(document.to_bytes()).unwrap();
+    let source = std::str::from_utf8(document.as_bytes()).unwrap();
     let offset = source.find("\"integer\"").unwrap();
     assert_eq!(located.pointer.as_ref().unwrap(), keyword);
     assert_eq!(located.byte_offset, offset);

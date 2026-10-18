@@ -560,30 +560,16 @@ impl BindingInvoker for Advisory {
     ) -> Self::Invocation<'a> {
         std::future::ready(Ok(()))
     }
-}
-impl openbindings_invocation::binding::BindingPreflight for Advisory {
-    type Preflight<'a>
-        = Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        Option<openbindings_invocation::ContextChallenge>,
-                        InvocationError,
-                    >,
-                > + Send
-                + 'a,
-        >,
-    >
-    where
-        Self: 'a;
-    fn preflight<'a>(&'a self, r: BindingRequest<'a>, _: CancellationToken) -> Self::Preflight<'a> {
-        Box::pin(async move {
-            if r.context.is_some() {
-                Err(InvocationError::new("custom.preflight", None).unwrap())
-            } else {
-                Ok(Some(challenge()))
-            }
-        })
+    fn preflight<'a>(
+        &'a self,
+        r: BindingRequest<'a>,
+        _: CancellationToken,
+    ) -> Option<Self::Invocation<'a>> {
+        Some(std::future::ready(Err(if r.context.is_some() {
+            InvocationError::new("custom.preflight", None).unwrap()
+        } else {
+            InvocationError::challenge(challenge())
+        })))
     }
 }
 
@@ -592,21 +578,13 @@ async fn advisory_preflight_can_challenge_or_fail_without_becoming_an_invocation
     let s = source();
     let b = BindingValue::default();
     let f = Invoker::new(Advisory);
-    assert!(
-        f.preflight_with_provider(request(&s, &b))
-            .await
-            .unwrap()
-            .is_some()
-    );
+    assert!(f.preflight(request(&s, &b)).await.unwrap().is_some());
     let context = json("{}");
     let r = BindingRequest {
         context: Some(&context),
         ..request(&s, &b)
     };
-    assert_eq!(
-        f.preflight_with_provider(r).await.unwrap_err().code(),
-        "custom.preflight"
-    );
+    assert_eq!(f.preflight(r).await.unwrap_err().code(), "custom.preflight");
     let mut call = f.invoke(r);
     assert!(call.next().await.is_none());
 }
@@ -726,30 +704,16 @@ impl BindingInvoker for LargeFailure {
         )
         .unwrap()))
     }
-}
-impl openbindings_invocation::binding::BindingPreflight for LargeFailure {
-    type Preflight<'a>
-        = Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        Option<openbindings_invocation::ContextChallenge>,
-                        InvocationError,
-                    >,
-                > + Send
-                + 'a,
-        >,
-    >
-    where
-        Self: 'a;
-    fn preflight<'a>(&'a self, r: BindingRequest<'a>, _: CancellationToken) -> Self::Preflight<'a> {
-        Box::pin(async move {
-            if r.source.content.is_none() {
-                Err(InvocationError::challenge(challenge()))
-            } else {
-                Err(InvocationError::new("custom.large", r.source.content.clone()).unwrap())
-            }
-        })
+    fn preflight<'a>(
+        &'a self,
+        r: BindingRequest<'a>,
+        _: CancellationToken,
+    ) -> Option<Self::Invocation<'a>> {
+        Some(std::future::ready(Err(if r.source.content.is_none() {
+            InvocationError::challenge(challenge())
+        } else {
+            InvocationError::new("custom.large", r.source.content.clone()).unwrap()
+        })))
     }
 }
 
@@ -776,25 +740,20 @@ async fn oversized_terminal_and_preflight_failure_fall_back_without_data_or_retr
         call.boundary_error().unwrap().code(),
         "terminal-resource-limit"
     );
-    let e = f
-        .preflight_with_provider(request(&s, &b))
-        .await
-        .unwrap_err();
+    let e = f.preflight(request(&s, &b)).await.unwrap_err();
     assert_eq!(e.code(), "ERR_EXECUTION_FAILED");
     assert!(e.data().is_none());
 }
 
+// The hook predicts the challenge invocation would raise; preflight returns it
+// as its result, never as an error carrying a retry path.
 #[tokio::test]
-async fn preflight_requires_context_challenges_in_the_result_not_the_error_channel() {
+async fn preflight_returns_a_predicted_challenge_as_its_result_not_an_error() {
     let s = source();
     let b = BindingValue::default();
     let f = Invoker::new(LargeFailure);
-    let error = f
-        .preflight_with_provider(request(&s, &b))
-        .await
-        .unwrap_err();
-    assert_eq!(error.code(), "ERR_EXECUTION_FAILED");
-    assert!(error.context_required().is_none());
+    let predicted = f.preflight(request(&s, &b)).await.unwrap().unwrap();
+    assert_eq!(predicted.value().text(), challenge().value().text());
 }
 
 #[tokio::test]

@@ -747,25 +747,35 @@ fn locations_with_work(values: &[crate::JsonRef<'_>]) -> (Vec<crate::SourceLocat
         scanned,
     )
 }
+// Node ids are assigned in source order and a subtree's ids are contiguous,
+// so the subtree's unpaired strings are one slice of the sorted id list,
+// found in logarithmic time in the number of unpaired strings.
+fn unpaired_within(value: &crate::JsonValue) -> &[Id] {
+    let (arena, start) = (value.owner.as_ref(), value.id);
+    let end = arena.nodes[start].span.end;
+    let probe = |within: bool| {
+        #[cfg(test)]
+        arena
+            .unpaired_query_probes
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        within
+    };
+    let first = arena.unpaired.partition_point(|&id| probe(id < start));
+    let last = first
+        + arena.unpaired[first..].partition_point(|&id| probe(arena.nodes[id].span.start < end));
+    &arena.unpaired[first..last]
+}
 pub fn has_unpaired(value: &crate::JsonValue) -> bool {
-    let span = &value.owner.nodes[value.id].span;
-    value.owner.unpaired.iter().any(|id| {
-        let inner = &value.owner.nodes[*id].span;
-        span.start <= inner.start && inner.end <= span.end
-    })
+    !unpaired_within(value).is_empty()
 }
 
 /// Borrow string and member-name tokens containing unpaired UTF-16 units.
 /// The exact parser retains these for values and draft inspection; document
 /// conformance applies its own OBI-01 exclusion at the original token locations.
 pub fn unpaired_strings(value: &crate::JsonValue) -> impl Iterator<Item = crate::JsonRef<'_>> {
-    let span = &value.owner.nodes[value.id].span;
-    value.owner.unpaired.iter().filter_map(move |&id| {
-        let inner = &value.owner.nodes[id].span;
-        (span.start <= inner.start && inner.end <= span.end).then_some(crate::JsonRef {
-            owner: &value.owner,
-            id,
-        })
+    unpaired_within(value).iter().map(|&id| crate::JsonRef {
+        owner: &value.owner,
+        id,
     })
 }
 /// Stack-safe exact comparison, charged to the enclosing evaluator work scope.
@@ -796,10 +806,11 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
                 if !jsonschema::ob_work::charge(1) {
                     return false;
                 }
+                // Names compare by their exact UTF-16 units (§5), so a name with
+                // an unpaired unit decides equality without interpretation.
                 let matched = if let Some(key) = items.0.string(member.key) {
                     other.get(&key.to_owned())
                 } else {
-                    interpreted_unpaired();
                     let key = items.0.units(member.key).unwrap();
                     let mut matched = None;
                     for candidate in other.1 {
@@ -845,6 +856,9 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
                     View::Text(_) => None,
                 }
             }
+            // Strings are equal exactly when their UTF-16 units are (§5). A
+            // string with an unpaired unit never equals a scalar one, and two
+            // such strings compare their units, so neither needs interpretation.
             match (scalar(left), scalar(right)) {
                 (Some(a), Some(b)) => {
                     if a != b {
@@ -852,7 +866,6 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
                     }
                 }
                 _ => {
-                    interpreted_unpaired();
                     if unpaired(left) != unpaired(right) {
                         return false;
                     }
@@ -895,6 +908,42 @@ pub fn standalone(value: crate::JsonValue) -> crate::JsonValue {
     )
     .expect("an admitted value's source span is a complete JSON value")
 }
+/// Copy retained values into one new arena that holds exactly their texts, in
+/// order, and return each as a view of it. Values kept together this way keep
+/// nothing else of the arenas they came from, at one parse for all of them.
+pub fn standalone_list(values: &[crate::JsonRef<'_>]) -> Vec<crate::JsonValue> {
+    if values.is_empty() {
+        return Vec::new();
+    }
+    let size = values
+        .iter()
+        .map(|value| value.text().len() + 1)
+        .sum::<usize>()
+        + 1;
+    let mut text = String::with_capacity(size);
+    for value in values {
+        text.push(if text.is_empty() { '[' } else { ',' });
+        text.push_str(value.text());
+    }
+    text.push(']');
+    let list = crate::JsonValue::parse_with_limits(
+        text,
+        crate::JsonLimits {
+            max_bytes: usize::MAX,
+            max_depth: usize::MAX,
+            max_nodes: u32::MAX as usize,
+        },
+    )
+    .expect("admitted values' source spans are complete JSON values");
+    let copies: Vec<_> = list
+        .view()
+        .elements()
+        .expect("a list")
+        .map(crate::JsonRef::to_owned)
+        .collect();
+    debug_assert_eq!(copies.len(), values.len());
+    copies
+}
 /// Borrow duplicate-containing objects in parse order without materializing
 /// pointers or coordinates. Callers cap this iterator before collecting nodes.
 /// Document validation passes a standalone root, so this covers its whole arena.
@@ -921,6 +970,19 @@ pub fn duplicate_member_names(
             owner: &value.owner,
             id: *key,
         })
+}
+
+/// Count a value's nodes, including itself and its member-name tokens: the
+/// measure [`crate::JsonLimits::max_nodes`] admits. Constant time for a parsed
+/// root; a subtree's ids are contiguous in source order, so otherwise this is
+/// one logarithmic search.
+pub fn node_count(value: crate::JsonRef<'_>) -> usize {
+    if value.id == 0 {
+        return value.owner.nodes.len();
+    }
+    let nodes = &value.owner.nodes[value.id..];
+    let end = nodes[0].span.end;
+    nodes.partition_point(|node| node.span.start < end)
 }
 
 pub fn depth(value: &crate::JsonValue) -> usize {
@@ -980,6 +1042,18 @@ mod tests {
         assert_eq!(decoded_string_size(unsupported.view(), usize::MAX), None);
     }
     #[test]
+    fn node_counts_cover_a_value_and_everything_below_it() {
+        let source = r#"{"a":[1,{"b":null}],"c":"d"}"#;
+        let value = crate::JsonValue::parse(source).unwrap();
+        // The root, its two member names, the array and its two elements,
+        // the inner name and null, and the string.
+        assert_eq!(node_count(value.view()), 9);
+        for (pointer, nodes) in [("/a", 5), ("/a/1", 3), ("/a/0", 1), ("/c", 1)] {
+            assert_eq!(node_count(value.at(pointer).unwrap()), nodes, "{pointer}");
+        }
+        assert_eq!(node_count(crate::JsonValue::parse("7").unwrap().view()), 1);
+    }
+    #[test]
     fn indexed_members_preserve_each_exact_occurrence() {
         let source = r#"{"z":9007199254740993,"\ud800":null,"z":0.29000000000000001}"#;
         let value = crate::JsonValue::parse(source).unwrap();
@@ -1009,6 +1083,52 @@ mod tests {
         for source in ["{}", "[]", "[1]", "null", "1", "true", r#""text""#] {
             let value = crate::JsonValue::parse(source).unwrap();
             assert!(member_at(value.view(), 0).is_none());
+        }
+    }
+
+    #[test]
+    fn unpaired_queries_match_subtree_membership_and_bound_search_work() {
+        use std::sync::atomic::Ordering;
+        let nested = r#"{"\ud800":{"a":"\udc00","b":["x","\ud800y"]},"c":"ok","d":[{"\udfff":0},[]],"e":"\ud83d\ude00","f":"\ude00\ud83d"}"#;
+        // Many unpaired strings beside many clean subtrees: each query must
+        // cost a search, not a scan of every unpaired string in the arena.
+        let wide = format!(
+            "[{},{}]",
+            std::iter::repeat_n(r#"{"type":"string"}"#, 2048)
+                .collect::<Vec<_>>()
+                .join(","),
+            std::iter::repeat_n(r#""\ud800""#, 4096)
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        for source in [nested, wide.as_str(), "[]", r#""\ud800""#, r#"{"a":1}"#] {
+            let root = crate::JsonValue::parse(source).unwrap();
+            let arena = &root.owner;
+            assert!(arena.unpaired.windows(2).all(|pair| pair[0] < pair[1]));
+            let bound = 2 * (arena.unpaired.len().max(1).ilog2() as usize + 2);
+            for id in 0..arena.nodes.len() {
+                let span = &arena.nodes[id].span;
+                // Independent slow oracle: every unpaired token inside this value.
+                let expected: Vec<_> = arena
+                    .unpaired
+                    .iter()
+                    .copied()
+                    .filter(|&inner| {
+                        let inner = &arena.nodes[inner].span;
+                        span.start <= inner.start && inner.end <= span.end
+                    })
+                    .collect();
+                let value = crate::JsonValue {
+                    owner: arena.clone(),
+                    id,
+                };
+                arena.unpaired_query_probes.store(0, Ordering::Relaxed);
+                assert_eq!(has_unpaired(&value), !expected.is_empty(), "node {id}");
+                let probes = arena.unpaired_query_probes.load(Ordering::Relaxed);
+                assert!(probes <= bound, "{probes} probes exceeds {bound}");
+                let found: Vec<_> = unpaired_strings(&value).map(|at| at.id).collect();
+                assert_eq!(found, expected, "node {id}");
+            }
         }
     }
 

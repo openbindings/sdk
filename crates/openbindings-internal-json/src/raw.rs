@@ -169,6 +169,8 @@ pub struct Arena {
     position_scanned: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
     pub duplicate_query_probes: std::sync::atomic::AtomicUsize,
+    #[cfg(test)]
+    pub unpaired_query_probes: std::sync::atomic::AtomicUsize,
     pub nodes: Vec<Node>,
     pub duplicates: Vec<(Id, Id)>,
     pub unpaired: Vec<Id>,
@@ -207,6 +209,8 @@ impl Arena {
                 position_scanned: std::sync::atomic::AtomicUsize::new(0),
                 #[cfg(test)]
                 duplicate_query_probes: std::sync::atomic::AtomicUsize::new(0),
+                #[cfg(test)]
+                unpaired_query_probes: std::sync::atomic::AtomicUsize::new(0),
                 nodes: Vec::new(),
                 duplicates: Vec::new(),
                 unpaired: Vec::new(),
