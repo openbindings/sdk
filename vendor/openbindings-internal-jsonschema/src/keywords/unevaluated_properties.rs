@@ -535,13 +535,14 @@ fn compile_pattern_properties<'a, F: Json>(
     let pat_ctx = ctx.new_at_location("patternProperties");
     let mut result = Patterns::default();
 
-    for (pattern, schema) in patterns {
+    // Marking needs only the patterns; the `patternProperties` keyword compiles the subschemas
+    // where it validates them. A copy compiled here would be dropped while the compiler can still
+    // hand its unsettled `$ref` targets to later rounds through non-owning edges.
+    for pattern in patterns.keys() {
         let schema_ctx = pat_ctx.new_at_location(pattern.as_str());
         let Ok(()) = result.push(&schema_ctx, pattern) else {
             return Err(invalid_regex(&schema_ctx, pattern));
         };
-        compiler::compile(&schema_ctx, schema_ctx.as_resource_ref(schema))
-            .map_err(ValidationError::to_owned)?;
     }
 
     Ok(result)

@@ -91,7 +91,7 @@ cached resolvable graph, not a crates.io-head claim.
 
 Upstream revision: `55ac1664384793c5d3b20745d3f9c169dfe2c06f`.
 Applied package: `openbindings-internal-jsonschema 0.58.6-ob.1`.
-The complete remaining Rust delta is **+300/-14 lines in ten files** against the
+The complete remaining Rust delta is **+304/-17 lines in ten files** against the
 0.58.6 archive (physical added/removed lines, including comments and blanks):
 
 | File under src/ | Added | Removed | Why retained |
@@ -99,7 +99,7 @@ The complete remaining Rust delta is **+300/-14 lines in ten files** against the
 | canonical/context.rs | 2 | 2 | Use the ECMA matcher without Rust-regex translation in canonical pattern compilation. |
 | compiler.rs | 3 | 3 | Cache and compile that same matcher, preserving authored pattern syntax. |
 | keywords/additional_properties.rs | 2 | 2 | Route both specialized patternProperties/additionalProperties paths through ECMA matching. |
-| keywords/unevaluated_properties.rs | 1 | 1 | Keep annotation matching on the same ECMA engine. |
+| keywords/unevaluated_properties.rs | 5 | 4 | Keep annotation matching on the same ECMA engine; build only the walk's `patternProperties` patterns (see compiled subschema ownership). |
 | lib.rs | 5 | 0 | Export private adapter work and regex controls. |
 | node.rs | 38 | 1 | Charge schema entries/depth and signal detected cycles; the outer adapter refuses any stopped result. |
 | ob_ecma.rs | 117 | 0 | Select regress ES2020 Unicode behavior, scoped regex work, and the qualified Unicode-property refusal. |
@@ -107,9 +107,9 @@ The complete remaining Rust delta is **+300/-14 lines in ten files** against the
 | properties.rs | 1 | 1 | Use the same matcher type for property validators. |
 | regex.rs | 4 | 4 | Route the library's internal matcher/builder through regress. |
 
-These guards have no complete equivalent in documented upstream APIs. All
-ordinary resolution, compilation, applicators and error construction remain the
-library's implementation. Upstream code, tests and comments keep their own wording:
+These guards have no complete equivalent in documented upstream APIs. Apart from
+the ownership correction below, all ordinary resolution, compilation, applicators
+and error construction remain the library's implementation. Upstream code, tests and comments keep their own wording:
 the SDK's vocabulary governs its own sources, not retained upstream text. Numeric semantics use its public extension APIs instead
 of forked equality/type/size internals. Cargo changes only select the private
 package/regress identities and ordinary upstream value/registry/serde dependencies.
@@ -122,6 +122,53 @@ and validate() runs for its first error only when a caller explains a failing
 value. `tools/verify-diagnostics.py` continues to enforce the pinned allocation
 ceilings and value allocation checks. No construction-memory guarantee is made for
 an explanation's library diagnostics.
+
+### Compiled subschema ownership
+
+Upstream's `unevaluatedProperties` walk compiles each `patternProperties` subschema
+it reaches, then drops the node and keeps only the pattern. The walk compiles at
+its referrer's location, so that node, and any `$ref` target first compiled
+beneath it, has no owner but the build caches. The compiler links a later
+compilation round to an unsettled node of an earlier round by a non-owning edge,
+on the premise that the earlier round's tree owns that node. After the build such
+a target is freed, and validation panics with "pending schema target dropped"; a
+Wasm host aborts. Unmodified jsonschema 0.58.6 panics on a seven-resource program
+the SDK projects. Release 0.59.0 and upstream master still compile and drop.
+
+The fork's walk builds only the patterns. Marking needs nothing else: a 2020-12
+`patternProperties` annotation is the set of matched names, and nothing read the
+dropped node. The subschemas stay compiled, and owned, where `patternProperties`
+validates them. Every schema the walk visits is also compiled as a node, by its
+enclosing schema, by a `$ref` or `$dynamicRef` keyword (possibly in a later
+round), or as one of the walk's own `allOf`/`anyOf`/`oneOf`/`if` nodes; that node's
+`patternProperties` keyword, or the fused `additionalProperties` validator,
+compiles the same subschemas and raises the same errors. The walk's copy raised
+an error first only for a resource root reached through `$ref: ""`, which
+validation skips, or under a custom keyword replacing `patternProperties`; the SDK
+uses neither. Its cache entries only decided which compilation came first: the
+review corpora, step budgets and cancellation points are byte-identical to the
+unmodified walk. Prepared contracts hold exactly the heap they held before, and
+preparation requests less: 30 referrers reaching five recursive patterns request
+1,470,560 instead of 1,671,146 bytes in 10,776 instead of 13,177 allocations, and
+hold 178,183 bytes either way. Keeping the walk's unsettled nodes instead held
+about 940 bytes and 13 allocations more per pattern and referrer. The benchmark's
+`unevaluated-patterns` workload guards that retained heap.
+
+Three compile sites still drop a node, none with this hazard. The walk's boolean
+`allOf`/`anyOf`/`oneOf` branches are settled leaves, and a dropped settled node is
+safe: every held non-owning edge (a shared reuse, a deferred target's placeholder,
+a cycle's alias placeholder) points at an unsettled node, and reaching one makes
+every enclosing node unsettled. The regex fallback after a literal
+`patternProperties` attempt recompiles the same locations in the same round and
+owns the cached nodes. `additionalProperties: true` beside `patternProperties`
+compiles the pattern subschemas and returns no validator; the `patternProperties`
+keyword compiles the same locations in the same round and owns those nodes,
+unless a custom keyword replaces it, which the SDK never registers.
+
+The evaluator's `unevaluated_pattern_ownership` test (and its Wasm counterpart)
+runs the reduced reproducer in four placements; `reference_placement` compares
+500 seeded random contracts, split across document, contained and supplied
+resources, with the same schemas in one resource. Both fail on the unmodified walk.
 
 ## regress
 

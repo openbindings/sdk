@@ -222,7 +222,7 @@
 -required-features = ["jsonb"]
 --- /dev/null
 +++ b/OPENBINDINGS-PATCH.md
-@@ -0,0 +1,20 @@
+@@ -0,0 +1,24 @@
 +# Internal dependency fork
 +
 +Based on `jsonschema-0.58.6`; upstream license and notices are retained.
@@ -230,6 +230,10 @@
 +ECMAScript-regex guards. The regex correctness fixes (empty quantifier semantics
 +and backtrack budget restoration) remain in the sibling regress fork; see
 +DEPENDENCY-MAINTENANCE.md.
++One correction is the fork's own: an `unevaluatedProperties` walk builds only the
++`patternProperties` patterns it needs. Upstream also compiles and drops the subschemas,
++although a later compilation round can still reach their unsettled `$ref` targets through
++a non-owning edge.
 +All diagnostic admission, copy, payload, metadata and schema-detail changes have
 +been removed. Error construction is the upstream implementation.
 +
@@ -509,6 +513,24 @@
      standard: Vec<Arc<regex::Regex>>,
  }
  
+@@ -535,13 +535,14 @@
+     let pat_ctx = ctx.new_at_location("patternProperties");
+     let mut result = Patterns::default();
+ 
+-    for (pattern, schema) in patterns {
++    // Marking needs only the patterns; the `patternProperties` keyword compiles the subschemas
++    // where it validates them. A copy compiled here would be dropped while the compiler can still
++    // hand its unsettled `$ref` targets to later rounds through non-owning edges.
++    for pattern in patterns.keys() {
+         let schema_ctx = pat_ctx.new_at_location(pattern.as_str());
+         let Ok(()) = result.push(&schema_ctx, pattern) else {
+             return Err(invalid_regex(&schema_ctx, pattern));
+         };
+-        compiler::compile(&schema_ctx, schema_ctx.as_resource_ref(schema))
+-            .map_err(ValidationError::to_owned)?;
+     }
+ 
+     Ok(result)
 --- a/src/lib.rs
 +++ b/src/lib.rs
 @@ -7276,3 +7276,8 @@

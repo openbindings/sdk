@@ -86,8 +86,11 @@ supplied carrier with 5,000 unused definitions. Its `context` mode measures
 public contract preparation; a counted unit test also requires one carrier
 preparation and the unchanged traversal cancellation checkpoints.
 The `reference-text-1000` and `reference-text-5000` fixtures repeat long reference
-spellings to qualify preparation heap. The diagnostic allocator regression also
-bounds cache storage growth when URI suffixes grow from 256 to 1,024 bytes.
+spellings to qualify preparation heap. The `unevaluated-patterns` fixture sends 100
+`unevaluatedProperties` walks through references to five recursive `patternProperties`
+subschemas; its `eval` retained heap shows any copy of those subschemas a walk keeps.
+The diagnostic allocator regression also bounds cache storage growth when URI
+suffixes grow from 256 to 1,024 bytes.
 Hash collisions are forced by the adapter's unit test; random benchmark hashes
 are never treated as a deterministic collision fixture.
 
