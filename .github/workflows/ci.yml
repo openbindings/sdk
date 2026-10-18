@@ -34,33 +34,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: ${{ steps.rust-version.outputs.version }}
-      - name: Build probes (debug)
-        run: |
-          cargo build --locked -p openbindings-json-schema-evaluator --example pattern_stack_probe
-          cargo build --locked --manifest-path tools/diag-regress-phases/Cargo.toml
-      - name: Evaluator phases (debug)
+      - name: Build probe (debug)
+        run: cargo build --locked -p openbindings-json-schema-evaluator --example pattern_stack_probe
+      - name: Smallest stacks (debug)
         env:
-          PROBE_STACKS: 256,512,1024,2048
+          PROBE_MODE: min-stack
         run: ./target/debug/examples/pattern_stack_probe.exe
-      - name: Regress stages (debug)
+      - name: Build probe (release)
+        run: cargo build --locked --release -p openbindings-json-schema-evaluator --example pattern_stack_probe
+      - name: Smallest stacks (release)
         env:
-          PROBE_STACKS: 256,512,1024,2048
-        run: ./target/debug/diag-regress-phases.exe
-      - name: pattern_stack test as committed (debug)
-        continue-on-error: true
-        run: cargo test --locked -p openbindings-json-schema-evaluator --test pattern_stack
-      - name: Build probes (release)
-        run: |
-          cargo build --locked --release -p openbindings-json-schema-evaluator --example pattern_stack_probe
-          cargo build --locked --release --manifest-path tools/diag-regress-phases/Cargo.toml
-      - name: Evaluator phases (release)
-        env:
-          PROBE_STACKS: 64,128,256,512
+          PROBE_MODE: min-stack
         run: ./target/release/examples/pattern_stack_probe.exe
-      - name: Regress stages (release)
-        env:
-          PROBE_STACKS: 48,64,128,256
-        run: ./target/release/diag-regress-phases.exe
-      - name: pattern_stack test as committed (release)
-        continue-on-error: true
-        run: cargo test --locked --release -p openbindings-json-schema-evaluator --test pattern_stack
