@@ -34,15 +34,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: ${{ steps.rust-version.outputs.version }}
-      - name: Build probe (debug)
-        run: cargo build --locked -p openbindings-json-schema-evaluator --example pattern_stack_probe
-      - name: Smallest stacks (debug)
-        env:
-          PROBE_MODE: min-stack
-        run: ./target/debug/examples/pattern_stack_probe.exe
-      - name: Build probe (release)
-        run: cargo build --locked --release -p openbindings-json-schema-evaluator --example pattern_stack_probe
-      - name: Smallest stacks (release)
-        env:
-          PROBE_MODE: min-stack
-        run: ./target/release/examples/pattern_stack_probe.exe
+      - name: Proposed pattern_stack test (debug)
+        run: cargo test --locked -p openbindings-json-schema-evaluator --test pattern_stack
+      - name: Proposed pattern_stack test (release)
+        run: cargo test --locked --release -p openbindings-json-schema-evaluator --test pattern_stack
