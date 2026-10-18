@@ -175,6 +175,14 @@ growing one loop moves every later one, and SDK changes move code the same way.
 Layout effects cannot be removed entirely, so timing stays advisory on shared
 runners.
 
+On Linux, glibc adapts its mmap and trim thresholds to a process's earlier frees,
+so a candidate whose preparation history differs from the baseline's can have
+large blocks served by fresh mappings on one side and by reused heap on the other.
+That once measured a 50,000-member parse at 1.9x with identical allocations and
+RSS, and at 0.997 once the thresholds were pinned. The workflow therefore pins
+`MALLOC_MMAP_THRESHOLD_` (32 MiB) and `MALLOC_TRIM_THRESHOLD_` (128 MiB) for both
+sides; local runs on other allocators are unaffected.
+
 On 2026-10-17 (macOS arm64, Rust 1.99.0, paired runs of 40 pairs per row on a
 loaded host), removing per-iteration dispatch lowered the `baseline` floor from
 5.1 to 2.9 ns and small evaluations by 1.3 to 3.9 ns; larger rows kept a median

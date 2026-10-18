@@ -111,7 +111,7 @@ bytes, checked against independent fixture expectations before timing.
 then requests full available diagnostics per iteration; serialization stays
 outside timing. Its precheck includes reported problem count, first problem
 code and original instance/schema locations, as well as the full observation.
-On the current SDK the shim selects `Diagnostics::Upstream` at preparation.
+The shim calls `PreparedContract::explain_with_control` per iteration.
 
 Each request selects its mode's operation once, before timing. Every mode's
 warmups and timed loop form a separate, never-inlined instance of one generic
@@ -149,7 +149,10 @@ runtime and fixture carriage, not just evaluator memory.
 
 The separate workflow **enforces outcome checks, requested heap and allocation
 counts now**, using `--enforce`. Outcome mismatches, failed checks and heap/count
-flags fail the job. Timing decisions and RSS remain advisory, including timing
+flags fail the job. The workflow pins glibc's `MALLOC_MMAP_THRESHOLD_` and
+`MALLOC_TRIM_THRESHOLD_` for both sides, so allocation history before timing
+cannot change how large blocks are served (see docs/performance-boundaries.md).
+Timing decisions and RSS remain advisory, including timing
 regressions and inconclusive measurements. Omitting `--enforce` gives a local
 advisory report without failing on outcome errors or heap/count flags.
 Timing enforcement requires explicit review after about 20 calibration runs

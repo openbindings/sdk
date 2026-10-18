@@ -64,6 +64,12 @@ jobs:
           cargo test --locked --manifest-path tools/evaluator-bench/Cargo.toml
       - name: Enforce outcomes and memory on serial pairs
         if: steps.build.outputs.comparable != 'false'
+        # glibc adapts its mmap and trim thresholds to each process's earlier
+        # frees, so two binaries' different preparation history before timing
+        # could serve large blocks differently. Pin both for every child.
+        env:
+          MALLOC_MMAP_THRESHOLD_: "33554432"
+          MALLOC_TRIM_THRESHOLD_: "134217728"
         run: |
           python tools/evaluator-bench/compare.py \
             --baseline "$RUNNER_TEMP/evaluator-bin/baseline" \
