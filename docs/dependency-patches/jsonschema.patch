@@ -226,10 +226,10 @@
 +# Internal dependency fork
 +
 +Based on `jsonschema-0.58.6`; upstream license and notices are retained.
-+The distinct package identity selects the qualified work/depth/cycle and
-+ECMAScript-regex guards. The regex correctness fixes (empty quantifier semantics
-+and backtrack budget restoration) remain in the sibling regress fork; see
-+DEPENDENCY-MAINTENANCE.md.
++The distinct package identity selects the qualified evaluation work/depth/cycle,
++compilation work and ECMAScript-regex guards. The regex correctness fixes (empty
++quantifier semantics and backtrack budget restoration) remain in the sibling
++regress fork; see DEPENDENCY-MAINTENANCE.md.
 +One correction is the fork's own: an `unevaluatedProperties` walk builds only the
 +`patternProperties` patterns it needs. Upstream also compiles and drops the subschemas,
 +although a later compilation round can still reach their unsettled `$ref` targets through
@@ -482,6 +482,37 @@
          let translated = self.translated_pattern(pattern)?;
          {
              let cache = self.shared.pattern_cache.borrow();
+@@ -993,6 +993,8 @@
+             .deferred_placeholders
+             .borrow_mut()
+             .insert(key.clone(), placeholder.clone());
++        // OpenBindings qualification patch: charge the placeholders this copies.
++        crate::ob_work::compile_charge(self.shared.alias_placeholders.borrow().len());
+         let in_progress = self.shared.alias_placeholders.borrow().clone();
+         self.shared
+             .deferred_targets
+@@ -1108,7 +1110,8 @@
+     let resource = draft.create_resource_ref(schema);
+ 
+     if config.validate_schema {
+-        validate_schema(draft, schema)?;
++        // OpenBindings qualification patch: meta-validation is not compilation work.
++        crate::ob_work::uncharged(|| validate_schema(draft, schema))?;
+     }
+ 
+     if let Some(registry) = config.registry {
+@@ -1551,6 +1554,11 @@
+         Ok(existing) => return Ok(existing),
+         Err(key) => key,
+     };
++    // OpenBindings qualification patch: charge this compilation, with the dynamic scope
++    // keying its caches; the adapter refuses a build whose compilation scope is spent.
++    if !crate::ob_work::compile_charge(1 + key.location.dynamic_scope.iter().count()) {
++        return Err(ValidationError::custom("schema compilation work limit"));
++    }
+     let outer = ctx.start_node();
+     let target = alias
+         .as_ref()
 --- a/src/keywords/additional_properties.rs
 +++ b/src/keywords/additional_properties.rs
 @@ -1683,7 +1683,7 @@
@@ -809,8 +840,9 @@
 +}
 --- /dev/null
 +++ b/src/ob_work.rs
-@@ -0,0 +1,127 @@
-+//! OpenBindings qualification patch: evaluator entry work/depth accounting.
+@@ -0,0 +1,190 @@
++//! OpenBindings qualification patch: evaluator entry work/depth accounting, and
++//! compilation work accounting for schema builds.
 +//! A bounded call must check its outcome before exposing any engine verdict.
 +use std::cell::Cell;
 +#[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -936,6 +968,68 @@
 +        state.stop.get_or_insert(Stop::Arithmetic);
 +    }
 +    STATE.set(state);
++}
++
++/// Schema compilation work: a scope separate from evaluation's, so meta-validation
++/// and evaluation budgets never mix with it. Each compiled schema node is charged
++/// with the dynamic scope that keys its caches, and each `$ref` deferral with the
++/// in-progress placeholders it copies. Scopes do not nest: an inner one replaces
++/// the outer until it returns.
++#[derive(Clone, Copy)]
++struct Compiling {
++    active: bool,
++    remaining: usize,
++    spent: bool,
++}
++const NOT_COMPILING: Compiling = Compiling {
++    active: false,
++    remaining: usize::MAX,
++    spent: false,
++};
++thread_local! {static COMPILING:Cell<Compiling>=const{Cell::new(NOT_COMPILING)};}
++struct Restore(Compiling);
++impl Drop for Restore {
++    fn drop(&mut self) {
++        COMPILING.set(self.0);
++    }
++}
++/// Run one schema build with `units` of compilation work. `Err(Stop::Work)` when it
++/// needed more; the build stopped at its next compilation and its result is not a
++/// prepared validator.
++pub fn compiling<T>(units: usize, f: impl FnOnce() -> T) -> Result<T, Stop> {
++    let _restore = Restore(COMPILING.get());
++    COMPILING.set(Compiling {
++        active: true,
++        remaining: units,
++        spent: false,
++    });
++    let value = f();
++    if COMPILING.get().spent {
++        Err(Stop::Work)
++    } else {
++        Ok(value)
++    }
++}
++/// Charge compilation work; `false` once the current scope is spent.
++pub(crate) fn compile_charge(amount: usize) -> bool {
++    let mut state = COMPILING.get();
++    if !state.active {
++        return true;
++    }
++    if state.spent || amount > state.remaining {
++        state.spent = true;
++        state.remaining = 0;
++    } else {
++        state.remaining -= amount;
++    }
++    COMPILING.set(state);
++    !state.spent
++}
++/// Run `f` outside any compilation scope: schema meta-validation is evaluation.
++pub(crate) fn uncharged<T>(f: impl FnOnce() -> T) -> T {
++    let _restore = Restore(COMPILING.get());
++    COMPILING.set(NOT_COMPILING);
++    f()
 +}
 --- a/src/properties.rs
 +++ b/src/properties.rs

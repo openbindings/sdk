@@ -993,6 +993,8 @@ impl<'a, F: Json> Context<'a, F> {
             .deferred_placeholders
             .borrow_mut()
             .insert(key.clone(), placeholder.clone());
+        // OpenBindings qualification patch: charge the placeholders this copies.
+        crate::ob_work::compile_charge(self.shared.alias_placeholders.borrow().len());
         let in_progress = self.shared.alias_placeholders.borrow().clone();
         self.shared
             .deferred_targets
@@ -1108,7 +1110,8 @@ pub(crate) fn build_validator<F: Json>(
     let resource = draft.create_resource_ref(schema);
 
     if config.validate_schema {
-        validate_schema(draft, schema)?;
+        // OpenBindings qualification patch: meta-validation is not compilation work.
+        crate::ob_work::uncharged(|| validate_schema(draft, schema))?;
     }
 
     if let Some(registry) = config.registry {
@@ -1551,6 +1554,11 @@ fn compile_with_internal<'a, F: Json>(
         Ok(existing) => return Ok(existing),
         Err(key) => key,
     };
+    // OpenBindings qualification patch: charge this compilation, with the dynamic scope
+    // keying its caches; the adapter refuses a build whose compilation scope is spent.
+    if !crate::ob_work::compile_charge(1 + key.location.dynamic_scope.iter().count()) {
+        return Err(ValidationError::custom("schema compilation work limit"));
+    }
     let outer = ctx.start_node();
     let target = alias
         .as_ref()
