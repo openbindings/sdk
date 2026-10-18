@@ -1482,6 +1482,19 @@ pub(crate) fn compile<'a, F: Json>(
     compile_with_internal(&ctx, resource, None).map(TargetNode::into_node)
 }
 
+/// Compile `resource` and report whether its node is settled. No non-owning edge reaches a settled
+/// node or anything it reaches, so a caller that keeps no other node it compiles must keep an
+/// unsettled one: a later round may reach it through such an edge.
+pub(crate) fn compile_settled<'a, F: Json>(
+    ctx: &Context<F>,
+    resource: ResourceRef<'a>,
+) -> Result<(SchemaNode<F>, bool), ValidationError<'a>> {
+    let outer = ctx.start_node();
+    let node = compile(ctx, resource);
+    let settled = ctx.finish_node(outer);
+    Ok((node?, settled))
+}
+
 /// Compile the target of `alias`, or reuse the compiled one.
 pub(crate) fn compile_with_alias<'a, F: Json>(
     ctx: &Context<F>,

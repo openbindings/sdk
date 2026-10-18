@@ -91,15 +91,15 @@ cached resolvable graph, not a crates.io-head claim.
 
 Upstream revision: `55ac1664384793c5d3b20745d3f9c169dfe2c06f`.
 Applied package: `openbindings-internal-jsonschema 0.58.6-ob.1`.
-The complete remaining Rust delta is **+300/-14 lines in ten files** against the
+The complete remaining Rust delta is **+349/-34 lines in ten files** against the
 0.58.6 archive (physical added/removed lines, including comments and blanks):
 
 | File under src/ | Added | Removed | Why retained |
 | --- | ---: | ---: | --- |
 | canonical/context.rs | 2 | 2 | Use the ECMA matcher without Rust-regex translation in canonical pattern compilation. |
-| compiler.rs | 3 | 3 | Cache and compile that same matcher, preserving authored pattern syntax. |
+| compiler.rs | 16 | 3 | Cache and compile that same matcher, preserving authored pattern syntax; report whether a compiled node is settled (see compiled subschema ownership). |
 | keywords/additional_properties.rs | 2 | 2 | Route both specialized patternProperties/additionalProperties paths through ECMA matching. |
-| keywords/unevaluated_properties.rs | 1 | 1 | Keep annotation matching on the same ECMA engine. |
+| keywords/unevaluated_properties.rs | 37 | 21 | Keep annotation matching on the same ECMA engine; own the unsettled `patternProperties` subschemas the walk compiles. |
 | lib.rs | 5 | 0 | Export private adapter work and regex controls. |
 | node.rs | 38 | 1 | Charge schema entries/depth and signal detected cycles; the outer adapter refuses any stopped result. |
 | ob_ecma.rs | 117 | 0 | Select regress ES2020 Unicode behavior, scoped regex work, and the qualified Unicode-property refusal. |
@@ -107,9 +107,9 @@ The complete remaining Rust delta is **+300/-14 lines in ten files** against the
 | properties.rs | 1 | 1 | Use the same matcher type for property validators. |
 | regex.rs | 4 | 4 | Route the library's internal matcher/builder through regress. |
 
-These guards have no complete equivalent in documented upstream APIs. All
-ordinary resolution, compilation, applicators and error construction remain the
-library's implementation. Upstream code, tests and comments keep their own wording:
+These guards have no complete equivalent in documented upstream APIs. Apart from
+the ownership correction below, all ordinary resolution, compilation, applicators
+and error construction remain the library's implementation. Upstream code, tests and comments keep their own wording:
 the SDK's vocabulary governs its own sources, not retained upstream text. Numeric semantics use its public extension APIs instead
 of forked equality/type/size internals. Cargo changes only select the private
 package/regress identities and ordinary upstream value/registry/serde dependencies.
@@ -122,6 +122,40 @@ and validate() runs for its first error only when a caller explains a failing
 value. `tools/verify-diagnostics.py` continues to enforce the pinned allocation
 ceilings and value allocation checks. No construction-memory guarantee is made for
 an explanation's library diagnostics.
+
+### Compiled subschema ownership
+
+Upstream compiles each `patternProperties` subschema an `unevaluatedProperties`
+walk reaches, then drops the node and keeps only the pattern. The walk compiles
+at its referrer's location, so that node, and any `$ref` target first compiled
+beneath it, has no other owner while it stays in the build caches. The compiler
+links a later compilation round to an unsettled node of an earlier round by a
+non-owning edge, on the premise that the earlier round's tree owns that node.
+After the build such a target is freed, and validation panics with "pending
+schema target dropped"; a Wasm host aborts. Unmodified jsonschema 0.58.6 panics on
+a seven-resource program the SDK projects. Release 0.59.0 and upstream master
+still drop the node.
+
+The fork keeps each unsettled pattern node in the walk's `PropertyValidators`;
+`compiler::compile_settled` reads settledness from the compiler's own reach
+tracking. A settled node is dropped as upstream drops it: every non-owning edge
+(a shared reuse, a deferred target's placeholder, a cycle's alias placeholder)
+points at an unsettled node, and reaching one makes every enclosing node
+unsettled, so only owning edges reach a settled node or anything it reaches.
+Each `PropertyValidators` of a walk grows by 16 bytes; settled patterns retain
+nothing, and no benchmark workload compiles a walk. Retaining every pattern node
+instead held about 940 bytes and 13 allocations per pattern in walks through
+`$ref` or `allOf`.
+
+Every other compile site in the fork keeps the node it compiles in the validator
+it builds, with two harmless exceptions: the walk's boolean `allOf`/`anyOf`/`oneOf`
+branches are settled leaves, and the regex fallback after a literal
+`patternProperties` attempt recompiles the same locations in the same round and
+owns the cached nodes. The evaluator's `unevaluated_pattern_ownership` test (and
+its Wasm counterpart) runs the reduced reproducer in four placements;
+`reference_placement` compares 500 seeded random contracts, split across document,
+contained and supplied resources, with the same schemas in one resource. Both
+fail without the correction.
 
 ## regress
 

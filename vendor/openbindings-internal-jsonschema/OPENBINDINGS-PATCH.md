@@ -5,6 +5,9 @@ The distinct package identity selects the qualified work/depth/cycle and
 ECMAScript-regex guards. The regex correctness fixes (empty quantifier semantics
 and backtrack budget restoration) remain in the sibling regress fork; see
 DEPENDENCY-MAINTENANCE.md.
+One correction is the fork's own: an `unevaluatedProperties` walk keeps the unsettled
+`patternProperties` subschemas it compiles, which upstream drops although a later
+compilation round can still reach them through a non-owning edge.
 All diagnostic admission, copy, payload, metadata and schema-detail changes have
 been removed. Error construction is the upstream implementation.
 

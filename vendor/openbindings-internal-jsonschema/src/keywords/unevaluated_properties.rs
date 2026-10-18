@@ -97,6 +97,10 @@ pub(crate) struct PropertyValidators<F: Json = SerdeJson> {
     additional: Option<SchemaNode<F>>,
     /// Patterns from "patternProperties" keyword
     pattern_properties: Patterns,
+    /// Unsettled subschemas from "patternProperties" keyword. Marking needs only the patterns,
+    /// but a later compilation round may reach such a node, or a `$ref` target first compiled
+    /// within it, through a non-owning edge, so the tree must own it.
+    pattern_nodes: Box<[SchemaNode<F>]>,
     /// Validator from "unevaluatedProperties" keyword itself
     unevaluated: Option<SchemaNode<F>>,
     /// Validators from "allOf" keyword - both the schema and its property validators
@@ -127,6 +131,7 @@ impl<F: Json> Clone for PropertyValidators<F> {
             properties: self.properties.clone(),
             additional: self.additional.clone(),
             pattern_properties: self.pattern_properties.clone(),
+            pattern_nodes: self.pattern_nodes.clone(),
             unevaluated: self.unevaluated.clone(),
             all_of: self.all_of.clone(),
             any_of: self.any_of.clone(),
@@ -434,22 +439,26 @@ fn compile_pending_property_validators<'a, F: Json>(
 
     let applicator = ctx.has_vocabulary(&Vocabulary::Applicator);
 
+    let properties = if applicator {
+        compile_properties(ctx, parent)?
+    } else {
+        AHashSet::new()
+    };
+    let additional = if applicator {
+        compile_additional(ctx, parent)?
+    } else {
+        None
+    };
+    let (pattern_properties, pattern_nodes) = if applicator {
+        compile_pattern_properties(ctx, parent)?
+    } else {
+        (Patterns::default(), Box::default())
+    };
     let validators = PropertyValidators {
-        properties: if applicator {
-            compile_properties(ctx, parent)?
-        } else {
-            AHashSet::new()
-        },
-        additional: if applicator {
-            compile_additional(ctx, parent)?
-        } else {
-            None
-        },
-        pattern_properties: if applicator {
-            compile_pattern_properties(ctx, parent)?
-        } else {
-            Patterns::default()
-        },
+        properties,
+        additional,
+        pattern_properties,
+        pattern_nodes,
         unevaluated: compile_unevaluated(ctx, parent)?,
         all_of: if applicator {
             compile_all_of(ctx, parent)?
@@ -524,27 +533,34 @@ fn compile_additional<'a, F: Json>(
     Ok(Some(node))
 }
 
+type CompiledPatterns<F> = (Patterns, Box<[SchemaNode<F>]>);
+
 fn compile_pattern_properties<'a, F: Json>(
     ctx: &compiler::Context<'_, F>,
     parent: &'a Map<String, Value>,
-) -> Result<Patterns, ValidationError<'a>> {
+) -> Result<CompiledPatterns<F>, ValidationError<'a>> {
     let Some(Value::Object(patterns)) = parent.get("patternProperties") else {
-        return Ok(Patterns::default());
+        return Ok((Patterns::default(), Box::default()));
     };
 
     let pat_ctx = ctx.new_at_location("patternProperties");
     let mut result = Patterns::default();
+    let mut nodes = Vec::new();
 
     for (pattern, schema) in patterns {
         let schema_ctx = pat_ctx.new_at_location(pattern.as_str());
         let Ok(()) = result.push(&schema_ctx, pattern) else {
             return Err(invalid_regex(&schema_ctx, pattern));
         };
-        compiler::compile(&schema_ctx, schema_ctx.as_resource_ref(schema))
-            .map_err(ValidationError::to_owned)?;
+        let (node, settled) =
+            compiler::compile_settled(&schema_ctx, schema_ctx.as_resource_ref(schema))
+                .map_err(ValidationError::to_owned)?;
+        if !settled {
+            nodes.push(node);
+        }
     }
 
-    Ok(result)
+    Ok((result, nodes.into_boxed_slice()))
 }
 
 fn compile_unevaluated<'a, F: Json>(
