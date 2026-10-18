@@ -51,10 +51,10 @@ plain data, while `schemas()` and schema access methods acquire new owners.
 | TypeScript `compileOperationSchema(iface, name, position)` and `CompiledSchema.validate(value)` returning `valid` and failures | Call `conformant.resolveOperation(name)`, then `input()` or `output()` and `prepare(options)`, narrow to ready, then call `contract.validate(value)`. Handle `satisfies`, `fails`, `undefined`, `no-verdict` and ordinary-input admission errors. |
 
 Preparation has its own refusal. An absent value contract is not success against
-an implicit schema. Retain a prepared contract for reuse; preparation compiles anew.
+an implicit schema. Retain a prepared value contract for reuse; preparation compiles anew.
 Resources are caller-supplied and immutable, with no automatic reference fetching.
 Changing resources means preparing again; old contracts keep their snapshots.
-A prepared contract may still return no-verdict for individual values. An undefined
+A prepared value contract may still return no-verdict for individual values. An undefined
 result is its own outcome: match `ValueOutcome::Undefined { detail }` in Rust or
 `{ outcome: "undefined", detail }` in TypeScript. `UndefinedResult` carries a code,
 message and optional original schema location. Move handling of the former

@@ -60,7 +60,7 @@ export {
   ConformantOperationView,
   SchemaResources,
   ValueContract,
-  PreparedContract,
+  PreparedValueContract,
   Operation,
   Example,
   Source,

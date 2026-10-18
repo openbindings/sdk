@@ -146,7 +146,7 @@ export function diagnosticPolicyCases(sdk) {
       prepared.status === "ready",
       "conformant document allows preparation",
     );
-    const contract = own(prepared.contract);
+    const contract = own(prepared.valueContract);
     check(
       contract.validate(null).outcome === "fails",
       "false schema establishes fails",
@@ -247,7 +247,7 @@ export function diagnosticPolicyCases(sdk) {
       const state = prepareInput(doc, "op");
       if (qualified) {
         check(state.status === "ready", "qualified missing reference prepares");
-        const result = own(state.contract).validate(null);
+        const result = own(state.valueContract).validate(null);
         check(
           result.outcome === "no-verdict" &&
             result.detail.reason === "resource-unavailable",
@@ -318,7 +318,7 @@ export function diagnosticPolicyCases(sdk) {
     ]) {
       const state = prepareInput(withSchema(schema), "op");
       check(state.status === "ready", "type/message contract prepared");
-      const outcome = own(state.contract).explain(instance);
+      const outcome = own(state.valueContract).explain(instance);
       check(
         outcome.outcome === "fails" && outcome.problems[0].message === expected,
         "useful expected type or safe generic guidance",

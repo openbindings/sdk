@@ -40,7 +40,7 @@ pub enum NoVerdictReason {
 /// pointer; generated evaluation-program identities are mapped back before
 /// exposure. Line and column come from the source's holder:
 /// [`Conformant::locate`] for the document and [`ResourceSet::locate`] for a
-/// supplied resource. A prepared contract keeps no source text. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
+/// supplied resource. A prepared value contract keeps no source text. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 ///
 /// Custom evaluators build one with [`Self::new`] or [`SchemaRequest::location`].
 /// Later versions may add fields: read them by name and match with `..`.
@@ -567,7 +567,7 @@ impl Conformant<Document> {
     /// Locate a schema location in this document: the node its pointer names,
     /// with line and column in the document's text. `None` for a location in a
     /// supplied resource, or a pointer that names no node in this revision.
-    /// Positions are computed on this call; a prepared contract keeps none.
+    /// Positions are computed on this call; a prepared value contract keeps none.
     pub fn locate(&self, at: &SchemaLocation) -> Option<SourceLocation> {
         if at.resource.is_some() {
             return None;
@@ -811,7 +811,7 @@ pub trait PreparedSchema: Send + Sync {
 ///     let _ = operation.input().unwrap().prepare(evaluator);
 /// }
 /// ```
-/// Neither a contract nor a prepared contract can be assembled by hand:
+/// Neither a value contract nor a prepared value contract can be assembled by hand:
 /// ```compile_fail,E0451
 /// use openbindings::*;
 /// fn forge(operation: &ConformantOperationView) {
@@ -820,10 +820,10 @@ pub trait PreparedSchema: Send + Sync {
 /// ```
 /// ```compile_fail,E0451
 /// use openbindings::*;
-/// fn raw(schema: std::sync::Arc<dyn PreparedSchema>) { let _ = PreparedContract { schema }; }
+/// fn raw(schema: std::sync::Arc<dyn PreparedSchema>) { let _ = PreparedValueContract { schema }; }
 /// ```
 /// Preparation borrows the evaluator and any supplied resources. Each call
-/// prepares anew; retain the [`PreparedContract`] to validate repeatedly. The
+/// prepares anew; retain the [`PreparedValueContract`] to validate repeatedly. The
 /// document's resolution space is assembled only when an evaluator requests the
 /// core projection, once per live revision and resource set. See the
 /// [Rust lifecycle guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md#resources-diagnostics-and-lifetime).
@@ -857,13 +857,16 @@ impl<'a> ValueContract<'a> {
             .expect("a contract exists only for a declared field")
     }
     /// Prepare with no supplied resources. Ready means prepared, not decidable:
-    /// a prepared contract can still return any of the four [`ValueOutcome`]
+    /// a prepared value contract can still return any of the four [`ValueOutcome`]
     /// variants, including no-verdict for every value.
     ///
     /// # Errors
     /// Returns a [`NoVerdict`] refusal when preparation is not established. A
     /// refusal judges no instance and does not prove semantic undefinedness.
-    pub fn prepare(&self, evaluator: &dyn SchemaEvaluator) -> Result<PreparedContract, NoVerdict> {
+    pub fn prepare(
+        &self,
+        evaluator: &dyn SchemaEvaluator,
+    ) -> Result<PreparedValueContract, NoVerdict> {
         self.prepare_with(evaluator, ResourceSet::empty())
     }
     /// Prepare with immutable supplied resources; nothing is fetched. An
@@ -879,7 +882,7 @@ impl<'a> ValueContract<'a> {
         &self,
         evaluator: &dyn SchemaEvaluator,
         resources: &ResourceSet,
-    ) -> Result<PreparedContract, NoVerdict> {
+    ) -> Result<PreparedValueContract, NoVerdict> {
         self.prepare_with_control(evaluator, resources, &crate::work_control::NeverCancelled)
     }
     /// Prepare with cooperative cancellation. A cancelled attempt returns no
@@ -895,7 +898,7 @@ impl<'a> ValueContract<'a> {
         evaluator: &dyn SchemaEvaluator,
         resources: &ResourceSet,
         control: &dyn WorkControl,
-    ) -> Result<PreparedContract, NoVerdict> {
+    ) -> Result<PreparedValueContract, NoVerdict> {
         control.check()?;
         let schema = self.schema();
         let entry = schema.to_owned();
@@ -924,7 +927,7 @@ impl<'a> ValueContract<'a> {
         let prepared = evaluator.prepare(&request, control);
         // An evaluator may finish while the caller cancels; no ready owner is returned.
         control.check()?;
-        prepared.map(|schema| PreparedContract { schema })
+        prepared.map(|schema| PreparedValueContract { schema })
     }
 }
 
@@ -933,15 +936,15 @@ impl<'a> ValueContract<'a> {
 /// `Clone + Send + Sync + 'static`; cloning shares immutable state, and dropping
 /// the final owner releases it, without promising lower RSS.
 #[derive(Clone)]
-pub struct PreparedContract {
+pub struct PreparedValueContract {
     schema: Arc<dyn PreparedSchema>,
 }
-impl fmt::Debug for PreparedContract {
+impl fmt::Debug for PreparedValueContract {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("PreparedContract { .. }")
+        f.write_str("PreparedValueContract { .. }")
     }
 }
-impl PreparedContract {
+impl PreparedValueContract {
     /// Admit exact JSON text or bytes under [`JsonLimits::default`], then validate.
     /// Every [`ValueOutcome`] is returned as `Ok`, including undefined and
     /// no-verdict. Duplicate members are retained by admission and yield

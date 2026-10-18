@@ -224,7 +224,7 @@ fn main() {
 enum Preparation {
     OperationMissing,
     NoContract,
-    Prepared(Result<PreparedContract, NoVerdict>),
+    Prepared(Result<PreparedValueContract, NoVerdict>),
 }
 fn prepare(
     proof: &Conformant<Document>,

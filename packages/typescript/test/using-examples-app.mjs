@@ -25,9 +25,9 @@ try {
   const setup = prepareInput(warm.value, "run");
   check(setup.status === "ready", "warm contract");
   try {
-    setup.contract.validate(1);
+    setup.valueContract.validate(1);
   } finally {
-    setup.contract.dispose();
+    setup.valueContract.dispose();
   }
 } finally {
   warm.value.dispose();

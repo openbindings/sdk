@@ -17,7 +17,7 @@ function candidate(input) {
     }),
   );
   assert.equal(result.status, "ready");
-  return result.contract;
+  return result.valueContract;
 }
 test("service replacement retains in-flight work and handles partial contracts", async () => {
   const warm = candidate(true);

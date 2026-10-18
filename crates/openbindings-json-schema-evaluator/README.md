@@ -50,13 +50,13 @@ Configure the evaluator or supply resources with `prepare_with`. The evaluator i
 borrowed for the call, and one `ResourceSet` can serve many preparations:
 
 ```rust,edition2024
-use openbindings::{NoVerdict, PreparedContract, ResourceSet, ValueContract};
+use openbindings::{NoVerdict, PreparedValueContract, ResourceSet, ValueContract};
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 
 fn with_resources(
     contract: ValueContract<'_>,
     resources: &ResourceSet,
-) -> Result<PreparedContract, NoVerdict> {
+) -> Result<PreparedValueContract, NoVerdict> {
     let evaluator = DefaultEvaluator::with_limits(Limits {
         regex_steps: 100_000,
         ..Limits::default()
@@ -67,9 +67,9 @@ fn with_resources(
 
 Use `JsonValue::parse_with_limits` for custom admission limits, or
 `JsonValue::from_serializable` for ordinary Rust values. Keep admitted exact values
-and call `PreparedContract::validate` to check them repeatedly without reparsing.
+and call `PreparedValueContract::validate` to check them repeatedly without reparsing.
 
-Retain and clone the prepared contract for repeated validation. Each `prepare`
+Retain and clone the prepared value contract for repeated validation. Each `prepare`
 call compiles independently. The packaged [first-use example](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/examples/first_use.rs)
 adds aliases and exact wide integers; the [replacement example](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/examples/replacement.rs)
 keeps old work usable while installing a new document and resource set.
@@ -79,7 +79,7 @@ keeps old work usable while installing a new document and resource set.
 The evaluator never fetches references. Supply resources through `ResourceSet`;
 new resources require a new preparation. Some values can be decided despite missing
 resources or undefined reference results when those results cannot affect the
-verdict. A prepared contract does not promise a verdict for every value. Handle
+verdict. A prepared value contract does not promise a verdict for every value. Handle
 no-verdict during both preparation and validation.
 
 `ValueOutcome::Undefined` establishes that whether the value satisfies its value
@@ -118,7 +118,7 @@ and the failing keyword by resource and exact pointer (`schema`); a keyword the
 original sources do not hold is named by the selected schema itself, never
 guessed. `JsonValue::locate`, `Conformant::locate` and `ResourceSet::locate`
 find line and column on demand, so an explanation costs no position. Schema facts may expose
-source operands. A prepared contract keeps the text of the schemas it reached
+source operands. A prepared value contract keeps the text of the schemas it reached
 for these facts, never the document, its supplied resources or any position.
 Missing or incomplete diagnostics never weaken an established failure.
 

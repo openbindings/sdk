@@ -1645,7 +1645,7 @@ mod resolution_reuse {
     }
 
     #[test]
-    fn a_prepared_contract_keeps_no_space_of_a_set_it_never_received() {
+    fn a_prepared_value_contract_keeps_no_space_of_a_set_it_never_received() {
         let proof = proof();
         let operation = proof.resolve_operation("op").unwrap();
         // Prepared without resources and retaining its request, hence the document.

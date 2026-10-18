@@ -149,7 +149,7 @@ export type DocumentValidation =
         supported: string;
       };
     };
-/** A keyword or schema in an original schema source, by resource and exact pointer. resource null denotes the OpenBindings document; supplied URIs identify explicit resources and never initiate acquisition. Private evaluator projection identities are not exposed. Line and column come from the source's holder: ConformantDocument.locate() for the document and SchemaResources.locate() for a supplied resource; a prepared contract keeps no source text. */
+/** A keyword or schema in an original schema source, by resource and exact pointer. resource null denotes the OpenBindings document; supplied URIs identify explicit resources and never initiate acquisition. Private evaluator projection identities are not exposed. Line and column come from the source's holder: ConformantDocument.locate() for the document and SchemaResources.locate() for a supplied resource; a prepared value contract keeps no source text. */
 export interface SchemaLocation {
   /** Original supplied-resource URI, or null for the OpenBindings document. */
   resource: string | null;
@@ -275,13 +275,13 @@ export type OperationSelection =
       /** Distinct primary keys in lexical order; repeated occurrences can yield one key. */
       candidates: readonly string[];
     };
-/** Preparation result: ready transfers a disposable PreparedContract; no-verdict is a preparation refusal that judges no instance. Ready means prepared, not decidable: a contract can return no-verdict for every value. A missing operation or an absent contract is undefined before preparation, never a preparation result. */
+/** Preparation result: ready transfers a disposable PreparedValueContract; no-verdict is a preparation refusal that judges no instance. Ready means prepared, not decidable: a prepared value contract can return no-verdict for every value. A missing operation or an absent value contract is undefined before preparation, never a preparation result. */
 export type ValueContractPreparation =
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
       status: "ready";
-      /** Caller-owned prepared contract, valid independently of its document, resources and operation owners. */
-      contract: PreparedContract;
+      /** Caller-owned prepared value contract, valid independently of its document, resources and operation owners. */
+      valueContract: PreparedValueContract;
     }
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
@@ -438,7 +438,7 @@ function encodedLimits(limits: Partial<EvaluatorLimits> = {}): string {
     )
       throw new SdkError(
         "invalid-evaluator-limits",
-        "Evaluator limits must be known nonnegative 32-bit integers.",
+        "Evaluator limits must be known budgets, each a nonnegative integer no greater than 4294967295; evaluationSteps may also be null for its default.",
       );
     encoded[key.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase())] = value;
   }
@@ -1520,7 +1520,7 @@ export class ConformantDocument extends DocumentReads {
     const raw = sdkCall(() => conformantRaw(this).resolveOperation(name));
     return raw ? adopt(raw, ConformantOperationView.fromRaw) : undefined;
   }
-  /** Locate a schema location in this document: the node its pointer names, with line and column in the document's text. null for a location in a supplied resource, or a pointer that names no node in this revision. Positions are computed on this call; a prepared contract keeps none. A malformed location throws SdkError with code invalid-schema-location. */
+  /** Locate a schema location in this document: the node its pointer names, with line and column in the document's text. null for a location in a supplied resource, or a pointer that names no node in this revision. Positions are computed on this call; a prepared value contract keeps none. A malformed location throws SdkError with code invalid-schema-location. */
   locate(at: SchemaLocation): SourceLocation | null {
     const raw = conformantRaw(this);
     return decode(sdkCall(() => raw.locate(schemaLocationText(at))));
@@ -1806,7 +1806,7 @@ export class SchemaResources extends Managed {
     return decode(sdkCall(() => raw.locate(schemaLocationText(at))));
   }
 }
-/** A conformant operation's input or output value contract, not yet prepared. Obtain it from ConformantOperationView.input() or output(); it retains its proved revision and survives operation and document disposal. Each prepare() compiles anew; retain the PreparedContract for repeated validation. */
+/** A conformant operation's input or output value contract, not yet prepared. Obtain it from ConformantOperationView.input() or output(); it retains its proved revision and survives operation and document disposal. Each prepare() compiles anew; retain the PreparedValueContract for repeated validation. */
 export class ValueContract extends Managed {
   private constructor(raw: wasm.WasmValueContract) {
     super(raw);
@@ -1818,7 +1818,7 @@ export class ValueContract extends Managed {
   schema(): ExactJson {
     return new ExactJson(contractRaw(this).schema());
   }
-  /** Prepare with the built-in evaluator. Ready transfers a new disposable PreparedContract independent of this owner; it does not promise every value is decidable. The default evaluator can prepare qualified missing-resource value contracts, including a bare missing $ref and dual-polarity oneOf bounds. Validation establishes a verdict when independent of missing content, or returns resource-unavailable when dependent. Known errors and unsupported partial contracts still refuse preparation; prepare again with resources to recover, while existing prepared owners retain their original snapshot. Cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
+  /** Prepare with the built-in evaluator. Ready transfers a new disposable PreparedValueContract independent of this owner; it does not promise every value is decidable. The default evaluator can prepare qualified missing-resource value contracts, including a bare missing $ref and dual-polarity oneOf bounds. Validation establishes a verdict when independent of missing content, or returns resource-unavailable when dependent. Known errors and unsupported partial contracts still refuse preparation; prepare again with resources to recover, while existing prepared owners retain their original snapshot. Cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
   prepare(options: PrepareOptions = {}): ValueContractPreparation {
     requireReady();
     const raw = contractRaw(this);
@@ -1841,18 +1841,18 @@ export class ValueContract extends Managed {
           throw new Error("Invalid preparation result.");
         return result;
       }
-      const contract = preparation.takeContract();
-      if (!contract)
-        throw new Error("Preparation invariant: ready contract missing.");
+      const prepared = preparation.takeValueContract();
+      if (!prepared)
+        throw new Error("Preparation invariant: ready value contract missing.");
       return {
         status: "ready",
-        contract: adopt(contract, PreparedContract.fromRaw),
+        valueContract: adopt(prepared, PreparedValueContract.fromRaw),
       };
     } finally {
       preparation.free();
     }
   }
-  /** Return a NEW independently disposable owner of this unprepared contract. */
+  /** Return a NEW independently disposable owner of this unprepared value contract. */
   retain(): ValueContract {
     return ValueContract.fromRaw(contractRaw(this).retain());
   }
@@ -1871,7 +1871,7 @@ function prepareOptions(options: PrepareOptions): {
   if (Object.prototype.hasOwnProperty.call(work, "diagnostics"))
     throw new SdkError(
       "invalid-work-options",
-      "The diagnostics option was removed: call explain(value) on the prepared contract to learn why a value fails.",
+      "The diagnostics option was removed: call explain(value) on the prepared value contract to learn why a value fails.",
     );
   return { resources, limits, signal: workSignal(work) };
 }
@@ -1927,12 +1927,14 @@ function cancelledValue(): ValueOutcome {
   };
 }
 /** Disposable prepared value contract, independent of its document, resources, operation and contract owners. Repeated validation borrows exact input; ordinary inputs are admitted and temporary owners released within the call. No verdict here proves whole-document conformance. */
-export class PreparedContract extends Managed {
+export class PreparedValueContract extends Managed {
   private constructor(raw: wasm.WasmPrepared) {
     super(raw);
   }
-  /** @internal */ static fromRaw(raw: wasm.WasmPrepared): PreparedContract {
-    return new PreparedContract(raw);
+  /** @internal */ static fromRaw(
+    raw: wasm.WasmPrepared,
+  ): PreparedValueContract {
+    return new PreparedValueContract(raw);
   }
   // Overload order matters: an untyped (any) argument takes the first
   // signature, so it must be one whose result keeps input-error.
@@ -1980,12 +1982,14 @@ export class PreparedContract extends Managed {
     return checkValue(this, value, options, true);
   }
   /** Return a NEW independently disposable owner sharing compiled state; it remains valid after the prior prepared owner is disposed. */
-  retain(): PreparedContract {
-    return PreparedContract.fromRaw(handle<wasm.WasmPrepared>(this).retain());
+  retain(): PreparedValueContract {
+    return PreparedValueContract.fromRaw(
+      handle<wasm.WasmPrepared>(this).retain(),
+    );
   }
 }
 function checkValue(
-  contract: PreparedContract,
+  contract: PreparedValueContract,
   value: JsonInput,
   options: WorkOptions,
   explain: boolean,

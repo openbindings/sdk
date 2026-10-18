@@ -22,7 +22,7 @@ fn prepare_input(
     document: &Document,
     entries: &ResourceSet,
     evaluator: &dyn SchemaEvaluator,
-) -> Result<PreparedContract, NoVerdict> {
+) -> Result<PreparedValueContract, NoVerdict> {
     document
         .validate()
         .unwrap()
@@ -38,13 +38,13 @@ fn prepare(
     schema: &str,
     entries: ResourceSet,
     evaluator: &dyn SchemaEvaluator,
-) -> PreparedContract {
+) -> PreparedValueContract {
     match prepare_input(&document(schema), &entries, evaluator) {
         Ok(contract) => contract,
         Err(detail) => panic!("{detail:?}"),
     }
 }
-fn evidence(contract: &PreparedContract) -> NoVerdict {
+fn evidence(contract: &PreparedValueContract) -> NoVerdict {
     match contract.validate(&json(r#"{"x":1,"a":1,"b":1}"#)) {
         ValueOutcome::NoVerdict { detail } => detail,
         other => panic!("{other:?}"),

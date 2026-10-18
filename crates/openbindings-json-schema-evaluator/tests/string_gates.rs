@@ -1,7 +1,7 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 
-fn prepare(schema: &str, extra: &str) -> PreparedContract {
+fn prepare(schema: &str, extra: &str) -> PreparedValueContract {
     // Schema text and opaque examples live in a supplied resource. OBI-01
     // governs the interface document, not supplied schemas or caller values.
     let text = r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://strings.invalid/schema#/$defs/target"}}}}"#;

@@ -1,6 +1,6 @@
 //! Optional exact source facts for library-bounded explanations.
 //!
-//! A prepared contract never keeps its document, supplied resources or schema
+//! A prepared value contract never keeps its document, supplied resources or schema
 //! space. It keeps a compact copy of what an explanation reads: every projected
 //! definition with only the keywords the validator compiled, their values
 //! copied from the original source. A projection writes each child subschema

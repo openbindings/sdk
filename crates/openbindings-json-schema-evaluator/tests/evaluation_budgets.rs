@@ -3,7 +3,7 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 
-fn prepared(schema: &str, limits: Limits) -> PreparedContract {
+fn prepared(schema: &str, limits: Limits) -> PreparedValueContract {
     let text = format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#);
     let proof = Document::parse(text)
         .unwrap()
@@ -31,7 +31,7 @@ const ITEMS: usize = 700_000;
 fn large() -> JsonValue {
     JsonValue::parse(format!("[{}0]", "1,".repeat(ITEMS - 1))).unwrap()
 }
-fn explicit(steps: usize) -> PreparedContract {
+fn explicit(steps: usize) -> PreparedValueContract {
     prepared(
         SCHEMA,
         Limits {

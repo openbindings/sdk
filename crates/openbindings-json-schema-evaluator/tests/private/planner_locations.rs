@@ -55,7 +55,7 @@ fn request(document: &Document, resources: ResourceSet) -> SchemaRequest {
 fn prepare(
     operation: &ConformantOperationView,
     resources: &ResourceSet,
-) -> Result<PreparedContract, NoVerdict> {
+) -> Result<PreparedValueContract, NoVerdict> {
     operation
         .input()
         .expect("declared input")

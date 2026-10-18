@@ -47,11 +47,11 @@ fn debug_redacts_caller_text_at_every_boundary() {
         let unprepared = operation.input().unwrap();
         rows.push(row("ValueContract", &unprepared));
         let prepared = unprepared.prepare(&DefaultEvaluator::new());
-        rows.push(row("Ok(PreparedContract)", &prepared));
+        rows.push(row("Ok(PreparedValueContract)", &prepared));
         let Ok(contract) = prepared else {
             panic!("not ready")
         };
-        rows.push(row("PreparedContract", &contract));
+        rows.push(row("PreparedValueContract", &contract));
         let value = JsonValue::parse(serde_json::json!({SECRET:7}).to_string()).unwrap();
         let result = match detail {
             Detail::Outcome => contract.validate(&value),

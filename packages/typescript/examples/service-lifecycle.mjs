@@ -29,10 +29,10 @@ function replace(service, schemaText, documentBytes = document) {
   const next = prepare(schemaText, documentBytes);
   if (next.status !== "ready") return next;
   try {
-    service.replace(next.contract); // ownership transfers only on success
+    service.replace(next.valueContract); // ownership transfers only on success
     return { status: "replaced" };
   } catch (error) {
-    next.contract.dispose();
+    next.valueContract.dispose();
     throw error;
   }
 }
@@ -43,15 +43,15 @@ const startupArenas = liveStorageOwners();
 const warm = prepare('{"type":"integer"}');
 assert.equal(warm.status, "ready");
 try {
-  assert.equal(warm.contract.validate(7).outcome, "satisfies");
+  assert.equal(warm.valueContract.validate(7).outcome, "satisfies");
 } finally {
-  warm.contract.dispose();
+  warm.valueContract.dispose();
 }
 const warmedArenas = liveStorageOwners();
 
 const setup = prepare('{"type":"integer","const":9007199254740993}');
 assert.equal(setup.status, "ready");
-const service = new ValidationService(setup.contract);
+const service = new ValidationService(setup.valueContract);
 let releaseBody, oldRequest;
 const outcomes = {};
 try {
@@ -62,7 +62,7 @@ try {
     }),
   );
   outcomes.replacement = replace(service, '{"type":"string"}');
-  outcomes.current = service.check("new prepared contract");
+  outcomes.current = service.check("new prepared value contract");
   releaseBody("9007199254740993");
   outcomes.inFlight = await oldRequest; // still uses the old exact const
   assert.equal(outcomes.current.outcome, "satisfies");
@@ -114,11 +114,11 @@ try {
 const partial = prepareService(document, []);
 assert.equal(partial.status, "ready");
 try {
-  outcomes.missingResource = partial.contract.validate(7);
+  outcomes.missingResource = partial.valueContract.validate(7);
   assert.equal(outcomes.missingResource.outcome, "no-verdict");
   assert.equal(outcomes.missingResource.detail.reason, "resource-unavailable");
 } finally {
-  partial.contract.dispose();
+  partial.valueContract.dispose();
 }
 const releasedArenas = liveStorageOwners();
 assert.equal(releasedArenas, warmedArenas);

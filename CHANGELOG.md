@@ -7,9 +7,10 @@
 - Value contracts come from the operation. A conformant operation's `input()` and
   `output()` return a `ValueContract`; `prepare(&evaluator)`, `prepare_with(&evaluator,
   &resources)` and `prepare_with_control` borrow the evaluator and return
-  `Result<PreparedContract, NoVerdict>`. `PreparedContract::validate_json` checks exact
+  `Result<PreparedValueContract, NoVerdict>`. `PreparedValueContract::validate_json` checks exact
   JSON text. TypeScript mirrors this with `ConformantOperationView.input()`/`output()`
-  and `ValueContract.prepare(options)`.
+  and `ValueContract.prepare(options)`, whose ready result carries its
+  `PreparedValueContract` as `valueContract`.
 
 - One exact OpenBindings 0.2 `Document` for parsing, inspection and in-place
   editing: atomic batches of JSON Pointer edits and typed part maps, and typed
@@ -25,11 +26,11 @@
 - An optional JSON Schema 2020-12 evaluator with exact numeric semantics,
   cooperative cancellation and declared work limits. Preparation reuses a
   resource set's identity index instead of indexing its resources again.
-- Cheap checks and explanations are chosen per call. `PreparedContract::validate`
+- Cheap checks and explanations are chosen per call. `PreparedValueContract::validate`
   (and `validate_with_control`, `validate_json`) reports a failure without
   problems; `explain` and `explain_with_control` return the same verdict with the
   library's first error, redacted, with original schema facts. TypeScript
-  `PreparedContract` gains `explain` beside `validate`. A prepared contract keeps a
+  `PreparedValueContract` gains `explain` beside `validate`. A prepared value contract keeps a
   compact copy of the keywords it compiled, with their original locations, and no
   longer keeps its document, supplied resources or location map.
 - `operation::Invoker::with_validation_detail(Detail::Explain)` asks the invoker to

@@ -3,7 +3,7 @@
 The default evaluator first prepares a complete closed program. If static reference
 resolution finds an absent resource carrier, it can prepare paired validity bounds
 for the fragment below. Applications still use operation contract → prepare → validate.
-A prepared contract means a validator exists, not that every value is decidable. Even a bare
+A prepared value contract means a validator exists, not that every value is decidable. Even a bare
 missing `$ref` prepares in this fragment and returns
 `NoVerdict(ResourceUnavailable)` for every admitted value.
 

@@ -18,7 +18,7 @@ export function diagnosticDetailsCases(sdk) {
       proof = checked.document;
       const ready = prepareInput(proof, "op", options);
       check(ready.status === "ready", "ready");
-      return ready.contract;
+      return ready.valueContract;
     } finally {
       proof?.dispose();
       parsed.value.dispose();

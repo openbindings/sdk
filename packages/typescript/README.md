@@ -48,7 +48,7 @@ function checkInput(input: JsonInput) {
   if (!contract) return { status: "no-input-contract" } as const;
   const setup = contract.prepare();
   if (setup.status !== "ready") return setup;
-  using prepared = setup.contract;
+  using prepared = setup.valueContract;
   return { operations, result: prepared.validate(input) };
 }
 
@@ -66,7 +66,7 @@ include `ESNext.Disposable` in the compiler `lib` setting and target ES2022 for
 conformance report. Only a conformant document's operations hand out value
 contracts: `resolveOperation` returns `undefined` for a missing operation, and
 `input()` or `output()` returns `undefined` when no contract is declared.
-`prepare()` returns a ready `PreparedContract` or a no-verdict refusal. Handle
+`prepare()` returns a ready `PreparedValueContract` or a no-verdict refusal. Handle
 each result before validating a value. Value results distinguish `satisfies`, `fails`, `undefined`
 (the specification gives the value no defined validity), `no-verdict` (the SDK could
 not answer) and an `input-error` when ordinary JavaScript data cannot be admitted.
@@ -158,19 +158,19 @@ checks. Independently retained proofs and views keep their certified revision.
 
 Schema resources are explicit and immutable. Pass `SchemaResources` to
 `prepare({ resources })`; the SDK never fetches a missing reference. Retain a
-prepared contract for repeated validation. Ready does not promise a verdict for
+prepared value contract for repeated validation. Ready does not promise a verdict for
 every value; missing resources, unsupported capabilities and exhausted work
 budgets can produce no-verdict. Replacing resources means preparing again.
 
 `validate` returns an established failure with no problem list and
-`problemsComplete: false`. Call `explain` on the same prepared contract for the
+`problemsComplete: false`. Call `explain` on the same prepared value contract for the
 library's first error. An explanation can allocate in proportion to input and
 overflow the stack on deep values, so keep `validate` for untrusted input. Each
 problem's `instance` is the failing node's exact pointer from the value passed,
 and its `schema` names the failing keyword by `resource` and `pointer`.
 `value.locate(problem.instance)`, `ConformantDocument.locate(problem.schema)` and
 `SchemaResources.locate(problem.schema)` give coordinates when asked. Schema
-facts may disclose source operands. A prepared contract keeps a compact copy of
+facts may disclose source operands. A prepared value contract keeps a compact copy of
 the keywords it compiled for explanations, never its document, resources or any
 position. Messages are advisory; use result tags, codes and rule evidence for
 control flow. Result objects (reports, findings, outcomes, problems, locations,

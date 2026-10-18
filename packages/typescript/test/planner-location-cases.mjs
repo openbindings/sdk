@@ -9,8 +9,8 @@ export function plannerLocationCases(sdk) {
   warm.validate().document?.dispose();
   const warmPrepared = prepareInput(warm, "op");
   if (warmPrepared.status !== "ready") throw Error("warm preparation");
-  warmPrepared.contract.validate(null);
-  warmPrepared.contract.dispose();
+  warmPrepared.valueContract.validate(null);
+  warmPrepared.valueContract.dispose();
   warm.dispose();
   const initial = testing.liveStorageOwners();
   const U = "https://absent.invalid/U";
@@ -92,11 +92,11 @@ export function plannerLocationCases(sdk) {
       check(healthy.status === "ready", "healthy subsequent preparation");
       try {
         check(
-          healthy.contract.validate(null).outcome === "satisfies",
+          healthy.valueContract.validate(null).outcome === "satisfies",
           "healthy validation",
         );
       } finally {
-        healthy.contract.dispose();
+        healthy.valueContract.dispose();
       }
       observations.push({ code, location: detail.location });
     } finally {

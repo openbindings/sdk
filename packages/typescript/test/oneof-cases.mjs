@@ -33,7 +33,7 @@ export function oneOfCases(sdk, fixtures) {
         setup.status === "ready",
         `oneOf prepared: ${JSON.stringify(setup)}`,
       );
-      contract = setup.contract;
+      contract = setup.valueContract;
       value = sdk.parseJson(valueText).value;
       parsed.value.dispose();
       resources.dispose();

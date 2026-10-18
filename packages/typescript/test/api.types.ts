@@ -54,7 +54,7 @@ async function caller(
       signal: new AbortController().signal,
     });
     if (prepared.status !== "ready") return undefined;
-    using input = prepared.contract;
+    using input = prepared.valueContract;
     using value = ExactJson.from(7);
     input.validate(value) satisfies ValueOutcome;
     // Preparation chooses no detail; each call does.
@@ -133,22 +133,22 @@ ConformantDocument.fromParsed(parsedOnly);
 // @ts-expect-error root no longer exports the HTTP companion
 import { discover as rootDiscovery } from "../dist/index.js";
 
-declare const preparedContract: import("../dist/index.js").PreparedContract;
+declare const preparedValueContract: import("../dist/index.js").PreparedValueContract;
 declare const exactInput: ExactJson;
-const exactOutcome: ValueOutcome = preparedContract.validate(exactInput);
+const exactOutcome: ValueOutcome = preparedValueContract.validate(exactInput);
 const ordinaryOutcome: import("../dist/index.js").ValueCheck =
-  preparedContract.validate({ nested: exactInput });
+  preparedValueContract.validate({ nested: exactInput });
 // @ts-expect-error ordinary admission may return input-error
-const incompleteOutcome: ValueOutcome = preparedContract.validate(7);
+const incompleteOutcome: ValueOutcome = preparedValueContract.validate(7);
 if (ordinaryOutcome.outcome === "input-error") {
   ordinaryOutcome.error.instancePointer satisfies string | null;
 }
 const textOutcome: import("../dist/index.js").JsonCheck =
-  preparedContract.validateJson(new Uint8Array());
+  preparedValueContract.validateJson(new Uint8Array());
 // @ts-expect-error exact text admission may return input-error
-const unadmittedText: ValueOutcome = preparedContract.validateJson("7");
+const unadmittedText: ValueOutcome = preparedValueContract.validateJson("7");
 // @ts-expect-error validateJson takes exact text or bytes, not ordinary values
-preparedContract.validateJson({ nested: exactInput });
+preparedValueContract.validateJson({ nested: exactInput });
 if (textOutcome.outcome === "input-error") {
   textOutcome.error.byteOffset satisfies number | undefined;
 }
@@ -157,26 +157,27 @@ void unadmittedText;
 // result keeps the input-error branch; only an ExactJson argument drops it.
 declare const untyped: any;
 declare const ordinaryInput: import("../dist/index.js").JsonInput;
-const untypedCheck = preparedContract.validate(untyped);
+const untypedCheck = preparedValueContract.validate(untyped);
 if (untypedCheck.outcome === "input-error")
   untypedCheck.error.instancePointer satisfies string | null;
-const untypedExplain = preparedContract.explain(untyped);
+const untypedExplain = preparedValueContract.explain(untyped);
 if (untypedExplain.outcome === "input-error")
   untypedExplain.error.instancePointer satisfies string | null;
-const ordinaryCheck = preparedContract.validate(ordinaryInput);
+const ordinaryCheck = preparedValueContract.validate(ordinaryInput);
 if (ordinaryCheck.outcome === "input-error")
   ordinaryCheck.error.instancePointer satisfies string | null;
-const ordinaryExplain = preparedContract.explain(ordinaryInput);
+const ordinaryExplain = preparedValueContract.explain(ordinaryInput);
 if (ordinaryExplain.outcome === "input-error")
   ordinaryExplain.error.instancePointer satisfies string | null;
-const untypedText = preparedContract.validateJson(untyped);
+const untypedText = preparedValueContract.validateJson(untyped);
 if (untypedText.outcome === "input-error")
   untypedText.error.code satisfies string;
 // @ts-expect-error an untyped value can return input-error
-const untypedOutcome: ValueOutcome = preparedContract.validate(untyped);
+const untypedOutcome: ValueOutcome = preparedValueContract.validate(untyped);
 // @ts-expect-error an untyped value can return input-error
-const untypedExplanation: ValueOutcome = preparedContract.explain(untyped);
-const exactExplanation: ValueOutcome = preparedContract.explain(exactInput);
+const untypedExplanation: ValueOutcome = preparedValueContract.explain(untyped);
+const exactExplanation: ValueOutcome =
+  preparedValueContract.explain(exactInput);
 void [untypedOutcome, untypedExplanation, exactExplanation];
 const selection = parsedOnly.resolveOperation("run");
 if (selection.status === "ambiguous") {
@@ -303,7 +304,7 @@ void roundOneTypes;
 void inaccessibleConstructors;
 
 function preparedResources(
-  prepared: import("../dist/index.js").PreparedContract,
+  prepared: import("../dist/index.js").PreparedValueContract,
 ) {
   // @ts-expect-error Evaluator completeness metadata is no longer a product API.
   void prepared.resourceCompleteness;

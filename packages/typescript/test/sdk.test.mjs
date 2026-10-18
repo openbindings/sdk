@@ -14,7 +14,7 @@ await sdk.initialize(
 );
 const ready = (preparation) => {
   assert.equal(preparation.status, "ready");
-  return preparation.contract;
+  return preparation.valueContract;
 };
 const text =
   ' {"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"},"aliases":["execute"]}}} ';
@@ -400,9 +400,13 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   );
   assert.equal(grown.validate(value).outcome, "satisfies");
   grown.dispose();
+  // Only evaluationSteps has a null default, and the refusal says so.
   assert.throws(
     () => contract.prepare({ limits: { regexSteps: null } }),
-    (e) => e.code === "invalid-evaluator-limits",
+    (e) =>
+      e.code === "invalid-evaluator-limits" &&
+      e.message.includes("4294967295") &&
+      e.message.includes("evaluationSteps may also be null"),
   );
   const partial = document.references({ resources, signal: control.signal });
   assert.equal(partial.complete, false);

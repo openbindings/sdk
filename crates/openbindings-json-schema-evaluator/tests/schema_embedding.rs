@@ -6,7 +6,10 @@ use std::sync::atomic::AtomicBool;
 const BASE: &str = "https://probe.invalid/root";
 
 /// Prepare operation `op` input of a conformant document with the default evaluator.
-fn prepare_input(doc: &Document, resources: &ResourceSet) -> Result<PreparedContract, NoVerdict> {
+fn prepare_input(
+    doc: &Document,
+    resources: &ResourceSet,
+) -> Result<PreparedValueContract, NoVerdict> {
     doc.validate()
         .unwrap()
         .conformant()

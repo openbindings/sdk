@@ -1,9 +1,11 @@
-use openbindings::{Conformance, Document, Evidence, JsonValue, PreparedContract, ValueOutcome};
+use openbindings::{
+    Conformance, Document, Evidence, JsonValue, PreparedValueContract, ValueOutcome,
+};
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::json;
 use std::{hint::black_box, time::Instant};
 
-fn prepare(source: &str) -> PreparedContract {
+fn prepare(source: &str) -> PreparedValueContract {
     let document = Document::parse(source).unwrap();
     let proof = document
         .validate()

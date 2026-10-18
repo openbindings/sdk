@@ -10,7 +10,7 @@ Use the locked dependencies and release profile to reproduce them.
 
 ## Prepared value contracts
 
-Retain a `PreparedContract` for repeated validation. Reusing a conformant
+Retain a `PreparedValueContract` for repeated validation. Reusing a conformant
 document and `ResourceSet` also saves work, but still prepares a fresh contract on
 each `prepare` call. The SDK does not transparently cache arbitrary custom
 evaluator results.

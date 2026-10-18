@@ -13,8 +13,8 @@ use crate::{
 };
 use openbindings::{
     Conformant, ConformantBindingView, ConformantOperationView, Detail, Document, JsonKind,
-    JsonValue, NoVerdict, NoVerdictReason, PreparedContract, ResourceSet, SchemaEvaluator, Source,
-    ValueContract, ValueOutcome,
+    JsonValue, NoVerdict, NoVerdictReason, PreparedValueContract, ResourceSet, SchemaEvaluator,
+    Source, ValueContract, ValueOutcome,
 };
 use std::{
     collections::HashMap,
@@ -58,7 +58,7 @@ impl Evaluation {
         &self,
         contract: ValueContract<'_>,
         control: &dyn openbindings::WorkControl,
-    ) -> Result<PreparedContract, NoVerdict> {
+    ) -> Result<PreparedValueContract, NoVerdict> {
         contract.prepare_with_control(&*self.evaluator, &self.resources, control)
     }
 }
@@ -662,8 +662,8 @@ pub struct PreparedOperation<P> {
 /// The operation a handle fixes and its two prepared value contracts.
 struct Prepared {
     operation: String,
-    input: Option<PreparedContract>,
-    output: Option<PreparedContract>,
+    input: Option<PreparedValueContract>,
+    output: Option<PreparedValueContract>,
 }
 impl<P> std::fmt::Debug for PreparedOperation<P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -683,7 +683,7 @@ impl<P: BindingInvoker> PreparedOperation<P> {
         self.invoke_with_control(attempt, &CancellationToken::new())
     }
     /// Invoke with caller cancellation isolated from this handle and all sibling
-    /// attempts. Cancellation does not discard the retained prepared contracts.
+    /// attempts. Cancellation does not discard the retained prepared value contracts.
     pub fn invoke_with_control<'a>(
         &'a self,
         attempt: Attempt<'a>,
@@ -770,7 +770,7 @@ pub(crate) struct Gate {
     detail: Detail,
     operation: ConformantOperationView,
     direction: Direction,
-    prepared: Option<Result<PreparedContract, NoVerdict>>,
+    prepared: Option<Result<PreparedValueContract, NoVerdict>>,
     external: CancellationToken,
 }
 impl Gate {

@@ -60,7 +60,7 @@ proportionally more above, so ordinary schemas decide values as large as the
 default admission limits accept. An explicitly configured allowance caps every
 pass at that many units, whatever the value's size. The evaluation depth (1,024 nested
 evaluations, a stack bound) and the regex budget (2,000,000 steps, the safety
-bound) can still prevent a verdict; a prepared contract can remain undecidable
+bound) can still prevent a verdict; a prepared value contract can remain undecidable
 for a particular value. Patterns may nest 32 groups by default; release builds
 prepare such patterns, and check values against them, on a 256 KiB thread stack.
 Debug builds need more on Windows, as the [support policy](docs/support.md) records.
@@ -73,7 +73,7 @@ two admissible completions that disagree. Other undefined results remain outside
 its supported fragment. Missing resources, unsupported capabilities and exhausted
 budgets produce no-verdict. Handle no-verdict in both preparation and validation.
 
-Retain prepared contracts for repeated validation. Paired macOS arm64 release
+Retain prepared value contracts for repeated validation. Paired macOS arm64 release
 measurements reduced 20,000-integer evaluation from 5.61 ms to 0.39 ms and the
 original twenty-pair SDK/jsonschema-rs time ratio from 12.50× to 4.84×. Sharing one
 target carrier across 100 referring resources measured 8.01 ms before and 7.74 ms

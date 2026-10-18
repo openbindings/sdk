@@ -93,7 +93,7 @@ for (const call of ["validate", "explain"]) {
           operation?.dispose();
         }
         const setup = contract?.prepare({ resources });
-        if (setup?.status === "ready") prepared = setup.contract;
+        if (setup?.status === "ready") prepared = setup.valueContract;
         const values = group.cases.map((entry) => {
           if (!prepared)
             return setup?.status === "no-verdict"

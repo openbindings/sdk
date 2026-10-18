@@ -42,7 +42,7 @@ export class DocumentEditor {
           return { status: "resources-missing", evidence: setup.detail };
         return setup;
       }
-      input = setup.contract;
+      input = setup.valueContract;
       // Explaining reports why a value fails; the cheap check only whether.
       const result = explain ? input.explain(value) : input.validate(value);
       const previous = this.#document;

@@ -4,7 +4,7 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 
-fn prepared(schema: &str) -> Result<PreparedContract, NoVerdict> {
+fn prepared(schema: &str) -> Result<PreparedValueContract, NoVerdict> {
     let text = format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#);
     let proof = Document::parse(text)
         .unwrap()

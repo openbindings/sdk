@@ -97,7 +97,7 @@ export function observe(sdk, request) {
           preparation,
           values: given.valuesJson.map(() => preparationOutcome(preparation)),
         };
-      const prepared = own(preparation.contract);
+      const prepared = own(preparation.valueContract);
       return {
         ...output,
         preparation: { status: "ready" },
@@ -128,7 +128,7 @@ export function observe(sdk, request) {
               const preparation = prepare(given.operation, direction);
               const outcome =
                 preparation.status === "ready"
-                  ? own(preparation.contract).validate(value)
+                  ? own(preparation.valueContract).validate(value)
                   : preparationOutcome(preparation);
               results.push({ ...outcome, example: name, side: direction });
             }

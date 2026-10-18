@@ -15,7 +15,7 @@ function conformant(document) {
   return result.document;
 }
 // Prepare one operation's input contract; the operation view and unprepared
-// contract are released, and the prepared contract survives them.
+// contract are released, and the prepared value contract survives them.
 function prepareInput(proof, name, options) {
   const operation = proof.resolveOperation(name);
   check(operation, "missing operation " + name);
@@ -25,7 +25,7 @@ function prepareInput(proof, name, options) {
     check(contract, "absent input contract " + name);
     const result = contract.prepare(options);
     check(result.status === "ready", JSON.stringify(result));
-    return result.contract;
+    return result.valueContract;
   } finally {
     contract?.dispose();
     operation.dispose();
@@ -140,7 +140,7 @@ export function runTier(sdk, testing, fixture, timed = true) {
         input = operation.input();
         const result = input.prepare();
         check(result.status === "ready", JSON.stringify(result));
-        return result.contract;
+        return result.valueContract;
       });
       value = take("parseValue", () => parsed(sdk, fixture.valid));
       const first = take("firstValidation", () => contract.validate(value));

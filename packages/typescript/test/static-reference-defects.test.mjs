@@ -51,7 +51,7 @@ test("static reference matrix and concrete completions through Wasm", async () =
         ]),
       );
       const setup = prepareInput(parsed.value, "op", { resources, limits });
-      contract = setup.contract;
+      contract = setup.valueContract;
       const result =
         setup.status === "ready"
           ? contract.validate(c.value)

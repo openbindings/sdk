@@ -47,7 +47,7 @@ impl PreparedSchema for Explained {
     }
 }
 #[repr(transparent)]
-pub struct Prepared(Result<PreparedContract, NoVerdict>);
+pub struct Prepared(Result<PreparedValueContract, NoVerdict>);
 #[repr(transparent)]
 pub struct ParsedValue(JsonValue);
 #[repr(transparent)]
