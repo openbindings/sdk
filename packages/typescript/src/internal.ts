@@ -387,10 +387,10 @@ export interface WorkOptions {
   /** Optional caller-owned cooperative cancellation signal; synchronous Wasm only observes same-thread cancellation at call boundaries. */
   signal?: AbortSignal;
 }
-/** Default-evaluator finite budgets, each a nonnegative 32-bit integer. Work counts are implementation units, not milliseconds. Zero is literal; the allocation and stack use of an explanation's library diagnostics are library-bounded; exhaustion produces no-verdict unless only post-verdict diagnostics are incomplete. */
+/** Default-evaluator finite budgets, each a nonnegative 32-bit integer; `evaluationSteps` may also be `null` for its default. Work counts are implementation units, not milliseconds. Zero is literal; the allocation and stack use of an explanation's library diagnostics are library-bounded; exhaustion produces no-verdict unless only post-verdict diagnostics are incomplete. */
 export interface EvaluatorLimits {
-  /** Work units per verdict/diagnostic pass over a value of up to 65,536 nodes (member names count), and proportionally more for a larger value; default 2,000,000. */
-  evaluationSteps: number;
+  /** Work units per verdict/diagnostic pass. `null`, the default, grows with the value: 2,000,000 units for a value of up to 65,536 nodes (member names count) and proportionally more for a larger one. A number caps every pass at exactly that many units, whatever the value's size. */
+  evaluationSteps: number | null;
   /** Nested evaluation depth; default 1024. It bounds stack use; a deeper value yields the `evaluation-depth-limit` no-verdict. */
   evaluationDepth: number;
   /** Regex evaluation/backtracking work budget; default 2,000,000. */
@@ -421,14 +421,20 @@ export function evaluatorLimits(): Readonly<EvaluatorLimits> {
 }
 function encodedLimits(limits: Partial<EvaluatorLimits> = {}): string {
   const defaults = evaluatorLimits();
-  const encoded: Record<string, number> = {};
+  const encoded: Record<string, number | null> = {};
   for (const [key, value] of ownEntries(limits)) {
+    // A null limit is accepted only where the default itself is null.
+    const budget =
+      typeof value === "number" &&
+      Number.isSafeInteger(value) &&
+      value >= 0 &&
+      value <= 0xffffffff;
     if (
       !Object.hasOwn(defaults, key) ||
-      typeof value !== "number" ||
-      !Number.isSafeInteger(value) ||
-      value < 0 ||
-      value > 0xffffffff
+      !(
+        budget ||
+        (value === null && defaults[key as keyof EvaluatorLimits] === null)
+      )
     )
       throw new SdkError(
         "invalid-evaluator-limits",

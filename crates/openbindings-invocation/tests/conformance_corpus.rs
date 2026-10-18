@@ -8,7 +8,7 @@ use openbindings_invocation::{
     operation::{Attempt, Invoker, Request},
 };
 use serde_json::Value;
-use std::{collections::HashSet, future::Future, pin::Pin};
+use std::{collections::HashSet, future::Future, pin::Pin, sync::Arc};
 
 const SELECTION: [(&str, &str); 4] = [
     (
@@ -114,7 +114,7 @@ async fn published_selection_cases_resolve_through_invocation_preparation_and_pr
                 warranted: strings(&case["supported"]).into_iter().collect(),
                 listed: Vec::new(),
             };
-            let invoker = Invoker::new(proof, &provider);
+            let invoker = Arc::new(Invoker::new(proof, &provider));
             let operation = case["operation"].as_str().unwrap();
             let selection = case.get("selection").map(strings);
             let keys: Vec<&str> = selection.iter().flatten().map(String::as_str).collect();

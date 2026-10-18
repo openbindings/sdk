@@ -126,8 +126,8 @@
 +
 +Based on `regress-0.12.0`; upstream license and notices are retained.
 +This distinct package name prevents unpatched transitive dependency resolution.
-+Changes are documented in the task foundation patch manifest; production changes
-+and regression tests must be recorded in the root dependency maintenance ledger.
++Changes are listed in the SDK's patch manifest, docs/dependency-patches/manifest.json;
++production changes and regression tests must be recorded in DEPENDENCY-MAINTENANCE.md.
 +This package is an implementation detail, not a supported SDK extension API.
 +
 +The repository maintenance contract is DEPENDENCY-MAINTENANCE.md. Original

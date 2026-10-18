@@ -18,13 +18,15 @@ use std::sync::Arc;
 #[serde(default, deny_unknown_fields)]
 /// Finite default-evaluator budgets. Work counts are implementation units, not milliseconds; exhaustion yields no verdict unless an established failure only loses diagnostic completeness. Zero is literal. These budgets do not bound the allocation or stack use of an explanation's library diagnostics.
 pub struct Limits {
-    /// Evaluation work units per verdict/diagnostic pass over a value of up to
-    /// 65,536 nodes (member names count), and proportionally more for a larger
-    /// value; default 2,000,000. An ordinary schema uses a few units per value
-    /// node, so it decides values as large as the default admission limits
-    /// accept (1,000,000 nodes), within about 30,500,000 units per pass. A
-    /// partial verdict shares this allowance across upper and lower evaluations.
-    pub evaluation_steps: usize,
+    /// Evaluation work units per verdict/diagnostic pass. `None`, the default,
+    /// grows with the value: 2,000,000 units for a value of up to 65,536 nodes
+    /// (member names count) and proportionally more for a larger one. An
+    /// ordinary schema uses a few units per value node, so by default it decides
+    /// values as large as the default admission limits accept (1,000,000
+    /// nodes), within about 30,500,000 units per pass. `Some(n)` caps every pass
+    /// at exactly `n` units, whatever the value's size. A partial verdict shares
+    /// one pass's allowance across upper and lower evaluations.
+    pub evaluation_steps: Option<usize>,
     /// Nested evaluation depth; default 1024, distinct from source JSON nesting.
     /// Each nested evaluation is a recursive call, so this also bounds stack
     /// use; reaching it yields the `evaluation-depth-limit` no-verdict.
@@ -41,23 +43,28 @@ pub struct Limits {
     /// default, preparation fits a 256 KiB thread stack.
     pub pattern_depth: usize,
 }
-// The value size, in nodes, that `Limits::evaluation_steps` is stated for.
+// The default work allowance and the value size, in nodes, it is stated for.
+const DEFAULT_STEPS: usize = 2_000_000;
 const STEPS_NODES: usize = 65_536;
 impl Limits {
-    // The work allowance of one pass over `value`.
+    // The work allowance of one pass over `value`: the configured cap, or the
+    // default allowance grown in proportion to the value.
     fn steps_for(&self, value: &JsonValue) -> usize {
+        if let Some(steps) = self.evaluation_steps {
+            return steps;
+        }
         let nodes = backend::node_count(value.view());
         if nodes <= STEPS_NODES {
-            return self.evaluation_steps;
+            return DEFAULT_STEPS;
         }
-        let scaled = self.evaluation_steps as u128 * nodes as u128 / STEPS_NODES as u128;
+        let scaled = DEFAULT_STEPS as u128 * nodes as u128 / STEPS_NODES as u128;
         usize::try_from(scaled).unwrap_or(usize::MAX)
     }
 }
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            evaluation_steps: 2_000_000,
+            evaluation_steps: None,
             evaluation_depth: 1024,
             regex_steps: 2_000_000,
             compile_json_depth: 512,
@@ -491,14 +498,14 @@ impl PreparedSchema for PartialCompiled {
             Ok(Some(false)) if detail == Detail::Outcome => verdict_only_failure(),
             Ok(Some(false)) => self.upper.diagnostics(value, control, true),
             Ok(Some(true)) => ValueOutcome::Satisfies,
+            // Both completed evaluations finished within the shared budget and
+            // disagree here. With one hole, they are the two ways its
+            // reference's result comes out, so the verdict depends on that
+            // reference. With several, which of them it depends on is not
+            // established, so no location is given rather than the first one.
             Ok(None) => match self.unavailable.clone() {
                 // In the positive fragment these are actual completions,
-                // not merely interval endpoints. Both completed evaluations
-                // finished within the shared budget and disagree here. With
-                // one hole, they are the two ways its reference's result comes
-                // out, so the value's validity depends on that reference. With
-                // several, which of them it depends on is not established, so
-                // no location is given rather than the first one.
+                // not merely interval endpoints.
                 Some(detail) if self.semantic_completions => ValueOutcome::Undefined {
                     detail: {
                         let mut undefined = UndefinedResult::new(detail.code, detail.message);
@@ -506,7 +513,10 @@ impl PreparedSchema for PartialCompiled {
                         undefined
                     },
                 },
-                Some(detail) => ValueOutcome::NoVerdict { detail },
+                Some(mut detail) => {
+                    detail.location = detail.location.filter(|_| self.sole_hole);
+                    ValueOutcome::NoVerdict { detail }
+                }
                 None => ValueOutcome::NoVerdict {
                     detail: no_verdict(
                         NoVerdictReason::EvaluatorFailure,
@@ -915,11 +925,11 @@ mod partial_budget_tests {
     #[test]
     fn both_verdict_passes_share_work_and_an_exhausted_pass_never_decides() {
         let limits = Limits {
-            evaluation_steps: 10,
+            evaluation_steps: Some(10),
             ..Limits::default()
         };
         for (upper_cost, lower_cost, upper) in [(6, 6, true), (11, 0, false), (0, 11, true)] {
-            let result = verdict_pass(&limits, limits.evaluation_steps, || {
+            let result = verdict_pass(&limits, 10, || {
                 bounded_decision(
                     || {
                         jsonschema::ob_work::charge(upper_cost);
@@ -935,7 +945,7 @@ mod partial_budget_tests {
             assert_eq!(result.unwrap_err().reason, NoVerdictReason::LimitExceeded);
         }
         assert_eq!(
-            verdict_pass(&limits, limits.evaluation_steps, || bounded_decision(
+            verdict_pass(&limits, 10, || bounded_decision(
                 || false,
                 || panic!("failure uses no lower pass"),
                 &std::sync::atomic::AtomicBool::new(false)
@@ -959,7 +969,7 @@ mod partial_budget_tests {
             regex_steps: needed,
             ..Limits::default()
         };
-        let result = verdict_pass(&limits, limits.evaluation_steps, || {
+        let result = verdict_pass(&limits, DEFAULT_STEPS, || {
             bounded_decision(
                 || regex.is_match(&input).unwrap_or(false),
                 || regex.is_match(&input).unwrap_or(false),
@@ -972,7 +982,7 @@ mod partial_budget_tests {
             ..Limits::default()
         };
         assert_eq!(
-            verdict_pass(&healthy, healthy.evaluation_steps, || bounded_decision(
+            verdict_pass(&healthy, DEFAULT_STEPS, || bounded_decision(
                 || regex.is_match(&input).unwrap_or(false),
                 || regex.is_match(&input).unwrap_or(false),
                 &std::sync::atomic::AtomicBool::new(false)

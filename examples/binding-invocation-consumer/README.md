@@ -12,7 +12,8 @@ and echoes exact input values. Tests compare those observations to authored
 expectations rather than to generated coverage. They choose a binding explicitly,
 convert it once, and reuse its source and carrier across calls. A separate path
 passes a hand-authored request directly to invocation. The operation consumer
-retains `invoker.prepare("s0.u0")` and invokes that handle twice, counting one
+holds its invoker in an `Arc`, retains `invoker.prepare("s0.u0")` and invokes that
+handle twice, counting one
 compilation per declared direction while supplying `Attempt::new()` on every
 call. The handle fixes the operation; each attempt selects only its binding and
 optional opaque context.

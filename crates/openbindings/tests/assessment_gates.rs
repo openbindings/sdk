@@ -213,3 +213,33 @@ fn the_whole_document_check_reaches_a_verdict_at_every_admitted_size() {
             .all(|finding| finding.code != "fixed-schema-limit-or-failure")
     );
 }
+
+#[test]
+fn every_embedded_schema_reaches_a_meta_schema_verdict_at_every_admitted_size() {
+    // Each schema's OBI-10 allowance grows with the schema. A near miss of a
+    // meta-schema pattern a million bytes long, in a schema of a few nodes, and
+    // a schema of nearly a million nodes both fell outside a fixed allowance.
+    let long = "a".repeat(1_000_000);
+    let schema = |body: &str| {
+        format!(r#"{{"openbindings":"0.2.0","operations":{{}},"schemas":{{"S":{body}}}}}"#)
+    };
+    for body in [
+        format!(r#"{{"$anchor":"{long}!"}}"#),
+        format!(r#"{{"$dynamicAnchor":"{long}!"}}"#),
+        format!(r#"{{"$id":"https://e.example/{long}##"}}"#),
+    ] {
+        let validation = checked(&schema(&body));
+        assert_eq!(validation.report().evidence["OBI-10"], Evidence::Violated);
+    }
+    let vocabulary = (0..450_000)
+        .map(|i| format!(r#""https://e.example/{i}":true"#))
+        .collect::<Vec<_>>()
+        .join(",");
+    for body in [
+        format!(r#"{{"$anchor":"{long}"}}"#),
+        format!(r#"{{"$vocabulary":{{{vocabulary}}}}}"#),
+    ] {
+        let validation = checked(&schema(&body));
+        assert_eq!(validation.report().conclusion, Conformance::Conformant);
+    }
+}

@@ -132,3 +132,40 @@ fn undefined_results_name_only_a_reference_the_validity_depends_on() {
         assert_eq!(undefined_at(both, value), None, "{value}");
     }
 }
+
+#[test]
+fn unavailable_resources_are_named_only_when_the_verdict_depends_on_them() {
+    let unavailable_at = |properties: &str, value: &str| {
+        let document = format!(
+            r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{{"properties":{properties}}}}}}}}}"#
+        );
+        let parsed = Document::parse(document).unwrap();
+        let validation = parsed.validate().unwrap();
+        let proof = validation.conformant().unwrap();
+        let operation = proof.resolve_operation("op").unwrap();
+        let contract = operation
+            .input()
+            .unwrap()
+            .prepare(&DefaultEvaluator::new())
+            .unwrap();
+        match contract.validate(&JsonValue::parse(value).unwrap()) {
+            ValueOutcome::NoVerdict { detail } => {
+                assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
+                detail.location.map(|at| at.pointer.to_string())
+            }
+            other => panic!("{properties} against {value}: {other:?}"),
+        }
+    };
+    // One missing resource: every value without a verdict depends on it.
+    let sole = r#"{"b":{"$ref":"https://missing.test/b"}}"#;
+    assert_eq!(
+        unavailable_at(sole, r#"{"b":1}"#).as_deref(),
+        Some("/operations/op/input/properties/b/$ref")
+    );
+    // Two: `{"b":1}` never reaches `/a/$ref`, and which one a value reaches is
+    // not established, so neither is named.
+    let both = r#"{"a":{"$ref":"https://missing.test/a"},"b":{"$ref":"https://missing.test/b"}}"#;
+    for value in [r#"{"b":1}"#, r#"{"a":1}"#, r#"{"a":1,"b":1}"#] {
+        assert_eq!(unavailable_at(both, value), None, "{value}");
+    }
+}

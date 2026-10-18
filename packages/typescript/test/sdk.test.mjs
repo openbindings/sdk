@@ -392,6 +392,18 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   assert.equal(input.validate(value).outcome, "no-verdict");
   assert.equal(input.validate(value).detail.reason, "limit-exceeded");
   input.dispose();
+  // The default work allowance grows with the value; null selects it, and a
+  // number caps every pass.
+  assert.equal(sdk.evaluatorLimits().evaluationSteps, null);
+  const grown = ready(
+    contract.prepare({ resources, limits: { evaluationSteps: null } }),
+  );
+  assert.equal(grown.validate(value).outcome, "satisfies");
+  grown.dispose();
+  assert.throws(
+    () => contract.prepare({ limits: { regexSteps: null } }),
+    (e) => e.code === "invalid-evaluator-limits",
+  );
   const partial = document.references({ resources, signal: control.signal });
   assert.equal(partial.complete, false);
   assert.equal(partial.limitation.reason, "cancelled");

@@ -130,7 +130,7 @@
         {
           "file": "OPENBINDINGS-PATCH.md",
           "upstream_sha256": null,
-          "current_sha256": "676c386c5401e4cd7e775531ce77b088c2944b8f753c212416442ca82995a697"
+          "current_sha256": "aa6f48ec0ad633ccbcaa4904872518e7cbed69c640c932f5590de0e82be04655"
         },
         {
           "file": "UPSTREAM-Cargo.toml",

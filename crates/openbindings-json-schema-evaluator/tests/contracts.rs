@@ -383,7 +383,7 @@ fn diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
         vec!["false"; 200].join(",")
     );
     let evaluator = DefaultEvaluator::with_limits(Limits {
-        evaluation_steps: 30,
+        evaluation_steps: Some(30),
 
         ..Limits::default()
     });
@@ -408,7 +408,7 @@ fn diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
     let limited = prepare_op(
         &conformant(&doc(r#"{"allOf":[true,true,true]}"#)),
         &DefaultEvaluator::with_limits(Limits {
-            evaluation_steps: 1,
+            evaluation_steps: Some(1),
             ..Limits::default()
         }),
     );

@@ -388,7 +388,12 @@ partial run nor a lower-bound diagnostic is used as semantic evidence.
 
 Semantic holes share all node/edge/hole/depth/scratch admission caps. Provenance is
 fixed-size enum metadata. Refusal locations identify recorded source evidence
-for the closure; the completions establish dependence collectively. The one
+for the closure; the completions establish dependence collectively. When the
+bounds disagree on a value, an undefined result or a `resource-unavailable`
+no-verdict names the reference only when the closure has one hole: its two
+completions are then the two ways that reference's result comes out, so the
+verdict depends on it. With several holes the evaluator does not establish which
+one a value reaches, so it names none rather than one the value may never reach. The one
 retained evidence location, code and message are counted before copying along with both programs and their source maps.
 
 Durable controls are `static_reference_defects.rs`, the matching TypeScript test,

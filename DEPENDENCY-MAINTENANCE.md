@@ -153,8 +153,8 @@ Before adopting an upstream update:
 
 1. Archive/checksum the new upstream sources and record its Git revision. Compare every old patch against the new API and behavior; never copy a Cargo registry cache over the production fork.
 2. Prefer an equivalent upstream hook and remove a patch when original-value, scope, work and diagnostic invariants remain provable. Keep unique private names until the unmodified upstream can satisfy them.
-3. Rebase the change in isolation. Re-run the full pinned 435-case OpenBindings corpus, 1,566 evaluator cases and exact-case refusal ledger on native and real Wasm. Run the affected upstream library tests, negative controls, no-I/O feature-unification traps, dynamic-scope/isolation, cancellation, deep literals, exact arithmetic and ownership probes.
-4. Repeat the six finite fuzz campaigns, frozen representative performance/memory series and packed consumer tests. A verdict becoming a refusal is a regression unless the governing authority intentionally changes; update scope only through an explicit separate decision.
+3. Rebase the change in isolation. Re-run the full pinned 440-case OpenBindings corpus and the evaluator kit's 1,564 observations, with its exact-case refusal declarations, natively and in real Wasm (`python3 tools/verify.py --browser`). Run the affected upstream library tests, negative controls, no-I/O feature-unification traps, dynamic-scope/isolation, cancellation, deep literals, exact arithmetic and ownership probes.
+4. Repeat the frozen representative performance/memory series (`tools/evaluator-bench`) and packed consumer tests. A verdict becoming a refusal is a regression unless the governing authority intentionally changes; update scope only through an explicit separate decision.
 5. Refresh RustSec and license inventories. Retain missing upstream notices from exact source revisions. Document all intentional translations, APIs removed from the fork, failed attempts and new limits.
 6. Regenerate the full patch manifests, source archive and package hashes only after review; do not silently rewrite the pinned baseline.
 

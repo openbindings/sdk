@@ -192,34 +192,31 @@ impl fmt::Debug for Attempt<'_> {
 /// its routing policy. Multiple providers can be composed by the application;
 /// registration order never becomes SDK selection policy.
 ///
-/// The document, provider and decoded carriers are shared with every
-/// [`PreparedOperation`] this invoker prepares, so the invoker is `Send` and
-/// `Sync` when the provider is both.
+/// Construction allocates nothing. To prepare operations, hold the invoker in
+/// an `Arc`: every [`PreparedOperation`] shares it, so a handle can outlive the
+/// `Arc` it came from and move into spawned tasks.
 pub struct Invoker<P> {
-    core: Arc<Core<P>>,
+    document: Conformant<Document>,
+    provider: P,
     limits: InvocationLimits,
     evaluation: Option<Evaluation>,
     validation_detail: Detail,
+    sources: CarrierCache<Source>,
+    bindings: CarrierCache<BindingValue>,
 }
 impl<P> std::fmt::Debug for Invoker<P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Invoker").finish_non_exhaustive()
     }
 }
-/// The document, provider and carrier caches an invoker shares with its
-/// prepared operations. Immutable after construction except for the caches.
-struct Core<P> {
-    document: Conformant<Document>,
-    provider: P,
-    sources: CarrierCache<Source>,
-    bindings: CarrierCache<BindingValue>,
-}
-/// The handle an attempt was started from. A plain attempt prepares its
-/// contracts lazily from the invoker's evaluator; a prepared one supplies them.
-/// Attempts capture this one reference, which keeps their futures small.
-enum Origin<'a, P> {
-    Invoker(&'a Invoker<P>),
-    Prepared(&'a PreparedOperation<P>),
+/// What an attempt was started from: the invoker and, for a prepared attempt,
+/// the handle's contracts. A plain attempt prepares its contracts lazily from
+/// the invoker's evaluator. Attempts capture these two references, which keeps
+/// their futures small, and never the handle's share of the invoker, so an
+/// attempt's future is `Send` whenever the provider is `Sync`.
+struct Origin<'a, P> {
+    invoker: &'a Invoker<P>,
+    prepared: Option<&'a Prepared>,
 }
 impl<P> Clone for Origin<'_, P> {
     fn clone(&self) -> Self {
@@ -227,25 +224,7 @@ impl<P> Clone for Origin<'_, P> {
     }
 }
 impl<P> Copy for Origin<'_, P> {}
-impl<'a, P> Origin<'a, P> {
-    fn core(self) -> &'a Core<P> {
-        match self {
-            Self::Invoker(invoker) => &invoker.core,
-            Self::Prepared(prepared) => &prepared.core,
-        }
-    }
-    fn limits(self) -> InvocationLimits {
-        match self {
-            Self::Invoker(invoker) => invoker.limits,
-            Self::Prepared(prepared) => prepared.limits,
-        }
-    }
-    fn prepared_operation(self) -> Option<&'a str> {
-        match self {
-            Self::Invoker(_) => None,
-            Self::Prepared(prepared) => Some(&prepared.operation),
-        }
-    }
+impl<P> Origin<'_, P> {
     /// A gate exists only for a declared contract. A lazy gate prepares it
     /// from the invoker's evaluator on its first value; a prepared operation
     /// supplies it.
@@ -256,21 +235,19 @@ impl<'a, P> Origin<'a, P> {
         external: &CancellationToken,
     ) -> Option<Gate> {
         direction.contract(operation).map(|_| {
-            let (evaluation, detail, prepared) = match self {
-                Self::Invoker(invoker) => {
-                    (invoker.evaluation.clone(), invoker.validation_detail, None)
-                }
-                Self::Prepared(prepared) => {
+            let (evaluation, prepared) = match self.prepared {
+                None => (self.invoker.evaluation.clone(), None),
+                Some(prepared) => {
                     let contract = match direction {
                         Direction::Input => &prepared.input,
                         Direction::Output => &prepared.output,
                     };
-                    (None, prepared.validation_detail, contract.clone().map(Ok))
+                    (None, contract.clone().map(Ok))
                 }
             };
             Gate {
                 evaluation,
-                detail,
+                detail: self.invoker.validation_detail,
                 operation: operation.clone(),
                 direction,
                 prepared,
@@ -295,15 +272,13 @@ impl<P: BindingInvoker> Invoker<P> {
     /// Sides without a schema forward values without claiming validation.
     pub fn new(document: Conformant<Document>, provider: P) -> Self {
         Self {
-            core: Arc::new(Core {
-                document,
-                provider,
-                sources: OnceLock::new(),
-                bindings: OnceLock::new(),
-            }),
+            document,
+            provider,
             limits: InvocationLimits::default(),
             evaluation: None,
             validation_detail: Detail::Outcome,
+            sources: OnceLock::new(),
+            bindings: OnceLock::new(),
         }
     }
     /// Set the explicit evaluator and immutable supplied resources.
@@ -348,6 +323,10 @@ impl<P: BindingInvoker> Invoker<P> {
         Ok(self)
     }
     /// Prepare both declared value contracts for a primary operation name or alias.
+    /// Call it on an invoker held in an `Arc`: the returned handle keeps a share
+    /// of that invoker, so it can outlive the caller's `Arc` and is `Send`,
+    /// `Sync` and `'static` when the provider is. Configure the invoker before
+    /// wrapping it; its limits and validation detail then hold for every handle.
     /// Retain the returned handle to reuse compiled state across attempts. This
     /// synchronously prepares schemas, without selecting a binding or calling the
     /// provider. Absent schemas need no evaluator; a declared schema without one
@@ -358,7 +337,10 @@ impl<P: BindingInvoker> Invoker<P> {
     ///
     /// # Errors
     /// Returns `ERR_OPERATION_NOT_FOUND` for a missing operation, `ERR_REFUSED` for unrepresentable metadata, or `ERR_SCHEMA_UNRESOLVED` when a declared value contract cannot be prepared. Cooperative cancellation returns `ERR_CANCELLED`.
-    pub fn prepare(&self, operation: &str) -> Result<PreparedOperation<P>, InvocationError> {
+    pub fn prepare(
+        self: &Arc<Self>,
+        operation: &str,
+    ) -> Result<PreparedOperation<P>, InvocationError> {
         self.prepare_with_control(operation, &CancellationToken::new())
     }
     /// Prepare with cooperative caller cancellation. Cancellation returns
@@ -368,14 +350,14 @@ impl<P: BindingInvoker> Invoker<P> {
     /// # Errors
     /// Returns `ERR_OPERATION_NOT_FOUND` for a missing operation, `ERR_REFUSED` for unrepresentable metadata, or `ERR_SCHEMA_UNRESOLVED` when a declared value contract cannot be prepared. Cooperative cancellation returns `ERR_CANCELLED`.
     pub fn prepare_with_control(
-        &self,
+        self: &Arc<Self>,
         operation: &str,
         control: &CancellationToken,
     ) -> Result<PreparedOperation<P>, InvocationError> {
         if control.is_cancelled() {
             return Err(InvocationError::cancelled());
         }
-        let operation = self.core.operation(operation)?;
+        let operation = self.operation(operation)?;
         let prepare = |direction: Direction| {
             if control.is_cancelled() {
                 return Err(InvocationError::cancelled());
@@ -401,12 +383,12 @@ impl<P: BindingInvoker> Invoker<P> {
             return Err(InvocationError::cancelled());
         }
         Ok(PreparedOperation {
-            core: self.core.clone(),
-            limits: self.limits,
-            validation_detail: self.validation_detail,
-            operation: operation.key().into(),
-            input,
-            output,
+            invoker: Arc::clone(self),
+            prepared: Prepared {
+                operation: operation.key().into(),
+                input,
+                output,
+            },
         })
     }
     /// Resolve names and pure support synchronously, then construct a lazy provider
@@ -425,7 +407,11 @@ impl<P: BindingInvoker> Invoker<P> {
         request: Request<'a>,
         control: &CancellationToken,
     ) -> Invocation<impl Future<Output = Result<(), InvocationError>> + 'a + use<'a, P>> {
-        invoke(Origin::Invoker(self), request, control)
+        let origin = Origin {
+            invoker: self,
+            prepared: None,
+        };
+        invoke(origin, request, control)
     }
     /// Resolve by the same rules and admit the selected binding, then ask the
     /// provider's advisory preflight hook ([`BindingInvoker::preflight`]) when it
@@ -456,9 +442,9 @@ impl<P: BindingInvoker> Invoker<P> {
         if control.is_cancelled() {
             return Err(InvocationError::cancelled());
         }
-        let selected = self.core.resolve(request, None, &mut None)?;
+        let selected = self.resolve(request, None, &mut None)?;
         binding::preflight(
-            &self.core.provider,
+            &self.provider,
             self.limits,
             BindingRequest {
                 source: selected.source,
@@ -477,8 +463,8 @@ fn invoke<'a, P: BindingInvoker>(
     request: Request<'a>,
     control: &CancellationToken,
 ) -> Invocation<impl Future<Output = Result<(), InvocationError>> + 'a + use<'a, P>> {
-    let core = origin.core();
-    let shared = Shared::new(origin.limits());
+    let invoker = origin.invoker;
+    let shared = Shared::new(invoker.limits);
     let state = shared.clone();
     let local = shared.control();
     let external = control.clone();
@@ -488,7 +474,8 @@ fn invoke<'a, P: BindingInvoker>(
     let selected = if external.is_cancelled() {
         Err(InvocationError::cancelled())
     } else {
-        core.resolve(request, origin.prepared_operation(), &mut finding)
+        let operation = origin.prepared.map(|prepared| prepared.operation.as_str());
+        invoker.resolve(request, operation, &mut finding)
     };
     if let Some(finding) = finding {
         state.record_finding(finding);
@@ -512,7 +499,8 @@ fn invoke<'a, P: BindingInvoker>(
                 state.record_finding(finding);
                 InvocationError::refused()
             })?;
-            let provider = &origin.core().provider;
+            // Through the origin, so the job captures only that.
+            let provider = &origin.invoker.provider;
             if !provider.supports_kind(&binding_request.source.kind) {
                 return Err(error("ERR_BINDING_NOT_FOUND"));
             }
@@ -524,7 +512,7 @@ fn invoke<'a, P: BindingInvoker>(
     );
     Invocation::new(shared, future)
 }
-impl<P: BindingInvoker> Core<P> {
+impl<P: BindingInvoker> Invoker<P> {
     fn operation(&self, name: &str) -> Result<ConformantOperationView, InvocationError> {
         self.document
             .resolve_operation(name)
@@ -660,19 +648,19 @@ impl<P: BindingInvoker> Core<P> {
 }
 /// Caller-owned prepared input and output contracts for one operation.
 ///
-/// Obtain this handle through [`Invoker::prepare`] or [`Invoker::prepare_with_control`].
-/// It shares its invoker's document, provider and decoded carriers, and keeps
-/// the limits and validation detail in effect when it was prepared; configuring
-/// the invoker afterwards does not change it. The handle owns what it uses, so
-/// it can outlive the invoker and is `Send` and `Sync` when the provider is
-/// both: wrap it in an `Arc` to share one handle across spawned tasks.
+/// Obtain this handle through [`Invoker::prepare`] or [`Invoker::prepare_with_control`]
+/// on an invoker held in an `Arc`. It keeps a share of that invoker, so it can
+/// outlive the caller's `Arc` and is `Send`, `Sync` and `'static` when the
+/// provider is: wrap it in an `Arc` to share one handle across spawned tasks.
 /// Each attempt supplies its own binding selection and context, with
 /// independent cancellation, queues and validation evidence. Sharing a handle
 /// does not share attempt state. Dropping it releases its contract owners.
 pub struct PreparedOperation<P> {
-    core: Arc<Core<P>>,
-    limits: InvocationLimits,
-    validation_detail: Detail,
+    invoker: Arc<Invoker<P>>,
+    prepared: Prepared,
+}
+/// The operation a handle fixes and its two prepared value contracts.
+struct Prepared {
     operation: String,
     input: Option<PreparedContract>,
     output: Option<PreparedContract>,
@@ -703,11 +691,11 @@ impl<P: BindingInvoker> PreparedOperation<P> {
     ) -> Invocation<impl Future<Output = Result<(), InvocationError>> + 'a + use<'a, P>> {
         let target = match attempt.selection {
             BindingChoice::Sole => Target::Operation {
-                name: &self.operation,
+                name: &self.prepared.operation,
                 selection: None,
             },
             BindingChoice::Ordered(selection) => Target::Operation {
-                name: &self.operation,
+                name: &self.prepared.operation,
                 selection: Some(selection),
             },
             BindingChoice::Exact(key) => Target::Binding(key),
@@ -716,7 +704,11 @@ impl<P: BindingInvoker> PreparedOperation<P> {
             target,
             context: attempt.context,
         };
-        invoke(Origin::Prepared(self), request, control)
+        let origin = Origin {
+            invoker: &self.invoker,
+            prepared: Some(&self.prepared),
+        };
+        invoke(origin, request, control)
     }
 }
 type CarrierCache<T> = OnceLock<HashMap<String, OnceLock<Result<T, crate::BoundaryError>>>>;

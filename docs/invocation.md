@@ -16,8 +16,10 @@ async fn call<P: BindingInvoker>(document: Document, provider: P)
     -> Result<(), Box<dyn std::error::Error>>
 {
     let proof = document.validate()?.conformant().ok_or("document is not conformant")?;
-    let invoker = Invoker::new(proof, provider)
-        .with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default());
+    let invoker = Arc::new(
+        Invoker::new(proof, provider)
+            .with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default()),
+    );
     let prepared = invoker.prepare("echo")?; // Keep for further attempts.
     let mut invocation = prepared.invoke(Attempt::new());
     invocation.write(JsonValue::parse("42")?).await?;
@@ -38,14 +40,16 @@ direction lazily once per attempt and retains that contract for its stream; zero
 values do not trigger preparation. Fresh attempts prepare again. There is no network retrieval
 or whole-graph readiness gate.
 
-For repeated attempts, call `let prepared = invoker.prepare("echo")?` and then
-`prepared.invoke(Attempt::new())`. The `operation::PreparedOperation`
-handle shares the invoker's document, provider and decoded carriers and eagerly
-retains both declared value contracts. It owns what it uses, so it can outlive the
-invoker, and it is `Send` and `Sync` when the provider is both: wrap it in an `Arc`
-to share one handle across spawned tasks. It keeps the limits and validation detail
-in effect when it was prepared. It performs no provider work and pins no binding
-or context. Each call takes an
+For repeated attempts, hold the configured invoker in an `Arc`, call
+`let prepared = invoker.prepare("echo")?` and then `prepared.invoke(Attempt::new())`.
+`Invoker::new` allocates nothing; preparing is what needs the `Arc`, because the
+`operation::PreparedOperation` handle keeps a share of the invoker (its document,
+provider, decoded carriers, limits and validation detail) and eagerly retains both
+declared value contracts. The handle can therefore outlive the caller's `Arc`, and
+it is `Send`, `Sync` and `'static` when the provider is: wrap it in an `Arc` to share
+one handle across spawned tasks. A caller that only invokes plainly needs no `Arc`.
+Configure the invoker before wrapping it. The handle performs no provider work and
+pins no binding or context. Each call takes an
 `Attempt` with no operation name: `Attempt::new()` requires a sole supported
 binding, `Attempt::ordered(&["preferred", "fallback"])` supplies an ordered list,
 and `Attempt::binding("exact-key")` selects one binding of the prepared operation.
@@ -116,8 +120,8 @@ disclosure policy allows that for both directions.
 Carrier caches have slots only for declared source/binding keys; repeated unknown
 requests cannot grow them. Used carriers retain exact content and are decoded
 once, without serializing or copying a whole document per call. Prepared
-operations share these caches; drop the invoker and its prepared operations to
-release the cache owners. Caller-retained documents, prepared contracts, and
+operations share these caches; drop the invoker's `Arc` and its prepared operations
+to release the cache owners. Caller-retained documents, prepared contracts, and
 values can independently retain their own backing storage.
 
 ## Ownership and progress
@@ -189,6 +193,15 @@ a later invocation. A hook's job reports requirements as the `CONTEXT_REQUIRED`
 challenge invocation would raise, and preflight returns that challenge as
 `Ok(Some(challenge))`, never as an error carrying a retry path. A job completing
 with `Ok(())` makes no prediction.
+
+The hook's job is the provider's own `Invocation` future type, which is what lets
+a caller's `Send` bound cover preflight, and it has a cost: the prediction travels
+in that future's error channel, as `Err(InvocationError::challenge(..))`. A
+provider with a boxed or `Ready` future builds the job freely. A provider whose
+future is a hand-written type, such as a request state machine, gives that type a
+preflight state that completes with the prediction without reading input,
+emitting output or dispatching; the `BindingInvoker::preflight` documentation
+shows one.
 
 ## Resource policy
 

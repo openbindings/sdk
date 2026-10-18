@@ -35,9 +35,9 @@ serialization retain their existing output; use them when disclosure is intended
 Debug formatting is not a stable serialization format.
 `Document` owns private exact storage; construct and edit it through its methods. Result-returning APIs document caller-visible failures
 under `# Errors`. `DocumentValidation`, `VersionDecision`, `ValueOutcome` and
-`DiscoveryOutcome` are `#[must_use]`, as are the invocation builders' `with_context`,
-`with_evaluator` and `with_validation_detail`; core methods that return a modified
-value, such as `UndefinedResult::with_location`, are not.
+`DiscoveryOutcome` are `#[must_use]`, and so is every method that returns a
+modified value, such as `UndefinedResult::with_location` and the invocation
+builders' `with_context`, `with_evaluator` and `with_validation_detail`.
 
 ## Records that may gain fields
 
@@ -184,10 +184,11 @@ facades' `preflight` methods always admit the request and, when the provider
 declares a hook, return its answer; a provider without one makes no prediction,
 and invocation never requires preflight. The hook's job is the provider's
 `Invocation` future, so stable Rust callers can bound it: binding preflight is
-`Send` when the provider is `Sync` and `P::Invocation<'a>` is `Send`. Operation
-preflight and operation invocations also need a `Send` provider, because the
-operation invoker shares its provider with prepared operations. Local futures
-and `Rc` providers are also supported.
+`Send` when the provider is `Sync` and `P::Invocation<'a>` is `Send`, and so are
+operation preflight and plain operation invocation. A future that holds
+a prepared operation also needs a `Send` provider, because the handle shares its
+invoker.
+Local futures and `Rc` providers are also supported.
 
 ## Boundaries to preserve
 
@@ -359,11 +360,21 @@ string; a SemVer near miss, the costliest, takes about 20 pattern steps per byte
 Any document the admission limits admit, default or caller-selected, therefore
 gets an OBI-02 verdict, and the check's work is linear in those limits. Location
 guidance spends the rest of the allowance; if it ran out, the report would mark
-findings truncated. OBI-10 checks each embedded schema object against the
-meta-schema, its subschemas separately, with a fixed allowance of 2,000,000 steps.
-At most 2 steps per node, it is not reached by any schema the default limits admit.
-An exhausted allowance leaves its rule inconclusive with
-`fixed-schema-limit-or-failure`.
+findings truncated. Linear work is not short work: the SemVer near miss, the worst
+case per byte, took about 0.37 µs per byte in a release build on an Apple M1 Max,
+so a 60 MB near miss takes about 22 seconds to reach its verdict and one at the
+default 64 MiB limit about 25 seconds. Callers bound that time with the admission
+byte limit, `JsonLimits::max_bytes` through `validate_document_with_limits`.
+OBI-10 checks each embedded schema object against the meta-schema, its subschemas
+separately, with recursive meta-schema edges cut to a type check. Its allowance
+grows with the schema: 129 evaluator steps per source byte, since one node meets
+each of the cut meta-schema's 129 positions at most once and takes at least one
+byte, and 64 pattern steps per source byte, its patterns being anchored and
+unambiguous too. Every schema the admission limits admit
+therefore gets a meta-schema verdict. A check reads its schema's own members and
+only the type of each subschema, so a node is read by at most two checks and their
+work together stays linear in the admission limits. An exhausted allowance would
+leave its rule inconclusive with `fixed-schema-limit-or-failure`.
 
 ### Finding-code catalog
 
@@ -542,13 +553,15 @@ it can report in the original sources, in which case `problems_complete` is fals
 ## Caller-owned operation preparation
 
 `operation::Invoker::prepare(name)` and `prepare_with_control(name, &control)`
-return `Result<PreparedOperation<P>, InvocationError>`. The handle shares the
-invoker's document, provider and decoded carriers through one reference count,
-keeps the limits and validation detail in effect at preparation, eagerly prepares
-both declared directions and owns their compiled state. It can outlive the invoker
-and is `Send`, `Sync` and `'static` when the provider is, so one handle wrapped in
-an `Arc` can serve spawned tasks. The invoker is likewise `Send` and `Sync` only
-when the provider is both.
+take the invoker as `&Arc<Invoker<P>>` and return
+`Result<PreparedOperation<P>, InvocationError>`. `Invoker::new` allocates nothing;
+a caller that prepares holds the configured invoker in an `Arc`, and each handle
+keeps one share of it: its document, provider, decoded carriers, limits and
+validation detail. The handle eagerly prepares both declared directions and owns
+their compiled state. It can outlive the caller's `Arc` and is `Send`, `Sync` and
+`'static` when the provider is, so one handle wrapped in an `Arc` can serve
+spawned tasks. The invoker is `Send` when the provider is `Send` and `Sync` when
+it is `Sync`.
 Absent directions need no evaluator. Failed or cancelled preparation releases all
 partial work and returns no handle. Preparation does not select bindings or call
 providers; ready means prepared, not that every value is decidable.

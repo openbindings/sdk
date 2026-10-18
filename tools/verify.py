@@ -14,6 +14,7 @@ def run(args, cwd=root):
 run([sys.executable, 'tools/verify-product-labels.py', '--self-test',
      *(['--tracked-files', a.tracked_files.resolve()] if a.tracked_files else [])])
 run([sys.executable, 'tools/verify-doc-links.py'])
+run([sys.executable, 'tools/verify-fixture-digests.py', '--self-test'])
 run([sys.executable, 'tools/verify-advisory-policy.py', '--self-test'])
 run([sys.executable, 'tools/test-reference.py'])
 run([sys.executable, 'tools/verify-msrv.py', '--version', '1.88'])

@@ -1,4 +1,6 @@
 #![doc = include_str!("../README.md")]
+// A method that returns `Self` is a builder step; dropping its result loses the change.
+#![warn(clippy::return_self_not_must_use)]
 mod error;
 mod exact;
 mod model;

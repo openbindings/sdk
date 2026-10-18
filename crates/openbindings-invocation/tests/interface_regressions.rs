@@ -96,7 +96,9 @@ fn send_provider<'a, P>(
     request: BindingRequest<'a>,
 ) -> impl Future<Output = ()> + Send + 'a
 where
-    P: BindingInvoker + Send + Sync,
+    // Plain operation calls borrow the invoker, so a provider that can be
+    // shared suffices, as for binding calls.
+    P: BindingInvoker + Sync,
     for<'b> P::Invocation<'b>: Send,
 {
     async move {

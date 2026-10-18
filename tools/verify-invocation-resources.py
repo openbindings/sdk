@@ -66,6 +66,9 @@ def main():
             any(row["name"] == name and row["iterations"] >= 10_000 for row in rows)
             for name in ["operation_unary_1_byte", "operation_cancel_release", "operation_validation_failure_release"]),
         "default_capacities_one_and_four": measurements["input_capacity"] == 1 and measurements["output_capacity"] == 4,
+        "operation_invoker_creation_allocates_nothing": any(
+            row["name"] == "operation_invoker_creation_release" and row["iterations"] >= 10_000
+            and row["allocations"] == 0 and row["reallocations"] == 0 for row in rows),
         "source_stable_during_run": hashes == {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in hashed},
     }
     host = {"system": platform.system(), "release": platform.release(), "machine": platform.machine()}

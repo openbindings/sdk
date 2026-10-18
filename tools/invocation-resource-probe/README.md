@@ -24,7 +24,8 @@ synthetic host and toolchain; no performance parity is asserted.
 
 Measurements cover handle construction/release, zero outputs, unary and 64-value
 streams at 1 byte and 64 KiB, a 1-byte selected subtree backed by a 1-MiB owner,
-and cancellation/release. A 1-MiB source is borrowed unchanged for all checked
+and cancellation/release. Constructing and releasing an operation invoker must
+allocate nothing. A 1-MiB source is borrowed unchanged for all checked
 calls. Per-call allocation volumes and maximum individual allocations provide
 evidence against serializing/reparsing that source on each invocation. Native
 queue and pending-item maxima are qualified separately by SDK unit tests.

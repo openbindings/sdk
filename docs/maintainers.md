@@ -26,7 +26,9 @@ contracts. `tools/verify-rust-snippets.py` executes prose examples.
 `tools/verify-product-labels.py --self-test` checks product vocabulary boundaries.
 `tools/verify-doc-links.py` checks local Markdown targets and fragments without
 network access, including repository URLs that name this checkout. Remote URLs
-are reported as unchecked. See [release preparation](release-candidate.md) for
+are reported as unchecked. `tools/verify-fixture-digests.py --self-test` checks
+that each vendored interface fixture matches the SHA-256 row in its
+`tests/fixtures/README.md`; update a row only with the snapshot it describes. See [release preparation](release-candidate.md) for
 archive and source-identity checks and [API reference](api-reference.md) for rendering.
 
 On pull requests and pushes to `main`, the [CI workflow](../.github/workflows/ci.yml)

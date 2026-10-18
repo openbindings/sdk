@@ -30,6 +30,7 @@ impl SupportedKind {
         }
     }
     /// Attach a human-facing description.
+    #[must_use]
     pub fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
@@ -102,6 +103,15 @@ pub trait BindingInvoker {
     /// future, such as `Send`, covers preflight too. Invocation never calls this
     /// hook.
     ///
+    /// Sharing the type has a cost. A prediction travels in the error channel,
+    /// as `Err(InvocationError::challenge(..))`, the terminal a context-requiring
+    /// invocation would end with; the facades return it as `Ok(Some(challenge))`.
+    /// A provider whose invocation future is a boxed or `std::future::Ready`
+    /// future builds the job freely, as below. One whose future is a type it
+    /// writes by hand, such as a state machine over its transport, gives that
+    /// type a preflight state: one that completes with the prediction without
+    /// reading input, emitting output or dispatching.
+    ///
     /// ```
     /// # use openbindings_invocation::{BindingRequest, CancellationToken, ContextChallenge, InvocationError, ProviderIo, binding::BindingInvoker};
     /// # use std::future::{Ready, ready};
@@ -121,6 +131,41 @@ pub trait BindingInvoker {
     ///             ).unwrap()).unwrap();
     ///             ready(Err(InvocationError::challenge(challenge)))
     ///         })
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// A hand-written future carries the prediction as one of its states:
+    ///
+    /// ```
+    /// # use openbindings_invocation::{BindingRequest, CancellationToken, ContextChallenge, InvocationError, ProviderIo, binding::BindingInvoker};
+    /// # use std::{future::Future, pin::Pin, task::{Context, Poll}};
+    /// enum Job {
+    ///     // A real provider keeps its request state machine here.
+    ///     Call(ProviderIo),
+    ///     // Preflight: no input, output or dispatch, just the prediction.
+    ///     Predict(Option<ContextChallenge>),
+    /// }
+    /// impl Future for Job {
+    ///     type Output = Result<(), InvocationError>;
+    ///     fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Self::Output> {
+    ///         match self.get_mut() {
+    ///             Job::Call(_) => Poll::Ready(Ok(())),
+    ///             Job::Predict(prediction) => Poll::Ready(match prediction.take() {
+    ///                 Some(challenge) => Err(InvocationError::challenge(challenge)),
+    ///                 None => Ok(()),
+    ///             }),
+    ///         }
+    ///     }
+    /// }
+    /// struct Native;
+    /// impl BindingInvoker for Native {
+    ///     type Invocation<'a> = Job;
+    ///     fn supports_kind(&self, kind: &str) -> bool { kind == "urn:example:native:v1" }
+    ///     fn invoke<'a>(&'a self, _: BindingRequest<'a>, io: ProviderIo, _: CancellationToken)
+    ///         -> Job { Job::Call(io) }
+    ///     fn preflight<'a>(&'a self, _: BindingRequest<'a>, _: CancellationToken) -> Option<Job> {
+    ///         Some(Job::Predict(None))
     ///     }
     /// }
     /// ```

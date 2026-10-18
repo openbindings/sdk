@@ -91,11 +91,11 @@ const STEPS_PER_NODE: usize = 80;
 // takes about 20 steps per byte, under a third of this (a test probes each
 // pattern's near misses); location guidance revalidates within the rest.
 const PATTERN_STEPS_PER_BYTE: usize = 64;
-// One schema object's meta-schema check, with recursive edges cut to type checks.
-const META_ALLOWANCE: Allowance = Allowance {
-    steps: 2_000_000,
-    patterns: 2_000_000,
-};
+// One schema object's meta-schema check cuts the recursive edges to type checks,
+// so one node meets each position of the unrolled, cut meta-schema at most once.
+// It has 129; a test counts them. Its patterns are anchored and unambiguous too
+// (a test probes their near misses), so the per-byte pattern allowance is shared.
+const META_STEPS_PER_NODE: usize = 129;
 impl Allowance {
     /// Spend from the enclosing check's allowance; unbounded outside a check.
     pub(super) const ENCLOSING: Self = Self {
@@ -111,9 +111,24 @@ impl Allowance {
             patterns: PATTERN_STEPS_PER_BYTE.saturating_mul(document.text().len()),
         }
     }
+    /// One schema object's meta-schema check. It grows with the schema, so every
+    /// schema the admission limits admit reaches a verdict. Every node takes at
+    /// least one source byte, so the per-node step bound is charged per byte:
+    /// counting a subschema's nodes costs a search of the document's node index
+    /// for each of its schemas. A check reads its schema's own members and,
+    /// through a cut edge, only the type of each subschema, so a node is read by
+    /// at most two checks and their total work stays linear in the admission
+    /// limits.
+    fn meta(schema: JsonRef<'_>) -> Self {
+        let bytes = schema.text().len();
+        Self {
+            steps: META_STEPS_PER_NODE.saturating_mul(bytes),
+            patterns: PATTERN_STEPS_PER_BYTE.saturating_mul(bytes),
+        }
+    }
     fn of(value: JsonRef<'_>, is_meta: bool) -> Self {
         if is_meta {
-            META_ALLOWANCE
+            Self::meta(value)
         } else {
             Self::document(value)
         }
@@ -404,6 +419,136 @@ mod tests {
         let schema: Value =
             serde_json::from_str(include_str!("../schemas/openbindings.schema.json")).unwrap();
         assert_eq!(positions(&schema, &schema, &mut Vec::new()), STEPS_PER_NODE);
+    }
+
+    #[test]
+    fn meta_step_allowance_is_the_position_count_of_the_unrolled_cut_meta_schema() {
+        // Cutting the recursive edges leaves a finite tree of positions across the
+        // localized meta-schema resources; one node meets each at most once.
+        use crate::schema_index::{SCHEMA_SELECTORS, SchemaSelector};
+        let resources: BTreeMap<String, Value> = META_FILES
+            .iter()
+            .map(|text| {
+                let mut schema: Value = serde_json::from_str(text).unwrap();
+                localize(&mut schema);
+                (schema["$id"].as_str().unwrap().to_owned(), schema)
+            })
+            .collect();
+        fn positions(
+            resources: &BTreeMap<String, Value>,
+            base: &str,
+            schema: &Value,
+            refs: &mut Vec<String>,
+        ) -> usize {
+            let object = match schema {
+                Value::Bool(_) => return 1,
+                Value::Object(object) => object,
+                _ => return 0,
+            };
+            for keyword in ["$dynamicRef", "$recursiveRef"] {
+                assert!(!object.contains_key(keyword), "{keyword}");
+            }
+            let mut count = 1;
+            if let Some(target) = object.get("$ref").and_then(Value::as_str) {
+                let (path, fragment) = target.split_once('#').unwrap_or((target, ""));
+                let uri = if path.is_empty() {
+                    base.to_owned()
+                } else {
+                    format!("{}{path}", &base[..=base.rfind('/').unwrap()])
+                };
+                let absolute = format!("{uri}#{fragment}");
+                assert!(!refs.contains(&absolute), "recursive {absolute}");
+                refs.push(absolute);
+                let resolved = resources[&uri].pointer(fragment).unwrap();
+                count += positions(resources, &uri, resolved, refs);
+                refs.pop();
+            }
+            for (keyword, selector) in SCHEMA_SELECTORS {
+                if matches!(*keyword, "$defs" | "definitions") {
+                    continue;
+                }
+                count += match (selector, object.get(*keyword)) {
+                    (SchemaSelector::Direct, Some(child)) => {
+                        positions(resources, base, child, refs)
+                    }
+                    (
+                        SchemaSelector::Map | SchemaSelector::MapOrStringArray,
+                        Some(Value::Object(map)),
+                    ) => map
+                        .values()
+                        .map(|child| positions(resources, base, child, refs))
+                        .sum(),
+                    (SchemaSelector::Array, Some(Value::Array(items))) => items
+                        .iter()
+                        .map(|child| positions(resources, base, child, refs))
+                        .sum(),
+                    _ => 0,
+                };
+            }
+            count
+        }
+        let root = "https://openbindings.invalid/internal-meta/schema";
+        assert_eq!(
+            positions(&resources, root, &resources[root], &mut Vec::new()),
+            META_STEPS_PER_NODE
+        );
+    }
+
+    #[test]
+    fn schemas_of_any_admitted_size_get_a_meta_schema_verdict() {
+        // The allowance grows with the schema, so a long near miss of a meta
+        // pattern and a schema with many members both decide.
+        let n = 1_000_000;
+        let long = "a".repeat(n);
+        let members =
+            |entry: &dyn Fn(usize) -> String| (0..200_000).map(entry).collect::<Vec<_>>().join(",");
+        let decided = [
+            (format!(r#"{{"$anchor":"{long}!"}}"#), false),
+            (format!(r#"{{"$dynamicAnchor":"{long}!"}}"#), false),
+            (format!(r#"{{"$id":"https://e.example/{long}##"}}"#), false),
+            (format!(r#"{{"$anchor":"{long}"}}"#), true),
+            (format!(r#"{{"$id":"https://e.example/{long}#"}}"#), true),
+            (
+                format!(
+                    r#"{{"$vocabulary":{{{}}}}}"#,
+                    members(&|i| format!(r#""https://e.example/{i}":true"#))
+                ),
+                true,
+            ),
+            (
+                format!(r#"{{"required":[{}]}}"#, members(&|i| format!(r#""p{i}""#))),
+                true,
+            ),
+            (
+                format!(
+                    r#"{{"properties":{{{}}}}}"#,
+                    members(&|i| format!(r#""p{i}":{{}}"#))
+                ),
+                true,
+            ),
+        ];
+        for (text, valid) in decided {
+            let value = JsonValue::parse(&text).unwrap();
+            assert_eq!(validity(&value, true), Ok(valid), "{}", &text[..24]);
+        }
+    }
+
+    #[test]
+    fn near_misses_of_every_meta_pattern_need_under_a_third_of_the_allowance() {
+        let n = 10_000;
+        let near_misses = [
+            format!(r#"{{"$anchor":"{}!"}}"#, "a".repeat(n)),
+            format!(r#"{{"$anchor":"{}!"}}"#, "a.-".repeat(n)),
+            format!(r#"{{"$dynamicAnchor":"{}!"}}"#, "_9".repeat(n)),
+            format!(r#"{{"$id":"{}##"}}"#, "a".repeat(n)),
+            format!(r#"{{"$id":"{}#a"}}"#, "/".repeat(n)),
+        ];
+        for text in &near_misses {
+            let value = JsonValue::parse(text).unwrap();
+            let third = PATTERN_STEPS_PER_BYTE / 3 * text.len();
+            let decided = jsonschema::ob_ecma::top_level(third, || validity(&value, true));
+            assert!(matches!(decided, Ok(Ok(false))), "{}", &text[..24]);
+        }
     }
 
     #[test]

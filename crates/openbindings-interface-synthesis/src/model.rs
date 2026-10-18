@@ -63,6 +63,7 @@ impl SupportedKind {
         }
     }
     /// Attach display text.
+    #[must_use]
     pub fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
@@ -240,11 +241,13 @@ impl CoverageLimitation {
         }
     }
     /// Attach exact structured evidence.
+    #[must_use]
     pub fn with_details(mut self, details: BTreeMap<String, JsonValue>) -> Self {
         self.details = Some(details);
         self
     }
     /// Attach additional evidence members; they must not shadow known fields.
+    #[must_use]
     pub fn with_additional_fields(mut self, fields: BTreeMap<String, JsonValue>) -> Self {
         self.additional_fields = fields;
         self

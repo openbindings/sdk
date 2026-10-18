@@ -1,5 +1,5 @@
-//! The default work allowance grows with the value checked, and exhausted depth
-//! is reported as such.
+//! The default work allowance grows with the value checked, an explicit one caps
+//! every pass, and exhausted depth is reported as such.
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 
@@ -25,41 +25,62 @@ fn code(outcome: &ValueOutcome) -> Option<&str> {
     }
 }
 
+const SCHEMA: &str = r#"{"type":"array","items":{"type":"integer","minimum":0}}"#;
+// About three units per element: more than the 2,000,000 a small value gets.
+const ITEMS: usize = 700_000;
+fn large() -> JsonValue {
+    JsonValue::parse(format!("[{}0]", "1,".repeat(ITEMS - 1))).unwrap()
+}
+fn explicit(steps: usize) -> PreparedContract {
+    prepared(
+        SCHEMA,
+        Limits {
+            evaluation_steps: Some(steps),
+            ..Limits::default()
+        },
+    )
+}
+
 #[test]
 fn work_allowance_grows_with_the_value() {
-    let schema = r#"{"type":"array","items":{"type":"integer","minimum":0}}"#;
-    // About three units per element: more than the 2,000,000 a small value gets.
-    let items = 700_000;
-    let large = JsonValue::parse(format!("[{}0]", "1,".repeat(items - 1))).unwrap();
-    let defaults = prepared(schema, Limits::default());
-    assert!(matches!(defaults.validate(&large), ValueOutcome::Satisfies));
-    let failing = JsonValue::parse(format!("[{}-1]", "1,".repeat(items - 1))).unwrap();
+    let defaults = prepared(SCHEMA, Limits::default());
+    assert!(matches!(
+        defaults.validate(&large()),
+        ValueOutcome::Satisfies
+    ));
+    let failing = JsonValue::parse(format!("[{}-1]", "1,".repeat(ITEMS - 1))).unwrap();
     assert!(matches!(
         defaults.explain(&failing),
         ValueOutcome::Fails { problems, .. } if problems.len() == 1
     ));
-    // An explicit allowance still bounds the work: it grows in proportion.
-    let small = Limits {
-        evaluation_steps: 1_000,
-        ..Limits::default()
-    };
-    let bounded = prepared(schema, small);
+}
+
+#[test]
+fn an_explicit_work_allowance_caps_every_pass_whatever_the_value_size() {
+    let large = large();
+    // The default's allowance for a small value, stated explicitly, does not
+    // grow: the large value the default decides exhausts it.
     assert_eq!(
-        code(&bounded.validate(&large)),
+        code(&explicit(2_000_000).validate(&large)),
+        Some("evaluation-work-limit")
+    );
+    assert_eq!(
+        code(&explicit(1_000).validate(&large)),
+        Some("evaluation-work-limit")
+    );
+    assert_eq!(
+        code(&explicit(0).validate(&large)),
         Some("evaluation-work-limit")
     );
     assert!(matches!(
-        bounded.validate(&JsonValue::parse("[1,2]").unwrap()),
+        explicit(1_000).validate(&JsonValue::parse("[1,2]").unwrap()),
         ValueOutcome::Satisfies
     ));
-    let none = prepared(
-        schema,
-        Limits {
-            evaluation_steps: 0,
-            ..Limits::default()
-        },
-    );
-    assert_eq!(code(&none.validate(&large)), Some("evaluation-work-limit"));
+    // A cap above what the value needs decides it.
+    assert!(matches!(
+        explicit(10_000_000).validate(&large),
+        ValueOutcome::Satisfies
+    ));
 }
 
 #[test]

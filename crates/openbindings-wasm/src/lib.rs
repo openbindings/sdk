@@ -1,4 +1,6 @@
 #![doc = include_str!("../README.md")]
+// A method that returns `Self` is a builder step; dropping its result loses the change.
+#![warn(clippy::return_self_not_must_use)]
 #![forbid(unsafe_code)]
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
@@ -104,6 +106,7 @@ impl WasmJson {
     pub fn parse_text(text: &str) -> Result<WasmJson, JsValue> {
         Self::parse_bytes(text.as_bytes())
     }
+    #[must_use]
     pub fn retain(&self) -> WasmJson {
         Self {
             value: self.value.clone(),
@@ -246,6 +249,7 @@ impl WasmMember {
             value: self.value.clone(),
         }
     }
+    #[must_use]
     pub fn retain(&self) -> WasmMember {
         Self {
             index: self.index,
@@ -490,6 +494,7 @@ impl WasmDocument {
             .set_operation_output(key, &value.value)
             .map_err(edit_error)
     }
+    #[must_use]
     pub fn retain(&self) -> WasmDocument {
         Self {
             handle: DocumentHandle::new(self.handle.document().clone()),
@@ -969,6 +974,7 @@ impl WasmOperation {
             .map(encoded)
             .map_err(interpretation_error)
     }
+    #[must_use]
     pub fn retain(&self) -> WasmOperation {
         Self {
             op: self.op.clone(),
@@ -1104,6 +1110,7 @@ impl std::fmt::Debug for WasmBinding {
 
 #[wasm_bindgen]
 impl WasmBinding {
+    #[must_use]
     pub fn retain(&self) -> WasmBinding {
         Self {
             view: self.view.clone(),
@@ -1135,6 +1142,7 @@ impl std::fmt::Debug for WasmSource {
 
 #[wasm_bindgen]
 impl WasmSource {
+    #[must_use]
     pub fn retain(&self) -> WasmSource {
         Self {
             view: self.view.clone(),
@@ -1166,6 +1174,7 @@ impl std::fmt::Debug for WasmDependency {
 
 #[wasm_bindgen]
 impl WasmDependency {
+    #[must_use]
     pub fn retain(&self) -> WasmDependency {
         Self {
             view: self.view.clone(),
@@ -1217,6 +1226,7 @@ impl std::fmt::Debug for WasmExample {
 
 #[wasm_bindgen]
 impl WasmExample {
+    #[must_use]
     pub fn retain(&self) -> WasmExample {
         Self {
             view: self.view.clone(),
@@ -1270,6 +1280,7 @@ impl WasmResources {
         .map(|resources| Self { resources })
         .map_err(|e| error("resource", e))
     }
+    #[must_use]
     pub fn retain(&self) -> WasmResources {
         Self {
             resources: self.resources.clone(),
@@ -1381,6 +1392,7 @@ impl WasmConformantOperation {
     pub fn bindings(&self) -> String {
         encoded(self.operation.bindings())
     }
+    #[must_use]
     pub fn retain(&self) -> WasmConformantOperation {
         Self {
             operation: self.operation.clone(),
@@ -1459,6 +1471,7 @@ impl WasmValueContract {
     ) -> Result<WasmPreparation, JsValue> {
         self.prepare_in(&resources.resources, limits, cancelled)
     }
+    #[must_use]
     pub fn retain(&self) -> WasmValueContract {
         Self {
             operation: self.operation.clone(),
@@ -1525,6 +1538,7 @@ impl WasmPrepared {
             .map(encoded)
             .map_err(input_error)
     }
+    #[must_use]
     pub fn retain(&self) -> WasmPrepared {
         Self {
             prepared: self.prepared.clone(),
