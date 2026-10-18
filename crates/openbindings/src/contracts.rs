@@ -367,11 +367,12 @@ pub struct SchemaResource {
 /// for different snapshots; this is not a process-wide registry or an acquirer.
 /// Clones share storage, including the identity index built by [`Self::new`].
 /// [`SchemaRequest::evaluation_program`] reads that index, and the resolution
-/// space it assembles for this set and a document revision is kept with the
-/// set while both are alive, and released when either is dropped. The default
-/// evaluator does not use them: each of its preparations indexes the set again
-/// and assembles its own resolution space, so its preparation time grows with
-/// the set's resources, including those the contract never reaches.
+/// space it assembles for a nonempty set and a document revision is kept with
+/// the set while both are alive, and released when either is dropped. The
+/// default evaluator reuses the index instead of indexing the set again, but
+/// assembles its own resolution space for each preparation, so its preparation
+/// time still grows with the set's resources, including those the contract
+/// never reaches.
 #[derive(Clone, Default)]
 pub struct ResourceSet {
     inner: Arc<ResourceSetInner>,
@@ -504,9 +505,6 @@ impl ResourceSet {
             .ok()?;
         resources[found].document.locate(&at.pointer)
     }
-    pub(crate) fn input_policy(&self) -> &openbindings_internal_schema::Supplied {
-        &self.inner.input_policy
-    }
     pub(crate) fn is_empty(&self) -> bool {
         self.inner.resources.is_empty()
     }
@@ -554,6 +552,14 @@ impl ResourceSet {
     pub(crate) fn empty() -> &'static Self {
         static EMPTY: std::sync::OnceLock<ResourceSet> = std::sync::OnceLock::new();
         EMPTY.get_or_init(Self::default)
+    }
+}
+
+// The default evaluator reuses the identity index built in `ResourceSet::new`
+// rather than admitting the resources again on every preparation.
+impl openbindings_internal_schema::SuppliedSet for ResourceSet {
+    fn supplied(&self) -> &openbindings_internal_schema::Supplied {
+        &self.inner.input_policy
     }
 }
 
@@ -866,7 +872,7 @@ impl<'a> ValueContract<'a> {
     /// Prepare with immutable supplied resources; nothing is fetched. An
     /// evaluator that calls [`SchemaRequest::evaluation_program`] reuses the
     /// set's index, and its resolution space with this document while both are
-    /// alive. The default evaluator indexes the set and assembles its
+    /// alive. The default evaluator reuses the set's index and assembles its
     /// resolution space again on every preparation.
     ///
     /// # Errors
