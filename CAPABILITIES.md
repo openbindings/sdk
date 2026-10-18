@@ -61,8 +61,9 @@ default admission limits accept. An explicitly configured allowance caps every
 pass at that many units, whatever the value's size. The evaluation depth (1,024 nested
 evaluations, a stack bound) and the regex budget (2,000,000 steps, the safety
 bound) can still prevent a verdict; a prepared value contract can remain undecidable
-for a particular value. Patterns may nest 32 groups by default, which keeps
-preparation within a 256 KiB thread stack.
+for a particular value. Patterns may nest 32 groups by default; release builds
+prepare such patterns, and check values against them, on a 256 KiB thread stack.
+Debug builds need more on Windows, as the [support policy](docs/support.md) records.
 
 Missing content or undefined reference results do not prevent a verdict when the
 evaluator proves that they cannot affect it. An established undefined result has

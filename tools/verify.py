@@ -39,6 +39,8 @@ run([sys.executable, 'tools/verify-invocation-resources.py'])
 run([sys.executable, 'tools/verify-diagnostics.py'])
 run([sys.executable, 'tools/test-source-inspection-verifier.py'])
 run(['cargo', 'build', '--locked', '--release', '--workspace'])
+# Release builds carry the pattern stack qualification on every host, Windows included.
+run(['cargo', 'test', '--locked', '--release', '-p', 'openbindings-json-schema-evaluator', '--test', 'pattern_stack'])
 run(['cargo', 'build', '--locked', '--manifest-path', 'tools/conformance-observer/Cargo.toml'])
 run([sys.executable, 'tools/qualification/replay/corpus.py'])
 run([sys.executable, 'tools/qualification/replay/production-corpus.py', '--binary', Path(env['CARGO_TARGET_DIR']) / 'debug' / ('sdk-production-observer.exe' if os.name == 'nt' else 'sdk-production-observer')])

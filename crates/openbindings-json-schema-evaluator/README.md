@@ -96,8 +96,11 @@ up to 65,536 nodes and grows in proportion above that, so ordinary schemas decid
 values as large as the default admission limits accept. An explicit
 `evaluation_steps: Some(n)` caps every pass at `n` units, whatever the value's size. Evaluation depth
 (default 1,024) bounds the recursive walk's stack and is reported as
-`evaluation-depth-limit`. Patterns may nest 32 groups by default, which keeps
-preparation within a 256 KiB thread stack. The default regex allowance is
+`evaluation-depth-limit`. Patterns may nest 32 groups by default; release
+builds prepare such patterns, and check values against them, on a 256 KiB
+thread stack. Debug builds need more on Windows; see
+[support](https://github.com/openbindings/sdk/blob/main/docs/support.md).
+The default regex allowance is
 2,000,000 steps. Large unanchored
 searches can exhaust it and return `LimitExceeded`, including ordinary megabyte
 strings. Unicode property matching is unsupported when applied. `format` is an
