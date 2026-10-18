@@ -14,7 +14,7 @@ export function prepareService(documentBytes, entries = []) {
     contract = operation.input();
     if (!contract) return { status: "no-value-contract" };
     resources = new SchemaResources(entries); // borrowed schema owners
-    // A ready result owns its prepared contract independently of setup locals.
+    // A ready result owns its prepared value contract independently of setup locals.
     return contract.prepare({ resources });
   } finally {
     resources?.dispose();

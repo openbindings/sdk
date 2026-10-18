@@ -1,9 +1,9 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 
-/// A prepared contract checked with one detail per call: the cheap check or an explanation.
+/// A prepared value contract checked with one detail per call: the cheap check or an explanation.
 struct Checked {
-    contract: PreparedContract,
+    contract: PreparedValueContract,
     detail: Detail,
 }
 impl Checked {

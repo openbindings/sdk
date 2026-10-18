@@ -11,7 +11,7 @@ trait EvaluateCase {
     fn explain(&self, value: &JsonValue) -> ValueOutcome;
     fn check(&self, value: &JsonValue, detail: Detail) -> ValueOutcome;
 }
-impl EvaluateCase for Result<PreparedContract, NoVerdict> {
+impl EvaluateCase for Result<PreparedValueContract, NoVerdict> {
     fn validate(&self, value: &JsonValue) -> ValueOutcome {
         self.check(value, Detail::Outcome)
     }
@@ -46,7 +46,7 @@ fn conformant(document: &Document) -> Conformant<Document> {
 fn prepare_op(
     document: &Conformant<Document>,
     evaluator: &dyn SchemaEvaluator,
-) -> Result<PreparedContract, NoVerdict> {
+) -> Result<PreparedValueContract, NoVerdict> {
     document
         .resolve_operation("op")
         .expect("declared operation")
@@ -54,7 +54,7 @@ fn prepare_op(
         .expect("declared input")
         .prepare(evaluator)
 }
-fn prepare(schema: &str) -> Result<PreparedContract, NoVerdict> {
+fn prepare(schema: &str) -> Result<PreparedValueContract, NoVerdict> {
     prepare_op(&conformant(&doc(schema)), &DefaultEvaluator::new())
 }
 fn value(text: &str) -> JsonValue {

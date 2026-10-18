@@ -40,7 +40,7 @@ impl SchemaEvaluator for RetainPrepared {
     }
 }
 
-fn prepared(schema: Value) -> (PreparedContract, Arc<dyn PreparedSchema>) {
+fn prepared(schema: Value) -> (PreparedValueContract, Arc<dyn PreparedSchema>) {
     let document = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )

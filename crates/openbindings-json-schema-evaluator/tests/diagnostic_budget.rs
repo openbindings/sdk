@@ -2,7 +2,7 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use serde_json::{Value, json};
 
-fn prepared(schema: Value, limits: Limits, resources: ResourceSet) -> PreparedContract {
+fn prepared(schema: Value, limits: Limits, resources: ResourceSet) -> PreparedValueContract {
     let doc = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
@@ -20,7 +20,7 @@ fn prepared(schema: Value, limits: Limits, resources: ResourceSet) -> PreparedCo
     }
 }
 /// Prepare operation `op` input with the default evaluator and no supplied resources.
-fn prepare_input(doc: &Document) -> Result<PreparedContract, NoVerdict> {
+fn prepare_input(doc: &Document) -> Result<PreparedValueContract, NoVerdict> {
     doc.validate()
         .unwrap()
         .conformant()

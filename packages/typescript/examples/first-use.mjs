@@ -38,7 +38,7 @@ export function firstUse(
     if (!contract) return { status: "no-value-contract" };
     const setup = contract.prepare();
     if (setup.status !== "ready") return setup;
-    prepared = setup.contract;
+    prepared = setup.valueContract;
     return { status: "checked", operations, result: prepared.validate(input) };
   } finally {
     prepared?.dispose();

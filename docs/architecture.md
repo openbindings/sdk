@@ -14,7 +14,7 @@ buffers; standalone document views rebase byte locations correctly.
 
 A conformant operation hands out its `ValueContract`s; preparation borrows an
 evaluator and an explicit immutable `ResourceSet`. Each preparation compiles
-independently. A caller-retained `PreparedContract` owns required compiled state
+independently. A caller-retained `PreparedValueContract` owns required compiled state
 and survives document, resource and evaluator disposal. Cancellation and transient failures do
 not poison healthy subsequent preparation. Resources with the same URI in distinct
 sets never share an implicit registry. A set indexes its resource identities once

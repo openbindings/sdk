@@ -7,7 +7,7 @@ import {
   type ValueOutcome,
   type ValueCheck,
   type ValueContractPreparation,
-  type PreparedContract,
+  type PreparedValueContract,
   type ValidationResult,
 } from "../dist/index.js";
 import { DiscoveryPublication } from "../dist/http-discovery.js";
@@ -32,7 +32,7 @@ export async function referenceExample(wasmBytes: Uint8Array, source: string) {
     limits: { evaluationSteps: 2000000 },
   });
   if (setup.status !== "ready") return setup;
-  using contract: PreparedContract = setup.contract;
+  using contract: PreparedValueContract = setup.valueContract;
   const exact = parseJson("9007199254740993");
   if (exact.status !== "parsed") return exact.error;
   using value = exact.value;

@@ -1,7 +1,7 @@
 // Exercise public proof acquisition and operation selection, then release the
 // temporary owners after setup. A plain Document is validated; a
 // ConformantDocument is used as given and stays caller-owned. Only the
-// returned preparation result (and its ready PreparedContract) is transferred.
+// returned preparation result (and its ready PreparedValueContract) is transferred.
 function prepare(document, operation, field, options) {
   let proof, view, contract;
   try {

@@ -34,7 +34,7 @@ fn prepare(
     schema: &str,
     supplied: ResourceSet,
     evaluator: &dyn SchemaEvaluator,
-) -> Result<PreparedContract, NoVerdict> {
+) -> Result<PreparedValueContract, NoVerdict> {
     conformant(&document(schema))
         .resolve_operation("op")
         .expect("declared operation")
@@ -42,7 +42,7 @@ fn prepare(
         .expect("declared input")
         .prepare_with(evaluator, &supplied)
 }
-fn ready(schema: &str) -> PreparedContract {
+fn ready(schema: &str) -> PreparedValueContract {
     let result = prepare(schema, ResourceSet::default(), &DefaultEvaluator::new());
     let Ok(contract) = result else {
         panic!("{result:?}")

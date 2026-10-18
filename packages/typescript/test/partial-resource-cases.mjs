@@ -29,7 +29,7 @@ export function partialResourceCases(sdk) {
         return;
       }
       check(setup.status === "ready", "qualified partial preparation is ready");
-      contract = setup.contract;
+      contract = setup.valueContract;
       document.dispose();
       const result = contract.explain(value);
       check(
@@ -186,7 +186,7 @@ export function partialResourceCases(sdk) {
   const proof = doc.validate().document;
   const operation = proof.resolveOperation("op");
   const input = operation.input();
-  const old = input.prepare({ resources: supplied }).contract;
+  const old = input.prepare({ resources: supplied }).valueContract;
   let completeResources, yes, next, retained;
   try {
     const info = old.validate({ x: 1 });
@@ -206,7 +206,7 @@ export function partialResourceCases(sdk) {
     );
     yes = sdk.parseJson("true").value;
     completeResources = supplied.with(V, yes);
-    next = input.prepare({ resources: completeResources }).contract;
+    next = input.prepare({ resources: completeResources }).valueContract;
     check(
       next.validate({ x: 1 }).outcome === "satisfies",
       "preparing again with complete resources ignores unselected references",

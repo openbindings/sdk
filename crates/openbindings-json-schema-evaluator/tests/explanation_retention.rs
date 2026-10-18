@@ -1,4 +1,4 @@
-//! A prepared contract that can explain keeps only what its own explanations
+//! A prepared value contract that can explain keeps only what its own explanations
 //! read. Its own binary, so no concurrent test changes the live arena count.
 use openbindings::*;
 use openbindings_internal_json::backend::live_arenas;
@@ -38,7 +38,7 @@ impl SchemaEvaluator for Projecting {
         DefaultEvaluator::new().prepare(request, control)
     }
 }
-fn explaining_contract() -> PreparedContract {
+fn explaining_contract() -> PreparedValueContract {
     let proof = proof();
     let item = resources(
         ITEM,

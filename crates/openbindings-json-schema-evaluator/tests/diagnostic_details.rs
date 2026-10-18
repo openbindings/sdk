@@ -1,7 +1,7 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 
-fn prepare(text: &str, resources: ResourceSet) -> PreparedContract {
+fn prepare(text: &str, resources: ResourceSet) -> PreparedValueContract {
     let doc = Document::parse(text).unwrap();
     let doc = doc
         .validate()

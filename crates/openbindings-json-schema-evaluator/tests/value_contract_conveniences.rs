@@ -14,7 +14,7 @@ fn document(schema: &str) -> Conformant<Document> {
 }
 
 /// Prepare the input contract selected by its alias with the default evaluator.
-fn prepare(schema: &str) -> PreparedContract {
+fn prepare(schema: &str) -> PreparedValueContract {
     document(schema)
         .resolve_operation("find")
         .expect("declared alias")
@@ -200,7 +200,7 @@ fn preparation_refusal_is_the_original_record_and_propagates_as_an_error() {
         assert_eq!(error.message, "custom message");
         assert_eq!(error.location.as_ref(), Some(&location));
         // Propagating the refusal as an error keeps the original record.
-        let propagated = (|| -> Result<PreparedContract, Box<dyn Error>> {
+        let propagated = (|| -> Result<PreparedValueContract, Box<dyn Error>> {
             Ok(contract.prepare(&Refuse(error.clone()))?)
         })()
         .unwrap_err();

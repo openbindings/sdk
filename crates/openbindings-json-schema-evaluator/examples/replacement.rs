@@ -51,7 +51,7 @@ fn candidate(
     text: &str,
     resources: ResourceSet,
     control: &dyn WorkControl,
-) -> Result<PreparedContract, LoadFailure> {
+) -> Result<PreparedValueContract, LoadFailure> {
     let document = Document::parse(text).map_err(LoadFailure::Parse)?;
     let validation = document.validate().map_err(LoadFailure::Version)?;
     let Some(proof) = validation.conformant() else {
@@ -81,10 +81,10 @@ fn candidate(
     }
 }
 
-fn satisfies(input: &PreparedContract, value: &JsonValue) {
+fn satisfies(input: &PreparedValueContract, value: &JsonValue) {
     assert!(matches!(input.validate(value), ValueOutcome::Satisfies));
 }
-fn mismatch(input: &PreparedContract, value: &JsonValue) {
+fn mismatch(input: &PreparedValueContract, value: &JsonValue) {
     assert!(matches!(input.validate(value), ValueOutcome::Fails { .. }));
 }
 

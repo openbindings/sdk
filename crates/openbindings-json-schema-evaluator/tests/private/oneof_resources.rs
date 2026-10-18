@@ -23,7 +23,7 @@ fn conformant(document: &Document) -> Conformant<Document> {
         .expect("conformant document")
 }
 /// Prepare operation `probe` input with the default evaluator; preparation must succeed.
-fn ready(document: &Document, resources: ResourceSet, limits: Limits) -> PreparedContract {
+fn ready(document: &Document, resources: ResourceSet, limits: Limits) -> PreparedValueContract {
     match conformant(document)
         .resolve_operation("probe")
         .expect("declared operation")

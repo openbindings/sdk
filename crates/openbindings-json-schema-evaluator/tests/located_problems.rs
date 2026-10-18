@@ -16,7 +16,7 @@ fn document(schema: &str) -> Conformant<Document> {
         .conformant()
         .expect("conformant document")
 }
-fn contract(document: &Conformant<Document>, resources: &ResourceSet) -> PreparedContract {
+fn contract(document: &Conformant<Document>, resources: &ResourceSet) -> PreparedValueContract {
     document
         .resolve_operation("op")
         .unwrap()

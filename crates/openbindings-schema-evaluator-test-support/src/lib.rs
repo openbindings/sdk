@@ -565,7 +565,7 @@ impl WorkControl for StopAfter {
 }
 // Explanations of one value cancelled after 0, 1, 2, 3, 5, 8 ... observations,
 // and finally after every observation an uninterrupted explanation makes.
-fn interrupted(contract: &PreparedContract, value: &JsonValue) -> Vec<(usize, ValueOutcome)> {
+fn interrupted(contract: &PreparedValueContract, value: &JsonValue) -> Vec<(usize, ValueOutcome)> {
     let all = StopAfter(AtomicUsize::new(0), usize::MAX);
     let _ = contract.explain_with_control(value, &all);
     let total = all.0.load(Ordering::Relaxed);

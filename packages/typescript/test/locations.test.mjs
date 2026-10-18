@@ -51,7 +51,7 @@ test("explained problems locate the value's node and the document's keyword", ()
     const proof = own(conformant(source));
     const ready = prepareInput(proof, "op");
     assert.equal(ready.status, "ready");
-    const contract = own(ready.contract);
+    const contract = own(ready.valueContract);
     const text = '{\n  "items": [\n    1,\n    "two"\n  ]\n}';
     const value = own(exact(text));
     assert.deepEqual(contract.validate(value).problems, []);
@@ -100,7 +100,7 @@ test("a subtree value is named from itself and located in its text", () =>
     );
     const ready = prepareInput(proof, "op");
     assert.equal(ready.status, "ready");
-    const contract = own(ready.contract);
+    const contract = own(ready.valueContract);
     const text = '{"request": {\n  "n": "x"\n}}';
     const whole = own(exact(text));
     const request = own(whole.at("/request"));
@@ -136,7 +136,7 @@ test("supplied resources locate their keywords, including through unpaired names
     );
     const ready = prepareInput(proof, "op", { resources });
     assert.equal(ready.status, "ready");
-    const contract = own(ready.contract);
+    const contract = own(ready.valueContract);
     const value = own(exact("3"));
     const [problem] = contract.explain(value).problems;
     assert.deepEqual(problem.schema, { resource: uri, pointer: "/minimum" });

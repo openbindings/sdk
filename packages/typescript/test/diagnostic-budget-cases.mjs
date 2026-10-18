@@ -17,7 +17,7 @@ export function diagnosticBudgetCases(sdk) {
     check(setup.status === "ready", "ready");
     try {
       for (const call of ["validate", "explain"]) {
-        const result = setup.contract[call](42);
+        const result = setup.valueContract[call](42);
         check(result.outcome === "fails", "same verdict");
         check(
           result.message === "value does not satisfy the contract",
@@ -35,7 +35,7 @@ export function diagnosticBudgetCases(sdk) {
           check(result.problems[0].code === "type", "library first error");
       }
     } finally {
-      setup.contract.dispose();
+      setup.valueContract.dispose();
     }
     for (const field of ["diagnosticBytes", "maxProblems"]) {
       check(!(field in sdk.evaluatorLimits()), "retired default");

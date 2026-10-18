@@ -465,7 +465,7 @@ impl PreparedSchema for Prepared {
     }
 }
 #[tokio::test(flavor = "current_thread")]
-async fn prepared_contracts_reused_across_values_and_attempts() {
+async fn prepared_value_contracts_reused_across_values_and_attempts() {
     let p = Provider::new(Mode::Echo);
     let prepares = Arc::new(AtomicUsize::new(0));
     let evaluations = Arc::new(AtomicUsize::new(0));

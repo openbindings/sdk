@@ -62,7 +62,7 @@ Preparation returns `ERR_OPERATION_NOT_FOUND` for an unknown operation, `ERR_REF
 for metadata it cannot represent, and `ERR_SCHEMA_UNRESOLVED` when a declared
 value contract cannot be prepared; each releases partial work. `prepare_with_control`
 returns `ERR_CANCELLED` when cancelled, leaving no handle.
-A prepared contract can still return no verdict or an undefined result for a
+A prepared value contract can still return no verdict or an undefined result for a
 particular value. Both stop the affected value with `ERR_SCHEMA_UNRESOLVED`.
 `ValidationFailure::outcome()` retains `ValueOutcome::Undefined` separately from
 `NoVerdict`, so callers can distinguish an established undefined result from
@@ -121,7 +121,7 @@ Carrier caches have slots only for declared source/binding keys; repeated unknow
 requests cannot grow them. Used carriers retain exact content and are decoded
 once, without serializing or copying a whole document per call. Prepared
 operations share these caches; drop the invoker's `Arc` and its prepared operations
-to release the cache owners. Caller-retained documents, prepared contracts, and
+to release the cache owners. Caller-retained documents, prepared value contracts, and
 values can independently retain their own backing storage.
 
 ## Ownership and progress

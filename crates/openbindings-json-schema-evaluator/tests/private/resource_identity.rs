@@ -46,7 +46,7 @@ fn prepare_with(
     supplied: &ResourceSet,
     operation: &str,
     evaluator: &dyn SchemaEvaluator,
-) -> Result<PreparedContract, NoVerdict> {
+) -> Result<PreparedValueContract, NoVerdict> {
     proof
         .resolve_operation(operation)
         .unwrap_or_else(|| panic!("declared operation {operation}"))
@@ -58,7 +58,7 @@ fn prepare(
     proof: &Conformant<Document>,
     supplied: &ResourceSet,
     operation: &str,
-) -> Result<PreparedContract, NoVerdict> {
+) -> Result<PreparedValueContract, NoVerdict> {
     prepare_with(proof, supplied, operation, &DefaultEvaluator::new())
 }
 fn ready_with(
@@ -66,7 +66,7 @@ fn ready_with(
     supplied: &ResourceSet,
     operation: &str,
     evaluator: &dyn SchemaEvaluator,
-) -> PreparedContract {
+) -> PreparedValueContract {
     match prepare_with(proof, supplied, operation, evaluator) {
         Ok(contract) => contract,
         Err(detail) => panic!("expected ready {operation}: {detail:?}"),
@@ -76,7 +76,7 @@ fn ready(
     proof: &Conformant<Document>,
     supplied: &ResourceSet,
     operation: &str,
-) -> PreparedContract {
+) -> PreparedValueContract {
     ready_with(proof, supplied, operation, &DefaultEvaluator::new())
 }
 fn label(result: ValueOutcome) -> &'static str {
@@ -87,7 +87,7 @@ fn label(result: ValueOutcome) -> &'static str {
         ValueOutcome::NoVerdict { .. } => "no-verdict",
     }
 }
-fn verdicts(contract: &PreparedContract, cases: &[(&str, &str)]) {
+fn verdicts(contract: &PreparedValueContract, cases: &[(&str, &str)]) {
     for (text, expected) in cases {
         assert_eq!(label(contract.explain(&value(text))), *expected, "{text}");
     }
@@ -125,7 +125,7 @@ fn helpers_ready(doc: &Document, supplied: &ResourceSet, operation: &str) {
         ready_with(&conformant(doc), supplied, operation, &Project(bounds));
     }
 }
-fn refusal(prepared: Result<PreparedContract, NoVerdict>) -> NoVerdict {
+fn refusal(prepared: Result<PreparedValueContract, NoVerdict>) -> NoVerdict {
     match prepared {
         Err(detail) => detail,
         other => panic!("expected preparation refusal: {other:?}"),
@@ -202,7 +202,7 @@ fn unresolved_identity(doc: &Document, supplied: &ResourceSet, pointer: &str) {
         other => panic!("{other:?}"),
     }
 }
-fn failed_location(contract: &PreparedContract, text: &str) -> SchemaLocation {
+fn failed_location(contract: &PreparedValueContract, text: &str) -> SchemaLocation {
     let ValueOutcome::Fails { problems, .. } = contract.explain(&value(text)) else {
         panic!("expected failure")
     };

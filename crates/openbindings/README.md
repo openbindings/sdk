@@ -55,16 +55,16 @@ supplies no resources; `prepare_with(&evaluator, &resources)` adds an immutable
 The [evaluator integration guide](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md)
 explains the no-evaluator behavior and custom implementations.
 
-Prepare a contract, retain the `PreparedContract`, and handle satisfies, fails,
+Prepare a value contract, retain the `PreparedValueContract`, and handle satisfies, fails,
 undefined and no-verdict for each value. Preparation returns
-`Result<PreparedContract, NoVerdict>`, so `?` propagates a refusal with its
-payload. Use `PreparedContract::validate_json` for exact JSON text or bytes; only
+`Result<PreparedValueContract, NoVerdict>`, so `?` propagates a refusal with its
+payload. Use `PreparedValueContract::validate_json` for exact JSON text or bytes; only
 admission failure returns `Err`. Retain a `JsonValue` and use `validate` for
 repeated checks or custom admission limits. `validate` is the cheap check; call
 `explain` on the same contract to learn why a value fails. Undefined means the value-contract
 rules leave whether the value satisfies its contract undefined; no-verdict means
 the evaluator could not answer. Each preparation compiles independently; cloning a
-prepared contract shares its compiled state. A `ResourceSet` indexes its resource
+prepared value contract shares its compiled state. A `ResourceSet` indexes its resource
 identities once. For evaluators that request the core projection, a resolution
 space is assembled once per live document revision and set, and released when
 either is dropped.

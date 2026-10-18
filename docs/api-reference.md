@@ -111,8 +111,8 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 | `Document.validate()` | Returns a union whose `conformant` branch owns an independent `ConformantDocument` and a plain report. |
 | `ConformantDocument` | Nominal, privately constructed proof with infallible typed reads. `resolveOperation(name)` returns a `ConformantOperationView` or `undefined`. It has no setters and does not inherit `Document`. |
 | `ConformantOperationView` | `input()` and `output()` return a disposable `ValueContract` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. Both views have `retain()`. |
-| `ValueContract` | `schema()` acquires the exact schema; `prepare(options)` takes `resources`, `limits` and `signal` and returns `{ status: "ready", contract }` or `{ status: "no-verdict", detail }`. |
-| `PreparedContract` | Disposable prepared contract with `validate(value, options)`, the cheap check, `explain(value, options)`, which adds problems to a failure, and `retain()`; independent of its document, operation, resources and contract owners. `validateJson(input, options)` is Rust's `validate_json`: it admits JSON text or bytes as `parseJson` does and returns a `JsonCheck`, whose `input-error` carries the `parseJson` error. `validate` reads a string as a JSON string value. |
+| `ValueContract` | `schema()` acquires the exact schema; `prepare(options)` takes `resources`, `limits` and `signal` and returns `{ status: "ready", valueContract }` or `{ status: "no-verdict", detail }`. |
+| `PreparedValueContract` | Disposable prepared value contract with `validate(value, options)`, the cheap check, `explain(value, options)`, which adds problems to a failure, and `retain()`; independent of its document, operation, resources and contract owners. `validateJson(input, options)` is Rust's `validate_json`: it admits JSON text or bytes as `parseJson` does and returns a `JsonCheck`, whose `input-error` carries the `parseJson` error. `validate` reads a string as a JSON string value. |
 | `ExactJson.locate(pointer)`, `ConformantDocument.locate(at)`, `SchemaResources.locate(at)` | The `SourceLocation` of the node a problem's instance pointer or a `SchemaLocation` names, in the value, the document or the supplied resource with its URI, or `null`. A malformed pointer throws `SdkError` with code `invalid-pointer`, and a malformed schema location with code `invalid-schema-location`. |
 | `asDocument()`, `intoDocument()` | Acquire an independent editable owner, or consume the proof. Consumption revokes all JavaScript aliases of that proof; retained owners survive. |
 | `toBytes()`, `dispose()`, `Symbol.dispose`, `disposed` | Detached exact current bytes and the existing deterministic lifecycle. |
@@ -138,16 +138,16 @@ known bytes and stops before exceeding the budget. A refusal discards that buffe
 | --- | --- |
 | `ConformantOperationView::input(&self)`, `output(&self) -> Option<ValueContract<'_>>` | The operation's declared value contract, or `None` when the field is absent. Reading prepares nothing. Only a conformant view hands one out; a plain `OperationView` returns the exact `JsonRef`. |
 | `ValueContract::schema(&self) -> JsonRef<'a>` | The exact unprepared schema; present `true`, `false` and objects remain distinct. |
-| `ValueContract::prepare(&self, &dyn SchemaEvaluator) -> Result<PreparedContract, NoVerdict>` | Prepares with no supplied resources. A `&DefaultEvaluator` coerces; the evaluator is borrowed for the call. |
+| `ValueContract::prepare(&self, &dyn SchemaEvaluator) -> Result<PreparedValueContract, NoVerdict>` | Prepares with no supplied resources. A `&DefaultEvaluator` coerces; the evaluator is borrowed for the call. |
 | `ValueContract::prepare_with(&self, &dyn SchemaEvaluator, &ResourceSet)`, `prepare_with_control(.., &dyn WorkControl)` | The same with immutable supplied resources and cooperative cancellation. A refusal judges no instance and does not prove undefinedness. |
-| `PreparedContract::validate_json(input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError>` | Admits through `JsonValue::parse` with default limits, then validates. `Err` is admission failure only; all four value outcomes are `Ok`. Duplicate members yield no-verdict and numbers retain exact semantics. |
-| `PreparedContract::validate(&self, &JsonValue)`, `validate_with_control(.., &dyn WorkControl) -> ValueOutcome` | The cheap check: a failure carries no problems and `problems_complete` is false. |
-| `PreparedContract::explain(&self, &JsonValue)`, `explain_with_control(.., &dyn WorkControl) -> ValueOutcome` | The same verdict, with problems that explain a failure. Library-bounded; see [value diagnostics](#value-diagnostics). |
+| `PreparedValueContract::validate_json(input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError>` | Admits through `JsonValue::parse` with default limits, then validates. `Err` is admission failure only; all four value outcomes are `Ok`. Duplicate members yield no-verdict and numbers retain exact semantics. |
+| `PreparedValueContract::validate(&self, &JsonValue)`, `validate_with_control(.., &dyn WorkControl) -> ValueOutcome` | The cheap check: a failure carries no problems and `problems_complete` is false. |
+| `PreparedValueContract::explain(&self, &JsonValue)`, `explain_with_control(.., &dyn WorkControl) -> ValueOutcome` | The same verdict, with problems that explain a failure. Library-bounded; see [value diagnostics](#value-diagnostics). |
 | `JsonValue::locate(&self, &Pointer)`, `Conformant<Document>::locate(&self, &SchemaLocation)`, `ResourceSet::locate(&self, &SchemaLocation) -> Option<SourceLocation>` | Byte offset, line and column of the node a problem's instance pointer or schema location names, in the value's, document's or supplied resource's text; `None` for another source or a pointer naming no node. One pass on the call; nothing retained. |
 
-`PreparedContract` is `Clone + Send + Sync + 'static` and owns what it needs after
+`PreparedValueContract` is `Clone + Send + Sync + 'static` and owns what it needs after
 the document, resources and evaluator are dropped. Core has no default evaluator
-dependency. Use `JsonValue::parse_with_limits` and `PreparedContract::validate`
+dependency. Use `JsonValue::parse_with_limits` and `PreparedValueContract::validate`
 for custom admission limits or retained exact values; `validate_with_control`
 accepts cooperative cancellation. Each preparation still compiles independently.
 A `ResourceSet` indexes its resource identities once, and clones share it. A
@@ -211,7 +211,7 @@ Local futures and `Rc` providers are also supported.
   New binding/source/dependency/example views follow this same owner-acquisition method rule;
   their frozen metadata is plain data. A traversal cursor and each yielded owner
   have independent lifetimes. See the TypeScript guide for editing ownership.
-- Every preparation compiles independently. Retain a `PreparedContract` for
+- Every preparation compiles independently. Retain a `PreparedValueContract` for
   repeated validation without recompilation; it survives document, resource and
   evaluator drop. Resource sets are immutable, explicit and scoped to the preparations that receive them; URI
   identity never authorizes I/O. Core and default schema evaluation do no acquisition.
@@ -495,7 +495,7 @@ See the [maintainer guide](maintainers.md) for rendering and verification comman
 
 ## Value diagnostics
 
-One prepared contract serves both calls. `validate` (and `validate_with_control`,
+One prepared value contract serves both calls. `validate` (and `validate_with_control`,
 `validate_json`) is the cheap check: it returns `Fails` with the fixed message
 “value does not satisfy the contract”, no problems, and `problems_complete =
 false`. TypeScript's `validate` returns `message`, no problems and
@@ -543,7 +543,7 @@ into a `serde_json::Value`, so `to_value` refuses it and `json!` panics.
 `SourceLocation`'s `Display` writes `pointer (line L, column C, byte B)`, or
 `line L, column C, byte B` without a pointer or at a root.
 
-A prepared contract keeps what its own explanation reads (a compact copy of the
+A prepared value contract keeps what its own explanation reads (a compact copy of the
 keywords it compiled) and never its document, supplied resources, schema space or
 any position. Custom evaluators receive the call's `Detail`: with `Detail::Outcome` a failure
 carries no problems and `problems_complete` is false; with `Detail::Explain` it

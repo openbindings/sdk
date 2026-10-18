@@ -119,7 +119,7 @@ fn probe_finding(
     finding.message = SECRET.into();
     finding
 }
-/// Accepts every value, so a prepared contract exists to inspect.
+/// Accepts every value, so a prepared value contract exists to inspect.
 struct Accept;
 impl SchemaEvaluator for Accept {
     fn prepare(
@@ -347,7 +347,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
     let captured = contract.prepare_with(&capture, &resources);
     rows.push(row("capturing preparation", &captured));
     let prepared = contract.prepare(&Accept).unwrap();
-    rows.push(row("PreparedContract", &prepared));
+    rows.push(row("PreparedValueContract", &prepared));
     let request = capture.0.lock().unwrap().take().unwrap();
     rows.push(row("SchemaRequest", &request));
     rows.push(row(

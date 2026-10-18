@@ -25,7 +25,7 @@ export async function apiQualityCases(sdk, http) {
   const ready = (proof, name, options) => {
     const r = prepareInput(proof, name, options);
     check(r.status === "ready", "ready " + name);
-    return own(r.contract);
+    return own(r.valueContract);
   };
   const throws = (fn, predicate, label) => {
     let error;
@@ -44,8 +44,8 @@ export async function apiQualityCases(sdk, http) {
   const warmPrepared = prepareInput(warm.value, "run");
   if (warmPrepared.status !== "ready")
     throw new Error("Warmup did not prepare.");
-  warmPrepared.contract.validate(1);
-  warmPrepared.contract.dispose();
+  warmPrepared.valueContract.validate(1);
+  warmPrepared.valueContract.dispose();
   warm.value.dispose();
   const baseline = testing.liveStorageOwners();
   try {
@@ -211,8 +211,8 @@ export async function apiQualityCases(sdk, http) {
       remote.status === "ready",
       "qualified missing-resource contract prepares ready",
     );
-    own(remote.contract);
-    const remoteResult = remote.contract.validate(null);
+    own(remote.valueContract);
+    const remoteResult = remote.valueContract.validate(null);
     check(
       remoteResult.outcome === "no-verdict" &&
         remoteResult.detail.reason === "resource-unavailable",

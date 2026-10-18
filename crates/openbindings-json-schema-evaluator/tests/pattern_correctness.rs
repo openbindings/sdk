@@ -2,7 +2,7 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::{Value, json};
 
-fn prepare(schema: Value, resources: ResourceSet) -> Result<PreparedContract, NoVerdict> {
+fn prepare(schema: Value, resources: ResourceSet) -> Result<PreparedValueContract, NoVerdict> {
     let document = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )

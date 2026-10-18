@@ -135,7 +135,7 @@ fn value_contracts(document: &Document) -> Result<(), Box<dyn std::error::Error>
             }
         }
     ));
-    // Prepared contracts own what they need after the document and resources go.
+    // Prepared value contracts own what they need after the document and resources go.
     drop((operation, proof, resources));
     assert!(matches!(
         input.validate(&exact("8")),

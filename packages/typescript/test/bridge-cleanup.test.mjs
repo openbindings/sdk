@@ -27,7 +27,7 @@ test("owned selection and preparation wrappers release untaken children on decod
     // warm them so every fault compares against a settled baseline.
     const warm = contract.prepare();
     assert.equal(warm.status, "ready");
-    warm.contract.dispose();
+    warm.valueContract.dispose();
     for (const [prototype, invoke, take] of [
       [
         bridge.WasmOperationSelection.prototype,
@@ -37,7 +37,7 @@ test("owned selection and preparation wrappers release untaken children on decod
       [
         bridge.WasmPreparation.prototype,
         () => contract.prepare(),
-        "takeContract",
+        "takeValueContract",
       ],
     ]) {
       for (const fault of [
@@ -89,8 +89,8 @@ test("owned selection and preparation wrappers release untaken children on decod
     selected.operation.dispose();
     const prepared = contract.prepare();
     assert.equal(prepared.status, "ready");
-    assert.equal(prepared.contract.validate(7).outcome, "satisfies");
-    prepared.contract.dispose();
+    assert.equal(prepared.valueContract.validate(7).outcome, "satisfies");
+    prepared.valueContract.dispose();
   } finally {
     contract.dispose();
     document.dispose();
@@ -103,7 +103,7 @@ test("ordinary admission maps only known engine limits and preserves unexpected 
   ).value;
   const setup = prepareInput(document, "run");
   assert.equal(setup.status, "ready");
-  const prepared = setup.contract;
+  const prepared = setup.valueContract;
   const parse = bridge.WasmJson.parseText;
   try {
     const before = testing.liveStorageOwners();

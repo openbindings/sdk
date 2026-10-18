@@ -1479,10 +1479,10 @@ impl WasmValueContract {
         }
     }
 }
-/// A private transfer wrapper. Dropping it drops any untaken prepared contract.
+/// A private transfer wrapper. Dropping it drops any untaken prepared value contract.
 #[wasm_bindgen]
 pub struct WasmPreparation {
-    preparation: Option<Result<PreparedContract, NoVerdict>>,
+    preparation: Option<Result<PreparedValueContract, NoVerdict>>,
 }
 impl std::fmt::Debug for WasmPreparation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1499,8 +1499,8 @@ impl WasmPreparation {
             None => encoded(json!({"status":"consumed"})),
         }
     }
-    #[wasm_bindgen(js_name=takeContract)]
-    pub fn take_contract(&mut self) -> Option<WasmPrepared> {
+    #[wasm_bindgen(js_name=takeValueContract)]
+    pub fn take_value_contract(&mut self) -> Option<WasmPrepared> {
         match self.preparation.take()? {
             Ok(prepared) => Some(WasmPrepared { prepared }),
             Err(_) => None,
@@ -1509,7 +1509,7 @@ impl WasmPreparation {
 }
 #[wasm_bindgen]
 pub struct WasmPrepared {
-    prepared: PreparedContract,
+    prepared: PreparedValueContract,
 }
 impl std::fmt::Debug for WasmPrepared {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

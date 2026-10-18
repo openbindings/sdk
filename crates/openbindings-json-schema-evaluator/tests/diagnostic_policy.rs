@@ -21,7 +21,10 @@ fn conformant(document: &Document) -> Conformant<Document> {
         .expect("conformant document")
 }
 /// Prepare operation `op` input with the default evaluator and the given resources.
-fn prepare(document: &Document, resources: &ResourceSet) -> Result<PreparedContract, NoVerdict> {
+fn prepare(
+    document: &Document,
+    resources: &ResourceSet,
+) -> Result<PreparedValueContract, NoVerdict> {
     conformant(document)
         .resolve_operation("op")
         .expect("declared operation")
@@ -29,7 +32,7 @@ fn prepare(document: &Document, resources: &ResourceSet) -> Result<PreparedContr
         .expect("declared input")
         .prepare_with(&DefaultEvaluator::new(), resources)
 }
-fn ready(document: &Document) -> PreparedContract {
+fn ready(document: &Document) -> PreparedValueContract {
     match prepare(document, &ResourceSet::default()) {
         Ok(contract) => contract,
         Err(detail) => panic!("expected ready: {detail:?}"),

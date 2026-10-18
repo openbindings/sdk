@@ -82,27 +82,27 @@ evaluator, custom budgets, supplied resources or a custom evaluator. The evaluat
 is borrowed for the call. Each check chooses its detail: `validate` is cheap and
 reports only whether a value fails; `explain` on the same contract reports why.
 
-Preparation returns `Result<PreparedContract, NoVerdict>`, so `?` propagates a
+Preparation returns `Result<PreparedValueContract, NoVerdict>`, so `?` propagates a
 refusal with its reason, code, message and location. A missing operation and an
 absent contract are `None` before preparation. Only a `Conformant<Document>` hands
 out contracts; a plain `Document` operation exposes the exact schema value.
 Document validation itself needs no caller-supplied evaluator. See
 [evaluator integration](schema-evaluators.md).
 
-A prepared contract's `validate_json(text_or_bytes)` admits exact JSON under the
+A prepared value contract's `validate_json(text_or_bytes)` admits exact JSON under the
 default limits: 64 MiB, 10,000 container levels and 1,000,000 nodes. `Err` means
 admission failed. `Ok` contains `Satisfies`, `Fails`, `Undefined` or `NoVerdict`.
 Duplicate members are preserved during admission and yield `NoVerdict` during
 validation. Number tokens retain their exact meaning.
 
 Use `JsonValue::parse_with_limits` for custom admission limits and
-`PreparedContract::validate` for retained exact values without reparsing. Use
+`PreparedValueContract::validate` for retained exact values without reparsing. Use
 `JsonValue::from_serializable` for ordinary Rust data. The converter preserves
 integer digits but cannot recover a value already rounded by application code.
 It refuses exact wrappers; keep those on the parse/retain route.
 
 Preparation and validation refusals remain separate from an established failure.
-Retain and clone a prepared contract to reuse compiled state. Every `prepare` call
+Retain and clone a prepared value contract to reuse compiled state. Every `prepare` call
 compiles independently. Prepared does not imply that every value is decidable.
 
 ## Edit an opaque value
@@ -162,7 +162,7 @@ additional numeric and error cases.
 `prepare_with` borrows a `&dyn SchemaEvaluator` and a `ResourceSet`;
 the [replacement example](../crates/openbindings-json-schema-evaluator/examples/replacement.rs)
 shows supplied resources and retained work. Schema resources are explicit and immutable. The SDK never fetches missing
-references. Prepare again with a new set to change resources; prepared contracts keep
+references. Prepare again with a new set to change resources; prepared value contracts keep
 their original snapshots. An application can prepare a candidate before replacing
 its active contract and keep serving old work if preparation fails.
 
@@ -171,7 +171,7 @@ share that index. Evaluators that request the core projection reuse one resoluti
 space per live document revision and set, including when preparations alternate
 between sets. The space without supplied resources stays with the revision; a
 space with a set stays with that set and is released when the set or the revision
-is dropped. A prepared contract retains at most its own document and resources,
+is dropped. A prepared value contract retains at most its own document and resources,
 and only when its evaluator keeps them; the default evaluator's keeps neither.
 
 `prepare_with_control`, `validate_with_control` and `explain_with_control` accept
@@ -192,7 +192,7 @@ possible stack overflow on deep values. An explained problem names the failing
 node by its exact pointer from the value passed (`instance`) and the failing
 keyword by resource and exact pointer (`schema`). Line and column come from the
 text's holder when asked: `JsonValue::locate` for the value, `Conformant::locate`
-and `ResourceSet::locate` for the schema. A prepared contract keeps a compact copy
+and `ResourceSet::locate` for the schema. A prepared value contract keeps a compact copy
 of the keywords it compiled for explanations, never its document or resources, and
 no positions. See the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md)
 and [host support](support.md).
