@@ -1,0 +1,11 @@
+# Diagnostic probe, not for merge.
+[package]
+name = "diag-regress-phases"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+regress = { package = "openbindings-internal-regress", path = "../../vendor/openbindings-internal-regress" }

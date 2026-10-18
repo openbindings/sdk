@@ -1,27 +1,21 @@
+# Diagnostic branch only, not for merge: measure pattern stack depth on Windows.
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
 
 permissions:
   contents: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
-  native:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+  diag-windows:
+    runs-on: windows-latest
+    timeout-minutes: 75
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -29,7 +23,6 @@ jobs:
           python-version: '3.13'
       - name: Read Rust toolchain
         id: rust-version
-        shell: bash
         run: |
           python - <<'PY'
           import os, tomllib
@@ -41,143 +34,33 @@ jobs:
       - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: ${{ steps.rust-version.outputs.version }}
-          components: rustfmt, clippy
-      - run: python tools/verify.py
-      - name: Verify discovery downstream features and decoded bodies
-        if: matrix.os == 'ubuntu-latest'
+      - name: Build probes (debug)
         run: |
-          cargo fetch --locked --manifest-path crates/openbindings-http-discovery/tests/feature-witness/Cargo.toml
-          python3 crates/openbindings-http-discovery/tests/feature_lock_test.py
-          python3 crates/openbindings-http-discovery/tests/feature-unification.py
-      - name: Verify core acquisition boundaries
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          cargo build --locked --manifest-path tools/no-io/Cargo.toml
-          python tools/verify-no-io.py --binary target/debug/sdk-no-io --output target/no-io-receipt
-  browser:
-    env:
-      CARGO_TARGET_DIR: ${{ github.workspace }}/target
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: '3.13'
-      - name: Read Rust toolchain
-        id: rust-version
-        shell: bash
-        run: |
-          python - <<'PY'
-          import os, tomllib
-          with open('rust-toolchain.toml', 'rb') as source:
-              version = tomllib.load(source)['toolchain']['channel']
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              output.write('version=' + version + '\n')
-          PY
-      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
-        with:
-          toolchain: ${{ steps.rust-version.outputs.version }}
-          targets: wasm32-unknown-unknown
-          components: clippy
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: '22.19.0'
-      - name: Verify development-toolchain stack margin
-        run: |
-          cargo test --locked -p openbindings --test document_stack
-          cargo test --locked -p openbindings-json-schema-evaluator --test pattern_stack
-      - name: Check out the SDK's declared specification
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          repository: openbindings/spec
-          ref: 30416ef1ca626e58eb8c383a0c71422a68f9243f
-          path: .ci-spec
-      - run: node tools/verify-spec.mjs . .ci-spec 30416ef1ca626e58eb8c383a0c71422a68f9243f --self-test
-      - name: Remove temporary specification checkout before clean-candidate checks
-        run: python -c "import shutil; shutil.rmtree('.ci-spec')"
-      - run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
-      - run: npm ci --ignore-scripts
-        working-directory: packages/typescript
-      - run: npm run build:wasm && npm run build && npm test && npm run test:types && npm run format:check && npm run test:package
-        working-directory: packages/typescript
-      - name: Verify clean candidate archives and Wasm identity
-        run: python tools/package-candidate.py --output target/release-candidate
-      - run: python tools/verify-api-reference.py --typescript-only
-      - name: Build and check the complete reference bundle
-        run: python tools/build-reference.py --output "${{ github.workspace }}/target/reference"
-      - name: Verify container findings through native and TypeScript APIs
-        run: |
-          cargo build --locked --manifest-path tools/conformance-observer/Cargo.toml
-          python tools/qualification/replay/check-container-findings.py --binary target/debug/sdk-production-observer
-      - run: python tools/verify-source-inspection.py --archives --wasm
-      - run: python tools/verify-interface-synthesis.py --archives --wasm
-      - run: python tools/verify-binding-invocation.py --archives --wasm
-      - run: npx playwright-core install --with-deps chromium webkit
-        working-directory: packages/typescript
-      - run: python tools/qualification/replay/prepare-browser-fixtures.py
-      - run: node packages/typescript/test/browser.mjs chromium
-      - run: python tools/qualification/replay/judge-browser.py tools/qualification/hosts/chromium
-      - run: node packages/typescript/test/browser.mjs webkit
-      - run: python tools/qualification/replay/judge-browser.py tools/qualification/hosts/webkit
-
-  msrv:
-    env:
-      RUST_MSRV: '1.88.0'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: '3.13'
-      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
-        with:
-          toolchain: ${{ env.RUST_MSRV }}
-          targets: wasm32-unknown-unknown
-      - name: Test minimum supported APIs with documented stack exclusions
-        run: python tools/verify-msrv.py --version "$RUST_MSRV" --test
-      - run: cargo +"$RUST_MSRV" build -p openbindings-wasm --target wasm32-unknown-unknown --locked
-
-  advisories:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: '3.13'
-      - run: python tools/verify-advisory-policy.py --self-test
-      - name: Read Rust toolchain
-        id: rust-version
-        run: |
-          python - <<'PY'
-          import os, tomllib
-          with open('rust-toolchain.toml', 'rb') as source:
-              version = tomllib.load(source)['toolchain']['channel']
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              output.write('version=' + version + '\n')
-          PY
-      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
-        with:
-          command: check advisories
-          arguments: --workspace --all-features --locked
-          # The action's container honors rust-toolchain.toml, so install that toolchain.
-          rust-version: ${{ steps.rust-version.outputs.version }}
-
-  ci:
-    if: always()
-    needs: [native, browser, msrv, advisories]
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Require every mandatory job to succeed
+          cargo build --locked -p openbindings-json-schema-evaluator --example pattern_stack_probe
+          cargo build --locked --manifest-path tools/diag-regress-phases/Cargo.toml
+      - name: Evaluator phases (debug)
         env:
-          RESULTS: ${{ toJSON(needs.*.result) }}
+          PROBE_STACKS: 256,512,1024,2048
+        run: ./target/debug/examples/pattern_stack_probe.exe
+      - name: Regress stages (debug)
+        env:
+          PROBE_STACKS: 256,512,1024,2048
+        run: ./target/debug/diag-regress-phases.exe
+      - name: pattern_stack test as committed (debug)
+        continue-on-error: true
+        run: cargo test --locked -p openbindings-json-schema-evaluator --test pattern_stack
+      - name: Build probes (release)
         run: |
-          python3 - <<'PY'
-          import json, os
-          results = json.loads(os.environ['RESULTS'])
-          if not results or any(result != 'success' for result in results):
-              raise SystemExit('Required job results: ' + repr(results))
-          PY
+          cargo build --locked --release -p openbindings-json-schema-evaluator --example pattern_stack_probe
+          cargo build --locked --release --manifest-path tools/diag-regress-phases/Cargo.toml
+      - name: Evaluator phases (release)
+        env:
+          PROBE_STACKS: 64,128,256,512
+        run: ./target/release/examples/pattern_stack_probe.exe
+      - name: Regress stages (release)
+        env:
+          PROBE_STACKS: 48,64,128,256
+        run: ./target/release/diag-regress-phases.exe
+      - name: pattern_stack test as committed (release)
+        continue-on-error: true
+        run: cargo test --locked --release -p openbindings-json-schema-evaluator --test pattern_stack
