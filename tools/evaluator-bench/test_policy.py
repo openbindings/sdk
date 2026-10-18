@@ -525,7 +525,7 @@ class FixtureCoverage(unittest.TestCase):
         import hashlib
         # Preserve the preexisting replay requests, including exact number tokens.
         existing = {name: row for name, row in fixtures().items()
-                    if not name.startswith(('document-', 'read-', 'explain-'))}
+                    if not name.startswith(('document-', 'read-', 'explain-', 'unevaluated-'))}
         self.assertEqual(len(existing), 32)
         serialized = (json.dumps(existing, indent=2)+'\n').encode()
         self.assertEqual(hashlib.sha256(serialized).hexdigest(),
@@ -543,6 +543,20 @@ class FixtureCoverage(unittest.TestCase):
         self.assertIn('$defs', large['schemas']['shared'])
         self.assertEqual(large['operations']['op0000']['input']['$ref'], '#/schemas/shared/$defs/item')
         self.assertEqual(rows['document-invalid']['expected']['finding_count'], 6)
+
+    def test_unevaluated_walks_reach_recursive_patterns_through_references(self):
+        row = fixtures()['unevaluated-patterns']
+        schema = json.loads(row['schema'])
+        walks = [name for name in schema['$defs'] if name.startswith('R')]
+        self.assertEqual(len(walks), 100)
+        for name in walks:
+            self.assertEqual(schema['$defs'][name], {'unevaluatedProperties': False, '$ref': '#/$defs/patterns'})
+        patterns = schema['$defs']['patterns']['patternProperties']
+        self.assertEqual(len(patterns), 5)
+        for subschema in patterns.values():
+            self.assertEqual(subschema['properties']['x'], {'$ref': '#'})
+        self.assertIn('eval', row['modes'])
+        self.assertEqual(row['expected'], {'status': 'satisfies'})
 
     def test_explanations_check_count_code_and_both_original_locations(self):
         rows = fixtures()

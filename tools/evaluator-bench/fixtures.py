@@ -50,6 +50,14 @@ def fixtures():
             {'$ref': uri + '#/$defs/value'} for _ in range(count)]}, '1',
             resources={uri: compact({'$id': uri, '$defs': {'value': {'type': 'integer'}}})},
             modes=('compile', 'context', 'eval', 'full'))
+    # unevaluatedProperties reaches recursive patternProperties through 100 referrers. Its walk
+    # keeps only the patterns; eval's retained heap shows any copy of their subschemas it holds.
+    patterns = {f'^p{j}': {'properties': {'x': {'$ref': '#'}}, 'minProperties': 1} for j in range(5)}
+    walks = {f'R{i}': {'unevaluatedProperties': False, '$ref': '#/$defs/patterns'} for i in range(100)}
+    add('unevaluated-patterns', {'properties': {f'r{i}': {'$ref': f'#/$defs/R{i}'} for i in range(100)},
+        '$defs': {**walks, 'patterns': {'patternProperties': patterns}}},
+        compact({'r0': {'p0': {'x': {}}}, 'r99': {'p4': {'x': {'r1': {'p2': {'x': {}}}}}}}),
+        modes=('compile', 'context', 'eval', 'full'))
     add('missing-resource', {'$ref': 'https://benchmark.invalid/missing'}, '1', 'no-verdict', modes=('cold', 'compile', 'context', 'eval', 'full'))
     add('missing-independent', {'anyOf': [True, {'$ref': 'https://benchmark.invalid/missing'}]}, '1')
     # Known static defects retain a separate undefined outcome.
