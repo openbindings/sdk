@@ -16,8 +16,8 @@ Preparing a `ValueContract` requires an explicit evaluator. There is
 no fallback value evaluator in core. A stated `true`, `false` or `{}` schema
 still requires an evaluator. Absence alone means no value contract is stated.
 
-`operation::Invoker::prepare` accepts operations with no stated value contracts
-without an evaluator. Any stated input or output value contract without one yields
+`operation::Invoker::prepare`, called on an invoker held in an `Arc`, accepts
+operations with no stated value contracts without an evaluator. Any stated input or output value contract without one yields
 `ERR_SCHEMA_UNRESOLVED` during preparation, before provider effects. Supply one
 through `with_evaluator` to enable those checks.
 

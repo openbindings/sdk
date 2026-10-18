@@ -9,3 +9,8 @@
 /THIRD-PARTY-NOTICES.txt -text
 /packages/typescript/DEPENDENCIES.json -text
 /packages/typescript/THIRD-PARTY-NOTICES.txt -text
+# tools/verify-fixture-digests.py compares vendored interface fixtures with the
+# digests their READMEs record, so they keep their exact bytes on every host too.
+/crates/openbindings-interface-synthesis/tests/fixtures/** -text
+/crates/openbindings-invocation/tests/fixtures/** -text
+/crates/openbindings-source-inspection/tests/fixtures/** -text

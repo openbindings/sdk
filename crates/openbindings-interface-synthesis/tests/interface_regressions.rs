@@ -248,3 +248,80 @@ async fn forwarded_synthesizers_preserve_exact_encoding_and_byte_limits() {
         );
     }
 }
+
+// Two documented SDK policies refuse output the published interface allows:
+// repeated identical evidence rows, and an unused input source left out of
+// the emitted document.
+#[tokio::test]
+async fn sdk_policies_refuse_repeated_evidence_and_dropped_unused_sources() {
+    let document = openbindings::Document::parse(format!(
+        r#"{{"openbindings":"0.2.0","operations":{{"getUser":{{}}}},"sources":{{"api":{{"kind":"{KIND}"}}}},"bindings":{{"getUser.api":{{"operation":"getUser","source":"api"}}}}}}"#
+    ))
+    .unwrap();
+    let entry = || {
+        let mut entry = CoverageEntry::new(
+            0,
+            "unit",
+            CoverageScope::Target,
+            CoverageStatus::Represented,
+        );
+        entry.source_key = Some("api".into());
+        entry.operation_key = Some("getUser".into());
+        entry.binding_key = Some("getUser.api".into());
+        entry
+    };
+    let used = source(None);
+    let unused = openbindings::Source {
+        description: Some("contributes no target".into()),
+        ..source(None)
+    };
+    let finding = |result: Result<Synthesis, SynthesisError>| {
+        let finding = result
+            .unwrap_err()
+            .rejected()
+            .unwrap()
+            .finding
+            .clone()
+            .unwrap();
+        (finding.code, finding.path)
+    };
+    let one = [SynthesisSource {
+        name: Some("api"),
+        source: &used,
+    }];
+    let repeated = SynthesisCandidate::new(
+        document.clone(),
+        CoverageClaim::complete(vec![entry(), entry()]),
+    );
+    let result = Synthesizer::new(Fixed::new(repeated))
+        .synthesize_with_coverage(&SynthesisRequest {
+            sources: &one,
+            ..Default::default()
+        })
+        .await;
+    assert_eq!(finding(result).0, "duplicate-unit");
+    let two = [
+        SynthesisSource {
+            name: Some("api"),
+            source: &used,
+        },
+        SynthesisSource {
+            name: None,
+            source: &unused,
+        },
+    ];
+    let dropped = SynthesisCandidate::new(document, CoverageClaim::complete(vec![entry()]));
+    let result = Synthesizer::new(Fixed::new(dropped))
+        .synthesize_with_coverage(&SynthesisRequest {
+            sources: &two,
+            ..Default::default()
+        })
+        .await;
+    assert_eq!(
+        finding(result),
+        (
+            "source-preservation".to_owned(),
+            "/request/sources/1".to_owned()
+        )
+    );
+}

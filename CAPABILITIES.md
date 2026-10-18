@@ -29,6 +29,19 @@ Default parsing admits 64 MiB, 10,000 container levels and 1,000,000 nodes.
 Ordinary Rust Serde conversion has a 128-container ceiling. Document reports
 retain at most 4,096 findings and 8 MiB of pointers. Truncation leaves rule evidence
 intact. See [performance and allocation boundaries](docs/performance-boundaries.md).
+OBI-02's whole-document check may spend 80 evaluator steps per admitted node and
+64 pattern steps per source byte, so every document the admission limits admit,
+default or caller-selected, gets an OBI-02 verdict, with work linear in those
+limits. A near miss of the SemVer pattern is the costliest input, at about 20
+pattern steps per byte, which took about 0.37 µs per byte in a release build on
+an Apple M1 Max: a 60 MB near miss takes about 22 seconds to reach its verdict,
+and one at the default 64 MiB limit about 25 seconds. The admission byte limit is
+how a caller bounds that time: `validate_document_with_limits` with a smaller
+`max_bytes` admits less. Each embedded schema's OBI-10 meta-schema check grows the
+same way with that schema, 129 steps and 64 pattern steps per source byte,
+so every schema the admission limits admit gets a meta-schema verdict. A check
+reads its schema's own members and only the type of each subschema, so a node is
+read by at most two checks and their work together stays linear in those limits.
 
 ## Value validation
 
@@ -41,8 +54,16 @@ schema. The [evaluator guide](docs/schema-evaluators.md) explains integration.
 The optional default evaluator supports JSON Schema 2020-12 with exact decimal
 comparison and explicit immutable resources. It performs no reference acquisition.
 `format` remains an annotation. Applied Unicode property matching and other
-unsupported capabilities produce no-verdict. Work and regex budgets can also
-prevent a verdict; a prepared contract can remain undecidable for a particular value.
+unsupported capabilities produce no-verdict. The default work allowance grows
+with the value checked: 2,000,000 units per pass up to 65,536 value nodes and
+proportionally more above, so ordinary schemas decide values as large as the
+default admission limits accept. An explicitly configured allowance caps every
+pass at that many units, whatever the value's size. The evaluation depth (1,024 nested
+evaluations, a stack bound) and the regex budget (2,000,000 steps, the safety
+bound) can still prevent a verdict; a prepared contract can remain undecidable
+for a particular value. Patterns may nest 32 groups by default; release builds
+prepare such patterns, and check values against them, on a 256 KiB thread stack.
+Debug builds need more on Windows, as the [support policy](docs/support.md) records.
 
 Missing content or undefined reference results do not prevent a verdict when the
 evaluator proves that they cannot affect it. An established undefined result has

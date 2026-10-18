@@ -17,12 +17,14 @@ evaluator and an explicit immutable `ResourceSet`. Each preparation compiles
 independently. A caller-retained `PreparedContract` owns required compiled state
 and survives document, resource and evaluator disposal. Cancellation and transient failures do
 not poison healthy subsequent preparation. Resources with the same URI in distinct
-sets never share an implicit registry. A set indexes its resource identities once.
+sets never share an implicit registry. A set indexes its resource identities once
+for the core projection.
 A resolution space is assembled only when an evaluator requests the core
 projection, once per live document revision and resource set: the space without
 supplied resources stays with the revision, and a space with a set stays with
 that set until either the set or the revision is dropped. The default evaluator
-assembles its own space for each preparation and drops it afterwards. Every space
+indexes the set and assembles its own space for each preparation and drops both
+afterwards. Every space
 places the packaged 2020-12 meta-schemas after the document and supplied resources
 as one immutable layer, built once per process and shared, so assembly does not
 re-add them. The schema-space compiler builds a
@@ -79,6 +81,17 @@ lifecycle. Context provisioning and remote interface transports remain separate 
 The invocation companion's
 [public guide](../crates/openbindings-invocation/README.md) describes both entry
 points and the maintained lifecycle tests.
+
+The three companions deliberately keep a few small parallel definitions, because
+sharing them would need a new internal crate or new public core API. Each defines
+its own `SupportedKind` and `KindSupportVerdict` pair and refuses an empty requested
+kind as `empty-kind` in its own code namespace. Each keeps a bounded JSON
+writer mapped to its own error type. Invocation's by-value `BindingValue` reads
+`preference` with its own exact parser, since core's document reader is private.
+Tests hold the copies aligned: the published kind-support cases run through all
+three facades, each facade's empty-kind code is pinned, the writers share
+byte-limit tests, and a differential test compares the preference parser with
+core's document reading. Change the copies together.
 
 The SDK supplies the three interface contracts and checked caller APIs without
 kind-specific instances. Providers own source interpretation, kind soundness and

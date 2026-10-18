@@ -28,11 +28,12 @@ seconds. Only 404 means absence; 401 and 403 mean gated discovery. HTTP status,
 transport failure, cancellation, timeout and document validation remain distinct.
 Complete bounded response bytes and observed metadata survive validation refusal.
 
-Native discovery requires HTTPS except literal loopback and checks redirect
-policy before each hop. Applications own TLS roots, credentials, proxies and
-network-address restrictions. Portable transports must honor the supplied URL,
-decoded-byte, redirect and cancellation contracts. Browser Fetch cannot expose
-all hops or peer addresses.
+Native discovery requires HTTPS except literal loopback, checks redirect policy
+before each hop and runs on a Tokio runtime with timers enabled. Applications
+own TLS roots, proxies, network-address restrictions and credentials, including
+which origins receive them across redirects. Portable transports must honor the
+supplied URL, decoded-byte, redirect and cancellation contracts. Browser Fetch
+cannot expose all hops or peer addresses.
 
 Publication defaults to `Access-Control-Allow-Origin: *`. Authentication,
 credentialed CORS and preflight belong to application middleware. Synchronous

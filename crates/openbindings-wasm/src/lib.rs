@@ -1,4 +1,6 @@
 #![doc = include_str!("../README.md")]
+// A method that returns `Self` is a builder step; dropping its result loses the change.
+#![warn(clippy::return_self_not_must_use)]
 #![forbid(unsafe_code)]
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
@@ -104,6 +106,7 @@ impl WasmJson {
     pub fn parse_text(text: &str) -> Result<WasmJson, JsValue> {
         Self::parse_bytes(text.as_bytes())
     }
+    #[must_use]
     pub fn retain(&self) -> WasmJson {
         Self {
             value: self.value.clone(),
@@ -117,6 +120,17 @@ impl WasmJson {
     }
     pub fn at(&self, pointer: &str) -> Option<WasmJson> {
         self.value.at(pointer).map(|v| Self {
+            value: v.to_owned(),
+        })
+    }
+    /// Resolve a pointer, given as an exact JSON string, as `locate` reads it;
+    /// a malformed pointer selects nothing, as it does for `at`.
+    #[wasm_bindgen(js_name=atPointer)]
+    pub fn at_pointer(&self, pointer: &str) -> Option<WasmJson> {
+        let pointer = JsonValue::parse(pointer)
+            .ok()
+            .and_then(|text| openbindings_internal_json::backend::string_pointer(text.view()))?;
+        self.value.at_pointer(&pointer).map(|v| Self {
             value: v.to_owned(),
         })
     }
@@ -235,6 +249,7 @@ impl WasmMember {
             value: self.value.clone(),
         }
     }
+    #[must_use]
     pub fn retain(&self) -> WasmMember {
         Self {
             index: self.index,
@@ -394,8 +409,15 @@ impl WasmDocument {
         for row in rows {
             let pointer = row
                 .get("pointer")
-                .and_then(|v| v.as_str())
+                .filter(|v| v.kind() == JsonKind::String)
                 .ok_or_else(|| error("invalid-pointer", "expected a pointer string"))?;
+            // A pointer through a member name with an unpaired unit, as a
+            // finding reports one, arrives as a JSON escape and stays exact.
+            let pointer = match pointer.as_str() {
+                Some(text) => Ok(text),
+                None => Err(openbindings_internal_json::backend::string_pointer(pointer)
+                    .ok_or_else(|| edit_error(EditError::InvalidPointer))?),
+            };
             let value = match row.get("op").and_then(|v| v.as_str()) {
                 Some("set") => Some(
                     row.get("value")
@@ -411,9 +433,15 @@ impl WasmDocument {
         let edits: Vec<_> = paths
             .iter()
             .zip(&values)
-            .map(|(pointer, value)| match value {
-                Some(value) => Edit::Set { pointer, value },
-                None => Edit::Remove { pointer },
+            .map(|(pointer, value)| {
+                let pointer = match pointer {
+                    Ok(text) => PointerRef::from(*text),
+                    Err(exact) => PointerRef::from(exact),
+                };
+                match value {
+                    Some(value) => Edit::Set { pointer, value },
+                    None => Edit::Remove { pointer },
+                }
             })
             .collect();
         self.handle.editable()?.edit(&edits).map_err(edit_error)
@@ -466,6 +494,7 @@ impl WasmDocument {
             .set_operation_output(key, &value.value)
             .map_err(edit_error)
     }
+    #[must_use]
     pub fn retain(&self) -> WasmDocument {
         Self {
             handle: DocumentHandle::new(self.handle.document().clone()),
@@ -478,7 +507,7 @@ impl WasmDocument {
     }
     #[wasm_bindgen(js_name=toBytes)]
     pub fn to_bytes(&self) -> Vec<u8> {
-        self.handle.document().to_bytes().into()
+        self.handle.document().as_bytes().into()
     }
     pub fn validate(&self) -> WasmDocumentValidation {
         let _ = self.handle.document().validate();
@@ -945,6 +974,12 @@ impl WasmOperation {
             .map(encoded)
             .map_err(interpretation_error)
     }
+    #[must_use]
+    pub fn retain(&self) -> WasmOperation {
+        Self {
+            op: self.op.clone(),
+        }
+    }
 }
 // Exact text crosses the bridge as escaped JSON, never through Rust scalar strings.
 fn exact_metadata(fields: serde_json::Value, exact: &[(&str, Option<String>)]) -> String {
@@ -1075,6 +1110,7 @@ impl std::fmt::Debug for WasmBinding {
 
 #[wasm_bindgen]
 impl WasmBinding {
+    #[must_use]
     pub fn retain(&self) -> WasmBinding {
         Self {
             view: self.view.clone(),
@@ -1106,6 +1142,7 @@ impl std::fmt::Debug for WasmSource {
 
 #[wasm_bindgen]
 impl WasmSource {
+    #[must_use]
     pub fn retain(&self) -> WasmSource {
         Self {
             view: self.view.clone(),
@@ -1137,6 +1174,7 @@ impl std::fmt::Debug for WasmDependency {
 
 #[wasm_bindgen]
 impl WasmDependency {
+    #[must_use]
     pub fn retain(&self) -> WasmDependency {
         Self {
             view: self.view.clone(),
@@ -1188,6 +1226,7 @@ impl std::fmt::Debug for WasmExample {
 
 #[wasm_bindgen]
 impl WasmExample {
+    #[must_use]
     pub fn retain(&self) -> WasmExample {
         Self {
             view: self.view.clone(),
@@ -1241,6 +1280,7 @@ impl WasmResources {
         .map(|resources| Self { resources })
         .map_err(|e| error("resource", e))
     }
+    #[must_use]
     pub fn retain(&self) -> WasmResources {
         Self {
             resources: self.resources.clone(),
@@ -1254,6 +1294,38 @@ impl WasmResources {
 impl Default for WasmResources {
     fn default() -> Self {
         Self::new()
+    }
+}
+/// Entries collected for one `ResourceSet::new`, so a set is admitted once
+/// rather than rebuilt for each added resource.
+#[wasm_bindgen]
+#[derive(Default)]
+pub struct WasmResourceEntries {
+    resources: Vec<SchemaResource>,
+}
+impl std::fmt::Debug for WasmResourceEntries {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmResourceEntries")
+            .finish_non_exhaustive()
+    }
+}
+#[wasm_bindgen]
+impl WasmResourceEntries {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> WasmResourceEntries {
+        Self::default()
+    }
+    pub fn push(&mut self, uri: &str, value: &WasmJson) {
+        self.resources.push(SchemaResource {
+            uri: uri.into(),
+            document: value.value.clone(),
+        });
+    }
+    /// Admit every collected entry as one set; the entries are taken.
+    pub fn build(&mut self) -> Result<WasmResources, JsValue> {
+        ResourceSet::new(std::mem::take(&mut self.resources))
+            .map(|resources| WasmResources { resources })
+            .map_err(|e| error("resource", e))
     }
 }
 /// A selected operation of a proved revision. Reads delegate to the plain view;
@@ -1319,6 +1391,12 @@ impl WasmConformantOperation {
     }
     pub fn bindings(&self) -> String {
         encoded(self.operation.bindings())
+    }
+    #[must_use]
+    pub fn retain(&self) -> WasmConformantOperation {
+        Self {
+            operation: self.operation.clone(),
+        }
     }
 }
 impl WasmConformantOperation {
@@ -1393,6 +1471,7 @@ impl WasmValueContract {
     ) -> Result<WasmPreparation, JsValue> {
         self.prepare_in(&resources.resources, limits, cancelled)
     }
+    #[must_use]
     pub fn retain(&self) -> WasmValueContract {
         Self {
             operation: self.operation.clone(),
@@ -1452,6 +1531,14 @@ impl WasmPrepared {
                 .explain_with_control(&value.value, &control(cancelled)),
         )
     }
+    #[wasm_bindgen(js_name=validateJson)]
+    pub fn validate_json(&self, bytes: &[u8]) -> Result<String, JsValue> {
+        self.prepared
+            .validate_json(bytes)
+            .map(encoded)
+            .map_err(input_error)
+    }
+    #[must_use]
     pub fn retain(&self) -> WasmPrepared {
         Self {
             prepared: self.prepared.clone(),

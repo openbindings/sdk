@@ -723,3 +723,56 @@ fn evaluator_records_build_with_constructors_and_optional_fields() {
         r#"{"instance":"/0","schema":{"resource":"https://example.invalid/s","pointer":"/type"},"code":"type","message":"wrong type","details":{"kind":"type","expected":["integer"]}}"#
     );
 }
+#[test]
+fn outcome_and_report_records_compare_by_value() {
+    fn eq<T: Eq>(_: &T) {}
+    let text = r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.invalid/missing"}}},"bindings":{"b":{"operation":"absent","source":"absent"}}}"#;
+    let report = validate_document(text).unwrap().report().clone();
+    let again = Document::parse(text).unwrap().validate().unwrap();
+    eq(&report);
+    assert_eq!(&report, again.report());
+    assert_eq!(report.findings[0], again.report().findings[0]);
+    let mut other = report.clone();
+    other.findings[0].message.push('.');
+    assert_ne!(report, other);
+    let references = Document::parse(text).unwrap().references().unwrap();
+    eq(&references);
+    assert_eq!(
+        references,
+        Document::parse(text).unwrap().references().unwrap()
+    );
+    let location = SchemaLocation::new(None, "/operations/op/input".parse().unwrap());
+    let refusal = NoVerdict::new(NoVerdictReason::LimitExceeded, "budget", "limit")
+        .with_location(location.clone());
+    let undefined = UndefinedResult::new("static-reference-defect", "undefined");
+    let problem = ValueProblem::new("".parse().unwrap(), location, "type", "wrong type")
+        .with_details(ValueProblemDetails::Type {
+            expected: vec!["integer".into()],
+        });
+    let outcomes = [
+        ValueOutcome::Satisfies,
+        ValueOutcome::Fails {
+            message: "wrong type".into(),
+            problems: vec![problem.clone()],
+            problems_complete: true,
+        },
+        ValueOutcome::Undefined {
+            detail: undefined.clone(),
+        },
+        ValueOutcome::NoVerdict {
+            detail: refusal.clone(),
+        },
+    ];
+    for (i, left) in outcomes.iter().enumerate() {
+        eq(left);
+        for (j, right) in outcomes.iter().enumerate() {
+            assert_eq!(left == right, i == j);
+        }
+        assert_eq!(left, &left.clone());
+    }
+    let mut changed = refusal.clone();
+    changed.code.push('!');
+    assert_ne!(refusal, changed);
+    assert_eq!(problem, problem.clone());
+    assert_eq!(undefined, undefined.clone());
+}

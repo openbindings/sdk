@@ -110,7 +110,10 @@ compiles independently. Prepared does not imply that every value is decidable.
 Edit the same `Document` through a mutable borrow. Generic paths use RFC 6901:
 `~0` escapes a tilde and `~1` a slash. Parents must exist; `set` inserts missing
 object members and `/-` appends to arrays. Use exact JSON values to preserve
-number spellings and escaped UTF-16.
+number spellings and escaped UTF-16. A pointer is escaped text or an exact
+`Pointer`, so a finding's location addresses the member it reports, including a
+name holding an unpaired UTF-16 unit: `document.remove(&pointer)`, or
+`Edit::Remove { pointer: (&pointer).into() }` in a batch.
 
 ```rust,edition2024
 use openbindings::{Document, Edit, JsonValue};
@@ -121,8 +124,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let note = JsonValue::string("Reviewed")?;
     let description = JsonValue::string("Ready for review")?;
     document.edit(&[
-        Edit::Set { pointer: "/x-editor/note", value: &note },
-        Edit::Set { pointer: "/description", value: &description },
+        Edit::Set { pointer: "/x-editor/note".into(), value: &note },
+        Edit::Set { pointer: "/description".into(), value: &description },
     ])?;
     assert_eq!(document.value().at("/x-editor/id").unwrap().text(), "9007199254740993");
     let proven = document.validate()?.conformant().ok_or("nonconformant")?;
@@ -136,7 +139,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 Each batch splices the current bytes once and parses the result once. A failed
 batch changes nothing. Untouched extension members, number tokens, member order
 and whitespace remain exact; inserted members use compact punctuation. Sibling
-insertions at one boundary coalesce in request order. Overlapping replacements
+insertions at one boundary coalesce in request order. Adjacent removals, up to
+every member of a container, share their separators. Overlapping replacements
 and removals are refused. Default byte, node and depth limits apply to the result;
 byte preflight happens before replacement allocation.
 

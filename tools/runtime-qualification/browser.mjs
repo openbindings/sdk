@@ -71,9 +71,9 @@ const server = http.createServer((req, res) => {
   if (req.url === "/") {
     res.setHeader("Content-Type", "text/html");
     res.end("<title>Runtime qualification</title>");
-  } else if (req.url.startsWith("/document/")) {
+  } else if (req.url === "/.well-known/openbindings") {
     res.setHeader("Content-Type", "application/json");
-    res.end(fixtures[req.url.split("/")[2]].document);
+    res.end(fixtures[req.headers["x-qualification-tier"]].document);
   } else if (files.has(req.url)) {
     res.setHeader(
       "Content-Type",

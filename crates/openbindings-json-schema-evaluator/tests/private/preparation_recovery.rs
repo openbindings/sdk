@@ -131,7 +131,7 @@ fn preparation_is_selected_and_does_not_promise_value_decidability() {
         "true",
         ResourceSet::default(),
         &DefaultEvaluator::with_limits(Limits {
-            evaluation_steps: 0,
+            evaluation_steps: Some(0),
             ..Limits::default()
         }),
     );
@@ -168,20 +168,14 @@ fn transitive_holes_and_original_snapshot_evidence_survive_new_resource_sets() {
         ResourceSet::default(),
         &DefaultEvaluator::with_limits(Limits::default()),
     );
-    assert!(
-        evidence(&two)
-            .location
-            .as_ref()
-            .unwrap()
-            .pointer
-            .as_str()
-            .unwrap()
-            .ends_with("/a/$ref")
-    );
+    // With two missing resources, which one a value's verdict depends on is not
+    // established, so neither is named: `{"b":1}` never reaches `/a/$ref`.
+    assert_eq!(evidence(&two).location, None);
     let ValueOutcome::NoVerdict { detail } = two.validate(&json(r#"{"b":1}"#)) else {
         panic!()
     };
-    assert_eq!(detail_json(&detail), detail_json(&evidence(&two))); // one witness, not necessarily active
+    assert_eq!(detail.location, None);
+    assert_eq!(detail_json(&detail), detail_json(&evidence(&two)));
 }
 struct Capture(Mutex<Option<SchemaRequest>>);
 impl SchemaEvaluator for Capture {

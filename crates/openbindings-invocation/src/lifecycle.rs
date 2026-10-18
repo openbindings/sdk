@@ -220,6 +220,17 @@ impl Shared {
     fn outcome(&self) -> Option<Outcome> {
         self.state.lock().unwrap().terminal.clone()
     }
+    /// The error a refused provider emission reports once the invocation has
+    /// settled: the terminal failure itself, or cancellation after success.
+    fn settled_error(state: &State) -> Option<InvocationError> {
+        state.terminal.as_ref().map(|terminal| match terminal {
+            Err(error) => error.clone(),
+            Ok(()) => InvocationError::cancelled(),
+        })
+    }
+    fn emission_refusal(&self) -> Option<InvocationError> {
+        Self::settled_error(&self.state.lock().unwrap())
+    }
     fn validation_failure(&self) -> Option<Arc<ValidationFailure>> {
         self.state.lock().unwrap().validation_failure.clone()
     }
@@ -701,7 +712,8 @@ impl ProviderIo {
     /// the terminal; an oversized value ends unsuccessfully without emission.
     ///
     /// # Errors
-    /// Returns the terminal invocation error when output can no longer be accepted, including cancellation, invalid output, or an established output-contract failure.
+    /// Returns the invocation's terminal error when output can no longer be
+    /// accepted, as [`ProviderOutput::emit`] describes.
     pub async fn emit(&mut self, value: JsonValue) -> Result<(), InvocationError> {
         self.output.emit(value).await
     }
@@ -816,23 +828,32 @@ impl ProviderOutput {
     /// the terminal; an oversized value ends unsuccessfully without emission.
     ///
     /// # Errors
-    /// Returns the terminal invocation error when output can no longer be accepted, including cancellation, invalid output, or an established output-contract failure.
+    /// Returns the invocation's terminal error when output can no longer be
+    /// accepted, whether this emission or earlier work settled it: cancellation,
+    /// an oversized value, invalid output, or an established output-contract
+    /// failure. After a successful terminal, an emission returns `ERR_CANCELLED`.
     pub async fn emit(&mut self, value: JsonValue) -> Result<(), InvocationError> {
         if value.bytes().len() > self.shared.limits.max_value_bytes {
             self.shared
                 .record_finding(BoundaryError::new("output-resource-limit", "/output"));
             self.shared.settle(Err(InvocationError::execution_failed()));
             self.shared.signal.notify();
-            return Err(InvocationError::execution_failed());
+            return Err(self
+                .shared
+                .emission_refusal()
+                .expect("settled by this emission or earlier"));
         }
-        if self.shared.outcome().is_some() {
-            return Err(InvocationError::cancelled());
+        if let Some(error) = self.shared.emission_refusal() {
+            return Err(error);
         }
         if let Some(gate) = &mut self.gate
             && let Err((error, failure)) = gate.check(&value, &self.shared.local)
         {
-            self.shared.fail_validation(error.clone(), failure);
-            return Err(error);
+            self.shared.fail_validation(error, failure);
+            return Err(self
+                .shared
+                .emission_refusal()
+                .expect("settled by this emission or earlier"));
         }
         let mut value = Some(value);
         let mut waiter = Waiter::new(self.shared.provider_write.clone());
@@ -840,7 +861,9 @@ impl ProviderOutput {
             waiter.register(cx.waker());
             let result = {
                 let mut s = self.shared.state.lock().unwrap();
-                if s.terminal.is_some() || s.abandoned {
+                if let Some(error) = Shared::settled_error(&s) {
+                    Poll::Ready(Err(error))
+                } else if s.abandoned {
                     Poll::Ready(Err(InvocationError::cancelled()))
                 } else if s.output.len() < self.shared.limits.output_capacity {
                     s.emitted = true;
@@ -999,7 +1022,7 @@ mod driver_tests {
     }
     #[test]
     fn stream_receiver_replaces_and_releases_waiters() {
-        // CA-4: polling owns one waiter; ready, close, drop, and next release it.
+        // Polling owns one waiter; ready, close, drop, and next release it.
         for finish in ["ready", "close", "drop", "next"] {
             let shared = Shared::new(InvocationLimits::default());
             let (mut reader, _writer) = ProviderIo::new(shared.clone()).split();
@@ -1049,7 +1072,7 @@ mod driver_tests {
     }
     #[test]
     fn pending_stream_receive_is_dropped_on_cancellation_or_abandonment() {
-        // CA-4: cancellation drops a suspended reader without resuming it as EOF.
+        // Cancellation drops a suspended reader without resuming it as EOF.
         for abandon in [false, true] {
             let shared = Shared::new(InvocationLimits::default());
             let (mut reader, mut writer) = ProviderIo::new(shared.clone()).split();
@@ -1085,7 +1108,7 @@ mod driver_tests {
     }
     #[test]
     fn provider_endpoints_notify_their_own_task_wakers() {
-        // CA-4: both input receive APIs wake the provider's own task.
+        // Both input receive APIs wake the provider's own task.
         for stream in [false, true] {
             let shared = Shared::new(InvocationLimits::default());
             let (mut reader, mut writer) = ProviderIo::new(shared.clone()).split();

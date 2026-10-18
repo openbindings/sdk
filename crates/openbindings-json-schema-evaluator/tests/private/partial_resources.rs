@@ -559,7 +559,7 @@ fn cancellation_limits_and_concurrent_calls_do_not_poison_prepared_owners() {
         }
     });
     let low = DefaultEvaluator::with_limits(Limits {
-        evaluation_steps: 0,
+        evaluation_steps: Some(0),
         ..Limits::default()
     });
     let Ok(limited) = prepare(&schema, ResourceSet::default(), &low) else {
@@ -724,7 +724,7 @@ fn partial_failure_survives_diagnostic_exhaustion_and_unsupported_known_evaluati
         r#"{{"properties":{{"external":{{"$ref":"{U}"}}}},"allOf":[false,{{"allOf":[{costly}]}}]}}"#
     );
     let limited = DefaultEvaluator::with_limits(Limits {
-        evaluation_steps: 30,
+        evaluation_steps: Some(30),
 
         ..Limits::default()
     });

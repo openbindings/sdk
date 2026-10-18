@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import * as sdk from "../dist/index.js";
 import * as discovery from "../dist/http-discovery.js";
+import * as bridge from "../dist/wasm/openbindings_wasm.js";
 await sdk.initialize(
   await readFile(
     new URL("../dist/wasm/openbindings_wasm_bg.wasm", import.meta.url),
@@ -240,7 +241,11 @@ test("Fetch discovery keeps assessment and transport distinctions with complete 
     });
     assert.equal(r.status, "found");
     assert.equal(new TextDecoder().decode(r.body), text);
-    assert.equal(r.metadata.finalUrl, null);
+    // The SDK follows hops itself, so the final URL is the URL it dispatched.
+    assert.equal(
+      r.metadata.finalUrl,
+      "https://example.test/.well-known/openbindings",
+    );
     r.document.dispose();
   }
   for (const [status, expected] of [
@@ -387,6 +392,18 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   assert.equal(input.validate(value).outcome, "no-verdict");
   assert.equal(input.validate(value).detail.reason, "limit-exceeded");
   input.dispose();
+  // The default work allowance grows with the value; null selects it, and a
+  // number caps every pass.
+  assert.equal(sdk.evaluatorLimits().evaluationSteps, null);
+  const grown = ready(
+    contract.prepare({ resources, limits: { evaluationSteps: null } }),
+  );
+  assert.equal(grown.validate(value).outcome, "satisfies");
+  grown.dispose();
+  assert.throws(
+    () => contract.prepare({ limits: { regexSteps: null } }),
+    (e) => e.code === "invalid-evaluator-limits",
+  );
   const partial = document.references({ resources, signal: control.signal });
   assert.equal(partial.complete, false);
   assert.equal(partial.limitation.reason, "cancelled");
@@ -420,4 +437,155 @@ test("Wasm reports retain specification evidence without application policy", ()
     ],
   );
   document.dispose();
+});
+
+// one admission builds the whole set, so construction stays linear in its entries.
+test("schema resources admit every entry in one pass", () => {
+  const documents = Array.from({ length: 64 }, (_, i) =>
+    exact(`{"type":"integer","title":"s${i}"}`),
+  );
+  const before = testing.liveStorageOwners();
+  const calls = { add: 0, build: 0 };
+  const { add } = bridge.WasmResources.prototype;
+  const { build } = bridge.WasmResourceEntries.prototype;
+  bridge.WasmResources.prototype.add = function (...args) {
+    calls.add++;
+    return add.apply(this, args);
+  };
+  bridge.WasmResourceEntries.prototype.build = function (...args) {
+    calls.build++;
+    return build.apply(this, args);
+  };
+  try {
+    const uri = (i) => `https://example.test/s${i}`;
+    const set = new sdk.SchemaResources(documents.map((d, i) => [uri(i), d]));
+    assert.deepEqual(calls, { add: 0, build: 1 });
+    for (const i of [0, 31, 63])
+      assert.equal(
+        set.locate({ resource: uri(i), pointer: "/title" }).pointer,
+        "/title",
+      );
+    set.dispose();
+    new sdk.SchemaResources([]).dispose();
+    new sdk.SchemaResources().dispose();
+    assert.deepEqual(calls, { add: 0, build: 1 });
+    // Refusals release collected entries and leave supplied owners usable.
+    assert.throws(
+      () =>
+        new sdk.SchemaResources([
+          [uri(0), documents[0]],
+          [uri(0), documents[1]],
+        ]),
+      (e) => e instanceof sdk.SdkError && e.code === "resource",
+    );
+    assert.throws(
+      () =>
+        new sdk.SchemaResources([
+          [uri(0), documents[0]],
+          ["https://example.test/\ud800", documents[1]],
+        ]),
+      TypeError,
+    );
+    function* failing() {
+      yield [uri(0), documents[0]];
+      throw new Error("caller iterable failed");
+    }
+    assert.throws(() => new sdk.SchemaResources(failing()), /caller iterable/);
+    assert.equal(documents[0].text, '{"type":"integer","title":"s0"}');
+    assert.equal(testing.liveStorageOwners(), before);
+  } finally {
+    bridge.WasmResources.prototype.add = add;
+    bridge.WasmResourceEntries.prototype.build = build;
+    for (const document of documents) document.dispose();
+  }
+});
+
+// a view outlives its original owner, and a conformant one keeps its contracts.
+test("operation views retain independent owners", () => {
+  const before = testing.liveStorageOwners();
+  const document = parsed(text);
+  const selection = document.resolveOperation("execute");
+  assert.equal(selection.status, "found");
+  const plain = selection.operation.retain();
+  assert.ok(plain instanceof sdk.OperationView);
+  assert.notEqual(plain, selection.operation);
+  selection.operation.dispose();
+  assert.equal(plain.key, "run");
+  const schema = plain.input();
+  assert.equal(schema.text, '{"type":"integer"}');
+  schema.dispose();
+  const checked = document.validate();
+  assert.equal(checked.status, "conformant");
+  const original = checked.document.resolveOperation("execute");
+  const retained = original.retain();
+  assert.ok(retained instanceof sdk.ConformantOperationView);
+  // A plain view's handle cannot be retained as a conformant one.
+  assert.throws(
+    () => sdk.ConformantOperationView.prototype.retain.call(plain),
+    (e) => e instanceof sdk.SdkError && e.code === "document-conformance",
+  );
+  original.dispose();
+  plain.dispose();
+  checked.document.dispose();
+  document.dispose();
+  assert.equal(retained.key, "run");
+  const contract = retained.input();
+  retained.dispose();
+  const prepared = ready(contract.prepare());
+  contract.dispose();
+  assert.equal(prepared.validate(7).outcome, "satisfies");
+  prepared.dispose();
+  assert.equal(testing.liveStorageOwners(), before);
+});
+
+// a string is JSON text here, admitted exactly as parseJson admits it.
+test("validateJson admits JSON text as parseJson does, then validates", () => {
+  const document = parsed(text);
+  const contract = ready(prepareInput(document, "run"));
+  document.dispose();
+  const before = testing.liveStorageOwners();
+  const utf8 = (value) => new TextEncoder().encode(value);
+  assert.equal(contract.validate("7").outcome, "fails");
+  assert.equal(contract.validateJson("7").outcome, "satisfies");
+  assert.equal(contract.validateJson(utf8(" 7 ")).outcome, "satisfies");
+  assert.equal(contract.validateJson("9007199254740993").outcome, "satisfies");
+  assert.equal(contract.validateJson("1.5").outcome, "fails");
+  const failed = contract.validateJson('"7"');
+  assert.deepEqual(failed, contract.validate("7"));
+  const duplicate = contract.validateJson('{"a":1,"a":2}');
+  assert.equal(duplicate.outcome, "no-verdict");
+  assert.equal(duplicate.detail.code, "duplicate-instance-members");
+  const deep = "[".repeat(10_001) + "]".repeat(10_001);
+  for (const input of [
+    "7 x",
+    "",
+    deep,
+    new Uint8Array([0xef, 0xbb, 0xbf, 0x37]),
+    new Uint8Array([0xff]),
+  ]) {
+    const admitted = sdk.parseJson(input);
+    assert.equal(admitted.status, "input-error");
+    assert.deepEqual(contract.validateJson(input), {
+      outcome: "input-error",
+      error: admitted.error,
+    });
+  }
+  assert.throws(() => contract.validateJson("\ud800"), TypeError);
+  assert.throws(() => contract.validateJson(7), TypeError);
+  const control = new AbortController();
+  control.abort();
+  assert.equal(
+    contract.validateJson("7", { signal: control.signal }).detail.reason,
+    "cancelled",
+  );
+  assert.throws(
+    () => contract.validateJson("7", { unknown: true }),
+    (e) => e.code === "invalid-work-options",
+  );
+  assert.equal(testing.liveStorageOwners(), before);
+  contract.dispose();
+  assert.throws(
+    () => contract.validateJson("7"),
+    (e) => e.code === "disposed-handle",
+  );
 });

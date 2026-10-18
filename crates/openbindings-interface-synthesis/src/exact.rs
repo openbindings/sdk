@@ -1,6 +1,7 @@
 use crate::{SynthesisError, SynthesisErrorKind};
 use openbindings::{JsonLimits, JsonValue};
 use serde::Serialize;
+// Invocation and inspection keep the same bounded writer for their own errors.
 pub(crate) fn encode<T: Serialize>(
     value: &T,
     limits: JsonLimits,

@@ -547,6 +547,24 @@ fn main() {
         &parked,
     );
     use openbindings_invocation::operation::Request as OperationRequest;
+    // Construction retains the document and provider in place: no allocation.
+    let proof = document
+        .clone()
+        .validate()
+        .unwrap()
+        .conformant()
+        .expect("conformant invocation document");
+    measurements.push(measure(
+        "operation_invoker_creation_release",
+        iterations,
+        0,
+        || {
+            drop(black_box(openbindings_invocation::operation::Invoker::new(
+                proof.clone(),
+                &fixture,
+            )))
+        },
+    ));
     measurements.push(measure("operation_unary_1_byte", iterations, 1, || {
         echo_call(
             operation.invoke(OperationRequest::operation("say")),

@@ -35,7 +35,10 @@ impl InterfaceSynthesizer for Skeleton {
             .map_err(openbindings::EditError::from)?;
             let edits: Vec<_> = fields
                 .iter()
-                .map(|(pointer, value)| Edit::Set { pointer, value })
+                .map(|(pointer, value)| Edit::Set {
+                    pointer: (*pointer).into(),
+                    value,
+                })
                 .collect();
             document.edit(&edits)?;
             Ok(SynthesisCandidate::new(
@@ -59,8 +62,8 @@ async fn source_free_overrides_and_ownership() {
     let result = provider.synthesize_with_coverage(&request).await.unwrap();
     let strict = provider.synthesize(&request).await.unwrap();
     assert_eq!(
-        result.document().as_document().to_bytes(),
-        strict.to_bytes()
+        result.document().as_document().as_bytes(),
+        strict.as_bytes()
     );
     assert_eq!(
         strict

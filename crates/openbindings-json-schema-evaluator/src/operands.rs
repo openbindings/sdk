@@ -9,15 +9,26 @@ use std::sync::Arc;
 
 #[derive(Default)]
 pub(crate) struct Operands {
-    literals: Vec<Arc<[JsonValue]>>,
+    // Each compiled `const` and `enum` keyword's literal, by the id it holds.
+    literals: Vec<Literal>,
     numbers: openbindings_internal_json::numeric::Operands,
 }
-struct Constraint(Arc<[JsonValue]>);
+// A `const` value, or an `enum` keyword's choices. Both are views of the
+// projection's separated literals.
+#[derive(Clone)]
+enum Literal {
+    Value(JsonValue),
+    Choices(Arc<[JsonValue]>),
+}
+struct Constraint(Literal);
 impl<'i> Keyword<'i, FlatJson> for Constraint {
     fn is_valid(&self, instance: View<'i>) -> bool {
-        self.0
-            .iter()
-            .any(|literal| backend::equals(instance, backend::view(literal)))
+        match &self.0 {
+            Literal::Value(value) => backend::equals(instance, backend::view(value)),
+            Literal::Choices(choices) => choices
+                .iter()
+                .any(|choice| backend::equals(instance, backend::view(choice))),
+        }
     }
     fn validate(&self, instance: View<'i>) -> Result<(), ValidationError<'i>> {
         if self.is_valid(instance) {
@@ -83,9 +94,13 @@ pub(crate) fn role(keyword: &str) -> Option<Role> {
     })
 }
 impl Operands {
+    /// The library's copy of a projected resource. Its `const` and `enum`
+    /// values are indices into `literals`, the literals the projection
+    /// separates, which the compiled keywords share rather than copy.
     pub(crate) fn resource(
         &mut self,
         resource: &JsonValue,
+        literals: &[JsonValue],
         limits: &Limits,
         control: &dyn WorkControl,
     ) -> Result<Value, NoVerdict> {
@@ -124,19 +139,20 @@ impl Operands {
                                         .expect("admitted size operand"),
                                     ),
                                     Some(Role::Const) => {
+                                        let value = separated(field.value, literals)?.clone();
                                         let id = self.literals.len();
-                                        self.literals.push(Arc::from([field.value.to_owned()]));
+                                        self.literals.push(Literal::Value(value));
                                         Value::from(id)
                                     }
                                     Some(Role::Enum) => {
-                                        let choices: Vec<_> = field
-                                            .value
+                                        let choices: Vec<_> = separated(field.value, literals)?
+                                            .view()
                                             .elements()
                                             .expect("admitted enum array")
                                             .map(|v| v.to_owned())
                                             .collect();
                                         let id = self.literals.len();
-                                        self.literals.push(choices.into());
+                                        self.literals.push(Literal::Choices(choices.into()));
                                         Value::Array(vec![Value::from(id)])
                                     }
                                     Some(Role::Read) => read(field.value, limits)?,
@@ -183,6 +199,23 @@ impl Operands {
         }
         options
     }
+}
+/// The separated literal a projected `const` or `enum` names by its index.
+pub(crate) fn separated<'a>(
+    index: JsonRef<'_>,
+    literals: &'a [JsonValue],
+) -> Result<&'a JsonValue, NoVerdict> {
+    index
+        .number_text()
+        .and_then(|index| index.parse::<usize>().ok())
+        .and_then(|index| literals.get(index))
+        .ok_or_else(|| {
+            no_verdict(
+                NoVerdictReason::EvaluatorFailure,
+                "program-literal",
+                "a projected literal is missing",
+            )
+        })
 }
 fn read(value: JsonRef<'_>, limits: &Limits) -> Result<Value, NoVerdict> {
     if backend::depth(&value.to_owned()) > limits.compile_json_depth {

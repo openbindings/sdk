@@ -211,32 +211,16 @@ mod tests {
                 Ok(())
             })
         }
-    }
-    impl openbindings_invocation::binding::BindingPreflight for CancelThenComplete {
-        type Preflight<'a>
-            = std::pin::Pin<
-            Box<
-                dyn std::future::Future<
-                        Output = Result<
-                            Option<openbindings_invocation::ContextChallenge>,
-                            InvocationError,
-                        >,
-                    > + Send
-                    + 'a,
-            >,
-        >
-        where
-            Self: 'a;
         fn preflight<'a>(
             &'a self,
             _: BindingRequest<'a>,
             local: CancellationToken,
-        ) -> Self::Preflight<'a> {
-            Box::pin(async move {
+        ) -> Option<Self::Invocation<'a>> {
+            Some(Box::pin(async move {
                 self.0.cancel();
                 assert!(local.is_cancelled());
-                Ok(None)
-            })
+                Ok(())
+            }))
         }
     }
 
@@ -265,10 +249,9 @@ mod tests {
             doc().validate().unwrap().conformant().unwrap(),
             CancelThenComplete(external.clone()),
         );
-        let result = std::pin::pin!(
-            invoker.preflight_with_provider_and_control(Request::binding("b"), &external)
-        )
-        .poll(&mut Context::from_waker(Waker::noop()));
+        let result =
+            std::pin::pin!(invoker.preflight_with_control(Request::binding("b"), &external))
+                .poll(&mut Context::from_waker(Waker::noop()));
         let Poll::Ready(result) = result else {
             panic!("preflight must be ready")
         };
@@ -409,22 +392,17 @@ mod tests {
             assert!(local.is_cancelled(), "relay must be installed before start");
             std::future::ready(Ok(()))
         }
-    }
-    impl openbindings_invocation::binding::BindingPreflight for CancelDuringStart {
-        type Preflight<'a> = std::future::Ready<
-            Result<Option<openbindings_invocation::ContextChallenge>, InvocationError>,
-        >;
         fn preflight<'a>(
             &'a self,
             _: BindingRequest<'a>,
             local: CancellationToken,
-        ) -> Self::Preflight<'a> {
+        ) -> Option<Self::Invocation<'a>> {
             self.0.cancel();
             assert!(
                 local.is_cancelled(),
                 "relay must be installed before preflight start"
             );
-            std::future::ready(Ok(None))
+            Some(std::future::ready(Ok(())))
         }
     }
     #[test]
@@ -445,7 +423,7 @@ mod tests {
             CancelDuringStart(external.clone()),
         );
         assert!(
-            matches!(std::pin::pin!(invoker.preflight_with_provider_and_control(Request::binding("b"), &external))
+            matches!(std::pin::pin!(invoker.preflight_with_control(Request::binding("b"), &external))
             .poll(&mut Context::from_waker(Waker::noop())), Poll::Ready(Err(e)) if e.code() == "ERR_CANCELLED")
         );
     }

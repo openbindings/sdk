@@ -48,22 +48,22 @@ fn explained_locations_exist_in_original_document_and_supplied_resources() {
         (
             r#"{"dependentRequired":{"a":["b"]}}"#,
             r#"{"a":1}"#,
-            "/dependentRequired",
+            "/dependentRequired/a",
         ),
         (
             r#"{"properties":{"a/~雪":{"dependentRequired":{"x":["y"]}}}}"#,
             r#"{"a/~雪":{"x":1}}"#,
-            "/properties/a~1~0雪/dependentRequired",
+            "/properties/a~1~0雪/dependentRequired/x",
         ),
         (
             r#"{"prefixItems":[{"dependentRequired":{"a":["b"]}}]}"#,
             r#"[{"a":1}]"#,
-            "/prefixItems/0/dependentRequired",
+            "/prefixItems/0/dependentRequired/a",
         ),
         (
             r##"{"$id":"https://example.test/schema","$defs":{"dep":{"dependentRequired":{"a":["b"]}}},"$ref":"#/$defs/dep"}"##,
             r#"{"a":1}"#,
-            "/$defs/dep/dependentRequired",
+            "/$defs/dep/dependentRequired/a",
         ),
         (
             r#"{"dependentSchemas":{"a":{"required":["b"]}}}"#,

@@ -75,8 +75,8 @@ failure never appears as clean end of input.
 
 The same input/output lifetime supports empty, unary and streaming interactions.
 For document calls, create `operation::Invoker` with a `Conformant<Document>` and
-provider, select an evaluator with `with_evaluator`, then `prepare` an operation
-and invoke an `Attempt`. The [invocation guide](https://github.com/openbindings/sdk/blob/main/docs/invocation.md)
+provider, select an evaluator with `with_evaluator`, hold it in an `Arc`, then
+`prepare` an operation and invoke an `Attempt`. The [invocation guide](https://github.com/openbindings/sdk/blob/main/docs/invocation.md)
 shows the complete caller and describes selection, limits and cancellation.
 
 ## Limits
@@ -88,8 +88,13 @@ more values. Poll both halves concurrently for bidirectional work.
 Without an evaluator, `operation::Invoker::prepare` refuses any stated value
 contract, even `true`; absent value contracts need no evaluator. Plain `invoke`
 prepares each direction lazily on its first value, so an output refusal can follow
-provider effects. Kind interpretation and transport belong to the provider. Preflight is optional,
-advisory and separate from invocation.
+provider effects. Kind interpretation and transport belong to the provider.
+Preflight is advisory and separate from invocation: both facades' `preflight`
+run the SDK's checks for every provider and ask the provider's hook when it
+overrides `BindingInvoker::preflight`; by default there is none. Construction
+allocates nothing; `prepare` is called on an invoker held in an `Arc`, and the
+prepared operation keeps a share of it, so an `Arc` of one handle can serve
+spawned tasks.
 
 Providers may borrow configuration and return local futures. Cancellation is
 cooperative; it cannot preempt a blocking poll. This SDK's carrier admission,

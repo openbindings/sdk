@@ -27,6 +27,12 @@ for the original-document and resource contract.
 This is a finite qualification suite, not proof of complete JSON Schema support.
 A successful report may contain explicitly permitted capability refusals.
 `Options` declares exact cases and reasons; a wrong verdict cannot be exempted.
+A case that reaches a schema in another dialect, such as draft 2019-09 or a custom
+meta-schema's vocabularies, expects JSON Schema's verdict for it and also accepts
+an unsupported-capability refusal without a declaration. Where JSON Schema leaves
+the assertion of `format` to the implementation, as under a format-assertion
+vocabulary declared false, the case expects the annotation reading's verdict,
+since OpenBindings treats `format` as an annotation.
 Unknown or unused declarations fail. Incomplete diagnostics are permitted, but
 reported paths must exist in the original instance or schema resource. Instance
 pointers start at the value passed: explaining a failing value inside a larger

@@ -70,6 +70,8 @@ contracts: `resolveOperation` returns `undefined` for a missing operation, and
 each result before validating a value. Value results distinguish `satisfies`, `fails`, `undefined`
 (the specification gives the value no defined validity), `no-verdict` (the SDK could
 not answer) and an `input-error` when ordinary JavaScript data cannot be admitted.
+`validate` reads a string as a JSON string value; check JSON text or bytes, such as
+a request body, with `validateJson`, which admits them as `parseJson` does.
 
 ## Browser resource management
 
@@ -114,7 +116,8 @@ undefined opaque values, bigint, cycles, sparse arrays and accessors are refused
 
 Edit a `Document` through `set(pointer, value)`, `remove(pointer)` or an atomic
 `edit([{ op: "set", pointer, value }, { op: "remove", pointer }])` batch. Paths use
-RFC 6901 and address the revision before the batch. A batch crosses the bridge
+RFC 6901 and address the revision before the batch. A path may hold an unpaired
+UTF-16 unit, so a finding's pointer addresses the member it reports. A batch crosses the bridge
 once, including nested exact values, splices once and reads the result once. `parseJson` values
 keep exact decimal spellings. Untouched bytes, formatting and member order remain
 exact; sibling insertions coalesce with compact punctuation. `EditError.code`
@@ -193,7 +196,11 @@ synthesis providers and custom evaluator callbacks are not provided.
 
 Import `discover` and `DiscoveryPublication` from
 `@openbindings/sdk/http-discovery`. Discovery uses Fetch with a default 1 MiB
-decoded body limit and thirty-second attempt deadline. Only 404 means absence;
+decoded body limit and thirty-second attempt deadline. Where the host exposes
+redirect responses, as Node does, the SDK checks every hop before dispatching it
+and calls a supplied Fetch callback once per hop, so the callback scopes
+credentials to each URL's origin; browsers follow redirects under their own
+policy and the SDK checks the final URL. Only 404 means absence;
 401 and 403 mean gated discovery. Dispose returned document owners. Publication
 copies conformant document bytes and defaults to CORS `*`; application middleware owns
 authentication and credentialed CORS.

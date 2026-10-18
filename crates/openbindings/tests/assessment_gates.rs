@@ -51,7 +51,7 @@ fn unpaired_document_strings_are_lossless_drafts_without_conformance() {
             "{fields}: {:?}",
             validation.report().findings
         );
-        assert_eq!(validation.document().unwrap().to_bytes(), text.as_bytes());
+        assert_eq!(validation.document().unwrap().as_bytes(), text.as_bytes());
     }
     for (field, rule) in [
         (
@@ -168,5 +168,78 @@ fn parse_findings_explain_the_syntax_failure() {
         assert_eq!(finding.code, code);
         assert_eq!(finding.message, message);
         assert!(finding.location.is_some());
+    }
+}
+
+#[test]
+fn the_whole_document_check_reaches_a_verdict_at_every_admitted_size() {
+    // The OBI-02 work allowance grows with the admitted document. These
+    // documents sit well inside the default limits and beyond any allowance
+    // fixed at two million steps, which left them undetermined.
+    let entries = |head: &str, count: usize, entry: fn(usize) -> String, tail: &str| {
+        let mut text = String::from(head);
+        text.push_str(&(0..count).map(entry).collect::<Vec<_>>().join(","));
+        text + tail
+    };
+    let schemas = entries(
+        r#"{"openbindings":"0.2.0","operations":{},"schemas":{"#,
+        300_000,
+        |i| format!(r#""s{i}":true"#),
+        "}}",
+    );
+    let aliases = entries(
+        r#"{"openbindings":"0.2.0","operations":{"o":{"aliases":["#,
+        350_000,
+        |i| format!(r#""a{i}""#),
+        "]}}}",
+    );
+    for text in [schemas, aliases] {
+        let validation = checked(&text);
+        assert_eq!(validation.report().conclusion, Conformance::Conformant);
+    }
+    // A long near miss of the costliest pattern takes the work its length
+    // needs, beyond the engine's default of a million steps for one match.
+    let version = format!(
+        r#"{{"openbindings":"0.0.0-{}!","operations":{{}}}}"#,
+        "1".repeat(60_000)
+    );
+    let validation = checked(&version);
+    assert_eq!(validation.report().evidence["OBI-02"], Evidence::Violated);
+    assert!(
+        validation
+            .report()
+            .findings
+            .iter()
+            .all(|finding| finding.code != "fixed-schema-limit-or-failure")
+    );
+}
+
+#[test]
+fn every_embedded_schema_reaches_a_meta_schema_verdict_at_every_admitted_size() {
+    // Each schema's OBI-10 allowance grows with the schema. A near miss of a
+    // meta-schema pattern a million bytes long, in a schema of a few nodes, and
+    // a schema of nearly a million nodes both fell outside a fixed allowance.
+    let long = "a".repeat(1_000_000);
+    let schema = |body: &str| {
+        format!(r#"{{"openbindings":"0.2.0","operations":{{}},"schemas":{{"S":{body}}}}}"#)
+    };
+    for body in [
+        format!(r#"{{"$anchor":"{long}!"}}"#),
+        format!(r#"{{"$dynamicAnchor":"{long}!"}}"#),
+        format!(r#"{{"$id":"https://e.example/{long}##"}}"#),
+    ] {
+        let validation = checked(&schema(&body));
+        assert_eq!(validation.report().evidence["OBI-10"], Evidence::Violated);
+    }
+    let vocabulary = (0..450_000)
+        .map(|i| format!(r#""https://e.example/{i}":true"#))
+        .collect::<Vec<_>>()
+        .join(",");
+    for body in [
+        format!(r#"{{"$anchor":"{long}"}}"#),
+        format!(r#"{{"$vocabulary":{{{vocabulary}}}}}"#),
+    ] {
+        let validation = checked(&schema(&body));
+        assert_eq!(validation.report().conclusion, Conformance::Conformant);
     }
 }

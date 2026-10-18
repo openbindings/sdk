@@ -84,7 +84,9 @@ jobs:
         with:
           node-version: '22.19.0'
       - name: Verify development-toolchain stack margin
-        run: cargo test --locked -p openbindings --test document_stack
+        run: |
+          cargo test --locked -p openbindings --test document_stack
+          cargo test --locked -p openbindings-json-schema-evaluator --test pattern_stack
       - name: Check out the SDK's declared specification
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

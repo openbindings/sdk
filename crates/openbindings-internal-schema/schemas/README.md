@@ -3,7 +3,9 @@
 `openbindings.schema.json` is the derived schema OBI-02 applies. From the SDK
 root, `tools/verify-spec.mjs` compares it byte-for-byte with
 `openbindings.schema.json` in the checkout of the SDK's declared applied
-specification revision, alongside the frozen qualification inputs.
+specification revision, alongside the frozen qualification inputs. It also
+requires the schemas that crate sources embed to be exactly the files it pins,
+so the pin always covers the copy OBI-02 and OBI-10 use.
 
 ## JSON Schema 2020-12 meta-schemas
 
@@ -54,5 +56,6 @@ node tools/verify-spec.mjs SDK_ROOT SPEC_CHECKOUT APPLIED_SPEC_COMMIT --self-tes
 
 The harness checks that an unmodified temporary copy passes, that changing
 one byte of the derived schema or any meta-schema fails with a diagnostic
-naming the file, and that omitting a digest fails. CI runs this harness with
-the pinned specification checkout.
+naming the file, that embedding a schema outside the pin or leaving a pinned
+file unembedded fails, and that omitting a digest fails. CI runs this harness
+with the pinned specification checkout.

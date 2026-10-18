@@ -240,7 +240,8 @@ document_namespace!(
 );
 
 impl BindingView {
-    /// Read the required operation name; its target need not exist for inspection.
+    /// Read the required key into the `operations` map; inspection does not require
+    /// an operation under that key.
     ///
     /// # Errors
     /// Returns an interpretation error if the required operation field is missing, is not a string, or contains an unpaired UTF-16 unit.
@@ -311,7 +312,7 @@ impl SourceView {
     }
 }
 impl DependencyView {
-    /// Read the required operation name without resolving its target.
+    /// Read the required key into the `operations` map without looking it up.
     ///
     /// # Errors
     /// Returns an interpretation error if the required operation field is missing, is not a string, or contains an unpaired UTF-16 unit.

@@ -34,7 +34,10 @@ credentials, provider state and invocation context. `Display`, accessors and
 serialization retain their existing output; use them when disclosure is intended.
 Debug formatting is not a stable serialization format.
 `Document` owns private exact storage; construct and edit it through its methods. Result-returning APIs document caller-visible failures
-under `# Errors`; validation outcomes (including `DocumentValidation`) and configuration methods warn when ignored.
+under `# Errors`. `DocumentValidation`, `VersionDecision`, `ValueOutcome` and
+`DiscoveryOutcome` are `#[must_use]`, and so is every method that returns a
+modified value, such as `UndefinedResult::with_location` and the invocation
+builders' `with_context`, `with_evaluator` and `with_validation_detail`.
 
 ## Records that may gain fields
 
@@ -60,8 +63,9 @@ construction: typed authoring parts and `BindingFragment`, `SchemaResource`,
 `JsonLimits`, evaluator `Limits`, kit `Options`, discovery `ClientOptions`,
 `PublicationOptions`, `HttpResponse`, synthesis requests, invocation carriers and
 `InvocationLimits`. Add `..Default::default()` where a record implements
-`Default`. `JsonMember` and discovery's `Header` are each a name and a value, built
-on both sides, and stay exhaustive.
+`Default`. Discovery's `Header`, a name and a value built on both sides, stays
+exhaustive. So does `JsonMember`, which only the SDK builds: a JSON member is
+exactly a name and a value, so it has no field to gain.
 
 Closed partitions stay exhaustive, so a `match` can name every variant:
 `Evidence`, `Conformance`, `ValueOutcome`, `VersionDecision`, `JsonKind`,
@@ -82,15 +86,15 @@ kind union.
 
 | Public item | Contract |
 | --- | --- |
-| `Document::parse`, `Document::from_json` | Admit exact JSON without a conformance claim, including malformed documents. |
+| `Document::parse`, `Document::from_json` | Admit exact JSON without a conformance claim, including documents with missing or mistyped fields. `parse` returns `InputError` for invalid UTF-8, a byte order mark, a JSON syntax error or an exceeded admission limit. |
 | `is_valid_name` | Tests the specification's ASCII name grammar without normalizing the name. |
 | `Document::new` | Create an empty OBI declaring the authoring version. |
-| `Document::set`, `remove`, `edit(&[Edit])` | Require a mutable borrow. One atomic splice and parse per batch, exact untouched bytes, compact insertions, default JSON limits. |
+| `Document::set`, `remove`, `edit(&[Edit])` | Require a mutable borrow. One atomic splice and parse per batch, exact untouched bytes, compact insertions, default JSON limits. A pointer is a `PointerRef`, converted from escaped text (`&str`, `&String`) or an exact `&Pointer`, so a finding's pointer through a member name with an unpaired UTF-16 unit addresses that member. |
 | Typed field and part setters | Edit descriptions, names, versions, operation schemas and typed operations, bindings, sources, dependencies and examples. Map setters support bulk construction. |
 | `DocumentValidation::document`, `conformant` | Borrow an admitted document or obtain proof only when every applicable rule is established. |
 | `Conformant<Document>` | Private proof, infallible reads, sole route to value contracts. No unchecked constructor, deserialization, dereference or mutable borrow. |
 | `as_document`, `into_inner` | Explicit plain reads, or consume proof to edit again. |
-| `Document::to_bytes`, `EditError::code` | Exact current bytes and stable kebab-case editing failure codes. |
+| `Document::as_bytes`, `EditError::code` | Exact current bytes and stable kebab-case editing failure codes. |
 
 Source positions describe current bytes. Retained views, reports and proofs keep
 their revision when another owner is edited. Duplicate members remain inspectable
@@ -100,15 +104,15 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 
 | Public item | Contract |
 | --- | --- |
-| `Document.parse(bytes)` | Returns the existing parse-result union; admits exact JSON, including broken documents. Typed reads may throw. |
+| `Document.parse(bytes)` | Returns the existing parse-result union; admits exact JSON without a conformance claim, including documents with missing or mistyped fields, and returns `input-error` for an encoding or JSON syntax error or an exceeded admission limit. Typed reads may throw. |
 | `Document.create()` | Creates an empty OBI for construction through setters. |
-| `set`, `remove`, `edit(edits)` | Mutable pointer edits; a batch crosses the bridge once, including exact inputs, and preserves untouched bytes. Exact inputs are borrowed. Failure leaves bytes and caches unchanged. |
+| `set`, `remove`, `edit(edits)` | Mutable pointer edits; a batch crosses the bridge once, including exact inputs, and preserves untouched bytes. Exact inputs are borrowed. A pointer may hold an unpaired UTF-16 unit, as a finding's can, and addresses that member. Failure leaves bytes and caches unchanged. |
 | Typed field and whole-part setters | Accept typed part values; map setters commit bulk construction once. |
 | `Document.validate()` | Returns a union whose `conformant` branch owns an independent `ConformantDocument` and a plain report. |
 | `ConformantDocument` | Nominal, privately constructed proof with infallible typed reads. `resolveOperation(name)` returns a `ConformantOperationView` or `undefined`. It has no setters and does not inherit `Document`. |
-| `ConformantOperationView` | `input()` and `output()` return a disposable `ValueContract` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. |
+| `ConformantOperationView` | `input()` and `output()` return a disposable `ValueContract` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. Both views have `retain()`. |
 | `ValueContract` | `schema()` acquires the exact schema; `prepare(options)` takes `resources`, `limits` and `signal` and returns `{ status: "ready", contract }` or `{ status: "no-verdict", detail }`. |
-| `PreparedContract` | Disposable prepared contract with `validate(value, options)`, the cheap check, `explain(value, options)`, which adds problems to a failure, and `retain()`; independent of its document, operation, resources and contract owners. |
+| `PreparedContract` | Disposable prepared contract with `validate(value, options)`, the cheap check, `explain(value, options)`, which adds problems to a failure, and `retain()`; independent of its document, operation, resources and contract owners. `validateJson(input, options)` is Rust's `validate_json`: it admits JSON text or bytes as `parseJson` does and returns a `JsonCheck`, whose `input-error` carries the `parseJson` error. `validate` reads a string as a JSON string value. |
 | `ExactJson.locate(pointer)`, `ConformantDocument.locate(at)`, `SchemaResources.locate(at)` | The `SourceLocation` of the node a problem's instance pointer or a `SchemaLocation` names, in the value, the document or the supplied resource with its URI, or `null`. A malformed pointer throws `SdkError` with code `invalid-pointer`, and a malformed schema location with code `invalid-schema-location`. |
 | `asDocument()`, `intoDocument()` | Acquire an independent editable owner, or consume the proof. Consumption revokes all JavaScript aliases of that proof; retained owners survive. |
 | `toBytes()`, `dispose()`, `Symbol.dispose`, `disposed` | Detached exact current bytes and the existing deterministic lifecycle. |
@@ -153,9 +157,9 @@ space without supplied resources stays with the revision, and a space with a set
 stays with that set until the set or the revision is dropped, so a prepared
 contract never retains a space for resources it did not receive.
 
-A preparation refusal is a `NoVerdict`, with its Debug redaction: broad reasons
-and recognized fixed codes are shown, while custom codes, messages and original
-schema text and locations are redacted. Display and the public fields can expose
+A preparation refusal is a `NoVerdict`, with its Debug redaction: the broad
+reason is shown, while its code, message and original schema text and
+locations are redacted. Display and the public fields can expose
 custom evaluator messages; callers choose their disclosure policy.
 
 ## Optional Rust companion APIs
@@ -170,15 +174,21 @@ are not exported by the TypeScript facade.
 | `INTERFACE_VERSION`, `APPLIED_INTERFACE_REVISION` | In invocation, source inspection and interface synthesis: the published interface version implemented, independent of the crate's own version, and the revision of the interfaces repository applied. HTTP discovery keeps its separate companion constants. |
 | `CoverageClaim::complete(entries)` | Claims an exhaustive inventory with no limitation; the synthesis facade checks correspondence before returning `SynthesisCoverage`. |
 | `ProviderInput: futures_core::Stream<Item = JsonValue>` | Poll-based input delivery sharing the inherent `next` implementation; preserves backpressure, cancellation, validation failure suspension and terminal ordering. `close` discards unread input. |
-| `binding::BindingPreflight` | Optional provider trait extending `BindingInvoker`; its `Preflight<'a>` associated future and `preflight` method report advisory context requirements or no prediction. |
-| `binding::Invoker::preflight_with_provider`, `operation::Invoker::preflight_with_provider` | Opt into the provider hook after checked admission; require `P: BindingPreflight`. |
-| `binding::Invoker::preflight_with_provider_and_control`, `operation::Invoker::preflight_with_provider_and_control` | The same provider preflight with caller cancellation, isolated from sibling attempts. |
+| `binding::BindingInvoker::preflight` | Provided method declaring the provider's advisory preflight hook; `None` by default. A hook returns a `Self::Invocation` job that completes with `Ok(())` for no prediction or with the `CONTEXT_REQUIRED` challenge invocation would raise. |
+| `binding::Invoker::preflight`, `operation::Invoker::preflight` | Run the SDK's admission checks (and, for operations, selection) for every provider, then the provider's hook when it declares one. |
+| `binding::Invoker::preflight_with_control`, `operation::Invoker::preflight_with_control` | The same provider preflight with caller cancellation, isolated from sibling attempts. |
 | `InspectionLimitation::additional_fields` | `BTreeMap<String, JsonValue>` retaining additional exact evidence; `code`, `message` and `details` cannot be shadowed. |
 
-Implement `BindingPreflight` to provide advisory preflight. The facades' ordinary
-`preflight` methods admit the request and make no prediction. Provider preflight
-is `Send` when the provider is `Sync` and its associated future is `Send`; local
-futures and `Rc` providers are also supported.
+Override `BindingInvoker::preflight` to provide advisory preflight. The
+facades' `preflight` methods always admit the request and, when the provider
+declares a hook, return its answer; a provider without one makes no prediction,
+and invocation never requires preflight. The hook's job is the provider's
+`Invocation` future, so stable Rust callers can bound it: binding preflight is
+`Send` when the provider is `Sync` and `P::Invocation<'a>` is `Send`, and so are
+operation preflight and plain operation invocation. A future that holds
+a prepared operation also needs a `Send` provider, because the handle shares its
+invoker.
+Local futures and `Rc` providers are also supported.
 
 ## Boundaries to preserve
 
@@ -261,10 +271,10 @@ Rust deadline and outcome items are defined in
 | `AttemptTimeout::duration()` | Returns `Result<Option<Duration>, ConfigurationError>`; `None` denotes unbounded and zero returns `invalid-timeout`. |
 | `ClientOptions::timeout` | Defaults to `AttemptTimeout::Default`; successful reads and redirects never reset it. `max_document_bytes: usize` defaults to 1 MiB; explicit zero and `usize::MAX` are refused. |
 | `DiscoveryTimer::{now, sleep_until}` | Host monotonic time and a wake-capable absolute timer in the same epoch, expressed as `Duration`. Dropping the timer releases it; local futures are supported. |
-| `discover(origin, &options, &control, &timer, transport)` | Races one host timer and caller `CancellationToken` while invoking a repeatable one-hop callback. The callback must dispatch the normalized URL, expose redirects, deliver decoded bytes or a typed refusal, and release acquisition on drop. Connection-time DNS, peer and proxy policy belongs to the host. |
+| `discover(origin, &options, &control, &timer, transport)` | Races one host timer and caller `CancellationToken` while invoking a repeatable one-hop callback. The callback must dispatch the normalized URL, expose redirects, deliver decoded bytes or a typed refusal, and release acquisition on drop. It is called again for each admitted redirect, including a cross-origin one, and scopes credentials to the URL it is given. Connection-time DNS, peer and proxy policy belongs to the host. `final_url` is the URL the SDK last dispatched. |
 | `DEFAULT_TIMEOUT_SECONDS` | Thirty-second SDK default. |
-| `MAX_REDIRECTS` | Ten followed redirects on native and portable checked paths. Browser Fetch owns its hidden redirect limit. |
-| `native::Client::new(ClientBuilder, ClientOptions)` | Installs SDK redirect policy last and builds the client, retaining application TLS, resolver, proxy, credential and decoding choices. Refuses downgrade and credential-replay hops before dispatch. Owns one Tokio attempt timer. |
+| `MAX_REDIRECTS` | Ten followed redirects on native and portable checked paths, and in TypeScript where the host exposes redirects. Browser Fetch owns its hidden redirect limit. |
+| `native::Client::new(ClientBuilder, ClientOptions)` | Installs SDK redirect policy last and builds the client, retaining application TLS, resolver, proxy, credential and decoding choices. Refuses downgrade and credential-replay hops before dispatch. Owns one Tokio attempt timer, so it requires a Tokio runtime with timers enabled. Credential headers other than reqwest's four standard ones follow cross-origin hops. |
 | `native::Client::with_delegated_policy(Client, ClientOptions)` | Accepts an already-built client through explicit host policy delegation. The application owns per-hop admission, the ten-redirect limit and credential handling. SDK deadline and cancellation handling still apply. |
 | `DiscoveryOutcome::Timeout` | SDK or identified transport deadline expired; distinct from caller `Cancelled`. Caller cancellation wins when both are ready at the same poll. Observed metadata and complete bounded body, if available, remain in the receipt. |
 | `ErrorKind::RedirectPolicy` | Admission, downgrade, hop-limit, credential-replay or observable hidden/unfollowed redirect refusal; never document nonconformance or absence. |
@@ -295,10 +305,20 @@ original request headers while reqwest 0.13.5 strips credentials only when the n
 origin differs from the immediately preceding one. Applications requiring such
 chains use `with_delegated_policy` and own credentials across all hops.
 
-TypeScript Fetch uses `redirect: "follow"`, checks final URL admission and refuses
-an observable HTTPS-to-HTTP downgrade. Browser mixed-content blocking in secure
-contexts and private-network rules govern hidden hops; the SDK cannot observe them.
-Opaque/opaqueredirect responses mean policy cannot be established. Timers remain
+TypeScript Fetch requests `redirect: "manual"`. Where the host exposes the redirect
+response, as Node does, the SDK checks each hop as the portable path does: it refuses
+every downgrade and refused destination before dispatch, follows at most ten
+redirects, calls the Fetch callback once per hop with only Accept so the callback
+scopes credentials to the URL it is given, and reports the URL it last dispatched as
+`finalUrl`. The callback must scope any credentials it adds by that URL; the SDK
+cannot strip headers the callback adds itself. An opaqueredirect shows the transport
+hides hops, as browser fetch does; the SDK then repeats the request with
+`redirect: "follow"`, remembers that for the transport so later discoveries follow
+directly, checks final URL admission and refuses
+an observable HTTPS-to-HTTP downgrade, and a visible 301, 302, 303, 307 or 308 with
+Location was left unfollowed and is `"redirect-policy"`, as in Rust. Browser mixed-content blocking in secure
+contexts and private-network rules govern those hidden hops; the SDK cannot observe them.
+Opaque responses mean policy cannot be established. Timers remain
 cooperative at blocking polls and synchronous validation boundaries.
 
 Publication uses typed `AllowOrigin` choices: Rust `Any` (default), `Omit`, `Null`,
@@ -330,6 +350,31 @@ Escaped surrogate pairs and noncharacters remain permitted. Exact parsing still
 retains unpaired units for draft inspection, caller values and supplied resources.
 Document validation checks admitted schemas locally at any depth. A violation
 established by any applicable rule makes the document non-conformant.
+
+OBI-02 applies the derived schema to the whole document under a work allowance
+that grows with the admitted document: 80 evaluator steps per node and 64 pattern
+steps per source byte. Each step enters one position of the unrolled derived
+schema for one node, which meets each of its 80 positions at most once, and every
+derived pattern is anchored and unambiguous, so its matching is linear in the
+string; a SemVer near miss, the costliest, takes about 20 pattern steps per byte.
+Any document the admission limits admit, default or caller-selected, therefore
+gets an OBI-02 verdict, and the check's work is linear in those limits. Location
+guidance spends the rest of the allowance; if it ran out, the report would mark
+findings truncated. Linear work is not short work: the SemVer near miss, the worst
+case per byte, took about 0.37 µs per byte in a release build on an Apple M1 Max,
+so a 60 MB near miss takes about 22 seconds to reach its verdict and one at the
+default 64 MiB limit about 25 seconds. Callers bound that time with the admission
+byte limit, `JsonLimits::max_bytes` through `validate_document_with_limits`.
+OBI-10 checks each embedded schema object against the meta-schema, its subschemas
+separately, with recursive meta-schema edges cut to a type check. Its allowance
+grows with the schema: 129 evaluator steps per source byte, since one node meets
+each of the cut meta-schema's 129 positions at most once and takes at least one
+byte, and 64 pattern steps per source byte, its patterns being anchored and
+unambiguous too. Every schema the admission limits admit
+therefore gets a meta-schema verdict. A check reads its schema's own members and
+only the type of each subschema, so a node is read by at most two checks and their
+work together stays linear in the admission limits. An exhausted allowance would
+leave its rule inconclusive with `fixed-schema-limit-or-failure`.
 
 ### Finding-code catalog
 
@@ -489,7 +534,8 @@ carry an optional `SchemaLocation` of the same shape.
 `Pointer` holds RFC 6901 segments exactly. `as_str()` returns `None` for a
 pointer through a member name with an unpaired UTF-16 unit, `utf16_units()` reads
 it exactly, `from_utf16` builds one from units and `FromStr` parses escaped text;
-`JsonValue::at_pointer` resolves one as `at` resolves text. `Display` writes such a
+`JsonValue::at_pointer` resolves one as `at` resolves text, and `Document` edits
+address one through `PointerRef`. `Display` writes such a
 unit as `\uXXXX`, and serialization writes it as a JSON escape, which JavaScript
 keeps as the same string; like an exact `JsonValue` holding one, such a record
 (a report, finding, outcome, problem or location) serializes to JSON text but not
@@ -507,8 +553,15 @@ it can report in the original sources, in which case `problems_complete` is fals
 ## Caller-owned operation preparation
 
 `operation::Invoker::prepare(name)` and `prepare_with_control(name, &control)`
-return `Result<PreparedOperation<'_, P>, InvocationError>`. The handle borrows the
-invoker, eagerly prepares both declared directions and owns their compiled state.
+take the invoker as `&Arc<Invoker<P>>` and return
+`Result<PreparedOperation<P>, InvocationError>`. `Invoker::new` allocates nothing;
+a caller that prepares holds the configured invoker in an `Arc`, and each handle
+keeps one share of it: its document, provider, decoded carriers, limits and
+validation detail. The handle eagerly prepares both declared directions and owns
+their compiled state. It can outlive the caller's `Arc` and is `Send`, `Sync` and
+`'static` when the provider is, so one handle wrapped in an `Arc` can serve
+spawned tasks. The invoker is `Send` when the provider is `Send` and `Sync` when
+it is `Sync`.
 Absent directions need no evaluator. Failed or cancelled preparation releases all
 partial work and returns no handle. Preparation does not select bindings or call
 providers; ready means prepared, not that every value is decidable.
@@ -520,7 +573,7 @@ supported binding; `Attempt::ordered(&[..])` chooses the first supported binding
 in the supplied list; `Attempt::binding(key)` selects one exact binding. Every
 ordered key must belong to the prepared operation, including keys after the first
 supported entry. An exact binding belonging to another operation returns
-`ERR_OPERATION_NOT_FOUND` before provider work. `.with_context(&context)` forwards
+`ERR_BINDING_NOT_FOUND` before provider work. `.with_context(&context)` forwards
 an opaque object; Debug redacts binding choices and context contents. Binding
 support and selection are checked anew, and cancellation, queues and validation
 evidence are independent. Plain `Invoker::invoke` keeps `Request` and still

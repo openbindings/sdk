@@ -61,7 +61,7 @@ fn author() -> Result<(Document, Document), Box<dyn std::error::Error>> {
     editable.set("/x-application", &exact(r#"{"data":9007199254740993}"#))?;
     let document = editable.clone();
     assert!(document.validate()?.conformant().is_some());
-    let serialized = editable.to_bytes();
+    let serialized = editable.as_bytes();
     let round = Document::parse(serialized)?;
     assert_eq!(document.value().semantic_eq(round.value()), Some(true));
     Ok((editable, document))
@@ -163,7 +163,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .validate()?
         .conformant()
         .expect("conformance established");
-    let original = valid.to_bytes().to_vec();
+    let original = valid.as_bytes().to_vec();
     let publication = Publication::new(&valid, PublicationOptions::default())?;
     editable.set_operations(&BTreeMap::new())?;
     assert_eq!(

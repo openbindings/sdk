@@ -28,6 +28,7 @@ impl SupportedKind {
         }
     }
     /// Attach a human-facing description.
+    #[must_use]
     pub fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
@@ -226,12 +227,14 @@ impl InspectionLimitation {
         }
     }
     /// Attach structured evidence; exact values are preserved.
+    #[must_use]
     pub fn with_details(mut self, details: BTreeMap<String, JsonValue>) -> Self {
         self.details = Some(details);
         self
     }
     /// Attach additional evidence members; they must not shadow `code`,
     /// `message` or `details`.
+    #[must_use]
     pub fn with_additional_fields(mut self, fields: BTreeMap<String, JsonValue>) -> Self {
         self.additional_fields = fields;
         self
@@ -309,6 +312,7 @@ impl SourceInspection {
     /// Returns an inspection error if the inventory fails carrier validation, cannot be serialized, or its encoded JSON exceeds the admission limits.
     pub fn to_json_with_limits(&self, limits: JsonLimits) -> Result<JsonValue, InspectionError> {
         self.validate()?;
+        // Invocation and synthesis keep the same bounded writer for their own errors.
         struct Output {
             bytes: Vec<u8>,
             max: usize,
@@ -360,6 +364,7 @@ impl SourceInspection {
     }
     /// Attach evidence, keeping completeness unchanged. The interface also
     /// permits evidence on a complete inventory.
+    #[must_use]
     pub fn with_limitation(mut self, limitation: InspectionLimitation) -> Self {
         self.limitation = Some(limitation);
         self
@@ -407,11 +412,13 @@ impl BindableTarget {
         }
     }
     /// Suggest an operation key; the author owns the actual key.
+    #[must_use]
     pub fn with_operation_key(mut self, operation_key: impl Into<String>) -> Self {
         self.operation_key = Some(operation_key.into());
         self
     }
     /// Frame the target as an operation. It must not carry `idempotent`.
+    #[must_use]
     pub fn with_operation(mut self, operation: Operation) -> Self {
         self.operation = Some(operation);
         self

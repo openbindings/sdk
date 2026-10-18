@@ -10,6 +10,14 @@
       "reason": "Cold document schema compilation and local validation on a 256 KiB thread stack; Rust 1.88 debug code generation exceeds this margin."
     },
     {
+      "source": "crates/openbindings-json-schema-evaluator/tests/pattern_stack.rs",
+      "workspace": true,
+      "names": [
+        "patterns_at_the_default_depth_prepare_and_check_on_a_small_stack"
+      ],
+      "reason": "Prepares value contracts whose patterns nest to the default pattern_depth, and checks values against them, on a 256 KiB thread stack; older compilers' debug code generation may exceed this margin. Development-toolchain debug runs ignore it on Windows, whose unoptimized matcher frames exceed this stack in every preparation's meta-schema check, and skip lookaround checks; tools/verify.py runs it in release builds on every host."
+    },
+    {
       "source": "vendor/openbindings-internal-jsonschema/tests/ref_chain.rs",
       "workspace": false,
       "names": [

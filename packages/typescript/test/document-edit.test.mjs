@@ -369,3 +369,59 @@ test("typed namespace construction and exact pointer edits share one atomic brid
     document.dispose();
   }
 });
+
+test("a finding pointer through an unpaired name edits the member it reports", () => {
+  const source = String.raw`{"openbindings":"0.2.0","operations":{},"x-a":{"\ud800":1,"k":2}}`;
+  const reported = open(source);
+  const assessed = reported.validate();
+  assert.equal(assessed.status, "report");
+  const [finding] = assessed.report.findings;
+  assert.equal(finding.rule, "OBI-01");
+  const { pointer } = finding.location;
+  assert.equal(pointer, "/x-a/\ud800");
+  reported.dispose();
+  const kept = String.raw`{"openbindings":"0.2.0","operations":{},"x-a":{"k":2}}`;
+  const value = exact("[3]");
+  for (const [edit, expected] of [
+    [(document) => document.remove(pointer), kept],
+    [
+      (document) => document.set(pointer, 3),
+      String.raw`{"openbindings":"0.2.0","operations":{},"x-a":{"\ud800":3,"k":2}}`,
+    ],
+    [
+      (document) => document.set(pointer, value),
+      String.raw`{"openbindings":"0.2.0","operations":{},"x-a":{"\ud800":[3],"k":2}}`,
+    ],
+    [
+      (document) =>
+        document.edit([
+          { op: "remove", pointer },
+          { op: "set", pointer: "/x-a/fixed", value: 1 },
+        ]),
+      String.raw`{"openbindings":"0.2.0","operations":{},"x-a":{"k":2,"fixed":1}}`,
+    ],
+  ]) {
+    const document = open(source);
+    edit(document);
+    assert.equal(new TextDecoder().decode(document.toBytes()), expected);
+    const checked = document.validate();
+    if (expected === kept) {
+      assert.equal(checked.status, "conformant");
+      checked.document.dispose();
+    }
+    document.dispose();
+  }
+  assert.equal(value.text, "[3]");
+  value.dispose();
+  const document = open(source);
+  assert.throws(
+    () => document.remove("\ud800"),
+    (e) => e instanceof sdk.EditError && e.code === "invalid-pointer",
+  );
+  assert.throws(
+    () => document.set("/none/\ud800", 0),
+    (e) => e instanceof sdk.EditError && e.code === "missing-parent",
+  );
+  assert.equal(new TextDecoder().decode(document.toBytes()), source);
+  document.dispose();
+});

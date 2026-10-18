@@ -35,7 +35,10 @@ impl Header {
 pub struct ResponseMetadata {
     /// Constructed discovery URL sent to the caller's transport.
     pub requested_url: String,
-    /// None when a custom transport or host cannot expose the final URL.
+    /// Resolved URL of the observed response, metadata only and never a schema
+    /// base. Portable discovery follows each hop itself and always records the
+    /// URL it last dispatched; on a host-following transport, `None` when the
+    /// host cannot expose the final URL.
     pub final_url: Option<String>,
     /// Observed HTTP status code; only 200 bodies enter validation.
     pub status: u16,
@@ -209,6 +212,11 @@ impl Default for ClientOptions {
 /// decoded bytes (or a typed decode refusal), and cancel/release work on drop.
 /// The SDK follows at most ten admitted DISC-C-02 redirects. It stores no cache.
 ///
+/// The SDK calls the callback again for each admitted redirect, including one
+/// to another origin, and passes only the URL. The callback scopes credentials:
+/// it decides from that URL's origin which credentials the request carries.
+/// The result's `final_url` is the URL the SDK last dispatched.
+///
 /// # Errors
 /// Returns a configuration error for an invalid origin, byte limit, or timeout. HTTP, transport, body, and document failures are represented in the returned discovery outcome.
 pub async fn discover<B, F, T, C>(
@@ -319,7 +327,7 @@ impl ClientOptions {
                 status: response.status,
                 headers: std::mem::take(&mut response.headers),
             });
-            let metadata = result.metadata.as_ref().unwrap();
+            let metadata = result.metadata.as_mut().unwrap();
             if let Some(final_url) = &metadata.final_url {
                 let observed = url::Url::parse(final_url);
                 let admitted = observed.as_ref().ok().is_some_and(|url| {
@@ -332,6 +340,12 @@ impl ClientOptions {
                     return Ok(result);
                 }
             }
+            // On individual hops the SDK dispatched `current` itself, so it knows
+            // the resolved URL even when the transport cannot report one.
+            if individual_hops && metadata.final_url.as_deref() != Some(current.as_str()) {
+                metadata.final_url = Some(current.as_str().into());
+            }
+            let metadata = &*metadata;
             // F2: a host-following transport must not return a redirect with Location.
             // tower-http can do this for malformed Location without consulting reqwest's policy.
             if !individual_hops

@@ -1,12 +1,12 @@
 use openbindings::*;
 
 #[test]
-fn to_bytes_include_whitespace_and_rebased_children_have_local_locations() {
+fn as_bytes_include_whitespace_and_rebased_children_have_local_locations() {
     let text = " \n {\"openbindings\":\"0.2.0\",\"operations\":{}}\t\n";
     let doc = Document::parse(text).unwrap();
-    assert_eq!(doc.to_bytes(), text.as_bytes());
+    assert_eq!(doc.as_bytes(), text.as_bytes());
     assert_eq!(
-        doc.validate().unwrap().conformant().unwrap().to_bytes(),
+        doc.validate().unwrap().conformant().unwrap().as_bytes(),
         text.as_bytes()
     );
     let parent =
@@ -16,7 +16,7 @@ fn to_bytes_include_whitespace_and_rebased_children_have_local_locations() {
     let expected = child.text().to_owned();
     let doc = Document::from_json(child);
     drop(parent);
-    assert_eq!(doc.to_bytes(), expected.as_bytes());
+    assert_eq!(doc.as_bytes(), expected.as_bytes());
     assert_eq!(doc.value().location().byte_offset, 0);
     assert_eq!(
         doc.value()
@@ -81,7 +81,7 @@ fn lone_surrogates_remain_exact_but_violate_document_conformance() {
     let checked = validation(text);
     assert_eq!(checked.report().conclusion, Conformance::NonConformant);
     assert_eq!(checked.report().evidence["OBI-01"], Evidence::Violated);
-    assert_eq!(checked.document().unwrap().to_bytes(), text.as_bytes());
+    assert_eq!(checked.document().unwrap().as_bytes(), text.as_bytes());
     let duplicate = validation(r#"{"openbindings":"0.2.0","operations":{},"\ud800":1,"\ud800":2}"#);
     assert_eq!(duplicate.report().evidence["OBI-01"], Evidence::Violated);
 }

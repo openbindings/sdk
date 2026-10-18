@@ -134,8 +134,11 @@ async fn inspect_synthesize_and_invoke_operation_preserves_exact_values() {
         .await
         .unwrap();
     let evaluator = Arc::new(Booleans::default());
-    let invoker = Invoker::new(synthesized.clone(), &provider)
-        .with_evaluator(evaluator.clone(), ResourceSet::default());
+    // Preparing shares the invoker, so it is held in an `Arc`.
+    let invoker = Arc::new(
+        Invoker::new(synthesized.clone(), &provider)
+            .with_evaluator(evaluator.clone(), ResourceSet::default()),
+    );
     assert!(
         invoker
             .preflight(Request::operation("s0.u0"))

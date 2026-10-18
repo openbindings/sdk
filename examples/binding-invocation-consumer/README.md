@@ -12,7 +12,8 @@ and echoes exact input values. Tests compare those observations to authored
 expectations rather than to generated coverage. They choose a binding explicitly,
 convert it once, and reuse its source and carrier across calls. A separate path
 passes a hand-authored request directly to invocation. The operation consumer
-retains `invoker.prepare("s0.u0")` and invokes that handle twice, counting one
+holds its invoker in an `Arc`, retains `invoker.prepare("s0.u0")` and invokes that
+handle twice, counting one
 compilation per declared direction while supplying `Attempt::new()` on every
 call. The handle fixes the operation; each attempt selects only its binding and
 optional opaque context.
@@ -29,7 +30,9 @@ rejects duplicate `(scope,id)` pairs and wrong typed present fields, and never
 chooses by array order. The optional unit `interaction` field adds explicit test-only modes:
 `unary` echoes one value and closes input; `server` repeats one input seven times;
 `count` counts inputs and returns one count; `empty` closes input and completes
-with zero outputs. These are fixture semantics, not an OpenAPI kind definition.
+with zero outputs. Catalog and `invoker-only` declare no preflight hook, so their
+preflight runs the SDK's checks and makes no prediction. These are fixture
+semantics, not an OpenAPI kind definition.
 The shared [fixture authority](../interface-synthesis-consumer/README.md#fixture-authority)
 requires all four interface operations (inspection, strict/coverage synthesis and
 invocation) to refuse wrong-typed or unknown interactions throughout the artifact.
