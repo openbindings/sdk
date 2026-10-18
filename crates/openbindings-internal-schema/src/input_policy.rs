@@ -11,10 +11,20 @@ pub struct InputPolicy {
     pub(crate) names: BTreeMap<String, Vec<(usize, usize)>>,
     pub(crate) protected: HashSet<String>,
 }
+/// Admitted supplied resources with their identity policy. Clones share both.
 #[derive(Clone, Default)]
 pub struct Supplied {
-    resources: Vec<ProjectedResource>,
+    resources: Arc<[ProjectedResource]>,
     pub(crate) policy: Arc<InputPolicy>,
+}
+/// A holder of admitted supplied resources, such as the SDK's resource set, that
+/// lets a schema space reuse their identity policy instead of admitting them
+/// again. Not a supported API: this crate is private to the OpenBindings SDK,
+/// pinned at its exact version and free to change in any release.
+#[doc(hidden)]
+pub trait SuppliedSet {
+    /// The admitted resources and their identity policy.
+    fn supplied(&self) -> &Supplied;
 }
 struct NoRetrieval;
 impl jsonschema::Retrieve for NoRetrieval {
@@ -66,7 +76,15 @@ impl Supplied {
         self.resources.iter()
     }
     pub fn new(resources: impl IntoIterator<Item = ProjectedResource>) -> Result<Self, String> {
-        let resources: Vec<_> = resources.into_iter().collect();
+        // Collected straight into the shared slice: one allocation, as a vector
+        // takes, when the source has a trusted length like the resource set's;
+        // an empty set shares the allocation-free empty slice.
+        let mut resources = resources.into_iter().peekable();
+        let resources: Arc<[ProjectedResource]> = if resources.peek().is_some() {
+            resources.collect()
+        } else {
+            Arc::default()
+        };
         let mut policy = InputPolicy::default();
         for (source, resource) in resources.iter().enumerate() {
             let index = schema_index::SchemaIndex::supplied(&resource.document, &resource.uri);

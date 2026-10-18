@@ -27,7 +27,7 @@ impl SchemaSpace {
         Self {
             inner: embedding::SchemaSpace::new(
                 embedding::RawDocument::new(document.value().clone()),
-                supplied.input_policy().clone(),
+                openbindings_internal_schema::SuppliedSet::supplied(supplied).clone(),
             ),
         }
     }
