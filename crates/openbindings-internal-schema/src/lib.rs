@@ -6,7 +6,7 @@ mod input_policy;
 pub mod schema_index;
 mod space;
 pub mod uri;
-pub use input_policy::{InputPolicy, Supplied};
+pub use input_policy::{InputPolicy, Supplied, SuppliedSet};
 mod program;
 pub use program::*;
 use serde::Serialize;

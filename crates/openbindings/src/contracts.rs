@@ -362,9 +362,11 @@ pub struct SchemaResource {
 /// Immutable caller-supplied resources. Separate sets can use the same URI
 /// for different snapshots; this is not a process-wide registry or an acquirer.
 /// Clones share storage, including the identity index built by [`Self::new`],
-/// so passing one set to many preparations indexes its resources once. A
-/// resolution space assembled for this set and a document revision is kept
-/// with the set while both are alive, and released when either is dropped.
+/// so passing one set to many preparations indexes its resources once; the
+/// default evaluator reuses that index rather than admitting the resources
+/// again. A resolution space assembled for [`SchemaRequest::evaluation_program`]
+/// from this set and a document revision is kept with the set while both are
+/// alive, and released when either is dropped.
 #[derive(Clone, Default)]
 pub struct ResourceSet {
     inner: Arc<ResourceSetInner>,
@@ -497,9 +499,6 @@ impl ResourceSet {
             .ok()?;
         resources[found].document.locate(&at.pointer)
     }
-    pub(crate) fn input_policy(&self) -> &openbindings_internal_schema::Supplied {
-        &self.inner.input_policy
-    }
     pub(crate) fn is_empty(&self) -> bool {
         self.inner.resources.is_empty()
     }
@@ -547,6 +546,14 @@ impl ResourceSet {
     pub(crate) fn empty() -> &'static Self {
         static EMPTY: std::sync::OnceLock<ResourceSet> = std::sync::OnceLock::new();
         EMPTY.get_or_init(Self::default)
+    }
+}
+
+// The default evaluator reuses the identity index built in `ResourceSet::new`
+// rather than admitting the resources again on every preparation.
+impl openbindings_internal_schema::SuppliedSet for ResourceSet {
+    fn supplied(&self) -> &openbindings_internal_schema::Supplied {
+        &self.inner.input_policy
     }
 }
 
@@ -854,8 +861,8 @@ impl<'a> ValueContract<'a> {
         self.prepare_with(evaluator, ResourceSet::empty())
     }
     /// Prepare with immutable supplied resources; nothing is fetched. Passing
-    /// the same set again reuses its index, and its resolution space with this
-    /// document while both are alive.
+    /// the same set again reuses its identity index; the core projection also
+    /// reuses its resolution space with this document while both are alive.
     ///
     /// # Errors
     /// Returns a [`NoVerdict`] refusal when preparation is not established. A

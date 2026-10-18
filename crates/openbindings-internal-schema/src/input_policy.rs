@@ -11,10 +11,20 @@ pub struct InputPolicy {
     pub(crate) names: BTreeMap<String, Vec<(usize, usize)>>,
     pub(crate) protected: HashSet<String>,
 }
+/// Admitted supplied resources with their identity policy. Clones share both.
 #[derive(Clone, Default)]
 pub struct Supplied {
-    resources: Vec<ProjectedResource>,
+    resources: Arc<[ProjectedResource]>,
     pub(crate) policy: Arc<InputPolicy>,
+}
+/// A holder of admitted supplied resources, such as the SDK's resource set, that
+/// lets a schema space reuse their identity policy instead of admitting them
+/// again. Not a supported API: this crate is private to the OpenBindings SDK,
+/// pinned at its exact version and free to change in any release.
+#[doc(hidden)]
+pub trait SuppliedSet {
+    /// The admitted resources and their identity policy.
+    fn supplied(&self) -> &Supplied;
 }
 struct NoRetrieval;
 impl jsonschema::Retrieve for NoRetrieval {
@@ -93,7 +103,7 @@ impl Supplied {
             }
         }
         Ok(Self {
-            resources,
+            resources: resources.into(),
             policy: Arc::new(policy),
         })
     }

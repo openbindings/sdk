@@ -82,13 +82,11 @@ impl EvaluationBounds {
 }
 
 pub(super) fn space(request: &openbindings::SchemaRequest) -> (SchemaSpace, usize) {
+    // The set admitted its resources and built their identity index once; the
+    // space shares that index and drops its handle when preparation returns.
     let space = SchemaSpace::new(
         Document::new(request.document().as_document().value().clone()),
-        embedding::Supplied::new(request.supplied_resources().iter().map(|r| SchemaResource {
-            uri: r.uri.clone(),
-            document: r.document.clone(),
-        }))
-        .expect("admitted resources"),
+        request.supplied_resources().supplied().clone(),
     );
     let entry = space
         .document_node(request.entry())
@@ -248,3 +246,6 @@ mod preparation_recovery;
 #[cfg(test)]
 #[path = "../../tests/private/resource_identity.rs"]
 mod resource_identity;
+#[cfg(test)]
+#[path = "../../tests/private/supplied_reuse.rs"]
+mod supplied_reuse;
