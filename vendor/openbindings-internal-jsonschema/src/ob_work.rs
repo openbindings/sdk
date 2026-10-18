@@ -1,4 +1,5 @@
-//! OpenBindings qualification patch: evaluator entry work/depth accounting.
+//! OpenBindings qualification patch: evaluator entry work/depth accounting, and
+//! compilation work accounting for schema builds.
 //! A bounded call must check its outcome before exposing any engine verdict.
 use std::cell::Cell;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,4 +125,66 @@ pub fn arithmetic_limit() {
         state.stop.get_or_insert(Stop::Arithmetic);
     }
     STATE.set(state);
+}
+
+/// Schema compilation work: a scope separate from evaluation's, so meta-validation
+/// and evaluation budgets never mix with it. Each compiled schema node is charged
+/// with the dynamic scope that keys its caches, and each `$ref` deferral with the
+/// in-progress placeholders it copies. Scopes do not nest: an inner one replaces
+/// the outer until it returns.
+#[derive(Clone, Copy)]
+struct Compiling {
+    active: bool,
+    remaining: usize,
+    spent: bool,
+}
+const NOT_COMPILING: Compiling = Compiling {
+    active: false,
+    remaining: usize::MAX,
+    spent: false,
+};
+thread_local! {static COMPILING:Cell<Compiling>=const{Cell::new(NOT_COMPILING)};}
+struct Restore(Compiling);
+impl Drop for Restore {
+    fn drop(&mut self) {
+        COMPILING.set(self.0);
+    }
+}
+/// Run one schema build with `units` of compilation work. `Err(Stop::Work)` when it
+/// needed more; the build stopped at its next compilation and its result is not a
+/// prepared validator.
+pub fn compiling<T>(units: usize, f: impl FnOnce() -> T) -> Result<T, Stop> {
+    let _restore = Restore(COMPILING.get());
+    COMPILING.set(Compiling {
+        active: true,
+        remaining: units,
+        spent: false,
+    });
+    let value = f();
+    if COMPILING.get().spent {
+        Err(Stop::Work)
+    } else {
+        Ok(value)
+    }
+}
+/// Charge compilation work; `false` once the current scope is spent.
+pub(crate) fn compile_charge(amount: usize) -> bool {
+    let mut state = COMPILING.get();
+    if !state.active {
+        return true;
+    }
+    if state.spent || amount > state.remaining {
+        state.spent = true;
+        state.remaining = 0;
+    } else {
+        state.remaining -= amount;
+    }
+    COMPILING.set(state);
+    !state.spent
+}
+/// Run `f` outside any compilation scope: schema meta-validation is evaluation.
+pub(crate) fn uncharged<T>(f: impl FnOnce() -> T) -> T {
+    let _restore = Restore(COMPILING.get());
+    COMPILING.set(NOT_COMPILING);
+    f()
 }

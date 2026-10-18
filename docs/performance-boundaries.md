@@ -175,6 +175,32 @@ dedicated runners use >10% / >1.10. Timing regressions, inconclusive timing and
 RSS verification flags do not fail the job. Noise requests a rerun. See the
 harness for exact floors, confirmation and calibration policy.
 
+## Preparation work bound
+
+Preparation compiles the projected schemas with the JSON Schema library, and two
+library behaviors make that compilation grow faster than the schema. Each time it
+defers a nested `$ref` target it copies every in-progress reference placeholder,
+which is quadratic in a reference chain's length. It also caches compiled schemas
+per dynamic scope, so a schema reached along branching and rejoining paths through
+`$id` resources compiles once per path, which is exponential in the number of such
+levels. The default evaluator therefore bounds compilation at 65,536 work units
+plus 64 per projected schema definition, and refuses beyond that with
+`LimitExceeded` (`preparation-work-limit`). Wide schemas spend about 3 units per
+definition, 256 levels of nested properties 32, and a 1,500-link chain 85.
+
+Release measurements on macOS arm64, Rust 1.99.0, 2026-10-17, against `186c6f2`:
+
+| Shape | Before | After |
+| --- | --- | --- |
+| 49,000-link same-document chain (1.79 MB) | prepared, 2.5 s, peak heap +165 MiB | refused, 0.32 s, peak heap +122 MiB |
+| 16,000-link same-document chain | prepared, 242 ms | refused, 104 ms |
+| 1,500-link same-document chain | prepared, 10.1 ms | prepared, 10.4 ms |
+| 16 levels of resource diamonds (3.7 KB) | prepared, 1.68 s | refused, 7.7 ms |
+
+Same-document chains refuse from 1,780 links, chains of `$id` resources from 403,
+and resource diamonds from 9 levels. The remaining cost of a refused 49,000-link
+chain is the SDK's linear reference resolution and projection before compilation.
+
 ## Document validation
 
 Run from the repository root with no concurrent compilation:

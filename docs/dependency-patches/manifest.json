@@ -30,7 +30,7 @@
         {
           "file": "OPENBINDINGS-PATCH.md",
           "upstream_sha256": null,
-          "current_sha256": "adbf4f3674c9e6d918ebe2e302e23c98fb20c490f9530e82fdaf3f3e0718bd2c"
+          "current_sha256": "0087c74896c40d0997bea173964a999cfe39aa9e723bd92825f340e4d466d0d3"
         },
         {
           "file": "UPSTREAM-Cargo.toml",
@@ -50,7 +50,7 @@
         {
           "file": "src/compiler.rs",
           "upstream_sha256": "15ce4f8ef9ce1bbfe42ff6e53900bde98af4810d3e4d0b82bcfe5cb5fb026cdf",
-          "current_sha256": "00dbb3e1ff54034f6ab3a5d11187c5ce5a04fa00cd6fda37f1e0b98e47b77ddf"
+          "current_sha256": "dfd4385e6bdc26e81afc8a05e354ecaf056a96474353a27122808a6d04ae6108"
         },
         {
           "file": "src/keywords/additional_properties.rs",
@@ -80,7 +80,7 @@
         {
           "file": "src/ob_work.rs",
           "upstream_sha256": null,
-          "current_sha256": "2bd505a7155617b7496127a656c150527ce6109e67d9772f7fd76b16d73a560f"
+          "current_sha256": "80a88ebd967484ffb3197d2de0dd38a3b84d8c25282e07a8baa8bef642ca3ac6"
         },
         {
           "file": "src/properties.rs",

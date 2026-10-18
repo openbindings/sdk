@@ -207,7 +207,7 @@ impl<'a> Emitter<'a> {
         polarity: Polarity,
         inplace: bool,
     ) -> fmt::Result {
-        let target = self.space.source(source).positions[&node_id(&value.to_owned())];
+        let target = self.space.source(source).positions[&ref_id(value)];
         self.child_ref(variant(self.plan, target, polarity), inplace)
     }
     fn branch_refs(&mut self, id: usize, polarity: Polarity) -> fmt::Result {

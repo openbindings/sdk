@@ -5,7 +5,8 @@ use crate::{
     uri, *,
 };
 use openbindings_internal_json::backend::{
-    has_unpaired, location_pointer_size, node_id, pointer_into, push_pointer, relative_pointer,
+    has_unpaired, location_pointer_size, node_id, pointer_into, push_pointer, ref_id,
+    relative_pointer,
 };
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
@@ -877,7 +878,7 @@ impl SchemaSpace {
                         let target = self
                             .source(node.source)
                             .positions
-                            .get(&node_id(&value.to_owned()))
+                            .get(&ref_id(value))
                             .copied()
                             .filter(|n| reach.nodes.contains(n))
                             .ok_or_else(|| {
@@ -1148,10 +1149,8 @@ impl SchemaSpace {
                     }
                     let children = keyword_children(keyword, member.value);
                     for child in children {
-                        if let Some(&target) = self
-                            .source(node.source)
-                            .positions
-                            .get(&node_id(&child.to_owned()))
+                        if let Some(&target) =
+                            self.source(node.source).positions.get(&ref_id(child))
                         {
                             queue.push_back(target);
                             if inplace {

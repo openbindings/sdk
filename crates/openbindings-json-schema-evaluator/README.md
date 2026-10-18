@@ -93,7 +93,13 @@ retains a code, message and optional original schema location.
 `Limits` controls work, recursion, regex steps, compilation depth and pattern
 admission. The default regex allowance is 2,000,000 steps. Large unanchored
 searches can exhaust it and return `LimitExceeded`, including ordinary megabyte
-strings. Unicode property matching is unsupported when applied. `format` is an
+strings. Preparation has its own fixed work bound, outside `Limits`: compiling a
+contract may spend 64 work units for each schema definition it projects, plus
+65,536. Ordinary schemas of any size compile well within it. Compilation that
+grows faster than the schema refuses with `LimitExceeded` and code
+`preparation-work-limit`: a chain of more than about 1,800 same-document
+references, or fewer across `$id` resources, and resources reached along
+repeatedly branching and rejoining paths of references. Unicode property matching is unsupported when applied. `format` is an
 annotation; another declared schema dialect is not treated as 2020-12.
 See [measured behavior](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md).
 

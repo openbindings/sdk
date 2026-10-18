@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]
-/// Finite default-evaluator budgets. Work counts are implementation units, not milliseconds; exhaustion yields no verdict unless an established failure only loses diagnostic completeness. Zero is literal. These budgets do not bound the allocation or stack use of an explanation's library diagnostics.
+/// Finite default-evaluator budgets. Work counts are implementation units, not milliseconds; exhaustion yields no verdict unless an established failure only loses diagnostic completeness. Zero is literal. These budgets do not bound the allocation or stack use of an explanation's library diagnostics. Schema compilation during preparation has a separate fixed bound (see the crate documentation).
 pub struct Limits {
     /// Evaluation work units per verdict/diagnostic pass; default 2,000,000. A partial verdict shares this allowance across upper and lower evaluations.
     pub evaluation_steps: usize,
@@ -164,6 +164,19 @@ impl SchemaEvaluator for DefaultEvaluator {
         }
     }
 }
+// Library compilation work a projection may spend: a floor plus a share for each
+// projected definition, so preparation stays linear in the projection. The
+// library charges one unit per compiled schema node and per entry of the dynamic
+// scope keying it, and one per in-progress placeholder copied when it defers a
+// `$ref` target. Compilation that outgrows the schema (each link of a long
+// reference chain copying every placeholder before it, or each diamond of
+// resources compiling its targets once per path) stops at this allowance. A
+// 1,500-link chain, the longest the tests prepare, spends about 128,000 of 161,664.
+const COMPILATION_FLOOR: usize = 65_536;
+const COMPILATION_PER_DEFINITION: usize = 64;
+fn compilation_allowance(definitions: usize) -> usize {
+    COMPILATION_FLOOR.saturating_add(definitions.saturating_mul(COMPILATION_PER_DEFINITION))
+}
 // Finite optional-planner declines only. Known-closure defects, shared admission
 // limits, cancellation and compiler errors retain their actual classifications.
 // With the planner's edge cap >= twice its node cap, schema-edge-limit already
@@ -275,17 +288,42 @@ impl DefaultEvaluator {
                 "the projected schema entry could not be located",
             )
         })?;
-        let validator = literals
-            .apply(jsonschema::options_for::<FlatJson>())
-            .with_registry(&registry)
-            .with_draft(jsonschema::Draft::Draft202012)
-            .with_retriever(NoRetrieval)
-            .should_validate_formats(false)
-            .with_pattern_options(
-                jsonschema::PatternOptions::fancy_regex().backtrack_limit(self.limits.regex_steps),
-            )
-            .build(root.contents())
-            .map_err(|error| preparation_error(error.kind()))?;
+        let projected = program
+            .resources
+            .iter()
+            .map(|resource| {
+                resource
+                    .document
+                    .get("$defs")
+                    .and_then(|defs| defs.members())
+                    .map_or(0, |members| members.len())
+            })
+            .sum::<usize>();
+        let build = || {
+            literals
+                .apply(jsonschema::options_for::<FlatJson>())
+                .with_registry(&registry)
+                .with_draft(jsonschema::Draft::Draft202012)
+                .with_retriever(NoRetrieval)
+                .should_validate_formats(false)
+                .with_pattern_options(
+                    jsonschema::PatternOptions::fancy_regex()
+                        .backtrack_limit(self.limits.regex_steps),
+                )
+                .build(root.contents())
+        };
+        let validator =
+            match jsonschema::ob_work::compiling(compilation_allowance(projected), build) {
+                Ok(built) => built.map_err(|error| preparation_error(error.kind()))?,
+                // The build stopped part way; whatever it returned is not a validator.
+                Err(_) => {
+                    return Err(no_verdict(
+                        NoVerdictReason::LimitExceeded,
+                        "preparation-work-limit",
+                        "schema preparation work limit reached",
+                    ));
+                }
+            };
         control.check()?;
         // Keep, for explanations, a compact copy of the compiled keywords with
         // their original locations; release the projection and, when that copy

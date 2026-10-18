@@ -277,11 +277,7 @@ fn copy(
             }
             continue;
         }
-        let mut child = |v: JsonRef<'_>| {
-            values
-                .remove(&node_id(&v.to_owned()))
-                .expect("postorder child")
-        };
+        let mut child = |v: JsonRef<'_>| values.remove(&ref_id(v)).expect("postorder child");
         let mut copied = match node.kind() {
             JsonKind::Null => Value::Null,
             JsonKind::Boolean => Value::Bool(node.as_bool().unwrap()),
@@ -308,7 +304,7 @@ fn copy(
         // evidence remain in SchemaSpace. No identifier, anchor, or target is
         // reconstructed here; ordinary lookup still belongs to the registry.
         if positions
-            .get(&node_id(&node.to_owned()))
+            .get(&ref_id(node))
             .is_some_and(|&id| repair_reference(id))
             && let Value::Object(object) = &mut copied
             && object
@@ -318,7 +314,7 @@ fn copy(
         {
             object.remove("$ref");
         }
-        values.insert(node_id(&node.to_owned()), copied);
+        values.insert(ref_id(node), copied);
     }
     let tree = Tree(Box::new(
         values.remove(&node_id(value)).expect("copied root"),
@@ -326,7 +322,7 @@ fn copy(
     let mut identity = HashMap::new();
     let mut stack = vec![(value.view(), &*tree.0)];
     while let Some((original, copied)) = stack.pop() {
-        if let Some(id) = positions.get(&node_id(&original.to_owned())) {
+        if let Some(id) = positions.get(&ref_id(original)) {
             identity.insert(std::ptr::from_ref(copied) as usize, *id);
         }
         if let (Some(items), Some(copies)) = (original.elements(), copied.as_array()) {

@@ -1,6 +1,6 @@
 //! The normative schema-position walk. Unknown keywords remain opaque.
 use crate::{JsonKind, JsonRef, JsonValue, uri};
-use openbindings_internal_json::backend::node_id;
+use openbindings_internal_json::backend::{node_id, ref_id};
 use std::collections::{BTreeMap, HashMap};
 
 pub const DIALECT: &str = "https://json-schema.org/draft/2020-12/schema";
@@ -220,11 +220,7 @@ impl SchemaIndex {
             let Some(value) = document.at(&fragment) else {
                 return SameDocument::Missing;
             };
-            return match self
-                .positions
-                .get(&node_id(&value.to_owned()))
-                .map(|&i| &self.nodes[i])
-            {
+            return match self.positions.get(&ref_id(value)).map(|&i| &self.nodes[i]) {
                 Some(node) if node.obi_position => SameDocument::Found(node.value.clone()),
                 _ => SameDocument::Missing,
             };

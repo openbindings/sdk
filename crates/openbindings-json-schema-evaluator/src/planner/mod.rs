@@ -6,7 +6,6 @@ use embedding::{
     Location as SchemaLocation, Program as EvaluationProgram, ProjectedResource as SchemaResource,
     RawDocument as Document, Supplied as ResourceSet,
 };
-use openbindings_internal_json::backend::node_id;
 use openbindings_internal_schema::{self as embedding, *};
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
