@@ -2604,7 +2604,7 @@ export class DiscoveryPublication extends Managed {
       ),
     );
   }
-  /** Create a detached Response for the exact route and method, preserving reserved percent escapes. GET returns exact bytes; HEAD returns no body with the original Content-Length; unsupported route is 404 and unsupported method 405. Creates no server and does not perform authentication or preflight handling. */
+  /** Create a detached Response for the route and method. A percent-encoded unreserved character in the path matches that character (RFC 3986 section 2.3), so /.well-known/%6Fpenbindings is the route; a reserved escape such as %2F is preserved and never matches /. GET returns exact bytes; HEAD returns no body with the original Content-Length; unsupported route is 404 and unsupported method 405. Creates no server and does not perform authentication or preflight handling. */
   respond(request: Request): Response {
     const url = new URL(request.url);
     const path = url.pathname;

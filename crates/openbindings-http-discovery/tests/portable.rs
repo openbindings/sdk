@@ -470,6 +470,46 @@ fn publication_copies_a_conformant_snapshot_and_serves_head_and_method_policy() 
         }
     });
 }
+// A path differing only in a percent-encoded unreserved character names the same
+// resource (RFC 3986 section 2.3); a reserved escape is never a path separator.
+#[test]
+fn publication_route_matches_encoded_unreserved_characters_but_not_reserved_escapes() {
+    let publication = Publication::from_bytes(DOCUMENT, PublicationOptions::default()).unwrap();
+    let direct = publication.respond("GET", WELL_KNOWN_PATH);
+    for path in [
+        "/.well-known/%6Fpenbindings",
+        "/.well-known/%6fpenbindings",
+        "/%2Ewell-known/openbindings",
+        "/%2ewell%2Dknown/open%62indings",
+        "/.well-known/%6F%70%65%6E%62%69%6E%64%69%6E%67%73",
+    ] {
+        let get = publication.respond("GET", path);
+        assert_eq!(get.status, 200, "{path}");
+        assert_eq!(get.headers, direct.headers, "{path}");
+        assert_eq!(get.body.as_ref(), DOCUMENT, "{path}");
+        assert_eq!(publication.respond("PUT", path).status, 405, "{path}");
+    }
+    for path in [
+        "/.well-known%2Fopenbindings",
+        "/.well-known%2fopenbindings",
+        "%2F.well-known/openbindings",
+        "/.well-known/openbindings%2F",
+        "/.well-known/openbindings/",
+        // Paths are case-sensitive: %4F is `O`, not `o`.
+        "/.well-known/%4Fpenbindings",
+        // `%25` escapes `%`, which is not unreserved, so nothing is decoded twice.
+        "/.well-known/%256Fpenbindings",
+        "/.well-known/%6",
+        "/.well-known/%6Gpenbindings",
+        "/.well-known/openbindings%00",
+        "",
+    ] {
+        let response = publication.respond("GET", path);
+        assert_eq!(response.status, 404, "{path}");
+        assert!(response.headers.is_empty(), "{path}");
+        assert!(response.body.is_empty(), "{path}");
+    }
+}
 #[test]
 fn publication_refuses_every_unestablished_conformance_state() {
     assert!(matches!(
@@ -483,6 +523,19 @@ fn publication_refuses_every_unestablished_conformance_state() {
         ),
         Err(PublicationError::VersionRefused(_))
     ));
+    // A document over the default node limit leaves every rule undecided; publication needs proof.
+    let text = format!(
+        r#"{{"openbindings":"0.2.0","operations":{{}},"x-data":[{}0]}}"#,
+        "0,".repeat(openbindings::JsonLimits::default().max_nodes)
+    );
+    let error = Publication::from_bytes(&text, PublicationOptions::default()).unwrap_err();
+    let PublicationError::Undetermined(validation) = error else {
+        panic!("expected an undetermined refusal, got {error:?}")
+    };
+    let report = validation.report();
+    assert_eq!(report.conclusion, Conformance::Undetermined);
+    assert!(!report.findings.is_empty());
+    assert!(report.findings.iter().all(|f| f.code == "input-limit"));
     // Publication applies the core document boundary, including opaque content.
     let error = Publication::from_bytes(
         br#"{"openbindings":"0.2.0","operations":{},"x-value":"\ud800"}"#,
@@ -692,6 +745,13 @@ async fn portable_redirects_obey_statuses_relative_location_limit_and_total_time
         "https://user:pass@example.test/next",
         "http://example.test/next",
         "http://[",
+        // Not RFC 3986 URI-references (RFC 9110 section 10.2.2), so never recovered.
+        "/tar get",
+        "https://example.test/a b",
+        "\\next",
+        "\\\\example.test/next",
+        "https://example.test\\next",
+        "/next\t",
     ] {
         let calls = std::cell::Cell::new(0);
         let r = discover(

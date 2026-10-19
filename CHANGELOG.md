@@ -47,7 +47,10 @@
   that checks and explains every value, including explanations interrupted by
   cancellation.
 - HTTP discovery and publication with bounded bodies, attempt deadlines and
-  explicit host-policy responsibilities.
+  explicit host-policy responsibilities. Publication serves the well-known path
+  when a request spells an unreserved character percent-encoded, as in
+  `/.well-known/%6Fpenbindings` (RFC 3986 section 2.3), and never decodes a
+  reserved escape such as `%2F` into a path separator.
 - Provisional Rust provider traits and checked callers for source inspection,
   interface synthesis, binding invocation and operation invocation.
 - A TypeScript API with bundled Wasm, exact-value editing, disposable owners and

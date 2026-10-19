@@ -518,8 +518,9 @@ test("invalid body chunks have a typed non-network failure", async () => {
   assert.equal(result.error.kind, "other");
 });
 
-// canonical CORS values, permissive default, exact reserved route spelling.
-test("publication uses serialized origins and matches the route exactly", async () => {
+// canonical CORS values, permissive default; a percent-encoded unreserved character
+// names the route (RFC 3986 section 2.3), while a reserved escape stays distinct.
+test("publication uses serialized origins and matches the route by URI equivalence", async () => {
   const parsed = sdk.Document.parse(text).value;
   const proof = parsed.validate().document;
   const publication = new discovery.DiscoveryPublication(proof);
@@ -528,14 +529,26 @@ test("publication uses serialized origins and matches the route exactly", async 
   );
   assert.equal(response.headers.get("access-control-allow-origin"), "*");
   for (const path of [
+    "/.well-known/%6Fpenbindings",
+    "/.well-known/%6fpenbindings",
+    "/%2ewell-known/openbindings",
+  ]) {
+    const encoded = publication.respond(
+      new Request("https://example.test" + path),
+    );
+    assert.equal(encoded.status, 200, path);
+    assert.equal(await encoded.text(), text, path);
+  }
+  for (const path of [
     "/.well-known%2Fopenbindings",
     "/.well-known%2fopenbindings",
     "/.well-known/openbindings/",
-    "/%2ewell-known/openbindings",
+    "/.well-known/%4Fpenbindings",
   ])
     assert.equal(
       publication.respond(new Request("https://example.test" + path)).status,
       404,
+      path,
     );
   for (const allowOrigin of [
     "HTTPS://A.EXAMPLE",
