@@ -422,6 +422,72 @@ fn builds_that_state_static_anchors_refuse_dynamic_resolution() {
     }
 }
 
+// Generated contracts whose `unevaluatedProperties` and `unevaluatedItems` walks
+// cross resources through `patternProperties`, `allOf`, `oneOf` and conditionals.
+// Compiled once per path through resources they took seconds to over a minute;
+// compiled once per location they prepare in milliseconds.
+#[derive(serde::Deserialize)]
+struct GeneratedCase {
+    id: String,
+    // Raw text keeps each schema's keyword order, which decides what compiles first.
+    document: Box<serde_json::value::RawValue>,
+    resources: Vec<GeneratedResource>,
+    values: Vec<Box<serde_json::value::RawValue>>,
+    expected: Vec<String>,
+}
+#[derive(serde::Deserialize)]
+struct GeneratedResource {
+    uri: String,
+    schema: Box<serde_json::value::RawValue>,
+}
+fn generated_cases() -> Vec<GeneratedCase> {
+    serde_json::from_str(include_str!("fixtures/preparation-generated-walks.json")).unwrap()
+}
+fn generated_resources(case: &GeneratedCase) -> ResourceSet {
+    resources(
+        case.resources
+            .iter()
+            .map(|r| (r.uri.clone(), r.schema.get().to_owned()))
+            .collect(),
+    )
+}
+
+#[test]
+fn generated_walks_across_resources_compile_once() {
+    for case in generated_cases() {
+        let contract = prepare_with(case.document.get(), &generated_resources(&case))
+            .unwrap_or_else(|detail| panic!("{}: {detail:?}", case.id));
+        for (value, expected) in case.values.iter().zip(&case.expected) {
+            let value = JsonValue::parse(value.get()).unwrap();
+            let label = format!("{} {}", case.id, value.text());
+            for outcome in [contract.validate(&value), contract.explain(&value)] {
+                let verdict = match outcome {
+                    ValueOutcome::Satisfies => "S",
+                    ValueOutcome::Fails { .. } => "F",
+                    _ => "neither",
+                };
+                assert_eq!(verdict, expected, "{label}");
+            }
+        }
+    }
+}
+
+#[test]
+fn generated_walks_with_a_dynamic_anchor_refuse_at_preparation() {
+    // A property holding a 2020-12 schema reaches the meta-schema's dynamic
+    // anchor, so the same walks compile once per path again; the allowance
+    // refuses them instead.
+    let case = generated_cases().pop().unwrap();
+    let mut document: serde_json::Value = serde_json::from_str(case.document.get()).unwrap();
+    let input = document["operations"]["op"]["input"].take();
+    document["operations"]["op"]["input"] = serde_json::json!({"allOf": [
+        input,
+        {"properties": {"schema": {"$ref": "https://json-schema.org/draft/2020-12/schema"}}}
+    ]});
+    let refused = prepare_with(&document.to_string(), &generated_resources(&case)).unwrap_err();
+    assert_work_limit(refused);
+}
+
 // Build `root` against `resources` inside a compilation scope stating, or not,
 // that no dynamic anchor is reachable; `None` builds outside any scope.
 fn build_in_scope(

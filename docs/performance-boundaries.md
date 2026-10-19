@@ -294,6 +294,13 @@ machine was shared, so times run high):
 | 1,000 `$id` resources sharing one with `required` of 100,000 names, with a schema-valued property | prepared, 4.6 s, 10.5 GB | refused, 0.24 s, 304 MB |
 | The same without the schema-valued property | prepared, 4.0 s, 10.5 GB | prepared, 69 ms, 94 MB |
 
+Generated contracts whose `unevaluatedProperties` and `unevaluatedItems` walks
+cross resources took from 1.4 s to more than 65 s each to prepare on `4b6afd3`
+(one preparation each, 25 contracts of up to 23 resources); they now prepare in 2
+to 26 ms, with the same verdicts where `4b6afd3` finished. One of 4 supplied and 6 contained
+resources (8.2 KB) took 62 s and prepares in 3.7 ms. With a property holding a
+2020-12 schema, each of the 25 refuses in 0.29 to 0.37 s.
+
 Same-document chains refuse from 23,497 links. With a reachable dynamic anchor,
 resource diamonds refuse from 13 levels, and a 20,000-name `required` list shared by
 more than 103 resource paths refuses. A refused build is released link by link, as
