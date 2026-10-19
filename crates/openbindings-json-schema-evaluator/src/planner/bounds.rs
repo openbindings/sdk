@@ -2,7 +2,7 @@
 mod oneof;
 use super::*;
 use openbindings_internal_json::backend::{
-    decoded_string_size, location_pointer_size, pointer_size, push_pointer,
+    decoded_string_size, location_pointer_size, pointer_size, push_pointer, ref_id,
 };
 use openbindings_internal_schema::ProgramOrigin;
 use std::{
@@ -531,7 +531,7 @@ impl SchemaSpace {
                     let target = self
                         .source(node.source)
                         .positions
-                        .get(&node_id(&value.to_owned()))
+                        .get(&ref_id(value))
                         .copied()
                         .ok_or_else(|| {
                             NoVerdict::new(
@@ -773,7 +773,7 @@ impl SchemaSpace {
         source: usize,
         value: JsonRef<'_>,
     ) -> fmt::Result {
-        let target = self.source(source).positions[&node_id(&value.to_owned())];
+        let target = self.source(source).positions[&ref_id(value)];
         sink.write_str("{\"$ref\":\"")?;
         self.address(sink, namespace, target)?;
         sink.write_str("\"}")

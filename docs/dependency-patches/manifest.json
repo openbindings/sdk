@@ -30,7 +30,7 @@
         {
           "file": "OPENBINDINGS-PATCH.md",
           "upstream_sha256": null,
-          "current_sha256": "1bebb469e31bf78a780d818c047df44ebd01743ea3e32a17ffb86e52e3a0ae67"
+          "current_sha256": "013093b81bfa888bdea6bb5ac5d0cead4f27307ec2a70ff649981b2a2ade9f3c"
         },
         {
           "file": "UPSTREAM-Cargo.toml",
@@ -50,7 +50,7 @@
         {
           "file": "src/compiler.rs",
           "upstream_sha256": "15ce4f8ef9ce1bbfe42ff6e53900bde98af4810d3e4d0b82bcfe5cb5fb026cdf",
-          "current_sha256": "00dbb3e1ff54034f6ab3a5d11187c5ce5a04fa00cd6fda37f1e0b98e47b77ddf"
+          "current_sha256": "1c37c82b438f8eae75878920622a1cd9789f9c3803cf08d775cfae5b56695784"
         },
         {
           "file": "src/keywords/additional_properties.rs",
@@ -58,9 +58,34 @@
           "current_sha256": "4522aab171002ffd720c368c8638da9463066e6c063fa4f23915502a86a37be9"
         },
         {
+          "file": "src/keywords/dependencies.rs",
+          "upstream_sha256": "e8a1420c7dc3cb37f2c362776b045b239cc01b2be3a44a8a61adb7f9c0dcc4d5",
+          "current_sha256": "7313368439d597a24d96c3d62d24b5f244052e3a38cdfce0e680fac49cf6d5dc"
+        },
+        {
+          "file": "src/keywords/pattern.rs",
+          "upstream_sha256": "10c06ddd49b4255b7da5e6afa41af82f15154e2b2924bb8cb710d7e4066e98f9",
+          "current_sha256": "b7fac85c1e99be8f128bc370c142e1a16f7b67bd327ad84e5a2729a63700faa1"
+        },
+        {
+          "file": "src/keywords/ref_.rs",
+          "upstream_sha256": "398a2f976daa1700a3b3bf1390bd74c786c6399fa093f6234d36deb06cac4f83",
+          "current_sha256": "fa875018f60e47ef67c5081b3be2981d6d6c70db6e2f3239e28e825b19fca17f"
+        },
+        {
+          "file": "src/keywords/required.rs",
+          "upstream_sha256": "ad4190196899c15b802901bcaac5d96d418ef4796c278a1fa6343b3e34b1f3a7",
+          "current_sha256": "d4f184ac5c328ead89a6d3c3a9c49ce23148bd56c90499383a296cb6f5a4424f"
+        },
+        {
+          "file": "src/keywords/unevaluated_items.rs",
+          "upstream_sha256": "aa55739a28ee04128b3802fd106ab09c1359c2293a45b4dde6ae5266928eba87",
+          "current_sha256": "16b304927672d5826a41c2f73ca9ba1d3920c9f27bb42d62e3ef7974a829b7de"
+        },
+        {
           "file": "src/keywords/unevaluated_properties.rs",
           "upstream_sha256": "e2081d55a7f6f0675c76d3d55f904f1d9b9640f83e519ca0563c83c9e3bce341",
-          "current_sha256": "54ddba4819d75c91974e2ae3bab658ab852349d0f95684deaac7214a39e1d8fc"
+          "current_sha256": "51fbd8ef473b5e19db399becb4a78cf1c1df6d70dd9c5e675e258a31f4244e89"
         },
         {
           "file": "src/lib.rs",
@@ -80,7 +105,7 @@
         {
           "file": "src/ob_work.rs",
           "upstream_sha256": null,
-          "current_sha256": "2bd505a7155617b7496127a656c150527ce6109e67d9772f7fd76b16d73a560f"
+          "current_sha256": "ab7de0d6bcf321c96c04b02632bd3a02011de0b33465af305670b12c25581c60"
         },
         {
           "file": "src/properties.rs",

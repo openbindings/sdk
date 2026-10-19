@@ -133,11 +133,33 @@ impl<R, F: Json> CompilationOptions<F> for ValidationOptions<'_, R, F> {
     }
 }
 
-#[derive(Hash, PartialEq, Eq, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct LocationCacheKey {
     pub(crate) base_uri: Arc<Uri<String>>,
     location: Arc<str>,
     dynamic_scope: List<Uri<String>>,
+}
+
+// OpenBindings qualification patch: in a build that reaches no dynamic anchor, no reference
+// resolves through the dynamic scope, so cache keys compare and hash without it.
+impl PartialEq for LocationCacheKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.base_uri == other.base_uri
+            && self.location == other.location
+            && (crate::ob_work::static_anchors() || self.dynamic_scope == other.dynamic_scope)
+    }
+}
+
+impl Eq for LocationCacheKey {}
+
+impl std::hash::Hash for LocationCacheKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.base_uri.hash(state);
+        self.location.hash(state);
+        if !crate::ob_work::static_anchors() {
+            self.dynamic_scope.hash(state);
+        }
+    }
 }
 
 /// Named anchors can share a base URI and output location without naming the same schema.
@@ -175,10 +197,28 @@ impl ItemsValidatorsPendingKey {
     }
 }
 
-#[derive(Hash, PartialEq, Eq, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct AliasCacheKey {
     uri: Arc<Uri<String>>,
     dynamic_scope: List<Uri<String>>,
+}
+
+impl PartialEq for AliasCacheKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.uri == other.uri
+            && (crate::ob_work::static_anchors() || self.dynamic_scope == other.dynamic_scope)
+    }
+}
+
+impl Eq for AliasCacheKey {}
+
+impl std::hash::Hash for AliasCacheKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.uri.hash(state);
+        if !crate::ob_work::static_anchors() {
+            self.dynamic_scope.hash(state);
+        }
+    }
 }
 
 /// A `$ref`'s resolved URI and the location its target starts at.
@@ -317,6 +357,19 @@ struct PatternCacheEntry {
 }
 
 impl<F: Json> SharedContextState<'_, F> {
+    /// OpenBindings qualification patch: drop every compiled node and placeholder held here.
+    fn release_nodes(&self) {
+        self.location_nodes.borrow_mut().clear();
+        self.alias_nodes.borrow_mut().clear();
+        self.alias_placeholders.borrow_mut().clear();
+        self.deferred_placeholders.borrow_mut().clear();
+        self.deferred_targets.borrow_mut().clear();
+        self.pending_property_validators_by_schema
+            .borrow_mut()
+            .clear();
+        self.pending_items_validators_by_schema.borrow_mut().clear();
+    }
+
     /// `capacity` pre-sizes the per-location node cache to avoid rehashing during a build.
     fn new(capacity: usize) -> Self {
         Self {
@@ -993,6 +1046,9 @@ impl<'a, F: Json> Context<'a, F> {
             .deferred_placeholders
             .borrow_mut()
             .insert(key.clone(), placeholder.clone());
+        // OpenBindings qualification patch: charge the placeholders this copies.
+        let copied = self.shared.alias_placeholders.borrow().len() as u64;
+        crate::ob_work::compile_charge(crate::ob_work::cost::PLACEHOLDER * copied);
         let in_progress = self.shared.alias_placeholders.borrow().clone();
         self.shared
             .deferred_targets
@@ -1108,7 +1164,8 @@ pub(crate) fn build_validator<F: Json>(
     let resource = draft.create_resource_ref(schema);
 
     if config.validate_schema {
-        validate_schema(draft, schema)?;
+        // OpenBindings qualification patch: meta-validation is not compilation work.
+        crate::ob_work::uncharged(|| validate_schema(draft, schema))?;
     }
 
     if let Some(registry) = config.registry {
@@ -1234,22 +1291,33 @@ fn compile_validator<F: Json>(
     draft: Draft,
 ) -> Result<Validator<F>, ValidationError<'static>> {
     let root = compile(ctx, resource).map_err(ValidationError::into_build_error)?;
-    let targets = compile_deferred_targets(ctx)?;
-    Ok(Validator {
-        root,
-        targets,
-        draft,
-    })
+    let mut targets = Vec::new();
+    match compile_deferred_targets(ctx, &mut targets) {
+        Ok(()) => Ok(Validator {
+            root,
+            targets,
+            draft,
+        }),
+        // OpenBindings qualification patch: release a build that stopped part way as a
+        // validator is released. Its targets go last, in order, once neither the root nor
+        // the caches hold them, so a long `$ref` chain never drops recursively.
+        Err(error) => {
+            drop(root);
+            ctx.shared.release_nodes();
+            drop(targets);
+            Err(error)
+        }
+    }
 }
 
-/// Drain the worklist and return the targets it compiled.
+/// Drain the worklist into `targets`.
 ///
 /// Out of line to keep its frame off the stack while the schema compiles.
 #[inline(never)]
 fn compile_deferred_targets<F: Json>(
     ctx: &Context<'_, F>,
-) -> Result<Vec<SchemaNode<F>>, ValidationError<'static>> {
-    let mut targets = Vec::new();
+    targets: &mut Vec<SchemaNode<F>>,
+) -> Result<(), ValidationError<'static>> {
     while let Some(target) = ctx.next_deferred_target() {
         ctx.replace_alias_placeholders(target.in_progress);
         let vocabularies = target
@@ -1275,7 +1343,7 @@ fn compile_deferred_targets<F: Json>(
         }
         ctx.replace_alias_placeholders(AHashMap::new());
     }
-    Ok(targets)
+    Ok(())
 }
 
 pub(crate) fn normalize_base_uri(registry: &Registry<'_>, base_uri: &Uri<String>) -> Uri<String> {
@@ -1551,6 +1619,16 @@ fn compile_with_internal<'a, F: Json>(
         Ok(existing) => return Ok(existing),
         Err(key) => key,
     };
+    // OpenBindings qualification patch: charge this compilation, with its location and the
+    // dynamic scope keying its caches; the adapter refuses a build whose scope is spent.
+    let scope = (!crate::ob_work::static_anchors()).then(|| key.location.dynamic_scope.iter());
+    let units = crate::ob_work::cost::node(
+        ctx.location().as_str().len(),
+        scope.map_or(0, Iterator::count),
+    );
+    if !crate::ob_work::compile_charge(units) {
+        return Err(ValidationError::custom("schema compilation work limit"));
+    }
     let outer = ctx.start_node();
     let target = alias
         .as_ref()

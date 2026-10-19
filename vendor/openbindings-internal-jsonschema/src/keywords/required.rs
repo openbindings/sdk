@@ -29,9 +29,11 @@ impl RequiredValidator {
         location: Location,
     ) -> CompilationResult<'_, F> {
         let mut required = Vec::with_capacity(items.len());
+        let mut bytes = 0;
         for item in items {
             match item {
                 Value::String(string) => {
+                    bytes += string.len();
                     required.push((PropertyName::new(string.clone()), F::prepare_key(string)));
                 }
                 _ => {
@@ -45,6 +47,8 @@ impl RequiredValidator {
                 }
             }
         }
+        // OpenBindings qualification patch: charge the names this copies.
+        crate::ob_work::compile_charge(crate::ob_work::cost::names(items.len(), bytes));
         Ok(Box::new(RequiredValidator { required, location }))
     }
 }
@@ -496,6 +500,7 @@ pub(crate) fn compile<'a, F: Json>(
             && !has_pattern_properties
             && !ctx.is_keyword_overridden("additionalProperties")
         {
+            charge_names(items);
             return None;
         }
 
@@ -519,11 +524,19 @@ pub(crate) fn compile<'a, F: Json>(
             && !additional_props_is_schema
             && !has_pattern_properties
         {
+            charge_names(items);
             return None;
         }
     }
     let location = ctx.location().join("required");
     compile_with_path(schema, location)
+}
+
+/// OpenBindings qualification patch: charge the names of a short list, which a validator
+/// (fused with `properties` for one or two) copies; a longer list is charged as it is copied.
+fn charge_names(items: &[Value]) {
+    let bytes = items.iter().filter_map(Value::as_str).map(str::len).sum();
+    crate::ob_work::compile_charge(crate::ob_work::cost::names(items.len(), bytes));
 }
 
 #[inline]
@@ -532,6 +545,9 @@ pub(crate) fn compile_with_path<F: Json>(
     location: Location,
 ) -> Option<CompilationResult<'_, F>> {
     // IMPORTANT: If this function will ever return `None`, adjust `dependencies.rs` accordingly
+    if let Some(items) = schema.as_array().filter(|items| items.len() <= 3) {
+        charge_names(items);
+    }
     match schema {
         Value::Array(items) => match items.len() {
             1 => {

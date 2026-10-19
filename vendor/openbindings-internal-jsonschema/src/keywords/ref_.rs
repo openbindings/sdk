@@ -204,6 +204,20 @@ fn is_named(alias: &referencing::Uri<String>) -> bool {
     })
 }
 
+/// OpenBindings qualification patch: the `unevaluatedProperties` and `unevaluatedItems` walks
+/// resolve the references they pass through themselves, even keywords their schema's draft does
+/// not compile. In a static build, fail such a resolution when it lands on a dynamic or recursive
+/// anchor, which the library finds by searching the dynamic scope.
+pub(crate) fn static_walk_target(target: &Value) -> Result<(), ValidationError<'static>> {
+    if crate::ob_work::static_anchors()
+        && (target.get("$dynamicAnchor").is_some()
+            || target.get("$recursiveAnchor") == Some(&Value::Bool(true)))
+    {
+        return Err(ValidationError::custom("dynamic anchor in a static build"));
+    }
+    Ok(())
+}
+
 /// Location of a named target within its resource.
 fn named_target_base<F: Json>(
     ctx: &compiler::Context<F>,
@@ -271,6 +285,12 @@ fn compile_reference_validator<'a, F: Json>(
     if reference.is_empty() {
         return None;
     }
+    // OpenBindings qualification patch: charge resolving and entering this reference.
+    if !crate::ob_work::compile_charge(crate::ob_work::cost::REFERENCE) {
+        return Some(Err(ValidationError::custom(
+            "schema compilation work limit",
+        )));
+    }
     let (alias, ref_target_base) = match ctx
         .ref_target(reference, extract_ref_target_base)
         .map_err(ValidationError::from)
@@ -287,6 +307,17 @@ fn compile_reference_validator<'a, F: Json>(
     };
     // A pointer counts from the resource the reference names, an anchor from the one it is in.
     let (ref_target_base, target_location, resource_start) = if is_named(&alias) {
+        // OpenBindings qualification patch: a dynamic anchor is found by searching the dynamic
+        // scope, which a static build's caches ignore.
+        if resolved.contents().get("$dynamicAnchor").is_some() {
+            if crate::ob_work::static_anchors() {
+                return Some(Err(ValidationError::custom(
+                    "dynamic anchor in a static build",
+                )));
+            }
+            let searched = resolved.resolver().dynamic_scope().iter().count() as u64;
+            crate::ob_work::compile_charge(crate::ob_work::cost::ANCHOR_SEARCH * searched);
+        }
         match named_target_base(ctx, &resolved) {
             Ok(location) => {
                 let target = target_location(&resolved.resolver().base_uri(), &location);
@@ -391,6 +422,14 @@ fn compile_recursive_validator<'a, F: Json>(
     let resolved = ctx
         .lookup_recursive_reference()
         .map_err(ValidationError::from)?;
+    // OpenBindings qualification patch: the build's caches ignore the dynamic scope.
+    if crate::ob_work::static_anchors()
+        && resolved.contents().get("$recursiveAnchor") == Some(&Value::Bool(true))
+    {
+        return Err(ValidationError::custom(
+            "recursive anchor in a static build",
+        ));
+    }
     let target_location = target_location(&resolved.resolver().base_uri(), &ref_target_base);
 
     match ctx.lookup_maybe_recursive(reference, resolved.resolver()) {

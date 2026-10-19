@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]
-/// Finite default-evaluator budgets. Work counts are implementation units, not milliseconds; exhaustion yields no verdict unless an established failure only loses diagnostic completeness. Zero is literal. These budgets do not bound the allocation or stack use of an explanation's library diagnostics.
+/// Finite default-evaluator budgets. Work counts are implementation units, not milliseconds; exhaustion yields no verdict unless an established failure only loses diagnostic completeness. Zero is literal. These budgets do not bound the allocation or stack use of an explanation's library diagnostics. Schema compilation during preparation has a separate fixed bound (see the crate documentation).
 pub struct Limits {
     /// Evaluation work units per verdict/diagnostic pass. `None`, the default,
     /// grows with the value: 2,000,000 units for a value of up to 65,536 nodes
@@ -205,6 +205,39 @@ impl SchemaEvaluator for DefaultEvaluator {
         }
     }
 }
+// Library compilation work a projection may spend: a floor plus a share for each
+// projected definition (every schema position the contract reaches, named or
+// not). The library weighs what a build does (each compiled schema node and the
+// bytes of its location, each reference resolved, each dynamic-scope entry keying
+// a node or searched for a dynamic anchor, each placeholder copied when it defers a
+// `$ref` target, and each property name and pattern byte it copies) in units of
+// about a nanosecond of compilation time or 0.7 bytes of compilation memory,
+// whichever the work costs more of. The share pays for compiling each definition
+// once, about 2,700 units for an ordinary one, so the number of definitions alone
+// never refuses a contract. The floor bounds the compilation that outgrows the
+// schema (each link of a long reference chain copying every placeholder before it,
+// or, with a dynamic anchor, a schema compiled once per path or a long `required`
+// list copied once per scope) at about 250 ms of compilation, or 175 to 250 MB of
+// its memory, in the reference build. Without a dynamic anchor the library's
+// caches ignore the dynamic scope, and each node compiles once.
+const COMPILATION_FLOOR: u64 = 250_000_000;
+const COMPILATION_PER_DEFINITION: u64 = 4_096;
+fn compilation_allowance(definitions: usize) -> u64 {
+    let definitions = u64::try_from(definitions).unwrap_or(u64::MAX);
+    COMPILATION_FLOOR.saturating_add(definitions.saturating_mul(COMPILATION_PER_DEFINITION))
+}
+// A build that spent its allowance, unless cancellation was requested meanwhile:
+// observed cancellation takes precedence over the limit.
+fn compilation_stop(control: &dyn WorkControl) -> NoVerdict {
+    match control.check() {
+        Err(cancelled) => cancelled.into(),
+        Ok(()) => no_verdict(
+            NoVerdictReason::LimitExceeded,
+            "preparation-work-limit",
+            "schema preparation work limit reached",
+        ),
+    }
+}
 // Finite optional-planner declines only. Known-closure defects, shared admission
 // limits, cancellation and compiler errors retain their actual classifications.
 // With the planner's edge cap >= twice its node cap, schema-edge-limit already
@@ -319,17 +352,41 @@ impl DefaultEvaluator {
                 "the projected schema entry could not be located",
             )
         })?;
-        let validator = operands
-            .apply(jsonschema::options_for::<FlatJson>())
-            .with_registry(&registry)
-            .with_draft(jsonschema::Draft::Draft202012)
-            .with_retriever(NoRetrieval)
-            .should_validate_formats(false)
-            .with_pattern_options(
-                jsonschema::PatternOptions::fancy_regex().backtrack_limit(self.limits.regex_steps),
-            )
-            .build(root.contents())
-            .map_err(|error| preparation_error(error.kind()))?;
+        let projected = program
+            .resources
+            .iter()
+            .map(|resource| {
+                resource
+                    .document
+                    .get("$defs")
+                    .and_then(|defs| defs.members())
+                    .map_or(0, |members| members.len())
+            })
+            .sum::<usize>();
+        // Without a dynamic anchor the library may compile each schema once.
+        let static_anchors = !operands.declares_dynamic_anchors();
+        let build = || {
+            operands
+                .apply(jsonschema::options_for::<FlatJson>())
+                .with_registry(&registry)
+                .with_draft(jsonschema::Draft::Draft202012)
+                .with_retriever(NoRetrieval)
+                .should_validate_formats(false)
+                .with_pattern_options(
+                    jsonschema::PatternOptions::fancy_regex()
+                        .backtrack_limit(self.limits.regex_steps),
+                )
+                .build(root.contents())
+        };
+        let validator = match jsonschema::ob_work::compiling(
+            compilation_allowance(projected),
+            static_anchors,
+            build,
+        ) {
+            Ok(built) => built.map_err(|error| preparation_error(error.kind()))?,
+            // The build stopped part way; whatever it returned is not a validator.
+            Err(_) => return Err(compilation_stop(control)),
+        };
         control.check()?;
         // Keep, for explanations, a compact copy of the compiled keywords with
         // their original locations, sharing the validator's literals; release
@@ -806,6 +863,19 @@ mod diagnostic_tests {
             );
             assert_eq!(fallback.location, None);
         }
+    }
+    #[test]
+    fn spent_compilation_yields_to_observed_cancellation() {
+        let running = std::sync::atomic::AtomicBool::new(false);
+        let limit = compilation_stop(&running);
+        assert_eq!(limit.reason, NoVerdictReason::LimitExceeded);
+        assert_eq!(limit.code, "preparation-work-limit");
+        assert_eq!(limit.location, None);
+        let cancelled = std::sync::atomic::AtomicBool::new(true);
+        assert_eq!(
+            compilation_stop(&cancelled).reason,
+            NoVerdictReason::Cancelled
+        );
     }
     #[test]
     fn runtime_cycle_guard_has_a_truthful_conservative_code() {

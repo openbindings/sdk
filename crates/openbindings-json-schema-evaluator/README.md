@@ -103,7 +103,23 @@ thread stack. Debug builds need more on Windows; see
 The default regex allowance is
 2,000,000 steps. Large unanchored
 searches can exhaust it and return `LimitExceeded`, including ordinary megabyte
-strings. Unicode property matching is unsupported when applied. `format` is an
+strings. Preparation has its own fixed work bound, outside `Limits`. Compiling a
+contract is charged for what it does (each schema node and reference compiled,
+the dynamic scope keyed or searched, and the placeholders, property names and
+pattern bytes copied) in units of about a nanosecond of compilation or 0.7 bytes
+of its memory, whichever is larger, in the reference build. A contract may spend
+250,000,000 units plus 4,096 for each schema position its projection reaches
+(every reached subschema, named or not); the share pays for compiling each
+position once, so the number of positions alone never refuses a contract. A
+schema reached along many reference paths, through supplied or `$id` resources,
+compiles once unless the contract also reaches a `$dynamicAnchor`, as the 2020-12
+meta-schema declares; then it compiles once per path. Compilation that grows
+faster than the schema refuses with `LimitExceeded` and code
+`preparation-work-limit` after about 250 ms of it, or 175 to 250 MB of its
+memory: a same-document chain of more than 23,496 references and, with a reachable
+dynamic anchor, resources reached along 13 or more levels of branching and
+rejoining paths, or a 20,000-name `required` list reached along more than 103
+resource paths. Unicode property matching is unsupported when applied. `format` is an
 annotation; another declared schema dialect is not treated as 2020-12.
 See [measured behavior](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md).
 
