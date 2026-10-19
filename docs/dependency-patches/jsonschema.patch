@@ -25,7 +25,18 @@
  authors = ["Dmitry Dygalo <dmitry@dygalo.dev>"]
  build = false
  autolib = false
-@@ -285,7 +286,7 @@
+@@ -275,7 +276,9 @@
+ optional = true
+ 
+ [dependencies.referencing]
+-version = "0.58.6"
++package = "openbindings-internal-referencing"
++version = "=0.58.6-ob.1"
++path = "../openbindings-internal-referencing"
+ 
+ [dependencies.regex]
+ version = "1.11.1"
+@@ -285,7 +288,7 @@
  features = ["derive"]
  
  [dependencies.serde_json]
@@ -34,7 +45,7 @@
  features = ["float_roundtrip"]
  
  [dependencies.strum]
-@@ -398,3 +399,9 @@
+@@ -398,3 +401,9 @@
  [lints.rust]
  unreachable_pub = "warn"
  unsafe_code = "warn"
@@ -222,7 +233,7 @@
 -required-features = ["jsonb"]
 --- /dev/null
 +++ b/OPENBINDINGS-PATCH.md
-@@ -0,0 +1,24 @@
+@@ -0,0 +1,25 @@
 +# Internal dependency fork
 +
 +Based on `jsonschema-0.58.6`; upstream license and notices are retained.
@@ -238,8 +249,9 @@
 +been removed. Error construction is the upstream implementation.
 +
 +The SDK uses documented keyword and value-representation APIs for exact decimal
-+semantics. jsonschema-value, referencing and serde_json are unmodified registry
-+packages; this fork no longer requests arbitrary precision for SDK builds.
++semantics. jsonschema-value and serde_json are unmodified registry packages;
++referencing is the sibling referencing fork, which makes resource registration
++linear. This fork no longer requests arbitrary precision for SDK builds.
 +
 +The repository maintenance contract is DEPENDENCY-MAINTENANCE.md, including
 +per-file upstream line counts and the reason each source change remains.

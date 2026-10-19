@@ -13,8 +13,9 @@ All diagnostic admission, copy, payload, metadata and schema-detail changes have
 been removed. Error construction is the upstream implementation.
 
 The SDK uses documented keyword and value-representation APIs for exact decimal
-semantics. jsonschema-value, referencing and serde_json are unmodified registry
-packages; this fork no longer requests arbitrary precision for SDK builds.
+semantics. jsonschema-value and serde_json are unmodified registry packages;
+referencing is the sibling referencing fork, which makes resource registration
+linear. This fork no longer requests arbitrary precision for SDK builds.
 
 The repository maintenance contract is DEPENDENCY-MAINTENANCE.md, including
 per-file upstream line counts and the reason each source change remains.

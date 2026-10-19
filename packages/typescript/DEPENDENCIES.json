@@ -777,6 +777,19 @@
       ]
     },
     {
+      "name": "openbindings-internal-referencing",
+      "version": "0.58.6-ob.1",
+      "declared_license": "MIT",
+      "repository": "https://github.com/Stranger6667/jsonschema",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "117829c3ca21efb132d81a44b55363d395ab8eea18526873bc828da4c0e5f038",
+          "retrieved_from": null
+        }
+      ]
+    },
+    {
       "name": "openbindings-internal-regress",
       "version": "0.12.0-ob.1",
       "declared_license": "MIT OR Apache-2.0",
@@ -942,19 +955,6 @@
         {
           "path": "LICENSE-MIT",
           "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "referencing",
-      "version": "0.58.6",
-      "declared_license": "MIT",
-      "repository": "https://github.com/Stranger6667/jsonschema",
-      "notices": [
-        {
-          "path": "LICENSE",
-          "sha256": "117829c3ca21efb132d81a44b55363d395ab8eea18526873bc828da4c0e5f038",
           "retrieved_from": null
         }
       ]

@@ -26,6 +26,7 @@
 - An optional JSON Schema 2020-12 evaluator with exact numeric semantics,
   cooperative cancellation and declared work limits. Preparation reuses a
   resource set's identity index instead of indexing its resources again.
+  Registering a contract's resources takes time linear in their number.
 - Cheap checks and explanations are chosen per call. `PreparedValueContract::validate`
   (and `validate_with_control`, `validate_json`) reports a failure without
   problems; `explain` and `explain_with_control` return the same verdict with the

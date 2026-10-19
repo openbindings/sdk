@@ -404,15 +404,30 @@ dependencies = [
  "jsonschema-value",
  "num-cmp",
  "num-traits",
+ "openbindings-internal-referencing",
  "openbindings-internal-regress",
  "percent-encoding",
- "referencing",
  "regex",
  "serde",
  "serde_json",
  "strum",
  "unicode-general-category",
  "uuid-simd",
+]
+
+[[package]]
+name = "openbindings-internal-referencing"
+version = "0.58.6-ob.1"
+dependencies = [
+ "ahash",
+ "fluent-uri",
+ "getrandom",
+ "hashbrown",
+ "itoa",
+ "micromap",
+ "parking_lot",
+ "percent-encoding",
+ "serde_json",
 ]
 
 [[package]]
