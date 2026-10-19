@@ -14,9 +14,10 @@ Its optional `--upstream-dir` additionally checks the downloaded archives.
 upstream crate archive, emitting applicable patches and before/after hashes.
 Original manifests and Git identities remain `UPSTREAM-Cargo.toml` and
 `UPSTREAM-VCS.json`, and the jsonschema and referencing forks keep their upstream
-locks as `UPSTREAM-Cargo.lock`, a name no Cargo command rewrites; licenses and
-publish guards remain. Retained upstream locks are provenance; the SDK workspace
-lock is the build authority.
+locks as `UPSTREAM-Cargo.lock`, a name no Cargo command rewrites; the patch
+inventory records each as a rename of the archive's `Cargo.lock`, with a diff only
+if a byte differs. Licenses and publish guards remain. Retained upstream locks are
+provenance; the SDK workspace lock is the build authority.
 
 CI runs each fork's own regression tests, named in the sections below, with
 `python3 tools/test-dependency-forks.py --output <new-directory>`. Cargo tests a

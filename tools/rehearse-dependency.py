@@ -59,6 +59,12 @@ def main():
             if target.read_bytes():
                 raise SystemExit(f'Patch did not delete {change["file"]}')
             target.unlink()
+        # A retained archive file takes the name the fork keeps it under; any
+        # hunk for it was applied to the archive name.
+        if "renamed_from" in change:
+            if target.exists():
+                raise SystemExit(f'{change["file"]} exists before its rename')
+            (source / change["renamed_from"]).rename(target)
     current = ROOT / "vendor" / record["modified_package"]
     actual, expected = inventory(source), inventory(current)
     differences = sorted(name for name in actual.keys() | expected.keys()
