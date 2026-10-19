@@ -98,10 +98,12 @@ fn an_evaluator_reports_the_budgets_it_was_given() {
         compile_json_depth: 17,
         pattern_bytes: 19,
         pattern_depth: 23,
+        schema_resources: Some(29),
     };
     let evaluator = DefaultEvaluator::with_limits(limits);
     let reported = evaluator.limits();
     assert_eq!(reported.evaluation_steps, Some(7));
+    assert_eq!(reported.schema_resources, Some(29));
     assert_eq!(
         (
             reported.evaluation_depth,
@@ -113,6 +115,7 @@ fn an_evaluator_reports_the_budgets_it_was_given() {
         (11, 13, 17, 19, 23)
     );
     assert_eq!(DefaultEvaluator::new().limits().evaluation_steps, None);
+    assert_eq!(DefaultEvaluator::new().limits().schema_resources, None);
 }
 
 #[test]
