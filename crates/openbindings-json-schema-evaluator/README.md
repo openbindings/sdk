@@ -123,6 +123,16 @@ resource paths. Unicode property matching is unsupported when applied. `format` 
 annotation; another declared schema dialect is not treated as 2020-12.
 See [measured behavior](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md).
 
+One known limitation of the jsonschema library can give a wrong verdict. The
+library closes a `$ref` cycle by reusing the schema it is still compiling,
+identified by its URI alone, so a `$dynamicRef` inside that schema resolves on
+every pass through the cycle as on the path that first reached it. When the cycle
+enters a resource whose matching `$dynamicAnchor` thereby becomes the outermost in
+the dynamic scope, the specification resolves the `$dynamicRef` to that anchor on
+the cycle's path, and a value that reaches it there can satisfy where it should
+fail, or fail where it should satisfy. The JSON Schema Test Suite has no such case,
+and contracts without `$dynamicRef` are unaffected.
+
 Each call chooses its detail. `validate` is the cheap check: an established
 failure has a fixed message, an empty problem list and `problems_complete =
 false`. `explain` returns the library's first error for the same verdict, with

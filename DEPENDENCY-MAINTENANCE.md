@@ -1,12 +1,13 @@
 # Internal dependency maintenance contract
 
-The SDK carries two renamed forks: jsonschema 0.58.6 and regress 0.12.0.
-Both are private implementation dependencies. jsonschema-value 0.58.6,
-referencing 0.58.6 and serde_json 1.0.151 now use their unmodified registry
-identities. `docs/dependency-isolation.json` records the three upstream archive
-checksums and complete Rust source digests. `tools/verify-dependency-isolation.py`
-checks those sources, the single-serde graph, absence of SDK-requested arbitrary
-precision, retained fork identities, and the cancellation/schema boundaries.
+The SDK carries three renamed forks: jsonschema 0.58.6, referencing 0.58.6 and
+regress 0.12.0. All are private implementation dependencies. jsonschema-value
+0.58.6 and serde_json 1.0.151 use their unmodified registry identities.
+`docs/dependency-isolation.json` records the two upstream archive checksums and
+complete Rust source digests. `tools/verify-dependency-isolation.py` checks those
+sources, the single-serde graph, absence of SDK-requested arbitrary precision,
+retained fork identities (each fork the only copy of its library in the graph),
+and the cancellation/schema boundaries.
 Its optional `--upstream-dir` additionally checks the downloaded archives.
 
 `tools/dependency-patches.py` compares every retained fork file with its exact
@@ -117,7 +118,7 @@ the ownership correction below, all ordinary resolution, compilation, applicator
 and error construction remain the library's implementation. Upstream code, tests and comments keep their own wording:
 the SDK's vocabulary governs its own sources, not retained upstream text. Numeric semantics use its public extension APIs instead
 of forked equality/type/size internals. Cargo changes only select the private
-package/regress identities and ordinary upstream value/registry/serde dependencies.
+package/referencing/regress identities and ordinary upstream value/serde dependencies.
 
 The entire diagnostic patch is removed: admission/count/metadata/copy/payload and
 schema-detail scopes, the property-name copy hook, diagnostic_text, lazy custom
@@ -175,6 +176,38 @@ runs the reduced reproducer in four placements; `reference_placement` compares
 500 seeded random contracts, split across document, contained and supplied
 resources, with the same schemas in one resource. Both fail on the unmodified walk.
 
+## referencing
+
+Upstream revision: `55ac1664384793c5d3b20745d3f9c169dfe2c06f` (`crates/jsonschema-referencing`).
+Applied package: `openbindings-internal-referencing 0.58.6-ob.1`. The jsonschema
+fork is its only dependent; the evaluator uses it through jsonschema's re-exported
+`Registry`. The complete Rust delta is **+2/-3 lines in one file** against the
+0.58.6 archive:
+
+| File under src/ | Added | Removed | Why retained |
+| --- | ---: | ---: | --- |
+| registry/mod.rs | 2 | 3 | `RegistryBuilder::add` and `extend` move the pending map into the returned builder instead of collecting it into a new one. |
+
+Upstream `add` collects the builder's pending resources into a new map on every
+call, and `extend` collects them once and then calls `add` for each pair, so
+registering n resources costs O(n^2). Preparation registers every projected
+resource with `add` before compilation, outside any work allowance, so this cost
+grew without bound. Release builds on macOS arm64 set up a registry of 20,000
+resources in 2.77 s before and 26 ms after, and prepare a contract over 10,000
+supplied resources in 1.51 s before and 0.83 s after. The map's value type is
+covariant in the builder's lifetime, so the existing map already has the returned
+builder's type. Its iteration order is still unspecified; upstream never fixed one,
+since each rebuilt map had a fresh hash seed. Upstream master still collects on
+every call (2026-10-18); a release that keeps the map lets this fork go.
+
+The evaluator's `resource_registration` test times registering 1,000 and 4,000
+resources, through `add` and through `extend`, and requires the larger to take less
+than eight times as long: linear registration measures about 4, the unmodified
+source 16 to 17. Upstream's library unit tests pass on the fork (149, and 158 with
+`retrieve-async`) in a standalone copy resolved offline; Cargo does not test a
+package outside the workspace that has dev-dependencies. The published archive
+omits the test-suite crate and data that `tests/suite.rs` and the benches need.
+
 ## regress
 
 The upstream 0.12.0 archive contains the reversed `prohibit-unsafe` branch in
@@ -215,7 +248,8 @@ The complete diff inventory is in `docs/dependency-patches/`. Reproduce it with
 verify the original archives against the manifest checksums first.
 
 For an isolated rehearsal of the current `jsonschema` fork, use a new output
-directory and the original crate archive directory:
+directory and the original crate archive directory (`--package referencing` and
+`--package regress` rehearse the other forks the same way):
 
 ```sh
 python3 tools/rehearse-dependency.py --package jsonschema \

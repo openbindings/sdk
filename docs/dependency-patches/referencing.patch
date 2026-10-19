@@ -1,0 +1,206 @@
+--- a/.cargo_vcs_info.json
++++ /dev/null
+@@ -1,6 +0,0 @@
+-{
+-  "git": {
+-    "sha1": "55ac1664384793c5d3b20745d3f9c169dfe2c06f"
+-  },
+-  "path_in_vcs": "crates/jsonschema-referencing"
+-}
+\ No newline at end of file
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -10,10 +10,11 @@
+ # See Cargo.toml.orig for the original contents.
+ 
+ [package]
++publish = false
+ edition = "2021"
+-rust-version = "1.85.0"
+-name = "referencing"
+-version = "0.58.6"
++rust-version = "1.88"
++name = "openbindings-internal-referencing"
++version = "0.58.6-ob.1"
+ authors = ["Dmitry Dygalo <dmitry@dygalo.dev>"]
+ build = false
+ autolib = false
+--- a/Cargo.toml.orig
++++ /dev/null
+@@ -1,59 +0,0 @@
+-[package]
+-name = "referencing"
+-version = "0.58.6"
+-description = "An implementation-agnostic JSON reference resolution library for Rust."
+-readme = "README.md"
+-rust-version.workspace = true
+-edition.workspace = true
+-authors.workspace = true
+-repository.workspace = true
+-license.workspace = true
+-
+-[features]
+-default = []
+-retrieve-async = ["dep:async-trait", "dep:futures"]
+-
+-[target.'cfg(target_arch = "wasm32")'.dependencies]
+-getrandom = { version = "0.3.4", features = ["wasm_js"] }
+-
+-[dependencies]
+-ahash.workspace = true
+-
+-async-trait = { version = "0.1.86", optional = true }
+-fluent-uri = { version = "0.4.1", features = ["serde"] }
+-futures = { version = "0.3.31", optional = true }
+-itoa = "1"
+-parking_lot = "0.12.3"
+-percent-encoding = "2.3.1"
+-serde_json.workspace = true
+-hashbrown = { version = "0.17", features = ["equivalent"] }
+-micromap = "0.3.0"
+-
+-[dev-dependencies]
+-benchmark = { path = "../benchmark/" }
+-codspeed-criterion-compat = { version = "5.0", default-features = false }
+-criterion = { version = "0.8", default-features = false }
+-# This one is to make `wasm32-unknown-unknown` lints happy (codspeed depends on it)
+-getrandom = { version = "0.4", features = ["wasm_js"] }
+-referencing_testsuite = { package = "jsonschema-referencing-testsuite", path = "../jsonschema-referencing-testsuite/" }
+-test-case = "3.3.1"
+-tokio = { version = "1", features = ["macros", "rt"] }
+-
+-[lints]
+-workspace = true
+-
+-[[bench]]
+-harness = false
+-name = "subresources"
+-
+-[[bench]]
+-harness = false
+-name = "pointer"
+-
+-[[bench]]
+-harness = false
+-name = "anchor"
+-
+-[[bench]]
+-harness = false
+-name = "registry"
+--- /dev/null
++++ b/OPENBINDINGS-PATCH.md
+@@ -0,0 +1,21 @@
++# Internal dependency fork
++
++Based on `referencing-0.58.6`; upstream license and notices are retained.
++The distinct package name prevents unpatched transitive dependency resolution:
++the sibling jsonschema fork depends on this package, so the SDK graph holds one
++`referencing`.
++
++One correction is the fork's own. Upstream `RegistryBuilder::add` collects its
++pending resources into a new map on every call, and `extend` collects them once
++more before calling `add` for each pair, so registering n resources one at a time
++costs O(n^2). The builder now moves its pending map into the returned builder;
++the map's value type is covariant in the builder's lifetime, so no rebuild is
++needed and registration is linear. The SDK evaluator's `resource_registration`
++test guards it through the jsonschema fork's re-exported `Registry`.
++
++The repository maintenance contract is DEPENDENCY-MAINTENANCE.md. Original
++upstream identity and manifest are retained as UPSTREAM-VCS.json and
++UPSTREAM-Cargo.toml; these names avoid Cargo-reserved packaging metadata. The
++complete reproducible patch and archive checksum are in docs/dependency-patches
++at the repository root. This package is an implementation detail, not a
++supported SDK extension API.
+--- /dev/null
++++ b/UPSTREAM-Cargo.toml
+@@ -0,0 +1,59 @@
++[package]
++name = "referencing"
++version = "0.58.6"
++description = "An implementation-agnostic JSON reference resolution library for Rust."
++readme = "README.md"
++rust-version.workspace = true
++edition.workspace = true
++authors.workspace = true
++repository.workspace = true
++license.workspace = true
++
++[features]
++default = []
++retrieve-async = ["dep:async-trait", "dep:futures"]
++
++[target.'cfg(target_arch = "wasm32")'.dependencies]
++getrandom = { version = "0.3.4", features = ["wasm_js"] }
++
++[dependencies]
++ahash.workspace = true
++
++async-trait = { version = "0.1.86", optional = true }
++fluent-uri = { version = "0.4.1", features = ["serde"] }
++futures = { version = "0.3.31", optional = true }
++itoa = "1"
++parking_lot = "0.12.3"
++percent-encoding = "2.3.1"
++serde_json.workspace = true
++hashbrown = { version = "0.17", features = ["equivalent"] }
++micromap = "0.3.0"
++
++[dev-dependencies]
++benchmark = { path = "../benchmark/" }
++codspeed-criterion-compat = { version = "5.0", default-features = false }
++criterion = { version = "0.8", default-features = false }
++# This one is to make `wasm32-unknown-unknown` lints happy (codspeed depends on it)
++getrandom = { version = "0.4", features = ["wasm_js"] }
++referencing_testsuite = { package = "jsonschema-referencing-testsuite", path = "../jsonschema-referencing-testsuite/" }
++test-case = "3.3.1"
++tokio = { version = "1", features = ["macros", "rt"] }
++
++[lints]
++workspace = true
++
++[[bench]]
++harness = false
++name = "subresources"
++
++[[bench]]
++harness = false
++name = "pointer"
++
++[[bench]]
++harness = false
++name = "anchor"
++
++[[bench]]
++harness = false
++name = "registry"
+--- /dev/null
++++ b/UPSTREAM-VCS.json
+@@ -0,0 +1,6 @@
++{
++  "git": {
++    "sha1": "55ac1664384793c5d3b20745d3f9c169dfe2c06f"
++  },
++  "path_in_vcs": "crates/jsonschema-referencing"
++}
+\ No newline at end of file
+--- a/src/registry/mod.rs
++++ b/src/registry/mod.rs
+@@ -140,8 +140,7 @@
+         'a: 'b,
+     {
+         let parsed = uri::from_str(uri.as_ref().trim_end_matches('#'))?;
+-        let mut pending: AHashMap<Uri<String>, PendingResource<'b>> =
+-            self.pending.into_iter().collect();
++        let mut pending: AHashMap<Uri<String>, PendingResource<'b>> = self.pending;
+         input::private::Sealed::insert_into(resource, &mut pending, parsed);
+         Ok(RegistryBuilder {
+             baseline: self.baseline,
+@@ -167,7 +166,7 @@
+     {
+         let mut builder = RegistryBuilder {
+             baseline: self.baseline,
+-            pending: self.pending.into_iter().collect(),
++            pending: self.pending,
+             retriever: self.retriever,
+             #[cfg(feature = "retrieve-async")]
+             async_retriever: self.async_retriever,

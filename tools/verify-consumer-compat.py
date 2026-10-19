@@ -113,9 +113,9 @@ with tempfile.TemporaryDirectory(prefix='openbindings-consumer-') as temporary:
         assert shared_features == sorted(expected), (label, shared_features)
         assert private is None, label
         assert len([i for i in identities if i.startswith('serde_json v')]) == 1, label
-        assert not {'openbindings-internal-referencing', 'openbindings-internal-jsonschema-value'} & nodes.keys(), label
+        assert not {'referencing', 'openbindings-internal-jsonschema-value'} & nodes.keys(), label
         if features not in ['', 'ap']:
-            assert 'referencing' in nodes and 'jsonschema-value' in nodes, label
+            assert 'openbindings-internal-referencing' in nodes and 'jsonschema-value' in nodes, label
         result = run(['cargo', 'test', '--locked', *selection], fixture)
         row = {'configuration': label, 'serde_json_features': shared_features,
                'serde_json_identities': sorted(i for i in identities if i.startswith('serde_json v')),

@@ -54,7 +54,11 @@ schema. The [evaluator guide](docs/schema-evaluators.md) explains integration.
 The optional default evaluator supports JSON Schema 2020-12 with exact decimal
 comparison and explicit immutable resources. It performs no reference acquisition.
 `format` remains an annotation. Applied Unicode property matching and other
-unsupported capabilities produce no-verdict. The default work allowance grows
+unsupported capabilities produce no-verdict. A library limitation can give a wrong
+verdict for a `$dynamicRef` reached again through a `$ref` cycle that enters the
+resource declaring its outermost matching `$dynamicAnchor`; the
+[evaluator limits](crates/openbindings-json-schema-evaluator/README.md#limits) state
+the exact shape. The default work allowance grows
 with the value checked: 2,000,000 units per pass up to 65,536 value nodes and
 proportionally more above, so ordinary schemas decide values as large as the
 default admission limits accept. An explicitly configured allowance caps every

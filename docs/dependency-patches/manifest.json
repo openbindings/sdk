@@ -20,7 +20,7 @@
         {
           "file": "Cargo.toml",
           "upstream_sha256": "a8318117cc87a9a88027d5820fc5507eda16cbf04e166cb35a26be5492a1f8d7",
-          "current_sha256": "e620bd721b5bea9d6992e80fae5da09c19dae5c6395957f31138122fb478b49c"
+          "current_sha256": "332600337ef0da64dd54ab8c5d66ca7738ef077f7e5b16de7e95f472423b80f4"
         },
         {
           "file": "Cargo.toml.orig",
@@ -30,7 +30,7 @@
         {
           "file": "OPENBINDINGS-PATCH.md",
           "upstream_sha256": null,
-          "current_sha256": "013093b81bfa888bdea6bb5ac5d0cead4f27307ec2a70ff649981b2a2ade9f3c"
+          "current_sha256": "d8b694a09311e61b10b951b9e99cb351b4309ca176913ed3cc111c6c2fbfab77"
         },
         {
           "file": "UPSTREAM-Cargo.toml",
@@ -119,6 +119,56 @@
         }
       ],
       "patch": "jsonschema.patch"
+    },
+    {
+      "upstream": "referencing",
+      "version": "0.58.6",
+      "upstream_archive_sha256": "558f3855529c0a7e78a48e409fa653456e55f1b167eab4109c16a255b7727e3f",
+      "vcs": {
+        "git": {
+          "sha1": "55ac1664384793c5d3b20745d3f9c169dfe2c06f"
+        },
+        "path_in_vcs": "crates/jsonschema-referencing"
+      },
+      "modified_package": "openbindings-internal-referencing",
+      "changes": [
+        {
+          "file": ".cargo_vcs_info.json",
+          "upstream_sha256": "34edc1152e075903e3833b3ec4b8ffaac81d5e718cfa61390340c34f0722b6d7",
+          "current_sha256": null
+        },
+        {
+          "file": "Cargo.toml",
+          "upstream_sha256": "b76476723bee5d0c68b8e970324254a5a4d75d7a264d6a31f1664f5abc1f87a4",
+          "current_sha256": "341634ec48ebfe1f5efb6e91495d7b9f418697582b4b16babfda27bf22960a55"
+        },
+        {
+          "file": "Cargo.toml.orig",
+          "upstream_sha256": "67f56523e3bb341ee112a625cd236e84a03592285e95d96a7bf686d725d2f80b",
+          "current_sha256": null
+        },
+        {
+          "file": "OPENBINDINGS-PATCH.md",
+          "upstream_sha256": null,
+          "current_sha256": "00d0d46352156ef73954e9492a9b4561426751a328fca4a9ac2aede88dabf287"
+        },
+        {
+          "file": "UPSTREAM-Cargo.toml",
+          "upstream_sha256": null,
+          "current_sha256": "67f56523e3bb341ee112a625cd236e84a03592285e95d96a7bf686d725d2f80b"
+        },
+        {
+          "file": "UPSTREAM-VCS.json",
+          "upstream_sha256": null,
+          "current_sha256": "34edc1152e075903e3833b3ec4b8ffaac81d5e718cfa61390340c34f0722b6d7"
+        },
+        {
+          "file": "src/registry/mod.rs",
+          "upstream_sha256": "3509f751003ddd86b3e9599522c1b91f26e54f960b8cd18a439df607d58c24b6",
+          "current_sha256": "c634584e3c36b11b87286d4b3ffc05cf76eccf9e6e2b23b0c6788a8cd3b33c52"
+        }
+      ],
+      "patch": "referencing.patch"
     },
     {
       "upstream": "regress",

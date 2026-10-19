@@ -7,7 +7,7 @@ import json
 import tarfile
 
 ROOT = Path(__file__).resolve().parents[1]
-UPSTREAM = [('jsonschema', '0.58.6'), ('regress', '0.12.0')]
+UPSTREAM = [('jsonschema', '0.58.6'), ('referencing', '0.58.6'), ('regress', '0.12.0')]
 
 
 def digest(value):
