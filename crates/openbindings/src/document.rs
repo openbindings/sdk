@@ -647,6 +647,17 @@ impl NameIndex {
 }
 #[derive(Clone)]
 /// Name-resolution result after successful interpretation; missing and ambiguous names are not schema verdicts.
+///
+/// This closed partition may be exhaustively matched:
+/// ```
+/// use openbindings::OperationSelection;
+/// fn found(selection: &OperationSelection) -> bool {
+///     match selection {
+///         OperationSelection::Found(_) => true,
+///         OperationSelection::Missing | OperationSelection::Ambiguous { .. } => false,
+///     }
+/// }
+/// ```
 pub enum OperationSelection {
     /// One retained operation view selected by primary key or alias; the view must still be assessed/prepared as needed.
     Found(OperationView),

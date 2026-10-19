@@ -30,8 +30,11 @@ All public Rust types implement `Debug` as a structural aid: types, variants,
 fixed SDK reasons and byte coordinates may be shown. Caller- and document-owned
 text is omitted, including reference spellings, URLs, origins, JSON Pointers,
 evidence-map keys and values, diagnostic messages, schema operands, bodies,
-credentials, provider state and invocation context. `Display`, accessors and
-serialization retain their existing output; use them when disclosure is intended.
+credentials, provider state, invocation context, and codes outside the SDK's
+fixed vocabulary, such as an application's `InvocationError` code or a custom
+evaluator's. `Display`, accessors and serialization retain their existing output,
+so `InvocationError` Display prints every code; use them when disclosure is
+intended.
 Debug formatting is not a stable serialization format.
 `Document` owns private exact storage; construct and edit it through its methods. Result-returning APIs document caller-visible failures
 under `# Errors`. `DocumentValidation`, `VersionDecision`, `ValueOutcome` and
@@ -47,7 +50,10 @@ problems, refusals, reference reports, kit receipts, discovery and publication
 results, companion results and errors. Their fields stay public to read and
 assign, and later versions may add fields without a breaking release. Outside the
 SDK they cannot be built with a struct literal, and a destructuring pattern needs
-`..`. Records an evaluator, provider or transport must build have a constructor
+`..`. The exception is `JsonMember`, which `JsonRef::members` yields and only
+the SDK builds. It stays exhaustive: a JSON member is exactly a name and a value,
+so it has no field to gain, and `let JsonMember { name, value } = member;` stays
+valid. Records an evaluator, provider or transport must build have a constructor
 for their required fields and `with_*` methods for optional ones:
 
 | Builder | Records |
@@ -64,8 +70,7 @@ construction: typed authoring parts and `BindingFragment`, `SchemaResource`,
 `PublicationOptions`, `HttpResponse`, synthesis requests, invocation carriers and
 `InvocationLimits`. Add `..Default::default()` where a record implements
 `Default`. Discovery's `Header`, a name and a value built on both sides, stays
-exhaustive. So does `JsonMember`, which only the SDK builds: a JSON member is
-exactly a name and a value, so it has no field to gain.
+exhaustive.
 
 Closed partitions stay exhaustive, so a `match` can name every variant:
 `Evidence`, `Conformance`, `ValueOutcome`, `VersionDecision`, `JsonKind`,
