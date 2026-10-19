@@ -229,6 +229,97 @@ dedicated runners use >10% / >1.10. Timing regressions, inconclusive timing and
 RSS verification flags do not fail the job. Noise requests a rerun. See the
 harness for exact floors, confirmation and calibration policy.
 
+## Preparation work bound
+
+Preparation compiles the projected schemas with the JSON Schema library, and some
+library behaviors can make that compilation grow faster than the schema. Each
+time it defers a nested `$ref` target it copies every in-progress reference
+placeholder, which is quadratic in a reference chain's length. It also keys its
+compiled schemas by dynamic scope, so a schema reached along several paths through
+resources (supplied resources or `$id` resources) would compile once per path,
+exponentially in the number of branching and rejoining levels, and each of those
+compilations copies the schema's own `required` names and patterns again. Only
+resolution through a `$dynamicAnchor` reads the dynamic scope, so when the projected
+contract declares none, the default evaluator tells the library, which then keys
+by location and compiles each schema once. A contract that reaches a dynamic
+anchor, for example by referencing the 2020-12 meta-schema, keeps one compilation
+per path.
+
+The library charges what a build does, in units of about a nanosecond of
+compilation time or 0.7 bytes of compilation memory, whichever the work costs more
+of, in the reference release build:
+
+| Work | Units |
+| --- | ---: |
+| A compiled schema node, or the node built for a `dependentRequired` entry | 830 |
+| Each byte of that node's location | 8 |
+| A `$ref` or `$dynamicRef` resolved and entered | 750 |
+| Each dynamic-scope entry keying a node's caches | 30 |
+| Each dynamic-scope entry searched for a dynamic anchor | 440 |
+| Each placeholder copied when a `$ref` target is deferred | 10 |
+| Each property name copied out of `required` or `dependentRequired` | 110 |
+| Each byte of such a name | 2 |
+| Each byte of a `pattern` | 1 |
+
+The weights were fitted to 126 measured builds in 20 classes of contract shape.
+Where time dominates, compile time is within about 25% of a nanosecond per unit;
+where copying dominates (long `required`, `dependentRequired` and `pattern` values
+compiled once per scope), compile memory is 0.7 to 1 byte per unit and time less.
+The charge counts work and never measures it, so a build's charge is the same on
+every platform.
+
+The default evaluator allows 250,000,000 units plus 4,096 per projected
+definition, that is, per schema position the contract reaches, named or not, and
+refuses beyond that with `LimitExceeded` (`preparation-work-limit`). Compiling an
+ordinary definition once costs about 2,700 units, so the number of definitions
+alone does not refuse a contract; the floor bounds what grows beyond them. Builds
+of the review corpora spend under 1% of their allowance, except a 3,000-definition
+contract (3%) and a layered model holding a schema-valued property (11%); layered
+models across resources without one spend under 2%.
+
+Release measurements on macOS arm64, Rust 1.99.0, 2026-10-18, against `ba5ca95`
+(minimum of three preparations; peak resident memory of the whole process; the
+machine was shared, so times run high):
+
+| Shape | Before | After |
+| --- | --- | --- |
+| 7 layers of 6 object schemas, each referencing 3 of the next, as 42 supplied resources | prepared, 25.6 ms | prepared, 3.2 ms |
+| The same model as `$id` resources in one document | prepared, 25.6 ms | prepared, 3.2 ms |
+| 12 layers of 6 schemas, each referencing 3 of the next, supplied | prepared, 10.3 s, 3.9 GB | prepared, 5.4 ms, 15 MB |
+| 24 levels of resource diamonds | stopped after 300 s at 17 GB | prepared, 1.9 ms |
+| The 7-layer model with one property holding a 2020-12 schema | prepared, 25.5 ms | prepared, 25.5 ms |
+| 16,000-link same-document chain | prepared, 238 ms | prepared, 235 ms |
+| 49,000-link same-document chain (1.79 MB) | prepared, 1.7 s, 247 MB | refused, 0.71 s, 232 MB |
+| 13 levels of resource diamonds with a dynamic anchor | prepared, 278 ms | refused, 296 ms |
+| 1,000 `$id` resources sharing one with `required` of 100,000 names, with a schema-valued property | prepared, 4.6 s, 10.5 GB | refused, 0.24 s, 304 MB |
+| The same without the schema-valued property | prepared, 4.0 s, 10.5 GB | prepared, 69 ms, 94 MB |
+
+Generated contracts whose `unevaluatedProperties` and `unevaluatedItems` walks
+cross resources took from 1.4 s to more than 65 s each to prepare on `4b6afd3`
+(one preparation each, 25 contracts of up to 23 resources); they now prepare in 2
+to 26 ms, with the same verdicts where `4b6afd3` finished. One of 4 supplied and 6 contained
+resources (8.2 KB) took 62 s and prepares in 3.7 ms. With a property holding a
+2020-12 schema, each of the 25 refuses in 0.29 to 0.37 s.
+
+Same-document chains refuse from 23,497 links. With a reachable dynamic anchor,
+resource diamonds refuse from 13 levels, and a 20,000-name `required` list shared by
+more than 103 resource paths refuses. A refused build is released link by link, as
+a prepared one is, so refusing a long chain needs no more stack than preparing it.
+Evaluation still follows every path of a diamond, within the evaluation limits.
+A schema compiled once is reached from its later paths through a pending node, as
+the library already does within one resource, which can cost evaluation steps. In
+an adversarial corpus of 15,400 values, 647 needed more steps than before, at most
+32% more; at budgets of 10 to 400 steps, 45 value and budget pairs lost their
+verdict, 9 gained one, and 26 explanations kept their failure but no longer listed
+its problem. A value that needs nearly its whole `evaluation_steps` budget can
+therefore return no verdict, or an explanation without its problem; a verdict that
+is reached never changes.
+Outside the charge stay the SDK's linear projection, pattern admission and each
+distinct pattern's one-time regex build, and registry setup, which grows
+quadratically with the number of projected resources (55 ms for 2,000 supplied
+resources, 0.47 s for an 8,000-resource `$id` chain); a refused 49,000-link chain
+spends about a third of its time there and in projection.
+
 ## Document validation
 
 Run from the repository root with no concurrent compilation:

@@ -233,14 +233,20 @@
 -required-features = ["jsonb"]
 --- /dev/null
 +++ b/OPENBINDINGS-PATCH.md
-@@ -0,0 +1,25 @@
+@@ -0,0 +1,31 @@
 +# Internal dependency fork
 +
 +Based on `jsonschema-0.58.6`; upstream license and notices are retained.
-+The distinct package identity selects the qualified work/depth/cycle and
-+ECMAScript-regex guards. The regex correctness fixes (empty quantifier semantics
-+and backtrack budget restoration) remain in the sibling regress fork; see
-+DEPENDENCY-MAINTENANCE.md.
++The distinct package identity selects the qualified evaluation work/depth/cycle,
++compilation work and ECMAScript-regex guards, weighs compilation work by what each
++build does, caches compiled schemas by location alone in builds that reach no dynamic
++anchor, and releases a build that stops part way without recursion. Such a build
++fails rather than compile a reference it resolves through a dynamic or recursive
++anchor, from the reference keywords or an `unevaluatedProperties` or
++`unevaluatedItems` walk; the `oneOf`/`anyOf` discriminator follows only `$ref`s the
++`$ref` keyword also compiles, under the standard vocabularies. The regex
++correctness fixes (empty quantifier semantics and backtrack budget restoration)
++remain in the sibling regress fork; see DEPENDENCY-MAINTENANCE.md.
 +One correction is the fork's own: an `unevaluatedProperties` walk builds only the
 +`patternProperties` patterns it needs. Upstream also compiles and drops the subschemas,
 +although a later compilation round can still reach their unsettled `$ref` targets through
@@ -467,7 +473,72 @@
              size_limit,
 --- a/src/compiler.rs
 +++ b/src/compiler.rs
-@@ -312,7 +312,7 @@
+@@ -133,11 +133,33 @@
+     }
+ }
+ 
+-#[derive(Hash, PartialEq, Eq, Clone, Debug)]
++#[derive(Clone, Debug)]
+ pub(crate) struct LocationCacheKey {
+     pub(crate) base_uri: Arc<Uri<String>>,
+     location: Arc<str>,
+     dynamic_scope: List<Uri<String>>,
++}
++
++// OpenBindings qualification patch: in a build that reaches no dynamic anchor, no reference
++// resolves through the dynamic scope, so cache keys compare and hash without it.
++impl PartialEq for LocationCacheKey {
++    fn eq(&self, other: &Self) -> bool {
++        self.base_uri == other.base_uri
++            && self.location == other.location
++            && (crate::ob_work::static_anchors() || self.dynamic_scope == other.dynamic_scope)
++    }
++}
++
++impl Eq for LocationCacheKey {}
++
++impl std::hash::Hash for LocationCacheKey {
++    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
++        self.base_uri.hash(state);
++        self.location.hash(state);
++        if !crate::ob_work::static_anchors() {
++            self.dynamic_scope.hash(state);
++        }
++    }
+ }
+ 
+ /// Named anchors can share a base URI and output location without naming the same schema.
+@@ -175,10 +197,28 @@
+     }
+ }
+ 
+-#[derive(Hash, PartialEq, Eq, Clone, Debug)]
++#[derive(Clone, Debug)]
+ pub(crate) struct AliasCacheKey {
+     uri: Arc<Uri<String>>,
+     dynamic_scope: List<Uri<String>>,
++}
++
++impl PartialEq for AliasCacheKey {
++    fn eq(&self, other: &Self) -> bool {
++        self.uri == other.uri
++            && (crate::ob_work::static_anchors() || self.dynamic_scope == other.dynamic_scope)
++    }
++}
++
++impl Eq for AliasCacheKey {}
++
++impl std::hash::Hash for AliasCacheKey {
++    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
++        self.uri.hash(state);
++        if !crate::ob_work::static_anchors() {
++            self.dynamic_scope.hash(state);
++        }
++    }
+ }
+ 
+ /// A `$ref`'s resolved URI and the location its target starts at.
+@@ -312,11 +352,24 @@
  #[derive(Debug, Clone)]
  struct PatternCacheEntry {
      translated: Arc<str>,
@@ -476,7 +547,24 @@
      standard: Option<Arc<regex::Regex>>,
  }
  
-@@ -514,7 +514,7 @@
+ impl<F: Json> SharedContextState<'_, F> {
++    /// OpenBindings qualification patch: drop every compiled node and placeholder held here.
++    fn release_nodes(&self) {
++        self.location_nodes.borrow_mut().clear();
++        self.alias_nodes.borrow_mut().clear();
++        self.alias_placeholders.borrow_mut().clear();
++        self.deferred_placeholders.borrow_mut().clear();
++        self.deferred_targets.borrow_mut().clear();
++        self.pending_property_validators_by_schema
++            .borrow_mut()
++            .clear();
++        self.pending_items_validators_by_schema.borrow_mut().clear();
++    }
++
+     /// `capacity` pre-sizes the per-location node cache to avoid rehashing during a build.
+     fn new(capacity: usize) -> Self {
+         Self {
+@@ -514,7 +567,7 @@
          if let Some(entry) = self.shared.pattern_cache.borrow().get(pattern) {
              return Ok(Arc::clone(&entry.translated));
          }
@@ -485,7 +573,7 @@
          self.shared.pattern_cache.borrow_mut().insert(
              Arc::from(pattern),
              PatternCacheEntry {
-@@ -847,7 +847,7 @@
+@@ -847,7 +900,7 @@
      pub(crate) fn get_or_compile_regex(
          &self,
          pattern: &str,
@@ -494,6 +582,97 @@
          let translated = self.translated_pattern(pattern)?;
          {
              let cache = self.shared.pattern_cache.borrow();
+@@ -993,6 +1046,9 @@
+             .deferred_placeholders
+             .borrow_mut()
+             .insert(key.clone(), placeholder.clone());
++        // OpenBindings qualification patch: charge the placeholders this copies.
++        let copied = self.shared.alias_placeholders.borrow().len() as u64;
++        crate::ob_work::compile_charge(crate::ob_work::cost::PLACEHOLDER * copied);
+         let in_progress = self.shared.alias_placeholders.borrow().clone();
+         self.shared
+             .deferred_targets
+@@ -1108,7 +1164,8 @@
+     let resource = draft.create_resource_ref(schema);
+ 
+     if config.validate_schema {
+-        validate_schema(draft, schema)?;
++        // OpenBindings qualification patch: meta-validation is not compilation work.
++        crate::ob_work::uncharged(|| validate_schema(draft, schema))?;
+     }
+ 
+     if let Some(registry) = config.registry {
+@@ -1234,22 +1291,33 @@
+     draft: Draft,
+ ) -> Result<Validator<F>, ValidationError<'static>> {
+     let root = compile(ctx, resource).map_err(ValidationError::into_build_error)?;
+-    let targets = compile_deferred_targets(ctx)?;
+-    Ok(Validator {
+-        root,
+-        targets,
+-        draft,
+-    })
+-}
+-
+-/// Drain the worklist and return the targets it compiled.
++    let mut targets = Vec::new();
++    match compile_deferred_targets(ctx, &mut targets) {
++        Ok(()) => Ok(Validator {
++            root,
++            targets,
++            draft,
++        }),
++        // OpenBindings qualification patch: release a build that stopped part way as a
++        // validator is released. Its targets go last, in order, once neither the root nor
++        // the caches hold them, so a long `$ref` chain never drops recursively.
++        Err(error) => {
++            drop(root);
++            ctx.shared.release_nodes();
++            drop(targets);
++            Err(error)
++        }
++    }
++}
++
++/// Drain the worklist into `targets`.
+ ///
+ /// Out of line to keep its frame off the stack while the schema compiles.
+ #[inline(never)]
+ fn compile_deferred_targets<F: Json>(
+     ctx: &Context<'_, F>,
+-) -> Result<Vec<SchemaNode<F>>, ValidationError<'static>> {
+-    let mut targets = Vec::new();
++    targets: &mut Vec<SchemaNode<F>>,
++) -> Result<(), ValidationError<'static>> {
+     while let Some(target) = ctx.next_deferred_target() {
+         ctx.replace_alias_placeholders(target.in_progress);
+         let vocabularies = target
+@@ -1275,7 +1343,7 @@
+         }
+         ctx.replace_alias_placeholders(AHashMap::new());
+     }
+-    Ok(targets)
++    Ok(())
+ }
+ 
+ pub(crate) fn normalize_base_uri(registry: &Registry<'_>, base_uri: &Uri<String>) -> Uri<String> {
+@@ -1551,6 +1619,16 @@
+         Ok(existing) => return Ok(existing),
+         Err(key) => key,
+     };
++    // OpenBindings qualification patch: charge this compilation, with its location and the
++    // dynamic scope keying its caches; the adapter refuses a build whose scope is spent.
++    let scope = (!crate::ob_work::static_anchors()).then(|| key.location.dynamic_scope.iter());
++    let units = crate::ob_work::cost::node(
++        ctx.location().as_str().len(),
++        scope.map_or(0, Iterator::count),
++    );
++    if !crate::ob_work::compile_charge(units) {
++        return Err(ValidationError::custom("schema compilation work limit"));
++    }
+     let outer = ctx.start_node();
+     let target = alias
+         .as_ref()
 --- a/src/keywords/additional_properties.rs
 +++ b/src/keywords/additional_properties.rs
 @@ -1683,7 +1683,7 @@
@@ -514,6 +693,187 @@
                                          F,
                                      >(ctx, map, patterns, schema)
                                  } else {
+--- a/src/keywords/dependencies.rs
++++ b/src/keywords/dependencies.rs
+@@ -159,6 +159,8 @@
+             let kctx = ctx.new_at_location("dependentRequired");
+             let mut dependencies = Vec::with_capacity(map.len());
+             for (key, subschema) in map {
++                // OpenBindings qualification patch: charge the node this entry builds.
++                crate::ob_work::compile_charge(crate::ob_work::cost::entry(key.len()));
+                 let ictx = kctx.new_at_location(key.as_str());
+                 if let Value::Array(dependency_array) = subschema {
+                     if !crate::unique::is_unique(dependency_array) {
+--- a/src/keywords/pattern.rs
++++ b/src/keywords/pattern.rs
+@@ -243,6 +243,8 @@
+     schema: &'a Value,
+ ) -> Option<CompilationResult<'a, F>> {
+     if let Value::String(item) = schema {
++        // OpenBindings qualification patch: charge analyzing and copying the pattern.
++        crate::ob_work::compile_charge(crate::ob_work::cost::PATTERN_BYTE * item.len() as u64);
+         // Try literal optimizations before compiling a full regex.
+         match analyze_pattern(item) {
+             Some(PatternOptimization::Exact(exact)) => {
+--- a/src/keywords/ref_.rs
++++ b/src/keywords/ref_.rs
+@@ -202,6 +202,20 @@
+     alias.fragment().is_some_and(|fragment| {
+         !fragment.as_str().is_empty() && !fragment.as_str().starts_with('/')
+     })
++}
++
++/// OpenBindings qualification patch: the `unevaluatedProperties` and `unevaluatedItems` walks
++/// resolve the references they pass through themselves, even keywords their schema's draft does
++/// not compile. In a static build, fail such a resolution when it lands on a dynamic or recursive
++/// anchor, which the library finds by searching the dynamic scope.
++pub(crate) fn static_walk_target(target: &Value) -> Result<(), ValidationError<'static>> {
++    if crate::ob_work::static_anchors()
++        && (target.get("$dynamicAnchor").is_some()
++            || target.get("$recursiveAnchor") == Some(&Value::Bool(true)))
++    {
++        return Err(ValidationError::custom("dynamic anchor in a static build"));
++    }
++    Ok(())
+ }
+ 
+ /// Location of a named target within its resource.
+@@ -271,6 +285,12 @@
+     if reference.is_empty() {
+         return None;
+     }
++    // OpenBindings qualification patch: charge resolving and entering this reference.
++    if !crate::ob_work::compile_charge(crate::ob_work::cost::REFERENCE) {
++        return Some(Err(ValidationError::custom(
++            "schema compilation work limit",
++        )));
++    }
+     let (alias, ref_target_base) = match ctx
+         .ref_target(reference, extract_ref_target_base)
+         .map_err(ValidationError::from)
+@@ -287,6 +307,17 @@
+     };
+     // A pointer counts from the resource the reference names, an anchor from the one it is in.
+     let (ref_target_base, target_location, resource_start) = if is_named(&alias) {
++        // OpenBindings qualification patch: a dynamic anchor is found by searching the dynamic
++        // scope, which a static build's caches ignore.
++        if resolved.contents().get("$dynamicAnchor").is_some() {
++            if crate::ob_work::static_anchors() {
++                return Some(Err(ValidationError::custom(
++                    "dynamic anchor in a static build",
++                )));
++            }
++            let searched = resolved.resolver().dynamic_scope().iter().count() as u64;
++            crate::ob_work::compile_charge(crate::ob_work::cost::ANCHOR_SEARCH * searched);
++        }
+         match named_target_base(ctx, &resolved) {
+             Ok(location) => {
+                 let target = target_location(&resolved.resolver().base_uri(), &location);
+@@ -391,6 +422,14 @@
+     let resolved = ctx
+         .lookup_recursive_reference()
+         .map_err(ValidationError::from)?;
++    // OpenBindings qualification patch: the build's caches ignore the dynamic scope.
++    if crate::ob_work::static_anchors()
++        && resolved.contents().get("$recursiveAnchor") == Some(&Value::Bool(true))
++    {
++        return Err(ValidationError::custom(
++            "recursive anchor in a static build",
++        ));
++    }
+     let target_location = target_location(&resolved.resolver().base_uri(), &ref_target_base);
+ 
+     match ctx.lookup_maybe_recursive(reference, resolved.resolver()) {
+--- a/src/keywords/required.rs
++++ b/src/keywords/required.rs
+@@ -29,9 +29,11 @@
+         location: Location,
+     ) -> CompilationResult<'_, F> {
+         let mut required = Vec::with_capacity(items.len());
++        let mut bytes = 0;
+         for item in items {
+             match item {
+                 Value::String(string) => {
++                    bytes += string.len();
+                     required.push((PropertyName::new(string.clone()), F::prepare_key(string)));
+                 }
+                 _ => {
+@@ -45,6 +47,8 @@
+                 }
+             }
+         }
++        // OpenBindings qualification patch: charge the names this copies.
++        crate::ob_work::compile_charge(crate::ob_work::cost::names(items.len(), bytes));
+         Ok(Box::new(RequiredValidator { required, location }))
+     }
+ }
+@@ -496,6 +500,7 @@
+             && !has_pattern_properties
+             && !ctx.is_keyword_overridden("additionalProperties")
+         {
++            charge_names(items);
+             return None;
+         }
+ 
+@@ -519,11 +524,19 @@
+             && !additional_props_is_schema
+             && !has_pattern_properties
+         {
++            charge_names(items);
+             return None;
+         }
+     }
+     let location = ctx.location().join("required");
+     compile_with_path(schema, location)
++}
++
++/// OpenBindings qualification patch: charge the names of a short list, which a validator
++/// (fused with `properties` for one or two) copies; a longer list is charged as it is copied.
++fn charge_names(items: &[Value]) {
++    let bytes = items.iter().filter_map(Value::as_str).map(str::len).sum();
++    crate::ob_work::compile_charge(crate::ob_work::cost::names(items.len(), bytes));
+ }
+ 
+ #[inline]
+@@ -532,6 +545,9 @@
+     location: Location,
+ ) -> Option<CompilationResult<'_, F>> {
+     // IMPORTANT: If this function will ever return `None`, adjust `dependencies.rs` accordingly
++    if let Some(items) = schema.as_array().filter(|items| items.len() <= 3) {
++        charge_names(items);
++    }
+     match schema {
+         Value::Array(items) => match items.len() {
+             1 => {
+--- a/src/keywords/unevaluated_items.rs
++++ b/src/keywords/unevaluated_items.rs
+@@ -448,6 +448,8 @@
+     };
+ 
+     let resolved = ctx.lookup(reference).map_err(ValidationError::from)?;
++    // OpenBindings qualification patch: see `static_walk_target`.
++    super::ref_::static_walk_target(resolved.contents())?;
+ 
+     let (contents, resolver, draft) = resolved.into_inner();
+     if let Value::Object(subschema) = &contents {
+@@ -478,6 +480,8 @@
+     };
+ 
+     let resolved = ctx.lookup(reference).map_err(ValidationError::from)?;
++    // OpenBindings qualification patch: see `static_walk_target`.
++    super::ref_::static_walk_target(resolved.contents())?;
+ 
+     let (contents, resolver, draft) = resolved.into_inner();
+     if let Value::Object(subschema) = &contents {
+@@ -511,6 +515,8 @@
+     let resolved = ctx
+         .lookup_recursive_reference()
+         .map_err(ValidationError::from)?;
++    // OpenBindings qualification patch: see `static_walk_target`.
++    super::ref_::static_walk_target(resolved.contents())?;
+ 
+     // Create context for the resolved reference and check its cache key
+     let (contents, resolver, draft) = resolved.into_inner();
 --- a/src/keywords/unevaluated_properties.rs
 +++ b/src/keywords/unevaluated_properties.rs
 @@ -52,7 +52,7 @@
@@ -543,6 +903,33 @@
      }
  
      Ok(result)
+@@ -709,6 +710,8 @@
+     };
+ 
+     let resolved = ctx.lookup(reference).map_err(ValidationError::from)?;
++    // OpenBindings qualification patch: see `static_walk_target`.
++    super::ref_::static_walk_target(resolved.contents())?;
+ 
+     let (contents, resolver, draft) = resolved.into_inner();
+     if let Value::Object(subschema) = &contents {
+@@ -739,6 +742,8 @@
+     };
+ 
+     let resolved = ctx.lookup(reference).map_err(ValidationError::from)?;
++    // OpenBindings qualification patch: see `static_walk_target`.
++    super::ref_::static_walk_target(resolved.contents())?;
+ 
+     let (contents, resolver, draft) = resolved.into_inner();
+     if let Value::Object(subschema) = &contents {
+@@ -772,6 +777,8 @@
+     let resolved = ctx
+         .lookup_recursive_reference()
+         .map_err(ValidationError::from)?;
++    // OpenBindings qualification patch: see `static_walk_target`.
++    super::ref_::static_walk_target(resolved.contents())?;
+ 
+     // Create context for the resolved reference and check its cache key
+     let (contents, resolver, draft) = resolved.into_inner();
 --- a/src/lib.rs
 +++ b/src/lib.rs
 @@ -7276,3 +7276,8 @@
@@ -821,8 +1208,9 @@
 +}
 --- /dev/null
 +++ b/src/ob_work.rs
-@@ -0,0 +1,127 @@
-+//! OpenBindings qualification patch: evaluator entry work/depth accounting.
+@@ -0,0 +1,240 @@
++//! OpenBindings qualification patch: evaluator entry work/depth accounting, and
++//! compilation work accounting for schema builds.
 +//! A bounded call must check its outcome before exposing any engine verdict.
 +use std::cell::Cell;
 +#[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -948,6 +1336,118 @@
 +        state.stop.get_or_insert(Stop::Arithmetic);
 +    }
 +    STATE.set(state);
++}
++
++/// Schema compilation work: a scope separate from evaluation's, so meta-validation
++/// and evaluation budgets never mix with it. Work is charged by what the build does,
++/// with the weights in [`cost`]. Scopes do not nest: an inner one replaces the outer
++/// until it returns.
++#[derive(Clone, Copy)]
++struct Compiling {
++    active: bool,
++    remaining: u64,
++    spent: bool,
++    static_anchors: bool,
++}
++const NOT_COMPILING: Compiling = Compiling {
++    active: false,
++    remaining: u64::MAX,
++    spent: false,
++    static_anchors: false,
++};
++thread_local! {static COMPILING:Cell<Compiling>=const{Cell::new(NOT_COMPILING)};}
++struct Restore(Compiling);
++impl Drop for Restore {
++    fn drop(&mut self) {
++        COMPILING.set(self.0);
++    }
++}
++/// Run one schema build with `units` of compilation work. `Err(Stop::Work)` when it
++/// needed more; the build stopped at its next compilation and its result is not a
++/// prepared validator. `static_anchors` states that the build reaches no
++/// `$dynamicAnchor` and no Draft 2019-09 `$recursiveAnchor`: no reference then
++/// resolves through the dynamic scope, so compiled schemas are cached by location
++/// alone instead of once per scope. A reference that does fails the build, whether
++/// the `$ref`, `$dynamicRef` or `$recursiveRef` keyword or an `unevaluatedProperties`
++/// or `unevaluatedItems` walk resolves it. The `oneOf`/`anyOf` discriminator follows
++/// only `$ref`s that its branches also compile through the `$ref` keyword, so under
++/// the standard vocabularies that keyword fails the same build.
++pub fn compiling<T>(units: u64, static_anchors: bool, f: impl FnOnce() -> T) -> Result<T, Stop> {
++    let _restore = Restore(COMPILING.get());
++    COMPILING.set(Compiling {
++        active: true,
++        remaining: units,
++        spent: false,
++        static_anchors,
++    });
++    let value = f();
++    if COMPILING.get().spent {
++        Err(Stop::Work)
++    } else {
++        Ok(value)
++    }
++}
++/// What compilation work costs, in units of about a nanosecond of compilation time
++/// or 0.7 bytes of the memory it allocates, whichever is larger, in the reference
++/// release build. Each weight was fitted to measured builds of many contract shapes;
++/// the charge is a sum of counts, never a measurement, so it is the same everywhere.
++pub(crate) mod cost {
++    /// A compiled schema node, or the node built for one `dependentRequired` entry.
++    pub(crate) const NODE: u64 = 830;
++    /// Each byte of a compiled node's location, which its keywords copy and its caches hash.
++    pub(crate) const LOCATION_BYTE: u64 = 8;
++    /// Each entry of the dynamic scope keying a node's caches.
++    pub(crate) const SCOPE_ENTRY: u64 = 30;
++    /// A `$ref` or `$dynamicRef` resolved and entered.
++    pub(crate) const REFERENCE: u64 = 750;
++    /// Each entry of the dynamic scope searched for a reference's dynamic anchor.
++    pub(crate) const ANCHOR_SEARCH: u64 = 440;
++    /// Each in-progress placeholder copied when a `$ref` target is deferred.
++    pub(crate) const PLACEHOLDER: u64 = 10;
++    /// A property name copied out of `required` or `dependentRequired`.
++    pub(crate) const NAME: u64 = 110;
++    /// Each byte of a copied property name.
++    pub(crate) const NAME_BYTE: u64 = 2;
++    /// Each byte of a `pattern`, which every compilation of its schema analyzes and copies.
++    pub(crate) const PATTERN_BYTE: u64 = 1;
++
++    /// A node at a location of `location_bytes`, its caches keyed by `scope_entries`.
++    pub(crate) fn node(location_bytes: usize, scope_entries: usize) -> u64 {
++        NODE + LOCATION_BYTE * location_bytes as u64 + SCOPE_ENTRY * scope_entries as u64
++    }
++    /// `count` property names of `bytes` in all.
++    pub(crate) fn names(count: usize, bytes: usize) -> u64 {
++        NAME * count as u64 + NAME_BYTE * bytes as u64
++    }
++    /// The node for a `dependentRequired` entry, whose name is `name_bytes` long.
++    pub(crate) fn entry(name_bytes: usize) -> u64 {
++        NODE + NAME_BYTE * name_bytes as u64
++    }
++}
++/// Charge compilation work; `false` once the current scope is spent.
++pub(crate) fn compile_charge(amount: u64) -> bool {
++    let mut state = COMPILING.get();
++    if !state.active {
++        return true;
++    }
++    if state.spent || amount > state.remaining {
++        state.spent = true;
++        state.remaining = 0;
++    } else {
++        state.remaining -= amount;
++    }
++    COMPILING.set(state);
++    !state.spent
++}
++/// Whether the current build's caller stated that its resources declare no dynamic anchor.
++pub(crate) fn static_anchors() -> bool {
++    COMPILING.get().static_anchors
++}
++/// Run `f` outside any compilation scope: schema meta-validation is evaluation.
++pub(crate) fn uncharged<T>(f: impl FnOnce() -> T) -> T {
++    let _restore = Restore(COMPILING.get());
++    COMPILING.set(NOT_COMPILING);
++    f()
 +}
 --- a/src/properties.rs
 +++ b/src/properties.rs

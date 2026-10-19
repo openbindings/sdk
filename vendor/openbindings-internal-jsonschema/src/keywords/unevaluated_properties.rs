@@ -710,6 +710,8 @@ fn compile_ref<'a, F: Json>(
     };
 
     let resolved = ctx.lookup(reference).map_err(ValidationError::from)?;
+    // OpenBindings qualification patch: see `static_walk_target`.
+    super::ref_::static_walk_target(resolved.contents())?;
 
     let (contents, resolver, draft) = resolved.into_inner();
     if let Value::Object(subschema) = &contents {
@@ -740,6 +742,8 @@ fn compile_dynamic_ref<'a, F: Json>(
     };
 
     let resolved = ctx.lookup(reference).map_err(ValidationError::from)?;
+    // OpenBindings qualification patch: see `static_walk_target`.
+    super::ref_::static_walk_target(resolved.contents())?;
 
     let (contents, resolver, draft) = resolved.into_inner();
     if let Value::Object(subschema) = &contents {
@@ -773,6 +777,8 @@ fn compile_recursive_ref<'a, F: Json>(
     let resolved = ctx
         .lookup_recursive_reference()
         .map_err(ValidationError::from)?;
+    // OpenBindings qualification patch: see `static_walk_target`.
+    super::ref_::static_walk_target(resolved.contents())?;
 
     // Create context for the resolved reference and check its cache key
     let (contents, resolver, draft) = resolved.into_inner();
