@@ -422,6 +422,130 @@ fn builds_that_state_static_anchors_refuse_dynamic_resolution() {
     }
 }
 
+// Build `root` against `resources` inside a compilation scope stating, or not,
+// that no dynamic anchor is reachable; `None` builds outside any scope.
+fn build_in_scope(
+    resources: &[(&str, serde_json::Value)],
+    static_anchors: Option<bool>,
+) -> Option<jsonschema::Validator> {
+    let mut registry = jsonschema::Registry::new();
+    for (uri, schema) in resources {
+        registry = registry.add(*uri, schema.clone()).unwrap();
+    }
+    let registry = registry.prepare().unwrap();
+    let root = jsonschema::Uri::parse(resources[0].0.to_owned()).unwrap();
+    let root = registry.resolver(root).lookup("").unwrap();
+    let build = || {
+        jsonschema::options()
+            .with_registry(&registry)
+            .build(root.contents())
+    };
+    match static_anchors {
+        None => Some(build().unwrap()),
+        Some(stated) => jsonschema::ob_work::compiling(1 << 30, stated, build)
+            .unwrap()
+            .ok(),
+    }
+}
+
+#[test]
+fn unevaluated_walks_in_static_builds_refuse_dynamic_resolution() {
+    // An `unevaluatedProperties` or `unevaluatedItems` walk resolves the
+    // references of the schemas it passes through itself, even keywords the
+    // schema's draft does not compile: `$dynamicRef` in a 2019-09 schema and
+    // `$recursiveRef` in a 2020-12 one. Reached from `a`, which declares the
+    // anchor, the shared schema `x` resolves to `a`; reached from `b`, it does
+    // not. A build wrongly stated static refuses instead of compiling `x` once
+    // for both paths; built per scope, it decides as the library does outside any
+    // compilation scope.
+    use serde_json::json;
+    let uri = |name: &str| format!("https://walks.test/{name}");
+    let (e, a, b, x, y) = (uri("e"), uri("a"), uri("b"), uri("x"), uri("y"));
+    let anchor_y = format!("{y}#n");
+    let draft_2019 = "https://json-schema.org/draft/2019-09/schema";
+    let shapes = [
+        // `$dynamicRef` in a 2019-09 schema.
+        (
+            json!({"$dynamicAnchor": "n", "properties": {"a": true}, "$ref": x}),
+            json!({"properties": {"b": true}, "$ref": x}),
+            json!({"$schema": draft_2019, "$dynamicRef": anchor_y, "unevaluatedProperties": false}),
+            json!({"a": 1}),
+        ),
+        (
+            json!({"$dynamicAnchor": "n", "prefixItems": [true], "$ref": x}),
+            json!({"$ref": x}),
+            json!({"$schema": draft_2019, "$dynamicRef": anchor_y, "unevaluatedItems": false}),
+            json!([1]),
+        ),
+        // A named `$ref` in a schema only the walk enters, through a pointer
+        // `$dynamicRef` that 2019-09 does not compile.
+        (
+            json!({"$dynamicAnchor": "n", "properties": {"a": true}, "$ref": x}),
+            json!({"$ref": x}),
+            json!({
+                "$schema": draft_2019,
+                "$dynamicRef": "#/$defs/t",
+                "$defs": {"t": {"$ref": anchor_y}},
+                "unevaluatedProperties": false
+            }),
+            json!({"a": 1}),
+        ),
+        (
+            json!({"$dynamicAnchor": "n", "prefixItems": [true], "$ref": x}),
+            json!({"$ref": x}),
+            json!({
+                "$schema": draft_2019,
+                "$dynamicRef": "#/$defs/t",
+                "$defs": {"t": {"$ref": anchor_y}},
+                "unevaluatedItems": false
+            }),
+            json!([1]),
+        ),
+        // `$recursiveRef` in a 2020-12 schema.
+        (
+            json!({"$recursiveAnchor": true, "properties": {"a": true}, "$ref": x}),
+            json!({"properties": {"b": true}, "$ref": x}),
+            json!({"$recursiveAnchor": true, "$recursiveRef": "#", "unevaluatedProperties": false}),
+            json!({"a": 1}),
+        ),
+        // The same, `x` reached through a property the walk does not enter.
+        (
+            json!({"$recursiveAnchor": true, "properties": {"a": true, "z": {"$ref": x}}}),
+            json!({"properties": {"z": {"$ref": x}}}),
+            json!({"$recursiveAnchor": true, "$recursiveRef": "#", "unevaluatedProperties": false}),
+            json!({"z": {"a": 1}}),
+        ),
+        (
+            json!({"$recursiveAnchor": true, "prefixItems": [true], "properties": {"z": {"$ref": x}}}),
+            json!({"properties": {"z": {"$ref": x}}}),
+            json!({"$recursiveAnchor": true, "$recursiveRef": "#", "unevaluatedItems": false}),
+            json!({"z": [1]}),
+        ),
+    ];
+    for (a_schema, b_schema, x_schema, value) in &shapes {
+        // Either path may compile `x` first: properties compile in name order.
+        for (first, second) in [(&a, &b), (&b, &a)] {
+            let entry = json!({"properties": {"p": {"$ref": first}, "q": {"$ref": second}}});
+            let resources = [
+                (e.as_str(), entry),
+                (a.as_str(), a_schema.clone()),
+                (b.as_str(), b_schema.clone()),
+                (x.as_str(), x_schema.clone()),
+                (y.as_str(), json!({"$dynamicAnchor": "n"})),
+            ];
+            assert!(
+                build_in_scope(&resources, Some(true)).is_none(),
+                "{x_schema} from {first}"
+            );
+            let plain = build_in_scope(&resources, None).unwrap();
+            let scoped = build_in_scope(&resources, Some(false)).unwrap();
+            for value in [json!({"p": value}), json!({"q": value})] {
+                assert_eq!(scoped.is_valid(&value), plain.is_valid(&value), "{value}");
+            }
+        }
+    }
+}
+
 #[test]
 fn library_builds_after_a_preparation_are_outside_its_compilation_scope() {
     // Same thread: a refused preparation leaves no spent scope behind, and a

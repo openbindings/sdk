@@ -222,14 +222,18 @@
 -required-features = ["jsonb"]
 --- /dev/null
 +++ b/OPENBINDINGS-PATCH.md
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,30 @@
 +# Internal dependency fork
 +
 +Based on `jsonschema-0.58.6`; upstream license and notices are retained.
 +The distinct package identity selects the qualified evaluation work/depth/cycle,
 +compilation work and ECMAScript-regex guards, weighs compilation work by what each
 +build does, caches compiled schemas by location alone in builds that reach no dynamic
-+anchor, and releases a build that stops part way without recursion. The regex
++anchor, and releases a build that stops part way without recursion. Such a build
++fails rather than compile a reference it resolves through a dynamic or recursive
++anchor, from the reference keywords or an `unevaluatedProperties` or
++`unevaluatedItems` walk; the `oneOf`/`anyOf` discriminator follows only `$ref`s the
++`$ref` keyword also compiles, under the standard vocabularies. The regex
 +correctness fixes (empty quantifier semantics and backtrack budget restoration)
 +remain in the sibling regress fork; see DEPENDENCY-MAINTENANCE.md.
 +One correction is the fork's own: an `unevaluatedProperties` walk builds only the
@@ -701,7 +705,28 @@
              Some(PatternOptimization::Exact(exact)) => {
 --- a/src/keywords/ref_.rs
 +++ b/src/keywords/ref_.rs
-@@ -271,6 +271,12 @@
+@@ -202,6 +202,20 @@
+     alias.fragment().is_some_and(|fragment| {
+         !fragment.as_str().is_empty() && !fragment.as_str().starts_with('/')
+     })
++}
++
++/// OpenBindings qualification patch: the `unevaluatedProperties` and `unevaluatedItems` walks
++/// resolve the references they pass through themselves, even keywords their schema's draft does
++/// not compile. In a static build, fail such a resolution when it lands on a dynamic or recursive
++/// anchor, which the library finds by searching the dynamic scope.
++pub(crate) fn static_walk_target(target: &Value) -> Result<(), ValidationError<'static>> {
++    if crate::ob_work::static_anchors()
++        && (target.get("$dynamicAnchor").is_some()
++            || target.get("$recursiveAnchor") == Some(&Value::Bool(true)))
++    {
++        return Err(ValidationError::custom("dynamic anchor in a static build"));
++    }
++    Ok(())
+ }
+ 
+ /// Location of a named target within its resource.
+@@ -271,6 +285,12 @@
      if reference.is_empty() {
          return None;
      }
@@ -714,7 +739,7 @@
      let (alias, ref_target_base) = match ctx
          .ref_target(reference, extract_ref_target_base)
          .map_err(ValidationError::from)
-@@ -287,6 +293,17 @@
+@@ -287,6 +307,17 @@
      };
      // A pointer counts from the resource the reference names, an anchor from the one it is in.
      let (ref_target_base, target_location, resource_start) = if is_named(&alias) {
@@ -732,7 +757,7 @@
          match named_target_base(ctx, &resolved) {
              Ok(location) => {
                  let target = target_location(&resolved.resolver().base_uri(), &location);
-@@ -391,6 +408,14 @@
+@@ -391,6 +422,14 @@
      let resolved = ctx
          .lookup_recursive_reference()
          .map_err(ValidationError::from)?;
@@ -808,6 +833,35 @@
      match schema {
          Value::Array(items) => match items.len() {
              1 => {
+--- a/src/keywords/unevaluated_items.rs
++++ b/src/keywords/unevaluated_items.rs
+@@ -448,6 +448,8 @@
+     };
+ 
+     let resolved = ctx.lookup(reference).map_err(ValidationError::from)?;
++    // OpenBindings qualification patch: see `static_walk_target`.
++    super::ref_::static_walk_target(resolved.contents())?;
+ 
+     let (contents, resolver, draft) = resolved.into_inner();
+     if let Value::Object(subschema) = &contents {
+@@ -478,6 +480,8 @@
+     };
+ 
+     let resolved = ctx.lookup(reference).map_err(ValidationError::from)?;
++    // OpenBindings qualification patch: see `static_walk_target`.
++    super::ref_::static_walk_target(resolved.contents())?;
+ 
+     let (contents, resolver, draft) = resolved.into_inner();
+     if let Value::Object(subschema) = &contents {
+@@ -511,6 +515,8 @@
+     let resolved = ctx
+         .lookup_recursive_reference()
+         .map_err(ValidationError::from)?;
++    // OpenBindings qualification patch: see `static_walk_target`.
++    super::ref_::static_walk_target(resolved.contents())?;
+ 
+     // Create context for the resolved reference and check its cache key
+     let (contents, resolver, draft) = resolved.into_inner();
 --- a/src/keywords/unevaluated_properties.rs
 +++ b/src/keywords/unevaluated_properties.rs
 @@ -52,7 +52,7 @@
@@ -837,6 +891,33 @@
      }
  
      Ok(result)
+@@ -709,6 +710,8 @@
+     };
+ 
+     let resolved = ctx.lookup(reference).map_err(ValidationError::from)?;
++    // OpenBindings qualification patch: see `static_walk_target`.
++    super::ref_::static_walk_target(resolved.contents())?;
+ 
+     let (contents, resolver, draft) = resolved.into_inner();
+     if let Value::Object(subschema) = &contents {
+@@ -739,6 +742,8 @@
+     };
+ 
+     let resolved = ctx.lookup(reference).map_err(ValidationError::from)?;
++    // OpenBindings qualification patch: see `static_walk_target`.
++    super::ref_::static_walk_target(resolved.contents())?;
+ 
+     let (contents, resolver, draft) = resolved.into_inner();
+     if let Value::Object(subschema) = &contents {
+@@ -772,6 +777,8 @@
+     let resolved = ctx
+         .lookup_recursive_reference()
+         .map_err(ValidationError::from)?;
++    // OpenBindings qualification patch: see `static_walk_target`.
++    super::ref_::static_walk_target(resolved.contents())?;
+ 
+     // Create context for the resolved reference and check its cache key
+     let (contents, resolver, draft) = resolved.into_inner();
 --- a/src/lib.rs
 +++ b/src/lib.rs
 @@ -7276,3 +7276,8 @@
@@ -1115,7 +1196,7 @@
 +}
 --- /dev/null
 +++ b/src/ob_work.rs
-@@ -0,0 +1,236 @@
+@@ -0,0 +1,240 @@
 +//! OpenBindings qualification patch: evaluator entry work/depth accounting, and
 +//! compilation work accounting for schema builds.
 +//! A bounded call must check its outcome before exposing any engine verdict.
@@ -1274,7 +1355,11 @@
 +/// prepared validator. `static_anchors` states that the build reaches no
 +/// `$dynamicAnchor` and no Draft 2019-09 `$recursiveAnchor`: no reference then
 +/// resolves through the dynamic scope, so compiled schemas are cached by location
-+/// alone instead of once per scope, and a reference that does fails the build.
++/// alone instead of once per scope. A reference that does fails the build, whether
++/// the `$ref`, `$dynamicRef` or `$recursiveRef` keyword or an `unevaluatedProperties`
++/// or `unevaluatedItems` walk resolves it. The `oneOf`/`anyOf` discriminator follows
++/// only `$ref`s that its branches also compile through the `$ref` keyword, so under
++/// the standard vocabularies that keyword fails the same build.
 +pub fn compiling<T>(units: u64, static_anchors: bool, f: impl FnOnce() -> T) -> Result<T, Stop> {
 +    let _restore = Restore(COMPILING.get());
 +    COMPILING.set(Compiling {

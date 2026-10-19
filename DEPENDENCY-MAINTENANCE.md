@@ -91,7 +91,7 @@ cached resolvable graph, not a crates.io-head claim.
 
 Upstream revision: `55ac1664384793c5d3b20745d3f9c169dfe2c06f`.
 Applied package: `openbindings-internal-jsonschema 0.58.6-ob.1`.
-The complete remaining Rust delta is **+551/-32 lines in fourteen files** against the
+The complete remaining Rust delta is **+581/-32 lines in fifteen files** against the
 0.58.6 archive (physical added/removed lines, including comments and blanks):
 
 | File under src/ | Added | Removed | Why retained |
@@ -101,13 +101,14 @@ The complete remaining Rust delta is **+551/-32 lines in fourteen files** agains
 | keywords/additional_properties.rs | 2 | 2 | Route both specialized patternProperties/additionalProperties paths through ECMA matching. |
 | keywords/dependencies.rs | 2 | 0 | Charge each `dependentRequired` entry's node and name. |
 | keywords/pattern.rs | 2 | 0 | Charge the pattern bytes each compilation analyzes and copies. |
-| keywords/ref_.rs | 25 | 0 | Charge each reference resolved and each dynamic-scope entry searched for a dynamic anchor. Fail a static build when a reference resolves through a dynamic or recursive anchor, rather than compile it with caches that ignore the scope. |
+| keywords/ref_.rs | 39 | 0 | Charge each reference resolved and each dynamic-scope entry searched for a dynamic anchor. Fail a static build when a reference resolves through a dynamic or recursive anchor, rather than compile it with caches that ignore the scope; the unevaluated walks share the check. |
 | keywords/required.rs | 16 | 0 | Charge the property names each `required` list copies. |
-| keywords/unevaluated_properties.rs | 5 | 4 | Keep annotation matching on the same ECMA engine; build only the walk's `patternProperties` patterns (see compiled subschema ownership). |
+| keywords/unevaluated_items.rs | 6 | 0 | Apply the static-build check to each reference the walk resolves itself, including `$dynamicRef` and `$recursiveRef` in drafts that do not compile them. |
+| keywords/unevaluated_properties.rs | 11 | 4 | Keep annotation matching on the same ECMA engine; build only the walk's `patternProperties` patterns (see compiled subschema ownership); apply the static-build check to each reference the walk resolves. |
 | lib.rs | 5 | 0 | Export private adapter work and regex controls. |
 | node.rs | 38 | 1 | Charge schema entries/depth and signal detected cycles; the outer adapter refuses any stopped result. |
 | ob_ecma.rs | 117 | 0 | Select regress ES2020 Unicode behavior, scoped regex work, and the qualified Unicode-property refusal. |
-| ob_work.rs | 236 | 0 | Scoped work/depth/cycle/arithmetic stop accounting, including nested scope restoration, and a separate compilation work scope that bounds a schema build, weighs each kind of compilation work, and carries the caller's statement that the build reaches no dynamic anchor. |
+| ob_work.rs | 240 | 0 | Scoped work/depth/cycle/arithmetic stop accounting, including nested scope restoration, and a separate compilation work scope that bounds a schema build, weighs each kind of compilation work, and carries the caller's statement that the build reaches no dynamic anchor. |
 | properties.rs | 1 | 1 | Use the same matcher type for property validators. |
 | regex.rs | 4 | 4 | Route the library's internal matcher/builder through regress. |
 

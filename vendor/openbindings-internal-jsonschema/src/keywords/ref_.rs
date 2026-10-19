@@ -204,6 +204,20 @@ fn is_named(alias: &referencing::Uri<String>) -> bool {
     })
 }
 
+/// OpenBindings qualification patch: the `unevaluatedProperties` and `unevaluatedItems` walks
+/// resolve the references they pass through themselves, even keywords their schema's draft does
+/// not compile. In a static build, fail such a resolution when it lands on a dynamic or recursive
+/// anchor, which the library finds by searching the dynamic scope.
+pub(crate) fn static_walk_target(target: &Value) -> Result<(), ValidationError<'static>> {
+    if crate::ob_work::static_anchors()
+        && (target.get("$dynamicAnchor").is_some()
+            || target.get("$recursiveAnchor") == Some(&Value::Bool(true)))
+    {
+        return Err(ValidationError::custom("dynamic anchor in a static build"));
+    }
+    Ok(())
+}
+
 /// Location of a named target within its resource.
 fn named_target_base<F: Json>(
     ctx: &compiler::Context<F>,

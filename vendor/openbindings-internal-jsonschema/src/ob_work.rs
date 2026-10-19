@@ -156,7 +156,11 @@ impl Drop for Restore {
 /// prepared validator. `static_anchors` states that the build reaches no
 /// `$dynamicAnchor` and no Draft 2019-09 `$recursiveAnchor`: no reference then
 /// resolves through the dynamic scope, so compiled schemas are cached by location
-/// alone instead of once per scope, and a reference that does fails the build.
+/// alone instead of once per scope. A reference that does fails the build, whether
+/// the `$ref`, `$dynamicRef` or `$recursiveRef` keyword or an `unevaluatedProperties`
+/// or `unevaluatedItems` walk resolves it. The `oneOf`/`anyOf` discriminator follows
+/// only `$ref`s that its branches also compile through the `$ref` keyword, so under
+/// the standard vocabularies that keyword fails the same build.
 pub fn compiling<T>(units: u64, static_anchors: bool, f: impl FnOnce() -> T) -> Result<T, Stop> {
     let _restore = Restore(COMPILING.get());
     COMPILING.set(Compiling {

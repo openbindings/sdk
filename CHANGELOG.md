@@ -24,14 +24,13 @@
   Undefined results carry a code, message and optional original schema location;
   no-verdict describes inability to answer.
 - An optional JSON Schema 2020-12 evaluator with exact numeric semantics,
-  cooperative cancellation and declared work limits. Preparation bounds schema
-  compilation, weighing each kind of work it does, at 250,000,000 units (about
-  250 ms of compilation, or 175 to 250 MB of its memory) plus 4,096 for each schema
-  position the contract reaches, refusing with `preparation-work-limit` beyond it;
-  without a reachable dynamic anchor, a schema reached along many reference paths
-  compiles once.
-  Preparation reuses a resource set's identity index instead of indexing its
-  resources again.
+  cooperative cancellation and declared work limits. Preparation charges schema
+  compilation by the work it does and refuses with `LimitExceeded` and
+  `preparation-work-limit` beyond 250,000,000 units (about 250 ms of compilation,
+  or 175 to 250 MB of its memory, in the reference build) plus 4,096 for each
+  schema position the contract reaches. Without a reachable dynamic anchor, a
+  schema reached along many reference paths compiles once. Preparation reuses a
+  resource set's identity index instead of indexing its resources again.
 - Cheap checks and explanations are chosen per call. `PreparedValueContract::validate`
   (and `validate_with_control`, `validate_json`) reports a failure without
   problems; `explain` and `explain_with_control` return the same verdict with the

@@ -299,6 +299,14 @@ resource diamonds refuse from 13 levels, and a 20,000-name `required` list share
 more than 103 resource paths refuses. A refused build is released link by link, as
 a prepared one is, so refusing a long chain needs no more stack than preparing it.
 Evaluation still follows every path of a diamond, within the evaluation limits.
+A schema compiled once is reached from its later paths through a pending node, as
+the library already does within one resource, which can cost evaluation steps. In
+an adversarial corpus of 15,400 values, 647 needed more steps than before, at most
+32% more; at budgets of 10 to 400 steps, 45 value and budget pairs lost their
+verdict, 9 gained one, and 26 explanations kept their failure but no longer listed
+its problem. A value that needs nearly its whole `evaluation_steps` budget can
+therefore return no verdict, or an explanation without its problem; a verdict that
+is reached never changes.
 Outside the charge stay the SDK's linear projection, pattern admission and each
 distinct pattern's one-time regex build, and registry setup, which grows
 quadratically with the number of projected resources (55 ms for 2,000 supplied
