@@ -2207,7 +2207,7 @@ function admitRedirect(previous: URL, next: URL): boolean {
 }
 /** Resolve a visible Location against the dispatched URL; undefined when refused. */
 function redirectTarget(current: string, location: string): string | undefined {
-  // As the Rust checked paths: printable ASCII without backslashes, then WHATWG resolution.
+  // As portable Rust discovery: printable ASCII without backslashes, then WHATWG resolution.
   if (!/^[\x21-\x7e]*$/.test(location) || location.includes("\\"))
     return undefined;
   let previous: URL, next: URL;

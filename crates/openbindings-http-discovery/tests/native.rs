@@ -916,6 +916,45 @@ async fn malformed_native_location_is_a_typed_policy_refusal() {
     assert_eq!(server.records.lock().unwrap().len(), 5);
 }
 
+// Native discovery keeps reqwest's redirect execution, so tower-http's WHATWG join
+// recovers a Location that is not a URI-reference, which portable discovery refuses.
+// Pinned so that a change in either library is noticed.
+#[tokio::test(flavor = "current_thread")]
+async fn native_recovers_a_location_that_is_not_a_uri_reference() {
+    let server = Server::new();
+    let authority = server.origin.trim_start_matches("http://").to_owned();
+    for (location, requested) in [
+        ("/tar get".to_owned(), "/tar%20get"),
+        ("\\target".to_owned(), "/target"),
+        (format!("\\\\{authority}\\next"), "/next"),
+    ] {
+        server
+            .redirects
+            .lock()
+            .unwrap()
+            .insert(WELL_KNOWN_PATH.into(), location.clone());
+        server.records.lock().unwrap().clear();
+        let r = client("document").discover(&server.origin).await.unwrap();
+        assert!(
+            matches!(r.outcome, DiscoveryOutcome::Found { .. }),
+            "{location}"
+        );
+        assert_eq!(
+            r.metadata.unwrap().final_url.unwrap(),
+            format!("{}{requested}", server.origin),
+            "{location}"
+        );
+        let paths: Vec<_> = server
+            .records
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|record| record.path.clone())
+            .collect();
+        assert_eq!(paths, [WELL_KNOWN_PATH, requested], "{location}");
+    }
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn truncated_native_body_is_network_without_coding_evidence() {
     // retain upstream explanations without interpreting wording.
