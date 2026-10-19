@@ -276,9 +276,7 @@ version = "0.29"
 optional = true
 
 [dependencies.referencing]
-package = "openbindings-internal-referencing"
-version = "=0.58.6-ob.1"
-path = "../openbindings-internal-referencing"
+version = "0.58.6"
 
 [dependencies.regex]
 version = "1.11.1"
