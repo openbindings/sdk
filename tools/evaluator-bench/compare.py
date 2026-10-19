@@ -42,8 +42,10 @@ def instrument_files(root):
 
 
 def sdk_crates(*roots):
+    # The SDK's own crates and its renamed dependency forks, whose lock entries it owns.
     return {tomllib.loads(p.read_text())['package']['name']
-            for root in roots for p in (root/'crates').glob('*/Cargo.toml')}
+            for root in roots for owned in ('crates', 'vendor')
+            for p in (root/owned).glob('*/Cargo.toml')}
 
 
 def lock_without_sdk(data, names):
