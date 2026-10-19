@@ -155,6 +155,17 @@ fn reference_refusal(f: embedding::Failure) -> ReferenceRefusal {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
 /// Static reference inspection outcome. Located dynamic references still require evaluation-time scope resolution.
+///
+/// This closed partition may be exhaustively matched:
+/// ```
+/// use openbindings::ReferenceResolution;
+/// fn located(resolution: &ReferenceResolution) -> bool {
+///     match resolution {
+///         ReferenceResolution::Located { .. } => true,
+///         ReferenceResolution::Unresolved { .. } => false,
+///     }
+/// }
+/// ```
 pub enum ReferenceResolution {
     /// A static target was located in the supplied original context.
     Located {

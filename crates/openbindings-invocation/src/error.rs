@@ -47,6 +47,10 @@ impl std::error::Error for BoundaryError {}
 /// errors, credentials, protocol envelopes, stacks, or debugging evidence.
 /// Construction checks `CONTEXT_REQUIRED` structurally; the provider remains
 /// responsible for its before-output and before-effects guarantees.
+///
+/// `Display` prints every code, application-defined ones included, and never
+/// the data. `Debug` shows the codes the invoker interfaces govern, writes
+/// `<redacted>` for any other code, and shows only whether data is present.
 #[derive(Clone)]
 pub struct InvocationError {
     code: String,

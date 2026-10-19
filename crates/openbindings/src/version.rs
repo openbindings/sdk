@@ -13,6 +13,16 @@ pub const APPLIED_SPEC_REVISION: &str = "30416ef1ca626e58eb8c383a0c71422a68f9243
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 /// Declared-version classification, independent of document conformance.
+///
+/// This closed partition may be exhaustively matched:
+/// ```
+/// use openbindings::{VersionDecision, check_version};
+/// let supported = match check_version("0.2.0") {
+///     VersionDecision::Supported => true,
+///     VersionDecision::Malformed | VersionDecision::Unsupported => false,
+/// };
+/// assert!(supported);
+/// ```
 #[must_use = "inspect the outcome before continuing"]
 pub enum VersionDecision {
     /// Well-formed stable version in the supported line; document rules still need validation.
