@@ -206,8 +206,8 @@ impl SchemaEvaluator for DefaultEvaluator {
     }
 }
 // Library compilation work a projection may spend: a floor plus a share for each
-// projected definition, so preparation stays linear in the projection. The
-// library charges one unit per compiled schema node and per entry of the dynamic
+// projected definition (every schema position the contract reaches, named or
+// not), so preparation stays linear in the projection. The library charges one unit per compiled schema node and per entry of the dynamic
 // scope keying it, and one per in-progress placeholder copied when it defers a
 // `$ref` target. Compilation that outgrows the schema (each link of a long
 // reference chain copying every placeholder before it, or each diamond of
@@ -217,6 +217,18 @@ const COMPILATION_FLOOR: usize = 65_536;
 const COMPILATION_PER_DEFINITION: usize = 64;
 fn compilation_allowance(definitions: usize) -> usize {
     COMPILATION_FLOOR.saturating_add(definitions.saturating_mul(COMPILATION_PER_DEFINITION))
+}
+// A build that spent its allowance, unless cancellation was requested meanwhile:
+// observed cancellation takes precedence over the limit.
+fn compilation_stop(control: &dyn WorkControl) -> NoVerdict {
+    match control.check() {
+        Err(cancelled) => cancelled.into(),
+        Ok(()) => no_verdict(
+            NoVerdictReason::LimitExceeded,
+            "preparation-work-limit",
+            "schema preparation work limit reached",
+        ),
+    }
 }
 // Finite optional-planner declines only. Known-closure defects, shared admission
 // limits, cancellation and compiler errors retain their actual classifications.
@@ -360,13 +372,7 @@ impl DefaultEvaluator {
             match jsonschema::ob_work::compiling(compilation_allowance(projected), build) {
                 Ok(built) => built.map_err(|error| preparation_error(error.kind()))?,
                 // The build stopped part way; whatever it returned is not a validator.
-                Err(_) => {
-                    return Err(no_verdict(
-                        NoVerdictReason::LimitExceeded,
-                        "preparation-work-limit",
-                        "schema preparation work limit reached",
-                    ));
-                }
+                Err(_) => return Err(compilation_stop(control)),
             };
         control.check()?;
         // Keep, for explanations, a compact copy of the compiled keywords with
@@ -844,6 +850,19 @@ mod diagnostic_tests {
             );
             assert_eq!(fallback.location, None);
         }
+    }
+    #[test]
+    fn spent_compilation_yields_to_observed_cancellation() {
+        let running = std::sync::atomic::AtomicBool::new(false);
+        let limit = compilation_stop(&running);
+        assert_eq!(limit.reason, NoVerdictReason::LimitExceeded);
+        assert_eq!(limit.code, "preparation-work-limit");
+        assert_eq!(limit.location, None);
+        let cancelled = std::sync::atomic::AtomicBool::new(true);
+        assert_eq!(
+            compilation_stop(&cancelled).reason,
+            NoVerdictReason::Cancelled
+        );
     }
     #[test]
     fn runtime_cycle_guard_has_a_truthful_conservative_code() {

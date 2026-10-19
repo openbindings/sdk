@@ -24,7 +24,9 @@
   Undefined results carry a code, message and optional original schema location;
   no-verdict describes inability to answer.
 - An optional JSON Schema 2020-12 evaluator with exact numeric semantics,
-  cooperative cancellation and declared work limits. Preparation reuses a
+  cooperative cancellation and declared work limits. Preparation bounds schema
+  compilation at 65,536 work units plus 64 for each schema position the contract
+  reaches, refusing with `preparation-work-limit` beyond it, and reuses a
   resource set's identity index instead of indexing its resources again.
 - Cheap checks and explanations are chosen per call. `PreparedValueContract::validate`
   (and `validate_with_control`, `validate_json`) reports a failure without

@@ -85,10 +85,14 @@ fn decides(contract: &PreparedValueContract) {
 }
 
 #[test]
-fn long_reference_chains_refuse_at_preparation() {
-    // Compiling a chain costs the library work quadratic in its length.
-    assert_work_limit(prepare(&chain(4_000)).unwrap_err());
-    assert_work_limit(prepare(&resource_chain(2_000)).unwrap_err());
+fn reference_chains_refuse_from_an_exact_length() {
+    // Compiling a chain costs the library work quadratic in its length, and
+    // more across `$id` resources, whose dynamic scope grows with each link.
+    // These boundaries pin the accounting; the Wasm lane pins the same ones.
+    assert!(prepare(&chain(1_779)).is_ok());
+    assert_work_limit(prepare(&chain(1_780)).unwrap_err());
+    assert!(prepare(&resource_chain(402)).is_ok());
+    assert_work_limit(prepare(&resource_chain(403)).unwrap_err());
 }
 
 #[test]
@@ -107,9 +111,12 @@ fn shorter_chains_prepare_within_the_allowance() {
 
 #[test]
 fn resource_diamonds_refuse_before_compilation_grows_exponentially() {
+    // Each level doubles the compilations of the next; nine levels spend more
+    // than the allowance. Without it, ten would still prepare quickly.
     decides(&prepare(&diamonds(4)).unwrap());
-    // Without the allowance, 24 levels would compile the last one 2^24 times.
-    assert_work_limit(prepare(&diamonds(24)).unwrap_err());
+    decides(&prepare(&diamonds(8)).unwrap());
+    assert_work_limit(prepare(&diamonds(9)).unwrap_err());
+    assert_work_limit(prepare(&diamonds(10)).unwrap_err());
     // Refusal leaves nothing behind; the next preparation is unaffected.
     decides(&prepare(&diamonds(4)).unwrap());
 }
@@ -136,4 +143,13 @@ fn wide_schemas_prepare_whatever_their_size() {
         contract.validate(&JsonValue::parse(r#"{"p4999":0}"#).unwrap()),
         ValueOutcome::Fails { .. }
     ));
+}
+
+#[test]
+fn library_builds_after_a_refusal_are_outside_its_compilation_scope() {
+    // Same thread: a refused preparation leaves no spent scope behind.
+    assert_work_limit(prepare(&chain(1_780)).unwrap_err());
+    let plain = jsonschema::validator_for(&serde_json::json!({"type": "integer"})).unwrap();
+    assert!(plain.is_valid(&serde_json::json!(7)));
+    assert!(!plain.is_valid(&serde_json::json!("7")));
 }
