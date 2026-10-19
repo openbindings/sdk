@@ -271,6 +271,12 @@ fn compile_reference_validator<'a, F: Json>(
     if reference.is_empty() {
         return None;
     }
+    // OpenBindings qualification patch: charge resolving and entering this reference.
+    if !crate::ob_work::compile_charge(crate::ob_work::cost::REFERENCE) {
+        return Some(Err(ValidationError::custom(
+            "schema compilation work limit",
+        )));
+    }
     let (alias, ref_target_base) = match ctx
         .ref_target(reference, extract_ref_target_base)
         .map_err(ValidationError::from)
@@ -287,11 +293,16 @@ fn compile_reference_validator<'a, F: Json>(
     };
     // A pointer counts from the resource the reference names, an anchor from the one it is in.
     let (ref_target_base, target_location, resource_start) = if is_named(&alias) {
-        // OpenBindings qualification patch: the build's caches ignore the dynamic scope.
-        if crate::ob_work::static_anchors() && resolved.contents().get("$dynamicAnchor").is_some() {
-            return Some(Err(ValidationError::custom(
-                "dynamic anchor in a static build",
-            )));
+        // OpenBindings qualification patch: a dynamic anchor is found by searching the dynamic
+        // scope, which a static build's caches ignore.
+        if resolved.contents().get("$dynamicAnchor").is_some() {
+            if crate::ob_work::static_anchors() {
+                return Some(Err(ValidationError::custom(
+                    "dynamic anchor in a static build",
+                )));
+            }
+            let searched = resolved.resolver().dynamic_scope().iter().count() as u64;
+            crate::ob_work::compile_charge(crate::ob_work::cost::ANCHOR_SEARCH * searched);
         }
         match named_target_base(ctx, &resolved) {
             Ok(location) => {

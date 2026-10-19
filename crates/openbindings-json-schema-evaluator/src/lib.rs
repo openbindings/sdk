@@ -207,17 +207,23 @@ impl SchemaEvaluator for DefaultEvaluator {
 }
 // Library compilation work a projection may spend: a floor plus a share for each
 // projected definition (every schema position the contract reaches, named or
-// not), so preparation stays linear in the projection. The library charges one
-// unit per compiled schema node and per entry of the dynamic scope keying it,
-// and one per in-progress placeholder copied when it defers a `$ref` target.
-// Without a dynamic anchor its caches ignore the dynamic scope, and each node
-// compiles once. Compilation that outgrows the schema (each link of a long
-// reference chain copying every placeholder before it, or, with a dynamic anchor,
-// each diamond of resources compiling its targets once per path) stops at this
-// allowance. A 1,500-link chain spends 126,086 of 161,664.
-const COMPILATION_FLOOR: usize = 65_536;
-const COMPILATION_PER_DEFINITION: usize = 64;
-fn compilation_allowance(definitions: usize) -> usize {
+// not). The library weighs what a build does (each compiled schema node and the
+// bytes of its location, each reference resolved, each dynamic-scope entry keying
+// a node or searched for a dynamic anchor, each placeholder copied when it defers a
+// `$ref` target, and each property name and pattern byte it copies) in units of
+// about a nanosecond of compilation time or 0.7 bytes of compilation memory,
+// whichever the work costs more of. The share pays for compiling each definition
+// once, about 2,700 units for an ordinary one, so the number of definitions alone
+// never refuses a contract. The floor bounds the compilation that outgrows the
+// schema (each link of a long reference chain copying every placeholder before it,
+// or, with a dynamic anchor, a schema compiled once per path or a long `required`
+// list copied once per scope) at about 250 ms of compilation, or 175 to 250 MB of
+// its memory, in the reference build. Without a dynamic anchor the library's
+// caches ignore the dynamic scope, and each node compiles once.
+const COMPILATION_FLOOR: u64 = 250_000_000;
+const COMPILATION_PER_DEFINITION: u64 = 4_096;
+fn compilation_allowance(definitions: usize) -> u64 {
+    let definitions = u64::try_from(definitions).unwrap_or(u64::MAX);
     COMPILATION_FLOOR.saturating_add(definitions.saturating_mul(COMPILATION_PER_DEFINITION))
 }
 // A build that spent its allowance, unless cancellation was requested meanwhile:

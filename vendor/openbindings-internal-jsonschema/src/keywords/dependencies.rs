@@ -159,6 +159,8 @@ impl DependentRequiredValidator {
             let kctx = ctx.new_at_location("dependentRequired");
             let mut dependencies = Vec::with_capacity(map.len());
             for (key, subschema) in map {
+                // OpenBindings qualification patch: charge the node this entry builds.
+                crate::ob_work::compile_charge(crate::ob_work::cost::entry(key.len()));
                 let ictx = kctx.new_at_location(key.as_str());
                 if let Value::Array(dependency_array) = subschema {
                     if !crate::unique::is_unique(dependency_array) {

@@ -243,6 +243,8 @@ pub(crate) fn compile<'a, F: Json>(
     schema: &'a Value,
 ) -> Option<CompilationResult<'a, F>> {
     if let Value::String(item) = schema {
+        // OpenBindings qualification patch: charge analyzing and copying the pattern.
+        crate::ob_work::compile_charge(crate::ob_work::cost::PATTERN_BYTE * item.len() as u64);
         // Try literal optimizations before compiling a full regex.
         match analyze_pattern(item) {
             Some(PatternOptimization::Exact(exact)) => {

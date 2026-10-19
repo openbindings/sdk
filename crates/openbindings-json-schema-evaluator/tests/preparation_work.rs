@@ -1,8 +1,9 @@
-//! Preparation spends a bounded amount of library compilation work for each
-//! projected schema definition. Long reference chains, whose compilation grows
-//! faster than the schema itself, refuse with a limit instead of running on. A
-//! schema reached along many reference paths through resources compiles once
-//! unless a dynamic anchor can make those paths resolve differently.
+//! Preparation spends a bounded amount of library compilation work: a floor plus
+//! a share for each projected schema definition. The library weighs what it does,
+//! so long reference chains, schemas compiled once per path and long keyword lists
+//! copied once per scope all refuse with a limit instead of running on. A schema
+//! reached along many reference paths through resources compiles once unless a
+//! dynamic anchor can make those paths resolve differently.
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 
@@ -90,6 +91,36 @@ fn dynamic_diamonds(levels: usize) -> String {
         r##""$dynamicRef":"#leaf","$defs":{"leaf":{"$dynamicAnchor":"leaf","type":"integer"}}"##,
     )
 }
+// `scopes` resources that each reference one shared resource requiring `names`
+// property names. With `dynamic`, the root declares a dynamic anchor that one of
+// its own properties resolves, so the build compiles the shared resource once per
+// resource path; otherwise once.
+fn required_fan(scopes: usize, names: usize, dynamic: bool) -> String {
+    let mut properties: Vec<_> = (0..scopes)
+        .map(|i| format!(r#""p{i}":{{"$ref":"https://fan.test/m{i}"}}"#))
+        .collect();
+    let anchor = if dynamic {
+        properties.push(r##""self":{"$dynamicRef":"#node"}"##.into());
+        r#""$dynamicAnchor":"node","#
+    } else {
+        ""
+    };
+    let mut schemas = vec![format!(
+        r#""top":{{"$id":"https://fan.test/top",{anchor}"type":"object","properties":{{{}}}}}"#,
+        properties.join(",")
+    )];
+    for i in 0..scopes {
+        schemas.push(format!(
+            r#""m{i}":{{"$id":"https://fan.test/m{i}","$ref":"https://fan.test/leaf"}}"#
+        ));
+    }
+    let required: Vec<_> = (0..names).map(|n| format!(r#""n{n}""#)).collect();
+    schemas.push(format!(
+        r#""leaf":{{"$id":"https://fan.test/leaf","required":[{}]}}"#,
+        required.join(",")
+    ));
+    document(&schemas, r##"{"$ref":"#/schemas/top"}"##)
+}
 // A domain model in `layers` layers of `width` object schemas, each with six
 // string properties and, above the last layer, `fan_out` properties referencing
 // schemas of the next layer. `uri(layer, schema)` names each schema.
@@ -172,15 +203,26 @@ fn decides_model(contract: &PreparedValueContract, layers: usize) {
     ));
 }
 
+// A thread stack far smaller than one frame per compiled link would need.
+const SMALL_STACK: usize = 512 * 1024;
+// Compiling a chain costs the library work quadratic in its length: each deferred
+// link copies the placeholders of every link before it. These boundaries pin the
+// accounting; the Wasm lane pins the same ones.
+#[test]
+fn reference_chains_prepare_up_to_an_exact_length() {
+    assert!(prepare(&chain(23_496)).is_ok());
+}
 #[test]
 fn reference_chains_refuse_from_an_exact_length() {
-    // Compiling a chain costs the library work quadratic in its length, and a
-    // chain of `$id` resources costs what a same-document chain does. These
-    // boundaries pin the accounting; the Wasm lane pins the same ones.
-    assert!(prepare(&chain(1_788)).is_ok());
-    assert_work_limit(prepare(&chain(1_789)).unwrap_err());
-    assert!(prepare(&resource_chain(1_788)).is_ok());
-    assert_work_limit(prepare(&resource_chain(1_789)).unwrap_err());
+    // The refused build has compiled most of the chain; it is released link by
+    // link, as a prepared one is, so even a small stack suffices.
+    let refused = std::thread::Builder::new()
+        .stack_size(SMALL_STACK)
+        .spawn(|| prepare(&chain(23_497)).unwrap_err())
+        .unwrap()
+        .join()
+        .unwrap();
+    assert_work_limit(refused);
 }
 
 #[test]
@@ -200,7 +242,7 @@ fn shorter_chains_prepare_within_the_allowance() {
 #[test]
 fn resource_diamonds_compile_each_level_once() {
     // Compiled once per path through resources, 24 levels would compile the
-    // last one 2^24 times; 12 already spend more than the allowance.
+    // last one 2^24 times; 13 already spend more than the allowance.
     decides(&prepare(&diamonds(4)).unwrap());
     decides(&prepare(&diamonds(12)).unwrap());
     // Evaluation still follows every path, within the evaluation limits.
@@ -268,10 +310,95 @@ fn dynamic_anchors_keep_compilation_per_scope() {
             assert!(matches!(outcome, ValueOutcome::Fails { .. }), "{value}");
         }
     }
-    // A reachable dynamic anchor keeps every schema compiled per path, so the
-    // diamond ladder refuses from the same depth it would without caching.
-    decides(&prepare(&dynamic_diamonds(8)).unwrap());
-    assert_work_limit(prepare(&dynamic_diamonds(9)).unwrap_err());
+    // A reachable dynamic anchor keeps every schema compiled per path.
+    decides(&prepare(&dynamic_diamonds(12)).unwrap());
+}
+
+#[test]
+fn dynamic_resource_diamonds_refuse_from_an_exact_depth() {
+    // Compiled per path, the diamond ladder refuses from the depth it would
+    // without caching. The Wasm lane pins the same boundary.
+    assert_work_limit(prepare(&dynamic_diamonds(13)).unwrap_err());
+}
+
+#[test]
+fn long_required_lists_are_charged_per_compilation() {
+    // Each compilation of the shared resource copies its 20,000 names, so a
+    // contract that compiles it once per resource path refuses from an exact
+    // number of paths, far fewer than its node count alone would allow. The
+    // Wasm lane pins the same boundary.
+    let prepared = prepare(&required_fan(103, 20_000, true)).unwrap();
+    assert!(matches!(
+        prepared.validate(&JsonValue::parse(r#"{"p0":{}}"#).unwrap()),
+        ValueOutcome::Fails { .. }
+    ));
+    assert_work_limit(prepare(&required_fan(104, 20_000, true)).unwrap_err());
+    // Without a dynamic anchor the list compiles once, for any number of paths.
+    assert!(prepare(&required_fan(1_000, 20_000, false)).is_ok());
+}
+
+#[test]
+fn compilation_charges_each_kind_of_work() {
+    use jsonschema::ob_work::{Stop, compiling};
+    use serde_json::json;
+    let long = "x".repeat(100);
+    let chain: serde_json::Map<_, _> = (0..30)
+        .map(|i| {
+            (
+                format!("d{i}"),
+                json!({"$ref": format!("#/$defs/d{}", i + 1)}),
+            )
+        })
+        .chain([("d30".to_owned(), json!({"type": "integer"}))])
+        .collect();
+    // Each build needs exactly these units: a node 830, plus 8 per byte of its
+    // location; a reference 750; each property name copied from `required` or
+    // `dependentRequired` 110, plus 2 per byte; each `dependentRequired` entry a
+    // node and 2 per byte of its name; each pattern byte 1; each placeholder a
+    // deferred reference copies 10; and, with a dynamic anchor, 30 per dynamic
+    // scope entry keying a node and 440 per entry searched for the anchor.
+    let cases = [
+        (true, json!({"type": "integer"}), 830),
+        // A child at "/properties/name": 830 + 16 * 8.
+        (
+            true,
+            json!({"properties": {"name": {"type": "string"}}}),
+            1_788,
+        ),
+        (true, json!({"properties": {long.clone(): {}}}), 2_556),
+        // A reference to a node at "/$defs/a": 830 + 750 + 830 + 8 * 8.
+        (
+            true,
+            json!({"$defs": {"a": {"type": "integer"}}, "$ref": "#/$defs/a"}),
+            2_474,
+        ),
+        (true, json!({"required": ["a", "b"]}), 1_054),
+        (
+            true,
+            json!({"required": ["name", "kind", "size", "tags"]}),
+            1_302,
+        ),
+        (true, json!({"required": [long]}), 1_140),
+        (true, json!({"dependentRequired": {"a": ["b", "c"]}}), 1_886),
+        (true, json!({"pattern": "^[a-z]+$"}), 838),
+        (true, json!({"$defs": chain, "$ref": "#/$defs/d0"}), 52_720),
+        (
+            false,
+            json!({
+                "$dynamicAnchor": "node",
+                "properties": {"next": {"$dynamicRef": "#node"}, "n": {"type": "integer"}}
+            }),
+            7_914,
+        ),
+    ];
+    for (static_anchors, schema, units) in cases {
+        let built = compiling(units, static_anchors, || jsonschema::validator_for(&schema));
+        assert!(built.unwrap().is_ok(), "{schema}");
+        let short = compiling(units - 1, static_anchors, || {
+            jsonschema::validator_for(&schema)
+        });
+        assert_eq!(short.err(), Some(Stop::Work), "{schema}");
+    }
 }
 
 #[test]
@@ -304,7 +431,7 @@ fn library_builds_after_a_preparation_are_outside_its_compilation_scope() {
         "properties": {"next": {"$dynamicRef": "#node"}, "n": {"type": "integer"}}
     });
     let instance = serde_json::json!({"next": {"n": "x"}});
-    assert_work_limit(prepare(&chain(1_789)).unwrap_err());
+    assert_work_limit(prepare(&required_fan(104, 20_000, true)).unwrap_err());
     let plain = jsonschema::validator_for(&dynamic).unwrap();
     assert!(!plain.is_valid(&instance));
     decides(&prepare(&diamonds(4)).unwrap());

@@ -357,6 +357,19 @@ struct PatternCacheEntry {
 }
 
 impl<F: Json> SharedContextState<'_, F> {
+    /// OpenBindings qualification patch: drop every compiled node and placeholder held here.
+    fn release_nodes(&self) {
+        self.location_nodes.borrow_mut().clear();
+        self.alias_nodes.borrow_mut().clear();
+        self.alias_placeholders.borrow_mut().clear();
+        self.deferred_placeholders.borrow_mut().clear();
+        self.deferred_targets.borrow_mut().clear();
+        self.pending_property_validators_by_schema
+            .borrow_mut()
+            .clear();
+        self.pending_items_validators_by_schema.borrow_mut().clear();
+    }
+
     /// `capacity` pre-sizes the per-location node cache to avoid rehashing during a build.
     fn new(capacity: usize) -> Self {
         Self {
@@ -1034,7 +1047,8 @@ impl<'a, F: Json> Context<'a, F> {
             .borrow_mut()
             .insert(key.clone(), placeholder.clone());
         // OpenBindings qualification patch: charge the placeholders this copies.
-        crate::ob_work::compile_charge(self.shared.alias_placeholders.borrow().len());
+        let copied = self.shared.alias_placeholders.borrow().len() as u64;
+        crate::ob_work::compile_charge(crate::ob_work::cost::PLACEHOLDER * copied);
         let in_progress = self.shared.alias_placeholders.borrow().clone();
         self.shared
             .deferred_targets
@@ -1277,22 +1291,33 @@ fn compile_validator<F: Json>(
     draft: Draft,
 ) -> Result<Validator<F>, ValidationError<'static>> {
     let root = compile(ctx, resource).map_err(ValidationError::into_build_error)?;
-    let targets = compile_deferred_targets(ctx)?;
-    Ok(Validator {
-        root,
-        targets,
-        draft,
-    })
+    let mut targets = Vec::new();
+    match compile_deferred_targets(ctx, &mut targets) {
+        Ok(()) => Ok(Validator {
+            root,
+            targets,
+            draft,
+        }),
+        // OpenBindings qualification patch: release a build that stopped part way as a
+        // validator is released. Its targets go last, in order, once neither the root nor
+        // the caches hold them, so a long `$ref` chain never drops recursively.
+        Err(error) => {
+            drop(root);
+            ctx.shared.release_nodes();
+            drop(targets);
+            Err(error)
+        }
+    }
 }
 
-/// Drain the worklist and return the targets it compiled.
+/// Drain the worklist into `targets`.
 ///
 /// Out of line to keep its frame off the stack while the schema compiles.
 #[inline(never)]
 fn compile_deferred_targets<F: Json>(
     ctx: &Context<'_, F>,
-) -> Result<Vec<SchemaNode<F>>, ValidationError<'static>> {
-    let mut targets = Vec::new();
+    targets: &mut Vec<SchemaNode<F>>,
+) -> Result<(), ValidationError<'static>> {
     while let Some(target) = ctx.next_deferred_target() {
         ctx.replace_alias_placeholders(target.in_progress);
         let vocabularies = target
@@ -1318,7 +1343,7 @@ fn compile_deferred_targets<F: Json>(
         }
         ctx.replace_alias_placeholders(AHashMap::new());
     }
-    Ok(targets)
+    Ok(())
 }
 
 pub(crate) fn normalize_base_uri(registry: &Registry<'_>, base_uri: &Uri<String>) -> Uri<String> {
@@ -1594,10 +1619,14 @@ fn compile_with_internal<'a, F: Json>(
         Ok(existing) => return Ok(existing),
         Err(key) => key,
     };
-    // OpenBindings qualification patch: charge this compilation, with the dynamic scope
-    // keying its caches; the adapter refuses a build whose compilation scope is spent.
+    // OpenBindings qualification patch: charge this compilation, with its location and the
+    // dynamic scope keying its caches; the adapter refuses a build whose scope is spent.
     let scope = (!crate::ob_work::static_anchors()).then(|| key.location.dynamic_scope.iter());
-    if !crate::ob_work::compile_charge(1 + scope.map_or(0, Iterator::count)) {
+    let units = crate::ob_work::cost::node(
+        ctx.location().as_str().len(),
+        scope.map_or(0, Iterator::count),
+    );
+    if !crate::ob_work::compile_charge(units) {
         return Err(ValidationError::custom("schema compilation work limit"));
     }
     let outer = ctx.start_node();

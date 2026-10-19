@@ -8,11 +8,11 @@
 #[test]
 fn meta_validation_is_not_charged_to_compilation_work() {
     use jsonschema::ob_work::compiling;
-    // One compiled node needs one unit, whether or not this build also compiles
+    // One compiled node needs 830 units, whether or not this build also compiles
     // the meta-schema validator, which has dynamic anchors.
     let schema = serde_json::json!({"type": "integer"});
-    let built = compiling(1, true, || jsonschema::validator_for(&schema))
-        .expect("one unit of compilation work")
+    let built = compiling(830, true, || jsonschema::validator_for(&schema))
+        .expect("one node's compilation work")
         .expect("valid schema");
     assert!(built.is_valid(&serde_json::json!(7)));
     assert!(!built.is_valid(&serde_json::json!("7")));

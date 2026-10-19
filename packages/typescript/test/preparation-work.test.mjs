@@ -46,6 +46,30 @@ const diamonds = (levels, last) => {
   schemas[`r${levels}`] = { $id: uri(`r${levels}`), ...last };
   return document(schemas, { $ref: "#/schemas/r0" });
 };
+// `scopes` resources that each reference one shared resource requiring `names`
+// property names; with `dynamic`, a dynamic anchor keeps the shared resource
+// compiled once per resource path.
+const requiredFan = (scopes, names, dynamic) => {
+  const uri = (name) => `https://fan.test/${name}`;
+  const properties = {};
+  for (let i = 0; i < scopes; i++) properties[`p${i}`] = { $ref: uri(`m${i}`) };
+  if (dynamic) properties.self = { $dynamicRef: "#node" };
+  const schemas = {
+    top: {
+      $id: uri("top"),
+      ...(dynamic && { $dynamicAnchor: "node" }),
+      type: "object",
+      properties,
+    },
+  };
+  for (let i = 0; i < scopes; i++)
+    schemas[`m${i}`] = { $id: uri(`m${i}`), $ref: uri("leaf") };
+  schemas.leaf = {
+    $id: uri("leaf"),
+    required: Array.from({ length: names }, (_, n) => `n${n}`),
+  };
+  return document(schemas, { $ref: "#/schemas/top" });
+};
 const integer = { type: "integer" };
 const dynamicInteger = {
   $dynamicRef: "#leaf",
@@ -74,12 +98,15 @@ const refuses = (text) => {
 };
 
 test("preparation work refuses from the native boundaries through Wasm", () => {
-  prepares(chain(1788, false));
-  refuses(chain(1789, false));
-  prepares(chain(1788, true));
-  refuses(chain(1789, true));
+  prepares(chain(23496, false));
+  refuses(chain(23497, false));
+  prepares(chain(100, true));
   // Without a dynamic anchor every level compiles once; with one, per path.
   prepares(diamonds(24, integer));
-  prepares(diamonds(8, dynamicInteger));
-  refuses(diamonds(9, dynamicInteger));
+  prepares(diamonds(12, dynamicInteger));
+  refuses(diamonds(13, dynamicInteger));
+  // A long `required` list is charged each time it compiles.
+  prepares(requiredFan(103, 20000, true));
+  refuses(requiredFan(104, 20000, true));
+  prepares(requiredFan(1000, 20000, false));
 });

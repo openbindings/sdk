@@ -128,20 +128,19 @@ pub fn arithmetic_limit() {
 }
 
 /// Schema compilation work: a scope separate from evaluation's, so meta-validation
-/// and evaluation budgets never mix with it. Each compiled schema node is charged
-/// with the dynamic scope that keys its caches, and each `$ref` deferral with the
-/// in-progress placeholders it copies. Scopes do not nest: an inner one replaces
-/// the outer until it returns.
+/// and evaluation budgets never mix with it. Work is charged by what the build does,
+/// with the weights in [`cost`]. Scopes do not nest: an inner one replaces the outer
+/// until it returns.
 #[derive(Clone, Copy)]
 struct Compiling {
     active: bool,
-    remaining: usize,
+    remaining: u64,
     spent: bool,
     static_anchors: bool,
 }
 const NOT_COMPILING: Compiling = Compiling {
     active: false,
-    remaining: usize::MAX,
+    remaining: u64::MAX,
     spent: false,
     static_anchors: false,
 };
@@ -158,7 +157,7 @@ impl Drop for Restore {
 /// `$dynamicAnchor` and no Draft 2019-09 `$recursiveAnchor`: no reference then
 /// resolves through the dynamic scope, so compiled schemas are cached by location
 /// alone instead of once per scope, and a reference that does fails the build.
-pub fn compiling<T>(units: usize, static_anchors: bool, f: impl FnOnce() -> T) -> Result<T, Stop> {
+pub fn compiling<T>(units: u64, static_anchors: bool, f: impl FnOnce() -> T) -> Result<T, Stop> {
     let _restore = Restore(COMPILING.get());
     COMPILING.set(Compiling {
         active: true,
@@ -173,8 +172,45 @@ pub fn compiling<T>(units: usize, static_anchors: bool, f: impl FnOnce() -> T) -
         Ok(value)
     }
 }
+/// What compilation work costs, in units of about a nanosecond of compilation time
+/// or 0.7 bytes of the memory it allocates, whichever is larger, in the reference
+/// release build. Each weight was fitted to measured builds of many contract shapes;
+/// the charge is a sum of counts, never a measurement, so it is the same everywhere.
+pub(crate) mod cost {
+    /// A compiled schema node, or the node built for one `dependentRequired` entry.
+    pub(crate) const NODE: u64 = 830;
+    /// Each byte of a compiled node's location, which its keywords copy and its caches hash.
+    pub(crate) const LOCATION_BYTE: u64 = 8;
+    /// Each entry of the dynamic scope keying a node's caches.
+    pub(crate) const SCOPE_ENTRY: u64 = 30;
+    /// A `$ref` or `$dynamicRef` resolved and entered.
+    pub(crate) const REFERENCE: u64 = 750;
+    /// Each entry of the dynamic scope searched for a reference's dynamic anchor.
+    pub(crate) const ANCHOR_SEARCH: u64 = 440;
+    /// Each in-progress placeholder copied when a `$ref` target is deferred.
+    pub(crate) const PLACEHOLDER: u64 = 10;
+    /// A property name copied out of `required` or `dependentRequired`.
+    pub(crate) const NAME: u64 = 110;
+    /// Each byte of a copied property name.
+    pub(crate) const NAME_BYTE: u64 = 2;
+    /// Each byte of a `pattern`, which every compilation of its schema analyzes and copies.
+    pub(crate) const PATTERN_BYTE: u64 = 1;
+
+    /// A node at a location of `location_bytes`, its caches keyed by `scope_entries`.
+    pub(crate) fn node(location_bytes: usize, scope_entries: usize) -> u64 {
+        NODE + LOCATION_BYTE * location_bytes as u64 + SCOPE_ENTRY * scope_entries as u64
+    }
+    /// `count` property names of `bytes` in all.
+    pub(crate) fn names(count: usize, bytes: usize) -> u64 {
+        NAME * count as u64 + NAME_BYTE * bytes as u64
+    }
+    /// The node for a `dependentRequired` entry, whose name is `name_bytes` long.
+    pub(crate) fn entry(name_bytes: usize) -> u64 {
+        NODE + NAME_BYTE * name_bytes as u64
+    }
+}
 /// Charge compilation work; `false` once the current scope is spent.
-pub(crate) fn compile_charge(amount: usize) -> bool {
+pub(crate) fn compile_charge(amount: u64) -> bool {
     let mut state = COMPILING.get();
     if !state.active {
         return true;
