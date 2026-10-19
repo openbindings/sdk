@@ -161,6 +161,11 @@ Schema resources are explicit and immutable. Pass `SchemaResources` to
 prepared value contract for repeated validation. Ready does not promise a verdict for
 every value; missing resources, unsupported capabilities and exhausted work
 budgets can produce no-verdict. Replacing resources means preparing again.
+Preparation registers each schema resource a contract reaches in time quadratic
+in their number (a contract reaching 10,000 supplied resources takes about 2.5 s
+to prepare), and the SDK sets no cap by default. When preparing untrusted
+documents or resources, pass `limits: { schemaResources: n }`; a contract reaching more
+than `n` refuses with the `schema-resource-limit` no-verdict before registration.
 
 `validate` returns an established failure with no problem list and
 `problemsComplete: false`. Call `explain` on the same prepared value contract for the

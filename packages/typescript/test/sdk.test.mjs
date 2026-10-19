@@ -400,13 +400,16 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   );
   assert.equal(grown.validate(value).outcome, "satisfies");
   grown.dispose();
-  // Only evaluationSteps has a null default, and the refusal says so.
+  // Only evaluationSteps and schemaResources have null defaults, and the
+  // refusal says so.
   assert.throws(
     () => contract.prepare({ limits: { regexSteps: null } }),
     (e) =>
       e.code === "invalid-evaluator-limits" &&
       e.message.includes("4294967295") &&
-      e.message.includes("evaluationSteps may also be null"),
+      e.message.includes(
+        "evaluationSteps and schemaResources may also be null",
+      ),
   );
   const partial = document.references({ resources, signal: control.signal });
   assert.equal(partial.complete, false);

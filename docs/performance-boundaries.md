@@ -318,7 +318,9 @@ Outside the charge stay the SDK's linear projection, pattern admission and each
 distinct pattern's one-time regex build, and registry setup, which grows
 quadratically with the number of projected resources (55 ms for 2,000 supplied
 resources, 0.47 s for an 8,000-resource `$id` chain); a refused 49,000-link chain
-spends about a third of its time there and in projection.
+spends about a third of its time there and in projection. `Limits::schema_resources`
+refuses a contract reaching more than a configured number of resources before
+that setup; there is no cap by default.
 
 ## Document validation
 

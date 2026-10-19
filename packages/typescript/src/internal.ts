@@ -387,7 +387,7 @@ export interface WorkOptions {
   /** Optional caller-owned cooperative cancellation signal; synchronous Wasm only observes same-thread cancellation at call boundaries. */
   signal?: AbortSignal;
 }
-/** Default-evaluator finite budgets, each a nonnegative 32-bit integer; `evaluationSteps` may also be `null` for its default. Work counts are implementation units, not milliseconds. Zero is literal; the allocation and stack use of an explanation's library diagnostics are library-bounded; exhaustion produces no-verdict unless only post-verdict diagnostics are incomplete. */
+/** Default-evaluator finite budgets, each a nonnegative 32-bit integer; `evaluationSteps` and `schemaResources` may also be `null` for their defaults. Work counts are implementation units, not milliseconds. Zero is literal; the allocation and stack use of an explanation's library diagnostics are library-bounded; exhaustion produces no-verdict unless only post-verdict diagnostics are incomplete. */
 export interface EvaluatorLimits {
   /** Work units per verdict/diagnostic pass. `null`, the default, grows with the value: 2,000,000 units for a value of up to 65,536 nodes (member names count) and proportionally more for a larger one. A number caps every pass at exactly that many units, whatever the value's size. */
   evaluationSteps: number | null;
@@ -401,6 +401,8 @@ export interface EvaluatorLimits {
   patternBytes: number;
   /** Maximum regex parenthesis nesting; default 32, which keeps preparation within a 256 KiB stack. */
   patternDepth: number;
+  /** Schema resources one contract may reach: the document resource holding its schema and each embedded `$id`, supplied and packaged meta-schema resource it reaches. Ordinary contracts reach one or a few. `null`, the default, sets no cap. Registering resources before compilation takes time quadratic in their number, outside every other budget: natively, 1,000 take 7 ms, 10,000 take 0.67 s and 20,000 take 2.8 s, and Wasm takes about three times as long. A number refuses a contract reaching more with the `schema-resource-limit` no-verdict before that setup, so an application preparing untrusted documents or resources can bound it at the cap it chooses. */
+  schemaResources: number | null;
 }
 /** Inputs for one preparation with the built-in JSON Schema 2020-12 evaluator, which performs no resource I/O, treats format as annotation, declines unqualified Unicode property-escape matching, and may conservatively refuse potential non-progressing cycles. A pre-aborted signal returns no-verdict. */
 export interface PrepareOptions extends WorkOptions {
@@ -438,7 +440,7 @@ function encodedLimits(limits: Partial<EvaluatorLimits> = {}): string {
     )
       throw new SdkError(
         "invalid-evaluator-limits",
-        "Evaluator limits must be known budgets, each a nonnegative integer no greater than 4294967295; evaluationSteps may also be null for its default.",
+        "Evaluator limits must be known budgets, each a nonnegative integer no greater than 4294967295; evaluationSteps and schemaResources may also be null for their defaults.",
       );
     encoded[key.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase())] = value;
   }
