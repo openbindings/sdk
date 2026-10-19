@@ -47,6 +47,10 @@ const diamonds = (levels, last) => {
   return document(schemas, { $ref: "#/schemas/r0" });
 };
 const integer = { type: "integer" };
+const dynamicInteger = {
+  $dynamicRef: "#leaf",
+  $defs: { leaf: { $dynamicAnchor: "leaf", type: "integer" } },
+};
 const preparation = (text) => {
   const parsed = sdk.Document.parse(text);
   assert.equal(parsed.status, "parsed");
@@ -70,10 +74,12 @@ const refuses = (text) => {
 };
 
 test("preparation work refuses from the native boundaries through Wasm", () => {
-  prepares(chain(1779, false));
-  refuses(chain(1780, false));
-  prepares(chain(402, true));
-  refuses(chain(403, true));
-  prepares(diamonds(8, integer));
-  refuses(diamonds(9, integer));
+  prepares(chain(1788, false));
+  refuses(chain(1789, false));
+  prepares(chain(1788, true));
+  refuses(chain(1789, true));
+  // Without a dynamic anchor every level compiles once; with one, per path.
+  prepares(diamonds(24, integer));
+  prepares(diamonds(8, dynamicInteger));
+  refuses(diamonds(9, dynamicInteger));
 });

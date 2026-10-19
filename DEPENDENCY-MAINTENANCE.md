@@ -91,19 +91,20 @@ cached resolvable graph, not a crates.io-head claim.
 
 Upstream revision: `55ac1664384793c5d3b20745d3f9c169dfe2c06f`.
 Applied package: `openbindings-internal-jsonschema 0.58.6-ob.1`.
-The complete remaining Rust delta is **+376/-18 lines in ten files** against the
+The complete remaining Rust delta is **+443/-20 lines in eleven files** against the
 0.58.6 archive (physical added/removed lines, including comments and blanks):
 
 | File under src/ | Added | Removed | Why retained |
 | --- | ---: | ---: | --- |
 | canonical/context.rs | 2 | 2 | Use the ECMA matcher without Rust-regex translation in canonical pattern compilation. |
-| compiler.rs | 12 | 4 | Cache and compile that same matcher, preserving authored pattern syntax. Charge each compiled node, with its dynamic scope, and each deferred target's placeholder copy to the compilation scope; meta-validation stays uncharged. |
+| compiler.rs | 55 | 6 | Cache and compile that same matcher, preserving authored pattern syntax. Charge each compiled node, with its dynamic scope, and each deferred target's placeholder copy to the compilation scope; meta-validation stays uncharged. In a build that reaches no dynamic anchor, compare and hash compiled-node cache keys without the dynamic scope, so a schema reached along many resource paths compiles once. |
 | keywords/additional_properties.rs | 2 | 2 | Route both specialized patternProperties/additionalProperties paths through ECMA matching. |
+| keywords/ref_.rs | 14 | 0 | Fail such a build when a reference resolves through a dynamic or recursive anchor, rather than compile it with caches that ignore the scope. |
 | keywords/unevaluated_properties.rs | 5 | 4 | Keep annotation matching on the same ECMA engine; build only the walk's `patternProperties` patterns (see compiled subschema ownership). |
 | lib.rs | 5 | 0 | Export private adapter work and regex controls. |
 | node.rs | 38 | 1 | Charge schema entries/depth and signal detected cycles; the outer adapter refuses any stopped result. |
 | ob_ecma.rs | 117 | 0 | Select regress ES2020 Unicode behavior, scoped regex work, and the qualified Unicode-property refusal. |
-| ob_work.rs | 190 | 0 | Scoped work/depth/cycle/arithmetic stop accounting, including nested scope restoration, and a separate compilation work scope that bounds a schema build. |
+| ob_work.rs | 200 | 0 | Scoped work/depth/cycle/arithmetic stop accounting, including nested scope restoration, and a separate compilation work scope that bounds a schema build and carries the caller's statement that the build reaches no dynamic anchor. |
 | properties.rs | 1 | 1 | Use the same matcher type for property validators. |
 | regex.rs | 4 | 4 | Route the library's internal matcher/builder through regress. |
 

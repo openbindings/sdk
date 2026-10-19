@@ -137,11 +137,13 @@ struct Compiling {
     active: bool,
     remaining: usize,
     spent: bool,
+    static_anchors: bool,
 }
 const NOT_COMPILING: Compiling = Compiling {
     active: false,
     remaining: usize::MAX,
     spent: false,
+    static_anchors: false,
 };
 thread_local! {static COMPILING:Cell<Compiling>=const{Cell::new(NOT_COMPILING)};}
 struct Restore(Compiling);
@@ -152,13 +154,17 @@ impl Drop for Restore {
 }
 /// Run one schema build with `units` of compilation work. `Err(Stop::Work)` when it
 /// needed more; the build stopped at its next compilation and its result is not a
-/// prepared validator.
-pub fn compiling<T>(units: usize, f: impl FnOnce() -> T) -> Result<T, Stop> {
+/// prepared validator. `static_anchors` states that the build reaches no
+/// `$dynamicAnchor` and no Draft 2019-09 `$recursiveAnchor`: no reference then
+/// resolves through the dynamic scope, so compiled schemas are cached by location
+/// alone instead of once per scope, and a reference that does fails the build.
+pub fn compiling<T>(units: usize, static_anchors: bool, f: impl FnOnce() -> T) -> Result<T, Stop> {
     let _restore = Restore(COMPILING.get());
     COMPILING.set(Compiling {
         active: true,
         remaining: units,
         spent: false,
+        static_anchors,
     });
     let value = f();
     if COMPILING.get().spent {
@@ -181,6 +187,10 @@ pub(crate) fn compile_charge(amount: usize) -> bool {
     }
     COMPILING.set(state);
     !state.spent
+}
+/// Whether the current build's caller stated that its resources declare no dynamic anchor.
+pub(crate) fn static_anchors() -> bool {
+    COMPILING.get().static_anchors
 }
 /// Run `f` outside any compilation scope: schema meta-validation is evaluation.
 pub(crate) fn uncharged<T>(f: impl FnOnce() -> T) -> T {

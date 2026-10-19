@@ -133,11 +133,33 @@ impl<R, F: Json> CompilationOptions<F> for ValidationOptions<'_, R, F> {
     }
 }
 
-#[derive(Hash, PartialEq, Eq, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct LocationCacheKey {
     pub(crate) base_uri: Arc<Uri<String>>,
     location: Arc<str>,
     dynamic_scope: List<Uri<String>>,
+}
+
+// OpenBindings qualification patch: in a build that reaches no dynamic anchor, no reference
+// resolves through the dynamic scope, so cache keys compare and hash without it.
+impl PartialEq for LocationCacheKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.base_uri == other.base_uri
+            && self.location == other.location
+            && (crate::ob_work::static_anchors() || self.dynamic_scope == other.dynamic_scope)
+    }
+}
+
+impl Eq for LocationCacheKey {}
+
+impl std::hash::Hash for LocationCacheKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.base_uri.hash(state);
+        self.location.hash(state);
+        if !crate::ob_work::static_anchors() {
+            self.dynamic_scope.hash(state);
+        }
+    }
 }
 
 /// Named anchors can share a base URI and output location without naming the same schema.
@@ -175,10 +197,28 @@ impl ItemsValidatorsPendingKey {
     }
 }
 
-#[derive(Hash, PartialEq, Eq, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct AliasCacheKey {
     uri: Arc<Uri<String>>,
     dynamic_scope: List<Uri<String>>,
+}
+
+impl PartialEq for AliasCacheKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.uri == other.uri
+            && (crate::ob_work::static_anchors() || self.dynamic_scope == other.dynamic_scope)
+    }
+}
+
+impl Eq for AliasCacheKey {}
+
+impl std::hash::Hash for AliasCacheKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.uri.hash(state);
+        if !crate::ob_work::static_anchors() {
+            self.dynamic_scope.hash(state);
+        }
+    }
 }
 
 /// A `$ref`'s resolved URI and the location its target starts at.
@@ -1556,7 +1596,8 @@ fn compile_with_internal<'a, F: Json>(
     };
     // OpenBindings qualification patch: charge this compilation, with the dynamic scope
     // keying its caches; the adapter refuses a build whose compilation scope is spent.
-    if !crate::ob_work::compile_charge(1 + key.location.dynamic_scope.iter().count()) {
+    let scope = (!crate::ob_work::static_anchors()).then(|| key.location.dynamic_scope.iter());
+    if !crate::ob_work::compile_charge(1 + scope.map_or(0, Iterator::count)) {
         return Err(ValidationError::custom("schema compilation work limit"));
     }
     let outer = ctx.start_node();

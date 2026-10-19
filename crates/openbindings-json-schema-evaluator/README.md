@@ -105,13 +105,14 @@ The default regex allowance is
 searches can exhaust it and return `LimitExceeded`, including ordinary megabyte
 strings. Preparation has its own fixed work bound, outside `Limits`: compiling a
 contract may spend 65,536 work units plus 64 for each schema position its
-projection reaches (every reached subschema, named or not). Compilation that
-grows faster than the schema refuses with `LimitExceeded` and code
-`preparation-work-limit`: a chain of more than 1,779 same-document references or
-402 `$id` resources, and schemas reached along repeatedly branching and rejoining
-paths through resources. That includes layered models split across supplied or
-`$id` resources (7 layers of 6 schemas, each referencing 3 of the next, refuse) and
-nine levels of resource diamonds; the same models within one resource prepare. Unicode property matching is unsupported when applied. `format` is an
+projection reaches (every reached subschema, named or not). A schema reached along
+many reference paths, through supplied or `$id` resources, compiles once unless
+the contract also reaches a `$dynamicAnchor`, as the 2020-12 meta-schema declares;
+then it compiles once per path. Compilation that grows faster than the schema
+refuses with `LimitExceeded` and code `preparation-work-limit`: a chain of more
+than 1,788 references, same-document or across `$id` resources, and, with a
+reachable dynamic anchor, resources reached along nine or more levels of branching
+and rejoining paths. Unicode property matching is unsupported when applied. `format` is an
 annotation; another declared schema dialect is not treated as 2020-12.
 See [measured behavior](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md).
 

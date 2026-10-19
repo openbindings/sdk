@@ -2,8 +2,9 @@
 
 Based on `jsonschema-0.58.6`; upstream license and notices are retained.
 The distinct package identity selects the qualified evaluation work/depth/cycle,
-compilation work and ECMAScript-regex guards. The regex correctness fixes (empty
-quantifier semantics and backtrack budget restoration) remain in the sibling
+compilation work and ECMAScript-regex guards, and caches compiled schemas by
+location alone in builds that reach no dynamic anchor. The regex correctness fixes
+(empty quantifier semantics and backtrack budget restoration) remain in the sibling
 regress fork; see DEPENDENCY-MAINTENANCE.md.
 One correction is the fork's own: an `unevaluatedProperties` walk builds only the
 `patternProperties` patterns it needs. Upstream also compiles and drops the subschemas,

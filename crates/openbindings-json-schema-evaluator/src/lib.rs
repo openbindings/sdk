@@ -207,12 +207,14 @@ impl SchemaEvaluator for DefaultEvaluator {
 }
 // Library compilation work a projection may spend: a floor plus a share for each
 // projected definition (every schema position the contract reaches, named or
-// not), so preparation stays linear in the projection. The library charges one unit per compiled schema node and per entry of the dynamic
-// scope keying it, and one per in-progress placeholder copied when it defers a
-// `$ref` target. Compilation that outgrows the schema (each link of a long
-// reference chain copying every placeholder before it, or each diamond of
-// resources compiling its targets once per path) stops at this allowance. A
-// 1,500-link chain, the longest the tests prepare, spends about 128,000 of 161,664.
+// not), so preparation stays linear in the projection. The library charges one
+// unit per compiled schema node and per entry of the dynamic scope keying it,
+// and one per in-progress placeholder copied when it defers a `$ref` target.
+// Without a dynamic anchor its caches ignore the dynamic scope, and each node
+// compiles once. Compilation that outgrows the schema (each link of a long
+// reference chain copying every placeholder before it, or, with a dynamic anchor,
+// each diamond of resources compiling its targets once per path) stops at this
+// allowance. A 1,500-link chain spends 126,086 of 161,664.
 const COMPILATION_FLOOR: usize = 65_536;
 const COMPILATION_PER_DEFINITION: usize = 64;
 fn compilation_allowance(definitions: usize) -> usize {
@@ -355,6 +357,8 @@ impl DefaultEvaluator {
                     .map_or(0, |members| members.len())
             })
             .sum::<usize>();
+        // Without a dynamic anchor the library may compile each schema once.
+        let static_anchors = !operands.declares_dynamic_anchors();
         let build = || {
             operands
                 .apply(jsonschema::options_for::<FlatJson>())
@@ -368,12 +372,15 @@ impl DefaultEvaluator {
                 )
                 .build(root.contents())
         };
-        let validator =
-            match jsonschema::ob_work::compiling(compilation_allowance(projected), build) {
-                Ok(built) => built.map_err(|error| preparation_error(error.kind()))?,
-                // The build stopped part way; whatever it returned is not a validator.
-                Err(_) => return Err(compilation_stop(control)),
-            };
+        let validator = match jsonschema::ob_work::compiling(
+            compilation_allowance(projected),
+            static_anchors,
+            build,
+        ) {
+            Ok(built) => built.map_err(|error| preparation_error(error.kind()))?,
+            // The build stopped part way; whatever it returned is not a validator.
+            Err(_) => return Err(compilation_stop(control)),
+        };
         control.check()?;
         // Keep, for explanations, a compact copy of the compiled keywords with
         // their original locations, sharing the validator's literals; release

@@ -12,6 +12,7 @@ pub(crate) struct Operands {
     // Each compiled `const` and `enum` keyword's literal, by the id it holds.
     literals: Vec<Literal>,
     numbers: openbindings_internal_json::numeric::Operands,
+    dynamic_anchors: bool,
 }
 // A `const` value, or an `enum` keyword's choices. Both are views of the
 // projection's separated literals.
@@ -53,6 +54,9 @@ pub(crate) enum Role {
     Enum,
     /// A value the library reads as it is.
     Read,
+    /// A `$dynamicAnchor`, also read as it is: references can then resolve
+    /// through the dynamic scope.
+    DynamicAnchor,
 }
 /// The role of a projected keyword, or `None` for keywords the validator never
 /// compiles: annotations and unknown keywords. No library error names them.
@@ -65,9 +69,9 @@ pub(crate) fn role(keyword: &str) -> Option<Role> {
         | "minContains" | "maxContains" => Role::Size,
         "const" => Role::Const,
         "enum" => Role::Enum,
+        "$dynamicAnchor" => Role::DynamicAnchor,
         "$ref"
         | "$dynamicRef"
-        | "$dynamicAnchor"
         | "type"
         | "pattern"
         | "uniqueItems"
@@ -156,6 +160,10 @@ impl Operands {
                                         Value::Array(vec![Value::from(id)])
                                     }
                                     Some(Role::Read) => read(field.value, limits)?,
+                                    Some(Role::DynamicAnchor) => {
+                                        self.dynamic_anchors = true;
+                                        read(field.value, limits)?
+                                    }
                                     // Annotations and unknown-keyword data do not affect this
                                     // validity-only API. Their original bytes stay in the SDK.
                                     None => continue,
@@ -173,6 +181,12 @@ impl Operands {
             }
         }
         Ok(Value::Object(root))
+    }
+    /// Whether a converted schema declares `$dynamicAnchor`. Every projected
+    /// schema is a definition of a 2020-12 resource, so without one no reference
+    /// resolves through the dynamic scope.
+    pub(crate) fn declares_dynamic_anchors(&self) -> bool {
+        self.dynamic_anchors
     }
     pub(crate) fn apply<R>(
         self,

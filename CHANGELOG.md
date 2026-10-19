@@ -26,8 +26,10 @@
 - An optional JSON Schema 2020-12 evaluator with exact numeric semantics,
   cooperative cancellation and declared work limits. Preparation bounds schema
   compilation at 65,536 work units plus 64 for each schema position the contract
-  reaches, refusing with `preparation-work-limit` beyond it, and reuses a
-  resource set's identity index instead of indexing its resources again.
+  reaches, refusing with `preparation-work-limit` beyond it; without a reachable
+  dynamic anchor, a schema reached along many reference paths compiles once.
+  Preparation reuses a resource set's identity index instead of indexing its
+  resources again.
 - Cheap checks and explanations are chosen per call. `PreparedValueContract::validate`
   (and `validate_with_control`, `validate_json`) reports a failure without
   problems; `explain` and `explain_with_control` return the same verdict with the

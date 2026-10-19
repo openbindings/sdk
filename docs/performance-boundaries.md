@@ -232,32 +232,43 @@ harness for exact floors, confirmation and calibration policy.
 ## Preparation work bound
 
 Preparation compiles the projected schemas with the JSON Schema library, and two
-library behaviors make that compilation grow faster than the schema. Each time it
-defers a nested `$ref` target it copies every in-progress reference placeholder,
-which is quadratic in a reference chain's length. It also caches compiled schemas
-per dynamic scope, so a schema reached along branching and rejoining paths through
-resources (supplied resources or `$id` resources) compiles once per path, which is
-exponential in the number of such levels. The default evaluator therefore bounds
-compilation at 65,536 work units plus 64 per projected definition, that is, per
-schema position the contract reaches, named or not, and refuses beyond that with
-`LimitExceeded` (`preparation-work-limit`). Wide schemas spend about 3 units per
-definition, 256 levels of nested properties 32, and a 1,500-link chain 85.
+library behaviors can make that compilation grow faster than the schema. Each
+time it defers a nested `$ref` target it copies every in-progress reference
+placeholder, which is quadratic in a reference chain's length. It also keys its
+compiled schemas by dynamic scope, so a schema reached along several paths through
+resources (supplied resources or `$id` resources) would compile once per path,
+exponentially in the number of branching and rejoining levels. Only resolution
+through a `$dynamicAnchor` reads the dynamic scope, so when the projected
+contract declares none, the default evaluator tells the library, which then keys
+by location and compiles each schema once. A contract that reaches a dynamic
+anchor, for example by referencing the 2020-12 meta-schema, keeps one compilation
+per path.
+
+The default evaluator bounds compilation at 65,536 work units plus 64 per
+projected definition, that is, per schema position the contract reaches, named or
+not. It refuses beyond that with `LimitExceeded` (`preparation-work-limit`).
+Layered models across resources spend 3 to 4 units per definition and a
+1,500-link chain 84.
 
 Release measurements on macOS arm64, Rust 1.99.0, 2026-10-17, against `186c6f2`
 (minimum of three preparations; peak resident memory of the whole process):
 
 | Shape | Before | After |
 | --- | --- | --- |
-| 49,000-link same-document chain (1.79 MB) | prepared, 1.5 to 1.7 s, 277 MB | refused, 0.29 to 0.30 s, 241 MB |
-| 16,000-link same-document chain | prepared, 214 ms | refused, 90 ms |
-| 16 levels of resource diamonds (3.7 KB) | prepared, 1.48 s | refused, 7.0 ms |
-| 7 layers of 6 object schemas, each referencing 3 of the next, as 42 supplied resources | prepared, 22.9 ms | refused, 16.3 ms |
-| The same model as `$id` resources in one 12.8 KB document | prepared, 24.6 ms | refused, 16.1 ms |
-| The same model within the document, without `$id` | prepared, 2.5 ms | prepared, 2.4 ms |
+| 7 layers of 6 object schemas, each referencing 3 of the next, as 42 supplied resources | prepared, 22.9 ms | prepared, 3.0 ms |
+| The same model as `$id` resources in one 12.8 KB document | prepared, 24.6 ms | prepared, 2.9 ms |
+| 10 layers of 4 schemas, each referencing 2 of the next, as 40 supplied resources | prepared, 24.3 ms | prepared, 2.7 ms |
+| 12 layers of 6 schemas, each referencing 3 of the next, supplied | prepared, 7.7 s, 5.2 GB | prepared, 5.4 ms, 15 MB |
+| 20 levels of resource diamonds (4.7 KB) | prepared, 38 s, 9.9 GB | prepared, 1.4 ms |
+| 49,000-link same-document chain (1.79 MB) | prepared, 1.5 to 1.7 s, 277 MB | refused, 0.29 to 0.30 s, 230 MB |
+| 1,500-link same-document chain | prepared, 8.9 ms | prepared, 8.9 ms |
+| The 7-layer model with one property holding a 2020-12 schema | prepared, 24.2 ms | refused, 17.9 ms |
 
-Same-document chains refuse from 1,780 links, chains of `$id` resources from 403,
-and resource diamonds from 9 levels. The remaining cost of a refused 49,000-link
-chain is the SDK's linear reference resolution and projection before compilation.
+Same-document chains and chains of `$id` resources refuse from 1,789 links. With a
+reachable dynamic anchor, resource diamonds refuse from 9 levels and the 7-layer
+model above refuses. Evaluation still follows every path of a diamond, within the
+evaluation limits. The remaining cost of a refused 49,000-link chain is the SDK's
+linear reference resolution and projection before compilation.
 
 ## Document validation
 

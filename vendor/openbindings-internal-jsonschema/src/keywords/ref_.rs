@@ -287,6 +287,12 @@ fn compile_reference_validator<'a, F: Json>(
     };
     // A pointer counts from the resource the reference names, an anchor from the one it is in.
     let (ref_target_base, target_location, resource_start) = if is_named(&alias) {
+        // OpenBindings qualification patch: the build's caches ignore the dynamic scope.
+        if crate::ob_work::static_anchors() && resolved.contents().get("$dynamicAnchor").is_some() {
+            return Some(Err(ValidationError::custom(
+                "dynamic anchor in a static build",
+            )));
+        }
         match named_target_base(ctx, &resolved) {
             Ok(location) => {
                 let target = target_location(&resolved.resolver().base_uri(), &location);
@@ -391,6 +397,14 @@ fn compile_recursive_validator<'a, F: Json>(
     let resolved = ctx
         .lookup_recursive_reference()
         .map_err(ValidationError::from)?;
+    // OpenBindings qualification patch: the build's caches ignore the dynamic scope.
+    if crate::ob_work::static_anchors()
+        && resolved.contents().get("$recursiveAnchor") == Some(&Value::Bool(true))
+    {
+        return Err(ValidationError::custom(
+            "recursive anchor in a static build",
+        ));
+    }
     let target_location = target_location(&resolved.resolver().base_uri(), &ref_target_base);
 
     match ctx.lookup_maybe_recursive(reference, resolved.resolver()) {
