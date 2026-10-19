@@ -25,7 +25,8 @@ linear. This fork no longer requests arbitrary precision for SDK builds.
 
 The repository maintenance contract is DEPENDENCY-MAINTENANCE.md, including
 per-file upstream line counts and the reason each source change remains.
-UPSTREAM-VCS.json and UPSTREAM-Cargo.toml retain the original identity/manifest;
-these names avoid Cargo-reserved packaging metadata. The complete reproducible
+UPSTREAM-VCS.json, UPSTREAM-Cargo.toml and UPSTREAM-Cargo.lock retain the original
+identity, manifest and lock; these names avoid Cargo-reserved packaging metadata and
+a lock that standalone Cargo commands would rewrite. The complete reproducible
 patch and archive checksum are in docs/dependency-patches at the repository root.
 This package is an implementation detail, not a supported SDK extension API.

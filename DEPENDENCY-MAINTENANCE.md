@@ -13,8 +13,18 @@ Its optional `--upstream-dir` additionally checks the downloaded archives.
 `tools/dependency-patches.py` compares every retained fork file with its exact
 upstream crate archive, emitting applicable patches and before/after hashes.
 Original manifests and Git identities remain `UPSTREAM-Cargo.toml` and
-`UPSTREAM-VCS.json`; licenses and publish guards remain. Retained upstream locks
-are provenance; the SDK workspace lock is the build authority.
+`UPSTREAM-VCS.json`, and the jsonschema and referencing forks keep their upstream
+locks as `UPSTREAM-Cargo.lock`, a name no Cargo command rewrites; licenses and
+publish guards remain. Retained upstream locks are provenance; the SDK workspace
+lock is the build authority.
+
+CI runs each fork's own regression tests, named in the sections below, with
+`python3 tools/test-dependency-forks.py --output <new-directory>`. Cargo tests a
+package outside the workspace only when it has no dev-dependencies, so the tool
+copies the forks into a workspace of their own and leaves the checkout untouched.
+It resolves that workspace from the SDK workspace lock and refuses a tested build
+in which a package of that lock changes version; only test-only dependencies, and
+those of features the SDK never selects, resolve afresh.
 Refresh both attribution inventories and notices offline with
 `python3 tools/attribution.py`; verify with `--check`. The upstream value crate's
 omitted license is retained as a hash-verified supplement from the same pinned
@@ -176,6 +186,15 @@ runs the reduced reproducer in four placements; `reference_placement` compares
 500 seeded random contracts, split across document, contained and supplied
 resources, with the same schemas in one resource. Both fail on the unmodified walk.
 
+CI also runs two of upstream's integration tests on the fork, with the SDK's
+feature selection (none): `ref_chain` compiles and releases 1,000-reference chains
+on a 256 KiB stack, and `leak` releases validators built through reference
+cycles; both exercise the fork's release order. The rest of upstream's suite is
+not a CI gate. Some cases read test-suite data the published archive omits, and
+others assert the Rust `regex` and `fancy-regex` dialects that the fork replaces
+with ECMAScript `u`-mode matching, which rejects the identity escape `\-`, for
+example.
+
 ## referencing
 
 Upstream revision: `55ac1664384793c5d3b20745d3f9c169dfe2c06f` (`crates/jsonschema-referencing`).
@@ -203,10 +222,9 @@ every call (2026-10-18); a release that keeps the map lets this fork go.
 The evaluator's `resource_registration` test times registering 1,000 and 4,000
 resources, through `add` and through `extend`, and requires the larger to take less
 than eight times as long: linear registration measures about 4, the unmodified
-source 16 to 17. Upstream's library unit tests pass on the fork (149, and 158 with
-`retrieve-async`) in a standalone copy resolved offline; Cargo does not test a
-package outside the workspace that has dev-dependencies. The published archive
-omits the test-suite crate and data that `tests/suite.rs` and the benches need.
+source 16 to 17. CI runs upstream's library unit tests on the fork: 149, and 158
+with `retrieve-async`. The published archive omits the test-suite crate and data
+that `tests/suite.rs` and the benches need.
 
 ## regress
 
@@ -217,14 +235,14 @@ provenance-preserving wrapping pointer arithmetic and byte-address subtraction.
 These produce the same positions/distances for valid input ranges without unsafe
 blocks, including empty inputs and one-past-end positions. Both modules forbid
 unsafe code at compile time. Tests cover every Unicode table entry and gap,
-case-insensitive matching, and position arithmetic. Run those regressions with
-`cargo test --manifest-path vendor/openbindings-internal-regress/Cargo.toml --no-default-features --features std,utf16,prohibit-unsafe --lib`.
+case-insensitive matching, and position arithmetic. CI runs those library
+regressions with `--no-default-features --features std,utf16,prohibit-unsafe --lib`.
 
 - `Cargo.toml`, `src/lib.rs`: private identity and internal modules; the SDK explicitly selects the classical interpreter required by the work budget.
 - `src/api.rs`, `src/classicalbacktrack.rs`, `src/ob_budget.rs`: finite interpreter work and cancellation propagation; a failed/exhausted match must never become an ordinary non-match that supports a wrong validation verdict.
 - `src/parse.rs`, `src/ob_ecma11_properties.rs`: ECMAScript 11 property-name recognition and bounded pattern expansion/admission. Supported syntax and selected matching capability are distinct. Unicode property matching remains an explicitly qualified refusal only when selected by evaluation; irrelevant branches retain existing verdicts.
 - Empty quantifier semantics: `src/classicalbacktrack.rs` treats an unrepresentable single-character atom as matching zero characters only when its quantifier admits zero repetitions, including lazy extension. Lone-surrogate escapes still match no scalar code point. `tests/fixtures/lone-surrogate.mjs` computes the checked-in 470-row differential fixture using Node's `RegExp` with the `u` flag (Node v22.19.0, V8 12.4.254.21-node.29); `tests/tests.rs` asserts every row, and the evaluator's `pattern_correctness` integration test runs every row through `pattern` and `patternProperties`.
-- Backtrack budget restoration: both mid-interpreter budget exits truncate the backtrack stack to its exhaustion sentinel. The direct matcher regression uses `^(a+)+$` on 28 `a` characters plus `b`, without `catch_unwind`, at budgets 0–255 in debug tests; positive/negative lookaround variants and fresh-scope recovery are also checked. Re-run the fork with `cargo test --manifest-path vendor/openbindings-internal-regress/Cargo.toml --no-default-features --features std` to select the SDK's classical matcher configuration.
+- Backtrack budget restoration: both mid-interpreter budget exits truncate the backtrack stack to its exhaustion sentinel. The direct matcher regression uses `^(a+)+$` on 28 `a` characters plus `b`, without `catch_unwind`, at budgets 0–255 in debug tests; positive/negative lookaround variants and fresh-scope recovery are also checked. CI runs the fork's whole suite with `--no-default-features --features std`, the SDK's classical matcher configuration.
 
 `OPENBINDINGS-PATCH.md` identifies each retained fork and links this contract.
 

@@ -14,8 +14,9 @@ needed and registration is linear. The SDK evaluator's `resource_registration`
 test guards it through the jsonschema fork's re-exported `Registry`.
 
 The repository maintenance contract is DEPENDENCY-MAINTENANCE.md. Original
-upstream identity and manifest are retained as UPSTREAM-VCS.json and
-UPSTREAM-Cargo.toml; these names avoid Cargo-reserved packaging metadata. The
+upstream identity, manifest and lock are retained as UPSTREAM-VCS.json,
+UPSTREAM-Cargo.toml and UPSTREAM-Cargo.lock; these names avoid Cargo-reserved
+packaging metadata and a lock that standalone Cargo commands would rewrite. The
 complete reproducible patch and archive checksum are in docs/dependency-patches
 at the repository root. This package is an implementation detail, not a
 supported SDK extension API.

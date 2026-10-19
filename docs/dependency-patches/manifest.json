@@ -18,6 +18,11 @@
           "current_sha256": null
         },
         {
+          "file": "Cargo.lock",
+          "upstream_sha256": "12e96ef9a359a6706b4379f4504cad0809aac0e47f53c4903586c38d515e5530",
+          "current_sha256": null
+        },
+        {
           "file": "Cargo.toml",
           "upstream_sha256": "a8318117cc87a9a88027d5820fc5507eda16cbf04e166cb35a26be5492a1f8d7",
           "current_sha256": "332600337ef0da64dd54ab8c5d66ca7738ef077f7e5b16de7e95f472423b80f4"
@@ -30,7 +35,12 @@
         {
           "file": "OPENBINDINGS-PATCH.md",
           "upstream_sha256": null,
-          "current_sha256": "d8b694a09311e61b10b951b9e99cb351b4309ca176913ed3cc111c6c2fbfab77"
+          "current_sha256": "10aecf1f9920623f095c31df3ce325fab1e467484ba03ccc4c26176f7a561b0e"
+        },
+        {
+          "file": "UPSTREAM-Cargo.lock",
+          "upstream_sha256": null,
+          "current_sha256": "12e96ef9a359a6706b4379f4504cad0809aac0e47f53c4903586c38d515e5530"
         },
         {
           "file": "UPSTREAM-Cargo.toml",
@@ -138,6 +148,11 @@
           "current_sha256": null
         },
         {
+          "file": "Cargo.lock",
+          "upstream_sha256": "a0ec058c9ee4e06cff4ccbc6afb40ba8578eefc1664d51b1615fe9de408abd83",
+          "current_sha256": null
+        },
+        {
           "file": "Cargo.toml",
           "upstream_sha256": "b76476723bee5d0c68b8e970324254a5a4d75d7a264d6a31f1664f5abc1f87a4",
           "current_sha256": "341634ec48ebfe1f5efb6e91495d7b9f418697582b4b16babfda27bf22960a55"
@@ -150,7 +165,12 @@
         {
           "file": "OPENBINDINGS-PATCH.md",
           "upstream_sha256": null,
-          "current_sha256": "00d0d46352156ef73954e9492a9b4561426751a328fca4a9ac2aede88dabf287"
+          "current_sha256": "c7c6e5e06e043b754d164c0d92447c24280d17b03b3c73fa7e73aed22bb6fe37"
+        },
+        {
+          "file": "UPSTREAM-Cargo.lock",
+          "upstream_sha256": null,
+          "current_sha256": "a0ec058c9ee4e06cff4ccbc6afb40ba8578eefc1664d51b1615fe9de408abd83"
         },
         {
           "file": "UPSTREAM-Cargo.toml",

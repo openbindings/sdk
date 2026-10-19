@@ -43,6 +43,9 @@ jobs:
           toolchain: ${{ steps.rust-version.outputs.version }}
           components: rustfmt, clippy
       - run: python tools/verify.py
+      - name: Run the dependency forks' own regression tests
+        if: matrix.os == 'ubuntu-latest'
+        run: python tools/test-dependency-forks.py --output target/dependency-fork-tests
       - name: Verify discovery downstream features and decoded bodies
         if: matrix.os == 'ubuntu-latest'
         run: |
