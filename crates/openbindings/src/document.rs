@@ -1488,6 +1488,62 @@ mod finding_identity_tests {
     }
 
     #[test]
+    fn a_later_inconclusive_result_keeps_an_established_violation() {
+        let value = JsonValue::parse(r#"{"a":0}"#).unwrap();
+        let a = value.get("a").unwrap();
+        let mut checks = Checks::new();
+        checks.violation(0, a, "test", "violated");
+        checks.mark_at(0, Evidence::Inconclusive, a, "test", "undecided");
+        checks.mark(0, Evidence::Inconclusive, "test", None, "undecided");
+        // An inconclusive result before a violation does not hide it either.
+        checks.mark(1, Evidence::Inconclusive, "test", None, "undecided");
+        checks.violation(1, a, "test", "violated");
+        let report = checks.finish();
+        assert_eq!(report.evidence["OBI-01"], Evidence::Violated);
+        assert_eq!(report.evidence["OBI-02"], Evidence::Violated);
+        assert_eq!(report.conclusion, Conformance::NonConformant);
+        assert_eq!(report.findings.len(), 5);
+    }
+
+    #[test]
+    fn direct_findings_with_equal_text_are_distinct_at_distinct_locations() {
+        let source = b"{}\n{}";
+        let first = backend::input_location(source, 0);
+        let second = backend::input_location(source, 3);
+        let mut checks = Checks::new();
+        for location in [&first, &second, &first, &second] {
+            checks.mark(
+                0,
+                Evidence::Violated,
+                "value",
+                Some(location.clone()),
+                "same",
+            );
+        }
+        checks.mark(0, Evidence::Violated, "value", None, "same");
+        checks.mark(0, Evidence::Violated, "value", None, "same");
+        let report = checks.finish();
+        let locations: Vec<_> = report.findings.iter().map(|f| f.location.clone()).collect();
+        assert_eq!(locations, [Some(first), Some(second), None]);
+    }
+
+    #[test]
+    fn direct_findings_beyond_the_cap_are_counted_as_truncated() {
+        let mut checks = Checks::new();
+        for i in 0..MAX_FINDINGS {
+            checks.mark(0, Evidence::Violated, "test", None, format!("distinct {i}"));
+        }
+        assert!(!checks.truncated);
+        checks.mark(1, Evidence::Inconclusive, "test", None, "one more");
+        assert!(checks.truncated);
+        let report = checks.finish();
+        assert_eq!(report.findings.len(), MAX_FINDINGS);
+        assert!(report.findings_truncated);
+        // The omitted finding's evidence still counts.
+        assert_eq!(report.evidence["OBI-02"], Evidence::Inconclusive);
+    }
+
+    #[test]
     fn fixed_stream_excludes_already_retained_findings_before_intermediate_cap() {
         let value = JsonValue::parse("null").unwrap();
         let mut checks = Checks::new();
