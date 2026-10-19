@@ -30,7 +30,13 @@
         {
           "file": "OPENBINDINGS-PATCH.md",
           "upstream_sha256": null,
-          "current_sha256": "013093b81bfa888bdea6bb5ac5d0cead4f27307ec2a70ff649981b2a2ade9f3c"
+          "current_sha256": "0e0eefb3be6ad11c7ebb14307184085e0238b1e71c7b3d43337773c8236e7c70"
+        },
+        {
+          "file": "UPSTREAM-Cargo.lock",
+          "renamed_from": "Cargo.lock",
+          "upstream_sha256": "12e96ef9a359a6706b4379f4504cad0809aac0e47f53c4903586c38d515e5530",
+          "current_sha256": "12e96ef9a359a6706b4379f4504cad0809aac0e47f53c4903586c38d515e5530"
         },
         {
           "file": "UPSTREAM-Cargo.toml",

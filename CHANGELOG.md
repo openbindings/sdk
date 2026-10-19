@@ -58,6 +58,11 @@
   interface synthesis, binding invocation and operation invocation.
 - A TypeScript API with bundled Wasm, exact-value editing, disposable owners and
   Fetch discovery for qualified browser, Node ESM and Worker hosts.
+- A bundled Wasm module whose bytes do not depend on where it was built. The
+  build gives the builder's Cargo home, toolchain, target directory and checkout
+  fixed names in the module, and refuses a module that still embeds one; CI
+  rebuilds it from another checkout path and Cargo home and requires identical
+  bytes.
 - Runnable first-use and lifecycle examples, legacy Go and TypeScript migration
   guidance, API reference documentation and reproducible performance measurements.
 

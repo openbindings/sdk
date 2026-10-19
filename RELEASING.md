@@ -24,6 +24,9 @@ Before a separately authorized release:
    after destination/package ownership is approved. Remove `publish = false`
    deliberately for the intended packages. Test registry consumers. Generate the
    npm Wasm asset from the same source and verify its recorded source identity.
+   CI's `wasm-reproducibility` job rebuilds that asset from another checkout path
+   and Cargo home and requires identical bytes, so its recorded hashes hold
+   wherever it is built.
 6. Use the project's current annotated-tag/release process. Record exact artifact
    hashes and supported specification identity. Application migration, existing
    SDK retirement and verified-cohort promotion require separate decisions.
