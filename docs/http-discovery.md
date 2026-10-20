@@ -28,6 +28,16 @@ redirect-policy refusal, including malformed Location that bypassed its callback
 An already-built client is accepted only by `Client::with_delegated_policy`.
 Observing a final HTTPS URL cannot prove that all intermediate hops used HTTPS.
 
+Native discovery keeps reqwest's redirect execution, so its policy sees only the
+URL that tower-http's WHATWG join resolved, never the raw Location. A Location
+that is not an RFC 3986 URI-reference is therefore recovered, as RFC 9110
+section 10.2.2 permits: a space is percent-encoded and a backslash is read as a
+slash, so `/tar get` is requested as `/tar%20get` and `\target` as `/target`.
+Portable Rust and TypeScript discovery refuse such a Location as a
+redirect-policy failure before a second request. Every path that sees a hop
+admits the URL actually requested, so the scheme, loopback, embedded-credential,
+downgrade and hop-limit rules are the same on each.
+
 The application scopes credentials on redirects. On a cross-origin hop, reqwest
 removes only `Authorization`, `Cookie`, `Proxy-Authorization` and
 `WWW-Authenticate`; any other credential header, such as an `x-api-key` set
@@ -90,7 +100,8 @@ TypeScript `discover` owns its timer and AbortController. `timeoutMs` defaults t
 It requests Fetch `redirect: "manual"`. Where the host returns the redirect
 response itself, as Node does, the SDK checks every hop before dispatching it,
 with the policy of the Rust checked paths: it follows 301, 302, 303, 307 and 308,
-resolves relative Location values against the URL it dispatched, refuses every
+resolves relative Location values against the URL it dispatched, refuses a
+Location that is not a URI-reference as portable Rust does, refuses every
 HTTPS-to-HTTP hop, any destination the origin rules above refuse and an eleventh
 redirect, and reports the URL it last dispatched as `finalUrl`. A transport that
 reports another URL or a followed response did not honor manual mode, which is a
@@ -145,7 +156,10 @@ unbounded cancellation promise. No response cache or global client is installed.
 Publication retains conformant immutable bytes. GET serves those bytes; HEAD
 returns the same headers without a body. Other methods return 405 with
 `Allow: GET, HEAD`; other paths return 404. Pass the route path without query or
-fragment and do not decode a reserved `%2F` into `/`.
+fragment, its escapes undecoded. A percent-encoded unreserved character matches
+that character, since RFC 3986 section 2.3 makes the spellings equivalent, so
+`/.well-known/%6Fpenbindings` is served; a reserved escape such as `%2F` is never
+decoded into `/`.
 
 CORS defaults to `AllowOrigin::Any`. Select `Omit`, `Null` or `Exact` explicitly
 when needed. Exact origins must use canonical ASCII browser serialization.

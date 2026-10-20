@@ -28,6 +28,13 @@ impl Client {
     /// refused before dispatch, and at most ten redirects are followed. A foreign-origin
     /// hop followed by a same-origin hop is refused to prevent upstream header replay.
     ///
+    /// Redirects keep reqwest's execution, so the policy sees only the URL that
+    /// tower-http's WHATWG join resolved. A Location that is not an RFC 3986
+    /// URI-reference is recovered, as RFC 9110 section 10.2.2 permits: a space is
+    /// percent-encoded and a backslash is read as a slash, so `/tar get` is requested
+    /// as `/tar%20get`. Portable [`crate::discover`] refuses such a Location before a
+    /// second request; both admit the URL actually requested at every hop.
+    ///
     /// The application scopes credentials across origins. On a cross-origin hop
     /// reqwest removes only `Authorization`, `Cookie`, `Proxy-Authorization` and
     /// `WWW-Authenticate`; another credential header, such as an `x-api-key` in

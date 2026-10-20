@@ -25,6 +25,18 @@ use std::{
 
 /// The direction in which a caller-facing value crosses the operation's
 /// boundary, and so which value contract governs it.
+///
+/// An operation has exactly these two value contracts, so this closed partition
+/// may be exhaustively matched:
+/// ```
+/// use openbindings_invocation::operation::Direction;
+/// fn field(direction: Direction) -> &'static str {
+///     match direction {
+///         Direction::Input => "input",
+///         Direction::Output => "output",
+///     }
+/// }
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Direction {
     /// A value crossing to the operation, governed by its input contract.
@@ -723,6 +735,17 @@ fn error(code: &str) -> InvocationError {
 
 /// Where operation validation stopped. Plain invocation prepares lazily on the
 /// first value; a prepared operation has already completed preparation.
+///
+/// This closed partition may be exhaustively matched:
+/// ```
+/// use openbindings_invocation::operation::ValidationStage;
+/// fn label(stage: ValidationStage) -> &'static str {
+///     match stage {
+///         ValidationStage::Preparation => "preparation",
+///         ValidationStage::Evaluation => "evaluation",
+///     }
+/// }
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValidationStage {
     /// A declared schema could not be prepared with the supplied evaluator/resources.

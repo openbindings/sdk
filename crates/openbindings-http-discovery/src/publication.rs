@@ -129,15 +129,17 @@ impl Publication {
             _ => unreachable!("body validation returns only document outcomes"),
         }
     }
-    /// `path` is the exact route path, excluding query/fragment. Do not decode reserved escapes. Accept
-    /// does not affect the default OBI representation. Authentication is external.
+    /// `path` is the request's route path without query or fragment, its escapes left undecoded. A
+    /// percent-encoded unreserved character matches that character (RFC 3986 section 2.3), so
+    /// `/.well-known/%6Fpenbindings` is the route; a reserved escape such as `%2F` never matches
+    /// `/`. Accept does not affect the default OBI representation. Authentication is external.
     pub fn respond(&self, method: &str, path: &str) -> PublicationResponse {
         let mut response = PublicationResponse {
             status: 404,
             headers: Vec::new(),
             body: Arc::from(&b""[..]),
         };
-        if path != WELL_KNOWN_PATH {
+        if !names_well_known_path(path) {
             return response;
         }
         if let Some(origin) = match &self.allow_origin {
@@ -168,6 +170,42 @@ impl Publication {
         response
     }
 }
+/// Whether `path` names the well-known route. URIs differing only in a percent-encoded unreserved
+/// character, with hexadecimal digits of either case, identify the same resource (RFC 3986
+/// sections 2.1 and 2.3); a reserved character and its escape are not equivalent (section 2.2).
+fn names_well_known_path(path: &str) -> bool {
+    let mut rest = path.as_bytes();
+    let mut expected = WELL_KNOWN_PATH.bytes();
+    loop {
+        let (byte, width) = match rest {
+            [] => return expected.next().is_none(),
+            [b'%', high, low, ..] => match unreserved_escape(*high, *low) {
+                Some(decoded) => (decoded, 3),
+                None => (b'%', 1),
+            },
+            [byte, ..] => (*byte, 1),
+        };
+        if expected.next() != Some(byte) {
+            return false;
+        }
+        rest = &rest[width..];
+    }
+}
+/// The RFC 3986 section 2.3 `unreserved` character a `%` triplet's two hexadecimal digits encode.
+fn unreserved_escape(high: u8, low: u8) -> Option<u8> {
+    let decoded = (hex_digit(high)? << 4) | hex_digit(low)?;
+    (decoded.is_ascii_alphanumeric() || matches!(decoded, b'-' | b'.' | b'_' | b'~'))
+        .then_some(decoded)
+}
+fn hex_digit(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
 #[derive(Clone)]
 /// Owned HTTP response data for the caller's server adapter; no I/O or listener side effect.
 /// Later versions may add fields: read them by name and match with `..`.

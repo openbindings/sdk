@@ -18,3 +18,8 @@
 /tools/conformance-observer/target/
 /examples/source-inspection-consumer/target/
 /examples/source-inspection-consumer/Cargo.lock
+
+# Standalone Cargo commands in a dependency fork leave their own lock and build
+# directory; the forks' retained upstream locks are named UPSTREAM-Cargo.lock.
+/vendor/*/Cargo.lock
+/vendor/*/target/

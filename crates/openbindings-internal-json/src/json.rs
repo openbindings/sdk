@@ -90,6 +90,19 @@ impl fmt::Display for InputError {
 impl std::error::Error for InputError {}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// Exact JSON token category, without coercion or interpretation.
+///
+/// JSON has exactly these six kinds, so this closed partition may be
+/// exhaustively matched:
+/// ```
+/// # use openbindings_internal_json as openbindings;
+/// use openbindings::JsonKind;
+/// fn container(kind: JsonKind) -> bool {
+///     match kind {
+///         JsonKind::Array | JsonKind::Object => true,
+///         JsonKind::Null | JsonKind::Boolean | JsonKind::Number | JsonKind::String => false,
+///     }
+/// }
+/// ```
 pub enum JsonKind {
     /// The JSON literal `null`.
     Null,
@@ -197,6 +210,18 @@ impl PartialEq<&str> for JsonStringRef<'_> {
     }
 }
 /// An object member; names are exact JSON strings and can preserve lone UTF-16 units.
+///
+/// [`JsonRef::members`] yields these. A JSON member is exactly a name and a
+/// value, so, unlike the SDK's other output records, this one stays exhaustive:
+/// a pattern may name both fields without `..`.
+/// ```
+/// # use openbindings_internal_json as openbindings;
+/// use openbindings::{JsonMember, JsonValue};
+/// let object = JsonValue::parse(r#"{"id":7}"#).unwrap();
+/// for JsonMember { name, value } in object.view().members().unwrap() {
+///     assert_eq!((name.text(), value.text()), (r#""id""#, "7"));
+/// }
+/// ```
 #[derive(Clone, Copy, Debug)]
 pub struct JsonMember<'a> {
     /// Exact original member-name string, including its token coordinates.

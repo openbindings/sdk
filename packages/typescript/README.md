@@ -57,9 +57,11 @@ console.log(checkInput("seven"));
 ```
 
 For a browser, serve the installed package directory over HTTP and open
-[examples/first-use.html](examples/first-use.html). TypeScript 5.9.3 is qualified;
-include `ESNext.Disposable` in the compiler `lib` setting and target ES2022 for
-`using`. An older compiler minimum has not been qualified.
+[examples/first-use.html](examples/first-use.html). TypeScript 5.9.3 is qualified
+with target ES2022 and `"lib": ["ES2022", "DOM", "ESNext.Disposable"]`, in Node
+projects too: `ESNext.Disposable` types `using`, and the declarations use web
+platform types that `DOM` declares, such as `Response`, `URL`, `AbortSignal` and
+`WebAssembly`. An older compiler minimum has not been qualified.
 
 `Document.parse` retains an inspectable, editable document. `validate()` returns a
 `conformant` branch carrying a `ConformantDocument`, or a version refusal or

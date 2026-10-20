@@ -211,6 +211,9 @@ impl Default for ClientOptions {
 /// enforce application DNS/peer/proxy restrictions at connection time, deliver
 /// decoded bytes (or a typed decode refusal), and cancel/release work on drop.
 /// The SDK follows at most ten admitted DISC-C-02 redirects. It stores no cache.
+/// A Location that is not an RFC 3986 URI-reference, such as one containing a
+/// space or a backslash, is a redirect-policy failure; native discovery, which
+/// keeps reqwest's redirect execution, recovers it instead.
 ///
 /// The SDK calls the callback again for each admitted redirect, including one
 /// to another origin, and passes only the URL. The callback scopes credentials:
@@ -678,7 +681,7 @@ mod review_tests {
     }
     #[tokio::test(flavor = "current_thread")]
     async fn malformed_location_is_refused_for_exposed_and_host_followed_hops() {
-        // identical visible redirects have identical typed outcomes.
+        // a Location no parser resolves is refused on exposed and host-followed hops alike.
         for individual_hops in [true, false] {
             let r = ClientOptions::default()
                 .discover_using(

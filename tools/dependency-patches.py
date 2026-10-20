@@ -8,6 +8,9 @@ import tarfile
 
 ROOT = Path(__file__).resolve().parents[1]
 UPSTREAM = [('jsonschema', '0.58.6'), ('regress', '0.12.0')]
+# Archive files a fork retains under a name Cargo never rewrites: fork name to
+# archive name. Each is compared with the archive file it renames.
+RETAINED = {'UPSTREAM-Cargo.lock': 'Cargo.lock'}
 
 
 def digest(value):
@@ -20,13 +23,16 @@ def source_lines(data):
     return [part + '\n' for part in pieces[:-1]] + ([pieces[-1]] if pieces[-1] else [])
 
 
-def unified_patch(file, before, after):
-    """Emit an applicable diff, including explicit missing-final-newline markers."""
+def unified_patch(file, before, after, original=None):
+    """Emit an applicable diff, including explicit missing-final-newline markers.
+
+    A renamed file's diff names its archive file as the original.
+    """
     try:
         lines = difflib.unified_diff(
             source_lines(before or b''),
             source_lines(after or b''),
-            fromfile='a/' + file if before is not None else '/dev/null',
+            fromfile='a/' + (original or file) if before is not None else '/dev/null',
             tofile='b/' + file if after is not None else '/dev/null',
         )
         return ''.join(line if line.endswith('\n') else line + '\n\\ No newline at end of file\n'
@@ -53,9 +59,20 @@ def main():
                    for f in modified.rglob('*')
                    if f.is_file() and 'target' not in f.relative_to(modified).parts
                    and '.git' not in f.relative_to(modified).parts}
+        renamed = {name: archived for name, archived in RETAINED.items()
+                   if name in current and archived in original and archived not in current}
         changes, patches = [], []
-        for file in sorted(original.keys() | current.keys()):
-            before, after = original.get(file), current.get(file)
+        for file in sorted((original.keys() - renamed.values()) | current.keys()):
+            archived = renamed.get(file)
+            before, after = original.get(archived or file), current.get(file)
+            if archived:
+                # The rename is recorded even when the bytes are identical.
+                changes.append({'file': file, 'renamed_from': archived,
+                                'upstream_sha256': digest(before),
+                                'current_sha256': digest(after)})
+                if before != after:
+                    patches.append(unified_patch(file, before, after, archived))
+                continue
             if before == after:
                 continue
             changes.append({'file': file, 'upstream_sha256': digest(before),

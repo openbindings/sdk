@@ -94,6 +94,19 @@ impl std::fmt::Debug for KindSupportVerdict {
 }
 
 /// What the source unit represents, independently of its disposition.
+///
+/// This closed partition may be exhaustively matched:
+/// ```
+/// use openbindings_interface_synthesis::CoverageScope;
+/// fn label(scope: CoverageScope) -> &'static str {
+///     match scope {
+///         CoverageScope::Target => "target",
+///         CoverageScope::Alternative => "alternative",
+///         CoverageScope::Projection => "projection",
+///         CoverageScope::Dependency => "dependency",
+///     }
+/// }
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CoverageScope {
@@ -107,6 +120,20 @@ pub enum CoverageScope {
     Dependency,
 }
 /// Disposition of an observed source unit.
+///
+/// This closed partition may be exhaustively matched:
+/// ```
+/// use openbindings_interface_synthesis::CoverageStatus;
+/// fn label(status: CoverageStatus) -> &'static str {
+///     match status {
+///         CoverageStatus::Represented => "represented",
+///         CoverageStatus::Excluded => "excluded",
+///         CoverageStatus::Invalid => "invalid",
+///         CoverageStatus::Lossy => "lossy",
+///         CoverageStatus::ImplementationUnsupported => "implementation-unsupported",
+///     }
+/// }
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CoverageStatus {
