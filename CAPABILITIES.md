@@ -29,19 +29,22 @@ Default parsing admits 64 MiB, 10,000 container levels and 1,000,000 nodes.
 Ordinary Rust Serde conversion has a 128-container ceiling. Document reports
 retain at most 4,096 findings and 8 MiB of pointers. Truncation leaves rule evidence
 intact. See [performance and allocation boundaries](docs/performance-boundaries.md).
-OBI-02's whole-document check may spend 80 evaluator steps per admitted node and
-64 pattern steps per source byte, so every document the admission limits admit,
-default or caller-selected, gets an OBI-02 verdict, with work linear in those
-limits. A near miss of the SemVer pattern is the costliest input, at about 20
-pattern steps per byte, which took about 0.37 µs per byte in a release build on
-an Apple M1 Max: a 60 MB near miss takes about 22 seconds to reach its verdict,
-and one at the default 64 MiB limit about 25 seconds. The admission byte limit is
-how a caller bounds that time: `validate_document_with_limits` with a smaller
-`max_bytes` admits less. Each embedded schema's OBI-10 meta-schema check grows the
-same way with that schema, 129 steps and 64 pattern steps per source byte,
-so every schema the admission limits admit gets a meta-schema verdict. A check
-reads its schema's own members and only the type of each subschema, so a node is
-read by at most two checks and their work together stays linear in those limits.
+OBI-02's whole-document check and each embedded schema's OBI-10 meta-schema
+check run on the unmodified jsonschema 0.58.6 library with its default pattern
+engine. Every fixed pattern is regular, so that engine matches it on a finite
+automaton in time linear in the string, with the results of ECMAScript's `u`-mode
+RegExp. The derived schema has no recursive reference and the meta-schema check
+cuts its recursive edges, so every document the admission limits admit, default
+or caller-selected, gets OBI-02 and OBI-10 verdicts, with work linear in those
+limits and no work budget of the checks' own. A SemVer near miss, the costliest
+input per byte, took about 0.6 seconds at 60 MB and 0.7 seconds at the default
+64 MiB limit in a release build on an Apple M1 Max; peak memory was the input
+text and the stored document, and the checks' own memory does not grow with the
+string. The admission byte limit is how a caller bounds that time:
+`validate_document_with_limits` with a smaller `max_bytes` admits less. A
+meta-schema check reads its schema's own members and only the type of each
+subschema, so a node is read by at most two checks and their work together stays
+linear in those limits.
 
 ## Value validation
 

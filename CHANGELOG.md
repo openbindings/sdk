@@ -16,6 +16,12 @@
   editing: atomic batches of JSON Pointer edits and typed part maps, and typed
   field and part setters, all keeping untouched bytes exact. Validation with original source locations, bounded
   findings and per-rule evidence.
+- Document validation's fixed checks (OBI-02, OBI-10) and reference inspection use
+  the unmodified jsonschema 0.58.6 library with its default pattern engine, which
+  matches every fixed pattern on a finite automaton, exactly as ECMAScript does.
+  The checks have no work budget; their work is linear in the admitted document,
+  and a 60 MB SemVer near miss reaches its verdict in about 0.6 seconds. Core's own
+  dependency graph holds neither renamed fork; the default evaluator keeps both.
 - `Conformant<Document>` (TypeScript `ConformantDocument`), the proven state, with
   infallible views, operation and alias lookup, exact schema access, reference
   inspection and opaque kind comparison. It is the only route to value contracts.

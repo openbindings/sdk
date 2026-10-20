@@ -425,8 +425,8 @@ name = "openbindings-internal-schema"
 version = "0.2.0-alpha.1"
 dependencies = [
  "fluent-uri",
+ "jsonschema",
  "openbindings-internal-json",
- "openbindings-internal-jsonschema",
  "serde",
  "serde_json",
 ]

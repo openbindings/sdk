@@ -1080,11 +1080,13 @@ mod tests {
         assert!(retained.owner.member_indexes.contains_key(&retained.id));
     }
 
+    #[cfg(feature = "evaluator-work")]
     #[test]
     fn evaluator_index_preserves_collision_work_accounting() {
         // the evaluator charges the table access and every exact candidate,
         // and refuses exhausted budgets without returning a partial match.
-        use jsonschema::json::{JsonNumber as _, Node as _, Object as _};
+        use evaluator_jsonschema::ob_work;
+        use jsonschema_value::{JsonNumber as _, Node as _, Object as _};
         let mut text = String::from("{");
         for i in 0..20 {
             if i > 0 {
@@ -1101,7 +1103,7 @@ mod tests {
             let view = crate::backend::View::Stored(&value.owner, 0);
             let object = view.as_object().unwrap();
             let key = String::from("k19");
-            let result = jsonschema::ob_work::bounded(required, 10, || {
+            let result = ob_work::bounded(required, 10, || {
                 object
                     .get(&key)
                     .unwrap()
@@ -1112,14 +1114,12 @@ mod tests {
             });
             assert_eq!(result, Ok(String::from("19")));
             assert_eq!(
-                jsonschema::ob_work::bounded(required - 1, 10, || object.get(&key).is_some()),
-                Err(jsonschema::ob_work::Stop::Work)
+                ob_work::bounded(required - 1, 10, || object.get(&key).is_some()),
+                Err(ob_work::Stop::Work)
             );
             assert_eq!(
-                jsonschema::ob_work::bounded(0, 10, || object
-                    .get(&String::from("absent"))
-                    .is_some()),
-                Err(jsonschema::ob_work::Stop::Work)
+                ob_work::bounded(0, 10, || object.get(&String::from("absent")).is_some()),
+                Err(ob_work::Stop::Work)
             );
         }
     }

@@ -1,9 +1,11 @@
 //! Keep literal values in the exact flat representation. Only the shallow
 //! projected schema structure crosses the dependency's recursive serde boundary.
 use crate::{Limits, no_verdict};
+use jsonschema::json::{JsonNumber, Node};
 use jsonschema::{Keyword, ValidationError, ValidationOptions};
 use openbindings::*;
 use openbindings_internal_json::backend::{self, FlatJson, View};
+use openbindings_internal_json::numeric;
 use serde_json::{Map, Value};
 use std::sync::Arc;
 
@@ -11,7 +13,7 @@ use std::sync::Arc;
 pub(crate) struct Operands {
     // Each compiled `const` and `enum` keyword's literal, by the id it holds.
     literals: Vec<Literal>,
-    numbers: openbindings_internal_json::numeric::Operands,
+    numbers: numeric::Operands,
     dynamic_anchors: bool,
 }
 // A `const` value, or an `enum` keyword's choices. Both are views of the
@@ -38,6 +40,30 @@ impl<'i> Keyword<'i, FlatJson> for Constraint {
             Err(ValidationError::custom(
                 "value differs from the required exact literal",
             ))
+        }
+    }
+}
+/// A numeric keyword compared exactly with its original operand. Division the
+/// exact arithmetic cannot decide stops the pass with an arithmetic stop.
+struct ExactBound(numeric::Bound);
+impl<'i> Keyword<'i, FlatJson> for ExactBound {
+    fn is_valid(&self, instance: View<'i>) -> bool {
+        let Some(number) = instance.as_number() else {
+            return true;
+        };
+        self.0.admits(&number.as_str()).unwrap_or_else(|| {
+            jsonschema::ob_work::arithmetic_limit();
+            false
+        })
+    }
+    fn validate(&self, instance: View<'i>) -> Result<(), ValidationError<'i>> {
+        if <Self as Keyword<'i, FlatJson>>::is_valid(self, instance) {
+            Ok(())
+        } else {
+            Err(ValidationError::custom(format!(
+                "exact numeric {} constraint failed",
+                self.0.keyword()
+            )))
         }
     }
 }
@@ -192,7 +218,19 @@ impl Operands {
         self,
         mut options: ValidationOptions<'_, R, FlatJson>,
     ) -> ValidationOptions<'_, R, FlatJson> {
-        options = self.numbers.apply(options);
+        let numbers = Arc::new(self.numbers);
+        for keyword in numeric::KEYWORDS {
+            let numbers = numbers.clone();
+            options = options.with_keyword(keyword, move |_, value, _| {
+                if value.as_number().is_none() {
+                    return Err(ValidationError::custom("numeric keyword requires a number"));
+                }
+                let bound = numbers
+                    .bound(keyword, value)
+                    .map_err(ValidationError::custom)?;
+                Ok(Box::new(ExactBound(bound)))
+            });
+        }
         let literals = Arc::new(self.literals);
         for keyword in ["const", "enum"] {
             let literals = literals.clone();

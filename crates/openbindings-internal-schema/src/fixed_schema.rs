@@ -1,15 +1,27 @@
 //! Fixed normative schema checks, compiled once without external acquisition.
+//!
+//! The checks run on the unmodified jsonschema library with its default pattern
+//! engine. Every fixed pattern is regular (no backreference or lookaround), so
+//! that engine hands each one whole to a finite-automaton matcher whose time is
+//! linear in the string and whose memory is bounded by the pattern. The derived
+//! document schema has no recursive reference, and the meta-schema check cuts
+//! its recursive edges, so one instance node meets each schema position at most
+//! once. A check's work is therefore linear in the admitted document and needs
+//! no budget of its own: the admission limits bound it. Its memory is the
+//! document's own arena plus a bounded matcher cache and the capped findings,
+//! and its stack depth follows the fixed schemas, not the instance.
 use crate::{JsonRef, JsonValue};
-use jsonschema::{Draft, Retrieve, Validator};
+use jsonschema::json::{JsonNumber, Node};
+use jsonschema::{Draft, Keyword, Retrieve, ValidationError, ValidationOptions, Validator};
 use openbindings_internal_json::{
-    backend::{self, FlatJson, location_pointer_size, view},
+    backend::{self, FlatJson, View, location_pointer_size, view},
     numeric,
 };
 use serde_json::Value;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap},
-    sync::{Arc, OnceLock},
+    sync::{Arc, Mutex, OnceLock, PoisonError},
 };
 
 #[derive(Clone)]
@@ -50,16 +62,98 @@ type Compiled = Result<Validator<FlatJson>, String>;
 static DOCUMENT: OnceLock<Compiled> = OnceLock::new();
 static META: OnceLock<Compiled> = OnceLock::new();
 
+/// An exact comparison of a number with a fixed schema's own operand. The fixed
+/// schemas assert only the four comparisons (a test checks every position), and
+/// those always decide; their operands are small and exactly representable.
+struct ExactComparison(numeric::Bound);
+impl<'i> Keyword<'i, FlatJson> for ExactComparison {
+    fn is_valid(&self, instance: View<'i>) -> bool {
+        let Some(number) = instance.as_number() else {
+            return true;
+        };
+        match self.0.admits(&number.as_str()) {
+            Some(admitted) => admitted,
+            None => unreachable!("only multipleOf can exceed the exact arithmetic"),
+        }
+    }
+    fn validate(&self, instance: View<'i>) -> Result<(), ValidationError<'i>> {
+        if <Self as Keyword<'i, FlatJson>>::is_valid(self, instance) {
+            Ok(())
+        } else {
+            Err(ValidationError::custom(format!(
+                "exact numeric {} constraint failed",
+                self.0.keyword()
+            )))
+        }
+    }
+}
+fn exact_comparisons<R>(
+    mut options: ValidationOptions<'_, R, FlatJson>,
+) -> ValidationOptions<'_, R, FlatJson> {
+    for keyword in numeric::COMPARISONS {
+        options = options.with_keyword(keyword, move |_, value, _| {
+            let Some(number) = value.as_number() else {
+                return Err(ValidationError::custom("numeric keyword requires a number"));
+            };
+            let bound = numeric::Bound::parse(keyword, &number.to_string())
+                .map_err(ValidationError::custom)?;
+            Ok(Box::new(ExactComparison(bound)))
+        });
+    }
+    options
+}
+/// The library's own `pattern` keyword, compiled once for each distinct pattern
+/// and shared by every fixed validator. The derived schema repeats the name
+/// grammar at many positions, and the location plan compiles a validator for
+/// every location, each of which would compile its own copy of every pattern
+/// beneath it: about ninety copies of one pattern, each a few kilobytes of
+/// compiled matcher. Each fixed check, and every location validator, consults
+/// the one shared validator of `{"pattern": ...}` instead.
+struct SharedPattern(Arc<Validator<FlatJson>>);
+impl<'i> Keyword<'i, FlatJson> for SharedPattern {
+    fn is_valid(&self, instance: View<'i>) -> bool {
+        self.0.is_valid(instance)
+    }
+    fn validate(&self, instance: View<'i>) -> Result<(), ValidationError<'i>> {
+        if <Self as Keyword<'i, FlatJson>>::is_valid(self, instance) {
+            Ok(())
+        } else {
+            Err(ValidationError::custom("value does not match the pattern"))
+        }
+    }
+}
+fn shared_pattern(pattern: &Value) -> Result<SharedPattern, ValidationError<'static>> {
+    // The fixed schemas hold five distinct patterns, so the table stays small.
+    static PATTERNS: Mutex<BTreeMap<String, Arc<Validator<FlatJson>>>> =
+        Mutex::new(BTreeMap::new());
+    let text = pattern
+        .as_str()
+        .ok_or_else(|| ValidationError::custom("pattern requires a string"))?;
+    let mut patterns = PATTERNS.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(validator) = patterns.get(text) {
+        return Ok(SharedPattern(validator.clone()));
+    }
+    let validator = Arc::new(
+        jsonschema::options_for::<FlatJson>()
+            .with_draft(Draft::Draft202012)
+            .build(&serde_json::json!({ "pattern": text }))?,
+    );
+    patterns.insert(text.to_owned(), validator.clone());
+    Ok(SharedPattern(validator))
+}
+/// The fixed checks' validation options: exact comparisons, no format
+/// assertion, only the local resources given, and the library's default
+/// pattern engine, each pattern compiled once.
 pub(super) fn options(
     resources: BTreeMap<String, Value>,
-) -> jsonschema::ValidationOptions<'static, Arc<dyn Retrieve>, FlatJson> {
-    numeric::apply(jsonschema::options_for::<FlatJson>())
+) -> ValidationOptions<'static, Arc<dyn Retrieve>, FlatJson> {
+    exact_comparisons(jsonschema::options_for::<FlatJson>())
+        .with_keyword("pattern", |_, value, _| {
+            Ok(Box::new(shared_pattern(value)?))
+        })
         .with_draft(Draft::Draft202012)
         .with_retriever(LocalResources(Arc::new(resources)))
         .should_validate_formats(false)
-        // A check's allowance bounds all of its pattern work, so one long string
-        // takes what it needs instead of failing an engine default per match.
-        .with_pattern_options(jsonschema::PatternOptions::fancy_regex().backtrack_limit(usize::MAX))
 }
 pub(super) fn compile(schema: &Value, resources: BTreeMap<String, Value>) -> Compiled {
     options(resources).build(schema).map_err(|e| e.to_string())
@@ -75,87 +169,17 @@ fn locations() -> &'static Result<super::fixed_locations::LocationMap, String> {
         OnceLock::new();
     LOCATIONS.get_or_init(compile_locations)
 }
-/// Evaluator and pattern steps one fixed check may spend.
-#[derive(Clone, Copy)]
-pub(super) struct Allowance {
-    steps: usize,
-    patterns: usize,
-}
-// Each evaluator step enters one schema position for one instance node. The
-// derived schema has no recursive reference and no applicator that revisits an
-// instance (anyOf tries each branch once), so one node meets each position of
-// the unrolled schema at most once. It has 80; a test counts them.
-const STEPS_PER_NODE: usize = 80;
-// Every derived-schema pattern is anchored and unambiguous, so its backtracking
-// match is linear in the string. The costliest, SemVer on a nearly valid version,
-// takes about 20 steps per byte, under a third of this (a test probes each
-// pattern's near misses); location guidance revalidates within the rest.
-const PATTERN_STEPS_PER_BYTE: usize = 64;
-// One schema object's meta-schema check cuts the recursive edges to type checks,
-// so one node meets each position of the unrolled, cut meta-schema at most once.
-// It has 129; a test counts them. Its patterns are anchored and unambiguous too
-// (a test probes their near misses), so the per-byte pattern allowance is shared.
-const META_STEPS_PER_NODE: usize = 129;
-impl Allowance {
-    /// Spend from the enclosing check's allowance; unbounded outside a check.
-    pub(super) const ENCLOSING: Self = Self {
-        steps: usize::MAX,
-        patterns: usize::MAX,
-    };
-    /// The whole-document check of `document`. It grows with the admitted
-    /// document, so whatever the admission limits admit reaches a verdict, and
-    /// is linear in those limits: its node count and its source bytes.
-    fn document(document: JsonRef<'_>) -> Self {
-        Self {
-            steps: STEPS_PER_NODE.saturating_mul(backend::node_count(document)),
-            patterns: PATTERN_STEPS_PER_BYTE.saturating_mul(document.text().len()),
-        }
-    }
-    /// One schema object's meta-schema check. It grows with the schema, so every
-    /// schema the admission limits admit reaches a verdict. Every node takes at
-    /// least one source byte, so the per-node step bound is charged per byte:
-    /// counting a subschema's nodes costs a search of the document's node index
-    /// for each of its schemas. A check reads its schema's own members and,
-    /// through a cut edge, only the type of each subschema, so a node is read by
-    /// at most two checks and their total work stays linear in the admission
-    /// limits.
-    fn meta(schema: JsonRef<'_>) -> Self {
-        let bytes = schema.text().len();
-        Self {
-            steps: META_STEPS_PER_NODE.saturating_mul(bytes),
-            patterns: PATTERN_STEPS_PER_BYTE.saturating_mul(bytes),
-        }
-    }
-    fn of(value: JsonRef<'_>, is_meta: bool) -> Self {
-        if is_meta {
-            Self::meta(value)
-        } else {
-            Self::document(value)
-        }
-    }
-}
-// Nested scopes consume the enclosing check's remaining allowance. Never expose
-// an is_valid result from an incomplete work or pattern scope as rule evidence.
-pub(super) fn bounded_valid(
-    validator: &Validator<FlatJson>,
-    at: JsonRef<'_>,
-    allowance: Allowance,
-) -> Result<bool, String> {
-    jsonschema::ob_work::bounded(allowance.steps, 1024, || {
-        jsonschema::ob_ecma::top_level(allowance.patterns, || {
-            validator.is_valid(view(&at.to_owned()))
-        })
-    })
-    .map_err(|e| format!("fixed validation work limit: {e:?}"))?
-    .map_err(|_| "fixed pattern work limit".into())
+/// One fixed validator's verdict on `at`, under the fixed-string presentation
+/// the caller has entered.
+pub(super) fn valid(validator: &Validator<FlatJson>, at: JsonRef<'_>) -> bool {
+    validator.is_valid(view(&at.to_owned()))
 }
 /// The authoritative check alone, also used to qualify diagnostic allocation.
 pub fn validity(value: &JsonValue, is_meta: bool) -> Result<bool, String> {
     let validator = (if is_meta { meta() } else { document() })
         .as_ref()
         .map_err(Clone::clone)?;
-    let allowance = Allowance::of(value.view(), is_meta);
-    backend::fixed_strings(|| bounded_valid(validator, value.view(), allowance))
+    Ok(backend::fixed_strings(|| valid(validator, value.view())))
 }
 fn document() -> &'static Compiled {
     DOCUMENT.get_or_init(|| {
@@ -321,49 +345,40 @@ pub fn check_with_retained<'a>(
     let validator = (if is_meta { meta() } else { document() })
         .as_ref()
         .map_err(Clone::clone)?;
-    // Compilation is schema-only and cached, outside the per-document budget.
-    let map = if is_meta {
-        None
-    } else {
-        locations().as_ref().ok()
-    };
-    let allowance = Allowance::of(value.view(), is_meta);
-    backend::fixed_strings(|| {
+    Ok(backend::fixed_strings(|| {
         let mut collector = ProblemCollector::new(max_problems);
-        let mut decision = Err("fixed validation did not complete".into());
-        // Location guidance spends what the verdict leaves of one allowance.
-        let _walk_status = jsonschema::ob_work::bounded(allowance.steps, 1024, || {
-            let _pattern_status = jsonschema::ob_ecma::top_level(allowance.patterns, || {
-                decision = bounded_valid(validator, value.view(), Allowance::ENCLOSING);
-                if decision != Ok(false) {
-                    return;
-                }
-                collector.violated = true;
-                if let Some(map) = map {
-                    let mut offered = false;
-                    let limited = map.locate(value.view(), |at| {
-                        offered = true;
-                        collector.offer(at, GENERIC_MESSAGE.into(), true, &already_retained)
-                            && !collector.expansion_exhausted
-                    });
-                    collector.truncated |= limited;
-                    if offered {
-                        return;
-                    }
-                }
-                collector.offer(
-                    value.view(),
-                    GENERIC_MESSAGE.into(),
-                    false,
-                    &already_retained,
-                );
+        if valid(validator, value.view()) {
+            return collector.finish();
+        }
+        collector.violated = true;
+        // Only a failing document needs guidance. Its plan compiles a validator
+        // for every location of the derived schema, so a process whose documents
+        // all conform never builds it; the first failure builds it once.
+        let map = if is_meta {
+            None
+        } else {
+            locations().as_ref().ok()
+        };
+        if let Some(map) = map {
+            let mut offered = false;
+            let limited = map.locate(value.view(), |at| {
+                offered = true;
+                collector.offer(at, GENERIC_MESSAGE.into(), true, &already_retained)
+                    && !collector.expansion_exhausted
             });
-        });
-        // A location budget stop cannot erase a failure already established by
-        // validity. A failed validity scope still returns its original refusal.
-        decision?;
-        Ok(collector.finish())
-    })
+            collector.truncated |= limited;
+            if offered {
+                return collector.finish();
+            }
+        }
+        collector.offer(
+            value.view(),
+            GENERIC_MESSAGE.into(),
+            false,
+            &already_retained,
+        );
+        collector.finish()
+    }))
 }
 
 #[cfg(test)]
@@ -371,10 +386,11 @@ mod tests {
     use super::*;
     use std::collections::HashSet;
     #[test]
-    fn step_allowance_is_the_position_count_of_the_unrolled_document_schema() {
+    fn document_schema_meets_each_node_at_a_bounded_number_of_positions() {
         // One instance node meets each position of the unrolled schema at most
-        // once, so their count bounds the evaluator steps it costs. That needs
-        // no recursive reference and no applicator that revisits an instance.
+        // once, so their count bounds the validator's work per node, and the
+        // unrolled depth bounds its stack. That needs no recursive reference and
+        // no applicator that revisits an instance (anyOf tries each branch once).
         use crate::schema_index::{SCHEMA_SELECTORS, SchemaSelector};
         fn positions(root: &Value, schema: &Value, refs: &mut Vec<String>) -> usize {
             let object = match schema {
@@ -418,11 +434,11 @@ mod tests {
         }
         let schema: Value =
             serde_json::from_str(include_str!("../schemas/openbindings.schema.json")).unwrap();
-        assert_eq!(positions(&schema, &schema, &mut Vec::new()), STEPS_PER_NODE);
+        assert_eq!(positions(&schema, &schema, &mut Vec::new()), 80);
     }
 
     #[test]
-    fn meta_step_allowance_is_the_position_count_of_the_unrolled_cut_meta_schema() {
+    fn cut_meta_schema_meets_each_node_at_a_bounded_number_of_positions() {
         // Cutting the recursive edges leaves a finite tree of positions across the
         // localized meta-schema resources; one node meets each at most once.
         use crate::schema_index::{SCHEMA_SELECTORS, SchemaSelector};
@@ -490,14 +506,14 @@ mod tests {
         let root = "https://openbindings.invalid/internal-meta/schema";
         assert_eq!(
             positions(&resources, root, &resources[root], &mut Vec::new()),
-            META_STEPS_PER_NODE
+            129
         );
     }
 
     #[test]
     fn schemas_of_any_admitted_size_get_a_meta_schema_verdict() {
-        // The allowance grows with the schema, so a long near miss of a meta
-        // pattern and a schema with many members both decide.
+        // A long near miss of a meta pattern and a schema with many members
+        // both decide; no work budget stops either.
         let n = 1_000_000;
         let long = "a".repeat(n);
         let members =
@@ -534,36 +550,29 @@ mod tests {
     }
 
     #[test]
-    fn near_misses_of_every_meta_pattern_need_under_a_third_of_the_allowance() {
-        let n = 10_000;
-        let near_misses = [
+    fn long_near_misses_of_every_fixed_pattern_fail() {
+        // A near miss is where a backtracking matcher does the most work. Each
+        // one still reaches its verdict: the patterns run on a finite automaton.
+        let n = 100_000;
+        let meta = [
             format!(r#"{{"$anchor":"{}!"}}"#, "a".repeat(n)),
             format!(r#"{{"$anchor":"{}!"}}"#, "a.-".repeat(n)),
             format!(r#"{{"$dynamicAnchor":"{}!"}}"#, "_9".repeat(n)),
             format!(r#"{{"$id":"{}##"}}"#, "a".repeat(n)),
             format!(r#"{{"$id":"{}#a"}}"#, "/".repeat(n)),
         ];
-        for text in &near_misses {
+        for text in &meta {
             let value = JsonValue::parse(text).unwrap();
-            let third = PATTERN_STEPS_PER_BYTE / 3 * text.len();
-            let decided = jsonschema::ob_ecma::top_level(third, || validity(&value, true));
-            assert!(matches!(decided, Ok(Ok(false))), "{}", &text[..24]);
+            assert_eq!(validity(&value, true), Ok(false), "{}", &text[..24]);
         }
-    }
-
-    #[test]
-    fn near_misses_of_every_derived_pattern_need_under_a_third_of_the_allowance() {
-        // A near miss forces the most backtracking. Validity's share leaves the
-        // rest of the allowance to location guidance.
         let version =
             |body: &str| format!(r#"{{"openbindings":"0.0.0{body}!","operations":{{}}}}"#);
-        let n = 10_000;
-        let mut near_misses: Vec<String> = ["1", "1a", "-", "00a", "0a-1.", "1.", "a."]
+        let mut documents: Vec<String> = ["1", "1a", "-", "00a", "0a-1.", "1.", "a."]
             .iter()
             .map(|unit| version(&format!("-{}", unit.repeat(n))))
             .collect();
-        near_misses.push(version(&format!("+{}", "a.".repeat(n))));
-        near_misses.push(format!(
+        documents.push(version(&format!("+{}", "a.".repeat(n))));
+        documents.push(format!(
             "{{\"openbindings\":\"{}!.0.0\",\"operations\":{{}}}}",
             "1".repeat(n)
         ));
@@ -572,45 +581,78 @@ mod tests {
             "a.-".repeat(n) + "!",
             "!".to_owned() + &"a".repeat(n),
         ] {
-            near_misses.push(format!(
+            documents.push(format!(
                 r#"{{"openbindings":"0.2.0","operations":{{"{name}":{{}}}}}}"#
             ));
-            near_misses.push(format!(
+            documents.push(format!(
                 r#"{{"openbindings":"0.2.0","operations":{{"o":{{"aliases":["{name}"]}}}}}}"#
             ));
         }
-        for text in &near_misses {
+        for text in &documents {
             let value = JsonValue::parse(text).unwrap();
-            let third = PATTERN_STEPS_PER_BYTE / 3 * text.len();
-            let decided = jsonschema::ob_ecma::top_level(third, || validity(&value, false));
-            assert!(matches!(decided, Ok(Ok(false))), "{}", &text[..48]);
+            assert_eq!(validity(&value, false), Ok(false), "{}", &text[..48]);
         }
     }
 
     #[test]
-    fn location_work_limit_preserves_established_failure_and_scope_recovers() {
-        let value = JsonValue::parse(r#"{"openbindings":"0.2.0","name":0}"#).unwrap();
-        let healthy = JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{}}"#).unwrap();
-        let mut saw_limited_failure = false;
-        for work in 1..100 {
-            let mut result = None;
-            let _ = jsonschema::ob_work::bounded(work, 1024, || {
-                result = Some(check(&value, false, 100));
-            });
-            if let Some(Ok(problems)) = result {
-                assert!(problems.violated);
-                assert!(!problems.entries.is_empty());
-                assert!(
-                    problems
-                        .entries
-                        .iter()
-                        .all(|p| p.message == GENERIC_MESSAGE)
-                );
-                saw_limited_failure |= problems.truncated;
+    fn fixed_checks_run_their_patterns_on_the_default_engines_finite_automaton() {
+        // The library's default pattern engine accepts lookaround, which a
+        // finite-automaton engine alone refuses...
+        assert!(compile(&serde_json::json!({"pattern": "(?<=a)b"}), BTreeMap::new()).is_ok());
+        // ...and hands a regular pattern whole to its finite automaton. This
+        // valid version makes a backtracking matcher retreat over two million
+        // digits before the letter; on the engine's backtracking path that
+        // exceeds its default limit of a million steps, which this library
+        // release reads as a non-match.
+        let version = JsonValue::parse(format!(
+            r#"{{"openbindings":"0.0.0-{}a","operations":{{}}}}"#,
+            "1".repeat(2_000_000)
+        ))
+        .unwrap();
+        assert_eq!(validity(&version, false), Ok(true));
+    }
+
+    #[test]
+    fn fixed_schemas_assert_only_exact_comparisons_of_small_integers() {
+        // Only the four comparisons are registered as exact keywords; a fixed
+        // `multipleOf` would fall to the library's binary64 arithmetic.
+        use crate::schema_index::{SCHEMA_SELECTORS, SchemaSelector};
+        fn walk(schema: &Value, operands: &mut Vec<String>) {
+            let Some(object) = schema.as_object() else {
+                return;
+            };
+            assert!(!object.contains_key("multipleOf"));
+            for keyword in numeric::COMPARISONS {
+                if let Some(operand) = object.get(keyword) {
+                    operands.push(operand.to_string());
+                }
             }
-            assert!(validity(&healthy, false).unwrap());
+            for (keyword, selector) in SCHEMA_SELECTORS {
+                match (selector, object.get(*keyword)) {
+                    (SchemaSelector::Direct, Some(child)) => walk(child, operands),
+                    (
+                        SchemaSelector::Map | SchemaSelector::MapOrStringArray,
+                        Some(Value::Object(map)),
+                    ) => map.values().for_each(|child| walk(child, operands)),
+                    (SchemaSelector::Array, Some(Value::Array(items))) => {
+                        items.iter().for_each(|child| walk(child, operands))
+                    }
+                    _ => {}
+                }
+            }
         }
-        assert!(saw_limited_failure);
+        let mut operands = Vec::new();
+        let document = include_str!("../schemas/openbindings.schema.json");
+        for text in [document].into_iter().chain(META_FILES) {
+            walk(&serde_json::from_str(text).unwrap(), &mut operands);
+        }
+        assert!(!operands.is_empty());
+        for operand in operands {
+            let exact = operand
+                .parse::<i64>()
+                .is_ok_and(|n| n.unsigned_abs() < 1 << 53);
+            assert!(exact, "{operand}");
+        }
     }
 
     #[test]
@@ -832,3 +874,7 @@ mod tests {
 #[cfg(test)]
 #[path = "../tests/support/meta_equivalence.rs"]
 mod equivalence;
+
+#[cfg(test)]
+#[path = "../tests/support/ecma_patterns.rs"]
+mod ecma_patterns;

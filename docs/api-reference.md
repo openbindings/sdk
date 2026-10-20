@@ -356,30 +356,27 @@ retains unpaired units for draft inspection, caller values and supplied resource
 Document validation checks admitted schemas locally at any depth. A violation
 established by any applicable rule makes the document non-conformant.
 
-OBI-02 applies the derived schema to the whole document under a work allowance
-that grows with the admitted document: 80 evaluator steps per node and 64 pattern
-steps per source byte. Each step enters one position of the unrolled derived
-schema for one node, which meets each of its 80 positions at most once, and every
-derived pattern is anchored and unambiguous, so its matching is linear in the
-string; a SemVer near miss, the costliest, takes about 20 pattern steps per byte.
-Any document the admission limits admit, default or caller-selected, therefore
-gets an OBI-02 verdict, and the check's work is linear in those limits. Location
-guidance spends the rest of the allowance; if it ran out, the report would mark
-findings truncated. Linear work is not short work: the SemVer near miss, the worst
-case per byte, took about 0.37 µs per byte in a release build on an Apple M1 Max,
-so a 60 MB near miss takes about 22 seconds to reach its verdict and one at the
-default 64 MiB limit about 25 seconds. Callers bound that time with the admission
-byte limit, `JsonLimits::max_bytes` through `validate_document_with_limits`.
+OBI-02 applies the derived schema to the whole document. It runs on the
+unmodified jsonschema 0.58.6 library with its default pattern engine. Every
+derived pattern is regular, so that engine matches it on a finite automaton in
+time linear in the string, with the results of ECMAScript's `u`-mode RegExp; the
+derived schema has no recursive reference, so a node meets each of its 80
+positions at most once. Any document the admission limits admit, default or
+caller-selected, therefore gets an OBI-02 verdict, and the check's work is linear
+in those limits; it has no work budget of its own. Location guidance revalidates
+only beneath failing positions, a bounded number of times for each level of the
+derived schema's finite depth, and stops at its findings allowance. Linear work is not short work: the SemVer near miss,
+the worst case per byte, took about 0.6 seconds at 60 MB and 0.7 seconds at the
+default 64 MiB limit in a release build on an Apple M1 Max. Callers bound that
+time with the admission byte limit, `JsonLimits::max_bytes` through
+`validate_document_with_limits`.
 OBI-10 checks each embedded schema object against the meta-schema, its subschemas
-separately, with recursive meta-schema edges cut to a type check. Its allowance
-grows with the schema: 129 evaluator steps per source byte, since one node meets
-each of the cut meta-schema's 129 positions at most once and takes at least one
-byte, and 64 pattern steps per source byte, its patterns being anchored and
-unambiguous too. Every schema the admission limits admit
-therefore gets a meta-schema verdict. A check reads its schema's own members and
-only the type of each subschema, so a node is read by at most two checks and their
-work together stays linear in the admission limits. An exhausted allowance would
-leave its rule inconclusive with `fixed-schema-limit-or-failure`.
+separately, with recursive meta-schema edges cut to a type check, so one node
+meets each of the cut meta-schema's 129 positions at most once; its patterns are
+regular too. Every schema the admission limits admit therefore gets a
+meta-schema verdict. A check reads its schema's own members and only the type of
+each subschema, so a node is read by at most two checks and their work together
+stays linear in the admission limits.
 
 ### Finding-code catalog
 
@@ -412,7 +409,7 @@ code-based Display representation.
 | `duplicate-member` | OBI-01 | An object repeats a decoded member name. |
 | `unpaired-surrogate` | OBI-01 | A member name or string value holds an escape denoting an unpaired surrogate. |
 | `schema-mismatch` | OBI-02, OBI-10 | A constraint in the derived schema or meta-schemas failed. The fixed message is `value violates the fixed normative schema`; locations identify deepest checked document positions or the checked schema node. |
-| `fixed-schema-limit-or-failure` | OBI-02, OBI-10 | Fixed-schema checking could not complete within its capability or work limit. |
+| `fixed-schema-limit-or-failure` | OBI-02, OBI-10 | Fixed-schema checking could not complete. The pinned schemas compile and their checks have no work limit, so a report does not hold it today. |
 | `semver` | OBI-03 | The openbindings value is not a SemVer string. |
 | `missing-version` | OBI-03 | The openbindings member is absent. |
 | `name-grammar` | OBI-04 | A defined map key or operation alias violates the ASCII name grammar. |

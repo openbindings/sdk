@@ -694,6 +694,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonschema"
+version = "0.58.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f622c574a29fb3034a0a90645afee194dfedc75fc124228801b6e77041075bd1"
+dependencies = [
+ "ahash",
+ "bytecount",
+ "data-encoding",
+ "email_address",
+ "fancy-regex",
+ "fraction",
+ "getrandom 0.3.4",
+ "itoa",
+ "jsonschema-regex",
+ "jsonschema-value",
+ "num-cmp",
+ "num-traits",
+ "percent-encoding",
+ "referencing",
+ "regex",
+ "serde",
+ "serde_json",
+ "strum",
+ "unicode-general-category",
+ "uuid-simd",
+]
+
+[[package]]
 name = "jsonschema-regex"
 version = "0.58.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -920,6 +948,7 @@ name = "openbindings-internal-json"
 version = "0.2.0-alpha.1"
 dependencies = [
  "itoa",
+ "jsonschema",
  "jsonschema-value",
  "num-bigint",
  "num-traits",
@@ -967,8 +996,8 @@ name = "openbindings-internal-schema"
 version = "0.2.0-alpha.1"
 dependencies = [
  "fluent-uri",
+ "jsonschema",
  "openbindings-internal-json",
- "openbindings-internal-jsonschema",
  "serde",
  "serde_json",
 ]

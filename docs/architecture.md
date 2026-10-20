@@ -32,12 +32,14 @@ private graph/projection preserving resource boundaries and dynamic scope. Only
 private generated names change; error locations resolve to original sources.
 
 `openbindings-internal-json` contains the flat source arena and exact numeric
-adapter. Three renamed dependency forks, jsonschema, referencing and regress,
-retain upstream ownership and licenses; see `DEPENDENCY-MAINTENANCE.md` for each
-patch and regression gate. They are not a new supported general schema or regex
-engine.
-The default evaluator uses denying retrievers even if a consuming Cargo graph
-enables dependency acquisition features.
+arithmetic. Core's fixed checks and reference inspection use the unmodified
+jsonschema library. The default evaluator still uses two renamed dependency
+forks, jsonschema and regress, which retain upstream ownership and licenses and
+never reach core's own graph; see `DEPENDENCY-MAINTENANCE.md` for each patch,
+the separation and the regression gates. They are not a new supported general
+schema or regex engine. Core and the default evaluator use denying or local
+retrievers even if a consuming Cargo graph enables dependency acquisition
+features.
 
 `openbindings-http-discovery` separates portable origin/response policy,
 caller-provided transport and immutable publication from its optional native HTTP

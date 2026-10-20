@@ -1,10 +1,27 @@
 //! Shared internal adapter: the schema engine reads immutable flat JSON without re-parsing.
 use crate::decimal::Decimal;
 use crate::raw::{Arena, Id, Kind, Member};
-use jsonschema::json::{Array, Json, JsonNumber, Node, NodeIdentity, Object};
 use jsonschema_value::types::JsonType;
+use jsonschema_value::{Array, Json, JsonNumber, Node, NodeIdentity, Object};
 use serde_json::Value;
 use std::borrow::Cow;
+
+/// Charge `units` of this adapter's reads to the default evaluator's current
+/// evaluation work scope; `false` once that scope is spent. Outside a scope, and
+/// in builds without the evaluator, nothing is counted and reads continue: core's
+/// fixed checks, whose work is linear in the admitted document, have no budget.
+#[inline]
+fn charge(units: usize) -> bool {
+    #[cfg(feature = "evaluator-work")]
+    {
+        evaluator_jsonschema::ob_work::charge(units)
+    }
+    #[cfg(not(feature = "evaluator-work"))]
+    {
+        let _ = units;
+        true
+    }
+}
 
 /// Borrow one object member by source position, without visiting preceding members.
 /// This internal bridge helper preserves duplicate names and exact name tokens.
@@ -119,6 +136,10 @@ pub fn fixed_string(value: crate::JsonRef<'_>) -> Option<Cow<'_, str>> {
     present_string(value.owner, value.id)
 }
 
+// The schema libraries call these accessors for every node they visit. Each is
+// a few instructions, and both core's library and the evaluator's call them, so
+// they carry inline hints: without them, a second set of callers can tip the
+// optimizer into calling instead of inlining them on the evaluator's hot paths.
 #[derive(Debug)]
 pub struct FlatJson;
 #[derive(Clone, Copy)]
@@ -154,15 +175,19 @@ impl std::fmt::Debug for Number<'_> {
 }
 
 impl JsonNumber for Number<'_> {
+    #[inline]
     fn as_u64(&self) -> Option<u64> {
         self.0.parse().ok()
     }
+    #[inline]
     fn as_i64(&self) -> Option<i64> {
         self.0.parse().ok()
     }
+    #[inline]
     fn as_f64(&self) -> Option<f64> {
         self.0.parse::<f64>().ok().filter(|v| v.is_finite())
     }
+    #[inline]
     fn as_str(&self) -> Cow<'_, str> {
         Cow::Borrowed(self.0)
     }
@@ -170,6 +195,7 @@ impl JsonNumber for Number<'_> {
     fn to_number(&self) -> Cow<'_, serde_json::Number> {
         Cow::Owned(0.into())
     }
+    #[inline]
     fn is_integer(&self) -> bool {
         // The arena has already admitted JSON number syntax. Without a decimal
         // point or exponent, even -0 and tokens longer than i64 are integers.
@@ -183,6 +209,7 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
     type Object = ObjectView<'a>;
     type Array = ArrayView<'a>;
     type Number = Number<'a>;
+    #[inline]
     fn as_object(&self) -> Option<ObjectView<'a>> {
         match self {
             Self::Stored(a, id) => match &a.nodes[*id].kind {
@@ -192,6 +219,7 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
             _ => None,
         }
     }
+    #[inline]
     fn as_array(&self) -> Option<ArrayView<'a>> {
         match self {
             Self::Stored(a, id) => match &a.nodes[*id].kind {
@@ -201,12 +229,14 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
             _ => None,
         }
     }
+    #[inline]
     fn as_string(&self) -> Option<Cow<'a, str>> {
         match self {
             Self::Text(s) => Some(Cow::Borrowed(s)),
             Self::Stored(a, id) => read_string(a, *id),
         }
     }
+    #[inline]
     fn as_number(&self) -> Option<Number<'a>> {
         match self {
             Self::Stored(a, id) if matches!(a.nodes[*id].kind, Kind::Number) => {
@@ -215,6 +245,7 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
             _ => None,
         }
     }
+    #[inline]
     fn as_boolean(&self) -> Option<bool> {
         match self {
             Self::Stored(a, id) => match a.nodes[*id].kind {
@@ -224,9 +255,11 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
             _ => None,
         }
     }
+    #[inline]
     fn is_null(&self) -> bool {
         matches!(self,Self::Stored(a,id) if matches!(a.nodes[*id].kind,Kind::Null))
     }
+    #[inline]
     fn json_type(&self) -> JsonType {
         match self {
             Self::Text(_) => JsonType::String,
@@ -243,7 +276,7 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
     fn equals_value(&self, expected: &Value) -> bool {
         let mut stack = vec![(*self, expected)];
         while let Some((left, right)) = stack.pop() {
-            if !jsonschema::ob_work::charge(1) {
+            if !charge(1) {
                 return false;
             }
             match right {
@@ -304,6 +337,7 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
     fn to_value(&self) -> Cow<'a, Value> {
         Cow::Borrowed(&Value::Null)
     }
+    #[inline]
     fn identity(&self) -> Option<NodeIdentity> {
         match self {
             Self::Stored(a, id) => Some(NodeIdentity::tagged(
@@ -358,8 +392,9 @@ impl<'a> From<MemberName<'a>> for Cow<'a, str> {
 }
 impl<'a> Iterator for Members<'a> {
     type Item = (MemberName<'a>, View<'a>);
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if !jsonschema::ob_work::charge(1) {
+        if !charge(1) {
             return None;
         }
         self.1.next().map(|m| {
@@ -383,17 +418,20 @@ impl<'a> Object<'a, FlatJson> for ObjectView<'a> {
     type Node = View<'a>;
     type MemberName = MemberName<'a>;
     type MembersIter = Members<'a>;
+    #[inline]
     fn len(&self) -> usize {
         self.1.len()
     }
+    #[inline]
     fn get(&self, key: &String) -> Option<View<'a>> {
         // recover the containing object from its first key token, so the
         // adapter shares the arena index and charges every collision candidate.
         let (object, _) = self.0.nodes[self.1.first()?.key].parent?;
         self.0
-            .get_with_probe(object, key, || jsonschema::ob_work::charge(1))
+            .get_with_probe(object, key, || charge(1))
             .map(|id| View::Stored(self.0, id))
     }
+    #[inline]
     fn members(&self) -> Members<'a> {
         Members(self.0, self.1.iter())
     }
@@ -414,8 +452,9 @@ impl std::fmt::Debug for Elements<'_> {
 
 impl<'a> Iterator for Elements<'a> {
     type Item = View<'a>;
+    #[inline]
     fn next(&mut self) -> Option<View<'a>> {
-        if !jsonschema::ob_work::charge(1) {
+        if !charge(1) {
             return None;
         }
         self.1.next().map(|id| View::Stored(self.0, *id))
@@ -424,9 +463,11 @@ impl<'a> Iterator for Elements<'a> {
 impl<'a> Array<'a, FlatJson> for ArrayView<'a> {
     type Node = View<'a>;
     type ElementsIter = Elements<'a>;
+    #[inline]
     fn len(&self) -> usize {
         self.1.len()
     }
+    #[inline]
     fn elements(&self) -> Elements<'a> {
         Elements(self.0, self.1.iter())
     }
@@ -443,7 +484,7 @@ impl<'a> Array<'a, FlatJson> for ArrayView<'a> {
         let hasher = RandomState::new();
         let mut hashes = vec![0u64; end - first];
         for id in (first..end).rev() {
-            if !jsonschema::ob_work::charge(1) {
+            if !charge(1) {
                 return false;
             }
             let hash = match &self.0.nodes[id].kind {
@@ -506,7 +547,7 @@ impl ArrayView<'_> {
                 Entry::Occupied(entry) => entry.into_mut(),
             };
             for &prior in bucket.ids() {
-                if !jsonschema::ob_work::charge(1) {
+                if !charge(1) {
                     return false;
                 }
                 if equals(View::Stored(self.0, id), View::Stored(self.0, prior)) {
@@ -782,7 +823,7 @@ pub fn unpaired_strings(value: &crate::JsonValue) -> impl Iterator<Item = crate:
 pub fn equals(left: View<'_>, right: View<'_>) -> bool {
     let mut stack = vec![(left, right)];
     while let Some((left, right)) = stack.pop() {
-        if !jsonschema::ob_work::charge(1) {
+        if !charge(1) {
             return false;
         }
         if left.json_type() != right.json_type() {
@@ -803,7 +844,7 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
             // lookup API. In particular, an encoded surrogate cannot alias a
             // genuine scalar member name containing the presentation marker.
             for member in items.1 {
-                if !jsonschema::ob_work::charge(1) {
+                if !charge(1) {
                     return false;
                 }
                 // Names compare by their exact UTF-16 units (§5), so a name with
@@ -814,7 +855,7 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
                     let key = items.0.units(member.key).unwrap();
                     let mut matched = None;
                     for candidate in other.1 {
-                        if !jsonschema::ob_work::charge(1) {
+                        if !charge(1) {
                             return false;
                         }
                         if other.0.units(candidate.key).as_deref() == Some(&key) {

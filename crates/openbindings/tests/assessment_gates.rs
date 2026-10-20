@@ -173,9 +173,9 @@ fn parse_findings_explain_the_syntax_failure() {
 
 #[test]
 fn the_whole_document_check_reaches_a_verdict_at_every_admitted_size() {
-    // The OBI-02 work allowance grows with the admitted document. These
-    // documents sit well inside the default limits and beyond any allowance
-    // fixed at two million steps, which left them undetermined.
+    // The OBI-02 check has no work budget; the admission limits bound it.
+    // These documents sit well inside the default limits and beyond any
+    // allowance fixed at two million steps, which left them undetermined.
     let entries = |head: &str, count: usize, entry: fn(usize) -> String, tail: &str| {
         let mut text = String::from(head);
         text.push_str(&(0..count).map(entry).collect::<Vec<_>>().join(","));
@@ -197,8 +197,8 @@ fn the_whole_document_check_reaches_a_verdict_at_every_admitted_size() {
         let validation = checked(&text);
         assert_eq!(validation.report().conclusion, Conformance::Conformant);
     }
-    // A long near miss of the costliest pattern takes the work its length
-    // needs, beyond the engine's default of a million steps for one match.
+    // A long near miss of the costliest pattern reaches its verdict: the
+    // pattern runs on a finite automaton, with no step limit to exhaust.
     let version = format!(
         r#"{{"openbindings":"0.0.0-{}!","operations":{{}}}}"#,
         "1".repeat(60_000)
@@ -216,9 +216,9 @@ fn the_whole_document_check_reaches_a_verdict_at_every_admitted_size() {
 
 #[test]
 fn every_embedded_schema_reaches_a_meta_schema_verdict_at_every_admitted_size() {
-    // Each schema's OBI-10 allowance grows with the schema. A near miss of a
-    // meta-schema pattern a million bytes long, in a schema of a few nodes, and
-    // a schema of nearly a million nodes both fell outside a fixed allowance.
+    // OBI-10 has no work budget either. A near miss of a meta-schema pattern a
+    // million bytes long, in a schema of a few nodes, and a schema of nearly a
+    // million nodes both fell outside an earlier fixed allowance.
     let long = "a".repeat(1_000_000);
     let schema = |body: &str| {
         format!(r#"{{"openbindings":"0.2.0","operations":{{}},"schemas":{{"S":{body}}}}}"#)

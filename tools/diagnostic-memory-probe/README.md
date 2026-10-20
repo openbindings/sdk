@@ -41,7 +41,22 @@ The separately capped validity baseline also detects increases in the fixed sche
 
 The verifier rejects diagnostic API calls in the two fixed-check modules. It also
 requires exact agreement between validity-only and fixed-check verdicts/refusals
-for every sample. A location budget stop retains failure and limited guidance.
+for every sample.
+
+## Near misses
+
+The fixed checks have no work budget: their patterns run on the library's
+finite-automaton engine. The near-miss phase (`src/near_misses.rs`) validates
+near misses of the SemVer pattern (dotted and plain pre-release shapes), the name
+grammar (on an alias) and the meta-schemas' anchor and identifier patterns at
+1 MiB and 8 MiB, after compiling the checks and warming the matcher caches. For
+each shape, validity alone and the check with findings must use no more peak
+bytes and no more allocations at 8 MiB than at 1 MiB. A backtracking matcher
+keeps a saved position per character it may retreat over and fails this; the
+finite automaton allocates the same few hundred bytes at both sizes. Complete
+document validation is recorded beside them but not bounded here: its native
+rules and finding locations are outside the fixed checks. Run the phase alone
+with `--near-misses-only`.
 
 ## Recorded results
 
