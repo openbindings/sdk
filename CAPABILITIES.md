@@ -69,6 +69,14 @@ for a particular value. Patterns may nest 32 groups by default; release builds
 prepare such patterns, and check values against them, on a 256 KiB thread stack.
 Debug builds need more on Windows, as the [support policy](docs/support.md) records.
 
+Preparation registers each schema resource a contract reaches (the document
+resource and each embedded `$id`, supplied and packaged meta-schema resource) in
+time quadratic in their number: 1,000 take 7 ms, 10,000 take 0.67 s and 20,000
+take 2.8 s in the reference build. The SDK sets no cap by default; an application
+that prepares untrusted documents or resource sets sets `Limits::schema_resources`
+(`schemaResources` in TypeScript), and a contract reaching more refuses with
+`schema-resource-limit` before any registration.
+
 Missing content or undefined reference results do not prevent a verdict when the
 evaluator proves that they cannot affect it. An established undefined result has
 its own `Undefined` outcome, separate from no-verdict. The default evaluator

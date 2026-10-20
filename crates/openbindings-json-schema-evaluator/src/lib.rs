@@ -45,6 +45,18 @@ pub struct Limits {
     /// [support policy](https://github.com/openbindings/sdk/blob/main/docs/support.md)
     /// records where they are qualified.
     pub pattern_depth: usize,
+    /// Schema resources one contract may reach, counted as its projection
+    /// holds them: the document resource holding the contract's schema and each
+    /// embedded `$id` resource, supplied resource and packaged meta-schema
+    /// resource it reaches. Ordinary contracts reach one or a few. `None`, the
+    /// default, sets no cap. Registering resources with the JSON Schema library
+    /// before compilation takes time quadratic in their number, outside every
+    /// other budget: in the reference build 1,000 resources take 7 ms, 10,000
+    /// take 0.67 s and 20,000 take 2.8 s. `Some(n)` refuses a contract reaching
+    /// more than `n` with `LimitExceeded` and `schema-resource-limit` before
+    /// that setup, so an application preparing untrusted documents or
+    /// resource sets can bound it at the cap it chooses.
+    pub schema_resources: Option<usize>,
 }
 // The default work allowance and the value size, in nodes, it is stated for.
 const DEFAULT_STEPS: usize = 2_000_000;
@@ -73,6 +85,7 @@ impl Default for Limits {
             compile_json_depth: 512,
             pattern_bytes: 1024 * 1024,
             pattern_depth: 32,
+            schema_resources: None,
         }
     }
 }
@@ -315,6 +328,19 @@ impl DefaultEvaluator {
         explains: bool,
         control: &dyn WorkControl,
     ) -> Result<Compiled, NoVerdict> {
+        // Registering resources costs time quadratic in their number, so the
+        // configured cap refuses before any of them is registered.
+        if self
+            .limits
+            .schema_resources
+            .is_some_and(|cap| program.resources.len() > cap)
+        {
+            return Err(no_verdict(
+                NoVerdictReason::LimitExceeded,
+                "schema-resource-limit",
+                "the contract reaches more schema resources than the configured limit",
+            ));
+        }
         let mut registry = jsonschema::Registry::new().retriever(NoRetrieval);
         let mut operands = operands::Operands::default();
         for (index, resource) in program.resources.iter().enumerate() {

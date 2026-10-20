@@ -30,20 +30,15 @@ for record in records:
             original = {m.name.split('/', 1)[1]: hashlib.sha256(tar.extractfile(m).read()).hexdigest()
                         for m in tar.getmembers() if m.isfile() and m.name.endswith('.rs')}
         assert original == record['rust_files']
-removed = {'openbindings-internal-' + name for name in ['serde-json', 'jsonschema-value']}
+removed = {'openbindings-internal-' + name for name in ['serde-json', 'referencing', 'jsonschema-value']}
 assert not removed & {p['name'] for p in graph['packages']}
-forks = {'openbindings-internal-' + name for name in ['jsonschema', 'referencing', 'regress']}
-assert {p.name for p in (root / 'vendor').iterdir() if p.is_dir()} == forks
-# Each fork replaces its upstream identity: no registry copy may enter the graph.
-for name in ['jsonschema', 'referencing', 'regress']:
-    assert not [p for p in graph['packages'] if p['name'] == name], name
-    fork = [p for p in graph['packages'] if p['name'] == 'openbindings-internal-' + name]
-    assert len(fork) == 1 and fork[0]['source'] is None, name
+assert {p.name for p in (root / 'vendor').iterdir() if p.is_dir()} == {
+    'openbindings-internal-jsonschema', 'openbindings-internal-regress'}
 tree = subprocess.check_output(['cargo', 'tree', '--offline', '--locked', '--workspace',
     '--edges', 'normal,build', '--no-dedupe', '--prefix', 'none', '--format', '{p}|{f}'], cwd=root, text=True)
 serde = {line for line in tree.splitlines() if line.startswith('serde_json v')}
 assert len(serde) == 1 and 'arbitrary_precision' not in next(iter(serde)), serde
-print('One registry serde_json identity; no SDK-requested arbitrary precision; two upstream source/archives audited; three retained forks, each the only copy of its library.')
+print('One registry serde_json identity; no SDK-requested arbitrary precision; three upstream source/archives audited; two retained forks.')
 
 # Cancellation has one delivery identity, with no async dependency entering core.
 cancellation = 'openbindings-internal-cancellation'

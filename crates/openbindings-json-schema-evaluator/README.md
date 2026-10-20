@@ -90,10 +90,11 @@ provenance and two admissible completions that disagree. Unsupported fragments,
 missing resources and inconclusive analysis remain no-verdict. `UndefinedResult`
 retains a code, message and optional original schema location.
 
-`Limits` controls work, recursion, regex steps, compilation depth and pattern
-admission. The default work allowance is 2,000,000 units per pass for values of
-up to 65,536 nodes and grows in proportion above that, so ordinary schemas decide
-values as large as the default admission limits accept. An explicit
+`Limits` controls work, recursion, regex steps, compilation depth, pattern
+admission and, when set, the schema resources a contract may reach. The default
+work allowance is 2,000,000 units per pass for values of up to 65,536 nodes and
+grows in proportion above that, so ordinary schemas decide values as large as
+the default admission limits accept. An explicit
 `evaluation_steps: Some(n)` caps every pass at `n` units, whatever the value's size. Evaluation depth
 (default 1,024) bounds the recursive walk's stack and is reported as
 `evaluation-depth-limit`. Patterns may nest 32 groups by default; release
@@ -122,6 +123,21 @@ rejoining paths, or a 20,000-name `required` list reached along more than 103
 resource paths. Unicode property matching is unsupported when applied. `format` is an
 annotation; another declared schema dialect is not treated as 2020-12.
 See [measured behavior](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md).
+
+Before compiling, preparation registers each schema resource the contract
+reaches with the library: the document resource holding its schema and each
+embedded `$id`, supplied and packaged meta-schema resource. Ordinary contracts
+reach one or a few. Registration takes time quadratic in their number, outside
+every other budget: in the reference build 1,000 resources take 7 ms, 10,000
+take 0.67 s and 20,000 take 2.8 s. An 8 MB document chaining 99,990 `$id`
+resources took nearly three minutes to prepare, almost all of it registering,
+before compilation refused it; with a cap of 1,000 it refuses in 1.3 s.
+The SDK sets no cap by default, since any default would be arbitrary. An
+application that prepares untrusted documents or resource sets sets its own
+with `Limits { schema_resources: Some(n), ..Limits::default() }`
+(`limits: { schemaResources: n }` in TypeScript); a contract reaching more than `n`
+then refuses with `LimitExceeded` and code `schema-resource-limit` before any
+registration.
 
 One known limitation of the jsonschema library can give a wrong verdict. The
 library closes a `$ref` cycle by reusing the schema it is still compiling,

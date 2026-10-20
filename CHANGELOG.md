@@ -31,7 +31,10 @@
   schema position the contract reaches. Without a reachable dynamic anchor, a
   schema reached along many reference paths compiles once. Preparation reuses a
   resource set's identity index instead of indexing its resources again.
-  Registering a contract's resources takes time linear in their number.
+  `Limits::schema_resources` (TypeScript `schemaResources`) caps the schema resources one
+  contract may reach, whose registration takes time quadratic in their number;
+  a contract reaching more refuses with `LimitExceeded` and
+  `schema-resource-limit` before registration. There is no cap by default.
 - Cheap checks and explanations are chosen per call. `PreparedValueContract::validate`
   (and `validate_with_control`, `validate_json`) reports a failure without
   problems; `explain` and `explain_with_control` return the same verdict with the
