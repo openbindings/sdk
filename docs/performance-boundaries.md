@@ -171,6 +171,13 @@ out of timing and memory decisions. Either side missing its own expectation, or
 any observation difference on a row whose expectation did not change, still fails
 the job. Workloads present in only one fixture set are reported, not compared.
 
+A regression that was reviewed and accepted is declared in the harness's
+`accepted-residuals.json`, one exact workload, mode and metric per entry, with
+the largest ratio accepted and the decision that accepted it. A declared flag
+within its bound passes and is reported first in the summary; beyond its bound,
+or undeclared, a flag still fails the job, and an entry whose row no longer
+regresses is reported as stale.
+
 The harness isolates SDK calls in `tools/evaluator-bench/src/sdk.rs`. It also
 measures document validation directly from bytes (including the conformant
 proof), conformant operation/text reads and full available failure diagnostics.
@@ -209,11 +216,12 @@ structure.
 
 The workflow first tries the candidate's identical instrument against both SDK
 revisions. If the baseline fails to build, it may build each revision's own
-instrument only when their complete instrument diff changes `src/sdk.rs` and
-SDK-owned workspace package blocks in the instrument's `Cargo.lock` exclusively.
-Any fixture, timing, check, allocator, manifest, third-party lock or other
-instrument change prohibits that fallback. Such pairs remain not comparable
-and pass with a report. Authorized pairs are marked `cross-API`, retain the
+instrument only when their complete instrument diff changes `src/sdk.rs`,
+SDK-owned workspace package blocks in the instrument's `Cargo.lock` and fixture
+expectations exclusively; a fixture edit qualifies only when both generators
+produce identical requests. Any fixture request, timing, check, allocator,
+manifest, third-party lock or other instrument change prohibits that fallback.
+Such pairs remain not comparable and pass with a report. Authorized pairs are marked `cross-API`, retain the
 instrument diff and SHA-256 plus lock hashes, and face the same outcome, heap,
 allocation-count and timing policy as identical-instrument pairs. Every build
 uses its own new target directory, because Cargo can judge archived sources fresh
