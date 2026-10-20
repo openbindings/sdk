@@ -41,11 +41,23 @@ class Policy(unittest.TestCase):
             self.assertTrue(memory_regression(
                 dict(base=base,candidate=base+difference,difference=difference), relative, absolute))
 
-    def run_comparison(self, *, enforce, metric=None, timing='within-threshold', cross_api=False):
-        """Feed deterministic instrument observations through the real report/exit path."""
+    def run_comparison(self, *, enforce, metric=None, timing='within-threshold', cross_api=False,
+                       factor=2, residuals=None, rows=None, workloads=None, summary=False):
+        """Feed deterministic instrument observations through the real report/exit path.
+
+        `metric` names one memory metric, or a list of them, that the candidate
+        multiplies by `factor`; `residuals` is the accepted-residuals document
+        the change declares (none by default).
+        """
+        metrics = [metric] if isinstance(metric, str) else list(metric or [])
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             arguments = ['compare.py', '--output', str(root/'output')]
+            if workloads:
+                arguments.extend(['--workloads', workloads])
+            declared = root/'accepted-residuals.json'
+            if residuals is not None:
+                declared.write_text(residuals if isinstance(residuals, str) else json.dumps(residuals))
             if cross_api:
                 (root/'output').mkdir()
                 (root/'output/instrument-pair.json').write_text(json.dumps(dict(kind='cross-API')))
@@ -62,8 +74,9 @@ class Policy(unittest.TestCase):
                     'baseline_live_bytes', 'peak_live_bytes', 'incremental_peak_bytes',
                     'requested_bytes_per_op']}
                 memory['allocations_per_op'] = 100
-                if binary.name.startswith('candidate') and metric in memory:
-                    memory[metric] *= 2
+                if binary.name.startswith('candidate'):
+                    for name in metrics:
+                        memory[name] *= factor
                 return dict(iterations=request['iterations'],
                             outcomes={'satisfies': request['iterations']},
                             observation={'status': 'satisfies'},
@@ -72,15 +85,19 @@ class Policy(unittest.TestCase):
                             rss_bytes=8*1024*1024 if binary.name.startswith('candidate') else 1024*1024)
 
             with patch.object(sys, 'argv', arguments), \
-                 patch.object(compare, 'fixtures', return_value={'scalar': {'modes': ['eval']}}), \
+                 patch.object(compare, 'fixtures', return_value=rows or {'scalar': {'modes': ['eval']}}), \
                  patch.object(compare, 'invoke', side_effect=invoke), \
-                 patch.object(compare, 'time_decision', return_value=timing):
+                 patch.object(compare, 'time_decision', return_value=timing), \
+                 patch.object(compare, 'ACCEPTED_RESIDUALS', declared):
                 try:
                     compare.main()
                     exit_code = 0
                 except SystemExit as error:
                     exit_code = error.code
-            return exit_code, json.loads((root/'output/comparison.json').read_text())
+            report = json.loads((root/'output/comparison.json').read_text(encoding='utf-8'))
+            if summary:
+                return exit_code, report, (root/'output/summary.md').read_text(encoding='utf-8')
+            return exit_code, report
 
     def test_heap_and_count_flags_fail_only_enforced_runs(self):
         for metric in ['baseline_live_bytes', 'peak_live_bytes', 'incremental_peak_bytes',
@@ -135,10 +152,159 @@ class Policy(unittest.TestCase):
                 if enforce: command.append('--enforce')
                 result = subprocess.run(command, capture_output=True, text=True)
                 self.assertEqual(result.returncode, expected_exit, result.stderr)
-                report = json.loads((output/'comparison.json').read_text())
+                report = json.loads((output/'comparison.json').read_text(encoding='utf-8'))
                 self.assertEqual(len(report['errors']), 7)
                 self.assertEqual(report['advisory'], not enforce)
                 self.assertTrue(report['timing_advisory'])
+
+class AcceptedResiduals(unittest.TestCase):
+    """A change may declare an exact regression accepted, within a bound, for a named reason."""
+    REASON = 'Matthew, 2026-10-20: accepted cost of a schema transform'
+
+    def document(self, *entries):
+        return dict(format=compare.RESIDUAL_FORMAT, residuals=[
+            dict(workload=workload, mode=mode, metric=metric, max_ratio=bound, reason=self.REASON)
+            for workload, mode, metric, bound in entries])
+
+    def run_comparison(self, **options):
+        return Policy.run_comparison(self, enforce=True, summary=True, **options)
+
+    def statuses(self, report):
+        return [(entry['workload'], entry['mode'], entry['metric'], entry['status'])
+                for entry in report['accepted_residuals']['entries']]
+
+    def test_a_declared_residual_within_its_bound_passes_and_is_reported(self):
+        for metric in ['incremental_peak_bytes', 'requested_bytes_per_op', 'allocations_per_op']:
+            with self.subTest(metric=metric):
+                code, report, summary = self.run_comparison(
+                    metric=metric, residuals=self.document(('scalar', 'eval', metric, 2.01)))
+                self.assertEqual(code, 0)
+                self.assertEqual(self.statuses(report), [('scalar', 'eval', metric, 'accepted')])
+                self.assertEqual(report['accepted_residuals']['entries'][0]['ratio'], 2.0)
+                self.assertEqual(report['rows'][0]['memory_flags'], [metric])
+                self.assertEqual(report['rows'][0]['accepted_residuals'], [metric])
+                self.assertIsNotNone(report['accepted_residuals']['sha256'])
+                self.assertIn('## Accepted residuals', summary)
+                self.assertIn(self.REASON, summary)
+                self.assertIn('| scalar | eval | 1.000 | within-threshold | accepted residual |', summary)
+                # The section precedes the per-row table, so a reviewer sees it first.
+                self.assertLess(summary.index('## Accepted residuals'), summary.index('| Workload | Mode | Candidate/base | Time'))
+
+    def test_a_residual_beyond_its_bound_still_fails(self):
+        code, report, summary = self.run_comparison(
+            metric='incremental_peak_bytes', residuals=self.document(('scalar', 'eval', 'incremental_peak_bytes', 1.99)))
+        self.assertEqual(code, 1)
+        self.assertEqual(self.statuses(report), [('scalar', 'eval', 'incremental_peak_bytes', 'exceeded')])
+        self.assertNotIn('accepted_residuals', report['rows'][0])
+        self.assertIn('**exceeded**', summary)
+        self.assertIn('| scalar | eval | 1.000 | within-threshold | True |', summary)
+
+    def test_undeclared_regressions_still_fail(self):
+        # Another metric on the declared row.
+        code, report, _ = self.run_comparison(
+            metric=['incremental_peak_bytes', 'allocations_per_op'],
+            residuals=self.document(('scalar', 'eval', 'incremental_peak_bytes', 2.01)))
+        self.assertEqual(code, 1)
+        self.assertEqual(self.statuses(report), [('scalar', 'eval', 'incremental_peak_bytes', 'accepted')])
+        self.assertEqual(compare.unaccepted_flags(report['rows'][0]), ['allocations_per_op'])
+        # Another row of the declared workload.
+        rows = {'scalar': {'modes': ['eval', 'compile']}}
+        code, report, _ = self.run_comparison(
+            metric='allocations_per_op', rows=rows,
+            residuals=self.document(('scalar', 'eval', 'allocations_per_op', 2.01)))
+        self.assertEqual(code, 1)
+        self.assertEqual([compare.unaccepted_flags(row) for row in report['rows']], [[], ['allocations_per_op']])
+        # No declaration at all.
+        code, report, summary = self.run_comparison(metric='allocations_per_op')
+        self.assertEqual(code, 1)
+        self.assertEqual(report['accepted_residuals']['entries'], [])
+        self.assertNotIn('## Accepted residuals', summary)
+
+    def test_stale_entries_are_reported_and_accept_nothing(self):
+        code, report, summary = self.run_comparison(residuals=self.document(
+            ('absent', 'eval', 'allocations_per_op', 1.1),
+            ('scalar', 'compile', 'allocations_per_op', 1.1),
+            ('scalar', 'eval', 'allocations_per_op', 1.1),
+            ('scalar', 'eval', 'time', 1.1)))
+        self.assertEqual(code, 0)
+        entries = report['accepted_residuals']['entries']
+        self.assertEqual([entry['status'] for entry in entries], ['stale'] * 4)
+        self.assertEqual([entry['detail'] for entry in entries], [
+            'no such workload and mode', 'no such workload and mode',
+            'the policy no longer flags this metric', 'the policy no longer flags this metric'])
+        self.assertNotIn('accepted_residuals', report['rows'][0])
+        self.assertEqual(summary.count('**stale**'), 4)
+        # A stale entry never hides a regression.
+        code, report, _ = self.run_comparison(
+            metric='allocations_per_op', residuals=self.document(('absent', 'eval', 'allocations_per_op', 9.0)))
+        self.assertEqual(code, 1)
+
+    def test_rows_not_compared_or_not_selected_accept_nothing(self):
+        rows = {'scalar': {'modes': ['eval']}, 'other': {'modes': ['eval']}}
+        code, report, _ = self.run_comparison(
+            rows=rows, workloads='scalar', residuals=self.document(('other', 'eval', 'allocations_per_op', 1.1)))
+        self.assertEqual(code, 0)
+        self.assertEqual(self.statuses(report), [('other', 'eval', 'allocations_per_op', 'not measured')])
+        row = dict(workload='w', mode='eval', comparison=compare.OUTCOME_CHANGED)
+        judged = compare.apply_residuals(dict(rows=[row]), self.document(('w', 'eval', 'time', 1.1))['residuals'],
+                                         {'w': {'modes': ['eval']}}, {'w': {'modes': ['eval']}})
+        self.assertEqual(judged[0]['status'], 'stale')
+        judged = compare.apply_residuals(dict(rows=[dict(row, comparison=compare.COMPARED, error='boom')]),
+                                         self.document(('w', 'eval', 'time', 1.1))['residuals'],
+                                         {'w': {'modes': ['eval']}}, {'w': {'modes': ['eval']}})
+        self.assertEqual(judged[0]['status'], 'error')
+
+    def test_time_residuals_are_reported_and_timing_stays_advisory(self):
+        code, report, summary = self.run_comparison(
+            timing='regression', residuals=self.document(('scalar', 'eval', 'time', 1.01)))
+        self.assertEqual(code, 0)
+        self.assertEqual(self.statuses(report), [('scalar', 'eval', 'time', 'accepted')])
+        self.assertIn('| scalar | eval | 1.000 | regression (accepted residual) | False |', summary)
+        with patch.object(compare, 'residual_ratio', return_value=1.5):
+            code, report, _ = self.run_comparison(
+                timing='regression', residuals=self.document(('scalar', 'eval', 'time', 1.01)))
+        self.assertEqual(code, 0)
+        self.assertEqual(self.statuses(report), [('scalar', 'eval', 'time', 'exceeded')])
+
+    def test_malformed_residuals_are_refused_before_measuring(self):
+        entry = dict(workload='scalar', mode='eval', metric='allocations_per_op', max_ratio=1.1, reason=self.REASON)
+        def document(**changes):
+            return json.dumps(dict(format=compare.RESIDUAL_FORMAT, residuals=[dict(entry, **changes)]))
+        cases = {
+            'not JSON': '{',
+            'wrong format': json.dumps(dict(format='other', residuals=[])),
+            'extra top-level member': json.dumps(dict(format=compare.RESIDUAL_FORMAT, residuals=[], note='x')),
+            'residuals not an array': json.dumps(dict(format=compare.RESIDUAL_FORMAT, residuals={})),
+            'extra entry member': json.dumps(dict(format=compare.RESIDUAL_FORMAT, residuals=[dict(entry, wildcard=True)])),
+            'unknown metric': document(metric='rss'),
+            'empty reason': document(reason=' '),
+            'workload not a string': document(workload=['scalar']),
+            'bound of one': document(max_ratio=1),
+            'boolean bound': document(max_ratio=True),
+            'infinite bound': document(max_ratio=float('inf')),
+            'repeated entry': json.dumps(dict(format=compare.RESIDUAL_FORMAT, residuals=[entry, entry])),
+        }
+        for name, text in cases.items():
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                (root/'accepted-residuals.json').write_text(text)
+                arguments = ['compare.py', '--output', str(root/'output'), '--enforce']
+                for key in ['baseline', 'candidate', 'baseline-alloc', 'candidate-alloc']:
+                    (root/key).write_text(key)
+                    arguments.extend(['--'+key, str(root/key)])
+                with patch.object(sys, 'argv', arguments), \
+                     patch.object(compare, 'ACCEPTED_RESIDUALS', root/'accepted-residuals.json'), \
+                     patch.object(compare, 'invoke', side_effect=AssertionError('measured')):
+                    with self.assertRaises(SystemExit) as raised:
+                        compare.main()
+                self.assertIn('Refusing malformed accepted residuals', str(raised.exception.code))
+                self.assertFalse((root/'output/comparison.json').exists())
+
+    def test_the_checked_in_residuals_are_valid_and_name_existing_rows(self):
+        rows = fixtures()
+        for entry in compare.accepted_residuals(compare.ACCEPTED_RESIDUALS):
+            self.assertIn(entry['mode'], rows[entry['workload']]['modes'], entry)
+
 
 class OutcomeChanges(unittest.TestCase):
     """An expectation that differs from the merge base's declares an intended outcome change."""
@@ -188,7 +354,7 @@ class OutcomeChanges(unittest.TestCase):
                     code = error.code
             def read(name):
                 path = output/name
-                return path.read_text() if path.exists() else None
+                return path.read_text(encoding='utf-8') if path.exists() else None
             report = read('comparison.json')
             return code, report and json.loads(report), read('summary.md'), calls
 
@@ -321,6 +487,38 @@ class InstrumentConfinement(unittest.TestCase):
                 if original is None: path.unlink()
                 else: path.write_bytes(original)
 
+    def test_fixture_edits_may_change_expectations_but_not_requests(self):
+        (self.base/'fixtures.py').write_text('old expectations\n')
+        (self.candidate/'fixtures.py').write_text('new expectations\n')
+        audit = compare.instrument_diff(self.base, self.candidate, {'openbindings'}, same_requests=True)
+        self.assertTrue(audit['confined'])
+        self.assertEqual(audit['changed'], ['fixtures.py'])
+        self.assertFalse(self.audit()['confined'])
+        (self.base/'fixtures.py').unlink()
+        audit = compare.instrument_diff(self.base, self.candidate, {'openbindings'}, same_requests=True)
+        self.assertFalse(audit['confined'])
+
+    def test_declared_residuals_may_change_without_blocking_a_cross_api_pair(self):
+        (self.candidate/'src/sdk.rs').write_text('new SDK calls\n')
+        residuals = self.candidate/'accepted-residuals.json'
+        residuals.write_text('{"format": "x", "residuals": []}\n')
+        audit = self.audit()
+        self.assertTrue(audit['confined'])
+        self.assertEqual(audit['changed'], ['accepted-residuals.json', 'src/sdk.rs'])
+        (self.base/'accepted-residuals.json').write_text('{"format": "x", "residuals": [1]}\n')
+        self.assertTrue(self.audit()['confined'])
+        residuals.unlink()
+        self.assertTrue(self.audit()['confined'])
+        residuals.symlink_to(self.base/'accepted-residuals.json')
+        self.assertFalse(self.audit()['confined'])
+
+    def test_requests_are_fixture_rows_without_expectations(self):
+        rows = {'w': {'value': '1', 'modes': ('eval',), 'expected': {'status': 'fails'}}}
+        self.assertEqual(compare.requests(rows), {'w': {'value': '1', 'modes': ['eval']}})
+        changed = {'w': {'value': '1', 'modes': ['eval'], 'expected': {'status': 'no-verdict'}}}
+        self.assertEqual(compare.requests(rows), compare.requests(changed))
+        self.assertNotEqual(compare.requests(rows), compare.requests({'w': {'value': '2', 'modes': ['eval']}}))
+
     def test_third_party_lock_and_metadata_edits_are_not_sdk_edits(self):
         for text in [self.lock.replace('"1.0"', '"2.0"'),
                      self.lock.replace('version = 4', 'version = 3'),
@@ -362,7 +560,7 @@ class InstrumentConfinement(unittest.TestCase):
         self.assertFalse(self.audit()['confined'])
 
     def build(self, *, confined=True, fail_candidate=False, fail_own_base=False, identical_builds=False,
-              reports=None):
+              reports=None, fixtures=None):
         # Fake only Cargo and the binaries, retaining the real copying,
         # confinement, fallback and provenance logic. Unless `identical_builds`,
         # the identical instrument fails on the old SDK by construction. Like
@@ -378,6 +576,8 @@ class InstrumentConfinement(unittest.TestCase):
             (source/'crates/core/Cargo.toml').write_text(f'[package]\nname = "openbindings"\n# {variant}\n')
             sources.append(source)
         (sources[1]/'tools/evaluator-bench/src/sdk.rs').write_text('new SDK calls\n')
+        for source, rows in zip(sources, fixtures or []):
+            (source/'tools/evaluator-bench/fixtures.py').write_text(f'def fixtures():\n    return {rows!r}\n')
         if not confined:
             (sources[1]/'tools/evaluator-bench/src/main.rs').write_text('changed timing\n')
         calls = []
@@ -387,7 +587,7 @@ class InstrumentConfinement(unittest.TestCase):
             if command[0] == sys.executable:
                 return real_run(command, **options)
             if command[1:] == ['--provenance']:
-                return subprocess.CompletedProcess(command, 0, stdout=Path(command[0]).read_text(), stderr='')
+                return subprocess.CompletedProcess(command, 0, stdout=Path(command[0]).read_text(encoding='utf-8'), stderr='')
             manifest = Path(command[command.index('--manifest-path')+1])
             directory = Path(options['env']['CARGO_TARGET_DIR'])
             calls.append((str(manifest), directory))
@@ -421,7 +621,7 @@ class InstrumentConfinement(unittest.TestCase):
             root = self.root/'sources'/tree
             self.assertEqual(builds[name]['source'], str(root.resolve()))
             self.assertEqual(builds[name]['sdk_digest'], compare.tree_digest(root, compare.SDK_SOURCES))
-            self.assertEqual(json.loads((self.root/'bin'/name.removesuffix('-identical')).read_text())['sdk'],
+            self.assertEqual(json.loads((self.root/'bin'/name.removesuffix('-identical')).read_text(encoding='utf-8'))['sdk'],
                              builds[name]['sdk_digest'])
         self.assertTrue(Path(builds['baseline-identical']['instrument']).name.startswith('evaluator-candidate-'))
         self.assertEqual(builds['baseline-identical']['instrument_digest'], builds['candidate']['instrument_digest'])
@@ -435,7 +635,7 @@ class InstrumentConfinement(unittest.TestCase):
             "def fixtures():\n    return {'w': {'value': '1', 'expected': EXPECTED, 'modes': ['eval']}}\n")
         metadata, _ = self.build(identical_builds=True)
         saved = self.root/'output'/compare.BASELINE_FIXTURES
-        self.assertEqual(json.loads(saved.read_text()),
+        self.assertEqual(json.loads(saved.read_text(encoding='utf-8')),
                          {'w': {'value': '1', 'expected': {'status': 'fails'}, 'modes': ['eval']}})
         self.assertEqual(metadata['baseline_fixtures_sha256'], compare.digest(saved))
         self.assertFalse((self.root/'sources/baseline/tools/evaluator-bench/__pycache__').exists())
@@ -498,12 +698,24 @@ class InstrumentConfinement(unittest.TestCase):
                          ['candidate', 'candidate-alloc', 'baseline-identical', 'baseline', 'baseline-alloc'])
         self.assertEqual(metadata['builds']['baseline']['instrument'],
                          str((self.root/'sources/baseline/tools/evaluator-bench').resolve()))
-        self.assertEqual(json.loads((self.root/'bin/baseline').read_text())['instrument'],
+        self.assertEqual(json.loads((self.root/'bin/baseline').read_text(encoding='utf-8'))['instrument'],
                          compare.tree_digest(self.root/'sources/baseline/tools/evaluator-bench', compare.INSTRUMENT_SOURCES))
-        self.assertTrue((self.root/'output/instrument.diff').read_text())
-        self.assertEqual(json.loads((self.root/'output/instrument-pair.json').read_text()), metadata)
+        self.assertTrue((self.root/'output/instrument.diff').read_text(encoding='utf-8'))
+        self.assertEqual(json.loads((self.root/'output/instrument-pair.json').read_text(encoding='utf-8')), metadata)
         for name in ['baseline', 'candidate', 'baseline-alloc', 'candidate-alloc']:
             self.assertTrue((self.root/'bin'/name).exists())
+
+    def test_a_fallback_may_declare_outcome_changes_but_not_change_requests(self):
+        row = {'value': '1', 'modes': ['eval'], 'expected': {'status': 'fails'}}
+        changed = dict(row, expected={'status': 'no-verdict'})
+        metadata, _ = self.build(fixtures=[{'w': row}, {'w': changed}])
+        self.assertEqual(metadata['kind'], 'cross-API')
+        self.assertEqual(metadata['instrument_diff']['changed'], ['fixtures.py', 'src/sdk.rs'])
+        shutil.rmtree(self.root/'sources')
+        shutil.rmtree(self.root/'target')
+        metadata, _ = self.build(fixtures=[{'w': row}, {'w': dict(changed, value='2')}])
+        self.assertEqual(metadata['kind'], 'not comparable')
+        self.assertIn('fixture expectations', metadata['reason'])
 
     def test_unconfined_fallback_stops_as_not_comparable(self):
         metadata, calls = self.build(confined=False)
@@ -521,15 +733,16 @@ class InstrumentConfinement(unittest.TestCase):
 
 
 class FixtureCoverage(unittest.TestCase):
-    def test_existing_fixture_bytes_and_expectations_remain_identical(self):
+    def test_existing_fixture_requests_remain_identical(self):
         import hashlib
-        # Preserve the preexisting replay requests, including exact number tokens.
-        existing = {name: row for name, row in fixtures().items()
+        # Preserve the preexisting replay requests, including exact number
+        # tokens; an expectation may change to declare an outcome change.
+        existing = {name: row for name, row in compare.requests(fixtures()).items()
                     if not name.startswith(('document-', 'read-', 'explain-', 'unevaluated-'))}
         self.assertEqual(len(existing), 32)
         serialized = (json.dumps(existing, indent=2)+'\n').encode()
         self.assertEqual(hashlib.sha256(serialized).hexdigest(),
-                         '5b37f03b822485b96d6745e387a3f847100e241051113ccbe9e014c396dda85d')
+                         '22bfb211564d6b0a113d41ebc067f17aad42418ed6ed15867c422b1e5ebc54f2')
 
     def test_document_scales_shared_definitions_and_complete_reads(self):
         rows = fixtures()

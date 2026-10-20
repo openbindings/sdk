@@ -25,6 +25,96 @@ def digest(path):
 
 
 SDK_MODULE = 'src/sdk.rs'
+FIXTURES = 'fixtures.py'
+RESIDUALS = 'accepted-residuals.json'
+ACCEPTED_RESIDUALS = Path(__file__).with_name(RESIDUALS)
+RESIDUAL_FORMAT = 'openbindings.evaluator-bench.accepted-residuals@1'
+HEAP_METRICS = ['baseline_live_bytes', 'peak_live_bytes', 'incremental_peak_bytes', 'requested_bytes_per_op']
+ALLOCATION_METRIC = 'allocations_per_op'
+RESIDUAL_METRICS = HEAP_METRICS + [ALLOCATION_METRIC, 'time']
+
+
+def accepted_residuals(path):
+    """The regressions a change declares accepted, checked before anything is measured.
+
+    Each entry names one exact workload and mode, one metric (a requested-heap
+    metric, `allocations_per_op` or `time`), the largest candidate/base ratio
+    accepted, and the reason, which names the decision that accepted it. No
+    file means no accepted residual.
+    """
+    if not path.exists():
+        return []
+    def refuse(problem):
+        raise ValueError(f'{path}: {problem}')
+    data = json.loads(path.read_text(encoding='utf-8'))
+    if not isinstance(data, dict) or set(data) != {'format', 'residuals'}:
+        refuse('expected exactly the members "format" and "residuals"')
+    if data['format'] != RESIDUAL_FORMAT:
+        refuse(f'format must be {RESIDUAL_FORMAT!r}')
+    if not isinstance(data['residuals'], list):
+        refuse('"residuals" must be an array')
+    seen = set()
+    for index, entry in enumerate(data['residuals']):
+        fields = {'workload', 'mode', 'metric', 'max_ratio', 'reason'}
+        if not isinstance(entry, dict) or set(entry) != fields:
+            refuse(f'residual {index} must have exactly the members {sorted(fields)}')
+        for field in ['workload', 'mode', 'metric', 'reason']:
+            if not isinstance(entry[field], str) or not entry[field].strip():
+                refuse(f'residual {index} needs a non-empty {field}')
+        if entry['metric'] not in RESIDUAL_METRICS:
+            refuse(f'residual {index} names unknown metric {entry["metric"]!r}')
+        bound = entry['max_ratio']
+        if isinstance(bound, bool) or not isinstance(bound, (int, float)) or not math.isfinite(bound) or bound <= 1:
+            refuse(f'residual {index} needs a finite max_ratio above 1')
+        key = (entry['workload'], entry['mode'], entry['metric'])
+        if key in seen:
+            refuse(f'residual {index} repeats {key}')
+        seen.add(key)
+    return data['residuals']
+
+
+def residual_ratio(row, metric):
+    """The candidate/base ratio a residual bounds: a memory metric's median
+    paired ratio, or the largest batch ratio for time."""
+    if metric == 'time':
+        return max(batch['ratio'] for batch in row['batches'])
+    return row['memory'][metric]['ratio']
+
+
+def apply_residuals(report, residuals, selected, candidate_fixtures):
+    """Judge every declared residual against the measured rows.
+
+    A declared metric the policy flags is accepted within its bound and exceeded
+    beyond it. An entry whose row does not exist, was not compared, or whose
+    metric the policy does not flag is stale. Memory flags not accepted, and
+    every undeclared flag, still fail enforcement; time remains advisory.
+    """
+    rows = {(row['workload'], row['mode']): row for row in report['rows']}
+    judged = []
+    for entry in residuals:
+        result = dict(entry, ratio=None)
+        workload, mode, metric = entry['workload'], entry['mode'], entry['metric']
+        row = rows.get((workload, mode))
+        if row is None:
+            known = mode in candidate_fixtures.get(workload, {}).get('modes', [])
+            result['status'] = 'not measured' if known and workload not in selected else 'stale'
+            result['detail'] = 'not selected for this run' if result['status'] == 'not measured' else 'no such workload and mode'
+        elif 'error' in row:
+            result['status'], result['detail'] = 'error', 'the row did not complete'
+        elif row['comparison'] != COMPARED:
+            result['status'], result['detail'] = 'stale', 'the row is not compared: ' + row['comparison']
+        else:
+            flagged = row['time_decision'] == 'regression' if metric == 'time' else metric in row['memory_flags']
+            result['ratio'] = residual_ratio(row, metric)
+            if not flagged:
+                result['status'], result['detail'] = 'stale', 'the policy no longer flags this metric'
+            elif result['ratio'] <= entry['max_ratio']:
+                result['status'], result['detail'] = 'accepted', 'within the declared bound'
+                row.setdefault('accepted_residuals', []).append(metric)
+            else:
+                result['status'], result['detail'] = 'exceeded', 'beyond the declared bound'
+        judged.append(result)
+    return judged
 
 
 def instrument_files(root):
@@ -43,7 +133,7 @@ def instrument_files(root):
 
 def sdk_crates(*roots):
     # The SDK's own crates and its renamed dependency forks, whose lock entries it owns.
-    return {tomllib.loads(p.read_text())['package']['name']
+    return {tomllib.loads(p.read_text(encoding='utf-8'))['package']['name']
             for root in roots for owned in ('crates', 'vendor')
             for p in (root/owned).glob('*/Cargo.toml')}
 
@@ -63,7 +153,17 @@ def lock_without_sdk(data, names):
                     or tomllib.loads(block.decode())['package'][0]['name'] not in names)
 
 
-def instrument_diff(baseline, candidate, names):
+def requests(rows):
+    """Each workload's request: its fixture row without the expectation."""
+    return {name: {key: value for key, value in row.items() if key != 'expected'}
+            for name, row in json.loads(json.dumps(rows)).items()}
+
+
+def instrument_diff(baseline, candidate, names, same_requests=False):
+    """Audit the instrument diff. `same_requests` states that both fixture
+    generators produce the same requests, so a fixture edit can only change
+    expectations, which declare outcome changes the measuring step checks per side.
+    """
     before, after = instrument_files(baseline), instrument_files(candidate)
     changed, forbidden, diff = [], [], []
     for name in sorted(before.keys() | after.keys()):
@@ -84,6 +184,11 @@ def instrument_diff(baseline, candidate, names):
                                        b.decode(errors='backslashreplace').splitlines(True),
                                        fromfile='baseline/'+name, tofile='candidate/'+name))
         allowed = name == SDK_MODULE and left is not None and right is not None
+        if name == FIXTURES and left and right and mode_a == mode_b:
+            allowed = same_requests
+        # Declared residuals change only which flags fail, never a measurement.
+        if name == RESIDUALS and (mode_a == mode_b or not (left and right)):
+            allowed = True
         if name == 'Cargo.lock' and left and right and mode_a == mode_b:
             try:
                 allowed = lock_without_sdk(a, names) == lock_without_sdk(b, names)
@@ -205,7 +310,10 @@ def build_instruments(baseline_source, candidate_source, output, binaries, targe
         fixture_path.write_text(json.dumps(baseline_rows, indent=2)+'\n')
     base = baseline_source/'tools/evaluator-bench'
     candidate = candidate_source/'tools/evaluator-bench'
-    audit = instrument_diff(base, candidate, sdk_crates(baseline_source, candidate_source))
+    candidate_rows = source_fixtures(candidate_source)
+    same_requests = (baseline_rows is not None and candidate_rows is not None
+                     and requests(baseline_rows) == requests(candidate_rows))
+    audit = instrument_diff(base, candidate, sdk_crates(baseline_source, candidate_source), same_requests)
     (output/'instrument.diff').write_text(audit.pop('diff'))
     metadata = dict(kind='identical', instrument_diff=audit,
                     baseline_source=str(baseline_source.resolve()), candidate_source=str(candidate_source.resolve()))
@@ -259,7 +367,8 @@ def build_instruments(baseline_source, candidate_source, output, binaries, targe
         if not baseline_builds:
             if not audit['confined']:
                 metadata['kind'] = 'not comparable'
-                metadata['reason'] = 'Candidate instrument failed against merge base; instrument diff is not confined to src/sdk.rs and SDK-owned lock entries.'
+                metadata['reason'] = ('Candidate instrument failed against merge base; instrument diff is not confined to '
+                                      'src/sdk.rs, SDK-owned lock entries and fixture expectations.')
             else:
                 metadata['kind'] = 'cross-API'
                 if not build(base, baseline_source, 'baseline') or not build(base, baseline_source, 'baseline', True):
@@ -322,11 +431,13 @@ def memory_regression(row, relative, absolute):
     return row['candidate'] > row['base'] * relative and row['difference'] > absolute
 
 
+def unaccepted_flags(row):
+    """The memory metrics the policy flags on a row that no declared residual accepts."""
+    return [metric for metric in row.get('memory_flags', []) if metric not in row.get('accepted_residuals', [])]
+
+
 def enforcement_fails(report):
-    return bool(report['errors']) or any(
-        row.get('heap_regression') or row.get('allocation_regression')
-        for row in report['rows']
-    )
+    return bool(report['errors']) or any(unaccepted_flags(row) for row in report['rows'])
 
 
 def invoke(binary, request, log, rss=False):
@@ -379,15 +490,19 @@ def main():
     if result_path.exists():
         raise SystemExit('Refusing to overwrite an existing comparison')
     pair_path = args.output/'instrument-pair.json'
-    instrument_pair = json.loads(pair_path.read_text()) if pair_path.exists() else dict(kind='identical')
+    instrument_pair = json.loads(pair_path.read_text(encoding='utf-8')) if pair_path.exists() else dict(kind='identical')
     if instrument_pair['kind'] == 'not comparable':
         raise SystemExit('Refusing to measure a pair marked not comparable')
     # The build driver saves the merge base's fixtures beside its pair record.
     baseline_path = args.output/BASELINE_FIXTURES
-    baseline_fixtures = json.loads(baseline_path.read_text()) if baseline_path.exists() else None
+    baseline_fixtures = json.loads(baseline_path.read_text(encoding='utf-8')) if baseline_path.exists() else None
     baseline_sha256 = digest(baseline_path) if baseline_fixtures is not None else None
     if instrument_pair.get('baseline_fixtures_sha256', baseline_sha256) != baseline_sha256:
         raise SystemExit(f'{baseline_path} is not the merge-base fixture set the build recorded')
+    try:
+        residuals = accepted_residuals(ACCEPTED_RESIDUALS)
+    except ValueError as error:
+        raise SystemExit(f'Refusing malformed accepted residuals: {error}')
     candidate_fixtures = fixtures()
     selected = candidate_fixtures
     if args.workloads:
@@ -402,6 +517,9 @@ def main():
     report['fixtures_sha256'] = digest(args.output/'fixtures.json')
     report['baseline_fixtures_sha256'] = baseline_sha256
     report['baseline_only_workloads'] = sorted(set(baseline_fixtures or ()) - set(candidate_fixtures))
+    report['accepted_residuals'] = dict(
+        path=str(ACCEPTED_RESIDUALS), sha256=digest(ACCEPTED_RESIDUALS) if ACCEPTED_RESIDUALS.exists() else None,
+        entries=[dict(entry, status='pending') for entry in residuals])
     for command in [['rustc','-Vv'], ['cargo','-V']]:
         run = subprocess.run(command, capture_output=True, text=True)
         report[command[0]] = run.stdout
@@ -472,8 +590,11 @@ def main():
                                      for metric in ['baseline_live_bytes','peak_live_bytes','incremental_peak_bytes','allocations_per_op','requested_bytes_per_op']}
                     # Gate incremental operation memory; keep the retained owner
                     # and total peak visible so baseline increases cannot hide.
-                    row['heap_regression'] = any(memory_regression(row['memory'][key],1.10,128*1024) for key in ['baseline_live_bytes','peak_live_bytes','incremental_peak_bytes','requested_bytes_per_op'])
-                    row['allocation_regression'] = memory_regression(row['memory']['allocations_per_op'],1.05,32)
+                    row['memory_flags'] = [key for key in HEAP_METRICS if memory_regression(row['memory'][key],1.10,128*1024)]
+                    if memory_regression(row['memory'][ALLOCATION_METRIC],1.05,32):
+                        row['memory_flags'].append(ALLOCATION_METRIC)
+                    row['heap_regression'] = any(key in row['memory_flags'] for key in HEAP_METRICS)
+                    row['allocation_regression'] = ALLOCATION_METRIC in row['memory_flags']
                     row['rss_samples'] = []
                     for _ in range(3):
                         order = ['baseline','candidate']; rng.shuffle(order)
@@ -490,6 +611,8 @@ def main():
                     print(name,mode,'ERROR',error,flush=True)
                 finally:
                     result_path.write_text(json.dumps(report,indent=2)+'\n')
+    report['accepted_residuals']['entries'] = apply_residuals(report, residuals, selected, candidate_fixtures)
+    result_path.write_text(json.dumps(report,indent=2)+'\n')
     failures = enforcement_fails(report)
     (args.output/'summary.md').write_text(summary_markdown(report, instrument_pair, args.enforce, baseline_fixtures is not None))
     if args.enforce and failures: raise SystemExit(1)
@@ -502,13 +625,30 @@ def summary_markdown(report, instrument_pair, enforce, has_baseline_fixtures):
         if 'error' not in r and r['comparison'] != COMPARED:
             return f"| {r['workload']} | {r['mode']} | n/a | {r['comparison']}; not timed | n/a |\n"
         if r['batches']:
-            return f"| {r['workload']} | {r['mode']} | {r['batches'][-1]['ratio']:.3f} | {r.get('time_decision','error')} | {bool(r.get('heap_regression') or r.get('allocation_regression'))} |\n"
+            flags = r.get('memory_flags', [])
+            flag = str(bool(unaccepted_flags(r))) if not flags or unaccepted_flags(r) else 'accepted residual'
+            timing = r.get('time_decision','error')
+            if 'time' in r.get('accepted_residuals', []): timing += ' (accepted residual)'
+            return f"| {r['workload']} | {r['mode']} | {r['batches'][-1]['ratio']:.3f} | {timing} | {flag} |\n"
         return f"| {r['workload']} | {r['mode']} | n/a | error | n/a |\n"
     text = '# Evaluator performance\n\nPair: '+instrument_pair['kind']+'.\n\n'
     text += ('Advisory run: outcome errors and heap/count flags are reported without failing.\n\n' if not enforce
              else 'Outcome checks and requested heap/allocation-count thresholds are enforced. Timing and RSS remain advisory.\n\n')
     if not has_baseline_fixtures:
         text += 'Merge-base fixtures were unavailable; both binaries are checked against the candidate\'s expectations.\n\n'
+    residuals = report.get('accepted_residuals', {}).get('entries', [])
+    if residuals:
+        text += ('## Accepted residuals\n\nThis change declares these regressions accepted in `'+RESIDUALS+'`. '
+                 'An accepted metric passes within its bound; an exceeded bound fails like any other flag (time '
+                 'stays advisory). Remove a stale entry: its row no longer exists, is not compared or no longer '
+                 'regresses.\n\n| Workload | Mode | Metric | Candidate/base | Bound | Status | Reason |\n'
+                 '| --- | --- | --- | ---: | ---: | --- | --- |\n')
+        for entry in residuals:
+            ratio = 'n/a' if entry.get('ratio') is None else f"{entry['ratio']:.4f}"
+            reason = entry['reason'].replace('|', '\\|')
+            text += (f"| {entry['workload']} | {entry['mode']} | {entry['metric']} | {ratio} | {entry['max_ratio']} | "
+                     f"**{entry['status']}** ({entry.get('detail', '')}) | {reason} |\n")
+        text += '\n'
     text += '| Workload | Mode | Candidate/base | Time decision | Heap/count flag |\n| --- | --- | ---: | --- | --- |\n'
     text += ''.join(line(r) for r in report['rows'])
     changed = [r for r in report['rows'] if r['comparison'] == OUTCOME_CHANGED]

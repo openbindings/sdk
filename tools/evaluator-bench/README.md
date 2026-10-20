@@ -40,9 +40,13 @@ memory instrument. `cargo test --locked --manifest-path
 tools/evaluator-bench/Cargo.toml` checks the executable's observations.
 
 If either identical baseline release variant fails, separate instruments are
-allowed **only** when the entire instrument diff is confined to `src/sdk.rs` and
-`Cargo.lock` package blocks for the SDK's own workspace crates. Third-party lock
-entries, lock metadata, fixtures, timing, checks, manifests, allocation code and
+allowed **only** when the entire instrument diff is confined to `src/sdk.rs`,
+`Cargo.lock` package blocks for the SDK's own workspace crates and fixture
+expectations: an edit to `fixtures.py` is allowed only when both trees'
+generators produce identical requests (every row without its `expected`
+member), so it can only declare outcome changes, which the measuring step
+checks against each side's own expectation as below. Third-party lock entries,
+lock metadata, fixture requests, timing, checks, manifests, allocation code and
 all other instrument edits prohibit that fallback. Each side then builds its
 own instrument and lockfile. The driver saves `instrument.diff`, its SHA-256,
 both lock hashes and the `cross-API` label in `instrument-pair.json` and carries
@@ -177,5 +181,23 @@ allocation counts require >5% **and** >32 per operation. Both thresholds must be
 exceeded for the same metric. These flags fail enforced runs. RSS >15% **and**
 >1 MiB requests dedicated verification and remains advisory. Ratchet improvements
 per workload against the accepted revision.
+
+A change whose regression was reviewed and accepted declares it in
+`accepted-residuals.json`: each entry names one exact workload and mode, one
+metric (`baseline_live_bytes`, `peak_live_bytes`, `incremental_peak_bytes`,
+`requested_bytes_per_op`, `allocations_per_op` or `time`), the largest
+candidate/base ratio accepted (`max_ratio`, above 1) and a reason that names the
+decision, who made it and when. Set the bound just above the measured ratio. The
+measuring step validates the file before measuring and refuses a malformed one.
+A declared metric the policy flags passes when its ratio (the median paired
+ratio for memory, the largest batch ratio for time) is within the bound and
+fails as before beyond it; every undeclared flag still fails. Each entry is
+reported first in the summary, and in `comparison.json` with its ratio and status:
+**accepted**, **exceeded**, **stale** (its row no longer exists, is not
+compared, or no longer regresses), or **not measured** (its workload was not
+selected). Time stays advisory, so a time entry changes only the report. A
+stale entry fails nothing: once the accepted change is the merge base, its rows
+no longer regress, and the entry should be removed. The instrument audit admits
+edits to this file, since it changes which flags fail and never a measurement.
 Geometric means and SDK/peer ratios are dashboards, never substitutes for
 per-workload gates or safe refusals. Do not run CPU-heavy tests beside timing.
