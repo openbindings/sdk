@@ -116,10 +116,18 @@ with tempfile.TemporaryDirectory(prefix='openbindings-consumer-') as temporary:
         assert not {'openbindings-internal-referencing', 'openbindings-internal-jsonschema-value'} & nodes.keys(), label
         if features not in ['', 'ap']:
             assert 'referencing' in nodes and 'jsonschema-value' in nodes, label
+            # Core uses the unmodified library; the renamed forks arrive only
+            # with the default evaluator.
+            assert 'jsonschema' in nodes, label
+            evaluator = bool({'evaluator', 'native'} & set(features.split(',')))
+            forks = {'openbindings-internal-jsonschema', 'openbindings-internal-regress'} & nodes.keys()
+            assert bool(forks) == evaluator and len(forks) in (0, 2), (label, forks)
         result = run(['cargo', 'test', '--locked', *selection], fixture)
         row = {'configuration': label, 'serde_json_features': shared_features,
                'serde_json_identities': sorted(i for i in identities if i.startswith('serde_json v')),
                'normal_and_build_packages_excluding_consumer': len(identities) - 1,
+               'schema_libraries': sorted(n for n in nodes if n in {
+                   'jsonschema', 'openbindings-internal-jsonschema', 'openbindings-internal-regress'}),
                'direct_shared_versions': {name: nodes[name]['version']
                                           for name in floors if name in nodes}, 'tests': 'passed'}
         if a.resolution == 'minimum':

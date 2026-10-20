@@ -16,7 +16,17 @@ workspace = true
 itoa.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-jsonschema.workspace = true
 jsonschema-value.workspace = true
 num-bigint = "0.4.8"
 num-traits = "0.2.19"
+# The default evaluator's renamed jsonschema fork, whose evaluation work budget
+# counts this adapter's reads. Only the evaluator enables it.
+evaluator-jsonschema = { package = "openbindings-internal-jsonschema", version = "=0.58.6-ob.1", path = "../../vendor/openbindings-internal-jsonschema", default-features = false, optional = true }
+
+[features]
+# Charge this adapter's reads to the default evaluator's evaluation work budget.
+# Core's fixed checks have no budget and never enable it.
+evaluator-work = ["dep:evaluator-jsonschema"]
+
+[dev-dependencies]
+jsonschema.workspace = true

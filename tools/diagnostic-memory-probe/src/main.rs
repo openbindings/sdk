@@ -5,13 +5,16 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
 mod constructors;
+mod near_misses;
 mod references;
 mod values;
 
 struct Counting;
 static LIVE: AtomicUsize = AtomicUsize::new(0);
 static PEAK: AtomicUsize = AtomicUsize::new(0);
+static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
 fn add(n: usize) {
+    ALLOCATIONS.fetch_add(1, Relaxed);
     let live = LIVE.fetch_add(n, Relaxed) + n;
     PEAK.fetch_max(live, Relaxed);
 }
@@ -61,6 +64,10 @@ fn main() {
         return;
     }
     constructors::run();
+    if std::env::args().any(|arg| arg == "--near-misses-only") {
+        near_misses::run();
+        return;
+    }
     if std::env::args().any(|arg| arg == "--values-only") {
         values::run();
         drop(references::run());
@@ -122,27 +129,21 @@ fn main() {
             let (_, location_peak, location_ns) = measured(|| {
                 if locate_document {
                     backend::fixed_strings(|| {
-                        jsonschema::ob_work::bounded(2_000_000, 1024, || {
-                            jsonschema::ob_ecma::top_level(2_000_000, || {
-                                let mut positions = Vec::new();
-                                let mut bytes = 8 * 1024 * 1024;
-                                location_map.locate(value.view(), |at| {
-                                    if positions.len() >= 4096 {
-                                        return false;
-                                    }
-                                    let Some(size) = backend::location_pointer_size(at, bytes)
-                                    else {
-                                        return false;
-                                    };
-                                    bytes -= size;
-                                    positions.push(at);
-                                    true
-                                });
-                                std::hint::black_box(backend::locations(&positions));
-                            })
-                        })
-                    })
-                    .ok();
+                        let mut positions = Vec::new();
+                        let mut bytes = 8 * 1024 * 1024;
+                        location_map.locate(value.view(), |at| {
+                            if positions.len() >= 4096 {
+                                return false;
+                            }
+                            let Some(size) = backend::location_pointer_size(at, bytes) else {
+                                return false;
+                            };
+                            bytes -= size;
+                            positions.push(at);
+                            true
+                        });
+                        std::hint::black_box(backend::locations(&positions));
+                    });
                 }
             });
             let ((actual, locations, truncated), check_peak, check_ns) = measured(|| {
@@ -222,4 +223,5 @@ fn main() {
     values::run();
     // Preserve the frozen probes' cache initialization and measurement order.
     drop(references::run());
+    near_misses::run();
 }

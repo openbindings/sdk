@@ -68,8 +68,9 @@ Those are evaluator implementation details, not an application readiness API.
 
 Fixed document checks use validity decisions separately from location guidance.
 The location walk follows failing members and elements and retains independently
-failing containers. A budget stop preserves an established violation and marks
-findings truncated. OBI-10 locates the schema node checked. No optional value
+failing containers. A findings-allowance or frame-depth stop preserves an
+established violation and marks findings truncated. OBI-10 locates the schema
+node checked. No optional value
 error tree participates in document rule evidence.
 
 [Allocation qualification](../tools/diagnostic-memory-probe/README.md) records

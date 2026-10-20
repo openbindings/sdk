@@ -1333,10 +1333,7 @@ pub fn embedded_resources() -> &'static [ProjectedResource] {
 #[cfg(test)]
 mod projection_tests {
     use super::*;
-    use openbindings_internal_json::{
-        backend::{self, FlatJson},
-        numeric,
-    };
+    use openbindings_internal_json::backend::{self, FlatJson};
     use std::collections::BTreeSet;
     #[test]
     fn malformed_reached_shapes_refuse_before_projection() {
@@ -1412,7 +1409,8 @@ mod projection_tests {
             registry = registry.add(resource.uri.clone(), v).unwrap();
         }
         let registry = registry.prepare().unwrap();
-        let validator = numeric::apply(jsonschema::options_for::<FlatJson>())
+        // The compared projections hold no numeric keyword.
+        let validator = jsonschema::options_for::<FlatJson>()
             .with_draft(jsonschema::Draft::Draft202012)
             .with_registry(&registry)
             .build(&root.unwrap())

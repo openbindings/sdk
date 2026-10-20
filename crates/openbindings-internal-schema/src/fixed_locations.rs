@@ -6,8 +6,6 @@ use jsonschema::{Validator, ValidatorMap};
 use openbindings_internal_json::backend::{self, FlatJson};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, HashSet};
-// Guidance runs inside the whole-document check and spends its allowance.
-const ENCLOSING: super::fixed_schema::Allowance = super::fixed_schema::Allowance::ENCLOSING;
 
 struct Shape {
     pointer: String,
@@ -309,16 +307,13 @@ impl LocationMap {
 
     fn valid(&self, id: usize, at: JsonRef<'_>) -> Result<bool, ()> {
         let validator = self.validators.get(&self.shapes[id].pointer).ok_or(())?;
-        super::fixed_schema::bounded_valid(validator, at, ENCLOSING).map_err(|_| ())
+        Ok(super::fixed_schema::valid(validator, at))
     }
 
     fn frame<'a>(&self, at: JsonRef<'a>, seeds: Vec<usize>) -> Result<Frame<'a>, ()> {
         let mut shapes = Vec::new();
         for mut id in seeds {
             loop {
-                if !jsonschema::ob_work::charge(1) {
-                    return Err(());
-                }
                 if shapes.contains(&id) {
                     break;
                 }
@@ -335,7 +330,7 @@ impl LocationMap {
                 .containers
                 .get(&self.shapes[id].container_pointer)
                 .ok_or(())?;
-            if !super::fixed_schema::bounded_valid(validator, at, ENCLOSING).map_err(|_| ())? {
+            if !super::fixed_schema::valid(validator, at) {
                 container_failed = true;
                 break;
             }
@@ -372,9 +367,6 @@ impl LocationMap {
             if frame.index >= frame.at.len().unwrap_or(0) {
                 return Ok(None);
             }
-            if !jsonschema::ob_work::charge(1) {
-                return Err(());
-            }
             let mut candidates = Vec::new();
             let at = if frame.at.kind() == JsonKind::Object {
                 let Some(member) = backend::member_at(frame.at, frame.index) else {
@@ -396,9 +388,7 @@ impl LocationMap {
                             candidates.push(property);
                         }
                         for (matcher, target) in &shape.patterns {
-                            if super::fixed_schema::bounded_valid(matcher, member.name, ENCLOSING)
-                                .map_err(|_| ())?
-                            {
+                            if super::fixed_schema::valid(matcher, member.name) {
                                 matched = true;
                                 candidates.push(*target);
                             }
@@ -435,9 +425,6 @@ impl LocationMap {
             };
             let mut failed = Vec::new();
             for candidate in candidates {
-                if !jsonschema::ob_work::charge(1) {
-                    return Err(());
-                }
                 if !failed.contains(&candidate) && !self.valid(candidate, at)? {
                     failed.push(candidate);
                 }
@@ -461,7 +448,8 @@ impl LocationMap {
     }
 
     /// Locate known failure without changing that verdict. `false` from `offer`
-    /// closes the findings allowance. Return whether work/depth limited guidance.
+    /// closes the findings allowance. Return whether guidance stopped early, at
+    /// its frame-depth limit, offering the deepest position it reached.
     pub fn locate<'a>(
         &self,
         root: JsonRef<'a>,
@@ -546,18 +534,15 @@ mod tests {
         }
     }
 
-    fn locate(schema: Value, text: &str, work: usize) -> (Vec<String>, bool) {
+    fn locate(schema: Value, text: &str) -> (Vec<String>, bool) {
         let map = LocationMap::compile(&schema).unwrap();
         let value = JsonValue::parse(text).unwrap();
         let mut paths = Vec::new();
-        let mut limited = false;
-        backend::fixed_strings(|| {
-            let _ = jsonschema::ob_work::bounded(work, 1024, || {
-                limited = map.locate(value.view(), |at| {
-                    paths.push(at.location().pointer.unwrap().to_string());
-                    true
-                });
-            });
+        let limited = backend::fixed_strings(|| {
+            map.locate(value.view(), |at| {
+                paths.push(at.location().pointer.unwrap().to_string());
+                true
+            })
         });
         (paths, limited)
     }
@@ -573,7 +558,6 @@ mod tests {
         let (paths, limited) = locate(
             schema,
             r#"{"arr":[false,"bad",3],"x":["a",null],"/bad name":0,"extra":true}"#,
-            2_000_000,
         );
         assert!(!limited);
         assert_eq!(
@@ -597,7 +581,7 @@ mod tests {
             "c":{"anyOf":[{"items":{"type":"string"}},{"type":"boolean"}]}
         }});
         assert_eq!(
-            locate(schema, r#"{"a":{},"b":[1,1],"c":[0]}"#, 10000).0,
+            locate(schema, r#"{"a":{},"b":[1,1],"c":[0]}"#).0,
             ["/a", "/b", "/c"]
         );
     }
@@ -612,7 +596,6 @@ mod tests {
         let (paths, limited) = locate(
             schema,
             r#"{"required":{"x":0},"unique":[0,0],"size":[0,0],"union":{"x":0}}"#,
-            10000,
         );
         assert!(!limited);
         assert_eq!(
@@ -635,11 +618,11 @@ mod tests {
     fn container_projections_keep_reference_scope_and_evaluated_positions() {
         let schema = json!({"$defs":{"inner":{"properties":{"a":{"type":"boolean"}}}},
             "$ref":"#/$defs/inner", "unevaluatedProperties":false});
-        assert_eq!(locate(schema, r#"{"a":0}"#, 10000).0, ["/a"]);
+        assert_eq!(locate(schema, r#"{"a":0}"#).0, ["/a"]);
         let schema = json!({"prefixItems":[{"type":"boolean"}],"items":{"type":"integer"},"unevaluatedItems":false});
-        assert_eq!(locate(schema, "[0,false]", 10000).0, ["/0", "/1"]);
+        assert_eq!(locate(schema, "[0,false]").0, ["/0", "/1"]);
         let schema = json!({"properties":{"x":{"type":"boolean"}},"anyOf":[{"$ref":"#/$defs/branch"}],"$defs":{"branch":{"properties":{"x":{"type":"boolean"}}}}});
-        assert_eq!(locate(schema, r#"{"x":0}"#, 10000).0, ["/x", ""]);
+        assert_eq!(locate(schema, r#"{"x":0}"#).0, ["/x", ""]);
         let schema = json!({
             "$defs":{
                 "__location_container_0":false,
@@ -651,7 +634,7 @@ mod tests {
             },
             "properties":{"a":{"$ref":"#/$defs/inner"}}
         });
-        assert_eq!(locate(schema, r#"{"a":{"x":0}}"#, 10000).0, ["/a/x", "/a"]);
+        assert_eq!(locate(schema, r#"{"a":{"x":0}}"#).0, ["/a/x", "/a"]);
     }
     #[test]
     fn pinned_container_projections_do_not_increase_schema_depth() {
@@ -740,19 +723,7 @@ mod tests {
     fn local_ref_siblings_and_percent_escaped_pointer_are_conjunctive() {
         let schema = json!({"$defs":{"a b":{"properties":{"x":{"type":"string"}}}},
             "$ref":"#/$defs/a%20b", "properties":{"y":{"type":"boolean"}}});
-        assert_eq!(locate(schema, r#"{"x":0,"y":0}"#, 10000).0, ["/x", "/y"]);
-    }
-    #[test]
-    fn work_limit_retains_deepest_established_failure() {
-        let schema = json!({"properties":{"a":{"properties":{"b":{"type":"string"}}}}});
-        let mut saw_child_stop = false;
-        for work in 0..40 {
-            let (paths, limited) = locate(schema.clone(), r#"{"a":{"b":0}}"#, work);
-            assert_eq!(paths.len(), 1);
-            assert!(["", "/a", "/a/b"].contains(&paths[0].as_str()));
-            saw_child_stop |= limited && paths[0] == "/a";
-        }
-        assert!(saw_child_stop);
+        assert_eq!(locate(schema, r#"{"x":0,"y":0}"#).0, ["/x", "/y"]);
     }
     #[test]
     fn pinned_schema_keywords_have_explicit_location_policy() {
