@@ -56,11 +56,19 @@
   that checks and explains every value, including explanations interrupted by
   cancellation.
 - HTTP discovery and publication with bounded bodies, attempt deadlines and
-  explicit host-policy responsibilities.
+  explicit host-policy responsibilities. Publication serves the well-known path
+  when a request spells an unreserved character percent-encoded, as in
+  `/.well-known/%6Fpenbindings` (RFC 3986 section 2.3), and never decodes a
+  reserved escape such as `%2F` into a path separator.
 - Provisional Rust provider traits and checked callers for source inspection,
   interface synthesis, binding invocation and operation invocation.
 - A TypeScript API with bundled Wasm, exact-value editing, disposable owners and
   Fetch discovery for qualified browser, Node ESM and Worker hosts.
+- A bundled Wasm module whose bytes do not depend on where it was built. The
+  build gives the builder's Cargo home, toolchain, target directory and checkout
+  fixed names in the module, and refuses a module that still embeds one; CI
+  rebuilds it from another checkout path and Cargo home and requires identical
+  bytes.
 - Runnable first-use and lifecycle examples, legacy Go and TypeScript migration
   guidance, API reference documentation and reproducible performance measurements.
 

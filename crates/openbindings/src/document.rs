@@ -647,6 +647,17 @@ impl NameIndex {
 }
 #[derive(Clone)]
 /// Name-resolution result after successful interpretation; missing and ambiguous names are not schema verdicts.
+///
+/// This closed partition may be exhaustively matched:
+/// ```
+/// use openbindings::OperationSelection;
+/// fn found(selection: &OperationSelection) -> bool {
+///     match selection {
+///         OperationSelection::Found(_) => true,
+///         OperationSelection::Missing | OperationSelection::Ambiguous { .. } => false,
+///     }
+/// }
+/// ```
 pub enum OperationSelection {
     /// One retained operation view selected by primary key or alias; the view must still be assessed/prepared as needed.
     Found(OperationView),
@@ -1485,6 +1496,62 @@ mod finding_identity_tests {
         );
         assert_eq!(report.evidence["OBI-01"], Evidence::Violated);
         assert!(!report.findings_truncated);
+    }
+
+    #[test]
+    fn a_later_inconclusive_result_keeps_an_established_violation() {
+        let value = JsonValue::parse(r#"{"a":0}"#).unwrap();
+        let a = value.get("a").unwrap();
+        let mut checks = Checks::new();
+        checks.violation(0, a, "test", "violated");
+        checks.mark_at(0, Evidence::Inconclusive, a, "test", "undecided");
+        checks.mark(0, Evidence::Inconclusive, "test", None, "undecided");
+        // An inconclusive result before a violation does not hide it either.
+        checks.mark(1, Evidence::Inconclusive, "test", None, "undecided");
+        checks.violation(1, a, "test", "violated");
+        let report = checks.finish();
+        assert_eq!(report.evidence["OBI-01"], Evidence::Violated);
+        assert_eq!(report.evidence["OBI-02"], Evidence::Violated);
+        assert_eq!(report.conclusion, Conformance::NonConformant);
+        assert_eq!(report.findings.len(), 5);
+    }
+
+    #[test]
+    fn direct_findings_with_equal_text_are_distinct_at_distinct_locations() {
+        let source = b"{}\n{}";
+        let first = backend::input_location(source, 0);
+        let second = backend::input_location(source, 3);
+        let mut checks = Checks::new();
+        for location in [&first, &second, &first, &second] {
+            checks.mark(
+                0,
+                Evidence::Violated,
+                "value",
+                Some(location.clone()),
+                "same",
+            );
+        }
+        checks.mark(0, Evidence::Violated, "value", None, "same");
+        checks.mark(0, Evidence::Violated, "value", None, "same");
+        let report = checks.finish();
+        let locations: Vec<_> = report.findings.iter().map(|f| f.location.clone()).collect();
+        assert_eq!(locations, [Some(first), Some(second), None]);
+    }
+
+    #[test]
+    fn direct_findings_beyond_the_cap_are_counted_as_truncated() {
+        let mut checks = Checks::new();
+        for i in 0..MAX_FINDINGS {
+            checks.mark(0, Evidence::Violated, "test", None, format!("distinct {i}"));
+        }
+        assert!(!checks.truncated);
+        checks.mark(1, Evidence::Inconclusive, "test", None, "one more");
+        assert!(checks.truncated);
+        let report = checks.finish();
+        assert_eq!(report.findings.len(), MAX_FINDINGS);
+        assert!(report.findings_truncated);
+        // The omitted finding's evidence still counts.
+        assert_eq!(report.evidence["OBI-02"], Evidence::Inconclusive);
     }
 
     #[test]

@@ -18,7 +18,6 @@ serde_json.workspace = true
 # The renamed fork carries the evaluator's work, depth, compilation and
 # ECMAScript-regex controls until the evaluator moves to the unmodified library.
 jsonschema = { package = "openbindings-internal-jsonschema", version = "=0.58.6-ob.1", path = "../../vendor/openbindings-internal-jsonschema", default-features = false }
-jsonschema-value.workspace = true
 
 openbindings-internal-json = { version = "=0.2.0-alpha.1", path = "../openbindings-internal-json", features = ["evaluator-work"] }
 serde.workspace = true

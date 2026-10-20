@@ -15,7 +15,6 @@ workspace = true
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
-fluent-uri.workspace = true
 
 openbindings-internal-json = { version = "=0.2.0-alpha.1", path = "../openbindings-internal-json" }
 

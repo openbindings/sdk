@@ -362,7 +362,6 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 name = "openbindings"
 version = "0.2.0-alpha.1"
 dependencies = [
- "fluent-uri",
  "openbindings-internal-json",
  "openbindings-internal-schema",
  "serde",
@@ -431,7 +430,6 @@ dependencies = [
 name = "openbindings-json-schema-evaluator"
 version = "0.2.0-alpha.1"
 dependencies = [
- "jsonschema-value",
  "openbindings",
  "openbindings-internal-json",
  "openbindings-internal-jsonschema",

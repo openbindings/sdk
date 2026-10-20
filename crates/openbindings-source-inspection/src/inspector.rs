@@ -106,7 +106,9 @@ impl<P: SourceInspector> Inspector<P> {
     ) -> Result<Vec<KindSupportVerdict>, InspectionError> {
         let kinds: Vec<_> = kinds.into_iter().collect();
         if kinds.iter().any(|kind| kind.as_ref().is_empty()) {
-            // The invocation and synthesis facades name this refusal `empty-kind` too.
+            // Each facade spells this refusal in its own code vocabulary: synthesis
+            // as `openbindings.synthesis.empty-kind`, binding invocation as the
+            // boundary code `empty-kind` at `/kinds`.
             return Err(InspectionError::new(
                 InspectionErrorKind::InvalidInput,
                 "openbindings.inspection.empty-kind",
