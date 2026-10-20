@@ -1912,7 +1912,7 @@
     },
     {
       "name": "rustls-webpki",
-      "version": "0.103.15",
+      "version": "0.103.16",
       "declared_license": "ISC",
       "repository": "https://github.com/rustls/webpki",
       "notices": [
