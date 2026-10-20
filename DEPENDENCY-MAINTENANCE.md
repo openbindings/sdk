@@ -21,6 +21,12 @@ Core's fixed checks compile the pinned document schema and the localized
 2020-12 meta-schemas with `jsonschema::options_for::<FlatJson>()`, exact
 comparisons registered through `with_keyword`, format assertion off, only local
 resources, and the library's default `PatternOptions`. They have no work budget.
+`pattern` is registered through `with_keyword` too, as a keyword that consults
+one shared validator of `{"pattern": ...}`, compiled by the library with its
+defaults, for each distinct pattern. The location plan compiles a validator for
+every location of the derived schema, and each would otherwise compile its own
+copy of every pattern beneath it: the name grammar about ninety times, a few
+kilobytes of compiled matcher each.
 Every fixed pattern is regular: the SemVer `openbindings` pattern, the name
 grammar, `^x-`, `^[^#]*#?$` for `$id` and the anchor grammar. jsonschema-regex
 leaves each unchanged (`^x-` takes its literal prefix path), and fancy-regex hands

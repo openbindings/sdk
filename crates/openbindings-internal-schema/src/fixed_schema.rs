@@ -21,7 +21,7 @@ use serde_json::Value;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap},
-    sync::{Arc, OnceLock},
+    sync::{Arc, Mutex, OnceLock, PoisonError},
 };
 
 #[derive(Clone)]
@@ -102,13 +102,55 @@ fn exact_comparisons<R>(
     }
     options
 }
+/// The library's own `pattern` keyword, compiled once for each distinct pattern
+/// and shared by every fixed validator. The derived schema repeats the name
+/// grammar at many positions, and the location plan compiles a validator for
+/// every location, each of which would compile its own copy of every pattern
+/// beneath it: about ninety copies of one pattern, each a few kilobytes of
+/// compiled matcher. Each fixed check, and every location validator, consults
+/// the one shared validator of `{"pattern": ...}` instead.
+struct SharedPattern(Arc<Validator<FlatJson>>);
+impl<'i> Keyword<'i, FlatJson> for SharedPattern {
+    fn is_valid(&self, instance: View<'i>) -> bool {
+        self.0.is_valid(instance)
+    }
+    fn validate(&self, instance: View<'i>) -> Result<(), ValidationError<'i>> {
+        if <Self as Keyword<'i, FlatJson>>::is_valid(self, instance) {
+            Ok(())
+        } else {
+            Err(ValidationError::custom("value does not match the pattern"))
+        }
+    }
+}
+fn shared_pattern(pattern: &Value) -> Result<SharedPattern, ValidationError<'static>> {
+    // The fixed schemas hold five distinct patterns, so the table stays small.
+    static PATTERNS: Mutex<BTreeMap<String, Arc<Validator<FlatJson>>>> =
+        Mutex::new(BTreeMap::new());
+    let text = pattern
+        .as_str()
+        .ok_or_else(|| ValidationError::custom("pattern requires a string"))?;
+    let mut patterns = PATTERNS.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(validator) = patterns.get(text) {
+        return Ok(SharedPattern(validator.clone()));
+    }
+    let validator = Arc::new(
+        jsonschema::options_for::<FlatJson>()
+            .with_draft(Draft::Draft202012)
+            .build(&serde_json::json!({ "pattern": text }))?,
+    );
+    patterns.insert(text.to_owned(), validator.clone());
+    Ok(SharedPattern(validator))
+}
 /// The fixed checks' validation options: exact comparisons, no format
 /// assertion, only the local resources given, and the library's default
-/// pattern engine.
+/// pattern engine, each pattern compiled once.
 pub(super) fn options(
     resources: BTreeMap<String, Value>,
 ) -> ValidationOptions<'static, Arc<dyn Retrieve>, FlatJson> {
     exact_comparisons(jsonschema::options_for::<FlatJson>())
+        .with_keyword("pattern", |_, value, _| {
+            Ok(Box::new(shared_pattern(value)?))
+        })
         .with_draft(Draft::Draft202012)
         .with_retriever(LocalResources(Arc::new(resources)))
         .should_validate_formats(false)
