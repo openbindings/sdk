@@ -1,6 +1,6 @@
 # First useful result in Rust
 
-Parse an interface document, validate it, read an operation and prepare its input
+Validate an interface document's bytes, read an operation and prepare its input
 value contract. Select `openbindings` and `openbindings-json-schema-evaluator` from
 an exact checkout or local archives through [source replay](REPLAY.md). Packages
 are unpublished; Rust needs no runtime initialization.
@@ -17,13 +17,12 @@ keeps old work usable while a new document and resource set are installed.
 This caller diagnoses an unexpected document field, corrects it and prepares input:
 
 ```rust
-use openbindings::Document;
+use openbindings::validate_document;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let text = r#"{"openbindings":"0.2.0","operations":{"lookup":{"inputSchema":{"type":"integer"}}}}"#;
-    let document = Document::parse(text)?;
-    let validation = document.validate()?;
+    let validation = validate_document(text)?;
     for finding in &validation.report().findings {
         // Debug quotes and escapes the pointer, including any control characters.
         let pointer = finding.location.as_ref().and_then(|at| at.pointer.as_ref());
@@ -36,8 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     // Correct this known fixture's original source, not a normalized JSON value.
     let corrected = text.replace("\"inputSchema\":", "\"input\":");
-    let corrected = Document::parse(corrected)?;
-    let validation = corrected.validate()?;
+    let validation = validate_document(corrected)?;
     let Some(proof) = validation.conformant() else {
         return Err(format!("document conformance: {:?}", validation.report().conclusion).into());
     };
@@ -64,7 +62,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-`validate()` returns a document report or an unsupported-version refusal.
+`validate_document` returns a document report or an unsupported-version refusal.
+It judges the bytes as they are: invalid UTF-8, a byte order mark or a JSON syntax
+error is an OBI-01 violation in the report, located like any other finding.
 A report can be conformant, non-conformant or undetermined. Only established
 conformance yields a `Conformant<Document>`. Its typed field reads are infallible;
 document editor reads remain fallible. Resolve primary names or aliases with
@@ -107,7 +107,10 @@ compiles independently. Prepared does not imply that every value is decidable.
 
 ## Edit an opaque value
 
-Edit the same `Document` through a mutable borrow. Generic paths use RFC 6901:
+Parse a `Document` to edit it. `Document::parse` admits exact JSON, keeps an
+invalid draft editable and refuses text that is not JSON as an `InputError`;
+`document.validate()` returns the same validation as `validate_document`. Edit
+the `Document` through a mutable borrow. Generic paths use RFC 6901:
 `~0` escapes a tilde and `~1` a slash. Parents must exist; `set` inserts missing
 object members and `/-` appends to arrays. Use exact JSON values to preserve
 number spellings and escaped UTF-16. A pointer is escaped text or an exact

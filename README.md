@@ -13,12 +13,11 @@ see [migration](docs/migration.md) before replacing a dependency.
 ## Read an operation in Rust
 
 ```rust
-use openbindings::{Conformance, Document};
+use openbindings::{Conformance, validate_document};
 
-let document = Document::parse(
+let validation = validate_document(
     br#"{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"]}}}"#,
 )?;
-let validation = document.validate()?;
 assert_eq!(validation.report().conclusion, Conformance::Conformant);
 let conformant = validation.conformant().ok_or("document is not conformant")?;
 let operation = conformant.resolve_operation("find").ok_or("operation is missing")?;
@@ -26,7 +25,9 @@ assert_eq!(operation.key(), "lookup");
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-Continue with [Rust first use](docs/rust-first-use.md) to prepare a value contract,
+`validate_document` judges the bytes as they are: text that is not JSON is an
+OBI-01 violation in the report, located like any other finding, and only an
+unsupported version is an `Err`. Continue with [Rust first use](docs/rust-first-use.md) to prepare a value contract,
 validate input, edit opaque values and retain prepared work. Rust needs no runtime
 initialization. A conformant operation hands out its contracts:
 `operation.input().ok_or("no input contract")?.prepare(&DefaultEvaluator::new())?`
@@ -37,7 +38,8 @@ schema that `value.locate(..)` and `proof.locate(..)` place at a line and column
 configured evaluator and a `ResourceSet`. The [TypeScript guide](packages/typescript/README.md) starts with a
 complete document-to-verdict example and covers initialization and disposal.
 
-Edit a mutable `Document` with `set`, `remove`, atomic `edit(&[Edit])`, or typed
+To edit, parse a `Document` with `Document::parse` (or create one with
+`Document::new`) and change it with `set`, `remove`, atomic `edit(&[Edit])`, or typed
 field and part setters. Untouched bytes remain exact. `Conformant<Document>`
 has no mutable access; consume it with `into_inner()` to edit again. Clones,
 views and proofs retain their revision.
