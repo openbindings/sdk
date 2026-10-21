@@ -126,7 +126,7 @@ completeness is separate from the established value outcome.
 ## Discovery and kind implementations
 
 HTTP discovery acquires an interface document with bounded decoded bytes and an
-attempt deadline. Publication serves a conformant document's immutable bytes. Applications own
+optional attempt deadline that the caller sets. Publication serves a conformant document's immutable bytes. Applications own
 authentication, additional network policy and credentialed CORS. Browser Fetch
 limits what redirect and network facts the SDK can observe. See
 [HTTP policy](docs/http-discovery.md).

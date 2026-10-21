@@ -1,4 +1,4 @@
-/** Optional HTTP discovery companion. Where the host exposes redirect responses, as Node does, the SDK checks every hop before dispatching it, as the Rust checked paths do; a browser hides them, so it follows redirects under its own per-hop policy and the SDK checks the final URL. The SDK owns the attempt timer. */
+/** Optional HTTP discovery companion. Where the host exposes redirect responses, as Node does, the SDK checks every hop before dispatching it, as the Rust checked paths do; a browser hides them, so it follows redirects under its own per-hop policy and the SDK checks the final URL. An attempt has no deadline unless `timeoutMs` sets one, and the SDK then owns its timer. */
 export {
   discover,
   discoveryEndpoint,

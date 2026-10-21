@@ -70,17 +70,22 @@ Portable transports may report their own decoding failures as `Decode`.
 A transport may buffer larger chunks internally. Only complete bounded 200 bodies
 enter validation; oversized or incomplete prefixes never become OBIs.
 
-Every attempt has one thirty-second whole-attempt deadline. It includes connect,
-TLS, response headers, the redirect chain, body acquisition and validation.
-`AttemptTimeout::After(Duration)` accepts a positive finite override;
-`AttemptTimeout::Unbounded` explicitly omits the deadline. Zero is an error.
-Native discovery owns one Tokio timer, so it must run on a Tokio runtime with
-timers enabled (`enable_time` or `enable_all`), as reqwest's own timeouts do;
-without them, Tokio panics when the timer is created. A shorter
-application-client timeout is an additional bound and yields `Timeout`. Caller
-`CancellationToken` cancellation remains `Cancelled`; caller cancellation wins
-when both sources are ready at the same poll, and the first observed terminal
-cause ends acquisition.
+The byte limit protects the process, so it is on by default. A deadline only
+bounds time, so it is the application's choice: an attempt has no deadline
+unless `ClientOptions::timeout` sets one, and without one it runs until it
+completes or the caller cancels it. A host that needs a bound, such as an
+interactive tool that should give up on an unresponsive origin, sets
+`Some(duration)`; thirty seconds is a reasonable starting point there. The
+deadline then covers connect, TLS, response headers, the redirect chain, body
+acquisition and validation, and redirects and reads never reset it. A zero
+duration is the `invalid-timeout` configuration error. Native discovery creates
+Tokio timers, the attempt timer when a deadline is set and the bounded drain of
+a small non-200 body, so it must run on a Tokio runtime with timers enabled
+(`enable_time` or `enable_all`), as reqwest's own timeouts do; without them,
+Tokio panics when a timer is created. An application-client timeout is an
+additional bound and yields `Timeout`. Caller `CancellationToken` cancellation
+remains `Cancelled`; caller cancellation wins when both sources are ready at the
+same poll, and the first observed terminal cause ends acquisition.
 
 Portable `discover(origin, &options, &control, &timer, transport)` requires a host `DiscoveryTimer`
 providing monotonic time and a wake-capable absolute timer. Its repeatable
@@ -92,11 +97,13 @@ decides which credentials that URL's origin receives, as a browser or reqwest
 does for its standard credential headers. Portable results record the URL the SDK
 last dispatched as `final_url`. Observable hidden following is a policy failure;
 this contract cannot sandbox arbitrary callback code. Local
-non-Send futures are supported. The SDK races and drops one host timer per attempt;
-redirects and chunk reads never reset it.
+non-Send futures are supported. When a deadline is set, the SDK races and drops
+one host timer per attempt, and redirects and chunk reads never reset it; without
+one it never consults the timer.
 
-TypeScript `discover` owns its timer and AbortController. `timeoutMs` defaults to
-30,000; it accepts a positive finite override or `"unbounded"`, and rejects zero.
+TypeScript `discover` owns its AbortController, and a timer when `timeoutMs` is
+set. Without `timeoutMs` an attempt has no deadline; a positive finite value sets
+one, and zero, negative and non-finite values are refused with `invalid-timeout`.
 It requests Fetch `redirect: "manual"`. Where the host returns the redirect
 response itself, as Node does, the SDK checks every hop before dispatching it,
 with the policy of the Rust checked paths: it follows 301, 302, 303, 307 and 308,
@@ -145,7 +152,8 @@ observed metadata survive validation-boundary expiry.
 Only 404 means absence and 401/403 mean gated discovery. Other statuses remain
 explicit. An observed status is committed before best-effort cleanup; timeout or
 cancellation stops cleanup without replacing the status. Native HTTP/1 cleanup
-has a 2 KiB / 100 ms bound, further limited by the attempt's remaining time.
+has a 2 KiB / 100 ms bound, further limited by the attempt's remaining time when
+a deadline is set.
 Dropping other bodies closes response state. TypeScript clears timers and
 listeners, cancels readers/late bodies and releases locks without awaiting an
 unbounded cancellation promise. No response cache or global client is installed.

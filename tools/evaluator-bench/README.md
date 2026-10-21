@@ -4,8 +4,11 @@ This isolated executable compares SDK revisions with the same pinned release
 compiler, profile and fixture generator. Ordinary pairs share an instrument
 lockfile; cross-API pairs may change only SDK-owned lock entries. Its optional
 unmodified jsonschema-rs 0.58.6 peer is an engine-cost reference: it does not
-provide the SDK's exact decimal, four-outcome or bounded-work contract. The peer
-and allocator instrumentation never enter the SDK dependency graph.
+provide the SDK's exact decimal, four-outcome or bounded-work contract. Core
+already runs its fixed document checks on the same registry jsonschema 0.58.6
+with default features off, so the peer is a package the SDK graph holds rather
+than an addition to it. The allocator instrumentation never enters the SDK
+dependency graph.
 
 All SDK calls and SDK types live in `src/sdk.rs`. Opaque owners expose a fixed
 internal interface for value parsing, byte document validation and proof,
@@ -122,7 +125,7 @@ bytes, checked against independent fixture expectations before timing.
 then requests full available diagnostics per iteration; serialization stays
 outside timing. Its precheck includes reported problem count, first problem
 code and original instance/schema locations, as well as the full observation.
-The shim calls `PreparedContract::explain_with_control` per iteration.
+The shim calls `PreparedValueContract::explain_with_control` per iteration.
 
 Each request selects its mode's operation once, before timing. Every mode's
 warmups and timed loop form a separate, never-inlined instance of one generic

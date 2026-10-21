@@ -1,9 +1,12 @@
-//! Native discovery with SDK redirect policy and one Tokio attempt timer.
-//! Application builders retain TLS, credentials, proxy, resolver and decoding choices.
+//! Native discovery with SDK redirect policy and, when the application sets a
+//! timeout, one Tokio attempt timer. Application builders retain TLS,
+//! credentials, proxy, resolver and decoding choices.
 //!
 //! Discovery must run on a Tokio runtime with timers enabled (`enable_time` or
 //! `enable_all`), as reqwest's own timeouts require; without them Tokio panics
-//! when the attempt timer is created. Tokio offers no way to detect a disabled
+//! when the SDK creates a timer: the attempt timer when
+//! [`ClientOptions::timeout`] is set, and the bounded wait that drains a small
+//! non-200 body for connection reuse. Tokio offers no way to detect a disabled
 //! timer driver before that point, so the SDK cannot return an error instead.
 use crate::CancellationToken;
 use crate::*;
@@ -82,7 +85,7 @@ impl Client {
     /// by tower-http 0.6.11 / reqwest 0.13.5. A final URL cannot prove hop safety.
     /// TLS, resolved-address, proxy, credential and decoding restrictions remain
     /// the application's responsibility on both construction paths. The SDK
-    /// still owns the Tokio whole-attempt timer and caller cancellation race.
+    /// still owns the optional whole-attempt timer and the caller cancellation race.
     ///
     /// # Errors
     /// Returns a configuration error for invalid byte or timeout limits.
@@ -276,7 +279,7 @@ impl DiscoveryTimer for Timer {
 
 fn validate_options(options: ClientOptions) -> Result<(), ConfigurationError> {
     options.byte_limit()?;
-    if let Some(duration) = options.timeout.duration()?
+    if let Some(duration) = options.attempt_timeout()?
         && tokio::time::Instant::now().checked_add(duration).is_none()
     {
         return Err(ConfigurationError {

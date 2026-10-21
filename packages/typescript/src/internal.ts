@@ -2086,12 +2086,12 @@ export type DiscoveryFetch = (
   url: string,
   init: RequestInit,
 ) => Promise<Response>;
-/** One discovery attempt with an SDK-owned timer and AbortController. Where the host exposes redirect responses, the SDK checks and follows each hop itself; a host that hides them follows redirects under its own policy and the SDK checks only the final URL. */
+/** One discovery attempt with an SDK-owned AbortController, and an SDK-owned timer when `timeoutMs` sets a deadline. Where the host exposes redirect responses, the SDK checks and follows each hop itself; a host that hides them follows redirects under its own policy and the SDK checks only the final URL. */
 export interface DiscoveryOptions {
   /** Decoded-body byte limit; omitted selects 1 MiB. Must be a positive safe integer; zero is refused. Bounds accepted/retained document bytes; Fetch may deliver a larger chunk before overflow is detected, so this does not bound host buffering. */
   maxDocumentBytes?: number;
-  /** Whole-attempt milliseconds, default 30,000. Must be positive and finite; "unbounded" explicitly omits the deadline. Zero is refused. */
-  timeoutMs?: number | "unbounded";
+  /** Whole-attempt deadline in milliseconds. Omitted, the attempt has no deadline and runs until it completes or `signal` aborts it: a deadline only bounds time, so it is the application's choice. When set it must be positive and finite; zero is refused. Headers, followed redirects, decoded reads and validation boundaries share it. */
+  timeoutMs?: number;
   /** Caller cancellation; aborts I/O and is checked around synchronous assessment. */
   signal?: AbortSignal;
   /** Local asynchronous Fetch-compatible callback; omitted uses host fetch. Honor the supplied normalized URL, redirect mode and cancellation; configure credentials and connection restrictions here. The callback is called once per hop: the SDK requests redirect: "manual" and calls it again for each admitted redirect, including one to another origin, passing only Accept. It must scope any credentials it adds by the URL it is given, as the Rust portable callback must: the SDK cannot strip headers the callback adds itself, so a credential added unconditionally reaches every admitted hop. When this callback answers manual mode with an opaqueredirect, as browser fetch does, the SDK repeats that request with redirect: "follow" and remembers the observation for this callback, so later discoveries through it use follow directly; Fetch then removes Authorization on a cross-origin redirect but keeps other request headers. */
@@ -2259,7 +2259,8 @@ function interruptible<T>(
 }
 /** Retrieve decoded bytes, then validate them in Rust. Only 404 means absence.
  * Returned document handles belong to the caller and must be disposed.
- * The SDK timer covers headers, followed redirects, decoded reads and validation boundaries.
+ * Without `timeoutMs` the attempt has no deadline; when set, its timer covers headers, followed
+ * redirects, decoded reads and validation boundaries.
  * Caller cancellation wins a same-observation tie; the first observed cause is retained.
  * Synchronous Wasm assessment requires a Worker and responsive supervisor for a hard latency bound.
  * Fetch uses redirect: "manual". Where the host exposes the redirect response, as Node does,
@@ -2284,11 +2285,12 @@ export async function discover(
       "invalid-byte-limit",
       "maxDocumentBytes must be a positive safe integer.",
     );
-  const timeout = options.timeoutMs ?? 30_000;
-  if (timeout !== "unbounded" && (!Number.isFinite(timeout) || timeout <= 0))
+  // null reads as omitted, as it does for maxDocumentBytes.
+  const timeout = options.timeoutMs ?? undefined;
+  if (timeout !== undefined && (!Number.isFinite(timeout) || timeout <= 0))
     throw new SdkError(
       "invalid-timeout",
-      "timeoutMs must be positive and finite, or explicitly unbounded.",
+      "timeoutMs must be positive and finite; omit it for no deadline.",
     );
   const host = globalThis.fetch,
     transport: object | undefined = options.fetch ?? host,
@@ -2301,8 +2303,8 @@ export async function discover(
   const limit = configured,
     controller = new AbortController(),
     signal = controller.signal,
-    deadline = timeout === "unbounded" ? Infinity : performance.now() + timeout;
-  if (timeout !== "unbounded" && !Number.isFinite(deadline))
+    deadline = timeout === undefined ? Infinity : performance.now() + timeout;
+  if (timeout !== undefined && !Number.isFinite(deadline))
     throw new SdkError(
       "invalid-timeout",
       "timeoutMs exceeds the host clock range.",
@@ -2342,7 +2344,7 @@ export async function discover(
       Math.min(2_147_483_647, Math.max(0, deadline - performance.now())),
     );
   };
-  if (timeout !== "unbounded") schedule();
+  if (timeout !== undefined) schedule();
   let metadata: DiscoveryMetadata | undefined,
     body: Uint8Array | undefined,
     reader: ReadableStreamDefaultReader<Uint8Array> | undefined;

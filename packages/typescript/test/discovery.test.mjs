@@ -409,7 +409,7 @@ test("SDK deadline interrupts stalled acquisition and retains body-phase metadat
       value: original,
     });
   }
-  for (const timeoutMs of [0, -1, NaN, Infinity])
+  for (const timeoutMs of [0, -1, NaN, Infinity, "unbounded"])
     await assert.rejects(
       discovery.discover("https://example.test", {
         timeoutMs,
@@ -419,12 +419,59 @@ test("SDK deadline interrupts stalled acquisition and retains body-phase metadat
       }),
       { code: "invalid-timeout" },
     );
-  const result = await discovery.discover("https://example.test", {
-    timeoutMs: "unbounded",
-    fetch: async () => new Response(text),
+});
+
+// without timeoutMs no deadline applies: only the caller's signal ends a stalled attempt.
+test("an attempt without timeoutMs waits until the caller aborts", async () => {
+  // A controlled clock leaps far past any deadline while acquisition stalls.
+  const original = performance.now;
+  let now = 0;
+  Object.defineProperty(performance, "now", {
+    configurable: true,
+    value: () => now,
   });
-  assert.equal(result.status, "found");
-  result.document.dispose();
+  try {
+    for (const phase of ["headers", "body"]) {
+      now = 0;
+      let cancelled = false;
+      const control = new AbortController();
+      const pending = discovery.discover("https://example.test", {
+        signal: control.signal,
+        fetch: async () => {
+          now = 365 * 24 * 60 * 60 * 1000;
+          if (phase === "headers") return new Promise(() => {});
+          return new Response(
+            new ReadableStream(
+              {
+                pull: () => new Promise(() => {}),
+                cancel() {
+                  cancelled = true;
+                },
+              },
+              { highWaterMark: 0 },
+            ),
+          );
+        },
+      });
+      const settled = await Promise.race([
+        pending.then(() => true),
+        new Promise((resolve) => setTimeout(() => resolve(false), 20)),
+      ]);
+      assert.equal(settled, false);
+      control.abort();
+      const result = await pending;
+      assert.equal(result.status, "cancelled");
+      assert.equal(result.reason, "aborted");
+      assert.equal(!!result.metadata, phase === "body");
+      assert.equal(result.body, undefined);
+      assert.equal(cancelled, phase === "body");
+    }
+  } finally {
+    Object.defineProperty(performance, "now", {
+      configurable: true,
+      value: original,
+    });
+  }
 });
 
 // already-ready cancellation wins a tie; first observed expiry stays timeout.
@@ -599,8 +646,8 @@ test("publication uses serialized origins and matches the route by URI equivalen
   parsed.dispose();
 });
 
-// the default installs one thirty-second timer and releases it on success.
-test("default thirty-second timer and late response cleanup", async () => {
+// the default installs no timer; a set timeoutMs installs one and releases it on success.
+test("a timer only for a set timeoutMs and late response cleanup", async () => {
   // A controlled clock fixes the timer's delay and moves past the deadline only
   // after dispatch, so host speed or load cannot expire the attempt earlier.
   const original = performance.now;
@@ -622,6 +669,13 @@ test("default thirty-second timer and late response cleanup", async () => {
       });
       assert.equal(result.status, "found");
       result.document.dispose();
+      assert.deepEqual(delays, []);
+      const bounded = await discovery.discover("https://example.test", {
+        timeoutMs: 30_000,
+        fetch: async () => new Response(text),
+      });
+      assert.equal(bounded.status, "found");
+      bounded.document.dispose();
       assert.deepEqual(delays, [30_000]);
     } finally {
       globalThis.setTimeout = nativeSetTimeout;
