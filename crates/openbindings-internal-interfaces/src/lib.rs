@@ -5,8 +5,13 @@
 #![warn(missing_docs)]
 
 mod binding;
+// Delivery internals for the companions, reachable only by depending on this
+// crate; no companion reexports them and they are not documented API.
+#[doc(hidden)]
 pub mod carrier;
 mod kinds;
 pub use binding::BindingValue;
 pub use carrier::BoundaryError;
-pub use kinds::{KindSupportVerdict, SupportedKind, kind_support_verdicts};
+#[doc(hidden)]
+pub use kinds::kind_support_verdicts;
+pub use kinds::{KindSupportVerdict, SupportedKind};

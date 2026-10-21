@@ -5,7 +5,7 @@ use crate::{
 };
 use futures_core::Stream;
 use openbindings::{JsonLimits, JsonValue};
-use openbindings_internal_interfaces::carrier::boundary_error;
+use openbindings_internal_interfaces::carrier::{BoundaryCode, boundary_error};
 use std::{
     collections::{HashMap, VecDeque},
     fmt,
@@ -259,7 +259,10 @@ impl Shared {
             let mut limits = JsonLimits::default();
             limits.max_bytes = self.limits.max_error_bytes;
             if error.to_json_with_limits(limits).is_err() {
-                finding = Some(boundary_error("terminal-resource-limit", "/error"));
+                finding = Some(boundary_error(
+                    BoundaryCode::TerminalResourceLimit,
+                    "/error",
+                ));
                 outcome = Err(InvocationError::execution_failed());
             }
         }
@@ -278,7 +281,7 @@ impl Shared {
                     .is_some_and(|e| e.code() == "CONTEXT_REQUIRED")
             {
                 s.finding
-                    .get_or_insert(boundary_error("challenge-after-output", "/error"));
+                    .get_or_insert(boundary_error(BoundaryCode::ChallengeAfterOutput, "/error"));
                 outcome = Err(InvocationError::execution_failed());
             }
             s.validation_failure = failure;
@@ -836,7 +839,7 @@ impl ProviderOutput {
     pub async fn emit(&mut self, value: JsonValue) -> Result<(), InvocationError> {
         if value.bytes().len() > self.shared.limits.max_value_bytes {
             self.shared
-                .record_finding(boundary_error("output-resource-limit", "/output"));
+                .record_finding(boundary_error(BoundaryCode::OutputResourceLimit, "/output"));
             self.shared.settle(Err(InvocationError::execution_failed()));
             self.shared.signal.notify();
             return Err(self
@@ -943,7 +946,7 @@ mod driver_tests {
         assert!(!shared.settle(Err(
             InvocationError::new("x".repeat(100_000), None).unwrap()
         )));
-        shared.record_finding(boundary_error("late-finding", ""));
+        shared.record_finding(boundary_error(BoundaryCode::OutputResourceLimit, "/output"));
         assert!(shared.boundary_error().is_none());
         assert_eq!(
             shared.outcome().unwrap().unwrap_err().code(),

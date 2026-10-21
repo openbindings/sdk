@@ -92,7 +92,10 @@ identically, and the source inspector and binding invoker share one by-value
 `Binding` schema. The SDK defines these records once, in the internal
 `openbindings-internal-interfaces` crate, with the by-value `BindingValue`'s
 structural `BoundaryError` and carrier readers; inspection, synthesis and
-invocation reexport them as all four async companions reexport cancellation. A
+invocation reexport the records as all four async companions reexport
+cancellation. The carrier readers stay hidden delivery internals, and they mint a
+`BoundaryError` only from a closed set of codes, so no dependent can attach an
+arbitrary code to one. Inspection's error converts from it. A
 provider serving several jobs builds one advisory list, and an inspected target's
 binding is the binding an invoker receives. Core stays free of interface records.
 Each companion still refuses an empty requested kind as `empty-kind` in its own

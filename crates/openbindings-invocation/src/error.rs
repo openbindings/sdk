@@ -4,7 +4,7 @@ use crate::value::ContextChallenge;
 use openbindings::{JsonLimits, JsonRef, JsonValue};
 use openbindings_internal_interfaces::{
     BoundaryError,
-    carrier::{boundary_error, encode, object, string},
+    carrier::{BoundaryCode, boundary_error, encode, object, string},
 };
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use std::fmt;
@@ -37,12 +37,12 @@ impl InvocationError {
     pub fn new(code: impl Into<String>, data: Option<JsonValue>) -> Result<Self, BoundaryError> {
         let code = code.into();
         if code.is_empty() {
-            return Err(boundary_error("empty-string", "/code"));
+            return Err(boundary_error(BoundaryCode::EmptyString, "/code"));
         }
         if code == "CONTEXT_REQUIRED" {
             let value = data
                 .as_ref()
-                .ok_or_else(|| boundary_error("missing-member", "/data"))?;
+                .ok_or_else(|| boundary_error(BoundaryCode::MissingMember, "/data"))?;
             ContextChallenge::validate(value.view())?;
         }
         Ok(Self { code, data })
@@ -64,7 +64,7 @@ impl InvocationError {
         object(value, &["code", "data"], false, "")?;
         let code = value
             .get("code")
-            .ok_or_else(|| boundary_error("missing-member", "/code"))?;
+            .ok_or_else(|| boundary_error(BoundaryCode::MissingMember, "/code"))?;
         Self::new(
             string(code, "/code")?,
             value.get("data").map(JsonRef::to_owned),
@@ -163,7 +163,10 @@ impl InvocationError {
                 | "ERR_OPERATION_VALIDATION_FAILED"
                 | "ERR_SCHEMA_UNRESOLVED"
         ) {
-            Err(boundary_error("reserved-provider-code", "/error/code"))
+            Err(boundary_error(
+                BoundaryCode::ReservedProviderCode,
+                "/error/code",
+            ))
         } else {
             Ok(self)
         }

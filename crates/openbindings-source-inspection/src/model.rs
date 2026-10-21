@@ -286,10 +286,14 @@ impl BindableTarget {
         if self.source_ref.is_empty() {
             return Err(InspectionError::result("requires a nonempty sourceRef"));
         }
-        if self.binding.operation.is_some() || self.binding.source.is_some() {
-            return Err(InspectionError::result(
-                "binding carries an author-owned operation or source key",
-            ));
+        let author_keys = [
+            ("operation", self.binding.operation.is_some()),
+            ("source", self.binding.source.is_some()),
+        ];
+        if let Some((key, _)) = author_keys.into_iter().find(|(_, present)| *present) {
+            return Err(InspectionError::result(format!(
+                "binding carries the author-owned {key:?} key"
+            )));
         }
         if let Some(key) = self
             .binding

@@ -4,7 +4,7 @@ use crate::{
     BindingRequest, BoundaryError, ContextChallenge, Invocation, InvocationError, InvocationLimits,
     LimitError, ProviderIo, lifecycle::Shared,
 };
-use openbindings_internal_interfaces::carrier::boundary_error;
+use openbindings_internal_interfaces::carrier::{BoundaryCode, boundary_error};
 
 // One definition of the records every kind-facing interface shares.
 pub use openbindings_internal_interfaces::{KindSupportVerdict, SupportedKind};
@@ -181,7 +181,7 @@ impl<P: BindingInvoker> Invoker<P> {
     ) -> Result<Vec<KindSupportVerdict>, BoundaryError> {
         let kinds: Vec<_> = kinds.into_iter().collect();
         if kinds.iter().any(|k| k.as_ref().is_empty()) {
-            return Err(boundary_error("empty-kind", "/kinds"));
+            return Err(boundary_error(BoundaryCode::EmptyKind, "/kinds"));
         }
         Ok(openbindings_internal_interfaces::kind_support_verdicts(
             kinds.iter().map(AsRef::as_ref),
@@ -196,7 +196,7 @@ impl<P: BindingInvoker> Invoker<P> {
     pub fn list_supported_kinds(&self) -> Result<Vec<SupportedKind>, BoundaryError> {
         let kinds = self.provider.supported_kinds();
         if kinds.iter().any(|k| !self.supports_kind(&k.kind)) {
-            return Err(boundary_error("advisory-list", ""));
+            return Err(boundary_error(BoundaryCode::AdvisoryList, ""));
         }
         Ok(kinds)
     }

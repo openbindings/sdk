@@ -32,13 +32,11 @@ impl SourceInspector for EchoInspector {
     }
 }
 
-async fn select(
-    source: Source,
-) -> Result<openbindings::Binding, Box<dyn std::error::Error>> {
+async fn select(source: Source) -> Result<openbindings::Binding, InspectionError> {
     let provider = EchoInspector;
     let inspector = Inspector::new(&provider);
     let inventory = inspector.inspect(&source).await?;
-    let target = inventory.targets.into_iter().next().ok_or("echo has one target")?;
+    let target = inventory.targets.into_iter().next().expect("echo has one target");
     // A binding invoker takes `target.binding` as it is; a document needs keys.
     Ok(target.binding.bind("my.operation", "my.source")?)
 }
@@ -47,8 +45,10 @@ async fn select(
 A target's binding is a `BindingValue`, the by-value binding a binding invoker
 receives, so an application can invoke a chosen target directly. To author a
 document, it assigns operation and source keys with `BindingValue::bind`, which
-returns a core `Binding`. Missing operation framing is permitted; the author can
-supply it before building and validating the final document.
+returns a core `Binding`. Its structural `BoundaryError` converts into an
+`InspectionError` that keeps the boundary code and location, so one error type
+covers inspecting and authoring. Missing operation framing is permitted; the
+author can supply it before building and validating the final document.
 
 Providers build results with `SourceInspection::complete` or `partial`,
 `BindableTarget::new` (with `with_operation_key` and `with_operation`),

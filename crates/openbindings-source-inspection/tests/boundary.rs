@@ -191,18 +191,24 @@ async fn consumer_rejects_provider_author_keys_unknown_binding_fields_and_bad_fr
             InspectionErrorKind::InvalidResult
         );
     }
-    // The author assigns operation and source keys; a provider's target carries neither.
-    for author_key in [
-        |binding: &mut BindingValue| binding.operation = Some("provider".into()),
-        |binding: &mut BindingValue| binding.source = Some("provider-source".into()),
-    ] {
+    // The author assigns operation and source keys; a provider's target carries
+    // neither. The refusal names the offending key and never its value.
+    for key in ["operation", "source"] {
         let mut item = target();
-        author_key(&mut item.binding);
+        let value = Some("provider-chosen".to_owned());
+        if key == "operation" {
+            item.binding.operation = value;
+        } else {
+            item.binding.source = value;
+        }
         let (inspector, _) = inspector(Some(SourceInspection::complete(vec![item])));
+        let error = inspector.inspect(&source()).await.unwrap_err();
+        assert_eq!(error.kind(), InspectionErrorKind::InvalidResult);
         assert_eq!(
-            inspector.inspect(&source()).await.unwrap_err().kind(),
-            InspectionErrorKind::InvalidResult
+            error.message(),
+            format!("target 0: binding carries the author-owned {key:?} key")
         );
+        assert!(!error.to_string().contains("provider-chosen"));
     }
     let mut item = target();
     item.operation = Some(Operation {
@@ -237,6 +243,53 @@ async fn consumer_rejects_provider_author_keys_unknown_binding_fields_and_bad_fr
     assert_eq!(
         (binding.operation.as_str(), binding.source.as_str()),
         ("author", "author-source")
+    );
+}
+
+// An inspect-then-author caller handles one error type: a binding's structural
+// refusal converts into an inspection error that keeps the boundary code and
+// location, in its message and as its source.
+#[test]
+fn binding_refusals_convert_into_inspection_errors_keeping_code_and_location() {
+    fn author(binding: BindingValue) -> Result<openbindings::Binding, InspectionError> {
+        Ok(binding.bind("author", "author-source")?)
+    }
+    fn boundary(error: &InspectionError) -> (&'static str, &'static str) {
+        let cause = std::error::Error::source(error)
+            .and_then(|cause| cause.downcast_ref::<BoundaryError>())
+            .expect("the boundary error is the source");
+        (cause.code(), cause.path())
+    }
+    let error = author(BindingValue {
+        extensions: BTreeMap::from([("operation".into(), JsonValue::null())]),
+        ..Default::default()
+    })
+    .unwrap_err();
+    assert_eq!(error.kind(), InspectionErrorKind::InvalidInput);
+    assert_eq!(error.code(), "openbindings.inspection.invalid-input");
+    assert_eq!(error.message(), "unexpected-member at /binding");
+    assert_eq!(boundary(&error), ("unexpected-member", "/binding"));
+    // An encoding limit stays an encoding refusal.
+    let limits = JsonLimits {
+        max_bytes: 1,
+        ..Default::default()
+    };
+    let binding = BindingValue {
+        content: Some(JsonValue::string("lookup").unwrap()),
+        ..Default::default()
+    };
+    let error = InspectionError::from(binding.to_json_with_limits(limits).unwrap_err());
+    assert_eq!(error.kind(), InspectionErrorKind::Encoding);
+    assert_eq!(error.code(), "openbindings.inspection.encoding");
+    assert_eq!(boundary(&error), ("encoding-limit", ""));
+    // Inspection's own refusals carry no boundary source.
+    assert!(
+        std::error::Error::source(&InspectionError::new(
+            InspectionErrorKind::ProviderFailure,
+            "example.failure",
+            "failed",
+        ))
+        .is_none()
     );
 }
 

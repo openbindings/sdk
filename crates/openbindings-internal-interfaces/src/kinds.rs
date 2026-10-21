@@ -70,6 +70,7 @@ impl std::fmt::Debug for KindSupportVerdict {
 /// One verdict per unique kind, in first-occurrence order. The companions'
 /// checked callers call this after refusing an empty kind; it is not part of
 /// any companion's API.
+#[doc(hidden)]
 pub fn kind_support_verdicts<'a>(
     kinds: impl IntoIterator<Item = &'a str>,
     supports: impl Fn(&str) -> bool,

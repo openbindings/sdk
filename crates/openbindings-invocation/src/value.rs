@@ -4,8 +4,8 @@ use openbindings::{JsonKind, JsonLimits, JsonRef, JsonValue, Source};
 use openbindings_internal_interfaces::{
     BindingValue, BoundaryError,
     carrier::{
-        BindingFields, admit_binding, boolean, boundary_error, encode, nonempty_array, object,
-        required, string, unique_object,
+        BindingFields, BoundaryCode, admit_binding, boolean, boundary_error, encode,
+        nonempty_array, object, required, string, unique_object,
     },
 };
 use serde::{Serialize, Serializer, ser::SerializeMap};
@@ -28,7 +28,7 @@ pub struct BindingRequest<'a> {
 impl BindingRequest<'_> {
     pub(crate) fn admit(&self) -> Result<(), BoundaryError> {
         if self.source.kind.is_empty() {
-            return Err(boundary_error("empty-string", "/source/kind"));
+            return Err(boundary_error(BoundaryCode::EmptyString, "/source/kind"));
         }
         if self
             .source
@@ -36,14 +36,14 @@ impl BindingRequest<'_> {
             .keys()
             .any(|name| !name.starts_with("x-"))
         {
-            return Err(boundary_error("unexpected-member", "/source"));
+            return Err(boundary_error(BoundaryCode::UnexpectedMember, "/source"));
         }
         admit_binding(self.binding)?;
         if self
             .context
             .is_some_and(|value| value.kind() != JsonKind::Object)
         {
-            return Err(boundary_error("expected-object", "/context"));
+            return Err(boundary_error(BoundaryCode::ExpectedObject, "/context"));
         }
         Ok(())
     }
@@ -160,7 +160,7 @@ pub(crate) fn source_from_json(value: JsonRef<'_>) -> Result<Source, BoundaryErr
     object(value, &["kind", "content", "description"], true, "/source")?;
     let kind = string(required(value, "kind", "/source/kind")?, "/source/kind")?;
     if kind.is_empty() {
-        return Err(boundary_error("empty-string", "/source/kind"));
+        return Err(boundary_error(BoundaryCode::EmptyString, "/source/kind"));
     }
     let mut source = Source {
         kind: kind.into(),
@@ -267,7 +267,7 @@ impl ContextChallenge {
     /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
     pub fn to_json_with_limits(&self, limits: JsonLimits) -> Result<JsonValue, BoundaryError> {
         JsonValue::parse_with_limits(self.0.bytes(), limits)
-            .map_err(|_| boundary_error("encoding-limit", ""))
+            .map_err(|_| boundary_error(BoundaryCode::EncodingLimit, ""))
     }
 
     /// Consume the wrapper and retain its complete exact value.
@@ -299,7 +299,7 @@ fn validate_requirement(value: JsonRef<'_>) -> Result<(), BoundaryError> {
     )?;
     if family.is_empty() {
         return Err(boundary_error(
-            "empty-string",
+            BoundaryCode::EmptyString,
             "/data/alternatives/*/requirements/*/type",
         ));
     }
@@ -307,7 +307,7 @@ fn validate_requirement(value: JsonRef<'_>) -> Result<(), BoundaryError> {
         && string(name, "/data/alternatives/*/requirements/*/name")?.is_empty()
     {
         return Err(boundary_error(
-            "empty-string",
+            BoundaryCode::EmptyString,
             "/data/alternatives/*/requirements/*/name",
         ));
     }
@@ -327,7 +327,7 @@ fn validate_requirement(value: JsonRef<'_>) -> Result<(), BoundaryError> {
         let path = string(path, "/data/alternatives/*/requirements/*/path")?;
         if family == "config.value" && !valid_pointer(path) {
             return Err(boundary_error(
-                "invalid-pointer",
+                BoundaryCode::InvalidPointer,
                 "/data/alternatives/*/requirements/*/path",
             ));
         }
@@ -336,7 +336,7 @@ fn validate_requirement(value: JsonRef<'_>) -> Result<(), BoundaryError> {
         && !matches!(schema.kind(), JsonKind::Object | JsonKind::Boolean)
     {
         return Err(boundary_error(
-            "expected-schema",
+            BoundaryCode::ExpectedSchema,
             "/data/alternatives/*/requirements/*/schema",
         ));
     }
