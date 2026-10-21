@@ -146,6 +146,130 @@ test("a contract's patterns are bounded together", () => {
   ample.valueContract.dispose();
 });
 
+// A contract's compiled patterns share its pattern memory, with the same
+// refusals, codes, locations and messages as the Rust evaluator: each compiled
+// pattern first compiles within 48 KiB, those that need more share what that
+// leaves, a name that does not fit what it is given refuses preparation, and a
+// `pattern` value compiled when a string first reaches it gives that string no
+// verdict.
+test("a contract's compiled patterns share its pattern memory", () => {
+  assert.equal(sdk.evaluatorLimits().totalPatternMemory, 64 * 1024 * 1024);
+  const at = "/operations/op/input";
+  const assertMemoryRefusal = (prepared, pointer) => {
+    assert.equal(prepared.status, "no-verdict");
+    assert.equal(prepared.detail.reason, "limit-exceeded");
+    assert.equal(prepared.detail.code, "pattern-total-memory-limit");
+    assert.match(prepared.detail.location.pointer, pointer);
+    return prepared.detail.message;
+  };
+  const ready = (prepared) => {
+    assert.equal(prepared.status, "ready");
+    return prepared.valueContract;
+  };
+  const raise = "raise total_pattern_memory (totalPatternMemory in TypeScript)";
+  // Forty names of the form `^.{1,10000}N$` need more together than the
+  // memory leaves; one alone compiles and decides.
+  const names = (count) =>
+    Object.fromEntries(
+      Array.from({ length: count }, (_, i) => [`^.{1,10000}${i}$`, false]),
+    );
+  const forty = assertMemoryRefusal(
+    preparation(
+      document({}, { patternProperties: names(40) }),
+      undefined,
+      null,
+    ),
+    new RegExp(`^${at}/patternProperties$`),
+  );
+  assert.match(forty, /; the 40 that need more share it equally, but this one/);
+  assert.ok(forty.endsWith(raise));
+  const alone = ready(
+    preparation(document({}, { patternProperties: names(1) }), undefined, null),
+  );
+  assert.equal(alone.validateJson('{"a0":1}').outcome, "fails");
+  assert.equal(alone.validateJson("{}").outcome, "satisfies");
+  alone.dispose();
+  // Small patterns elsewhere leave the large name its outcome.
+  const small = Object.fromEntries(
+    Array.from({ length: 100 }, (_, i) => [`s${i}`, { pattern: `a${i}|b` }]),
+  );
+  const among = ready(
+    preparation(
+      document({}, { patternProperties: names(1), properties: small }),
+      undefined,
+      null,
+    ),
+  );
+  assert.equal(among.validateJson('{"a0":1}').outcome, "fails");
+  among.dispose();
+  // Three patterns' 48 KiB admit three compiled patterns; run matchers do
+  // not count.
+  const three = { totalPatternMemory: 3 * 64 * 1024 };
+  const compiled = (count) =>
+    Array.from({ length: count }, (_, i) => ({ pattern: `a${i}|b` }));
+  ready(
+    preparation(
+      document({}, { prefixItems: [...compiled(3), { pattern: "^a+$" }] }),
+      undefined,
+      null,
+      three,
+    ),
+  ).dispose();
+  assert.equal(
+    assertMemoryRefusal(
+      preparation(
+        document({}, { prefixItems: compiled(4) }),
+        undefined,
+        null,
+        three,
+      ),
+      new RegExp(`^${at}/prefixItems/[0-9]+/pattern$`),
+    ),
+    "this contract compiles more than 3 regular expressions, as many as its 192 KiB " +
+      "total_pattern_memory holds at 48 KiB each once their search caches take a quarter; " +
+      raise,
+  );
+  // One pattern in 256 KiB compiles `^.{1,100}x$` but not `^.{1,1000}x$`.
+  const quarter = { totalPatternMemory: 256 * 1024 };
+  ready(
+    preparation(
+      document({}, { patternProperties: { "^.{1,100}x$": false } }),
+      undefined,
+      null,
+      quarter,
+    ),
+  ).dispose();
+  assertMemoryRefusal(
+    preparation(
+      document({}, { patternProperties: { "^.{1,1000}x$": false } }),
+      undefined,
+      null,
+      quarter,
+    ),
+    new RegExp(`^${at}/patternProperties$`),
+  );
+  const lazy = ready(
+    preparation(
+      document({}, { pattern: "^.{1,1000}x$" }),
+      undefined,
+      null,
+      quarter,
+    ),
+  );
+  const unmatched = lazy.validateJson('"ax"');
+  assert.equal(unmatched.outcome, "no-verdict");
+  assert.equal(unmatched.detail.code, "pattern-total-memory-limit");
+  assert.equal(
+    unmatched.detail.message,
+    "this contract's one compiled regular expression holds 48 KiB of its 256 KiB " +
+      "total_pattern_memory and 64 KiB for its search cache, which leaves 144 KiB; this " +
+      "one, which needs more, may take it all, but does not compile within the 192 KiB " +
+      "that gives it; " +
+      raise,
+  );
+  lazy.dispose();
+});
+
 test("a resource cap refusal takes time linear in the resources", () => {
   // Registering resources takes time quadratic in their number; a refusal
   // before registration grows with the projection, about fourfold here.

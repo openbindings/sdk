@@ -53,9 +53,22 @@
   and nesting, and the forms kept for all of a contract's patterns together,
   counted as each is written, with each distinct `pattern` form kept once
   (`Limits::total_pattern_bytes`, TypeScript `totalPatternBytes`, 4 MiB,
-  `pattern-total-byte-limit`), with each pattern compiled within the regex
-  crate's size limit, set to 32 MiB; the definitions, JSON and dynamic-scope
-  entries dynamic specialization produces (`program-specialization-limit`); and
+  `pattern-total-byte-limit`); the regex crate's memory for all of a
+  contract's compiled patterns together (`Limits::total_pattern_memory`,
+  TypeScript `totalPatternMemory`, 64 MiB, `pattern-total-memory-limit`, whose
+  message states the arithmetic) for each distinct `pattern` form the run
+  matcher does not match and each `patternProperties` name: a quarter, at most
+  2 MiB each, for their search caches (`dfa_size_limit`) in equal parts, and
+  the rest for their compiled forms (`size_limit`), each first within 48 KiB,
+  with the forms that need more sharing what is left, at most 32 MiB each, so
+  small patterns elsewhere change a large one's outcome only through their
+  48 KiB each, no outcome depends on the order strings reach the patterns, a
+  contract compiling more than 1,024 patterns refuses before compiling any, 40
+  counted-repetition names that peaked at 1.1 GB refuse in about 0.2 s, and a
+  `pattern` value compiled when a string first reaches it stays within what it
+  is given; the
+  definitions, JSON and dynamic-scope entries dynamic specialization produces
+  (`program-specialization-limit`); and
   an unevaluated keyword's annotation walk, which the library compiles by
   recursion, weighed by the kind of each reference so the longest admitted walk
   of every kind prepares with a fifth of a 256 KiB thread already in use on

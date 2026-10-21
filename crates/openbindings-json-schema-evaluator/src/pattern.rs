@@ -50,10 +50,36 @@ pub(crate) enum Unsupported {
     PropertyEscape,
     /// It has a non-word-boundary assertion, `\B`.
     NonWordBoundary,
-    /// Its form is longer than the pattern byte limit, or exceeds the
-    /// linear-time engine's compiled size limit, which is found when the
-    /// pattern is first matched.
+    /// Its form is longer than the pattern byte limit, or does not compile
+    /// within the most compiled size any one pattern is given
+    /// ([`COMPILED_SIZE`]), which is found when the pattern is first compiled.
     Size,
+    /// Its form does not compile within what the contract's pattern memory
+    /// gives it, found when the pattern is first compiled.
+    Memory(Shortfall),
+}
+/// How a contract's pattern memory fell short, for the refusal to state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Shortfall {
+    /// The contract compiles more patterns than its `total` bytes hold first
+    /// allowances for, `most`.
+    Count { most: usize, total: usize },
+    /// One pattern needs a larger compiled size than it is given. Each of the
+    /// contract's `patterns` compiled patterns holds [`FIRST`] for its form
+    /// and `cache` for its search cache, which leaves `left` of the `total`;
+    /// those that need more share it, and those of them that need less than
+    /// an equal part keep only what they need, `kept` in all. The `sharing`
+    /// patterns that need more than that share the rest equally, and this one
+    /// does not compile within the `compiled` size that gives it.
+    Pattern {
+        patterns: usize,
+        total: usize,
+        cache: usize,
+        left: usize,
+        kept: usize,
+        sharing: usize,
+        compiled: usize,
+    },
 }
 /// Why a pattern has no reading.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,19 +90,223 @@ pub(crate) enum Refusal {
     Depth,
 }
 
-/// The compiled size the linear-time engine allows each pattern's form, in
-/// bytes. Counted repetitions of large sets, such as `^.{1,10000}$`, need more
-/// than the engine's default of 10 MiB; this bounds each pattern's automaton
-/// instead.
+/// The most compiled size the linear-time engine gives any one pattern's form,
+/// in bytes. Counted repetitions of large sets, such as `^.{1,10000}$` (about
+/// 13.2 MiB), need more than the engine's default of 10 MiB.
 pub(crate) const COMPILED_SIZE: usize = 32 * 1024 * 1024;
+/// The most a search through any one pattern keeps in its lazy DFA's cache, in
+/// bytes.
+pub(crate) const SEARCH_CACHE: usize = 2 * 1024 * 1024;
+/// The compiled size every pattern's form first compiles within, in bytes.
+/// Every compiled pattern also holds memory that neither of the engine's size
+/// settings counts, so holding this much of the pattern memory bounds how many
+/// patterns a contract compiles as well as their size.
+pub(crate) const FIRST: usize = 48 * 1024;
 
-/// The pattern's form compiled for the linear-time engine, within
-/// [`COMPILED_SIZE`]; `None` when it exceeds that size.
-pub(crate) fn compile(form: &str) -> Option<regex::Regex> {
+/// What the linear-time engine may build for one compiled pattern, through the
+/// regex crate's two documented size settings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Allowance {
+    /// The compiled size of the pattern's form (`size_limit`).
+    pub(crate) compiled: usize,
+    /// The lazy DFA's cache for one search (`dfa_size_limit`).
+    pub(crate) cache: usize,
+}
+
+/// The pattern's form compiled for the linear-time engine within `allowance`;
+/// `None` when it does not fit.
+pub(crate) fn compile(form: &str, allowance: Allowance) -> Option<regex::Regex> {
     regex::RegexBuilder::new(form)
-        .size_limit(COMPILED_SIZE)
+        .size_limit(allowance.compiled)
+        .dfa_size_limit(allowance.cache)
         .build()
         .ok()
+}
+
+/// A contract's pattern memory (`Limits::total_pattern_memory`) and how it is
+/// divided. A quarter of it, up to [`SEARCH_CACHE`] for each, is the compiled
+/// patterns' search caches, in equal parts, which bound only how fast a search
+/// runs. Each pattern's form first compiles within [`FIRST`]; the patterns
+/// whose forms do not share what that leaves.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Memory {
+    total: usize,
+    patterns: usize,
+    cache: usize,
+}
+/// What a pattern that does not fit its first allowance is given.
+#[derive(Debug)]
+pub(crate) enum Given {
+    /// Its form compiles within `compiled` bytes; `regex` is that compiled
+    /// form when it was asked for.
+    Compiled {
+        regex: Option<regex::Regex>,
+        compiled: usize,
+    },
+    /// Its form does not compile within what it can be given.
+    Refused(Unsupported),
+}
+impl Memory {
+    /// The most patterns `total` bytes hold first allowances for: the
+    /// search caches take at most a quarter, and each form [`FIRST`].
+    pub(crate) fn most_patterns(total: usize) -> usize {
+        (total - total / 4) / FIRST
+    }
+    /// The memory of a contract compiling `patterns` patterns, at most
+    /// [`Self::most_patterns`].
+    pub(crate) fn new(total: usize, patterns: usize) -> Self {
+        Self {
+            total,
+            patterns,
+            cache: (total / 4 / patterns.max(1)).min(SEARCH_CACHE),
+        }
+    }
+    /// The allowance every compiled pattern first compiles within.
+    pub(crate) fn first(&self) -> Allowance {
+        Allowance {
+            compiled: FIRST,
+            cache: self.cache,
+        }
+    }
+    /// What the first allowances and the search caches leave for the forms
+    /// that need more.
+    fn left(&self) -> usize {
+        self.total
+            .saturating_sub(self.patterns.saturating_mul(FIRST + self.cache))
+    }
+    /// Share what the first allowances leave among `forms`, none of which
+    /// fits its first allowance. The first `names` are `patternProperties`
+    /// names, which the library compiles: `together` compiles every name
+    /// within one allowance and answers whether they all fit, so when they do
+    /// in the first round the library's compilation is that round's. The
+    /// others are the SDK's, and each keeps its compiled form.
+    ///
+    /// Each form is given an equal part; those that need less keep only what
+    /// they need, to within a sixteenth, and the others share what that
+    /// leaves again, until all of them fit their parts, none does, or the
+    /// parts grow by no more than a sixteenth. Those that then do not fit are
+    /// refused. Whether a form compiles depends only on the forms, not on
+    /// their order.
+    ///
+    /// A round compiles each form within its part, which together come to
+    /// what is left, and an attempt that does not fit stops building once it
+    /// passes its size, so a round builds at most what is left, and each form
+    /// keeps the least it needs once. The forms that fit a round's part needed
+    /// more than the last round's, so they leave less than that growth to the
+    /// others: for the parts to keep growing by more than a sixteenth, the
+    /// forms still sharing must shrink geometrically, and the rounds grow only
+    /// with the logarithm of the forms.
+    pub(crate) fn share(
+        &self,
+        forms: &[&str],
+        names: usize,
+        together: &mut dyn FnMut(Allowance) -> bool,
+    ) -> Vec<Given> {
+        let keep = |at: usize| at >= names;
+        let left = self.left();
+        let mut given: Vec<Option<Given>> = forms.iter().map(|_| None).collect();
+        let mut sharing: Vec<usize> = (0..forms.len()).collect();
+        let mut rest = left;
+        let mut previous: Option<usize> = None;
+        while !sharing.is_empty() {
+            let part = rest / sharing.len();
+            let compiled = (FIRST + part).min(COMPILED_SIZE);
+            let allowance = Allowance {
+                compiled,
+                cache: self.cache,
+            };
+            // In the first round every name is sharing, and the library
+            // compiles them all at once.
+            let named = previous.is_none() && names > 0 && together(allowance);
+            let last =
+                previous.is_some_and(|previous| part.saturating_sub(previous) <= previous / 16);
+            let (mut fitted, mut short) = (Vec::new(), Vec::new());
+            for &at in &sharing {
+                if named && !keep(at) {
+                    fitted.push((at, None));
+                    continue;
+                }
+                match compile(forms[at], allowance) {
+                    Some(regex) => fitted.push((at, keep(at).then_some(regex))),
+                    None if compiled == COMPILED_SIZE => {
+                        given[at] = Some(Given::Refused(Unsupported::Size));
+                    }
+                    None => short.push(at),
+                }
+            }
+            if short.is_empty() || fitted.is_empty() || last {
+                let shortfall = Shortfall::Pattern {
+                    patterns: self.patterns,
+                    total: self.total,
+                    cache: self.cache,
+                    left,
+                    kept: left - rest,
+                    sharing: sharing.len(),
+                    compiled,
+                };
+                for (at, regex) in fitted {
+                    given[at] = Some(Given::Compiled { regex, compiled });
+                }
+                for at in short {
+                    given[at] = Some(Given::Refused(Unsupported::Memory(shortfall)));
+                }
+                break;
+            }
+            // Those that fit keep only what they need, and the others share
+            // the rest again.
+            for (at, regex) in fitted {
+                let (least, smaller) = least(forms[at], allowance, keep(at));
+                rest -= least - FIRST;
+                given[at] = Some(Given::Compiled {
+                    regex: smaller.or(regex),
+                    compiled: least,
+                });
+            }
+            previous = Some(part);
+            sharing = short;
+        }
+        given
+            .into_iter()
+            .map(|given| given.expect("every form is given"))
+            .collect()
+    }
+}
+
+/// The least compiled size, to within a sixteenth, between [`FIRST`], which
+/// `form` does not fit, and the size `fits` gives, which it does; with the
+/// form compiled within it when `keep` holds and that size is smaller. It
+/// doubles from [`FIRST`] to the first size that fits and then halves the gap
+/// below it. An attempt that does not fit stops building once it passes its
+/// size, so the attempts together build a few times the form's compiled size.
+fn least(form: &str, fits: Allowance, keep: bool) -> (usize, Option<regex::Regex>) {
+    let attempt = |compiled| {
+        compile(
+            form,
+            Allowance {
+                compiled,
+                cache: fits.cache,
+            },
+        )
+    };
+    let (mut below, mut size, mut regex) = (FIRST, fits.compiled, None);
+    let mut next = FIRST * 2;
+    while next < size {
+        match attempt(next) {
+            Some(fitted) => {
+                (size, regex) = (next, keep.then_some(fitted));
+                break;
+            }
+            None => (below, next) = (next, next * 2),
+        }
+    }
+    while size - below > size / 16 {
+        let middle = below + (size - below) / 2;
+        match attempt(middle) {
+            Some(fitted) => (size, regex) = (middle, keep.then_some(fitted)),
+            None => below = middle,
+        }
+    }
+    (size, regex)
 }
 
 /// Read one pattern, refusing groups nested more than `max_depth` deep. A
@@ -976,6 +1206,84 @@ mod tests {
                 "{pattern}"
             );
         }
+    }
+    #[test]
+    fn the_pattern_memory_is_divided_between_caches_and_forms() {
+        const KIB: usize = 1024;
+        const MIB: usize = 1024 * KIB;
+        assert_eq!(Memory::most_patterns(64 * MIB), 1024);
+        assert_eq!(Memory::most_patterns(0), 0);
+        let first = |total, patterns| Memory::new(total, patterns).first();
+        let allowance = |compiled, cache| Allowance { compiled, cache };
+        // A quarter of the memory for the search caches, up to 2 MiB each.
+        assert_eq!(first(64 * MIB, 1), allowance(48 * KIB, 2 * MIB));
+        assert_eq!(first(64 * MIB, 8), allowance(48 * KIB, 2 * MIB));
+        assert_eq!(first(64 * MIB, 64), allowance(48 * KIB, 256 * KIB));
+        assert_eq!(first(64 * MIB, 1024), allowance(48 * KIB, 16 * KIB));
+        assert_eq!(Memory::new(64 * MIB, 1024).left(), 0);
+        assert_eq!(Memory::new(64 * MIB, 4).left(), 56 * MIB - 4 * 48 * KIB);
+        for patterns in 1..=Memory::most_patterns(64 * MIB) {
+            let memory = Memory::new(64 * MIB, patterns);
+            assert!(
+                patterns * (FIRST + memory.cache) + memory.left() <= 64 * MIB,
+                "{patterns}"
+            );
+        }
+    }
+    // A form that does not fit its first allowance is given the least size
+    // that fits, to within a sixteenth.
+    #[test]
+    fn a_form_keeps_the_least_size_it_compiles_within() {
+        // About 1 MiB compiled.
+        let form = "^.{1,1000}x$";
+        let fits = Allowance {
+            compiled: COMPILED_SIZE,
+            cache: SEARCH_CACHE,
+        };
+        let (size, regex) = least(form, fits, true);
+        assert!(regex.is_some_and(|regex| regex.is_match("ax")));
+        let within = |compiled| compile(form, Allowance { compiled, cache: 0 }).is_some();
+        assert!(within(size));
+        assert!(!within(size - size / 16));
+        assert_eq!(least(form, fits, false).0, size);
+        assert!(least(form, fits, false).1.is_none());
+    }
+    // Forms that do not fit their first allowances share what is left: equal
+    // parts, of which those that need less keep only what they need.
+    #[test]
+    fn forms_share_what_the_first_allowances_leave() {
+        const MIB: usize = 1024 * 1024;
+        let compiled = |given: &Given| match given {
+            Given::Compiled { compiled, .. } => Some(*compiled),
+            Given::Refused(_) => None,
+        };
+        // About 1 and 10 MiB compiled; one part of 6 MiB is too small for the
+        // larger, which takes what the smaller leaves of its part.
+        let small = "^.{1,1000}x$";
+        let large = "^.{1,10000}x$";
+        let memory = Memory::new(16 * MIB, 2);
+        let given = memory.share(&[large, small], 2, &mut |_| false);
+        let large_size = compiled(&given[0]).expect("the larger fits what the smaller leaves");
+        let small_size = compiled(&given[1]).expect("the smaller fits its part");
+        assert!(small_size < 2 * MIB && large_size > 8 * MIB);
+        assert!(large_size + small_size <= memory.left() + 2 * FIRST);
+        // The order of the forms does not change what each is given.
+        let reversed = memory.share(&[small, large], 2, &mut |_| false);
+        assert_eq!(compiled(&reversed[0]), Some(small_size));
+        assert_eq!(compiled(&reversed[1]), Some(large_size));
+        // Two larger forms need more together than is left, and neither
+        // fits its part.
+        let given = memory.share(&[large, large], 0, &mut |_| unreachable!());
+        for given in &given {
+            assert!(matches!(
+                given,
+                Given::Refused(Unsupported::Memory(Shortfall::Pattern { sharing: 2, .. }))
+            ));
+        }
+        // A form needing more than any one pattern is given is refused for
+        // its size.
+        let given = Memory::new(256 * MIB, 1).share(&["^.{1,40000}x$"], 0, &mut |_| unreachable!());
+        assert!(matches!(given[0], Given::Refused(Unsupported::Size)));
     }
     #[test]
     fn group_nesting_is_bounded() {

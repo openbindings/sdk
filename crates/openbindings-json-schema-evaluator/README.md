@@ -102,8 +102,8 @@ application's to set, and is off unless it does:
 
 - `evaluation_steps` sets no cap by default, so a pass takes time that grows
   with the schema and the value, and can grow exponentially with the schema:
-  16 nested holders of `unevaluatedProperties` whose `anyOf` names the next
-  holder twice take about 40 s to check `{}`. `Some(n)` charges one unit for
+  30 levels of `anyOf` that each name the next level twice, ending in
+  `false`, take about 2.5 s to check `{}`. `Some(n)` charges one unit for
   each schema a reference enters and for each element, member and literal
   comparison step, and gives `evaluation-work-limit` once a pass spends `n`;
   an application that evaluates untrusted contracts or values within a
@@ -135,6 +135,31 @@ application's to set, and is off unless it does:
   far longer than its pattern (`\S` takes 191 bytes); preparation counts each as
   it is written and refuses at the first that passes the limit
   (`pattern-total-byte-limit`).
+- `total_pattern_memory` (64 MiB) bounds the linear-time engine's memory for
+  a contract's compiled patterns together: each distinct `pattern` form the
+  run matcher does not match, and each `patternProperties` name, built through
+  the regex crate's two size settings. A quarter of it, at most 2 MiB each, is
+  their search caches (`dfa_size_limit`), in equal parts; a cache bounds only
+  how fast a search runs. Each form first compiles within 48 KiB
+  (`size_limit`), which all but one of 5,389 measured real patterns fit, so a
+  contract compiling more patterns than the rest holds at 48 KiB each (1,024 at
+  the default) refuses at the first past that count, before compiling any. The
+  forms that need more share what is left equally; those that need less than
+  their part keep only what they need, to within a sixteenth, and the rest is
+  shared again among the others, at most 32 MiB each. So a pattern's outcome
+  depends on the small patterns elsewhere in its contract only through their
+  48 KiB each, and never on the order strings reach the patterns: a single
+  `^.{1,10000}$` (about 13.2 MiB) compiles beside up to 743 small patterns,
+  four of them compile together, and five need more than is left. The first
+  time a form is found that does not fit its 48 KiB, the contract's compiled
+  patterns not yet compiled are compiled then. A `patternProperties` name that
+  does not fit what it is given refuses preparation, and a `pattern` value,
+  compiled the first time a string reaches it, gives that string no verdict;
+  both use `pattern-total-memory-limit`, whose message states the arithmetic,
+  or `pattern-size-limit` when the form needs more than 32 MiB. Refusing forms
+  that together need more than is left takes building about that much: 40
+  names of the form `^.{1,10000}N$` refuse in about 0.2 s, with about 2 MB of
+  heap at their peak.
 - `schema_resources` sets no cap by default; `Some(n)` refuses a contract
   reaching more than `n` schema resources (the document resource holding its
   schema and each embedded `$id`, supplied and packaged meta-schema resource)
@@ -145,9 +170,7 @@ application's to set, and is off unless it does:
 
 Fixed bounds apply as well. Core's document admission limits bound the bytes and
 nodes of every document and resource, and its projection refuses a contract
-reaching more than 100,000 schema positions (`schema-node-limit`). Each pattern
-compiles within the regex crate's size limit, set to 32 MiB, so counted
-repetitions of large sets such as `^.{1,10000}$` fit. Dynamic specialization
+reaching more than 100,000 schema positions (`schema-node-limit`). Dynamic specialization
 (below) produces at most 100,000 definitions, adds at most 16,777,216 units of
 JSON in specialized copies (one per JSON value and one per byte of its strings
 and member names) and holds at most 4,000,000 dynamic-scope entries across its
@@ -164,10 +187,9 @@ use.
 
 Within those bounds, preparing a schema can still take more memory than a
 host may want, since the library's compiled program grows with what it
-compiles, as any JSON Schema library's does: 40 `patternProperties` names of
-the form `^.{1,10000}N$`, about 600 bytes in all, peak at 1.1 GB; 1,000 holders
-of `unevaluatedProperties` that each inherit a base schema of 4,000 properties
-peak at 400 MB; and a dynamically specialized contract within its bounds can
+compiles, as any JSON Schema library's does: 1,000 holders of
+`unevaluatedProperties` that each inherit a base schema of 4,000 properties
+peak at 400 MB, and a dynamically specialized contract within its bounds can
 reach about 450 MB. A host that prepares schemas from untrusted parties should
 prepare them in an isolated worker or process with an operating-system memory
 limit. Values checked against trusted schemas stay bounded by
@@ -181,8 +203,10 @@ escape, or holds the non-word boundary `\B` (which the engine's `is_match` can
 answer wrongly beside multi-byte characters) is not matched: a string that
 reaches it in `pattern` gives no verdict (`pattern-backtracking`,
 `unicode-property-matching` or `pattern-non-word-boundary`), and as a
-`patternProperties` name it refuses preparation. A pattern whose form compiles
-to more than 32 MiB gives `pattern-size-limit`. The reading is meant to match as
+`patternProperties` name it refuses preparation. A pattern whose form needs
+more of `total_pattern_memory` than it is given gives
+`pattern-total-memory-limit`, or `pattern-size-limit` past 32 MiB. The
+reading is meant to match as
 ECMA-262 does, and a differential against V8 checks it through both keywords,
 but it is a translation, not an ECMA-262 engine: it writes every set as the
 positive class of the scalar values it matches, since the engine's negation of a
