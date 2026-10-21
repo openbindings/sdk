@@ -1,6 +1,7 @@
 {
   "name": "@openbindings/sdk",
   "version": "0.2.0-alpha.1",
+  "private": true,
   "type": "module",
   "description": "Exact OpenBindings documents, contracts and optional HTTP discovery powered by Rust and WebAssembly",
   "license": "Apache-2.0",

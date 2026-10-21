@@ -2,9 +2,10 @@
 
 The canonical repository is `openbindings/sdk`; source changes integrate on `main`
 through reviewed squash-merged pull requests. The current packages are unpublished.
-`publish = false` intentionally prevents accidental Cargo publication. Source
-landing and local qualification do not publish a package, deploy a consumer,
-retire another SDK, or establish whole-project release readiness.
+`publish = false` intentionally prevents accidental Cargo publication, and
+`"private": true` accidental npm publication; `tools/verify-publication-guards.py`
+checks both. Source landing and local qualification do not publish a package,
+deploy a consumer, retire another SDK, or establish whole-project release readiness.
 
 Before a separately authorized release:
 
@@ -22,8 +23,9 @@ Before a separately authorized release:
    workerd, fresh package, no-I/O and performance gates on the final source.
 5. Publish internal dependencies and companion crates in dependency order only
    after destination/package ownership is approved. Remove `publish = false`
-   deliberately for the intended packages. Test registry consumers. Generate the
-   npm Wasm asset from the same source and verify its recorded source identity.
+   deliberately for the intended packages, and `"private": true` for the npm
+   package, narrowing the guard check to match. Test registry consumers. Generate
+   the npm Wasm asset from the same source and verify its recorded source identity.
    CI's `wasm-reproducibility` job rebuilds that asset from another checkout path
    and Cargo home and requires identical bytes, so its recorded hashes hold
    wherever it is built.
