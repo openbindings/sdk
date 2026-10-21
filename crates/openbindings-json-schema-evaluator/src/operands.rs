@@ -1,6 +1,7 @@
 //! The SDK's keywords and the library's copy of each projected resource.
 //! Literal values stay in the exact flat representation: only the shallow
 //! projected schema structure crosses the dependency's recursive serde boundary.
+use crate::pattern::{Allowance, Given, Memory, Unsupported};
 use crate::{Limits, no_verdict};
 use jsonschema::json::{JsonNumber, Node};
 use jsonschema::{Keyword, ValidationError, ValidationOptions};
@@ -8,15 +9,16 @@ use openbindings::*;
 use openbindings_internal_json::backend::{self, FlatJson, View};
 use openbindings_internal_json::numeric;
 use serde_json::{Map, Value};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 #[derive(Default)]
 pub(crate) struct Operands {
     // Each compiled `const` and `enum` keyword's literal, by the id it holds.
     literals: Vec<Literal>,
     numbers: numeric::Operands,
-    // Each distinct `pattern` matcher; a `pattern` keyword holds its index.
-    patterns: Vec<Arc<Matcher>>,
+    // Each distinct `pattern` matcher, in the order preparation reads them; a
+    // `pattern` keyword holds its index.
+    patterns: Vec<Matcher>,
     // Each matcher's index by its form, or by the reason the evaluator does
     // not match its pattern, while preparing. A form is kept once, shared with
     // its matcher.
@@ -90,22 +92,120 @@ impl<'i> Keyword<'i, FlatJson> for Missing {
 enum Matcher {
     Simple(crate::pattern::Simple),
     // Compiled on first use, so preparation does not pay for patterns no
-    // value reaches; `None` when the form exceeds the engine's size limit.
+    // value reaches.
     Regex {
         form: Arc<str>,
-        compiled: std::sync::OnceLock<Option<regex::Regex>>,
+        compiled: OnceLock<Compiled>,
     },
-    Unmatched(crate::pattern::Unsupported),
+    Unmatched(Unsupported),
 }
-impl Matcher {
-    fn is_match(&self, text: &str) -> bool {
-        match self {
-            Matcher::Simple(simple) => simple.is_match(text),
-            Matcher::Regex { form, compiled } => {
-                match compiled.get_or_init(|| crate::pattern::compile(form)) {
-                    Some(regex) => regex.is_match(text),
+enum Compiled {
+    Regex(regex::Regex),
+    Refused(Unsupported),
+}
+/// A contract's `pattern` matchers and its pattern memory. Each compiled
+/// matcher first compiles within its first allowance. When a pattern is found
+/// that does not fit its own, at preparation for a `patternProperties` name or
+/// when a string first reaches a `pattern` matcher, every compiled pattern of
+/// the contract not yet compiled is compiled within its first allowance, and
+/// those that do not fit share what the first allowances leave. That happens
+/// once, so whether a pattern compiles does not depend on the order strings
+/// reach the contract's patterns.
+pub(crate) struct Patterns {
+    matchers: Vec<Matcher>,
+    memory: Memory,
+    // Whether the memory has been shared.
+    shared: Mutex<bool>,
+}
+impl Patterns {
+    /// Share the pattern memory among the `names`, distinct
+    /// `patternProperties` name forms that the library compiles, and every
+    /// matcher, because one of the names does not fit its first allowance.
+    /// `together` compiles every name within one allowance and answers
+    /// whether they all fit. Each name's compiled size, or why it does not
+    /// fit.
+    pub(crate) fn share_with(
+        &self,
+        names: &[&str],
+        together: &mut dyn FnMut(Allowance) -> bool,
+    ) -> Vec<Result<usize, Unsupported>> {
+        let mut shared = self.shared.lock().unwrap_or_else(PoisonError::into_inner);
+        self.share(names, together, &mut shared)
+    }
+    fn share(
+        &self,
+        names: &[&str],
+        together: &mut dyn FnMut(Allowance) -> bool,
+        shared: &mut bool,
+    ) -> Vec<Result<usize, Unsupported>> {
+        enum Owner {
+            Name(usize),
+            Matcher(usize),
+        }
+        let first = self.memory.first();
+        let mut given = vec![Ok(first.compiled); names.len()];
+        let (mut forms, mut owners) = (Vec::new(), Vec::new());
+        for (at, name) in names.iter().enumerate() {
+            if crate::pattern::compile(name, first).is_none() {
+                forms.push(*name);
+                owners.push(Owner::Name(at));
+            }
+        }
+        for (at, matcher) in self.matchers.iter().enumerate() {
+            if let Matcher::Regex { form, compiled } = matcher
+                && compiled.get().is_none()
+            {
+                match crate::pattern::compile(form, first) {
+                    // A string reaching it meanwhile compiles it the same way.
+                    Some(regex) => drop(compiled.set(Compiled::Regex(regex))),
                     None => {
-                        crate::pass::unmatched(crate::pattern::Unsupported::Size);
+                        forms.push(form);
+                        owners.push(Owner::Matcher(at));
+                    }
+                }
+            }
+        }
+        let names_sharing = owners
+            .iter()
+            .filter(|owner| matches!(owner, Owner::Name(_)))
+            .count();
+        let shares = self.memory.share(&forms, names_sharing, together);
+        for (owner, share) in owners.into_iter().zip(shares) {
+            match owner {
+                Owner::Name(at) => {
+                    given[at] = match share {
+                        Given::Compiled { compiled, .. } => Ok(compiled),
+                        Given::Refused(unsupported) => Err(unsupported),
+                    };
+                }
+                Owner::Matcher(at) => {
+                    let Matcher::Regex { compiled, .. } = &self.matchers[at] else {
+                        unreachable!("only a regex matcher compiles")
+                    };
+                    let outcome = match share {
+                        Given::Compiled {
+                            regex: Some(regex), ..
+                        } => Compiled::Regex(regex),
+                        Given::Compiled { regex: None, .. } => {
+                            unreachable!("a matcher keeps its compiled form")
+                        }
+                        Given::Refused(unsupported) => Compiled::Refused(unsupported),
+                    };
+                    drop(compiled.set(outcome));
+                }
+            }
+        }
+        *shared = true;
+        given
+    }
+    fn is_match(&self, index: usize, text: &str) -> bool {
+        match &self.matchers[index] {
+            Matcher::Simple(simple) => simple.is_match(text),
+            Matcher::Regex { compiled, .. } => {
+                match compiled.get().unwrap_or_else(|| self.compile(index)) {
+                    Compiled::Regex(regex) => regex.is_match(text),
+                    Compiled::Refused(unsupported) => {
+                        crate::pass::unmatched(*unsupported);
                         true
                     }
                 }
@@ -115,6 +215,22 @@ impl Matcher {
                 true
             }
         }
+    }
+    // The first use of a compiled matcher, within its first allowance or, when
+    // it does not fit that, within what sharing the pattern memory gives it.
+    #[cold]
+    fn compile(&self, index: usize) -> &Compiled {
+        let Matcher::Regex { form, compiled } = &self.matchers[index] else {
+            unreachable!("only a regex matcher compiles")
+        };
+        if let Some(regex) = crate::pattern::compile(form, self.memory.first()) {
+            return compiled.get_or_init(|| Compiled::Regex(regex));
+        }
+        let mut shared = self.shared.lock().unwrap_or_else(PoisonError::into_inner);
+        if !*shared {
+            self.share(&[], &mut |_| unreachable!("no name shares"), &mut shared);
+        }
+        compiled.get().expect("sharing compiles every matcher")
     }
 }
 // The forms by which patterns the evaluator does not match share a matcher; no
@@ -126,11 +242,11 @@ const SIZE: &str = "\u{1}size";
 /// The SDK's `pattern` keyword, which matches with ECMA-262 semantics through
 /// its pattern's reading. A string that reaches a pattern the evaluator does
 /// not match ends the pass with no verdict.
-struct Pattern(Arc<Matcher>);
+struct Pattern(Arc<Patterns>, usize);
 impl<'i> Keyword<'i, FlatJson> for Pattern {
     fn is_valid(&self, instance: View<'i>) -> bool {
         match instance.as_string() {
-            Some(text) => self.0.is_match(&text),
+            Some(text) => self.0.is_match(self.1, &text),
             None => true,
         }
     }
@@ -310,7 +426,9 @@ impl Operands {
                 Unsupported::Backtracking => BACKTRACKING,
                 Unsupported::PropertyEscape => PROPERTY_ESCAPE,
                 Unsupported::NonWordBoundary => NON_WORD_BOUNDARY,
-                Unsupported::Size => SIZE,
+                // Reading finds no shortfall: a pattern meets one only when it
+                // is compiled.
+                Unsupported::Size | Unsupported::Memory(_) => SIZE,
             },
         };
         let index = match self.indices.get(key) {
@@ -322,23 +440,26 @@ impl Operands {
                         Some(simple) => Matcher::Simple(simple),
                         None => Matcher::Regex {
                             form: key.clone(),
-                            compiled: std::sync::OnceLock::new(),
+                            compiled: OnceLock::new(),
                         },
                     },
                     Reading::Unsupported(unsupported) => Matcher::Unmatched(unsupported),
                 };
                 let index = self.patterns.len();
-                self.patterns.push(Arc::new(matcher));
+                self.patterns.push(matcher);
                 self.indices.insert(key, index);
                 index
             }
         };
         index.to_string()
     }
+    /// The library's options with the SDK's keywords, and the `pattern`
+    /// keyword's matchers, which compile within the contract's `memory`.
     pub(crate) fn apply<R>(
         self,
         mut options: ValidationOptions<'_, R, FlatJson>,
-    ) -> ValidationOptions<'_, R, FlatJson> {
+        memory: Memory,
+    ) -> (ValidationOptions<'_, R, FlatJson>, Arc<Patterns>) {
         options = options.with_keyword(crate::bundle::MARKER, |_, _, _| Ok(Box::new(Work)));
         options = options.with_keyword(crate::missing::KEYWORD, |_, value, _| {
             let at = value
@@ -349,14 +470,19 @@ impl Operands {
         });
         // Only the matchers outlive preparation; their index by form does not.
         drop(self.indices);
-        let patterns = Arc::new(self.patterns);
+        let patterns = Arc::new(Patterns {
+            matchers: self.patterns,
+            memory,
+            shared: Mutex::new(false),
+        });
+        let keyword = patterns.clone();
         options = options.with_keyword("pattern", move |_, value, _| {
-            let matcher = value
+            let index = value
                 .as_str()
                 .and_then(|key| key.parse::<usize>().ok())
-                .and_then(|index| patterns.get(index))
+                .filter(|&index| index < keyword.matchers.len())
                 .ok_or_else(|| ValidationError::custom("invalid internal pattern reference"))?;
-            Ok(Box::new(Pattern(matcher.clone())))
+            Ok(Box::new(Pattern(keyword.clone(), index)))
         });
         let numbers = Arc::new(self.numbers);
         for keyword in numeric::KEYWORDS {
@@ -389,7 +515,7 @@ impl Operands {
                 Ok(Box::new(Constraint(literal.clone())))
             });
         }
-        options
+        (options, patterns)
     }
 }
 /// The separated literal a projected `const` or `enum` names by its index.
