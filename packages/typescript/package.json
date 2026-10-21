@@ -34,7 +34,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-wasm.mjs",
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.json && node scripts/copy-wasm.mjs",
     "test": "node --test test/*.test.mjs",
     "test:types": "tsc -p tsconfig.types.json",
     "format:check": "prettier --check src/*.ts test/* examples/* scripts/* *.json",

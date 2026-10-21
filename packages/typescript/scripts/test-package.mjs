@@ -37,6 +37,12 @@ try {
       packed[0].files.some((file) => file.path === "examples/" + name),
       `Package must include the runnable ${name} example`,
     );
+  // The JavaScript is tsc's unbundled output and the TypeScript sources are not
+  // shipped, so the package carries no source maps that would name them.
+  assert(
+    !packed[0].files.some((file) => file.path.endsWith(".map")),
+    "Package must not ship source maps",
+  );
   writeFileSync(
     join(temporary, "package.json"),
     JSON.stringify({ private: true, type: "module" }),
@@ -56,6 +62,12 @@ try {
   // Compile the exact first-use block delivered in the installed README.
   // Host initialization is intentionally outside this host-independent block.
   const installed = join(temporary, "node_modules/@openbindings/sdk");
+  for (const file of packed[0].files.filter(({ path }) => path.endsWith(".js")))
+    assert.doesNotMatch(
+      readFileSync(join(installed, file.path), "utf8"),
+      /sourceMappingURL/,
+      `${file.path} must not reference a source map`,
+    );
   const snippet = firstUseSnippet(
     readFileSync(join(installed, "README.md"), "utf8"),
   );
