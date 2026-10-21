@@ -7,5 +7,5 @@ await sdk.initialize(
     new URL("../dist/wasm/openbindings_wasm_bg.wasm", import.meta.url),
   ),
 );
-test("opt-in exact schema facts and source retention", () =>
+test("explanations at original locations and source retention", () =>
   diagnosticDetailsCases(sdk));

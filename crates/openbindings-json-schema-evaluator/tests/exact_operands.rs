@@ -128,7 +128,7 @@ fn every_numeric_family_uses_exact_values_in_both_detail_modes() {
 }
 
 #[test]
-fn explained_facts_use_original_tokens_and_never_numeric_handles() {
+fn exact_bounds_and_choices_fail_at_their_original_keywords() {
     let huge = format!("1e{}", "9".repeat(100_000));
     for bound in ["1e400", "9007199254740993", "-0.00", huge.as_str()] {
         let schema = format!(r#"{{"exclusiveMinimum":{bound}}}"#);
@@ -145,9 +145,6 @@ fn explained_facts_use_original_tokens_and_never_numeric_handles() {
             problem.schema.pointer,
             "/operations/op/input/exclusiveMinimum"
         );
-        assert!(
-            matches!(&problem.details, Some(ValueProblemDetails::NumericBound { bound: token }) if token == bound)
-        );
     }
     let schema = format!(r#"{{"enum":[1e400,{huge},9007199254740993,-0.00]}}"#);
     let contract = prepare(&schema, Detail::Explain, ResourceSet::default());
@@ -156,24 +153,17 @@ fn explained_facts_use_original_tokens_and_never_numeric_handles() {
     else {
         panic!()
     };
-    assert!(
-        matches!(&problems[0].details, Some(ValueProblemDetails::Enum { choices })
-        if choices == &["1e400", huge.as_str(), "9007199254740993", "-0.00"])
-    );
+    assert_eq!(problems[0].schema.pointer, "/operations/op/input/enum");
 }
 
 #[test]
 fn substituted_resource_nodes_keep_distinct_original_provenance() {
     let resource = JsonValue::parse(r#"{"$id":"https://exact.test/root","$defs":{"a":{"$anchor":"a","maximum":1e400},"b":{"$id":"nested","maximum":2e400}}}"#).unwrap();
     for mode in [Detail::Outcome, Detail::Explain] {
-        for (reference, pointer, bound) in [
-            ("https://exact.test/root#a", "/$defs/a/maximum", "1e400"),
-            (
-                "https://exact.test/root#/%24defs/b",
-                "/$defs/b/maximum",
-                "2e400",
-            ),
-            ("https://exact.test/nested", "/$defs/b/maximum", "2e400"),
+        for (reference, pointer) in [
+            ("https://exact.test/root#a", "/$defs/a/maximum"),
+            ("https://exact.test/root#/%24defs/b", "/$defs/b/maximum"),
+            ("https://exact.test/nested", "/$defs/b/maximum"),
         ] {
             let resources = ResourceSet::new([SchemaResource {
                 uri: "https://exact.test/root".into(),
@@ -193,9 +183,6 @@ fn substituted_resource_nodes_keep_distinct_original_provenance() {
                     Some("https://exact.test/root")
                 );
                 assert_eq!(location.pointer, pointer);
-                assert!(
-                    matches!(&problems[0].details, Some(ValueProblemDetails::NumericBound { bound: token }) if token == bound)
-                );
             }
         }
     }

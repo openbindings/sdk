@@ -223,10 +223,10 @@ export function diagnosticPolicyCases(sdk) {
         }
       }
     }
-    for (const [reference, qualified] of [
-      [secret, true],
-      [secret + "\nSECRET-control", false],
-      ["https://example.invalid/" + "SECRET-long".repeat(2000), true],
+    for (const [reference, expected] of [
+      [secret, "refuses"],
+      [secret + "\nSECRET-control", "malformed"],
+      ["https://example.invalid/" + "SECRET-long".repeat(2000), "prepares"],
     ]) {
       const doc = withSchema({ $ref: reference });
       const report = doc.references();
@@ -235,7 +235,7 @@ export function diagnosticPolicyCases(sdk) {
         "explicit source spelling preserved",
       );
       safe(report.references[0].resolution.detail.message);
-      if (!qualified) {
+      if (expected === "malformed") {
         const validation = doc.validate();
         check(
           validation.status === "report" &&
@@ -245,17 +245,21 @@ export function diagnosticPolicyCases(sdk) {
         continue;
       }
       const state = prepareInput(doc, "op");
-      if (qualified) {
-        check(state.status === "ready", "qualified missing reference prepares");
+      if (expected === "prepares") {
+        check(state.status === "ready", "missing resource prepares");
         const result = own(state.valueContract).validate(null);
         check(
           result.outcome === "no-verdict" &&
             result.detail.reason === "resource-unavailable",
-          "bare missing reference refuses dependent validation",
+          "missing resource refuses dependent validation",
         );
         safe(result.detail.message);
       } else {
-        check(state.status === "no-verdict", "invalid reference refuses setup");
+        check(
+          state.status === "no-verdict" &&
+            state.detail.reason === "resource-unavailable",
+          "fragment of a missing resource refuses setup",
+        );
         safe(state.detail.message);
       }
     }

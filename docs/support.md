@@ -13,18 +13,22 @@ replacing an existing dependency.
 | Worker service | Local workerd with a compiled Wasm module and initialization in an allowed request context. This is not evidence of deployed Cloudflare latency, quotas, or service availability. |
 
 The 256 KiB small-stack document regression is qualified on the development
-toolchain. On the same stack, value contracts whose patterns nest to the default
-`pattern_depth` prepare, and values are checked against them, in release builds
-on Linux, macOS and Windows. Debug builds on Linux and macOS prepare them and
-check values against patterns without lookarounds. Unoptimized code gives the
-vendored regular-expression matcher frames of about 90 to 100 KiB, reached by the
-meta-schema check in every preparation and again for each nested lookaround
-while a value is checked, so Windows debug builds need more than 256 KiB for any
-preparation. Older supported compilers may need larger stacks in debug builds.
-MSRV CI runs all workspace tests except the exact stack-margin tests selected by
-[this inventory](../tools/stack-margin-tests.json), with reasons and scope for the
-vendored tests too. Development-toolchain jobs retain the workspace stack tests,
-and `tools/verify.py` also runs the pattern stack test in release builds.
+toolchain. On the same stack, release builds on Linux, macOS and Windows prepare
+value contracts whose patterns nest to the default `pattern_depth` and check
+values against them, and prepare, check and explain values as deep as the
+default `evaluation_depth` admits for the 39 recursive contract shapes
+`evaluation_stack` covers, unevaluated keywords included, and prepare the
+longest unevaluated annotation walk of each kind the walk limit admits with a
+fifth of the thread already in use (`walk_stack`). The static depth bound models
+the library's frames, and a contract holding an unevaluated keyword is also
+guarded by measuring the stack its pass uses. Unoptimized code needs more:
+compiling 32 nested quantified groups takes up to about 1 MiB of stack in debug
+builds, and debug evaluation frames exceed 256 KiB at the default depth, so
+debug runs ignore both tests and `tools/verify.py` runs them in release builds.
+Older supported compilers may need larger stacks in debug builds. MSRV CI runs
+all workspace tests except the exact stack-margin tests selected by [this
+inventory](../tools/stack-margin-tests.json), with reasons and scope.
+Development-toolchain jobs retain the workspace stack tests.
 
 The Rust and TypeScript APIs use the same engine and outcome meanings. They
 follow their languages' ownership conventions: Rust uses ordinary ownership and
@@ -41,16 +45,24 @@ custom evaluator callbacks are not currently provided. The complete boundaries
 are in [CAPABILITIES.md](../CAPABILITIES.md).
 
 For untrusted request validation, use `validate`, the cheap check. `explain` is an
-explicit per-call choice for callers that accept library allocation and stack
-limits; it can allocate in proportion to inputs and overflow on deep values.
+explicit per-call choice for callers that accept library allocation; it allocates
+in proportion to inputs and explains only values within half the depth limit.
 An empty problem list never turns an established failure into success.
 See the [evaluator policy](../crates/openbindings-json-schema-evaluator/README.md).
 
-The default evaluator can decide positive contracts containing known static
-reference defects in present resources. Agreement across completions produces
-Satisfies or Fails; disagreeing concrete completions with proven defect provenance
-produce Undefined. Missing resources, unsupported features and exhausted budgets
-keep their distinct refusal reasons. This support excludes malformed `$id`,
-dynamic defects and annotation-dependent cases. An unused malformed `$ref` sibling
-is isolated; an unused malformed `$id` sibling still refuses. See the
-[partial-resource and reference-defect boundaries](partial-resource-bounds.md).
+The default evaluator prepares a contract that reaches a missing resource with
+an empty stand-in for it; a pass that reaches the stand-in gives no verdict
+naming it. It refuses preparation for a contract in which an
+`unevaluatedProperties` or `unevaluatedItems` keyword's annotation sources
+reach a stand-in, a reference to a fragment of a missing resource, or a static
+reference defect (an absent pointer target or anchor, or a malformed
+fragment), and never produces Undefined. Missing resources, unsupported features and exhausted limits keep
+their distinct refusal reasons.
+
+Preparing a schema from an untrusted party can take more memory than a host
+may want, as with any JSON Schema library: the evaluator bounds what the SDK
+itself reads and writes, not the library's compiled program (see the
+[evaluator limits](../crates/openbindings-json-schema-evaluator/README.md#limits)).
+Prepare such schemas in an isolated worker or process with an operating-system
+memory limit. Checking values against a trusted schema stays bounded by the
+evaluation depth limit and, when set, the work cap.

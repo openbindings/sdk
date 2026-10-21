@@ -1085,7 +1085,7 @@ mod tests {
     fn evaluator_index_preserves_collision_work_accounting() {
         // the evaluator charges the table access and every exact candidate,
         // and refuses exhausted budgets without returning a partial match.
-        use evaluator_jsonschema::ob_work;
+        use crate::work;
         use jsonschema_value::{JsonNumber as _, Node as _, Object as _};
         let mut text = String::from("{");
         for i in 0..20 {
@@ -1103,7 +1103,7 @@ mod tests {
             let view = crate::backend::View::Stored(&value.owner, 0);
             let object = view.as_object().unwrap();
             let key = String::from("k19");
-            let result = ob_work::bounded(required, 10, || {
+            let result = work::scope(required, || {
                 object
                     .get(&key)
                     .unwrap()
@@ -1114,12 +1114,12 @@ mod tests {
             });
             assert_eq!(result, Ok(String::from("19")));
             assert_eq!(
-                ob_work::bounded(required - 1, 10, || object.get(&key).is_some()),
-                Err(ob_work::Stop::Work)
+                work::scope(required - 1, || object.get(&key).is_some()),
+                Err(work::Spent)
             );
             assert_eq!(
-                ob_work::bounded(0, 10, || object.get(&String::from("absent")).is_some()),
-                Err(ob_work::Stop::Work)
+                work::scope(0, || object.get(&String::from("absent")).is_some()),
+                Err(work::Spent)
             );
         }
     }

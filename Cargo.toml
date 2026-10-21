@@ -1,7 +1,6 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
-exclude = ["vendor/openbindings-internal-jsonschema", "vendor/openbindings-internal-regress"]
 
 [workspace.package]
 version = "0.2.0-alpha.1"
@@ -16,7 +15,6 @@ itoa = "1.0.18"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["raw_value", "unbounded_depth"] }
 fluent-uri = "0.4.1"
-# Core's fixed checks and reference inspection use the unmodified library.
 jsonschema = { version = "=0.58.6", default-features = false }
 jsonschema-value = { version = "=0.58.6", default-features = false, features = ["serde_json"] }
 wasm-bindgen = "=0.2.129"

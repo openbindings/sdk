@@ -368,13 +368,32 @@ fn conservative_preparation_is_not_semantic_undefinedness() {
     ));
 }
 #[test]
-fn positive_missing_disjunct_establishes_satisfaction() {
-    // Intentionally expanded capability: missing positive disjuncts now use bounds.
+fn a_missing_resource_gives_no_verdict_only_where_evaluation_reaches_it() {
+    // A disjunct already satisfied leaves the missing resource unread; a value
+    // that reaches it gives no verdict, naming the missing resource.
+    let prepared =
+        prepare(r#"{"anyOf":[{"type":"string"},{"$ref":"https://absent.invalid/x"}]}"#).unwrap();
     assert!(matches!(
-        prepare(r#"{"anyOf":[true,{"$ref":"https://absent.invalid/x"}]}"#)
-            .explain(&value(r#""secret""#)),
+        prepared.explain(&value(r#""secret""#)),
         ValueOutcome::Satisfies
     ));
+    for outcome in [
+        prepared.validate(&value("7")),
+        prepared.explain(&value("7")),
+    ] {
+        let ValueOutcome::NoVerdict { detail } = outcome else {
+            panic!("a value reaching the missing resource was decided")
+        };
+        assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
+        assert_eq!(detail.code, "resource-unavailable");
+        assert_eq!(
+            detail.location,
+            Some(SchemaLocation::new(
+                Some("https://absent.invalid/x".into()),
+                "".parse().unwrap()
+            ))
+        );
+    }
 }
 #[test]
 fn diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
@@ -485,40 +504,6 @@ fn diagnostic_allocation_admission_bounds_many_missing_names() {
     };
     assert!(!problems_complete);
     assert!(problems.is_empty());
-}
-
-#[test]
-fn internal_work_scopes_restore_after_nested_exhaustion_unwind_and_threads() {
-    use jsonschema::{ob_ecma, ob_work};
-    let validator = jsonschema::options()
-        .build(&serde_json::json!({"required":["a","b"]}))
-        .unwrap();
-    let instance = serde_json::json!({});
-    let _ = std::panic::catch_unwind(|| ob_work::bounded(0, 100, || panic!("scope probe")));
-    assert_eq!(validator.iter_errors(&instance).count(), 2);
-    assert!(
-        ob_work::bounded(100, 100, || ob_work::bounded(0, 100, || validator
-            .is_valid(&instance)))
-        .is_err()
-    );
-    assert!(ob_work::bounded(100, 100, || validator.is_valid(&instance)).is_ok());
-    let pattern = ob_ecma::Regex::new(r"\p{Lu}").unwrap();
-    assert!(matches!(
-        ob_ecma::top_level(100, || ob_ecma::top_level(100, || pattern.is_match("A"))),
-        Err(ob_ecma::Exhausted::UnsupportedProperty)
-    ));
-    let _ = std::panic::catch_unwind(|| ob_ecma::top_level(0, || panic!("regex scope probe")));
-    assert!(ob_ecma::top_level(100, || true).is_ok());
-    std::thread::scope(|scope| {
-        for _ in 0..8 {
-            scope.spawn(|| {
-                for _ in 0..100 {
-                    assert!(ob_work::bounded(1, 1, || true).is_ok());
-                    assert!(ob_ecma::top_level(1, || true).is_ok());
-                }
-            });
-        }
-    });
 }
 
 #[test]

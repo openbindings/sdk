@@ -58,6 +58,19 @@ document validation is recorded beside them but not bounded here: its native
 rules and finding locations are outside the fixed checks. Run the phase alone
 with `--near-misses-only`.
 
+## Pattern forms
+
+The evaluator writes each pattern in a form for its linear-time engine that
+spells every set out, so a 10,002-byte pattern of 5,000 `\S` has a 955,002-byte
+form. The pattern phase (`src/patterns.rs`) prepares contracts holding such
+patterns: 380 of them, as many as `Limits::total_pattern_bytes` admits, one
+more, one repeated 380 times, and one more than it admits as
+`patternProperties` names. Each preparation, and checking `{}` when it
+prepares, must add no more heap at its peak than preparing the same document
+with the patterns as annotations, plus the default total and three times the
+per-pattern limit for the form being written and its shared copy. Run the
+phase alone with `--patterns-only`.
+
 ## Recorded results
 
 The verifier writes fresh raw allocation and timing samples to
@@ -80,15 +93,18 @@ compilation cost; per-document allocation thresholds remain unchanged.
 
 The allocation runner now also prepares default value contracts outside the
 measured region and validates arrays of 1,000 and 50,000 elements three times each.
-Ordinary and partial-upper failures use a two-branch type `anyOf`; a missing
-resource forces the partial programs. The partial-lower case reaches both Boolean
-passes and retains its expected resource-unavailable outcome. Each call must use
+Ordinary and referenced failures use an `anyOf` whose second branch fails at
+every element, directly and through a `$ref`, so building the library's errors
+would allocate for each element; the work-capped case checks an integer array schema under a
+1,000-unit evaluation cap, which reading the elements exhausts, and retains its
+expected no-verdict. Each call must use
 at most **65,536 bytes** of incremental live allocation. This is a focused
 regression threshold for prepared type decisions, not a universal value bound.
 
 Run `python3 tools/diagnostic-memory-probe/check_value_mutations.py` to test the
 allocation controls. It copies sources under `target/diagnostics-review`, replaces
-one `is_valid` call at a time with `validate(...).is_ok()`, runs the same assertions,
-and restores the copy. It never mutates the production evaluator. Each mutation
-must fail the allocation assertion while retaining the expected public outcome. Fresh mutation receipts are generated under
+the cheap check's `is_valid` call with `validate(...).is_ok()`, runs the same
+assertions for each failing path alone, and restores the copy. It never mutates
+the production evaluator. Each path must fail the allocation assertion while
+retaining the expected public outcome. Fresh mutation receipts are generated under
 `target/diagnostics-review/value-mutations`.

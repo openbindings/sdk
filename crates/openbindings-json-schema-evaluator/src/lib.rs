@@ -3,101 +3,132 @@
 #![warn(clippy::return_self_not_must_use)]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
-mod details;
-mod operands;
+mod bundle;
 #[cfg(test)]
 extern crate self as openbindings_json_schema_evaluator;
-mod planner;
+mod depth;
+mod es2020_properties;
+mod explain;
+mod missing;
+mod operands;
+mod pass;
+mod pattern;
+mod unevaluated_walk;
 use openbindings::*;
 use openbindings_internal_json::backend::{self, FlatJson};
-use openbindings_internal_schema::Program as EvaluationProgram;
+use openbindings_internal_schema::{Program as EvaluationProgram, SchemaSpace, SuppliedSet};
 use serde_json::Value;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]
-/// Finite default-evaluator budgets. Work counts are implementation units, not milliseconds; exhaustion yields no verdict unless an established failure only loses diagnostic completeness. Zero is literal. These budgets do not bound the allocation or stack use of an explanation's library diagnostics. Schema compilation during preparation has a separate fixed bound (see the crate documentation).
+/// Default-evaluator limits. A limit that protects the process (its stack or
+/// its memory) has a default; one that would only bound time is the
+/// application's to set, and is off unless it does. Exceeding a limit yields
+/// no verdict.
 pub struct Limits {
-    /// Evaluation work units per verdict/diagnostic pass. `None`, the default,
-    /// grows with the value: 2,000,000 units for a value of up to 65,536 nodes
-    /// (member names count) and proportionally more for a larger one. An
-    /// ordinary schema uses a few units per value node, so by default it decides
-    /// values as large as the default admission limits accept (1,000,000
-    /// nodes), within about 30,500,000 units per pass. `Some(n)` caps every pass
-    /// at exactly `n` units, whatever the value's size. A partial verdict shares
-    /// one pass's allowance across upper and lower evaluations.
+    /// Evaluation work units per verdict or explanation pass. `None`, the
+    /// default, sets no cap: the time a pass takes then grows with the schema,
+    /// exponentially for some (nested `anyOf` holders of
+    /// `unevaluatedProperties`), and with the value, so an application that
+    /// evaluates untrusted contracts or values within a deadline sets one. `Some(n)` charges one unit for each
+    /// schema a reference enters and for each element, member and literal
+    /// comparison step, and gives `evaluation-work-limit` once a pass spends
+    /// `n`; preparing with a cap compiles a slightly larger validator.
     pub evaluation_steps: Option<usize>,
-    /// Nested evaluation depth; default 1024, distinct from source JSON nesting.
-    /// Each nested evaluation is a recursive call, so this also bounds stack
-    /// use; reaching it yields the `evaluation-depth-limit` no-verdict.
+    /// The deepest nesting of schema evaluations a value may need; default
+    /// 1024. Evaluation recurses once for each schema it enters, so this
+    /// bounds its stack use. Before evaluating a value, the evaluator bounds
+    /// that nesting from the contract's schemas and the value's depth; a value
+    /// whose bound exceeds this limit yields `evaluation-depth-limit` without
+    /// being evaluated. A contract holding `unevaluatedProperties` or
+    /// `unevaluatedItems`, whose library validators recurse in ways the bound
+    /// does not model, is also guarded as it evaluates: a pass that uses more
+    /// than 128 bytes of stack per unit of this limit (128 KiB at the default)
+    /// stops with `evaluation-depth-limit`. At the default, release builds
+    /// evaluate the recursive contract shapes the evaluator's stack test covers
+    /// on a 256 KiB thread stack.
     pub evaluation_depth: usize,
-    /// Regular-expression work/backtracking budget per verdict/diagnostic pass; default 2,000,000. Upper and lower share one verdict allowance.
-    pub regex_steps: usize,
     /// Maximum projected JSON nesting admitted to evaluator compilation; default 512.
     pub compile_json_depth: usize,
-    /// Maximum UTF-8 bytes in each schema regular expression; default 1 MiB (1,048,576 bytes).
+    /// Maximum UTF-8 bytes in each schema regular expression, and in the form
+    /// the linear-time engine compiles it from; default 1 MiB (1,048,576
+    /// bytes). A pattern whose form would be longer gives `pattern-size-limit`.
     pub pattern_bytes: usize,
-    /// Maximum parenthesis nesting in a schema regular expression; default 32.
-    /// The regular-expression engine parses nested groups and matches nested
-    /// lookarounds recursively, so this also bounds the stack those use. At the
-    /// default, release builds prepare such patterns, and check values against
-    /// them, on a 256 KiB thread stack. Debug builds need more; the
-    /// [support policy](https://github.com/openbindings/sdk/blob/main/docs/support.md)
-    /// records where they are qualified.
+    /// Maximum group nesting in a schema regular expression; default 32. The
+    /// regular-expression compiler recurses at each group level.
     pub pattern_depth: usize,
+    /// Maximum UTF-8 bytes in the forms the evaluator keeps for one contract's
+    /// schema regular expressions: each distinct form of its `pattern` values
+    /// and the form of each `patternProperties` name; default 4 MiB (4,194,304
+    /// bytes). The forms spell every set out, so they can be far longer than
+    /// the patterns (`\S` takes 191 bytes). Preparation counts each form
+    /// as it is written and refuses with `pattern-total-byte-limit` at the
+    /// first that passes the limit.
+    pub total_pattern_bytes: usize,
     /// Schema resources one contract may reach, counted as its projection
-    /// holds them: the document resource holding the contract's schema and each
-    /// embedded `$id` resource, supplied resource and packaged meta-schema
-    /// resource it reaches. Ordinary contracts reach one or a few. `None`, the
-    /// default, sets no cap. Registering resources with the JSON Schema library
-    /// before compilation takes time quadratic in their number, outside every
-    /// other budget: in the reference build 1,000 resources take 7 ms, 10,000
-    /// take 0.67 s and 20,000 take 2.8 s. `Some(n)` refuses a contract reaching
-    /// more than `n` with `LimitExceeded` and `schema-resource-limit` before
-    /// that setup, so an application preparing untrusted documents or
-    /// resource sets can bound it at the cap it chooses.
+    /// holds them: the document resource holding the contract's schema and
+    /// each embedded `$id` resource, supplied resource and packaged
+    /// meta-schema resource it reaches. Ordinary contracts reach one or a
+    /// few. `None`, the default, sets no cap. `Some(n)` refuses a contract
+    /// reaching more than `n` with `LimitExceeded` and `schema-resource-limit`
+    /// before compiling it, so an application preparing untrusted documents or
+    /// resource sets can bound preparation at the size it chooses.
     pub schema_resources: Option<usize>,
-}
-// The default work allowance and the value size, in nodes, it is stated for.
-const DEFAULT_STEPS: usize = 2_000_000;
-const STEPS_NODES: usize = 65_536;
-impl Limits {
-    // The work allowance of one pass over `value`: the configured cap, or the
-    // default allowance grown in proportion to the value.
-    fn steps_for(&self, value: &JsonValue) -> usize {
-        if let Some(steps) = self.evaluation_steps {
-            return steps;
-        }
-        let nodes = backend::node_count(value.view());
-        if nodes <= STEPS_NODES {
-            return DEFAULT_STEPS;
-        }
-        let scaled = DEFAULT_STEPS as u128 * nodes as u128 / STEPS_NODES as u128;
-        usize::try_from(scaled).unwrap_or(usize::MAX)
-    }
 }
 impl Default for Limits {
     fn default() -> Self {
         Self {
             evaluation_steps: None,
             evaluation_depth: 1024,
-            regex_steps: 2_000_000,
             compile_json_depth: 512,
             pattern_bytes: 1024 * 1024,
             pattern_depth: 32,
+            total_pattern_bytes: 4 * 1024 * 1024,
             schema_resources: None,
         }
     }
 }
+// The most definitions dynamic specialization may produce for one contract:
+// as many as the projection admits schema nodes.
+const SPECIALIZED_DEFINITIONS: usize = 100_000;
+// The most JSON dynamic specialization may add to the projected program in
+// specialized copies, counted on the SDK's own output as one unit for each
+// JSON value and one for each byte of its strings and member names, and the
+// most dynamic-scope entries its distinct contexts may hold together.
+const SPECIALIZED_OUTPUT: usize = 16 * 1024 * 1024;
+const CONTEXT_ENTRIES: usize = 4_000_000;
+// The stack a guarded pass may use for each unit of `evaluation_depth`:
+// 128 KiB at the default, which leaves a 256 KiB thread room for the frames
+// one level of the value adds before the next check.
+const STACK_PER_DEPTH: usize = 128;
+// The heaviest annotation walk an unevaluated keyword may follow, weighed by
+// what each reference adds (`bundle::REFERENCE_WALK` and the rest): 26 `$ref`s,
+// 8 levels of `allOf: [{"$ref": ...}]` inheritance, or 7 through `then` or
+// `dependentSchemas`. The library compiles the walk by recursion; release
+// builds on Linux, macOS and Windows prepare the longest admitted walk of each
+// kind, below enclosing schemas, with a fifth of a 256 KiB thread already used
+// (`tests/walk_stack.rs`).
+const UNEVALUATED_WALK: u32 = 105;
+
 #[derive(Clone, Debug, Default)]
-/// Optional JSON Schema 2020-12 companion with exact numeric semantics and explicit resources only. It performs no network/filesystem acquisition. Format is annotation, Unicode property-escape matching is not qualified, and potential non-progressing cycles can conservatively refuse. Use a custom [`SchemaEvaluator`] when different qualified capabilities are required.
+/// Optional JSON Schema 2020-12 companion with exact numeric semantics and
+/// explicit resources only, composed over the unmodified `jsonschema` library.
+/// It performs no network or filesystem acquisition. `format` is an
+/// annotation. Patterns run on a linear-time engine, so one that needs a
+/// backtracking engine (lookaround or backreferences), has a Unicode property
+/// escape or holds the non-word boundary `\B` gives no verdict. A contract that reaches a resource that
+/// was not supplied prepares with an empty stand-in for it, and a pass that
+/// reaches the stand-in gives no verdict naming the resource. A contract in
+/// which an `unevaluatedProperties` or `unevaluatedItems` keyword's
+/// annotation sources reach a stand-in, a reference to a fragment of a missing
+/// resource, or one that identifies no schema refuses preparation. Use a custom
+/// [`SchemaEvaluator`] when different qualified capabilities are required.
 ///
 /// A cheap check ([`Detail::Outcome`]) decides with the library's validity test
 /// and reports a failure with a fixed message and no problems. An explanation
-/// ([`Detail::Explain`]) reports the library's first error, with redacted
-/// messages and original schema facts. It is library-bounded: building that
-/// error can allocate in proportion to the schema and value and can overflow
-/// the stack on deep values. The SDK promises no stronger bound.
+/// ([`Detail::Explain`]) reports the library's first error at the keyword's
+/// original schema location, with a redacted message.
 pub struct DefaultEvaluator {
     limits: Limits,
 }
@@ -106,12 +137,12 @@ impl DefaultEvaluator {
     pub fn new() -> Self {
         Self::default()
     }
-    /// Construct the companion with explicit budgets; limits apply during preparation/evaluation, not as wall-clock deadlines.
+    /// Construct the companion with explicit limits; they apply during preparation/evaluation, not as wall-clock deadlines.
     #[must_use]
     pub fn with_limits(limits: Limits) -> Self {
         Self { limits }
     }
-    /// Borrow this evaluator's configured budgets without allocation.
+    /// Borrow this evaluator's configured limits without allocation.
     pub fn limits(&self) -> &Limits {
         &self.limits
     }
@@ -129,32 +160,6 @@ impl jsonschema::Retrieve for NoRetrieval {
 fn no_verdict(reason: NoVerdictReason, code: &str, message: impl Into<String>) -> NoVerdict {
     NoVerdict::new(reason, code, message)
 }
-fn preparation_error(mut kind: &jsonschema::error::ValidationErrorKind) -> NoVerdict {
-    use jsonschema::error::ValidationErrorKind;
-    // Read only trusted kind metadata, never dependency Display text or schema
-    // values. Property-name validation may wrap a regex-format failure.
-    for _ in 0..16 {
-        match kind {
-            ValidationErrorKind::Format { format } if format == "regex" => {
-                return no_verdict(
-                    NoVerdictReason::ConservativePreparation,
-                    "schema-pattern-compilation",
-                    "a schema regular expression could not be compiled; inspect pattern and patternProperties",
-                );
-            }
-            ValidationErrorKind::PropertyNames { error } => kind = error.kind(),
-            _ => break,
-        }
-    }
-    // Build errors can identify metaschema locations or resource-relative
-    // projected paths without a resource identity. Neither proves an original
-    // source location, so leave location absent rather than guessing the root.
-    no_verdict(
-        NoVerdictReason::ConservativePreparation,
-        "evaluator-preparation",
-        "the evaluator could not prepare the projected schema",
-    )
-}
 impl SchemaEvaluator for DefaultEvaluator {
     fn prepare(
         &self,
@@ -162,174 +167,85 @@ impl SchemaEvaluator for DefaultEvaluator {
         control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         control.check()?;
-        let (space, entry) = planner::space(request);
+        let (mut space, mut entry) = space(request, Vec::new())?;
         let cancellation = || control.is_cancelled();
-        // The explanation writes each definition's origin from the space, so
-        // the projection builds no location map for it.
-        match space.program_unmapped(entry, &cancellation) {
-            Ok(unmapped) => {
-                let origins = Origins::Space {
-                    space: &space,
-                    definitions: &unmapped.definitions,
-                };
-                Ok(Arc::new(self.compile(
-                    unmapped.program,
-                    unmapped.literals,
-                    origins,
-                    true,
-                    control,
-                )?))
-            }
-            Err(detail)
-                if (detail.reason
-                    == openbindings_internal_schema::FailureReason::ResourceUnavailable
-                    && detail.code == "resource-unavailable")
-                    || detail.reference_defect.is_some() =>
+        let mut missing = Vec::new();
+        let unmapped = match space.program_unmapped(entry, &cancellation) {
+            Err(failure)
+                if failure.reason
+                    == openbindings_internal_schema::FailureReason::ResourceUnavailable =>
             {
-                let detail = projection_failure(detail);
-                let bounds = space
-                    .bounds(entry, &cancellation)
-                    .map_err(projection_failure)
-                    .map_err(|decline| recover_partial_decline(detail, decline))?;
-                let planner::EvaluationBounds {
-                    lower,
-                    upper,
-                    literals,
-                    unavailable,
-                    semantic_completions,
-                    sole_hole,
-                } = bounds;
-                let unavailable = unavailable.map(projection_failure);
-                // Both programs name the same separated literals.
-                let upper = self.compile(upper, literals.clone(), Origins::Map, true, control)?;
-                control.check()?;
-                // Explanations never read lower-bound failures.
-                let lower = self.compile(lower, literals, Origins::Map, false, control)?;
-                control.check()?;
-                Ok(Arc::new(PartialCompiled {
-                    upper,
-                    lower,
-                    unavailable,
-                    semantic_completions,
-                    sole_hole,
-                }))
+                // Stand in for every resource the references name but the
+                // request does not supply, and project again; a contract the
+                // stand-ins cannot complete refuses as it first did.
+                missing = missing::uris(&space);
+                if missing.is_empty() {
+                    return Err(projection_failure(failure));
+                }
+                (space, entry) = self::space(request, missing::stand_ins(&missing).collect())?;
+                space
+                    .program_unmapped(entry, &cancellation)
+                    .map_err(|_| projection_failure(failure))?
             }
-            Err(detail) => Err(projection_failure(detail)),
-        }
+            other => other.map_err(projection_failure)?,
+        };
+        Ok(Arc::new(self.compile(
+            unmapped.program,
+            unmapped.literals,
+            &unmapped.definitions,
+            &space,
+            missing,
+            control,
+        )?))
     }
 }
-// Library compilation work a projection may spend: a floor plus a share for each
-// projected definition (every schema position the contract reaches, named or
-// not). The library weighs what a build does (each compiled schema node and the
-// bytes of its location, each reference resolved, each dynamic-scope entry keying
-// a node or searched for a dynamic anchor, each placeholder copied when it defers a
-// `$ref` target, and each property name and pattern byte it copies) in units of
-// about a nanosecond of compilation time or 0.7 bytes of compilation memory,
-// whichever the work costs more of. The share pays for compiling each definition
-// once, about 2,700 units for an ordinary one, so the number of definitions alone
-// never refuses a contract. The floor bounds the compilation that outgrows the
-// schema (each link of a long reference chain copying every placeholder before it,
-// or, with a dynamic anchor, a schema compiled once per path or a long `required`
-// list copied once per scope) at about 250 ms of compilation, or 175 to 250 MB of
-// its memory, in the reference build. Without a dynamic anchor the library's
-// caches ignore the dynamic scope, and each node compiles once.
-const COMPILATION_FLOOR: u64 = 250_000_000;
-const COMPILATION_PER_DEFINITION: u64 = 4_096;
-fn compilation_allowance(definitions: usize) -> u64 {
-    let definitions = u64::try_from(definitions).unwrap_or(u64::MAX);
-    COMPILATION_FLOOR.saturating_add(definitions.saturating_mul(COMPILATION_PER_DEFINITION))
-}
-// A build that spent its allowance, unless cancellation was requested meanwhile:
-// observed cancellation takes precedence over the limit.
-fn compilation_stop(control: &dyn WorkControl) -> NoVerdict {
-    match control.check() {
-        Err(cancelled) => cancelled.into(),
-        Ok(()) => no_verdict(
-            NoVerdictReason::LimitExceeded,
-            "preparation-work-limit",
-            "schema preparation work limit reached",
+
+// The request's schema space and its entry node. The set admitted its resources
+// and built their identity index once; the space shares that index and drops
+// its handle when preparation returns. Stand-ins are admitted with the set's
+// resources, so their space indexes those again.
+fn space(
+    request: &SchemaRequest,
+    stand_ins: Vec<openbindings_internal_schema::ProjectedResource>,
+) -> Result<(SchemaSpace, usize), NoVerdict> {
+    let supplied = request.supplied_resources().supplied();
+    let supplied = if stand_ins.is_empty() {
+        supplied.clone()
+    } else {
+        openbindings_internal_schema::Supplied::new(supplied.iter().cloned().chain(stand_ins))
+            .map_err(|_| program_failure())?
+    };
+    let space = SchemaSpace::new(
+        openbindings_internal_schema::RawDocument::new(
+            request.document().as_document().value().clone(),
         ),
-    }
-}
-// Finite optional-planner declines only. Known-closure defects, shared admission
-// limits, cancellation and compiler errors retain their actual classifications.
-// With the planner's edge cap >= twice its node cap, schema-edge-limit already
-// establishes too many known positions; supplying missing resources cannot cure
-// it. The core cap-relationship regression pins this recovery-policy premise.
-fn recover_partial_decline(strict: NoVerdict, planner: NoVerdict) -> NoVerdict {
-    let optional_decline = matches!(
-        (planner.reason, planner.code.as_str()),
-        (
-            NoVerdictReason::ConservativePreparation,
-            "partial-nonpositive-influence" | "partial-annotation-or-dynamic"
-        ) | (
-            NoVerdictReason::LimitExceeded,
-            "partial-program-byte-limit"
-                | "partial-scratch-limit"
-                | "schema-hole-limit"
-                | "partial-generated-node-limit"
-                | "partial-generated-edge-limit"
-        )
+        supplied,
     );
-    if optional_decline { strict } else { planner }
+    let entry = space
+        .document_node(request.entry())
+        .expect("validated entry is a schema");
+    Ok((space, entry))
 }
-// Where a compiled program's definitions came from: its own location map, or
-// the space it was projected from, with each projected resource's definition
-// nodes in `$defs` order.
-#[derive(Clone, Copy)]
-enum Origins<'a> {
-    Map,
-    Space {
-        space: &'a openbindings_internal_schema::SchemaSpace,
-        definitions: &'a [Vec<usize>],
-    },
-}
-impl Origins<'_> {
-    // The original location of a keyword of a projected definition.
-    fn keyword(
-        self,
-        program: &EvaluationProgram,
-        resource: usize,
-        definition: usize,
-        keyword: &str,
-    ) -> Option<SchemaLocation> {
-        let projected = &program.resources[resource];
-        match self {
-            Origins::Map => {
-                let name = projected
-                    .document
-                    .get("$defs")
-                    .and_then(|defs| {
-                        openbindings_internal_json::backend::member_at(defs, definition)
-                    })?
-                    .name
-                    .as_str()?
-                    .to_owned();
-                program
-                    .original_location(&format!("{}#/$defs/{name}/{keyword}", projected.uri))
-                    .map(original_location)
-            }
-            Origins::Space { space, definitions } => {
-                let mut at = space.location(*definitions.get(resource)?.get(definition)?);
-                backend::push_pointer(&mut at.pointer, &format!("/{keyword}"));
-                Some(original_location(at))
-            }
-        }
-    }
-}
+#[cfg(test)]
+#[path = "../tests/private/resource_identity.rs"]
+mod resource_identity;
+#[cfg(test)]
+#[path = "../tests/private/supplied_reuse.rs"]
+mod supplied_reuse;
+
 impl DefaultEvaluator {
     // `literals` are the program's separated `const` and `enum` values, in an
-    // arena holding only them, which the program names by index.
+    // arena holding only them, which the program names by index; `nodes` are
+    // each projected resource's definitions' nodes in `space`, in `$defs` order.
     fn compile(
         &self,
-        mut program: EvaluationProgram,
+        program: EvaluationProgram,
         literals: Vec<JsonValue>,
-        origins: Origins<'_>,
-        explains: bool,
+        nodes: &[Vec<usize>],
+        space: &SchemaSpace,
+        missing: Vec<String>,
         control: &dyn WorkControl,
     ) -> Result<Compiled, NoVerdict> {
-        // Registering resources costs time quadratic in their number, so the
-        // configured cap refuses before any of them is registered.
         if self
             .limits
             .schema_resources
@@ -341,112 +257,373 @@ impl DefaultEvaluator {
                 "the contract reaches more schema resources than the configured limit",
             ));
         }
-        let mut registry = jsonschema::Registry::new().retriever(NoRetrieval);
+        let mut numbers = HashMap::new();
         let mut operands = operands::Operands::default();
+        let mut resources = Vec::with_capacity(program.resources.len());
+        let mut entry = None;
         for (index, resource) in program.resources.iter().enumerate() {
             control.check()?;
-            check_patterns(index, &program, origins, &self.limits, control)?;
-            let value = operands.resource(&resource.document, &literals, &self.limits, control)?;
-            // Transfer each private projection into the registry. Holding a
-            // second serde tree until compilation unnecessarily raises peak RSS.
-            registry = registry.add(&resource.uri, value).map_err(|_| {
+            let mut root =
+                operands.resource(&resource.document, &literals, &self.limits, control)?;
+            let Some(Value::Object(mut definitions)) =
+                root.as_object_mut().and_then(|r| r.remove("$defs"))
+            else {
+                return Err(program_failure());
+            };
+            // Every schema projected from a stand-in is the missing keyword.
+            if !missing.is_empty() {
+                for ((_, schema), &node) in definitions.iter_mut().zip(&nodes[index]) {
+                    if let Some(at) = space
+                        .source_uri(node)
+                        .and_then(|uri| missing.binary_search_by(|m| m.as_str().cmp(uri)).ok())
+                    {
+                        *schema = serde_json::json!({ missing::KEYWORD: at });
+                    }
+                }
+            }
+            for (name, &node) in definitions.keys().zip(&nodes[index]) {
+                let number = name
+                    .strip_prefix('n')
+                    .and_then(|n| n.parse::<u32>().ok())
+                    .ok_or_else(program_failure)?;
+                numbers.insert(number, node);
+            }
+            if resource.uri == program.entry_uri {
+                entry = root.get("$ref").and_then(Value::as_str).map(str::to_owned);
+            }
+            resources.push(bundle::Resource {
+                uri: resource.uri.clone(),
+                definitions,
+            });
+        }
+        let entry = entry.ok_or_else(program_failure)?;
+        // Read every pattern while the schemas still have their original
+        // locations, counting the forms kept for them together.
+        let mut kept = Kept::default();
+        for resource in &mut resources {
+            for (name, schema) in resource.definitions.iter_mut() {
+                control.check()?;
+                let number = name[1..].parse::<u32>().map_err(|_| program_failure())?;
+                patterns(schema, &self.limits, &mut operands, &mut kept).map_err(
+                    |(keyword, mut detail)| {
+                        detail.location = numbers
+                            .get(&number)
+                            .map(|&node| keyword_location(space, node, keyword));
+                        detail
+                    },
+                )?;
+            }
+        }
+        drop(kept);
+        // The library's unevaluated validators recurse in ways the static
+        // bound does not model, so a contract holding one is guarded: every
+        // read of a child instance checks the stack its pass has used, once
+        // for every level of the value.
+        let guarded = resources.iter().any(|resource| {
+            resource.definitions.values().any(|schema| {
+                schema.get("unevaluatedProperties").is_some()
+                    || schema.get("unevaluatedItems").is_some()
+            })
+        });
+        let mut bundle = bundle::bundle(
+            resources,
+            &entry,
+            &bundle::Options {
+                max_definitions: SPECIALIZED_DEFINITIONS,
+                max_size: SPECIALIZED_OUTPUT,
+                max_context_entries: CONTEXT_ENTRIES,
+                markers: self.limits.evaluation_steps.is_some(),
+            },
+        )
+        .map_err(|_| {
+            no_verdict(
+                NoVerdictReason::LimitExceeded,
+                "program-specialization-limit",
+                "the contract's dynamic references would specialize too many schemas",
+            )
+        })?;
+        if let Some(at) = missing::behind_unevaluated(&bundle) {
+            let mut detail = no_verdict(
+                NoVerdictReason::ResourceUnavailable,
+                "resource-unavailable",
+                "static preparation requires a resource that was not supplied",
+            );
+            detail.location = missing.get(at as usize).map(|uri| {
+                SchemaLocation::new(
+                    Some(uri.clone()),
+                    Pointer::from_utf16(&[]).expect("the root pointer"),
+                )
+            });
+            return Err(detail);
+        }
+        unevaluated_walk::apply(&mut bundle);
+        let stack = guarded.then(|| self.limits.evaluation_depth.saturating_mul(STACK_PER_DEPTH));
+        let bound =
+            depth::bound(&bundle.definitions, bundle.entry, bundle.entry_weight).map_err(|_| {
                 no_verdict(
-                    NoVerdictReason::EvaluatorFailure,
-                    "program-resource",
-                    "a projected resource could not be registered",
+                    NoVerdictReason::ConservativePreparation,
+                    "evaluation-cycle",
+                    "evaluation could recurse without consuming the instance",
                 )
             })?;
-        }
-        let registry = registry.prepare().map_err(|_| {
-            no_verdict(
-                NoVerdictReason::ConservativePreparation,
-                "program-registry",
-                "the projected schema registry could not be prepared",
-            )
-        })?;
-        let entry_uri = jsonschema::Uri::parse(program.entry_uri.clone()).map_err(|_| {
-            no_verdict(
-                NoVerdictReason::EvaluatorFailure,
-                "program-entry-uri",
-                "the projected entry identifier is invalid",
-            )
-        })?;
-        let root = registry.resolver(entry_uri).lookup("").map_err(|_| {
-            no_verdict(
-                NoVerdictReason::EvaluatorFailure,
-                "missing-program-entry",
-                "the projected schema entry could not be located",
-            )
-        })?;
-        let projected = program
-            .resources
-            .iter()
-            .map(|resource| {
-                resource
-                    .document
-                    .get("$defs")
-                    .and_then(|defs| defs.members())
-                    .map_or(0, |members| members.len())
-            })
-            .sum::<usize>();
-        // Without a dynamic anchor the library may compile each schema once.
-        let static_anchors = !operands.declares_dynamic_anchors();
-        let build = || {
-            operands
-                .apply(jsonschema::options_for::<FlatJson>())
-                .with_registry(&registry)
-                .with_draft(jsonschema::Draft::Draft202012)
-                .with_retriever(NoRetrieval)
-                .should_validate_formats(false)
-                .with_pattern_options(
-                    jsonschema::PatternOptions::fancy_regex()
-                        .backtrack_limit(self.limits.regex_steps),
-                )
-                .build(root.contents())
-        };
-        let validator = match jsonschema::ob_work::compiling(
-            compilation_allowance(projected),
-            static_anchors,
-            build,
-        ) {
-            Ok(built) => built.map_err(|error| preparation_error(error.kind()))?,
-            // The build stopped part way; whatever it returned is not a validator.
-            Err(_) => return Err(compilation_stop(control)),
-        };
         control.check()?;
-        // Keep, for explanations, a compact copy of the compiled keywords with
-        // their original locations, sharing the validator's literals; release
-        // the projection and, when that copy holds every location, the
-        // program's location map.
-        let explanation = explains
-            .then(|| match origins {
-                Origins::Map => details::Explanation::new(&program, literals, control),
-                Origins::Space { space, definitions } => {
-                    details::Explanation::projected(&program, literals, space, definitions, control)
-                }
+        let locations = explain::Locations::new(space, &numbers, &bundle);
+        let holders: Vec<bool> = bundle
+            .schemas
+            .iter()
+            .map(|schema| {
+                schema.get("unevaluatedProperties").is_some()
+                    || schema.get("unevaluatedItems").is_some()
             })
-            .transpose()?
-            .flatten();
-        program.resources = Vec::new();
-        let program = explanation
-            .as_ref()
-            .is_some_and(details::Explanation::needs_locations)
-            .then_some(program);
+            .collect();
+        if let Some((length, holder)) = depth::longest_walk(&bundle.definitions, &holders)
+            && length > UNEVALUATED_WALK
+        {
+            let mut detail = no_verdict(
+                NoVerdictReason::LimitExceeded,
+                "unevaluated-walk-limit",
+                "an unevaluated keyword's annotation sources nest more deeply than the evaluator admits",
+            );
+            // The holder's keyword whose walk it is, at its original location.
+            let schema = &bundle.schemas[holder as usize];
+            let keyword = if schema.get("unevaluatedProperties").is_some() {
+                "unevaluatedProperties"
+            } else {
+                "unevaluatedItems"
+            };
+            detail.location = locations
+                .locate(&format!(
+                    "{}#/$defs/{}/{keyword}",
+                    bundle::URI,
+                    bundle.names[holder as usize]
+                ))
+                .map(|(location, _)| location);
+            return Err(detail);
+        }
+        let document = bundle.document();
+        let validator = operands
+            .apply(jsonschema::options_for::<FlatJson>())
+            .with_draft(jsonschema::Draft::Draft202012)
+            .with_retriever(NoRetrieval)
+            .should_validate_formats(false)
+            .with_pattern_options(
+                jsonschema::PatternOptions::regex().size_limit(pattern::COMPILED_SIZE),
+            )
+            .build(&document)
+            .map_err(|error| preparation_error(&error, &locations))?;
+        control.check()?;
         Ok(Compiled {
             validator,
-            program,
+            locations,
+            deepest: bound.deepest(self.limits.evaluation_depth as u64),
+            deepest_explained: bound.deepest(self.limits.evaluation_depth as u64 / 2),
+            stack,
             limits: self.limits.clone(),
-            explanation,
+            missing,
         })
     }
 }
+fn program_failure() -> NoVerdict {
+    no_verdict(
+        NoVerdictReason::EvaluatorFailure,
+        "program-shape",
+        "the projected program has an unexpected shape",
+    )
+}
+fn keyword_location(space: &SchemaSpace, node: usize, keyword: &str) -> SchemaLocation {
+    let mut at = space.location(node);
+    backend::push_pointer(&mut at.pointer, &format!("/{keyword}"));
+    original_location(at)
+}
+
+// Read each `pattern` and `patternProperties` name of one schema, or refuse
+// it, naming the keyword. The SDK's `pattern` keyword matches a pattern
+// through its reading, and answers no verdict when a string reaches one the
+// evaluator does not match. The library matches `patternProperties` names
+// itself, so each is written in its linear form, and one without such a form
+// refuses the contract.
+fn patterns(
+    schema: &mut Value,
+    limits: &Limits,
+    operands: &mut operands::Operands,
+    kept: &mut Kept,
+) -> Result<(), (&'static str, NoVerdict)> {
+    let Value::Object(schema) = schema else {
+        return Ok(());
+    };
+    // Count each form the evaluator keeps as it is written, so preparation
+    // stops at the first that passes the total.
+    let mut count = |keyword: &'static str, form: &str| {
+        kept.bytes = kept.bytes.saturating_add(form.len());
+        if kept.bytes > limits.total_pattern_bytes {
+            Err((
+                keyword,
+                no_verdict(
+                    NoVerdictReason::LimitExceeded,
+                    "pattern-total-byte-limit",
+                    "the forms of the contract's patterns exceed the admitted total byte limit",
+                ),
+            ))
+        } else {
+            Ok(())
+        }
+    };
+    if let Some(Value::String(source)) = schema.get("pattern") {
+        let key = match kept.read.get(source) {
+            Some(key) => key.clone(),
+            None => {
+                let reading = read_pattern(source, "pattern", limits)
+                    .map_err(|detail| ("pattern", detail))?;
+                // Patterns with the same form share one matcher, which keeps
+                // the form.
+                if let pattern::Reading::Linear(linear) = &reading
+                    && !operands.has_pattern(&linear.form)
+                {
+                    count("pattern", &linear.form)?;
+                }
+                operands.pattern(reading)
+            }
+        };
+        if let Some(Value::String(source)) =
+            schema.insert("pattern".into(), Value::String(key.clone()))
+        {
+            kept.read.entry(source).or_insert(key);
+        }
+    }
+    // The library matches these names itself, so the bundle keeps each form.
+    if let Some(Value::Object(names)) = schema.get_mut("patternProperties") {
+        let original = std::mem::take(names);
+        for (source, subschema) in original {
+            let refuse = |detail| ("patternProperties", detail);
+            let mut form =
+                match read_pattern(&source, "patternProperties", limits).map_err(refuse)? {
+                    pattern::Reading::Linear(linear) => linear.form,
+                    pattern::Reading::Unsupported(unsupported) => {
+                        return Err(refuse(unsupported_pattern(unsupported)));
+                    }
+                };
+            // Two names may share a form; an empty group keeps them apart.
+            while names.contains_key(&form) {
+                form.push_str("(?:)");
+            }
+            count("patternProperties", &form)?;
+            form.shrink_to_fit();
+            names.insert(form, subschema);
+        }
+    }
+    Ok(())
+}
+// What preparation has kept for a contract's patterns so far.
+#[derive(Default)]
+struct Kept {
+    // The bytes of the forms kept.
+    bytes: usize,
+    // The value written for each `pattern` already read, so a repeated
+    // pattern is read once.
+    read: HashMap<String, String>,
+}
+fn read_pattern(
+    source: &str,
+    keyword: &str,
+    limits: &Limits,
+) -> Result<pattern::Reading, NoVerdict> {
+    if source.len() > limits.pattern_bytes {
+        return Err(no_verdict(
+            NoVerdictReason::LimitExceeded,
+            "pattern-byte-limit",
+            "pattern exceeds the admitted byte limit",
+        ));
+    }
+    let reading =
+        pattern::read(source, limits.pattern_depth, limits.pattern_bytes).map_err(|refusal| {
+            match refusal {
+                pattern::Refusal::Depth => no_verdict(
+                    NoVerdictReason::LimitExceeded,
+                    "pattern-depth-limit",
+                    "pattern nesting exceeds the admitted limit",
+                ),
+                pattern::Refusal::Invalid => no_verdict(
+                    NoVerdictReason::ConservativePreparation,
+                    "schema-pattern-compilation",
+                    format!("the schema {keyword} regular expression could not be compiled"),
+                ),
+            }
+        })?;
+    // A form longer than the pattern byte limit is neither written out nor
+    // compiled: its parse alone could take memory far beyond the engine's
+    // compiled size limit.
+    Ok(reading)
+}
+fn unsupported_pattern(unsupported: pattern::Unsupported) -> NoVerdict {
+    match unsupported {
+        pattern::Unsupported::Backtracking => no_verdict(
+            NoVerdictReason::UnsupportedCapability,
+            "pattern-backtracking",
+            "the schema pattern needs a backtracking engine, which this evaluator does not run",
+        ),
+        pattern::Unsupported::PropertyEscape => no_verdict(
+            NoVerdictReason::UnsupportedCapability,
+            "unicode-property-matching",
+            "Unicode property-escape matching is outside the qualified evaluator capability",
+        ),
+        pattern::Unsupported::NonWordBoundary => no_verdict(
+            NoVerdictReason::UnsupportedCapability,
+            "pattern-non-word-boundary",
+            "the schema pattern's non-word-boundary assertion is outside the qualified evaluator capability",
+        ),
+        pattern::Unsupported::Size => no_verdict(
+            NoVerdictReason::LimitExceeded,
+            "pattern-size-limit",
+            "a schema regular expression exceeds the engine's size limits",
+        ),
+    }
+}
+fn preparation_error(
+    error: &jsonschema::ValidationError<'_>,
+    locations: &explain::Locations,
+) -> NoVerdict {
+    use jsonschema::error::ValidationErrorKind;
+    // Read only trusted kind metadata, never dependency Display text or schema
+    // values. Every pattern was read first, so the engine refuses one only
+    // for its compiled size.
+    let mut kind = error.kind();
+    for _ in 0..16 {
+        match kind {
+            ValidationErrorKind::Format { format } if format == "regex" => {
+                let mut detail = no_verdict(
+                    NoVerdictReason::LimitExceeded,
+                    "pattern-size-limit",
+                    "a schema regular expression exceeds the engine's size limits",
+                );
+                detail.location = locations
+                    .locate(&format!("{}#{}", bundle::URI, error.schema_path().as_str()))
+                    .map(|(location, _)| location);
+                return detail;
+            }
+            ValidationErrorKind::PropertyNames { error } => kind = error.kind(),
+            _ => break,
+        }
+    }
+    no_verdict(
+        NoVerdictReason::ConservativePreparation,
+        "evaluator-preparation",
+        "the evaluator could not prepare the projected schema",
+    )
+}
+
 struct Compiled {
-    // The explanation source; never the document, its resources or the space.
-    explanation: Option<details::Explanation>,
     validator: jsonschema::Validator<FlatJson>,
-    // Kept only when the explanation needs the program's own location map.
-    program: Option<EvaluationProgram>,
+    locations: explain::Locations,
+    // The deepest value the depth bound admits within the limit, and within
+    // half of it for explanations; `usize::MAX` when every value is.
+    deepest: Option<usize>,
+    deepest_explained: Option<usize>,
+    // The stack a guarded contract's pass may use, in bytes.
+    stack: Option<usize>,
     limits: Limits,
+    // The resources the contract reaches but the request did not supply, by
+    // the index their stand-ins' keyword holds.
+    missing: Vec<String>,
 }
 fn verdict_only_failure() -> ValueOutcome {
     ValueOutcome::Fails {
@@ -466,10 +643,16 @@ impl PreparedSchema for Compiled {
             let detail = detail.into();
             return ValueOutcome::NoVerdict { detail };
         }
-        let steps = self.limits.steps_for(value);
-        let valid = verdict_pass(&self.limits, steps, || {
-            Ok(self.validator.is_valid(backend::view(value)))
-        });
+        if !self.nests_within(value, self.deepest) {
+            return ValueOutcome::NoVerdict {
+                detail: no_verdict(
+                    NoVerdictReason::LimitExceeded,
+                    "evaluation-depth-limit",
+                    "evaluation depth limit reached",
+                ),
+            };
+        }
+        let valid = self.pass(|| Ok(self.validator.is_valid(backend::view(value))));
         // A completed verdict pass establishes its verdict: cancellation
         // observed later never discards it.
         match valid {
@@ -477,60 +660,130 @@ impl PreparedSchema for Compiled {
             Ok(true) => ValueOutcome::Satisfies,
             Ok(false) if detail == Detail::Outcome => verdict_only_failure(),
             // An established failure survives interruption of optional diagnostics.
-            Ok(false) => self.diagnostics(value, control, false),
+            Ok(false) => self.diagnostics(value, control),
         }
     }
 }
 impl Compiled {
-    fn diagnostics(
-        &self,
-        value: &JsonValue,
-        control: &dyn WorkControl,
-        original_only: bool,
-    ) -> ValueOutcome {
-        let mut problems = Vec::new();
-        if let Some(explanation) = &self.explanation {
-            // Validity is already established. Failure to obtain detail (including
-            // cancellation or exhausted work) must never turn it into no-verdict.
-            let steps = self.limits.steps_for(value);
-            let diagnostic = verdict_pass(&self.limits, steps, || {
+    // Whether evaluating `value` nests no more than `limit` schemas deep. The
+    // bound grows with the value's depth only for a recursive contract; the
+    // value's node count bounds its depth without reading it, and otherwise
+    // the scan stops at the first container nested too deep.
+    fn nests_within(&self, value: &JsonValue, deepest: Option<usize>) -> bool {
+        match deepest {
+            None => false,
+            Some(usize::MAX) => true,
+            Some(deepest) => {
+                backend::node_count(value.view()) <= deepest
+                    || backend::depth_at_most(value, deepest)
+            }
+        }
+    }
+    // One verdict or diagnostic pass.
+    fn pass<T>(&self, evaluate: impl FnOnce() -> Result<T, NoVerdict>) -> Result<T, NoVerdict> {
+        let run = || pass::scope(evaluate);
+        let allowed = || match self.limits.evaluation_steps {
+            Some(steps) => openbindings_internal_json::work::scope(steps, run),
+            None => Ok(run()),
+        };
+        // A guarded pass that used more stack than it may stopped descending,
+        // so its result answers nothing.
+        let (evaluated, deep) = match self.stack {
+            None => (backend::string_scope(allowed), false),
+            Some(bytes) => {
+                match backend::string_scope(|| {
+                    openbindings_internal_json::work::guard(bytes, allowed)
+                }) {
+                    Ok((evaluated, deep)) => (Ok(evaluated), deep),
+                    Err(lone) => (Err(lone), false),
+                }
+            }
+        };
+        let evaluated = evaluated.map_err(|_| {
+            no_verdict(
+                NoVerdictReason::UnsupportedCapability,
+                "lone-surrogate-instance",
+                "a reached keyword requires Unicode scalar string interpretation",
+            )
+        })?;
+        if deep {
+            return Err(no_verdict(
+                NoVerdictReason::LimitExceeded,
+                "evaluation-depth-limit",
+                "evaluation depth limit reached",
+            ));
+        }
+        match evaluated {
+            Err(openbindings_internal_json::work::Spent) => Err(no_verdict(
+                NoVerdictReason::LimitExceeded,
+                "evaluation-work-limit",
+                "evaluation work limit reached",
+            )),
+            Ok((_, Some(pass::Stop::Arithmetic))) => Err(no_verdict(
+                NoVerdictReason::LimitExceeded,
+                "numeric-arithmetic-limit",
+                "numeric arithmetic exceeds the admitted evaluation limit",
+            )),
+            Ok((_, Some(pass::Stop::Unmatched(unsupported)))) => {
+                Err(unsupported_pattern(unsupported))
+            }
+            Ok((_, Some(pass::Stop::Missing(at)))) => {
+                let mut detail = no_verdict(
+                    NoVerdictReason::ResourceUnavailable,
+                    "resource-unavailable",
+                    "evaluation reached a resource that was not supplied",
+                );
+                detail.location = self.missing.get(at as usize).map(|uri| {
+                    SchemaLocation::new(
+                        Some(uri.clone()),
+                        Pointer::from_utf16(&[]).expect("the root pointer"),
+                    )
+                });
+                Err(detail)
+            }
+            Ok((result, None)) => result,
+        }
+    }
+    fn diagnostics(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
+        // Validity is already established. Failure to obtain detail (including
+        // cancellation or exhausted work) must never turn it into no-verdict.
+        // Building the library's error takes about twice the stack per level a
+        // check takes, so a value is explained only within half the limit.
+        let explains = self.nests_within(value, self.deepest_explained);
+        let problem = (explains).then(|| {
+            self.pass(|| {
                 control.check()?;
                 let Err(error) = self.validator.validate(backend::view(value)) else {
                     return Ok(None);
                 };
-                let uri = error.absolute_keyword_location().map(|uri| uri.as_str());
-                let program = self.program.as_ref();
-                let Ok(Some(mut located)) =
-                    explanation.problem_schema(program, uri, original_only, control)
+                let Some((schema, keyword)) = error
+                    .absolute_keyword_location()
+                    .and_then(|uri| self.locations.locate(uri.as_str()))
                 else {
                     return Ok(None);
                 };
-                let instance = instance_pointer(error.instance_path().as_str());
-                if located
-                    .narrow_to_failed_list(value.at_pointer(&instance), control)
-                    .is_err()
-                {
-                    return Ok(None);
-                }
-                let (schema, operand) = (located.location, located.operand);
-                let detail = details::collect(operand, error.kind(), control);
                 control.check()?;
-                let code: String = error.kind().keyword().into();
-                let message = if original_only && error.kind().keyword() == "oneOf" {
-                    "value does not satisfy exactly one alternative".into()
-                } else {
-                    diagnostic_message(error.kind())
+                let instance = instance_pointer(error.instance_path().as_str());
+                let (code, message) = match keyword {
+                    // The library reports the transform's own keyword; the
+                    // problem names the one it stands for.
+                    Some(keyword) => (keyword.to_owned(), PATTERN_MEMBER.to_owned()),
+                    None => (
+                        error.kind().keyword().to_owned(),
+                        diagnostic_message(error.kind()),
+                    ),
                 };
-                let mut problem = ValueProblem::new(instance, schema, code, message);
-                problem.details = detail;
-                Ok(Some(problem))
-            });
-            if let Ok(Some(problem)) = diagnostic {
+                Ok(Some(ValueProblem::new(instance, schema, code, message)))
+            })
+        });
+        let problems = match problem {
+            Some(Ok(Some(problem))) => {
                 debug_assert!(value.at_pointer(&problem.instance).is_some());
                 // The library's first error is the only problem.
-                problems = vec![problem];
+                vec![problem]
             }
-        }
+            _ => Vec::new(),
+        };
         ValueOutcome::Fails {
             message: "value does not satisfy the contract".into(),
             problems,
@@ -551,194 +804,15 @@ fn instance_pointer(path: &str) -> Pointer {
     backend::escaped_pointer(path.to_owned())
 }
 
-struct PartialCompiled {
-    upper: Compiled,
-    lower: Compiled,
-    unavailable: Option<NoVerdict>,
-    semantic_completions: bool,
-    sole_hole: bool,
-}
-impl PreparedSchema for PartialCompiled {
-    fn validate(
-        &self,
-        value: &JsonValue,
-        detail: Detail,
-        control: &dyn WorkControl,
-    ) -> ValueOutcome {
-        if let Err(detail) = control.check() {
-            let detail = detail.into();
-            return ValueOutcome::NoVerdict { detail };
-        }
-        // One outer work AND regex allowance covers both Boolean evaluations.
-        // Diagnostics start after this scope and never evaluate synthetic lower failures.
-        let steps = self.upper.limits.steps_for(value);
-        let result = verdict_pass(&self.upper.limits, steps, || {
-            bounded_decision(
-                || self.upper.validator.is_valid(backend::view(value)),
-                || self.lower.validator.is_valid(backend::view(value)),
-                control,
-            )
-        });
-        match result {
-            Err(detail) => ValueOutcome::NoVerdict { detail },
-            Ok(Some(false)) if detail == Detail::Outcome => verdict_only_failure(),
-            Ok(Some(false)) => self.upper.diagnostics(value, control, true),
-            Ok(Some(true)) => ValueOutcome::Satisfies,
-            // Both completed evaluations finished within the shared budget and
-            // disagree here. With one hole, they are the two ways its
-            // reference's result comes out, so the verdict depends on that
-            // reference. With several, which of them it depends on is not
-            // established, so no location is given rather than the first one.
-            Ok(None) => match self.unavailable.clone() {
-                // In the positive fragment these are actual completions,
-                // not merely interval endpoints.
-                Some(detail) if self.semantic_completions => ValueOutcome::Undefined {
-                    detail: {
-                        let mut undefined = UndefinedResult::new(detail.code, detail.message);
-                        undefined.location = detail.location.filter(|_| self.sole_hole);
-                        undefined
-                    },
-                },
-                Some(mut detail) => {
-                    detail.location = detail.location.filter(|_| self.sole_hole);
-                    ValueOutcome::NoVerdict { detail }
-                }
-                None => ValueOutcome::NoVerdict {
-                    detail: no_verdict(
-                        NoVerdictReason::EvaluatorFailure,
-                        "inconsistent-exact-bounds",
-                        "the evaluator disagreed on two exact projections",
-                    ),
-                },
-            },
-        }
-    }
-}
-// Satisfaction needs both passes, so cancellation between them comes before
-// the verdict. Once the lower pass completes, the outcome is established.
-fn bounded_decision(
-    upper: impl FnOnce() -> bool,
-    lower: impl FnOnce() -> bool,
-    control: &dyn WorkControl,
-) -> Result<Option<bool>, NoVerdict> {
-    let upper = upper();
-    // An established upper failure survives interruption of later optional work.
-    if !upper {
-        return Ok(Some(false));
-    }
-    control.check()?;
-    Ok(lower().then_some(true))
-}
-// One verdict or diagnostic pass with `steps` work units.
-fn verdict_pass<T>(
-    limits: &Limits,
-    steps: usize,
-    evaluate: impl FnOnce() -> Result<T, NoVerdict>,
-) -> Result<T, NoVerdict> {
-    let evaluated = backend::string_scope(|| {
-        jsonschema::ob_work::bounded(steps, limits.evaluation_depth, || {
-            jsonschema::ob_ecma::top_level(limits.regex_steps, evaluate)
-        })
-    })
-    .map_err(|_| {
-        no_verdict(
-            NoVerdictReason::UnsupportedCapability,
-            "lone-surrogate-instance",
-            "a reached keyword requires Unicode scalar string interpretation",
-        )
-    })?;
-    match evaluated {
-        Ok(Ok(result)) => result,
-        Ok(Err(jsonschema::ob_ecma::Exhausted::UnsupportedProperty)) => Err(no_verdict(
-            NoVerdictReason::UnsupportedCapability,
-            "unicode-property-matching",
-            "Unicode property-escape matching is outside the qualified evaluator capability",
-        )),
-        Ok(Err(_)) => Err(no_verdict(
-            NoVerdictReason::LimitExceeded,
-            "regex-work-limit",
-            "regular-expression work limit reached",
-        )),
-        Err(reason) => Err(evaluation_stop(reason)),
-    }
-}
+const PATTERN_MEMBER: &str =
+    "an object member does not satisfy the schema of a pattern its name matches";
 
-fn check_patterns(
-    index: usize,
-    program: &EvaluationProgram,
-    origins: Origins<'_>,
-    limits: &Limits,
-    control: &dyn WorkControl,
-) -> Result<(), NoVerdict> {
-    let resource = &program.resources[index];
-    // Only schema pattern positions count; opaque values are not interpreted.
-    let Some(definitions) = resource.document.get("$defs").and_then(|v| v.members()) else {
-        return Ok(());
-    };
-    for (position, definition) in definitions.enumerate() {
-        control.check()?;
-        let schema = definition.value;
-        let mut patterns = Vec::new();
-        if let Some(pattern) = schema.get("pattern").and_then(|v| v.as_str()) {
-            patterns.push(("pattern", pattern));
-        }
-        if let Some(entries) = schema.get("patternProperties").and_then(|v| v.members()) {
-            patterns
-                .extend(entries.filter_map(|m| m.name.as_str().map(|p| ("patternProperties", p))));
-        }
-        for (keyword, pattern) in patterns {
-            if pattern.len() > limits.pattern_bytes {
-                return Err(no_verdict(
-                    NoVerdictReason::LimitExceeded,
-                    "pattern-byte-limit",
-                    "pattern exceeds the admitted byte limit",
-                ));
-            }
-            let mut escaped = false;
-            let mut class = false;
-            let mut depth = 0usize;
-            for byte in pattern.bytes() {
-                if escaped {
-                    escaped = false;
-                    continue;
-                }
-                match byte {
-                    b'\\' => escaped = true,
-                    b'[' if !class => class = true,
-                    b']' if class => class = false,
-                    b'(' if !class => {
-                        depth += 1;
-                        if depth > limits.pattern_depth {
-                            return Err(no_verdict(
-                                NoVerdictReason::LimitExceeded,
-                                "pattern-depth-limit",
-                                "pattern nesting exceeds the admitted limit",
-                            ));
-                        }
-                    }
-                    b')' if !class => depth = depth.saturating_sub(1),
-                    _ => {}
-                }
-            }
-            // Compile while the projected node still has an unambiguous source
-            // identity. Dependency build errors may only carry relative paths.
-            if jsonschema::ob_ecma::Regex::new(pattern).is_err() {
-                let mut detail = no_verdict(
-                    NoVerdictReason::ConservativePreparation,
-                    "schema-pattern-compilation",
-                    format!("the schema {keyword} regular expression could not be compiled"),
-                );
-                detail.location = origins.keyword(program, index, position, keyword);
-                return Err(detail);
-            }
-        }
-    }
-    Ok(())
-}
-
+// A fixed message for each kind of error, never the library's Display text,
+// which renders schema and instance values.
 fn diagnostic_message(kind: &jsonschema::error::ValidationErrorKind) -> String {
     use jsonschema::error::ValidationErrorKind as K;
     let keyword_message = match kind.keyword() {
+        "pattern" => Some("string does not match the schema pattern"),
         "minimum" => Some(
             "number is below the inclusive lower bound; inspect minimum at the schema location",
         ),
@@ -806,384 +880,13 @@ fn diagnostic_message(kind: &jsonschema::error::ValidationErrorKind) -> String {
         K::AdditionalItems { .. } | K::UnevaluatedItems { .. } => {
             "this array item is not permitted by the schema"
         }
-        K::Pattern { .. } => "string does not match the schema pattern",
         K::PropertyNames { .. } => {
             "object contains a member name that does not satisfy the propertyNames schema"
-        }
-        K::Constant { .. } | K::Enum { .. } => {
-            "value is not one of the values allowed by this schema"
         }
         K::UniqueItems => "array contains equal items where unique items are required",
         _ => "value does not satisfy the constraint at the schema location",
     };
     message.into()
-}
-
-fn evaluation_stop(stop: jsonschema::ob_work::Stop) -> NoVerdict {
-    use jsonschema::ob_work::Stop;
-    let (reason, code, message) = match stop {
-        Stop::Cycle => (
-            NoVerdictReason::ConservativePreparation,
-            "evaluation-cycle",
-            "evaluation encountered a potential cycle and could not establish a verdict",
-        ),
-        Stop::Arithmetic => (
-            NoVerdictReason::LimitExceeded,
-            "numeric-arithmetic-limit",
-            "numeric arithmetic exceeds the admitted evaluation limit",
-        ),
-        Stop::Work => (
-            NoVerdictReason::LimitExceeded,
-            "evaluation-work-limit",
-            "evaluation work limit reached",
-        ),
-        Stop::Depth => (
-            NoVerdictReason::LimitExceeded,
-            "evaluation-depth-limit",
-            "evaluation depth limit reached",
-        ),
-    };
-    no_verdict(reason, code, message)
-}
-
-#[cfg(test)]
-mod diagnostic_tests {
-    use super::*;
-    #[test]
-    fn preparation_classification_uses_kind_metadata_and_unwraps_property_names() {
-        use jsonschema::error::ValidationErrorKind;
-        let validator = jsonschema::options()
-            .with_draft(jsonschema::Draft::Draft202012)
-            .should_validate_formats(true)
-            .build(&serde_json::json!({"propertyNames":{"format":"regex"}}))
-            .unwrap();
-        let value = serde_json::json!({"[SECRET":true});
-        let error = validator.validate(&value).unwrap_err();
-        assert!(matches!(
-            error.kind(),
-            ValidationErrorKind::PropertyNames { .. }
-        ));
-        let classified = preparation_error(error.kind());
-        assert_eq!(classified.reason, NoVerdictReason::ConservativePreparation);
-        assert_eq!(classified.code, "schema-pattern-compilation");
-        assert_eq!(
-            classified.message,
-            "a schema regular expression could not be compiled; inspect pattern and patternProperties"
-        );
-        assert_eq!(classified.location, None);
-        for kind in [
-            ValidationErrorKind::Format {
-                format: "SECRET-unknown".into(),
-            },
-            ValidationErrorKind::Custom {
-                keyword: "SECRET-keyword".into(),
-                message: "SECRET-detail".repeat(1000),
-            },
-        ] {
-            let fallback = preparation_error(&kind);
-            assert_eq!(fallback.reason, NoVerdictReason::ConservativePreparation);
-            assert_eq!(fallback.code, "evaluator-preparation");
-            assert_eq!(
-                fallback.message,
-                "the evaluator could not prepare the projected schema"
-            );
-            assert_eq!(fallback.location, None);
-        }
-    }
-    #[test]
-    fn spent_compilation_yields_to_observed_cancellation() {
-        let running = std::sync::atomic::AtomicBool::new(false);
-        let limit = compilation_stop(&running);
-        assert_eq!(limit.reason, NoVerdictReason::LimitExceeded);
-        assert_eq!(limit.code, "preparation-work-limit");
-        assert_eq!(limit.location, None);
-        let cancelled = std::sync::atomic::AtomicBool::new(true);
-        assert_eq!(
-            compilation_stop(&cancelled).reason,
-            NoVerdictReason::Cancelled
-        );
-    }
-    #[test]
-    fn runtime_cycle_guard_has_a_truthful_conservative_code() {
-        use jsonschema::ob_work::Stop;
-        let cycle = evaluation_stop(Stop::Cycle);
-        assert_eq!(cycle.reason, NoVerdictReason::ConservativePreparation);
-        assert_eq!(cycle.code, "evaluation-cycle");
-        for stop in [Stop::Work, Stop::Depth, Stop::Arithmetic] {
-            let stopped = evaluation_stop(stop);
-            assert_eq!(stopped.reason, NoVerdictReason::LimitExceeded);
-            assert_ne!(stopped.code, cycle.code);
-        }
-        // Exhausted depth and exhausted work are told apart.
-        assert_eq!(evaluation_stop(Stop::Work).code, "evaluation-work-limit");
-        assert_eq!(evaluation_stop(Stop::Depth).code, "evaluation-depth-limit");
-    }
-}
-
-#[cfg(test)]
-mod partial_budget_tests {
-    use super::*;
-    #[test]
-    fn optional_decline_classification_is_finite_and_preserves_exact_strict_evidence() {
-        let mut strict = NoVerdict::new(
-            NoVerdictReason::ResourceUnavailable,
-            "resource-unavailable",
-            "original strict message",
-        );
-        strict.location = Some(SchemaLocation::new(
-            Some("https://original.invalid/R".into()),
-            "/properties/long~0name".parse().unwrap(),
-        ));
-        for (reason, code) in [
-            (
-                NoVerdictReason::ConservativePreparation,
-                "partial-nonpositive-influence",
-            ),
-            (
-                NoVerdictReason::ConservativePreparation,
-                "partial-annotation-or-dynamic",
-            ),
-            (NoVerdictReason::LimitExceeded, "partial-program-byte-limit"),
-            (NoVerdictReason::LimitExceeded, "partial-scratch-limit"),
-            (NoVerdictReason::LimitExceeded, "schema-hole-limit"),
-            (
-                NoVerdictReason::LimitExceeded,
-                "partial-generated-node-limit",
-            ),
-            (
-                NoVerdictReason::LimitExceeded,
-                "partial-generated-edge-limit",
-            ),
-        ] {
-            let declined = no_verdict(reason, code, "irrelevant planner message");
-            assert_eq!(
-                serde_json::to_value(recover_partial_decline(strict.clone(), declined)).unwrap(),
-                serde_json::to_value(&strict).unwrap()
-            );
-            let wrong_reason = no_verdict(
-                NoVerdictReason::EvaluatorFailure,
-                code,
-                "same code, actual defect",
-            );
-            assert_eq!(
-                recover_partial_decline(strict.clone(), wrong_reason).reason,
-                NoVerdictReason::EvaluatorFailure
-            );
-        }
-        for (reason, code) in [
-            (NoVerdictReason::Cancelled, "cancelled"),
-            (NoVerdictReason::LimitExceeded, "schema-node-limit"),
-            (NoVerdictReason::LimitExceeded, "schema-edge-limit"),
-            (NoVerdictReason::LimitExceeded, "schema-depth-limit"),
-            (NoVerdictReason::LimitExceeded, "program-json-limit"),
-            (
-                NoVerdictReason::EvaluatorFailure,
-                "projection-output-mismatch",
-            ),
-            (NoVerdictReason::ConservativePreparation, "invalid-schema"),
-            (
-                NoVerdictReason::ConservativePreparation,
-                "invalid-reference-fragment",
-            ),
-            (NoVerdictReason::ConservativePreparation, "in-place-cycle"),
-            (
-                NoVerdictReason::ConservativePreparation,
-                "schema-pattern-compilation",
-            ),
-            (NoVerdictReason::UnsupportedCapability, "schema-dialect"),
-            (
-                NoVerdictReason::UnsupportedCapability,
-                "lone-surrogate-schema",
-            ),
-        ] {
-            let mut actual = no_verdict(reason, code, "actual refusal");
-            actual.location = Some(SchemaLocation::new(
-                Some("https://original.invalid/R".into()),
-                "/selected/schema".parse().unwrap(),
-            ));
-            assert_eq!(
-                serde_json::to_value(recover_partial_decline(strict.clone(), actual.clone()))
-                    .unwrap(),
-                serde_json::to_value(actual).unwrap()
-            );
-        }
-    }
-    #[test]
-    fn cancellation_between_passes_never_enters_lower() {
-        let control = std::sync::atomic::AtomicBool::new(false);
-        let result = bounded_decision(
-            || {
-                control.store(true, std::sync::atomic::Ordering::Release);
-                true
-            },
-            || panic!("lower must not run"),
-            &control,
-        );
-        assert_eq!(result.unwrap_err().reason, NoVerdictReason::Cancelled);
-    }
-    #[test]
-    fn both_verdict_passes_share_work_and_an_exhausted_pass_never_decides() {
-        let limits = Limits {
-            evaluation_steps: Some(10),
-            ..Limits::default()
-        };
-        for (upper_cost, lower_cost, upper) in [(6, 6, true), (11, 0, false), (0, 11, true)] {
-            let result = verdict_pass(&limits, 10, || {
-                bounded_decision(
-                    || {
-                        jsonschema::ob_work::charge(upper_cost);
-                        upper
-                    },
-                    || {
-                        jsonschema::ob_work::charge(lower_cost);
-                        true
-                    },
-                    &std::sync::atomic::AtomicBool::new(false),
-                )
-            });
-            assert_eq!(result.unwrap_err().reason, NoVerdictReason::LimitExceeded);
-        }
-        assert_eq!(
-            verdict_pass(&limits, 10, || bounded_decision(
-                || false,
-                || panic!("failure uses no lower pass"),
-                &std::sync::atomic::AtomicBool::new(false)
-            ))
-            .unwrap(),
-            Some(false)
-        );
-    }
-    #[test]
-    fn upper_and_lower_regex_work_share_one_allowance() {
-        let regex = jsonschema::ob_ecma::Regex::new("^a+$").unwrap();
-        let input = "a".repeat(100);
-        let needed = (0..10000)
-            .find(|&n| {
-                jsonschema::ob_ecma::top_level(n, || regex.is_match(&input))
-                    .is_ok_and(|r| matches!(r, Ok(true)))
-            })
-            .unwrap();
-        assert!(needed > 0);
-        let limits = Limits {
-            regex_steps: needed,
-            ..Limits::default()
-        };
-        let result = verdict_pass(&limits, DEFAULT_STEPS, || {
-            bounded_decision(
-                || regex.is_match(&input).unwrap_or(false),
-                || regex.is_match(&input).unwrap_or(false),
-                &std::sync::atomic::AtomicBool::new(false),
-            )
-        });
-        assert_eq!(result.unwrap_err().code, "regex-work-limit");
-        let healthy = Limits {
-            regex_steps: needed * 2,
-            ..Limits::default()
-        };
-        assert_eq!(
-            verdict_pass(&healthy, DEFAULT_STEPS, || bounded_decision(
-                || regex.is_match(&input).unwrap_or(false),
-                || regex.is_match(&input).unwrap_or(false),
-                &std::sync::atomic::AtomicBool::new(false)
-            ))
-            .unwrap(),
-            Some(true)
-        );
-    }
-}
-
-#[cfg(test)]
-mod literal_retention_tests {
-    use super::*;
-    use std::sync::{Mutex, atomic::AtomicBool};
-    // The request a default preparation of operation `op`'s input receives.
-    fn request(schemas: &str, input: &str) -> SchemaRequest {
-        #[derive(Default)]
-        struct Capture(Mutex<Option<SchemaRequest>>);
-        impl SchemaEvaluator for Capture {
-            fn prepare(
-                &self,
-                request: &SchemaRequest,
-                control: &dyn WorkControl,
-            ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-                *self.0.lock().unwrap() = Some(request.clone());
-                DefaultEvaluator::new().prepare(request, control)
-            }
-        }
-        let document = Document::parse(format!(
-            r#"{{"openbindings":"0.2.0","schemas":{{{schemas}}},"operations":{{"op":{{"input":{input}}}}}}}"#
-        ))
-        .unwrap();
-        let proof = document.validate().unwrap().conformant().unwrap();
-        let capture = Capture::default();
-        let operation = proof.resolve_operation("op").unwrap();
-        assert!(operation.input().unwrap().prepare(&capture).is_ok());
-        capture.0.lock().unwrap().take().unwrap()
-    }
-    // Each literal is held in an arena of literals alone, which the
-    // explanation shares rather than copies.
-    fn assert_separated(literals: &[JsonValue], compiled: &Compiled) {
-        assert!(!literals.is_empty());
-        for literal in literals {
-            let source = std::str::from_utf8(literal.original_source()).unwrap();
-            assert!(source.len() < 256 && !source.contains("ddd"), "{source}");
-        }
-        let explained = compiled.explanation.as_ref().unwrap().literals();
-        assert_eq!(explained.len(), literals.len());
-        for (kept, literal) in explained.iter().zip(literals) {
-            assert!(backend::same_source(kept.view(), literal));
-        }
-        assert!(compiled.program.is_none());
-    }
-    #[test]
-    fn compiled_literals_keep_none_of_the_schemas_they_were_read_from() {
-        let text = "d".repeat(1 << 20);
-        let control = AtomicBool::new(false);
-        let evaluator = DefaultEvaluator::new();
-        for (schemas, input) in [
-            // A literal beside a large annotation in its own schema.
-            (
-                String::new(),
-                format!(r#"{{"description":"{text}","enum":[1,2,{{"a":"b"}}]}}"#),
-            ),
-            (
-                String::new(),
-                format!(r#"{{"description":"{text}","const":{{"a":"b"}}}}"#),
-            ),
-            // A literal in one reached schema, a large annotation in another.
-            (
-                format!(
-                    r#""A":{{"examples":["{text}"],"type":"object"}},"B":{{"enum":[{{"a":"b"}},2]}}"#
-                ),
-                r##"{"allOf":[{"$ref":"#/schemas/A"},{"$ref":"#/schemas/B"}]}"##.to_owned(),
-            ),
-        ] {
-            let request = request(&schemas, &input);
-            let (space, entry) = planner::space(&request);
-            let unmapped = space.program_unmapped(entry, &|| false).unwrap();
-            let literals = unmapped.literals.clone();
-            let origins = Origins::Space {
-                space: &space,
-                definitions: &unmapped.definitions,
-            };
-            let compiled = evaluator
-                .compile(unmapped.program, unmapped.literals, origins, true, &control)
-                .unwrap();
-            assert_separated(&literals, &compiled);
-        }
-        // Paired bounds for a missing resource share one copy of each literal.
-        let input = format!(
-            r#"{{"anyOf":[{{"$ref":"https://missing.invalid/m"}},{{"description":"{text}","enum":[1,2]}}]}}"#
-        );
-        let request = request("", &input);
-        let (space, entry) = planner::space(&request);
-        let bounds = space.bounds(entry, &|| false).unwrap();
-        let literals = bounds.literals.clone();
-        let upper = evaluator
-            .compile(bounds.upper, bounds.literals, Origins::Map, true, &control)
-            .unwrap();
-        assert_separated(&literals, &upper);
-    }
 }
 
 fn original_location(at: openbindings_internal_schema::Location) -> SchemaLocation {

@@ -70,7 +70,7 @@ fn explain_checks_reported_count_and_original_problem_locations() {
             "expected":{"status":"fails", "problem_count":1, "first_problem":{
                 "code":"type", "instance_pointer":"/0", "schema_location":{
                     "pointer":"/items/type", "resource":"https://benchmark.invalid/root"},
-                "message":"expected JSON type: integer", "details":{"kind":"type","expected":["integer"]}}}}),
+                "message":"expected JSON type: integer"}}}),
         );
         assert!(
             output.status.success(),

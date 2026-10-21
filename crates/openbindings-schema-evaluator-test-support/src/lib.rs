@@ -116,9 +116,43 @@ struct PolicyTranslation {
     original_value: String,
     original_resources: Vec<Resource>,
 }
+// A case whose stated outcome an evaluator may decline, giving the stated
+// refusal, when the caller permits the capability it names.
+#[derive(Deserialize)]
+struct CapabilityDeclaration {
+    case: String,
+    expected: String,
+    optional_capability: String,
+    refusal_kind: String,
+    original_document: String,
+    original_value: String,
+}
 #[derive(Deserialize)]
 struct Provenance {
     runtime_policy_translations: Vec<PolicyTranslation>,
+    capability_declarations: Vec<CapabilityDeclaration>,
+}
+fn declare_capabilities(suite: &mut Suite) {
+    let provenance: Provenance = serde_json::from_str(include_str!("../fixtures/provenance.json"))
+        .expect("packaged policy provenance");
+    for declaration in provenance.capability_declarations {
+        let group = suite
+            .groups
+            .iter_mut()
+            .find(|group| group.cases.iter().any(|case| case.id == declaration.case))
+            .expect("capability declaration names an existing group");
+        assert_eq!(group.document, declaration.original_document);
+        let case = group
+            .cases
+            .iter_mut()
+            .find(|case| case.id == declaration.case)
+            .expect("capability declaration names an existing case");
+        assert_eq!(case.value, declaration.original_value);
+        assert_eq!(case.expected, declaration.expected);
+        assert!(case.optional_capability.is_none() && case.refusal_kind.is_none());
+        case.optional_capability = Some(declaration.optional_capability);
+        case.refusal_kind = Some(declaration.refusal_kind);
+    }
 }
 fn translate_policy(suite: &mut Suite) {
     let provenance: Provenance = serde_json::from_str(include_str!("../fixtures/provenance.json"))
@@ -248,6 +282,7 @@ pub fn suite() -> &'static Suite {
                 case.refusal_kind = None;
             }
         }
+        declare_capabilities(&mut suite);
         suite
     })
 }
@@ -264,8 +299,12 @@ impl std::fmt::Debug for Options {
 }
 
 impl Options {
-    /// The default companion's qualified Unicode-property limitation, case by case.
-    pub fn without_unicode_property_matching() -> Self {
+    /// Permit, case by case, the refusals of every case that declares one of
+    /// `capabilities`: `unicode-property-matching` (Unicode property escapes
+    /// in patterns), `backtracking-pattern-matching` (patterns with
+    /// lookaround or backreferences) or `undefined-results`
+    /// (establishing that a value's validity is undefined).
+    pub fn without(capabilities: &[&str]) -> Self {
         Self {
             permitted_refusals: suite()
                 .groups
@@ -274,10 +313,15 @@ impl Options {
                 .filter_map(|c| {
                     c.optional_capability
                         .as_ref()
-                        .map(|reason| (c.id.clone(), reason.clone()))
+                        .filter(|capability| capabilities.contains(&capability.as_str()))
+                        .map(|capability| (c.id.clone(), capability.clone()))
                 })
                 .collect(),
         }
+    }
+    /// Permit the refusals of Unicode property matching, case by case.
+    pub fn without_unicode_property_matching() -> Self {
+        Self::without(&["unicode-property-matching"])
     }
 }
 #[derive(Clone, Serialize)]
@@ -640,14 +684,19 @@ pub fn judge(
         ValueOutcome::Undefined { .. } => "undefined",
         ValueOutcome::NoVerdict { .. } => "no-verdict",
     };
-    // A case with a verdict can accept a refusal of its stated capability: one
-    // the caller permits for an optional capability, or one for a dialect an
-    // evaluator may not read, which JSON Schema has it refuse.
+    // A case with an outcome can accept the refusal it states: one the caller
+    // permits for an optional capability, or an unsupported-capability refusal
+    // for a dialect an evaluator may not read, which JSON Schema has it refuse.
     let refusal_accepted = case.expected != "no-verdict"
-        && case.refusal_kind.as_deref() == Some("unsupported-capability")
-        && (case.optional_capability.is_none() || permitted_refusal);
+        && match (&case.optional_capability, case.refusal_kind.as_deref()) {
+            (Some(_), Some(_)) => permitted_refusal,
+            (None, Some(kind)) => kind == "unsupported-capability",
+            _ => false,
+        };
     let permitted_refusal = refusal_accepted
-        && matches!(outcome, ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::UnsupportedCapability);
+        && matches!(outcome, ValueOutcome::NoVerdict { detail }
+            if serde_json::to_value(detail.reason).ok().as_ref().and_then(|r| r.as_str())
+                == case.refusal_kind.as_deref());
     if tag != case.expected && !(tag == "no-verdict" && permitted_refusal) {
         failures.push(format!("expected {}, observed {tag}", case.expected));
     }

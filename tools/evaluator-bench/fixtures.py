@@ -58,26 +58,32 @@ def fixtures():
         '$defs': {**walks, 'patterns': {'patternProperties': patterns}}},
         compact({'r0': {'p0': {'x': {}}}, 'r99': {'p4': {'x': {'r1': {'p2': {'x': {}}}}}}}),
         modes=('compile', 'context', 'eval', 'full'))
+    # A value that reaches an unsupplied resource gives no verdict naming it;
+    # a reference that identifies no schema refuses preparation, and a refused
+    # preparation gives no verdict for any value.
     add('missing-resource', {'$ref': 'https://benchmark.invalid/missing'}, '1', 'no-verdict', modes=('cold', 'compile', 'context', 'eval', 'full'))
     add('missing-independent', {'anyOf': [True, {'$ref': 'https://benchmark.invalid/missing'}]}, '1')
-    # Known static defects retain a separate undefined outcome.
-    add('undefined-pointer', {'$ref': '#/$defs/absent'}, '1', 'undefined')
+    add('undefined-pointer', {'$ref': '#/$defs/absent'}, '1', 'no-verdict')
     recursive = {'$defs': {'node': {'anyOf': [{'type': 'integer'}, {'type': 'array', 'items': {'$ref': '#/$defs/node'}}]}}, '$ref': '#/$defs/node'}
     add('deep', recursive, '['*32+'0'+']'*32)
     add('depth-stop', recursive, '['*32+'0'+']'*32, 'no-verdict', limits=dict(evaluation_depth=8))
     add('work-stop', {'type': 'array', 'items': {'type': 'integer'}}, array, 'no-verdict', limits=dict(evaluation_steps=16))
+    # Patterns match in time linear in the string, so a megabyte string is decided.
     add('regex-failure', dict(pattern='[A-Z]+[0-9]+'), compact('a'*65536), 'fails')
-    add('regex-stop', dict(pattern='[A-Z]+[0-9]+'), compact('a'*1048576), 'no-verdict')
+    add('regex-stop', dict(pattern='[A-Z]+[0-9]+'), compact('a'*1048576), 'fails')
     add('cancelled', True, '1', 'no-verdict', cancelled=True)
     add('source-diagnostics', '{"maximum":9223372036854775807}', '9223372036854775808', 'fails', upstream=True)
-    for name, code in [('missing-resource', 'resource-unavailable'), ('depth-stop', 'evaluation-depth-limit'),
-                       ('work-stop', 'evaluation-work-limit'), ('regex-stop', 'regex-work-limit'), ('cancelled', 'caller-cancelled')]:
+    for name, code in [('missing-resource', 'resource-unavailable'),
+                       ('undefined-pointer', 'non-schema-target'), ('depth-stop', 'evaluation-depth-limit'),
+                       ('work-stop', 'evaluation-work-limit'), ('cancelled', 'caller-cancelled')]:
         rows[name]['expected']['code'] = code
-    rows['undefined-pointer']['expected']['code'] = 'static-reference-defect'
+    rows['missing-resource']['expected']['detail'] = dict(code='resource-unavailable',
+        location=dict(pointer='', resource='https://benchmark.invalid/missing'),
+        message='evaluation reached a resource that was not supplied', reason='resource-unavailable')
     rows['work-stop']['expected']['detail'] = dict(code='evaluation-work-limit', location=None,
         message='evaluation work limit reached', reason='limit-exceeded')
     rows['source-diagnostics']['expected'].update(problems_complete=False, problems=[dict(
-        code='maximum', details=dict(bound='9223372036854775807', kind='numeric-bound'), instance_pointer='',
+        code='maximum', instance_pointer='',
         message='number exceeds the inclusive upper bound; inspect maximum at the schema location',
         schema_location=dict(pointer='/maximum', resource='https://benchmark.invalid/root'))])
     # Fixed text includes escaped Unicode so conformant text access does work.
@@ -112,7 +118,7 @@ def fixtures():
         'fails', modes=('explain',))['expected'].update(problem_count=1, problems_complete=False,
         first_problem=dict(code='type', instance_pointer='/0',
             schema_location=dict(pointer='/items/type', resource='https://benchmark.invalid/root'),
-            message='expected JSON type: integer', details=dict(kind='type', expected=['integer'])))
+            message='expected JSON type: integer'))
     # Sixty-four independent violations exercise a broad failing value. The
     # current evaluator reports its first problem only, never a fabricated list.
     add('explain-many', {'type': 'array', 'items': {'type': 'integer'}},

@@ -1,6 +1,6 @@
 import * as testing from "../dist/testing.js";
 import { prepareInput } from "./conformant-contracts.mjs";
-/** Public-package detail/privacy/retention controls; portable across Node and browsers. */
+/** Public-package location/privacy/retention controls; portable across Node and browsers. Explanations name each failing keyword at its original location and carry no schema facts. */
 export function diagnosticDetailsCases(sdk) {
   let assertions = 0;
   const check = (ok, text) => {
@@ -41,15 +41,16 @@ export function diagnosticDetailsCases(sdk) {
   const cases = [
     ['{"type":"integer"}', '"SECRET-instance"', "type"],
     ['{"required":["SECRET/member~key"]}', "{}", "required"],
-    ['{"minimum":9007199254740993}', "9007199254740992", "numeric-bound"],
-    ['{"maxLength":3}', '"long"', "size-bound"],
+    ['{"minimum":9007199254740993}', "9007199254740992", "minimum"],
+    ['{"maxLength":3}', '"long"', "maxLength"],
     [
       '{"enum":["SECRET-choice",9007199254740993,{"x":1e-999}]}',
       "null",
       "enum",
     ],
   ];
-  // Exact operands remain source facts after the engine's numeric substitution.
+  // Exact operands fail at their original keywords after the engine's numeric
+  // substitution.
   for (const token of [
     "1e400",
     "1e" + "9".repeat(1000),
@@ -64,10 +65,7 @@ export function diagnosticDetailsCases(sdk) {
         check(result.problems.length === 0, "cheap check omits payloads");
       else {
         const problem = result.problems[0];
-        check(
-          problem.details.bound === token,
-          "original numeric token, never handle",
-        );
+        check(problem.details === undefined, "no schema facts");
         check(
           problem.schema.pointer === "/operations/op/input/exclusiveMinimum",
           "original numeric location",
@@ -80,7 +78,7 @@ export function diagnosticDetailsCases(sdk) {
     }
   }
   const examples = [];
-  for (const [schema, input, kind] of cases) {
+  for (const [schema, input, keyword] of cases) {
     const ordinary = run(schema, input),
       detailed = run(schema, input, "explain");
     check(
@@ -93,33 +91,25 @@ export function diagnosticDetailsCases(sdk) {
       ),
       "private default",
     );
-    const detail = detailed.problems[0].details;
-    check(!detailed.problemsComplete && detail.kind === kind, "atomic fact");
-    if (kind === "required")
-      check(
-        detail.member === "SECRET/member~key" &&
-          detailed.problems[0].instance === "",
-        "required parent location",
-      );
-    if (kind === "numeric-bound")
-      check(detail.bound === "9007199254740993", "exact numeric fact");
-    if (kind === "enum")
-      check(
-        JSON.stringify(detail.choices) ===
-          JSON.stringify([
-            '"SECRET-choice"',
-            "9007199254740993",
-            '{"x":1e-999}',
-          ]),
-        "exact enum choices",
-      );
+    const problem = detailed.problems[0];
+    check(
+      !detailed.problemsComplete &&
+        problem.details === undefined &&
+        problem.code === keyword &&
+        problem.schema.pointer === "/operations/op/input/" + keyword &&
+        !problem.message.includes("SECRET"),
+      "original keyword location without facts",
+    );
+    if (keyword === "required")
+      check(problem.instance === "", "required parent location");
     examples.push(detailed);
   }
   const largeName = "é".repeat(10000);
   const large = run(JSON.stringify({ required: [largeName] }), "{}", "explain");
   check(
-    large.problems[0].details.member === largeName,
-    "explanation retains library-provided name",
+    large.problems[0].details === undefined &&
+      !large.problems[0].message.includes(largeName),
+    "explanation copies no source-controlled name",
   );
   const resourceText =
     '{"allOf":[{"properties":{"a/~":{"minimum":9007199254740993}}}],"x-padding":"' +
@@ -160,8 +150,9 @@ export function diagnosticDetailsCases(sdk) {
       newResult = newer.explain({ "a/~": 6 });
     explainedArenas = testing.liveStorageOwners();
     check(
-      oldResult.problems[0].details.bound === "9007199254740993" &&
-        newResult.problems[0].details.bound === "7",
+      oldResult.problems[0].schema.pointer ===
+        "/allOf/0/properties/a~1~0/minimum" &&
+        newResult.problems[0].schema.pointer === "/properties/a~1~0/minimum",
       "replacement preserves original resource",
     );
     check(

@@ -20,8 +20,8 @@
   the unmodified jsonschema 0.58.6 library with its default pattern engine, which
   matches every fixed pattern on a finite automaton, exactly as ECMAScript does.
   The checks have no work budget; their work is linear in the admitted document,
-  and a 60 MB SemVer near miss reaches its verdict in about 0.6 seconds. Core's own
-  dependency graph holds neither renamed fork; the default evaluator keeps both.
+  and a 60 MB SemVer near miss reaches its verdict in about 0.6 seconds. The SDK
+  carries no fork of any dependency.
 - `Conformant<Document>` (TypeScript `ConformantDocument`), the proven state, with
   infallible views, operation and alias lookup, exact schema access, reference
   inspection and opaque kind comparison. It is the only route to value contracts.
@@ -29,25 +29,56 @@
   preparation refusals separate from satisfies, fails, undefined or no-verdict outcomes.
   Undefined results carry a code, message and optional original schema location;
   no-verdict describes inability to answer.
-- An optional JSON Schema 2020-12 evaluator with exact numeric semantics,
-  cooperative cancellation and declared work limits. Preparation charges schema
-  compilation by the work it does and refuses with `LimitExceeded` and
-  `preparation-work-limit` beyond 250,000,000 units (about 250 ms of compilation,
-  or 175 to 250 MB of its memory, in the reference build) plus 4,096 for each
-  schema position the contract reaches. Without a reachable dynamic anchor, a
-  schema reached along many reference paths compiles once. Preparation reuses a
-  resource set's identity index instead of indexing its resources again.
-  `Limits::schema_resources` (TypeScript `schemaResources`) caps the schema resources one
-  contract may reach, whose registration takes time quadratic in their number;
-  a contract reaching more refuses with `LimitExceeded` and
-  `schema-resource-limit` before registration. There is no cap by default.
+- An optional JSON Schema 2020-12 evaluator composed over the unmodified
+  jsonschema 0.58.6 library, with exact numeric semantics, ECMAScript `u`-mode
+  patterns on a linear-time engine, dynamic references resolved through each
+  path's dynamic scope, and cooperative cancellation. It bundles each contract
+  into one resource, so every reached schema compiles once, and reuses a
+  resource set's identity index instead of indexing its resources again. A
+  contract that reaches a resource that was not supplied prepares with an empty
+  stand-in for it, and a pass that reaches the stand-in gives no verdict
+  (`resource-unavailable`) naming it. A contract in which an
+  `unevaluatedProperties` or `unevaluatedItems` keyword's annotation sources
+  reach a stand-in, a reference to a fragment of a missing resource, or one that
+  identifies no schema refuses preparation. Patterns, including the word
+  boundary `\b`, are translated for a linear-time engine and match in time
+  linear in the string, so there is no pattern work cap; one that needs a
+  backtracking engine (lookaround or backreferences), applies a Unicode property
+  escape or holds the non-word boundary `\B` gives no verdict. The evaluator
+  bounds what the SDK itself reads, writes and recurses through, and does not
+  estimate the library's compiled memory. Limits that protect the process have
+  defaults: evaluation depth, bounded from the contract before a value is
+  evaluated and, for a contract holding an unevaluated keyword, guarded as it
+  evaluates by measuring the stack the pass has used; each pattern's size, form
+  and nesting, and the forms kept for all of a contract's patterns together,
+  counted as each is written, with each distinct `pattern` form kept once
+  (`Limits::total_pattern_bytes`, TypeScript `totalPatternBytes`, 4 MiB,
+  `pattern-total-byte-limit`), with each pattern compiled within the regex
+  crate's size limit, set to 32 MiB; the definitions, JSON and dynamic-scope
+  entries dynamic specialization produces (`program-specialization-limit`); and
+  an unevaluated keyword's annotation walk, which the library compiles by
+  recursion, weighed by the kind of each reference so the longest admitted walk
+  of every kind prepares with a fifth of a 256 KiB thread already in use on
+  Linux, macOS and Windows (`unevaluated-walk-limit`: 26 `$ref`s, 8 levels of
+  `allOf` inheritance, 7 through `then`, `else` or `dependentSchemas`).
+  Preparing a schema from an untrusted party can still take more memory than a
+  host may want, so a host doing so should prepare in an isolated worker or
+  process with an operating-system memory limit. Limits that would only bound
+  time are the application's to set and are off by default:
+  `Limits::evaluation_steps` caps each pass's work, without which time can grow
+  exponentially with some schemas, and `Limits::schema_resources` (TypeScript
+  `schemaResources`) caps the schema resources one contract may reach, refusing
+  with `LimitExceeded` and `schema-resource-limit` before compiling. The default
+  evaluator never returns `Undefined`. One schema transform keeps the library's
+  `unevaluatedProperties` walk clear of an upstream bug that drops compiled
+  pattern subschemas.
 - Cheap checks and explanations are chosen per call. `PreparedValueContract::validate`
   (and `validate_with_control`, `validate_json`) reports a failure without
   problems; `explain` and `explain_with_control` return the same verdict with the
-  library's first error, redacted, with original schema facts. TypeScript
-  `PreparedValueContract` gains `explain` beside `validate`. A prepared value contract keeps a
-  compact copy of the keywords it compiled, with their original locations, and no
-  longer keeps its document, supplied resources or location map.
+  library's first error at its keyword's original location, with a fixed
+  message. TypeScript `PreparedValueContract` gains `explain` beside `validate`.
+  A prepared value contract keeps only the original locations of the schemas it
+  compiled, never their text, its document, supplied resources or a location map.
 - `operation::Invoker::with_validation_detail(Detail::Explain)` asks the invoker to
   explain a rejected value before withholding it, so `ValidationFailure::outcome()`
   carries the evaluator's problems; by default it carries the verdict only.

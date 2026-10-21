@@ -16,8 +16,9 @@ export const editorDocument = `{
   }
 }`;
 
-// The component keeps its latest prepared snapshot, including partial contracts.
-// Each value check can still return no verdict.
+// The component keeps its latest prepared snapshot, including one whose contract
+// reaches a resource that was not supplied. Each value check can still return
+// no verdict.
 export class DocumentEditor {
   #document;
   update(text, value = { id: 7 }, explain = false) {
@@ -78,23 +79,6 @@ function schemaLocation(location) {
   return `schema ${JSON.stringify(location.pointer)}, resource ${JSON.stringify(location.resource)}`;
 }
 
-// This example displays details only after the user explicitly requests them.
-// Tokens/names are displayed as text, never interpreted as HTML or rounded numbers.
-function detailLine(detail) {
-  if (!detail) return "";
-  switch (detail.kind) {
-    case "required":
-      return ` Missing member: ${JSON.stringify(detail.member)}.`;
-    case "numeric-bound":
-    case "size-bound":
-      return ` Exact bound: ${detail.bound}.`;
-    case "enum":
-      return ` Exact allowed values: ${detail.choices.join(", ")}.`;
-    case "type":
-      return ` Expected types: ${detail.expected.join(", ")}.`;
-  }
-}
-
 function valueLines(result) {
   switch (result.outcome) {
     case "satisfies":
@@ -104,7 +88,7 @@ function valueLines(result) {
         "Selected input does not satisfy the input contract.",
         ...result.problems.map(
           (problem) =>
-            `Instance ${JSON.stringify(problem.instance)}; ${schemaLocation(problem.schema)}: ${problem.message}${detailLine(problem.details)}`,
+            `Instance ${JSON.stringify(problem.instance)}; ${schemaLocation(problem.schema)}: ${problem.message}`,
         ),
         `Selected input diagnostics complete: ${result.problemsComplete}.`,
       ];

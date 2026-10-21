@@ -392,8 +392,8 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   assert.equal(input.validate(value).outcome, "no-verdict");
   assert.equal(input.validate(value).detail.reason, "limit-exceeded");
   input.dispose();
-  // The default work allowance grows with the value; null selects it, and a
-  // number caps every pass.
+  // By default no work cap applies; null selects that, and a number caps
+  // every pass.
   assert.equal(sdk.evaluatorLimits().evaluationSteps, null);
   const grown = ready(
     contract.prepare({ resources, limits: { evaluationSteps: null } }),
@@ -403,7 +403,7 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   // Only evaluationSteps and schemaResources have null defaults, and the
   // refusal says so.
   assert.throws(
-    () => contract.prepare({ limits: { regexSteps: null } }),
+    () => contract.prepare({ limits: { patternDepth: null } }),
     (e) =>
       e.code === "invalid-evaluator-limits" &&
       e.message.includes("4294967295") &&

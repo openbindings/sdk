@@ -48,22 +48,22 @@ fn explained_locations_exist_in_original_document_and_supplied_resources() {
         (
             r#"{"dependentRequired":{"a":["b"]}}"#,
             r#"{"a":1}"#,
-            "/dependentRequired/a",
+            "/dependentRequired",
         ),
         (
             r#"{"properties":{"a/~雪":{"dependentRequired":{"x":["y"]}}}}"#,
             r#"{"a/~雪":{"x":1}}"#,
-            "/properties/a~1~0雪/dependentRequired/x",
+            "/properties/a~1~0雪/dependentRequired",
         ),
         (
             r#"{"prefixItems":[{"dependentRequired":{"a":["b"]}}]}"#,
             r#"[{"a":1}]"#,
-            "/prefixItems/0/dependentRequired/a",
+            "/prefixItems/0/dependentRequired",
         ),
         (
             r##"{"$id":"https://example.test/schema","$defs":{"dep":{"dependentRequired":{"a":["b"]}}},"$ref":"#/$defs/dep"}"##,
             r#"{"a":1}"#,
-            "/$defs/dep/dependentRequired/a",
+            "/$defs/dep/dependentRequired",
         ),
         (
             r#"{"dependentSchemas":{"a":{"required":["b"]}}}"#,
@@ -129,49 +129,194 @@ fn explained_locations_exist_in_original_document_and_supplied_resources() {
     }
 }
 
+// Each keyword's failure names the keyword in the original schema, from the
+// schema's own definition: every subschema position is one, so no keyword is
+// reported at a position the original does not hold. Explanations add no schema
+// facts; the location is where a reader finds them.
 #[test]
-fn exact_facts_private_defaults_and_recovery() {
-    let cases = [
-        (r#"{"type":"integer"}"#, r#""SECRET-instance""#, "type"),
-        (r#"{"required":["SECRET/member~key"]}"#, "{}", "required"),
+fn every_keyword_is_explained_at_its_original_location() {
+    for (schema, input, code, pointer, instance) in [
+        (r#"{"type":"integer"}"#, r#""x""#, "type", "/type", ""),
+        (r#"{"minimum":3}"#, "1", "minimum", "/minimum", ""),
         (
-            r#"{"minimum":9007199254740993}"#,
-            "9007199254740992",
-            "numeric-bound",
+            r#"{"exclusiveMaximum":3}"#,
+            "3",
+            "exclusiveMaximum",
+            "/exclusiveMaximum",
+            "",
         ),
-        (r#"{"maxLength":3}"#, r#""long""#, "size-bound"),
+        (r#"{"multipleOf":3}"#, "4", "multipleOf", "/multipleOf", ""),
         (
-            r#"{"enum":["SECRET-choice",9007199254740993,{"x":1e-999}]}"#,
-            "null",
-            "enum",
+            r#"{"maxLength":1}"#,
+            r#""ab""#,
+            "maxLength",
+            "/maxLength",
+            "",
         ),
-    ];
-    for (schema, input, tag) in cases {
-        let ordinary = run(schema, input, false);
-        let (problems, complete) = failure(&ordinary);
-        assert!(!complete);
-        assert!(problems.is_empty());
-        let enriched = run(schema, input, true);
-        let (problems, complete) = failure(&enriched);
-        assert!(!complete);
-        let details = serde_json::to_value(problems[0].details.as_ref().unwrap()).unwrap();
-        assert_eq!(details["kind"], tag);
-        match problems[0].details.as_ref().unwrap() {
-            ValueProblemDetails::Required { member } => {
-                assert_eq!(member, "SECRET/member~key");
-                assert_eq!(problems[0].instance, "");
-            }
-            ValueProblemDetails::NumericBound { bound } => assert_eq!(bound, "9007199254740993"),
-            ValueProblemDetails::Enum { choices } => assert_eq!(
-                choices,
-                &[r#""SECRET-choice""#, "9007199254740993", r#"{"x":1e-999}"#]
-            ),
-            _ => (),
-        }
+        (
+            r#"{"pattern":"^[a-z]+\\d$"}"#,
+            r#""b""#,
+            "pattern",
+            "/pattern",
+            "",
+        ),
+        (
+            r#"{"uniqueItems":true}"#,
+            "[1,1]",
+            "uniqueItems",
+            "/uniqueItems",
+            "",
+        ),
+        (
+            r#"{"contains":{"type":"string"},"maxContains":1}"#,
+            r#"["a","b"]"#,
+            "contains",
+            "/maxContains",
+            "",
+        ),
+        (r#"{"items":false}"#, "[1]", "falseSchema", "/items", "/0"),
+        (
+            r#"{"prefixItems":[{"type":"string"}]}"#,
+            "[1]",
+            "type",
+            "/prefixItems/0/type",
+            "/0",
+        ),
+        (
+            r#"{"type":"array","minItems":1,"items":{"type":"string"}}"#,
+            "[]",
+            "minItems",
+            "/minItems",
+            "",
+        ),
+        (
+            r#"{"prefixItems":[true],"unevaluatedItems":{"type":"string"}}"#,
+            "[1,2]",
+            "unevaluatedItems",
+            "/unevaluatedItems",
+            "",
+        ),
+        (
+            r#"{"required":["a","b"]}"#,
+            r#"{"a":1}"#,
+            "required",
+            "/required",
+            "",
+        ),
+        (
+            r#"{"maxProperties":0}"#,
+            r#"{"a":1}"#,
+            "maxProperties",
+            "/maxProperties",
+            "",
+        ),
+        (
+            r#"{"properties":{"a":false}}"#,
+            r#"{"a":1}"#,
+            "falseSchema",
+            "/properties/a",
+            "/a",
+        ),
+        (
+            r#"{"patternProperties":{"^a":{"type":"string"}}}"#,
+            r#"{"a":1}"#,
+            "type",
+            "/patternProperties/^a/type",
+            "/a",
+        ),
+        (
+            r#"{"properties":{"b":true},"additionalProperties":{"type":"string"}}"#,
+            r#"{"a":1}"#,
+            "type",
+            "/additionalProperties/type",
+            "/a",
+        ),
+        (
+            r#"{"propertyNames":{"maxLength":1}}"#,
+            r#"{"ab":1}"#,
+            "propertyNames",
+            "/propertyNames",
+            "",
+        ),
+        (
+            r#"{"unevaluatedProperties":false}"#,
+            r#"{"a":1}"#,
+            "unevaluatedProperties",
+            "/unevaluatedProperties",
+            "",
+        ),
+        (
+            r#"{"dependentSchemas":{"a":{"required":["b"]}}}"#,
+            r#"{"a":1}"#,
+            "required",
+            "/dependentSchemas/a/required",
+            "",
+        ),
+        (
+            r#"{"allOf":[true,{"type":"string"}]}"#,
+            "1",
+            "type",
+            "/allOf/1/type",
+            "",
+        ),
+        (
+            r#"{"anyOf":[{"type":"string"},{"type":"null"}]}"#,
+            "1",
+            "anyOf",
+            "/anyOf",
+            "",
+        ),
+        (
+            r#"{"oneOf":[{"type":"integer"},{"minimum":0}]}"#,
+            "1",
+            "oneOf",
+            "/oneOf",
+            "",
+        ),
+        (r#"{"not":true}"#, "1", "not", "/not", ""),
+        (
+            r#"{"if":{"type":"integer"},"then":{"minimum":5}}"#,
+            "1",
+            "minimum",
+            "/then/minimum",
+            "",
+        ),
+        (
+            r#"{"if":{"type":"integer"},"else":{"type":"null"}}"#,
+            r#""x""#,
+            "type",
+            "/else/type",
+            "",
+        ),
+        (r#"{"const":1}"#, "2", "const", "/const", ""),
+        (r#"{"enum":[1,2]}"#, "3", "enum", "/enum", ""),
+        ("false", "1", "falseSchema", "", ""),
+        (
+            r##"{"$ref":"#/operations/op/input/$defs/x","$defs":{"x":{"type":"string"}}}"##,
+            "1",
+            "type",
+            "/$defs/x/type",
+            "",
+        ),
+    ] {
+        let result = run(schema, input, true);
+        let (problems, complete) = failure(&result);
+        assert!(!complete, "{schema}");
+        assert_eq!(problems.len(), 1, "{schema}");
+        let problem = &problems[0];
+        assert_eq!(problem.code, code, "{schema}");
+        assert_eq!(problem.instance, instance, "{schema}");
+        assert_eq!(problem.schema.resource, None, "{schema}");
+        assert_eq!(
+            problem.schema.pointer,
+            format!("/operations/op/input{pointer}"),
+            "{schema}"
+        );
+        assert!(problem.details.is_none(), "{schema}");
     }
 }
 #[test]
-fn external_old_snapshot_nested_coordinates_and_escaped_names() {
+fn nested_coordinates_and_escaped_names_in_a_supplied_resource() {
     let document = r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/schema"}}}}"#;
     let resource = |schema: &str| {
         ResourceSet::new([SchemaResource {
@@ -180,16 +325,12 @@ fn external_old_snapshot_nested_coordinates_and_escaped_names() {
         }])
         .unwrap()
     };
-    let old = prepare(
+    let contract = prepare(
         document,
         resource(r#"{"allOf":[{"properties":{"a/~":{"minimum":9007199254740993}}}]}"#),
     );
-    let new = prepare(
-        document,
-        resource(r#"{"properties":{"a/~":{"minimum":7}}}"#),
-    );
     let value = JsonValue::parse(r#"{"a/~":6}"#).unwrap();
-    let result = old.explain(&value);
+    let result = contract.explain(&value);
     let problem = &failure(&result).0[0];
     assert_eq!(problem.instance, "/a~1~0");
     assert_eq!(problem.schema.pointer, "/allOf/0/properties/a~1~0/minimum");
@@ -197,63 +338,4 @@ fn external_old_snapshot_nested_coordinates_and_escaped_names() {
         problem.schema.resource.as_deref(),
         Some("https://example.test/schema")
     );
-    assert!(
-        matches!(&problem.details,Some(ValueProblemDetails::NumericBound{bound}) if bound=="9007199254740993")
-    );
-    let result = new.explain(&value);
-    assert!(
-        matches!(&failure(&result).0[0].details,Some(ValueProblemDetails::NumericBound{bound}) if bound=="7")
-    );
-}
-#[test]
-fn every_bound_and_required_specialization_recovers_original_facts() {
-    for (keyword, input) in [
-        ("minimum", "0"),
-        ("maximum", "2"),
-        ("exclusiveMinimum", "1"),
-        ("exclusiveMaximum", "1"),
-        ("minLength", "\"\""),
-        ("maxLength", "\"xx\""),
-        ("minItems", "[]"),
-        ("maxItems", "[0,1]"),
-        ("minProperties", "{}"),
-        ("maxProperties", "{\"a\":0,\"b\":0}"),
-    ] {
-        let result = run(&format!("{{\"{keyword}\":1e0}}"), input, true);
-        let (problems, complete) = failure(&result);
-        assert!(!complete, "{keyword}");
-        assert_eq!(problems[0].code, keyword);
-        match problems[0].details.as_ref().unwrap() {
-            ValueProblemDetails::NumericBound { bound }
-            | ValueProblemDetails::SizeBound { bound } => assert_eq!(bound, "1e0"),
-            detail => panic!("{detail:?}"),
-        }
-    }
-    for required in [
-        vec!["a"],
-        vec!["a", "b"],
-        vec!["a", "b", "c"],
-        vec!["a", "b", "c", "d"],
-    ] {
-        for missing in &required {
-            let schema = serde_json::json!({"required": required}).to_string();
-            let mut input = serde_json::Map::new();
-            for member in &required {
-                if member != missing {
-                    input.insert((*member).to_owned(), serde_json::Value::Null);
-                }
-            }
-            let result = run(&schema, &serde_json::Value::Object(input).to_string(), true);
-            let (problems, complete) = failure(&result);
-            assert!(!complete);
-            assert_eq!(problems.len(), 1);
-            assert!(
-                matches!(&problems[0].details, Some(ValueProblemDetails::Required { member }) if member == missing)
-            );
-        }
-    }
-    let unsupported = run(r#"{"const":"private"}"#, "null", true);
-    let (problems, complete) = failure(&unsupported);
-    assert!(!complete);
-    assert!(problems[0].details.is_none());
 }

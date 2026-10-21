@@ -84,10 +84,6 @@ fn explaining_contracts_keep_neither_documents_nor_resources() {
     let location = &problems[0].schema;
     assert_eq!(location.resource.as_deref(), Some(ITEM));
     assert_eq!(location.pointer, "/properties/id/minimum");
-    assert!(matches!(
-        &problems[0].details,
-        Some(ValueProblemDetails::NumericBound { bound }) if bound == "1"
-    ));
     drop(value);
     // Explaining builds no arena either.
     assert_eq!(live_arenas(), before);

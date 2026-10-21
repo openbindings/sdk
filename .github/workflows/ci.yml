@@ -43,9 +43,6 @@ jobs:
           toolchain: ${{ steps.rust-version.outputs.version }}
           components: rustfmt, clippy
       - run: python tools/verify.py
-      - name: Run the dependency forks' own regression tests
-        if: matrix.os == 'ubuntu-latest'
-        run: python tools/test-dependency-forks.py --output target/dependency-fork-tests
       - name: Verify discovery downstream features and decoded bodies
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -89,7 +86,7 @@ jobs:
       - name: Verify development-toolchain stack margin
         run: |
           cargo test --locked -p openbindings --test document_stack
-          cargo test --locked -p openbindings-json-schema-evaluator --test pattern_stack
+          cargo test --locked --release -p openbindings-json-schema-evaluator --test pattern_stack --test evaluation_stack --test walk_stack
       - name: Check out the SDK's declared specification
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

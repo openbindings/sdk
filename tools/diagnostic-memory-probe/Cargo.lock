@@ -381,43 +381,8 @@ dependencies = [
  "jsonschema-value",
  "num-bigint",
  "num-traits",
- "openbindings-internal-jsonschema",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "openbindings-internal-jsonschema"
-version = "0.58.6-ob.1"
-dependencies = [
- "ahash",
- "bytecount",
- "data-encoding",
- "email_address",
- "fancy-regex",
- "fraction",
- "getrandom",
- "itoa",
- "jsonschema-regex",
- "jsonschema-value",
- "num-cmp",
- "num-traits",
- "openbindings-internal-regress",
- "percent-encoding",
- "referencing",
- "regex",
- "serde",
- "serde_json",
- "strum",
- "unicode-general-category",
- "uuid-simd",
-]
-
-[[package]]
-name = "openbindings-internal-regress"
-version = "0.12.0-ob.1"
-dependencies = [
- "memchr",
 ]
 
 [[package]]
@@ -435,10 +400,11 @@ dependencies = [
 name = "openbindings-json-schema-evaluator"
 version = "0.2.0-alpha.1"
 dependencies = [
+ "jsonschema",
  "openbindings",
  "openbindings-internal-json",
- "openbindings-internal-jsonschema",
  "openbindings-internal-schema",
+ "regex",
  "serde",
  "serde_json",
 ]

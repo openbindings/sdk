@@ -99,28 +99,9 @@ fn type_failure_survives_cancellation_after_verdict() {
     assert_interrupted_failure(json!({"type":"integer"}), r#""not an integer""#);
 }
 
-fn partial_schema() -> Value {
-    json!({
-        "type":"object",
-        "properties":{"external":{"$ref":"https://example.invalid/missing"}}
-    })
-}
-
-#[test]
-fn upper_bound_failure_survives_cancellation_after_verdict() {
-    let (contract, _) = prepared(partial_schema());
-    // Reaching the absent resource cannot decide, proving this preparation is
-    // partial even though the known object constraint can establish a failure.
-    assert!(matches!(
-        contract.validate(&JsonValue::parse(r#"{"external":1}"#).unwrap()),
-        ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::ResourceUnavailable
-    ));
-    assert_interrupted_failure(partial_schema(), "0");
-}
-
 #[test]
 fn cancellation_before_verdict_still_yields_no_verdict() {
-    for schema in [json!(false), json!({"type":"integer"}), partial_schema()] {
+    for schema in [json!(false), json!({"type":"integer"})] {
         let (contract, prepared) = prepared(schema);
         let value = JsonValue::null();
         for outcome in [
@@ -142,14 +123,11 @@ fn cancellation_before_verdict_still_yields_no_verdict() {
 
 #[test]
 fn established_satisfaction_survives_cancellation_after_verdict() {
-    // Each control allows the observations an evaluation makes before its
-    // verdict and reports cancellation at every later one. A partial contract
-    // satisfies only after both of its passes, which observe the control
-    // between them.
+    // Each control allows the observation an evaluation makes before its
+    // verdict and reports cancellation at every later one.
     for (schema, instance, before_verdict) in [
         (json!(true), "null", 1),
         (json!({"type":"integer"}), "1", 1),
-        (partial_schema(), "{}", 2),
     ] {
         let (contract, prepared) = prepared(schema);
         let value = JsonValue::parse(instance).unwrap();
@@ -172,18 +150,6 @@ fn established_satisfaction_survives_cancellation_after_verdict() {
                 matches!(outcome, ValueOutcome::Satisfies),
                 "an established satisfaction must survive later cancellation: {outcome:?}"
             );
-        }
-        // Cancellation between a partial contract's passes precedes its verdict.
-        if before_verdict > 1 {
-            for outcome in [
-                prepared.validate(&value, Detail::Outcome, &CancelAfterChecks::new(1)),
-                contract.validate_with_control(&value, &CancelAfterChecks::new(2)),
-            ] {
-                assert!(
-                    matches!(&outcome, ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled),
-                    "cancellation between passes must prevent a verdict: {outcome:?}"
-                );
-            }
         }
     }
 }

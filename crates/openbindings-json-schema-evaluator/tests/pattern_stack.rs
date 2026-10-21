@@ -16,49 +16,60 @@ fn prepared(schema: &str) -> Result<PreparedValueContract, NoVerdict> {
     operation.input().unwrap().prepare(&DefaultEvaluator::new())
 }
 
-// Unoptimized Windows code gives the regular-expression matcher frames that
-// alone exceed this stack in the meta-schema check every preparation runs,
-// whatever the pattern. tools/verify.py also runs this test in release builds.
+// Release builds need at most 96 KiB here (macOS arm64). Unoptimized code gives
+// the regular-expression compiler frames large enough that 32 nested quantified
+// groups need up to 1 MiB, so tools/verify.py runs this test in release builds.
 #[test]
 #[cfg_attr(
-    all(windows, debug_assertions),
-    ignore = "Windows debug preparation exceeds 256 KiB at any pattern depth; verified in release"
+    debug_assertions,
+    ignore = "unoptimized pattern compilation exceeds 256 KiB at the default depth; verified in release"
 )]
 fn patterns_at_the_default_depth_prepare_and_check_on_a_small_stack() {
     std::thread::Builder::new()
         .stack_size(256 * 1024)
         .spawn(|| {
             let depth = Limits::default().pattern_depth;
-            // Unoptimized matching takes a frame of about 96 KiB per nested
-            // lookaround, so only optimized builds check values against them.
-            let lookarounds = !cfg!(debug_assertions);
-            // (opening, closing, whether a value is checked against it)
-            for (open, close, checked) in [
+            // (opening, closing, whether the evaluator matches it)
+            for (open, close, matched) in [
                 ("(", ")", true),
                 ("(?:", ")*", true),
                 ("(?:a|", ")", true),
                 ("(?:[a-z]", ")+", true),
-                ("(?=", ")", lookarounds),
-                ("(?!", ")", lookarounds),
-                ("(?<=", ")", lookarounds),
+                ("(?=", ")", false),
+                ("(?!", ")", false),
+                ("(?<=", ")", false),
             ] {
                 let pattern = format!("{}a{}", open.repeat(depth), close.repeat(depth));
                 let quoted = serde_json::to_string(&pattern).unwrap();
-                // Each keyword is checked against a value it applies to.
-                for (schema, value) in [
-                    (format!(r#"{{"pattern":{quoted}}}"#), r#""a""#),
+                // Each keyword is checked against a value it applies to. A
+                // lookaround needs a backtracking engine: a string that reaches
+                // the pattern gets no verdict, and a `patternProperties` name
+                // holding one refuses preparation.
+                for (keyword, schema, value) in [
+                    ("pattern", format!(r#"{{"pattern":{quoted}}}"#), r#""a""#),
                     (
+                        "patternProperties",
                         format!(r#"{{"patternProperties":{{{quoted}:false}}}}"#),
                         r#"{"a":true}"#,
                     ),
                 ] {
-                    let contract = prepared(&schema).unwrap_or_else(|d| panic!("{pattern}: {d:?}"));
-                    if checked {
-                        let value = JsonValue::parse(value).unwrap();
-                        assert!(
-                            !matches!(contract.validate(&value), ValueOutcome::NoVerdict { .. }),
-                            "{pattern}"
-                        );
+                    let value = JsonValue::parse(value).unwrap();
+                    match prepared(&schema) {
+                        Ok(contract) => {
+                            let outcome = contract.validate(&value);
+                            if matched {
+                                assert!(!matches!(outcome, ValueOutcome::NoVerdict { .. }), "{pattern}");
+                            } else {
+                                assert!(
+                                    matches!(&outcome, ValueOutcome::NoVerdict { detail } if detail.code == "pattern-backtracking"),
+                                    "{pattern}: {outcome:?}"
+                                );
+                            }
+                        }
+                        Err(detail) => {
+                            assert!(!matched && keyword == "patternProperties", "{pattern}: {detail:?}");
+                            assert_eq!(detail.code, "pattern-backtracking");
+                        }
                     }
                 }
                 // One level deeper is refused before any regular expression is built.

@@ -10,8 +10,8 @@ Rules inferred from the existing DEPENDENCIES.json / THIRD-PARTY-NOTICES.txt:
   openbindings-wasm as its sole root. Both use offline, locked Cargo metadata.
 * Traverse every resolved normal (kind null) and build edge, even conservative
   optional edges Cargo metadata reports; exclude edges whose kinds are all dev.
-  Omit authored workspace members from attribution, but include reachable
-  registry packages and vendored packages as distinct package identities.
+  Omit authored workspace members from attribution, but include every
+  reachable registry package as a distinct package identity.
 * JSON keys are target, scope, packages; package keys are name, version,
   declared_license, repository, notices. Notice keys are path, sha256, retrieved_from. License and
   repository come verbatim from Cargo metadata. JSON uses two-space indentation,
@@ -166,9 +166,8 @@ def dependency_closure(graph, inventory):
 def package_record(package, retrieved, texts):
     source = Path(package["manifest_path"]).resolve().parent
     if package["source"] is None:
-        if not source.is_relative_to(ROOT / "vendor"):
-            raise ValueError(f"attributed path package is not vendored: {source}")
-    elif not package["source"].startswith("registry+"):
+        raise ValueError(f"attributed path package is not a workspace member: {source}")
+    if not package["source"].startswith("registry+"):
         raise ValueError(f"unsupported offline package source: {package['id']}")
     paths = sorted(
         (p for p in source.rglob("*")

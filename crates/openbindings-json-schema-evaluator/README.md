@@ -58,7 +58,7 @@ fn with_resources(
     resources: &ResourceSet,
 ) -> Result<PreparedValueContract, NoVerdict> {
     let evaluator = DefaultEvaluator::with_limits(Limits {
-        regex_steps: 100_000,
+        evaluation_steps: Some(10_000_000),
         ..Limits::default()
     });
     contract.prepare_with(&evaluator, resources)
@@ -77,91 +77,141 @@ keeps old work usable while installing a new document and resource set.
 ## Limits
 
 The evaluator never fetches references. Supply resources through `ResourceSet`;
-new resources require a new preparation. Some values can be decided despite missing
-resources or undefined reference results when those results cannot affect the
-verdict. A prepared value contract does not promise a verdict for every value. Handle
-no-verdict during both preparation and validation.
+new resources require a new preparation. A contract that reaches a resource that
+was not supplied still prepares, with an empty stand-in for it: a pass that
+reaches the stand-in gives no verdict (`resource-unavailable`) naming the
+missing resource, and a value whose evaluation never reaches it keeps its
+verdict, which then cannot depend on the missing content. One keyword decides
+without evaluating its sources: `unevaluatedProperties` and `unevaluatedItems`
+read the structure of the schemas that apply to the same instance to collect
+their annotations, so a contract in which those sources can reach a stand-in
+refuses preparation (`resource-unavailable`, naming the missing resource).
+Preparation also refuses a reference to a fragment of a resource that was not
+supplied, or a reference that identifies no schema (an absent pointer target or
+plain-name anchor, or a malformed fragment), with a `NoVerdict` that names the
+schema holding the reference. The default evaluator never returns
+`ValueOutcome::Undefined`, which custom evaluators may establish. A prepared
+value contract does not promise a verdict for every value. Handle no-verdict
+during both preparation and validation.
 
-`ValueOutcome::Undefined` establishes that whether the value satisfies its value
-contract is undefined. The default evaluator proves this for static reference
-defects: pointers that reach no schema, missing or duplicate plain names, and
-malformed `$ref` values within resources declaring `$id`. It requires original
-provenance and two admissible completions that disagree. Unsupported fragments,
-missing resources and inconclusive analysis remain no-verdict. `UndefinedResult`
-retains a code, message and optional original schema location.
+The evaluator bounds what the SDK itself reads, writes and recurses through.
+It does not estimate the memory the JSON Schema library's compiled program
+takes. `Limits` holds the configurable bounds; a limit that protects the
+process has a default, and one that would only bound time is the
+application's to set, and is off unless it does:
 
-`Limits` controls work, recursion, regex steps, compilation depth, pattern
-admission and, when set, the schema resources a contract may reach. The default
-work allowance is 2,000,000 units per pass for values of up to 65,536 nodes and
-grows in proportion above that, so ordinary schemas decide values as large as
-the default admission limits accept. An explicit
-`evaluation_steps: Some(n)` caps every pass at `n` units, whatever the value's size. Evaluation depth
-(default 1,024) bounds the recursive walk's stack and is reported as
-`evaluation-depth-limit`. Patterns may nest 32 groups by default; release
-builds prepare such patterns, and check values against them, on a 256 KiB
-thread stack. Debug builds need more on Windows; see
-[support](https://github.com/openbindings/sdk/blob/main/docs/support.md).
-The default regex allowance is
-2,000,000 steps. Large unanchored
-searches can exhaust it and return `LimitExceeded`, including ordinary megabyte
-strings. Preparation has its own fixed work bound, outside `Limits`. Compiling a
-contract is charged for what it does (each schema node and reference compiled,
-the dynamic scope keyed or searched, and the placeholders, property names and
-pattern bytes copied) in units of about a nanosecond of compilation or 0.7 bytes
-of its memory, whichever is larger, in the reference build. A contract may spend
-250,000,000 units plus 4,096 for each schema position its projection reaches
-(every reached subschema, named or not); the share pays for compiling each
-position once, so the number of positions alone never refuses a contract. A
-schema reached along many reference paths, through supplied or `$id` resources,
-compiles once unless the contract also reaches a `$dynamicAnchor`, as the 2020-12
-meta-schema declares; then it compiles once per path. Compilation that grows
-faster than the schema refuses with `LimitExceeded` and code
-`preparation-work-limit` after about 250 ms of it, or 175 to 250 MB of its
-memory: a same-document chain of more than 23,496 references and, with a reachable
-dynamic anchor, resources reached along 13 or more levels of branching and
-rejoining paths, or a 20,000-name `required` list reached along more than 103
-resource paths. Unicode property matching is unsupported when applied. `format` is an
-annotation; another declared schema dialect is not treated as 2020-12.
-See [measured behavior](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md).
+- `evaluation_steps` sets no cap by default, so a pass takes time that grows
+  with the schema and the value, and can grow exponentially with the schema:
+  16 nested holders of `unevaluatedProperties` whose `anyOf` names the next
+  holder twice take about 40 s to check `{}`. `Some(n)` charges one unit for
+  each schema a reference enters and for each element, member and literal
+  comparison step, and gives `evaluation-work-limit` once a pass spends `n`;
+  an application that evaluates untrusted contracts or values within a
+  deadline sets one.
+- `evaluation_depth` (1,024) bounds the stack evaluation uses. Preparation
+  bounds the schema objects any evaluation path can hold as a function of the
+  value's depth, and a value whose bound exceeds the limit gives
+  `evaluation-depth-limit` before it is evaluated. The library's
+  `unevaluatedProperties` and `unevaluatedItems` validators recurse in ways
+  that bound does not model, so a contract holding one is also guarded as it
+  evaluates: every read of a child instance compares the stack address it runs
+  at with the pass's start, and a pass that has used more than 128 bytes per
+  unit (128 KiB at the default) stops descending and gives
+  `evaluation-depth-limit`. The bound is static: a deep contract whose paths
+  only some values follow refuses the others too. Release builds prepare,
+  check and explain the 39 recursive shapes `tests/evaluation_stack.rs`
+  covers at the default on a 256 KiB thread.
+- `compile_json_depth` (512) bounds the projected JSON nesting compiled.
+- `pattern_bytes` (1 MiB) bounds each pattern, and its form for the
+  linear-time engine, which spells each set out (a `\S` takes 191
+  bytes): a longer form gives `pattern-size-limit` without being written out.
+  `pattern_depth` (32 groups) bounds each pattern's nesting, and release builds
+  prepare and check patterns at that depth on a 256 KiB thread (debug builds
+  need more; see
+  [support](https://github.com/openbindings/sdk/blob/main/docs/support.md)).
+  `total_pattern_bytes` (4 MiB) bounds the forms the evaluator keeps for a
+  contract's patterns together: each distinct `pattern` form once, and the form
+  of each `patternProperties` name. A form spells every set out, so it can be
+  far longer than its pattern (`\S` takes 191 bytes); preparation counts each as
+  it is written and refuses at the first that passes the limit
+  (`pattern-total-byte-limit`).
+- `schema_resources` sets no cap by default; `Some(n)` refuses a contract
+  reaching more than `n` schema resources (the document resource holding its
+  schema and each embedded `$id`, supplied and packaged meta-schema resource)
+  with `LimitExceeded` and `schema-resource-limit` before compiling it
+  (`limits: { schemaResources: n }` in TypeScript). Preparation time grows
+  linearly with the resources a contract reaches: 10,000 supplied resources
+  take 0.22 s in the reference build.
 
-Before compiling, preparation registers each schema resource the contract
-reaches with the library: the document resource holding its schema and each
-embedded `$id`, supplied and packaged meta-schema resource. Ordinary contracts
-reach one or a few. Registration takes time quadratic in their number, outside
-every other budget: in the reference build 1,000 resources take 7 ms, 10,000
-take 0.67 s and 20,000 take 2.8 s. An 8 MB document chaining 99,990 `$id`
-resources took nearly three minutes to prepare, almost all of it registering,
-before compilation refused it; with a cap of 1,000 it refuses in 1.3 s.
-The SDK sets no cap by default, since any default would be arbitrary. An
-application that prepares untrusted documents or resource sets sets its own
-with `Limits { schema_resources: Some(n), ..Limits::default() }`
-(`limits: { schemaResources: n }` in TypeScript); a contract reaching more than `n`
-then refuses with `LimitExceeded` and code `schema-resource-limit` before any
-registration.
+Fixed bounds apply as well. Core's document admission limits bound the bytes and
+nodes of every document and resource, and its projection refuses a contract
+reaching more than 100,000 schema positions (`schema-node-limit`). Each pattern
+compiles within the regex crate's size limit, set to 32 MiB, so counted
+repetitions of large sets such as `^.{1,10000}$` fit. Dynamic specialization
+(below) produces at most 100,000 definitions, adds at most 16,777,216 units of
+JSON in specialized copies (one per JSON value and one per byte of its strings
+and member names) and holds at most 4,000,000 dynamic-scope entries across its
+distinct contexts (`program-specialization-limit`). The library compiles an
+unevaluated keyword's annotation sources by recursion, so preparation weighs the
+walk and refuses one weighing more than 105 (`unevaluated-walk-limit`, at that
+keyword): a reference weighs 4, each `allOf`, `anyOf` or `oneOf` on its path 5
+more, each `if`, `then`, `else` or `dependentSchemas` 7 more and reaching
+another holder 1 more. That admits 26 direct `$ref`s (21 with a holder at every
+level), 8 levels of `allOf: [{"$ref": ...}]` inheritance (7), or 7 levels
+through `then`, `else` or `dependentSchemas` (6), each prepared in release
+builds on Linux, macOS and Windows with a fifth of a 256 KiB thread already in
+use.
 
-One known limitation of the jsonschema library can give a wrong verdict. The
-library closes a `$ref` cycle by reusing the schema it is still compiling,
-identified by its URI alone, so a `$dynamicRef` inside that schema resolves on
-every pass through the cycle as on the path that first reached it. When the cycle
-enters a resource whose matching `$dynamicAnchor` thereby becomes the outermost in
-the dynamic scope, the specification resolves the `$dynamicRef` to that anchor on
-the cycle's path, and a value that reaches it there can satisfy where it should
-fail, or fail where it should satisfy. The JSON Schema Test Suite has no such case,
-and contracts without `$dynamicRef` are unaffected.
+Within those bounds, preparing a schema can still take more memory than a
+host may want, since the library's compiled program grows with what it
+compiles, as any JSON Schema library's does: 40 `patternProperties` names of
+the form `^.{1,10000}N$`, about 600 bytes in all, peak at 1.1 GB; 1,000 holders
+of `unevaluatedProperties` that each inherit a base schema of 4,000 properties
+peak at 400 MB; and a dynamically specialized contract within its bounds can
+reach about 450 MB. A host that prepares schemas from untrusted parties should
+prepare them in an isolated worker or process with an operating-system memory
+limit. Values checked against trusted schemas stay bounded by
+`evaluation_depth` and, when the host sets one, by `evaluation_steps`.
+
+Patterns are ECMA-262 patterns with Unicode semantics, matched by a linear-time
+engine, so a match takes time linear in the string. The word boundary `\b`
+matches against ECMA-262's ASCII word characters. A pattern that needs a
+backtracking engine (lookaround or a backreference), has a Unicode property
+escape, or holds the non-word boundary `\B` (which the engine's `is_match` can
+answer wrongly beside multi-byte characters) is not matched: a string that
+reaches it in `pattern` gives no verdict (`pattern-backtracking`,
+`unicode-property-matching` or `pattern-non-word-boundary`), and as a
+`patternProperties` name it refuses preparation. A pattern whose form compiles
+to more than 32 MiB gives `pattern-size-limit`. The reading is meant to match as
+ECMA-262 does, and a differential against V8 checks it through both keywords,
+but it is a translation, not an ECMA-262 engine: it writes every set as the
+positive class of the scalar values it matches, since the engine's negation of a
+class whose ranges meet across the surrogate gap adds a range across it.
+`format` is an annotation; another declared schema dialect is not treated as
+2020-12.
+
+A `$dynamicRef` resolves through the dynamic scope of the path that reaches it,
+also when a `$ref` cycle re-enters a resource that declares a dynamic anchor:
+preparation compiles a schema once for each dynamic context it is reached in,
+within the specialization bounds above. Otherwise preparation compiles each
+reached schema once, in time and memory that grow with the contract, except
+that the library takes time quadratic in the length of a long same-document
+reference chain. See
+[measured behavior](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md).
 
 Each call chooses its detail. `validate` is the cheap check: an established
 failure has a fixed message, an empty problem list and `problems_complete =
 false`. `explain` returns the library's first error for the same verdict, with
-redacted messages and original schema facts. Building that error can allocate in
-proportion to the schema and value and can overflow the stack on deep values, so
-keep `validate` on paths that check untrusted input. Each explained problem
-names the failing node by its exact pointer from the value passed (`instance`)
-and the failing keyword by resource and exact pointer (`schema`); a keyword the
-original sources do not hold is named by the selected schema itself, never
-guessed. `JsonValue::locate`, `Conformant::locate` and `ResourceSet::locate`
-find line and column on demand, so an explanation costs no position. Schema facts may expose
-source operands. A prepared value contract keeps the text of the schemas it reached
-for these facts, never the document, its supplied resources or any position.
+a fixed message for its kind. Building that error allocates in proportion to
+the schema and value and takes about twice a check's stack per level, so a
+value nested deeper than half the depth limit allows is reported as failing
+without its problem; keep `validate` on paths that check untrusted input. The
+explained problem names the failing node by its exact pointer from the value
+passed (`instance`) and the failing keyword by resource and exact pointer
+(`schema`). `JsonValue::locate`, `Conformant::locate` and `ResourceSet::locate`
+find line and column on demand, so an explanation costs no position. A prepared
+value contract keeps only the original locations of the schemas it reached,
+never their text, the document, its supplied resources or any position.
 Missing or incomplete diagnostics never weaken an established failure.
 
 Cancellation uses `WorkControl` and is cooperative. Cancelled preparation produces
@@ -177,4 +227,6 @@ for the integration contract.
 
 The crate reference documents `DefaultEvaluator` and `Limits`.
 [Resolver and evaluation maintenance](https://github.com/openbindings/sdk/blob/main/docs/maintainers.md)
-links the resource-identity rules, partial evaluation proof and dependency patches.
+links the resource-identity rules and the
+[dependency maintenance contract](https://github.com/openbindings/sdk/blob/main/DEPENDENCY-MAINTENANCE.md),
+which describes how the evaluator composes the unmodified JSON Schema library.

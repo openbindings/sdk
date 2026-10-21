@@ -161,32 +161,6 @@ fn exact_equality_decides_strings_with_unpaired_units() {
     }
 }
 #[test]
-fn partial_evaluations_use_the_same_string_scope() {
-    // both bounds use the runtime access gate, including decisive bounds.
-    for (schema, succeeds) in [
-        (
-            r#"{"anyOf":[true,{"$ref":"https://missing.invalid/schema"}]}"#,
-            true,
-        ),
-        (
-            r#"{"allOf":[false,{"$ref":"https://missing.invalid/schema"}]}"#,
-            false,
-        ),
-    ] {
-        let result = outcome(schema, r#""\ud800""#);
-        assert_eq!(matches!(result, ValueOutcome::Satisfies), succeeds);
-        assert_eq!(matches!(result, ValueOutcome::Fails { .. }), !succeeds);
-    }
-    let result = outcome(
-        r#"{"anyOf":[{"pattern":"a"},{"$ref":"https://missing.invalid/schema"}]}"#,
-        r#""\ud800""#,
-    );
-    assert!(
-        matches!(result, ValueOutcome::NoVerdict { detail } if detail.code == "lone-surrogate-instance")
-    );
-}
-
-#[test]
 fn visiting_values_does_not_interpret_their_names_and_diagnostics_preserve_failure() {
     // an applicator can visit every value without interpreting name strings.
     assert!(matches!(

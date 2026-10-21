@@ -1,6 +1,7 @@
 //! Preparation shares the identity index a resource set built once, instead of
-//! admitting the set's resources again, and plans exactly as a fresh admission.
-use super::space;
+//! admitting the set's resources again, and projects exactly as a fresh
+//! admission.
+use crate::space;
 use openbindings::*;
 use openbindings_internal_schema::{self as embedding, SuppliedSet};
 use std::sync::{Arc, Mutex};
@@ -62,20 +63,6 @@ fn program(space: &embedding::SchemaSpace, entry: usize) -> String {
         Err(failure) => serde_json::to_string(&failure).unwrap(),
     }
 }
-fn bounds(space: &super::SchemaSpace, entry: usize) -> String {
-    match space.bounds(entry, &|| false) {
-        Ok(bounds) => format!(
-            "{}\n{}\n{:?}",
-            text(&bounds.upper),
-            text(&bounds.lower),
-            bounds
-                .unavailable
-                .map(|f| serde_json::to_string(&f).unwrap())
-        ),
-        Err(failure) => serde_json::to_string(&failure).unwrap(),
-    }
-}
-
 #[test]
 fn preparation_shares_the_sets_admitted_resources() {
     let resources = set(&[
@@ -84,7 +71,7 @@ fn preparation_shares_the_sets_admitted_resources() {
     ]);
     let request = request(r#"{"$ref":"https://reuse.test/b"}"#, &resources);
     for _ in 0..2 {
-        let (space, _) = space(&request);
+        let (space, _) = space(&request, Vec::new()).unwrap();
         // The same admitted resources in memory, not a copy of them.
         let shared: Vec<_> = space.supplied.iter().map(std::ptr::from_ref).collect();
         let held: Vec<_> = resources
@@ -97,7 +84,7 @@ fn preparation_shares_the_sets_admitted_resources() {
 }
 
 #[test]
-fn shared_and_freshly_admitted_resources_plan_identically() {
+fn shared_and_freshly_admitted_resources_project_identically() {
     const META: &str = "https://json-schema.org/draft/2020-12/schema";
     let cases: Vec<(String, Vec<(&str, String)>)> = vec![
         // An ordinary reference into a supplied resource with a nested identifier.
@@ -133,8 +120,8 @@ fn shared_and_freshly_admitted_resources_plan_identically() {
             .collect();
         let resources = set(&entries);
         let request = request(&input, &resources);
-        let (shared, entry) = space(&request);
-        let fresh = super::SchemaSpace(embedding::SchemaSpace::new(
+        let (shared, _) = space(&request, Vec::new()).unwrap();
+        let fresh = embedding::SchemaSpace::new(
             embedding::RawDocument::new(request.document().as_document().value().clone()),
             embedding::Supplied::new(request.supplied_resources().iter().map(|r| {
                 embedding::ProjectedResource {
@@ -143,7 +130,7 @@ fn shared_and_freshly_admitted_resources_plan_identically() {
                 }
             }))
             .unwrap(),
-        ));
+        );
         assert_eq!(
             serde_json::to_string(&shared.references(&control)).unwrap(),
             serde_json::to_string(&fresh.references(&control)).unwrap()
@@ -152,7 +139,6 @@ fn shared_and_freshly_admitted_resources_plan_identically() {
             assert_eq!(program(&shared, id), program(&fresh, id), "{input} {id}");
             planned += 1;
         }
-        assert_eq!(bounds(&shared, entry), bounds(&fresh, entry), "{input}");
     }
     assert!(planned >= 10, "{planned}");
 }

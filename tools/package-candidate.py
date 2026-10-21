@@ -20,8 +20,7 @@ PUBLIC_CRATES = {
 
 INTERNAL_CRATES = {
     "openbindings-internal-json", "openbindings-internal-schema",
-    "openbindings-internal-cancellation", "openbindings-internal-jsonschema",
-    "openbindings-internal-regress",
+    "openbindings-internal-cancellation",
 }
 BUILD_ONLY_CRATES = {"openbindings-wasm"}
 
@@ -40,7 +39,7 @@ def publication_order(packages):
     by_name = {item["name"]: item for item in packages}
     dependencies = {}
     for item in packages:
-        manifest = tomllib.loads((Path(item["source"]) / "Cargo.toml").read_text())
+        manifest = tomllib.loads((Path(item["source"]) / "Cargo.toml").read_text(encoding='utf-8'))
         sections = [manifest, *manifest.get("target", {}).values()]
         names = set()
         for section in sections:
@@ -70,8 +69,8 @@ def publication_order(packages):
 
 
 def artifact_manifests():
-    manifests = sorted([*ROOT.glob("crates/*/Cargo.toml"), *ROOT.glob("vendor/*/Cargo.toml")])
-    names = [tomllib.loads(manifest.read_text())["package"]["name"] for manifest in manifests]
+    manifests = sorted(ROOT.glob("crates/*/Cargo.toml"))
+    names = [tomllib.loads(manifest.read_text(encoding='utf-8'))["package"]["name"] for manifest in manifests]
     require(len(names) == len(set(names)), "Duplicate local package names.")
     require(set(names) == PUBLIC_CRATES | INTERNAL_CRATES | BUILD_ONLY_CRATES,
             "Local packages differ from the supported artifact inventory.")
@@ -118,7 +117,7 @@ def main():
     with tarfile.open(npm_archive) as archive:
         archive.extractall(out / "npm", filter="data")
     npm_root = out / "npm/package"
-    identity = json.loads((npm_root / "dist/wasm/build-info.json").read_text())
+    identity = json.loads((npm_root / "dist/wasm/build-info.json").read_text(encoding='utf-8'))
     require(identity["commit"] == commit and identity["treeClean"], "Wasm was not built from this clean candidate.")
     current_identity = json.loads(run("wasm-source-identity", ["node", "--input-type=module", "-e",
         "import {rustSourceIdentity} from './packages/typescript/scripts/source-identity.mjs'; "
@@ -128,10 +127,10 @@ def main():
             "Incomplete Wasm artifact inventory.")
     for name, expected in identity["artifacts"].items():
         require(digest(npm_root / "dist/wasm" / name) == expected, f"Wasm artifact mismatch: {name}")
-    version = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
+    version = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding='utf-8'))["workspace"]["package"]["version"]
     packages = []
     for manifest in manifests:
-        spec = tomllib.loads(manifest.read_text())["package"]
+        spec = tomllib.loads(manifest.read_text(encoding='utf-8'))["package"]
         name = spec["name"]
         package_version = spec["version"] if isinstance(spec["version"], str) else version
         run("package-" + name, ["cargo", "package", "--locked", *offline, "--no-verify", "--exclude-lockfile", "--manifest-path", manifest])
@@ -140,7 +139,7 @@ def main():
         with tarfile.open(archive_path) as archive:
             archive.extractall(out / "cargo", filter="data")
             source = out / "cargo" / archive_path.name.removesuffix(".crate")
-            require(json.loads((source / ".cargo_vcs_info.json").read_text())["git"]["sha1"] == commit, f"Stale Cargo source: {name}")
+            require(json.loads((source / ".cargo_vcs_info.json").read_text(encoding='utf-8'))["git"]["sha1"] == commit, f"Stale Cargo source: {name}")
             for member in archive.getmembers():
                 if not member.isfile():
                     continue
@@ -150,8 +149,7 @@ def main():
                 original = manifest.parent / ("Cargo.toml" if str(relative) == "Cargo.toml.orig" else relative)
                 require(original.is_file() and original.read_bytes() == archive.extractfile(member).read(), f"Archive/source mismatch: {name}/{relative}")
             # Every package must deliver the license terms it declares. The SDK's own
-            # packages inherit Apache-2.0 and carry the root text and a notice; forks keep
-            # their upstream license files.
+            # packages inherit Apache-2.0 and carry the root text and a notice.
             delivered = {str(Path(m.name).relative_to(m.name.split("/")[0])) for m in archive.getmembers() if m.isfile()}
             if spec.get("license") == {"workspace": True}:
                 require({"LICENSE", "NOTICE"} <= delivered, f"Archive omits LICENSE or NOTICE: {name}")
@@ -159,7 +157,7 @@ def main():
             else:
                 require(any(Path(member).name.upper().startswith("LICENSE") for member in delivered),
                         f"Archive omits its license text: {name}")
-        normalized = tomllib.loads((source / "Cargo.toml").read_text())
+        normalized = tomllib.loads((source / "Cargo.toml").read_text(encoding='utf-8'))
         for section in [normalized, *normalized.get("target", {}).values()]:
             for kind in ["dependencies", "dev-dependencies", "build-dependencies"]:
                 for dependency in section.get(kind, {}).values():
@@ -193,8 +191,8 @@ def main():
     compat = out / "compat-consumer"
     (compat / "src").mkdir(parents=True)
     versions = {item["name"]: item["version"] for item in packages}
-    manifest = (ROOT / "tools/consumer-compat/Cargo.toml").read_text()
-    manifest = re.sub(r'path = "../../(?:crates|vendor)/([^\"]+)"', lambda m: 'version = "=' + versions[m[1]] + '"', manifest)
+    manifest = (ROOT / "tools/consumer-compat/Cargo.toml").read_text(encoding='utf-8')
+    manifest = re.sub(r'path = "../../crates/([^\"]+)"', lambda m: 'version = "=' + versions[m[1]] + '"', manifest)
     require("path =" not in manifest, "Compatibility fixture still references the source checkout.")
     (compat / "Cargo.toml").write_text(manifest + patches)
     shutil.copyfile(ROOT / "tools/consumer-compat/src/lib.rs", compat / "src/lib.rs")
@@ -223,12 +221,12 @@ def main():
     require(run("source-head-after", ["git", "rev-parse", "HEAD"]).strip() == commit, "Candidate changed during packaging.")
     require(not run("source-status-after", ["git", "status", "--porcelain"]).strip(), "Source changed during packaging.")
     spec_inventory = ROOT / "tools/qualification/inputs/blueprint/case-inventory.json"
-    spec = json.loads(spec_inventory.read_text())
+    spec = json.loads(spec_inventory.read_text(encoding='utf-8'))
     receipt = {"commit": commit, "version": version, "rustc": toolchain,
                "node": node_version, "npmVersion": npm_version,
                "specification": {"commit": spec["spec_commit"], "cases": spec["count"],
                                  "inventorySha256": digest(spec_inventory)},
-               "dependencyProvenanceSha256": digest(ROOT / "docs/dependency-patches/manifest.json"),
+               "dependencyIdentitiesSha256": digest(ROOT / "docs/dependency-isolation.json"),
                "workspaceLockSha256": digest(ROOT / "Cargo.lock"),
                "npm": {"archive": npm_archive.name, "sha256": digest(npm_archive), "buildIdentity": identity},
                "cargo": packages, "publicationOrder": publication_order(packages),

@@ -72,31 +72,6 @@ files.set(
   await fs.readFile(path.join(packageRoot, "test/diagnostic-budget-cases.mjs")),
 );
 files.set(
-  "/oneof-cases.mjs",
-  await fs.readFile(path.join(packageRoot, "test/oneof-cases.mjs")),
-);
-const oneOfFixtureRoot = path.join(
-  root,
-  "crates/openbindings-json-schema-evaluator/tests/fixtures/oneof",
-);
-const oneOfFixtures = {
-  c22: await fs.readFile(path.join(oneOfFixtureRoot, "C22.json"), "utf8"),
-  c22Cases: JSON.parse(
-    await fs.readFile(path.join(oneOfFixtureRoot, "C22-cases.json"), "utf8"),
-  ),
-  controls: JSON.parse(
-    await fs.readFile(path.join(oneOfFixtureRoot, "owner-cases.json"), "utf8"),
-  ),
-};
-files.set(
-  "/partial-resource-cases.mjs",
-  await fs.readFile(path.join(packageRoot, "test/partial-resource-cases.mjs")),
-);
-files.set(
-  "/planner-location-cases.mjs",
-  await fs.readFile(path.join(packageRoot, "test/planner-location-cases.mjs")),
-);
-files.set(
   "/observer.mjs",
   await fs.readFile(
     path.join(root, "tools/qualification/replay/sdk-observe.mjs"),
@@ -146,16 +121,13 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   if ((await page.title()) !== id) throw Error("fresh host identity");
   const result = await page.evaluate(
-    async ({ requests, oneOfFixtures }) => {
+    async ({ requests }) => {
       const sdk = await import("/dist/index.js"),
         { observe } = await import("/observer.mjs"),
         { fixedDiagnosticCases } = await import("/fixed-diagnostic-cases.mjs"),
         { diagnosticBudgetCases } = await import(
           "/diagnostic-budget-cases.mjs"
-        ),
-        { partialResourceCases } = await import("/partial-resource-cases.mjs"),
-        { oneOfCases } = await import("/oneof-cases.mjs"),
-        { plannerLocationCases } = await import("/planner-location-cases.mjs");
+        );
       await sdk.initialize();
       const run = (list) =>
         list.map((request) => {
@@ -169,13 +141,10 @@ try {
         core: run(requests.core),
         suite: run(requests.suite),
         fixedDiagnostics: fixedDiagnosticCases(sdk),
-        partialResources: partialResourceCases(sdk),
-        oneOf: oneOfCases(sdk, oneOfFixtures),
-        plannerLocations: plannerLocationCases(sdk),
         ...diagnosticBudgetCases(sdk),
       };
     },
-    { requests, oneOfFixtures },
+    { requests },
   );
   result.diagnosticBudgetWorker = await page.evaluate(
     () =>
@@ -216,8 +185,6 @@ try {
       {
         ...firstUse,
         fixedDiagnostics: result.fixedDiagnostics,
-        partialResources: result.partialResources,
-        plannerLocations: result.plannerLocations,
         diagnosticBudget: result.diagnosticBudget,
         diagnosticBudgetWorker: result.diagnosticBudgetWorker,
         loadingFailures,

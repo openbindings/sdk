@@ -156,7 +156,7 @@ export interface SchemaLocation {
   /** Exact RFC 6901 pointer from that source's root; empty string denotes root. */
   pointer: string;
 }
-/** Known refusal causes for this facade and its bundled engine. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. A potential cycle alone is conservative-preparation. Later package versions may add causes. Qualified partial value contracts can prepare ready; values whose result depends on missing content return resource-unavailable during validation. For unavailable resources, Document.references() exposes document-wide reference spellings and original keyword locations, not an exact per-value-contract missing-resource list; apply an application disclosure policy before logging them. */
+/** Known refusal causes for this facade and its bundled engine. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. A potential cycle alone is conservative-preparation. Later package versions may add causes. A value contract that reaches a resource that was not supplied can prepare ready; values whose evaluation reaches the missing content return resource-unavailable during validation. For unavailable resources, Document.references() exposes document-wide reference spellings and original keyword locations, not an exact per-value-contract missing-resource list; apply an application disclosure policy before logging them. */
 export type NoVerdictReason =
   | "unsupported-capability"
   | "conservative-preparation"
@@ -387,24 +387,24 @@ export interface WorkOptions {
   /** Optional caller-owned cooperative cancellation signal; synchronous Wasm only observes same-thread cancellation at call boundaries. */
   signal?: AbortSignal;
 }
-/** Default-evaluator finite budgets, each a nonnegative 32-bit integer; `evaluationSteps` and `schemaResources` may also be `null` for their defaults. Work counts are implementation units, not milliseconds. Zero is literal; the allocation and stack use of an explanation's library diagnostics are library-bounded; exhaustion produces no-verdict unless only post-verdict diagnostics are incomplete. */
+/** Default-evaluator limits, each a nonnegative 32-bit integer; `evaluationSteps` and `schemaResources` may also be `null`, their defaults. A limit that protects the process (its stack or memory) has a default; one that would only bound time is off unless set. Exceeding a limit produces no-verdict, except that exhausted post-verdict diagnostics leave an established failure without problems. */
 export interface EvaluatorLimits {
-  /** Work units per verdict/diagnostic pass. `null`, the default, grows with the value: 2,000,000 units for a value of up to 65,536 nodes (member names count) and proportionally more for a larger one. A number caps every pass at exactly that many units, whatever the value's size. */
+  /** Work units per verdict/diagnostic pass. `null`, the default, sets no cap, so a pass takes time that grows with the schema (exponentially for some, such as nested `anyOf` holders of `unevaluatedProperties`) and the value; an application evaluating untrusted contracts or values within a deadline sets one. A number charges a unit for each schema a reference enters and each element, member and literal comparison step, and yields `evaluation-work-limit` once a pass spends it. */
   evaluationSteps: number | null;
-  /** Nested evaluation depth; default 1024. It bounds stack use; a deeper value yields the `evaluation-depth-limit` no-verdict. */
+  /** The deepest nesting of schema evaluations a value may need; default 1024. Before evaluating a value the evaluator bounds that nesting from the contract's schemas and the value's depth, and a value that could need more yields the `evaluation-depth-limit` no-verdict without being evaluated. A contract holding `unevaluatedProperties` or `unevaluatedItems` is also guarded as it evaluates: a pass that uses more than 128 bytes of stack per unit (128 KiB at the default) stops with the same no-verdict. It bounds stack use. */
   evaluationDepth: number;
-  /** Regex evaluation/backtracking work budget; default 2,000,000. */
-  regexSteps: number;
   /** Projected JSON nesting admitted to compilation; default 512. */
   compileJsonDepth: number;
-  /** Maximum UTF-8 bytes per schema regex; default 1,048,576 (1 MiB). */
+  /** Maximum UTF-8 bytes per schema regex, and in the form the linear-time engine compiles it from; default 1,048,576 (1 MiB). A longer form yields the `pattern-size-limit` no-verdict. */
   patternBytes: number;
-  /** Maximum regex parenthesis nesting; default 32, which keeps preparation within a 256 KiB stack. */
+  /** Maximum regex group nesting; default 32. */
   patternDepth: number;
-  /** Schema resources one contract may reach: the document resource holding its schema and each embedded `$id`, supplied and packaged meta-schema resource it reaches. Ordinary contracts reach one or a few. `null`, the default, sets no cap. Registering resources before compilation takes time quadratic in their number, outside every other budget: natively, 1,000 take 7 ms, 10,000 take 0.67 s and 20,000 take 2.8 s, and Wasm takes about three times as long. A number refuses a contract reaching more with the `schema-resource-limit` no-verdict before that setup, so an application preparing untrusted documents or resources can bound it at the cap it chooses. */
+  /** Maximum UTF-8 bytes in the forms the evaluator keeps for one contract's schema regexes together: each distinct form of its `pattern` values and the form of each `patternProperties` name; default 4,194,304 (4 MiB). A form spells every set out, so it can be far longer than its regex (`\S` takes 191 bytes). Preparation counts each form as it is written and yields the `pattern-total-byte-limit` no-verdict at the first that passes the limit. */
+  totalPatternBytes: number;
+  /** Schema resources one contract may reach: the document resource holding its schema and each embedded `$id`, supplied and packaged meta-schema resource it reaches. Ordinary contracts reach one or a few. `null`, the default, sets no cap. A number refuses a contract reaching more with the `schema-resource-limit` no-verdict before compiling it, so an application preparing untrusted documents or resources can bound preparation at the size it chooses. */
   schemaResources: number | null;
 }
-/** Inputs for one preparation with the built-in JSON Schema 2020-12 evaluator, which performs no resource I/O, treats format as annotation, declines unqualified Unicode property-escape matching, and may conservatively refuse potential non-progressing cycles. A pre-aborted signal returns no-verdict. */
+/** Inputs for one preparation with the built-in JSON Schema 2020-12 evaluator, which performs no resource I/O, treats format as annotation, matches patterns with a linear-time engine (declining Unicode property escapes, the non-word boundary `\B` and patterns that need a backtracking engine), prepares an empty stand-in for a resource that was not supplied (a value whose evaluation reaches it returns resource-unavailable), refuses a contract in which an unevaluatedProperties or unevaluatedItems keyword's annotation sources reach a missing resource or a reference to a fragment of one, and may conservatively refuse potential non-progressing cycles. A pre-aborted signal returns no-verdict. */
 export interface PrepareOptions extends WorkOptions {
   /** Explicit resources borrowed for this preparation; omitted means none. No URI is fetched and the passed owner remains caller-owned. */
   resources?: SchemaResources;
@@ -1820,7 +1820,7 @@ export class ValueContract extends Managed {
   schema(): ExactJson {
     return new ExactJson(contractRaw(this).schema());
   }
-  /** Prepare with the built-in evaluator. Ready transfers a new disposable PreparedValueContract independent of this owner; it does not promise every value is decidable. The default evaluator can prepare qualified missing-resource value contracts, including a bare missing $ref and dual-polarity oneOf bounds. Validation establishes a verdict when independent of missing content, or returns resource-unavailable when dependent. Known errors and unsupported partial contracts still refuse preparation; prepare again with resources to recover, while existing prepared owners retain their original snapshot. Cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
+  /** Prepare with the built-in evaluator. Ready transfers a new disposable PreparedValueContract independent of this owner; it does not promise every value is decidable. The default evaluator prepares a value contract that reaches a resource that was not supplied, with an empty stand-in for it. Validation returns resource-unavailable when evaluation reaches the missing content, and otherwise a verdict independent of it. A contract in which an unevaluatedProperties or unevaluatedItems keyword's annotation sources reach a missing resource, a reference to a fragment of a missing resource, and known errors still refuse preparation; prepare again with resources to recover, while existing prepared owners retain their original snapshot. Cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
   prepare(options: PrepareOptions = {}): ValueContractPreparation {
     requireReady();
     const raw = contractRaw(this);

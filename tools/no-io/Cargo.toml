@@ -10,9 +10,7 @@ publish = false
 [dependencies]
 openbindings = { path = "../../crates/openbindings" }
 openbindings-json-schema-evaluator = { path = "../../crates/openbindings-json-schema-evaluator" }
-# Deliberately enable retrieval on both schema libraries the SDK uses: core's
-# unmodified jsonschema and the default evaluator's renamed fork. These are
-# white-box positive controls, not supported SDK extension APIs.
+# Deliberately enable retrieval on the schema library the SDK uses. This is a
+# white-box positive control, not a supported SDK extension API.
 jsonschema = { version = "=0.58.6", default-features = false, features = ["resolve-http", "resolve-file", "tls-ring"] }
-evaluator-jsonschema = { package = "openbindings-internal-jsonschema", path = "../../vendor/openbindings-internal-jsonschema", default-features = false, features = ["resolve-http", "resolve-file", "tls-ring"] }
 serde_json = "1.0.151"

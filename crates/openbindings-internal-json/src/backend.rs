@@ -7,14 +7,15 @@ use serde_json::Value;
 use std::borrow::Cow;
 
 /// Charge `units` of this adapter's reads to the default evaluator's current
-/// evaluation work scope; `false` once that scope is spent. Outside a scope, and
-/// in builds without the evaluator, nothing is counted and reads continue: core's
-/// fixed checks, whose work is linear in the admitted document, have no budget.
+/// evaluation work allowance; `false` once it is spent. Outside an allowance,
+/// and in builds without the evaluator, nothing is counted and reads continue:
+/// core's fixed checks, whose work is linear in the admitted document, have no
+/// budget.
 #[inline]
 fn charge(units: usize) -> bool {
     #[cfg(feature = "evaluator-work")]
     {
-        evaluator_jsonschema::ob_work::charge(units)
+        crate::work::charge(units)
     }
     #[cfg(not(feature = "evaluator-work"))]
     {
@@ -1026,6 +1027,47 @@ pub fn node_count(value: crate::JsonRef<'_>) -> usize {
     nodes.partition_point(|node| node.span.start < end)
 }
 
+/// Whether [`depth`] is at most `limit`, without allocating for a value that
+/// nests at most 32 levels, and without reading past the first container
+/// deeper than `limit`.
+pub fn depth_at_most(value: &crate::JsonValue, limit: usize) -> bool {
+    const INLINE: usize = 32;
+    let nodes = &value.owner.nodes[value.id..];
+    let end = nodes[0].span.end;
+    // The span ends of the containers enclosing the current node, outermost
+    // first; the first `INLINE` live on the stack.
+    let mut inline = [0usize; INLINE];
+    let mut spilled = Vec::new();
+    let mut open = 0usize;
+    for node in nodes.iter().take_while(|node| node.span.start < end) {
+        while open > 0 {
+            let enclosing = if open <= INLINE {
+                inline[open - 1]
+            } else {
+                spilled[open - 1 - INLINE]
+            };
+            if node.span.start < enclosing {
+                break;
+            }
+            open -= 1;
+        }
+        if matches!(node.kind, Kind::Array(_) | Kind::Object(_)) {
+            if open == limit {
+                return false;
+            }
+            if open < INLINE {
+                inline[open] = node.span.end;
+            } else if spilled.len() > open - INLINE {
+                spilled[open - INLINE] = node.span.end;
+            } else {
+                spilled.push(node.span.end);
+            }
+            open += 1;
+        }
+    }
+    true
+}
+
 pub fn depth(value: &crate::JsonValue) -> usize {
     let span = &value.owner.nodes[value.id].span;
     let end = value
@@ -1093,6 +1135,37 @@ mod tests {
             assert_eq!(node_count(value.at(pointer).unwrap()), nodes, "{pointer}");
         }
         assert_eq!(node_count(crate::JsonValue::parse("7").unwrap().view()), 1);
+    }
+    #[test]
+    fn bounded_depth_agrees_with_depth_for_values_and_subtrees() {
+        let deep = format!("{}0{}", "[".repeat(40), "]".repeat(40));
+        let mixed = format!(r#"{{"a":[1,{{"b":{deep}}}],"c":{{}},"d":[[[]]]}}"#);
+        for text in [
+            "0",
+            "[]",
+            "[0,[1],[[2]]]",
+            r#"{"a":{"b":[]},"c":0}"#,
+            &deep,
+            &mixed,
+        ] {
+            let value = crate::JsonValue::parse(text).unwrap();
+            let mut subtrees = vec![value.clone()];
+            for pointer in ["/a", "/a/1", "/a/1/b", "/0", "/2"] {
+                if let Some(subtree) = value.at(pointer) {
+                    subtrees.push(subtree.to_owned());
+                }
+            }
+            for subtree in subtrees {
+                let depth = depth(&subtree);
+                for limit in 0..depth + 3 {
+                    assert_eq!(
+                        depth_at_most(&subtree, limit),
+                        depth <= limit,
+                        "{text} {limit}"
+                    );
+                }
+            }
+        }
     }
     #[test]
     fn indexed_members_preserve_each_exact_occurrence() {

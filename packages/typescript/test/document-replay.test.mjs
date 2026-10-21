@@ -2,33 +2,57 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as sdk from "../dist/index.js";
 await sdk.initialize();
 const root = fileURLToPath(new URL("../../../", import.meta.url));
-const python = (source, input) =>
-  JSON.parse(
-    execFileSync("python3", ["-c", source], {
+// Run a Python program that reads its request from `request` and writes its
+// answer to `answer`. Both travel through files: each exchange here carries
+// megabytes, and a synchronous exchange through the child's pipes once hung with
+// the child waiting on stdin, so no bulk data crosses a pipe. The child's stdout
+// is discarded and its stderr shown; a stalled child fails the test.
+const python = (source, input = null) => {
+  const directory = mkdtempSync(join(tmpdir(), "document-replay-"));
+  try {
+    const request = join(directory, "request.json");
+    const answer = join(directory, "answer.json");
+    writeFileSync(request, JSON.stringify(input));
+    execFileSync("python3", ["-c", imports + source, request, answer], {
       cwd: root,
-      input: input === undefined ? undefined : JSON.stringify(input),
-      encoding: "utf8",
-      maxBuffer: 32 * 1024 * 1024,
-    }),
-  );
+      stdio: ["ignore", "ignore", "inherit"],
+      timeout: 600_000,
+    });
+    return JSON.parse(readFileSync(answer, "utf8"));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+};
 const imports = `import sys,json,importlib.util
 from pathlib import Path
+request=json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+def answer(value):
+    Path(sys.argv[2]).write_text(json.dumps(value),encoding="utf-8")
 sys.path.insert(0,"tools/qualification/replay")
 import corpus
 spec=importlib.util.spec_from_file_location("judge","tools/qualification/replay/judge-browser.py")
 judge=importlib.util.module_from_spec(spec);spec.loader.exec_module(judge)
 `;
-const { core, fixture } = python(
-  imports +
-    `
-fixture=judge.current_fixture(json.loads(Path("crates/openbindings-schema-evaluator-test-support/fixtures/cases.json").read_text()))
-print(json.dumps({"core":[corpus.request(c) for c in corpus.load()],"fixture":fixture}))
-`,
-);
+test("the Python exchange carries requests and answers larger than any pipe buffer", () => {
+  const request = { text: "r".repeat(16 * 1024 * 1024) };
+  const result = python(
+    `answer({"echo":request["text"],"extra":"a"*(40*1024*1024)})`,
+    request,
+  );
+  assert.equal(result.echo, request.text);
+  assert.equal(result.extra.length, 40 * 1024 * 1024);
+});
+const { core, fixture } = python(`
+fixture=judge.current_fixture(json.loads(Path("crates/openbindings-schema-evaluator-test-support/fixtures/cases.json").read_text(encoding="utf-8")))
+answer({"core":[corpus.request(c) for c in corpus.load()],"fixture":fixture})
+`);
 const exact = (text) => {
   const result = sdk.parseJson(text);
   assert.equal(result.status, "parsed");
@@ -117,12 +141,11 @@ for (const call of ["validate", "explain"]) {
       }
     }
     const result = python(
-      imports +
-        `
-fixture,observations=json.load(sys.stdin)
+      `
+fixture,observations=request
 rows,accounting=judge.judge_evaluator(fixture,observations)
 failures=[r for r in rows if r["status"]!="pass"]
-print(json.dumps({"cases":len(rows),"failures":failures,"accounting":accounting}))
+answer({"cases":len(rows),"failures":failures,"accounting":accounting})
 `,
       [fixture, observations],
     );

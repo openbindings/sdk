@@ -42,7 +42,7 @@ def consumer_manifest(template, checkout):
     # These are TOML string values, not shell paths. Preserve quotes/Unicode and
     # serialize Windows separators safely instead of interpolating raw text.
     return re.sub(
-        r'path = "\.\./\.\./(crates|vendor)/([^"\n]+)"',
+        r'path = "\.\./\.\./(crates)/([^"\n]+)"',
         lambda match: 'path = ' + json.dumps(
             (checkout / match[1] / match[2]).as_posix(), ensure_ascii=False).replace('\x7f', '\\u007f'),
         template,
@@ -56,10 +56,9 @@ for checkout in [PureWindowsPath(r'D:\a\sdk\sdk'),
                  PureWindowsPath('C:/callers/😀/sdk'),
                  PurePosixPath('/tmp/user\x7fname/sdk'),
                  PurePosixPath('/tmp/quote"and\\slash/sdk')]:
-    template = '[dependencies]\nx = { path = "../../crates/x" }\ny = { path = "../../vendor/y" }\n'
+    template = '[dependencies]\nx = { path = "../../crates/x" }\n'
     parsed = tomllib.loads(consumer_manifest(template, checkout))
     assert parsed['dependencies']['x']['path'] == (checkout / 'crates/x').as_posix()
-    assert parsed['dependencies']['y']['path'] == (checkout / 'vendor/y').as_posix()
 
 
 with tempfile.TemporaryDirectory(prefix='openbindings-consumer-') as temporary:
@@ -114,20 +113,15 @@ with tempfile.TemporaryDirectory(prefix='openbindings-consumer-') as temporary:
         assert private is None, label
         assert len([i for i in identities if i.startswith('serde_json v')]) == 1, label
         assert not {'openbindings-internal-referencing', 'openbindings-internal-jsonschema-value'} & nodes.keys(), label
+        assert not {'openbindings-internal-jsonschema', 'openbindings-internal-regress'} & nodes.keys(), label
         if features not in ['', 'ap']:
-            assert 'referencing' in nodes and 'jsonschema-value' in nodes, label
-            # Core uses the unmodified library; the renamed forks arrive only
-            # with the default evaluator.
-            assert 'jsonschema' in nodes, label
-            evaluator = bool({'evaluator', 'native'} & set(features.split(',')))
-            forks = {'openbindings-internal-jsonschema', 'openbindings-internal-regress'} & nodes.keys()
-            assert bool(forks) == evaluator and len(forks) in (0, 2), (label, forks)
+            # Core and the default evaluator use the unmodified library.
+            assert {'jsonschema', 'referencing', 'jsonschema-value'} <= nodes.keys(), label
         result = run(['cargo', 'test', '--locked', *selection], fixture)
         row = {'configuration': label, 'serde_json_features': shared_features,
                'serde_json_identities': sorted(i for i in identities if i.startswith('serde_json v')),
                'normal_and_build_packages_excluding_consumer': len(identities) - 1,
-               'schema_libraries': sorted(n for n in nodes if n in {
-                   'jsonschema', 'openbindings-internal-jsonschema', 'openbindings-internal-regress'}),
+               'schema_libraries': sorted(n for n in nodes if n in {'jsonschema', 'regex'}),
                'direct_shared_versions': {name: nodes[name]['version']
                                           for name in floors if name in nodes}, 'tests': 'passed'}
         if a.resolution == 'minimum':

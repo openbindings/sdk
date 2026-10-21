@@ -104,9 +104,12 @@ impl Context {
     }
 }
 impl Prepared {
+    // Preparation finished: with a prepared contract, or with a refusal, which
+    // judges no value and which the outcome check before timing compared with
+    // the fixture.
     #[inline(always)]
     pub fn is_ready(&self) -> bool {
-        self.0.is_ok()
+        !matches!(&self.0, Err(detail) if detail.reason == NoVerdictReason::Cancelled)
     }
     // This SDK chooses detail per call.
     #[inline(always)]
@@ -116,7 +119,7 @@ impl Prepared {
                 contract
                     .explain_with_control(&value.0, &std::sync::atomic::AtomicBool::new(cancelled)),
             ),
-            Err(detail) => panic!("fixture did not prepare: {detail:?}"),
+            Err(detail) => refused(detail),
         }
     }
     #[inline(always)]
@@ -128,9 +131,16 @@ impl Prepared {
                     &std::sync::atomic::AtomicBool::new(cancelled),
                 ))
             }
-            Err(detail) => panic!("fixture did not prepare: {detail:?}"),
+            Err(detail) => refused(detail),
         }
     }
+}
+// A refused preparation gives no verdict for any value.
+#[inline(never)]
+fn refused(detail: &NoVerdict) -> Outcome {
+    Outcome(ValueOutcome::NoVerdict {
+        detail: detail.clone(),
+    })
 }
 impl Outcome {
     #[inline(always)]

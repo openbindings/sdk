@@ -236,24 +236,24 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
             assert!(validation.conformant().is_none());
             continue;
         }
-        // Valid absent carriers now defer refusal to validation; malformed URI
-        // syntax still refuses during preparation. Privacy applies in both phases.
+        // A missing resource has a stand-in, and a value reaching it gives no
+        // verdict; a reference to a fragment of it refuses preparation.
+        // Privacy applies in both phases.
         let detail = match prepare(&doc, &ResourceSet::default()) {
             Ok(contract) => {
-                assert!(!reference.contains('\n'));
                 let ValueOutcome::NoVerdict { detail } =
                     contract.explain(&JsonValue::parse("null").unwrap())
                 else {
                     panic!()
                 };
-                assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
                 detail
             }
             Err(detail) => {
-                assert!(reference.contains('\n'));
+                assert!(reference.contains('#'));
                 detail
             }
         };
+        assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
         safe(&detail.message);
     }
     let doc = document(
@@ -415,7 +415,7 @@ fn external_evaluator_construction_and_matching_stay_supported() {
 }
 
 #[test]
-fn explained_schema_facts_are_redacted_from_debug() {
+fn explanations_carry_no_schema_facts_and_redact_debug() {
     let doc = document(serde_json::json!({"enum":["SECRET-schema-choice"]}));
     let contract = ready(&doc);
     for text in [format!("{contract:?}"), format!("{contract:#?}")] {
@@ -425,12 +425,9 @@ fn explained_schema_facts_are_redacted_from_debug() {
     let ValueOutcome::Fails { problems, .. } = &outcome else {
         panic!("expected failure")
     };
-    assert!(problems.iter().any(|problem| problem.details.is_some()));
-    assert!(
-        serde_json::to_string(&outcome)
-            .unwrap()
-            .contains("SECRET-schema-choice")
-    );
+    // Explanations name the keyword's location and carry no schema facts.
+    assert!(problems.iter().all(|problem| problem.details.is_none()));
+    assert!(!serde_json::to_string(&outcome).unwrap().contains("SECRET"));
     for text in [format!("{outcome:?}"), format!("{outcome:#?}")] {
         assert!(!text.contains("SECRET"));
     }

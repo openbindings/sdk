@@ -68,7 +68,7 @@ def main():
     failure = None
     try:
         for kind, uri in [('http', f'http://127.0.0.1:{server.server_port}/schema'), ('file', pipe.as_uri())]:
-            for mode in ['positive-core', 'positive-evaluator', 'sdk']:
+            for mode in ['positive', 'sdk']:
                 before = len(hits)
                 command = [str(binary), mode, uri]
                 result = subprocess.run(command, capture_output=True, text=True, timeout=15)
@@ -77,7 +77,7 @@ def main():
                 observed = hits[before:]
                 records.append({'kind': kind, 'mode': mode, 'command': command,
                                 'exit': result.returncode, 'hits': observed})
-                if result.returncode or bool(observed) != mode.startswith('positive') or reader_errors:
+                if result.returncode or bool(observed) != (mode == 'positive') or reader_errors:
                     raise RuntimeError(f'{kind}/{mode} control failed; inspect receipt')
     except Exception as error:
         failure = str(error)
@@ -95,7 +95,7 @@ def main():
         'status': 'failed' if failure else 'passed', 'failure': failure, 'records': records,
         'readerErrors': reader_errors,
         'features': ['resolve-http', 'resolve-file', 'tls-ring'],
-        'scope': 'SDK core assessment, external reference/dialect, kind/content, supplied resource; explicit raw positive controls for both schema libraries',
+        'scope': 'SDK core assessment, external reference/dialect, kind/content, supplied resource; an explicit raw positive control for the schema library',
         'buildIdentity': 'Caller must bind binary to final source through its recorded build command/metadata.',
     }
     (output / 'REPORT.json').write_text(json.dumps(report, indent=2) + '\n')

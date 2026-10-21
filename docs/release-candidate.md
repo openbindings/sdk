@@ -36,8 +36,7 @@ runs Rust examples and the ordinary-Serde compatibility matrix exclusively from
 extracted Cargo archives. Local Cargo patches resolve unpublished siblings; they
 are temporary qualification infrastructure, not the eventual public quickstart.
 The explicit artifact inventory covers all seven supported Rust libraries, the
-internal JSON, schema and cancellation packages, both renamed dependency forks,
-and the build-only Wasm crate. Missing or unclassified packages fail the check.
+internal JSON, schema and cancellation packages, and the build-only Wasm crate. Missing or unclassified packages fail the check.
 The JSON manifest records artifacts, hashes, source identity, and a topologically
 sorted publication order. CI runs this gate after building the npm package from
 its clean candidate checkout. Packaging success is not a substitute for the full
