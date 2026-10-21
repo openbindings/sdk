@@ -71,6 +71,21 @@ with the patterns as annotations, plus the default total and three times the
 per-pattern limit for the form being written and its shared copy. Run the
 phase alone with `--patterns-only`.
 
+## Compiled patterns
+
+The same phase bounds the memory the regex crate builds for a contract's
+compiled patterns, which share `Limits::total_pattern_memory` (64 MiB). It
+prepares 40 and 300 `patternProperties` names of the form `^.{1,10000}N$`, each
+compiling to about 13.2 MiB, which need more together than the memory leaves
+and must refuse with `pattern-total-memory-limit` in under 2 s (each needs more
+than its equal part, which takes about 0.2 s to establish), adding no more at
+their peak than three times the memory divided among them to the same
+document with the names as property names.
+Four such names must prepare and decide a value, keeping no more than the
+pattern memory and peaking within twice it. One hundred names whose automata
+fill the lazy DFA's cache (`[01]*1[01]{20}zN`), checked against a 64 KiB key of
+random bits, must add no more than the pattern memory at their peak.
+
 ## Recorded results
 
 The verifier writes fresh raw allocation and timing samples to
