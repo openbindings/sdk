@@ -87,6 +87,20 @@ for interface in ['http-discovery', 'invocation', 'source-inspection', 'interfac
     assert 'pub use openbindings_internal_cancellation::{Cancellation, CancellationToken};' in (package / 'src/lib.rs').read_text(encoding='utf-8')
 print('Cancellation: one shared identity, std-only implementation above synchronous core.')
 
+# The interface records the kind-facing companions share have one definition,
+# outside core, reexported by each of them.
+interfaces = 'openbindings-internal-interfaces'
+assert interfaces not in core.get('dependencies', {})
+for interface in ['invocation', 'source-inspection', 'interface-synthesis']:
+    package = root / 'crates' / ('openbindings-' + interface)
+    manifest = tomllib.loads((package / 'Cargo.toml').read_text(encoding='utf-8'))
+    assert manifest['dependencies'][interfaces] == {
+        'version': '=0.2.0-alpha.1', 'path': '../' + interfaces,
+    }
+    assert 'pub use openbindings_internal_interfaces::{KindSupportVerdict, SupportedKind};' in ''.join(
+        path.read_text(encoding='utf-8') for path in (package / 'src').rglob('*.rs'))
+print('Interface records: one shared definition of the kind support records, outside core.')
+
 # Core's complete implementation closure holds no evaluator.
 graph = json.loads(subprocess.check_output(
     ['cargo', 'metadata', '--offline', '--locked', '--format-version', '1'], cwd=root))

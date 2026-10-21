@@ -14,6 +14,7 @@ for a complete job; use the definitions for exact result, ownership and limit co
 | Rust interface synthesis interface | [`openbindings-interface-synthesis`](../crates/openbindings-interface-synthesis/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-interface-synthesis` |
 | Rust binding and operation invocation interfaces | [`openbindings-invocation`](../crates/openbindings-invocation/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-invocation` |
 | Shared Rust cancellation definitions | [`openbindings-internal-cancellation`](../crates/openbindings-internal-cancellation/src/lib.rs), reexported by all four async companions | `cargo doc --locked --no-deps -p openbindings-internal-cancellation` |
+| Shared Rust interface records | [`openbindings-internal-interfaces`](../crates/openbindings-internal-interfaces/src/lib.rs): `SupportedKind` and `KindSupportVerdict`, reexported by inspection, synthesis and invocation | `cargo doc --locked --no-deps -p openbindings-internal-interfaces` |
 | TypeScript core and HTTP discovery | [`internal.ts`](../packages/typescript/src/internal.ts), as exported by the two entry points | Build the package, then run `node packages/typescript/scripts/check-api-reference.mjs target/api-reference` |
 | TypeScript testing | [`testing.ts`](../packages/typescript/src/testing.ts), exported by `@openbindings/sdk/testing` | Included in the TypeScript reference renderer |
 | Compiled Wasm asset import | [`wasm-module.d.ts`](../packages/typescript/src/wasm-module.d.ts) | Host import type documented alongside `initialize` |
@@ -62,6 +63,11 @@ for their required fields and `with_*` methods for optional ones:
 | Source inspectors | `SourceInspection::complete(targets)` or `partial(targets, limitation)` and `with_limitation(..)`, `BindableTarget::new(source_ref, binding).with_operation_key(..).with_operation(..)`, `InspectionLimitation::new(code, message).with_details(..).with_additional_fields(..)`, `SupportedKind::new(kind).with_description(..)` |
 | Interface synthesizers | `SynthesisCandidate::new(document, coverage)`, `CoverageClaim::complete(entries)` or `partial(entries, limitation)`, `CoverageEntry::new(..)` then its assignable evidence fields, `CoverageLimitation::new(code, message)` with the same builders, `SupportedKind::new(kind)` |
 | Binding invokers and transports | `binding::SupportedKind::new(kind).with_description(..)`, HTTP discovery `RequestError::new(kind, message)` |
+
+`SupportedKind` and `KindSupportVerdict` are one type in every companion that
+reexports them, so a provider serving inspection, synthesis and invocation can
+return the same advisory list from each trait. A verdict answers for the job of
+the checked caller that returned it.
 | Version checks | `VersionRefusal::new(declared)`, `Some` only for a well-formed version outside the supported line |
 
 Input records, which callers build and the SDK reads, keep struct-literal

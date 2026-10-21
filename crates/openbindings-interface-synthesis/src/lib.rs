@@ -9,6 +9,8 @@ mod validate;
 pub use error::*;
 pub use model::*;
 pub use synthesizer::*;
+// One definition of the records every kind-facing interface shares.
+pub use openbindings_internal_interfaces::{KindSupportVerdict, SupportedKind};
 /// Version of the published interface this crate implements, independent of the crate's own version.
 pub const INTERFACE_VERSION: &str = "0.2.0";
 /// Revision of the interfaces repository applied by this crate.

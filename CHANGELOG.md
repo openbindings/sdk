@@ -98,7 +98,9 @@
   `/.well-known/%6Fpenbindings` (RFC 3986 section 2.3), and never decodes a
   reserved escape such as `%2F` into a path separator.
 - Provisional Rust provider traits and checked callers for source inspection,
-  interface synthesis, binding invocation and operation invocation.
+  interface synthesis, binding invocation and operation invocation. The three
+  kind-facing companions share one `SupportedKind` and `KindSupportVerdict`, so a
+  provider serving several jobs builds one advisory list.
 - A TypeScript API with bundled Wasm, exact-value editing, disposable owners and
   Fetch discovery for qualified browser, Node ESM and Worker hosts.
 - A bundled Wasm module whose bytes do not depend on where it was built. The

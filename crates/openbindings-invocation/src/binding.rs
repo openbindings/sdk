@@ -5,60 +5,8 @@ use crate::{
     LimitError, ProviderIo, lifecycle::Shared,
 };
 
-use serde::Serialize;
-use std::collections::HashSet;
-
-/// Advisory kind description; omission conveys no negative support verdict.
-///
-/// Providers build one with [`Self::new`] and [`Self::with_description`]. Later
-/// versions may add fields: read them by name and match with `..`.
-#[derive(Clone, Serialize)]
-#[non_exhaustive]
-pub struct SupportedKind {
-    /// Exact opaque kind label.
-    pub kind: String,
-    /// Optional human-facing description.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-}
-impl SupportedKind {
-    /// An exact kind without a description.
-    pub fn new(kind: impl Into<String>) -> Self {
-        Self {
-            kind: kind.into(),
-            description: None,
-        }
-    }
-    /// Attach a human-facing description.
-    #[must_use]
-    pub fn with_description(mut self, description: impl Into<String>) -> Self {
-        self.description = Some(description.into());
-        self
-    }
-}
-impl std::fmt::Debug for SupportedKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SupportedKind").finish_non_exhaustive()
-    }
-}
-
-/// Exact support for this provider’s invocation job.
-/// Later versions may add fields: read them by name and match with `..`.
-#[derive(Clone, PartialEq, Eq, Serialize)]
-#[non_exhaustive]
-pub struct KindSupportVerdict {
-    /// Exact requested kind, unchanged.
-    pub kind: String,
-    /// Authoritative support for this job; not a guarantee every case is handled.
-    pub supported: bool,
-}
-impl std::fmt::Debug for KindSupportVerdict {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("KindSupportVerdict")
-            .field("supported", &self.supported)
-            .finish_non_exhaustive()
-    }
-}
+// One definition of the records every kind-facing interface shares.
+pub use openbindings_internal_interfaces::{KindSupportVerdict, SupportedKind};
 
 use std::{
     future::{Future, poll_fn},
@@ -234,16 +182,10 @@ impl<P: BindingInvoker> Invoker<P> {
         if kinds.iter().any(|k| k.as_ref().is_empty()) {
             return Err(BoundaryError::new("empty-kind", "/kinds"));
         }
-        let mut seen = HashSet::new();
-        Ok(kinds
-            .iter()
-            .map(AsRef::as_ref)
-            .filter(|k| seen.insert(*k))
-            .map(|kind| KindSupportVerdict {
-                kind: kind.into(),
-                supported: self.supports_kind(kind),
-            })
-            .collect())
+        Ok(openbindings_internal_interfaces::kind_support_verdicts(
+            kinds.iter().map(AsRef::as_ref),
+            |kind| self.supports_kind(kind),
+        ))
     }
     /// Validate the advisory list against exact support; omission means nothing.
     ///

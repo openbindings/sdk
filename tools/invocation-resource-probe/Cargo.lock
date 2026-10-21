@@ -376,6 +376,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "openbindings-internal-interfaces"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "openbindings-internal-json"
 version = "0.2.0-alpha.1"
 dependencies = [
@@ -405,6 +412,7 @@ dependencies = [
  "futures-core",
  "openbindings",
  "openbindings-internal-cancellation",
+ "openbindings-internal-interfaces",
  "serde",
  "serde_json",
 ]

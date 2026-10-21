@@ -6,59 +6,6 @@ use serde::{
 };
 use std::collections::{BTreeMap, HashSet};
 
-/// Advisory description of a supported exact kind; omission implies nothing.
-///
-/// Providers build one with [`Self::new`] and [`Self::with_description`]. Later
-/// versions may add fields: read them by name and match with `..`.
-#[derive(Clone, Serialize)]
-#[non_exhaustive]
-pub struct SupportedKind {
-    /// Exact, opaque source kind.
-    pub kind: String,
-    /// Optional human-facing description.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-}
-impl SupportedKind {
-    /// An exact kind without a description.
-    pub fn new(kind: impl Into<String>) -> Self {
-        Self {
-            kind: kind.into(),
-            description: None,
-        }
-    }
-    /// Attach a human-facing description.
-    #[must_use]
-    pub fn with_description(mut self, description: impl Into<String>) -> Self {
-        self.description = Some(description.into());
-        self
-    }
-}
-impl std::fmt::Debug for SupportedKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SupportedKind").finish_non_exhaustive()
-    }
-}
-
-/// Authoritative support verdict for this provider's inspection job.
-/// Later versions may add fields: read them by name and match with `..`.
-#[derive(Clone, PartialEq, Eq, Serialize)]
-#[non_exhaustive]
-pub struct KindSupportVerdict {
-    /// Exact requested kind, unchanged.
-    pub kind: String,
-    /// Whether the provider understands this kind for inspection, not a promise
-    /// that every artifact can be handled completely.
-    pub supported: bool,
-}
-impl std::fmt::Debug for KindSupportVerdict {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("KindSupportVerdict")
-            .field("supported", &self.supported)
-            .finish_non_exhaustive()
-    }
-}
-
 /// Binding data returned before an author assigns operation and source keys.
 ///
 /// Absent content and explicit JSON null remain distinct. Metadata is information,

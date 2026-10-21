@@ -48,7 +48,9 @@ supply it before building and validating the final document.
 Providers build results with `SourceInspection::complete` or `partial`,
 `BindableTarget::new` (with `with_operation_key` and `with_operation`),
 `InspectionLimitation::new` and `SupportedKind::new`. These records may gain
-fields in later versions, so match them with `..`. A `BindingFragment` is
+fields in later versions, so match them with `..`. `SupportedKind` and
+`KindSupportVerdict` are the same types interface synthesis and invocation
+reexport, so a provider serving several jobs builds one advisory list. A `BindingFragment` is
 authoring data like `openbindings::Binding` and keeps struct-literal construction.
 
 ## Limits
