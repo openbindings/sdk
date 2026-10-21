@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
 mod constructors;
 mod near_misses;
+mod patterns;
 mod references;
 mod values;
 
@@ -64,12 +65,22 @@ fn main() {
         return;
     }
     constructors::run();
+    if std::env::args().any(|arg| arg == "--patterns-only") {
+        patterns::run();
+        return;
+    }
     if std::env::args().any(|arg| arg == "--near-misses-only") {
         near_misses::run();
         return;
     }
     if std::env::args().any(|arg| arg == "--values-only") {
-        values::run();
+        // `--path NAME` runs one value path alone.
+        let args: Vec<String> = std::env::args().collect();
+        let only = args
+            .iter()
+            .position(|arg| arg == "--path")
+            .map(|at| args[at + 1].as_str());
+        values::run(only);
         drop(references::run());
         return;
     }
@@ -220,8 +231,9 @@ fn main() {
             );
         }
     }
-    values::run();
+    values::run(None);
     // Preserve the frozen probes' cache initialization and measurement order.
     drop(references::run());
     near_misses::run();
+    patterns::run();
 }

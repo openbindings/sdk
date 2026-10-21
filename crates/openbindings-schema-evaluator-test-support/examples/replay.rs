@@ -27,9 +27,14 @@ impl SchemaEvaluator for OriginalContext {
     }
 }
 fn main() {
+    // The default evaluator's qualified limitations.
     let report = run(
         &OriginalContext,
-        &Options::without_unicode_property_matching(),
+        &Options::without(&[
+            "unicode-property-matching",
+            "backtracking-pattern-matching",
+            "undefined-results",
+        ]),
     );
     // The receipt is written as JSON text: a report can carry an exact pointer
     // through a member name with an unpaired unit, which no `Value` holds.

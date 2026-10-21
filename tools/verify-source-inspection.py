@@ -20,8 +20,6 @@ LOCAL = [
     "crates/openbindings", "crates/openbindings-internal-json",
     "crates/openbindings-internal-cancellation", "crates/openbindings-internal-schema",
     "crates/openbindings-source-inspection",
-    "vendor/openbindings-internal-jsonschema",
-    "vendor/openbindings-internal-regress",
 ]
 
 
@@ -66,10 +64,10 @@ def main():
 
     sources = {}
     hashes = {}
-    version = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
+    version = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding='utf-8'))["workspace"]["package"]["version"]
     for local in LOCAL:
         source = ROOT / local
-        package = tomllib.loads((source / "Cargo.toml").read_text())["package"]
+        package = tomllib.loads((source / "Cargo.toml").read_text(encoding='utf-8'))["package"]
         name = package["name"]
         if args.archives:
             run("package-" + name, ["cargo", "package", "--locked", "--allow-dirty", "--no-verify", "--exclude-lockfile", "--manifest-path", source / "Cargo.toml"])
@@ -80,7 +78,7 @@ def main():
             if source.exists():
                 shutil.rmtree(source)
             extract_fresh(archive, out / "cargo")
-            normalized = tomllib.loads((source / "Cargo.toml").read_text())
+            normalized = tomllib.loads((source / "Cargo.toml").read_text(encoding='utf-8'))
             for section in [normalized, *normalized.get("target", {}).values()]:
                 for kind in ["dependencies", "dev-dependencies", "build-dependencies"]:
                     for spec in section.get(kind, {}).values():
@@ -93,7 +91,7 @@ def main():
     for directory in ["src", "tests", "examples"]:
         shutil.copytree(FIXTURE / directory, consumer / directory, dirs_exist_ok=True)
     patches = "\n[patch.crates-io]\n" + "".join(f"{name}={{path={json.dumps(str(source))}}}\n" for name, source in sources.items())
-    (consumer / "Cargo.toml").write_text((FIXTURE / "Cargo.toml").read_text() + patches)
+    (consumer / "Cargo.toml").write_text((FIXTURE / "Cargo.toml").read_text(encoding='utf-8') + patches)
     shutil.copyfile(ROOT / "Cargo.lock", consumer / "Cargo.lock")
     # Preserve the root lock's selected versions, adding only the external fixture.
     run("consumer-test", ["cargo", "test"], consumer)

@@ -15,9 +15,9 @@ workspace = true
 [dependencies]
 openbindings = { version = "=0.2.0-alpha.1", path = "../openbindings" }
 serde_json.workspace = true
-# The renamed fork carries the evaluator's work, depth, compilation and
-# ECMAScript-regex controls until the evaluator moves to the unmodified library.
-jsonschema = { package = "openbindings-internal-jsonschema", version = "=0.58.6-ob.1", path = "../../vendor/openbindings-internal-jsonschema", default-features = false }
+jsonschema.workspace = true
+# The linear-time engine that matches `pattern` values.
+regex = "1.13.1"
 
 openbindings-internal-json = { version = "=0.2.0-alpha.1", path = "../openbindings-internal-json", features = ["evaluator-work"] }
 serde.workspace = true

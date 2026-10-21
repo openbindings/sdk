@@ -12,7 +12,13 @@ separately.
 ```rust
 use openbindings_schema_evaluator_test_support::{run, Options};
 let evaluator = openbindings_json_schema_evaluator::DefaultEvaluator::new();
-let report = run(&evaluator, &Options::without_unicode_property_matching());
+// The default evaluator's qualified limitations.
+let options = Options::without(&[
+    "unicode-property-matching",
+    "backtracking-pattern-matching",
+    "undefined-results",
+]);
+let report = run(&evaluator, &options);
 assert!(report.is_success());
 ```
 
@@ -27,6 +33,11 @@ for the original-document and resource contract.
 This is a finite qualification suite, not proof of complete JSON Schema support.
 A successful report may contain explicitly permitted capability refusals.
 `Options` declares exact cases and reasons; a wrong verdict cannot be exempted.
+`Options::without` permits, case by case, the stated refusal of each case that
+declares one of the suite's optional capabilities: `unicode-property-matching`
+(Unicode property escapes in patterns), `backtracking-pattern-matching`
+(patterns with lookaround or backreferences) and
+`undefined-results` (establishing that a value's validity is undefined).
 A case that reaches a schema in another dialect, such as draft 2019-09 or a custom
 meta-schema's vocabularies, expects JSON Schema's verdict for it and also accepts
 an unsupported-capability refusal without a declaration. Where JSON Schema leaves

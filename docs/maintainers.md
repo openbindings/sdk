@@ -60,9 +60,10 @@ the library normalization policy.
 Ordinary resolution inside identified and supplied resources uses the dependency's
 documented API. Core retains OpenBindings embedding rules. See
 [architecture](architecture.md) for package boundaries and the
-[partial-resource and reference-defect proof](partial-resource-bounds.md) for
-lower/upper programs, semantic provenance, graph admission and shared budgets.
-Those are evaluator implementation details, not an application readiness API.
+[dependency maintenance contract](../DEPENDENCY-MAINTENANCE.md) for how the default
+evaluator bundles, specializes and transforms projected schemas before the library
+compiles them. Those are evaluator implementation details, not an application
+readiness API.
 
 ## Findings and allocation qualification
 
@@ -81,8 +82,8 @@ MSRV exclusion without weakening development-toolchain tests.
 
 ## Dependency and fixture maintenance
 
-Use [dependency maintenance](../DEPENDENCY-MAINTENANCE.md) for fork provenance,
-patch reconstruction and upgrade invariants. The
+Use [dependency maintenance](../DEPENDENCY-MAINTENANCE.md) for upstream source
+records, the evaluator's schema transforms and upgrade invariants. The
 [evaluator fixture provenance](../crates/openbindings-schema-evaluator-test-support/fixtures/provenance.json)
 records frozen inputs and policy translations. The
 [qualification guide](../tools/qualification/README.md) describes corpus replay.

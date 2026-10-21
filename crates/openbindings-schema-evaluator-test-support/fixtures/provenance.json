@@ -6674,5 +6674,124 @@
         }
       ]
     }
+  ],
+  "capability_declarations": [
+    {
+      "case": "suite/draft2020-12/optional/refOfUnknownKeyword.json#0/0 reference of a root arbitrary keyword /match",
+      "expected": "undefined",
+      "optional_capability": "undefined-results",
+      "refusal_kind": "conservative-preparation",
+      "authority": "OpenBindings 0.2 section 5.2: a no-verdict where an undefined result could be established is incomplete, never false. An evaluator may decline to establish undefined results and refuse, naming the defective reference.",
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"bar\":{\"$ref\":\"#/unknown-keyword\"}},\"unknown-keyword\":{\"type\":\"integer\"}}}}}",
+      "original_value": "{\"bar\": 3}"
+    },
+    {
+      "case": "suite/draft2020-12/optional/refOfUnknownKeyword.json#0/1 reference of a root arbitrary keyword /mismatch",
+      "expected": "undefined",
+      "optional_capability": "undefined-results",
+      "refusal_kind": "conservative-preparation",
+      "authority": "OpenBindings 0.2 section 5.2: a no-verdict where an undefined result could be established is incomplete, never false. An evaluator may decline to establish undefined results and refuse, naming the defective reference.",
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"bar\":{\"$ref\":\"#/unknown-keyword\"}},\"unknown-keyword\":{\"type\":\"integer\"}}}}}",
+      "original_value": "{\"bar\": true}"
+    },
+    {
+      "case": "suite/draft2020-12/optional/refOfUnknownKeyword.json#1/0 reference of a root arbitrary keyword with encoded ref/match",
+      "expected": "undefined",
+      "optional_capability": "undefined-results",
+      "refusal_kind": "conservative-preparation",
+      "authority": "OpenBindings 0.2 section 5.2: a no-verdict where an undefined result could be established is incomplete, never false. An evaluator may decline to establish undefined results and refuse, naming the defective reference.",
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"bar\":{\"$ref\":\"#/unknown~1keyword\"}},\"unknown/keyword\":{\"type\":\"integer\"}}}}}",
+      "original_value": "{\"bar\": 3}"
+    },
+    {
+      "case": "suite/draft2020-12/optional/refOfUnknownKeyword.json#1/1 reference of a root arbitrary keyword with encoded ref/mismatch",
+      "expected": "undefined",
+      "optional_capability": "undefined-results",
+      "refusal_kind": "conservative-preparation",
+      "authority": "OpenBindings 0.2 section 5.2: a no-verdict where an undefined result could be established is incomplete, never false. An evaluator may decline to establish undefined results and refuse, naming the defective reference.",
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"bar\":{\"$ref\":\"#/unknown~1keyword\"}},\"unknown/keyword\":{\"type\":\"integer\"}}}}}",
+      "original_value": "{\"bar\": true}"
+    },
+    {
+      "case": "suite/draft2020-12/optional/refOfUnknownKeyword.json#2/0 reference of an arbitrary keyword of a sub-schema/match",
+      "expected": "undefined",
+      "optional_capability": "undefined-results",
+      "refusal_kind": "conservative-preparation",
+      "authority": "OpenBindings 0.2 section 5.2: a no-verdict where an undefined result could be established is incomplete, never false. An evaluator may decline to establish undefined results and refuse, naming the defective reference.",
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"foo\":{\"unknown-keyword\":{\"type\":\"integer\"}},\"bar\":{\"$ref\":\"#/properties/foo/unknown-keyword\"}}}}}}",
+      "original_value": "{\"bar\": 3}"
+    },
+    {
+      "case": "suite/draft2020-12/optional/refOfUnknownKeyword.json#2/1 reference of an arbitrary keyword of a sub-schema/mismatch",
+      "expected": "undefined",
+      "optional_capability": "undefined-results",
+      "refusal_kind": "conservative-preparation",
+      "authority": "OpenBindings 0.2 section 5.2: a no-verdict where an undefined result could be established is incomplete, never false. An evaluator may decline to establish undefined results and refuse, naming the defective reference.",
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"foo\":{\"unknown-keyword\":{\"type\":\"integer\"}},\"bar\":{\"$ref\":\"#/properties/foo/unknown-keyword\"}}}}}}",
+      "original_value": "{\"bar\": true}"
+    },
+    {
+      "case": "suite/draft2020-12/optional/refOfUnknownKeyword.json#3/0 reference internals of known non-applicator/match",
+      "expected": "undefined",
+      "optional_capability": "undefined-results",
+      "refusal_kind": "conservative-preparation",
+      "authority": "OpenBindings 0.2 section 5.2: a no-verdict where an undefined result could be established is incomplete, never false. An evaluator may decline to establish undefined results and refuse, naming the defective reference.",
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$ref\":\"#/examples/0\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"examples\":[{\"type\":\"string\"}]}}}}",
+      "original_value": "\"a string\""
+    },
+    {
+      "case": "suite/draft2020-12/optional/refOfUnknownKeyword.json#3/1 reference internals of known non-applicator/mismatch",
+      "expected": "undefined",
+      "optional_capability": "undefined-results",
+      "refusal_kind": "conservative-preparation",
+      "authority": "OpenBindings 0.2 section 5.2: a no-verdict where an undefined result could be established is incomplete, never false. An evaluator may decline to establish undefined results and refuse, naming the defective reference.",
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$ref\":\"#/examples/0\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"examples\":[{\"type\":\"string\"}]}}}}",
+      "original_value": "42"
+    },
+    {
+      "case": "suite/draft2020-12/optional/refOfUnknownKeyword.json#4/0 reference of an arbitrary keyword of a sub-schema with encoded ref/match",
+      "expected": "undefined",
+      "optional_capability": "undefined-results",
+      "refusal_kind": "conservative-preparation",
+      "authority": "OpenBindings 0.2 section 5.2: a no-verdict where an undefined result could be established is incomplete, never false. An evaluator may decline to establish undefined results and refuse, naming the defective reference.",
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"foo\":{\"unknown/keyword\":{\"type\":\"integer\"}},\"bar\":{\"$ref\":\"#/properties/foo/unknown~1keyword\"}}}}}}",
+      "original_value": "{\"bar\": 3}"
+    },
+    {
+      "case": "suite/draft2020-12/optional/refOfUnknownKeyword.json#4/1 reference of an arbitrary keyword of a sub-schema with encoded ref/mismatch",
+      "expected": "undefined",
+      "optional_capability": "undefined-results",
+      "refusal_kind": "conservative-preparation",
+      "authority": "OpenBindings 0.2 section 5.2: a no-verdict where an undefined result could be established is incomplete, never false. An evaluator may decline to establish undefined results and refuse, naming the defective reference.",
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"foo\":{\"unknown/keyword\":{\"type\":\"integer\"}},\"bar\":{\"$ref\":\"#/properties/foo/unknown~1keyword\"}}}}}}",
+      "original_value": "{\"bar\": true}"
+    },
+    {
+      "case": "adversarial/lazy-lookahead/2",
+      "expected": "satisfies",
+      "optional_capability": "backtracking-pattern-matching",
+      "refusal_kind": "unsupported-capability",
+      "authority": "OpenBindings 0.2 security considerations: a backtracking engine can take exponential time on crafted input. An evaluator that matches patterns with a linear-time engine may refuse a pattern that needs lookaround, backreferences or word boundaries.",
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"anyOf\":[{\"type\":\"integer\"},{\"pattern\":\"^(?=a)\"}]}}},\"schemas\":{}}",
+      "original_value": "\"abc\""
+    },
+    {
+      "case": "adversarial/lazy-pattern-properties/0",
+      "expected": "satisfies",
+      "optional_capability": "unicode-property-matching",
+      "refusal_kind": "unsupported-capability",
+      "authority": "An evaluator without Unicode property matching may refuse a contract whose patternProperties name holds a property escape, as well as each value that reaches it.",
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"patternProperties\":{\"^\\\\p{Lu}\":{\"type\":\"integer\"}},\"additionalProperties\":false}}},\"schemas\":{}}",
+      "original_value": "{}"
+    },
+    {
+      "case": "adversarial/lazy-pattern-properties/1",
+      "expected": "satisfies",
+      "optional_capability": "unicode-property-matching",
+      "refusal_kind": "unsupported-capability",
+      "authority": "An evaluator without Unicode property matching may refuse a contract whose patternProperties name holds a property escape, as well as each value that reaches it.",
+      "original_document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"patternProperties\":{\"^\\\\p{Lu}\":{\"type\":\"integer\"}},\"additionalProperties\":false}}},\"schemas\":{}}",
+      "original_value": "5"
+    }
   ]
 }

@@ -75,18 +75,22 @@ fn matrix_and_concrete_reference_completions() {
     }
 }
 #[test]
-fn semantic_preparation_and_validation_honor_cancellation() {
-    let parsed = Document::parse(r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$id":"https://controls.test/root","$ref":"#missing"}}}}"##).unwrap();
+fn preparation_and_validation_honor_cancellation() {
+    let parsed = Document::parse(r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$id":"https://controls.test/root","$ref":"#missing"}},"ok":{"input":{"type":"integer"}}}}"##).unwrap();
     let validation = parsed.validate().unwrap();
     let proof = validation.conformant().unwrap();
-    let operation = proof.resolve_operation("op").unwrap();
-    let unprepared = operation.input().unwrap();
     let evaluator = DefaultEvaluator::new();
     let cancelled = AtomicBool::new(true);
+    let defective = proof.resolve_operation("op").unwrap();
+    let unprepared = defective.input().unwrap();
     assert!(
         matches!(unprepared.prepare_with_control(&evaluator, &ResourceSet::default(), &cancelled), Err(detail) if detail.reason == NoVerdictReason::Cancelled)
     );
-    let Ok(contract) = unprepared.prepare(&evaluator) else {
+    assert!(
+        matches!(unprepared.prepare(&evaluator), Err(detail) if detail.code == "anchor-missing")
+    );
+    let operation = proof.resolve_operation("ok").unwrap();
+    let Ok(contract) = operation.input().unwrap().prepare(&evaluator) else {
         panic!("prepared")
     };
     assert!(
@@ -94,78 +98,85 @@ fn semantic_preparation_and_validation_honor_cancellation() {
     );
 }
 
-#[test]
-fn undefined_results_name_only_a_reference_the_validity_depends_on() {
-    let undefined_at = |properties: &str, value: &str| {
-        let document = format!(
-            r#"{{"openbindings":"0.2.0","schemas":{{"T":{{"$id":"https://defects.test/r","properties":{properties}}}}},"operations":{{"op":{{"input":{{"$ref":"https://defects.test/r"}}}}}}}}"#
-        );
-        let parsed = Document::parse(document).unwrap();
-        let validation = parsed.validate().unwrap();
-        let proof = validation.conformant().unwrap();
-        let operation = proof.resolve_operation("op").unwrap();
-        let contract = operation
-            .input()
-            .unwrap()
-            .prepare(&DefaultEvaluator::new())
-            .unwrap();
-        match contract.validate(&JsonValue::parse(value).unwrap()) {
-            ValueOutcome::Undefined { detail } => {
-                assert_eq!(detail.code, "static-reference-defect");
-                detail
-                    .location
-                    .map(|at| (at.resource, at.pointer.to_string()))
-            }
-            other => panic!("{properties} against {value}: {other:?}"),
-        }
+// The evaluator establishes no verdict that a static reference defect leaves
+// open, even one that would not depend on it: it refuses preparation, naming
+// the schema whose reference it could not follow.
+fn refusal_at(document: String) -> NoVerdict {
+    let parsed = Document::parse(document).unwrap();
+    let validation = parsed.validate().unwrap();
+    let proof = validation.conformant().unwrap();
+    let operation = proof.resolve_operation("op").unwrap();
+    let Err(detail) = operation.input().unwrap().prepare(&DefaultEvaluator::new()) else {
+        panic!("a defective reference prepared")
     };
-    // With one defective reference, every undefined value depends on it.
-    let sole = r##"{"b":{"$ref":"#nope"}}"##;
-    assert_eq!(
-        undefined_at(sole, r#"{"b":1}"#),
-        Some((None, "/schemas/T/properties/b/$ref".to_owned()))
-    );
-    // With two, a value can depend on either; the first is not named for a
-    // value that never reaches it, and no other is guessed.
-    let both = r##"{"a":{"$ref":"#/$defs/missing"},"b":{"$ref":"#nope"}}"##;
-    for value in [r#"{"b":1}"#, r#"{"a":1}"#, r#"{"a":1,"b":1}"#] {
-        assert_eq!(undefined_at(both, value), None, "{value}");
-    }
+    detail
 }
-
 #[test]
-fn unavailable_resources_are_named_only_when_the_verdict_depends_on_them() {
-    let unavailable_at = |properties: &str, value: &str| {
-        let document = format!(
-            r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{{"properties":{properties}}}}}}}}}"#
-        );
-        let parsed = Document::parse(document).unwrap();
-        let validation = parsed.validate().unwrap();
-        let proof = validation.conformant().unwrap();
-        let operation = proof.resolve_operation("op").unwrap();
-        let contract = operation
-            .input()
-            .unwrap()
-            .prepare(&DefaultEvaluator::new())
-            .unwrap();
-        match contract.validate(&JsonValue::parse(value).unwrap()) {
-            ValueOutcome::NoVerdict { detail } => {
-                assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
-                detail.location.map(|at| at.pointer.to_string())
-            }
-            other => panic!("{properties} against {value}: {other:?}"),
-        }
+fn defective_references_refuse_preparation_naming_the_reference() {
+    let defective = |properties: &str| {
+        refusal_at(format!(
+            r#"{{"openbindings":"0.2.0","schemas":{{"T":{{"$id":"https://defects.test/r","properties":{properties}}}}},"operations":{{"op":{{"input":{{"$ref":"https://defects.test/r"}}}}}}}}"#
+        ))
     };
-    // One missing resource: every value without a verdict depends on it.
-    let sole = r#"{"b":{"$ref":"https://missing.test/b"}}"#;
+    let detail = defective(r##"{"b":{"$ref":"#nope"}}"##);
+    assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
+    assert_eq!(detail.code, "anchor-missing");
     assert_eq!(
-        unavailable_at(sole, r#"{"b":1}"#).as_deref(),
-        Some("/operations/op/input/properties/b/$ref")
+        detail.location,
+        Some(SchemaLocation::new(
+            None,
+            "/schemas/T/properties/b".parse().unwrap()
+        ))
     );
-    // Two: `{"b":1}` never reaches `/a/$ref`, and which one a value reaches is
-    // not established, so neither is named.
-    let both = r#"{"a":{"$ref":"https://missing.test/a"},"b":{"$ref":"https://missing.test/b"}}"#;
-    for value in [r#"{"b":1}"#, r#"{"a":1}"#, r#"{"a":1,"b":1}"#] {
-        assert_eq!(unavailable_at(both, value), None, "{value}");
-    }
+    let detail = defective(r##"{"a":{"$ref":"#/$defs/missing"},"b":{"$ref":"#nope"}}"##);
+    assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
+    assert!(detail.location.is_some());
+}
+#[test]
+fn values_reaching_a_missing_resource_give_no_verdict_naming_it() {
+    let document = |properties: &str| {
+        format!(
+            r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{{"properties":{properties}}}}}}}}}"#
+        )
+    };
+    let parsed = Document::parse(document(r#"{"b":{"$ref":"https://missing.test/b"}}"#)).unwrap();
+    let validation = parsed.validate().unwrap();
+    let proof = validation.conformant().unwrap();
+    let operation = proof.resolve_operation("op").unwrap();
+    let contract = operation
+        .input()
+        .unwrap()
+        .prepare(&DefaultEvaluator::new())
+        .unwrap();
+    assert!(matches!(
+        contract.validate(&JsonValue::parse(r#"{"a":1}"#).unwrap()),
+        ValueOutcome::Satisfies
+    ));
+    let ValueOutcome::NoVerdict { detail } =
+        contract.validate(&JsonValue::parse(r#"{"b":1}"#).unwrap())
+    else {
+        panic!("a value reaching the missing resource was decided")
+    };
+    assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
+    assert_eq!(detail.code, "resource-unavailable");
+    assert_eq!(
+        detail.location,
+        Some(SchemaLocation::new(
+            Some("https://missing.test/b".into()),
+            "".parse().unwrap()
+        ))
+    );
+    // A fragment of a missing resource has no stand-in: preparation refuses,
+    // naming the reference.
+    let detail = refusal_at(document(
+        r#"{"b":{"$ref":"https://missing.test/b#/$defs/x"}}"#,
+    ));
+    assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
+    assert_eq!(
+        detail.location,
+        Some(SchemaLocation::new(
+            None,
+            "/operations/op/input/properties/b".parse().unwrap()
+        ))
+    );
 }

@@ -54,9 +54,15 @@ Set `REFERENCE_RECEIPT` to separate output paths when running each, then run:
 python3 tools/qualification/replay/check-reference-completions.py native.json typescript.json
 ```
 
-The accepted matrix's 1,086 cases are retained, including the unsupported
-families; 36 static-reference observations change. Additional controls preserve
-siblings and identities while replacing individual defective invocations with
-concrete schemas. Every migrated kit/corpus case has opposite concrete repairs.
-The complete-fragment oracle, completion comparisons, and injected false results
-run without network or an independent resolver implementation.
+The matrix's 1,086 cases and the 1,262 completion cases are retained, including
+the unsupported families. A contract that reaches a static reference defect
+refuses preparation, naming the reference, and a missing resource has a
+stand-in whose no-verdict names it. Against the earlier evaluator, 194 defect
+cases that were decided or undefined now refuse preparation, 8 values that reach
+a stand-in give no verdict, 34 no-verdicts now name the missing resource, 2
+preparation refusals are decided, 5 refusals name a different first defect or
+limit, and no case changes between satisfies and fails. Additional controls
+preserve siblings and identities while replacing individual defective
+invocations with concrete schemas, and keep the complete-fragment oracle's
+verdicts. The oracle, completion comparisons, and injected false results run
+without network or an independent resolver implementation.

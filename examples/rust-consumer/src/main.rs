@@ -238,7 +238,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     server.join().expect("example server")?;
     let report = openbindings_schema_evaluator_test_support::run(
         &DefaultEvaluator::new(),
-        &openbindings_schema_evaluator_test_support::Options::without_unicode_property_matching(),
+        &openbindings_schema_evaluator_test_support::Options::without(&[
+            "unicode-property-matching",
+            "backtracking-pattern-matching",
+            "undefined-results",
+        ]),
     );
     assert!(report.is_success());
     println!(

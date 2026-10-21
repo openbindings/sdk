@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_workspace(version):
-    inventory = json.loads((ROOT / 'tools/stack-margin-tests.json').read_text())
+    inventory = json.loads((ROOT / 'tools/stack-margin-tests.json').read_text(encoding='utf-8'))
     skipped = []
     for entry in inventory['tests']:
         assert (ROOT / entry['source']).is_file(), entry['source']
@@ -35,17 +35,17 @@ def test_workspace(version):
 
 def check(version):
     version = version.removesuffix(".0") if version.count(".") == 2 else version
-    workspace = tomllib.loads((ROOT / 'Cargo.toml').read_text())
+    workspace = tomllib.loads((ROOT / 'Cargo.toml').read_text(encoding='utf-8'))
     assert workspace['workspace']['package']['rust-version'] == version, 'workspace MSRV differs from lane'
-    assert tomllib.loads((ROOT / 'clippy.toml').read_text())['msrv'] == version, 'Clippy MSRV differs from lane'
+    assert tomllib.loads((ROOT / 'clippy.toml').read_text(encoding='utf-8'))['msrv'] == version, 'Clippy MSRV differs from lane'
     manifests = []
-    for base in ['crates', 'vendor', 'examples', 'tools']:
+    for base in ['crates', 'examples', 'tools']:
         for directory, children, files in os.walk(ROOT / base):
             children[:] = [name for name in children if name not in {'target', 'node_modules', '.git'}]
             if 'Cargo.toml' in files:
                 manifests.append(Path(directory) / 'Cargo.toml')
     for manifest in manifests:
-        package = tomllib.loads(manifest.read_text())['package']
+        package = tomllib.loads(manifest.read_text(encoding='utf-8'))['package']
         declared = package.get('rust-version')
         expected = {'workspace': True} if manifest.parent.parent.name == 'crates' else version
         assert declared == expected, f'{manifest.relative_to(ROOT)}: inconsistent rust-version {declared!r}'

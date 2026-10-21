@@ -22,8 +22,6 @@ LOCAL = [
     "crates/openbindings-internal-cancellation", "crates/openbindings-internal-schema",
     "crates/openbindings-interface-synthesis", "crates/openbindings-source-inspection",
     "crates/openbindings-invocation", "crates/openbindings-json-schema-evaluator",
-    "vendor/openbindings-internal-jsonschema",
-    "vendor/openbindings-internal-regress",
 ]
 
 
@@ -89,10 +87,10 @@ def main():
 
     sources = {}
     hashes = {}
-    version = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
+    version = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding='utf-8'))["workspace"]["package"]["version"]
     for local in LOCAL:
         source = ROOT / local
-        package = tomllib.loads((source / "Cargo.toml").read_text())["package"]
+        package = tomllib.loads((source / "Cargo.toml").read_text(encoding='utf-8'))["package"]
         name = package["name"]
         if args.archives:
             run("package-" + name, ["cargo", "package", "--locked", "--allow-dirty", "--no-verify", "--exclude-lockfile", "--manifest-path", source / "Cargo.toml"])
@@ -103,7 +101,7 @@ def main():
             if source.exists():
                 shutil.rmtree(source)
             extract_fresh(archive, out / "cargo")
-            normalized = tomllib.loads((source / "Cargo.toml").read_text())
+            normalized = tomllib.loads((source / "Cargo.toml").read_text(encoding='utf-8'))
             for section in [normalized, *normalized.get("target", {}).values()]:
                 for kind in ["dependencies", "dev-dependencies", "build-dependencies"]:
                     for spec in section.get(kind, {}).values():
@@ -123,7 +121,7 @@ def main():
     for directory in ["src", "tests"]:
         copy_fresh(FIXTURE / directory, consumer / directory)
     patches = "\n[patch.crates-io]\n" + "".join(f"{name}={{path={json.dumps(str(source))}}}\n" for name, source in sources.items())
-    (consumer / "Cargo.toml").write_text((FIXTURE / "Cargo.toml").read_text() + patches)
+    (consumer / "Cargo.toml").write_text((FIXTURE / "Cargo.toml").read_text(encoding='utf-8') + patches)
     shutil.copyfile(ROOT / "Cargo.lock", consumer / "Cargo.lock")
     # Preserve the root lock's selected versions, adding only the external fixture.
     run("consumer-test", ["cargo", "test"], consumer)
@@ -141,7 +139,7 @@ def main():
     standalone_patches = "\n[patch.crates-io]\n" + "".join(
         f"{name}={{path={json.dumps(str(source))}}}\n" for name, source in sources.items()
         if name not in {"openbindings-source-inspection", "openbindings-interface-synthesis", "interface-synthesis-consumer"})
-    (standalone / "Cargo.toml").write_text((FIXTURE / "invoker-only/Cargo.toml").read_text() + standalone_patches)
+    (standalone / "Cargo.toml").write_text((FIXTURE / "invoker-only/Cargo.toml").read_text(encoding='utf-8') + standalone_patches)
     shutil.copyfile(ROOT / "Cargo.lock", standalone / "Cargo.lock")
     run("invoker-only", ["cargo", "test"], standalone)
     isolated = json.loads(run("invoker-only-metadata", ["cargo", "metadata", "--locked", "--format-version", "1"], standalone))
@@ -165,7 +163,7 @@ def main():
         run("wasm-host", ["node", host / "wasm-probe.js"])
 
     interface = sources["openbindings-invocation"] / "src/lib.rs"
-    pin = re.search(r'APPLIED_INTERFACE_REVISION: &str =\s*"([0-9a-f]{40})"', interface.read_text())
+    pin = re.search(r'APPLIED_INTERFACE_REVISION: &str =\s*"([0-9a-f]{40})"', interface.read_text(encoding='utf-8'))
     if pin is None:
         raise SystemExit("Invocation authority revision is not pinned")
     if input_hashes() != input_snapshot:

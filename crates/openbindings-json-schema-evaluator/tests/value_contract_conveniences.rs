@@ -29,7 +29,6 @@ fn default_preparation_matches_explicit_policy_and_retains_ready_work() {
     for (schema, input) in [
         (r#"{"type":"integer"}"#, "7"),
         (r#"{"type":"integer"}"#, r#""seven""#),
-        (r#"{"$ref":"https://example.invalid/missing"}"#, "7"),
         (r#"{"pattern":"x"}"#, r#""x""#),
     ] {
         let proof = document(schema);
@@ -71,6 +70,24 @@ fn default_preparation_matches_explicit_policy_and_retains_ready_work() {
     assert!(error.reason == NoVerdictReason::LimitExceeded && error.code == "pattern-byte-limit");
 }
 
+// An evaluator whose every value has an undefined result.
+struct Undefined;
+impl SchemaEvaluator for Undefined {
+    fn prepare(
+        &self,
+        _: &SchemaRequest,
+        _: &dyn WorkControl,
+    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+        Ok(Arc::new(Undefined))
+    }
+}
+impl PreparedSchema for Undefined {
+    fn validate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
+        ValueOutcome::Undefined {
+            detail: UndefinedResult::new("fixture-undefined", "every value is undefined"),
+        }
+    }
+}
 #[test]
 fn json_validation_returns_all_four_outcomes_after_admission() {
     assert!(matches!(
@@ -81,12 +98,31 @@ fn json_validation_returns_all_four_outcomes_after_admission() {
         prepare("false").validate_json("7").unwrap(),
         ValueOutcome::Fails { .. }
     ));
-    let undefined = prepare(r##"{"$id":"https://example.invalid/root","$ref":"#missing"}"##);
+    let capped = DefaultEvaluator::with_limits(openbindings_json_schema_evaluator::Limits {
+        evaluation_steps: Some(0),
+        ..Default::default()
+    });
+    let proof = document(r#"{"items":{"type":"integer"}}"#);
+    let operation = proof.resolve_operation("find").expect("declared alias");
+    let input = operation.input().expect("declared input");
+    let limited = input.prepare(&capped).unwrap();
+    assert!(
+        matches!(limited.validate_json("[7]").unwrap(), ValueOutcome::NoVerdict { detail }
+        if detail.reason == NoVerdictReason::LimitExceeded)
+    );
+    let undefined = input.prepare(&Undefined).unwrap();
     assert!(
         matches!(undefined.validate_json("7").unwrap(), ValueOutcome::Undefined { detail }
-        if detail.code == "static-reference-defect")
+        if detail.code == "fixture-undefined")
     );
-    let missing = prepare(r#"{"$ref":"https://example.invalid/missing"}"#);
+    // A value reaching a missing resource gives no verdict.
+    let missing = document(r#"{"$ref":"https://example.invalid/missing"}"#)
+        .resolve_operation("find")
+        .expect("declared alias")
+        .input()
+        .expect("declared input")
+        .prepare(&DefaultEvaluator::new())
+        .unwrap();
     assert!(
         matches!(missing.validate_json("7").unwrap(), ValueOutcome::NoVerdict { detail }
         if detail.reason == NoVerdictReason::ResourceUnavailable)

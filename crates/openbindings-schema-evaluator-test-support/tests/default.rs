@@ -1,11 +1,19 @@
 use openbindings::*;
 use openbindings_schema_evaluator_test_support::*;
 use std::sync::Arc;
+// The default evaluator's qualified limitations.
+fn default_options() -> Options {
+    Options::without(&[
+        "unicode-property-matching",
+        "backtracking-pattern-matching",
+        "undefined-results",
+    ])
+}
 #[test]
 fn pinned_suite_and_adversarial_contracts() {
     let report = run(
         &openbindings_json_schema_evaluator::DefaultEvaluator::new(),
-        &Options::without_unicode_property_matching(),
+        &default_options(),
     );
     for observation in &report.observations {
         if !observation.failures.is_empty() {
@@ -17,14 +25,17 @@ fn pinned_suite_and_adversarial_contracts() {
     }
     assert!(report.is_success(), "{:?}", report.configuration_failures);
     assert_eq!(report.observations.len(), 1564);
-    assert_eq!(report.refusal_count(), 32);
+    // 32 permitted refusals, with 13 more for its pattern engine and its
+    // undefined results: 10 undefined results, one lookahead and two values a
+    // property-escape `patternProperties` name does not reach.
+    assert_eq!(report.refusal_count(), 45);
     assert_eq!(
         report
             .observations
             .iter()
             .filter(|o| matches!(o.outcome, Some(ValueOutcome::Undefined { .. })))
             .count(),
-        10
+        0
     );
 }
 #[test]
@@ -83,10 +94,7 @@ impl SchemaEvaluator for OriginalContextAdapter {
 }
 #[test]
 fn external_adapter_receives_original_context_and_passes_the_kit() {
-    let report = run(
-        &OriginalContextAdapter,
-        &Options::without_unicode_property_matching(),
-    );
+    let report = run(&OriginalContextAdapter, &default_options());
     assert!(report.is_success());
 }
 struct Wrong;
@@ -252,10 +260,7 @@ fn real_runner_rejects_malformed_outcomes_fabricated_sources_and_broad_refusals(
         Fault::InterruptedSatisfies,
         Fault::SourceRootedInstance,
     ] {
-        let report = run(
-            &FaultyAdapter(fault),
-            &Options::without_unicode_property_matching(),
-        );
+        let report = run(&FaultyAdapter(fault), &default_options());
         assert!(!report.is_success(), "missed {fault:?}");
         assert!(report.observations.iter().any(|o| !o.failures.is_empty()));
     }
@@ -343,31 +348,59 @@ fn optional_capability_declaration_does_not_authorize_other_refusal_reasons() {
 }
 
 #[test]
-fn undefined_is_an_answer_and_not_an_optional_refusal() {
+fn undefined_is_an_answer_and_declining_it_needs_the_declaration() {
     let case = suite()
         .groups
         .iter()
         .flat_map(|g| &g.cases)
         .find(|c| c.expected == "undefined")
         .unwrap();
+    assert_eq!(
+        case.optional_capability.as_deref(),
+        Some("undefined-results")
+    );
     let value = JsonValue::parse(&case.value).unwrap();
     let outcome = ValueOutcome::Undefined {
         detail: UndefinedResult::new("proof", "established undefined result"),
     };
     assert!(judge(case, &value, &outcome, false).is_empty());
-    let refusal = ValueOutcome::NoVerdict {
-        detail: NoVerdict::new(
-            NoVerdictReason::ConservativePreparation,
-            "unknown",
-            "not proved",
-        ),
+    let refusal = |reason| ValueOutcome::NoVerdict {
+        detail: NoVerdict::new(reason, "unknown", "not proved"),
     };
-    assert!(!judge(case, &value, &refusal, true).is_empty());
+    // Declining to establish the undefined result is the stated refusal, and
+    // only with the caller's declaration.
+    assert!(
+        !judge(
+            case,
+            &value,
+            &refusal(NoVerdictReason::ConservativePreparation),
+            false
+        )
+        .is_empty()
+    );
+    assert!(
+        judge(
+            case,
+            &value,
+            &refusal(NoVerdictReason::ConservativePreparation),
+            true
+        )
+        .is_empty()
+    );
+    assert!(
+        !judge(
+            case,
+            &value,
+            &refusal(NoVerdictReason::UnsupportedCapability),
+            true
+        )
+        .is_empty()
+    );
     let optional = suite()
         .groups
         .iter()
         .flat_map(|g| &g.cases)
-        .find(|c| c.optional_capability.is_some())
+        .find(|c| c.optional_capability.as_deref() == Some("unicode-property-matching"))
         .unwrap();
     assert!(
         !judge(

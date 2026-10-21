@@ -14,6 +14,9 @@ pub use pointer::{Pointer, PointerError};
 pub mod decimal;
 pub mod numeric;
 pub mod text;
+#[cfg(feature = "evaluator-work")]
+#[warn(missing_docs)]
+pub mod work;
 
 #[warn(missing_docs)]
 mod conversion;

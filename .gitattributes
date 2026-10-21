@@ -1,9 +1,5 @@
-# Vendored fork files keep their exact bytes on every host:
-# tools/dependency-patches.py compares each with its upstream archive, and
-# tools/attribution.py hashes the forks' notice files.
-/vendor/** -text
-# tools/attribution.py also hashes retrieved notice files and compares the
-# generated inventories byte-for-byte, so these keep their exact bytes too.
+# tools/attribution.py hashes retrieved notice files and compares the generated
+# inventories byte-for-byte, so these keep their exact bytes on every host.
 /tools/attribution/retrieved/** -text
 /DEPENDENCIES.json -text
 /THIRD-PARTY-NOTICES.txt -text
@@ -15,3 +11,6 @@
 /crates/openbindings-internal-schema/tests/fixtures/** -text
 /crates/openbindings-invocation/tests/fixtures/** -text
 /crates/openbindings-source-inspection/tests/fixtures/** -text
+# The evaluator's fixtures hold results recorded from V8 and generated cases that
+# tests and the TypeScript suite compare exactly, so they keep their bytes too.
+/crates/openbindings-json-schema-evaluator/tests/fixtures/** -text

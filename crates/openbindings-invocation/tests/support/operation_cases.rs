@@ -1,6 +1,6 @@
 use openbindings::{
-    Document, JsonValue, NoVerdict, PreparedSchema, ResourceSet, SchemaEvaluator, SchemaRequest,
-    ValueOutcome,
+    Document, JsonValue, NoVerdict, PreparedSchema, ResourceSet, SchemaEvaluator, SchemaLocation,
+    SchemaRequest, UndefinedResult, ValueOutcome,
 };
 use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
@@ -944,15 +944,52 @@ fn unpaired_metadata_is_rejected_before_invoker_construction() {
     }
 }
 
+// An evaluator whose every value has an undefined result, located at the
+// contract's reference.
+struct UndefinedResults(&'static str);
+struct Undefined(&'static str);
+impl SchemaEvaluator for UndefinedResults {
+    fn prepare(
+        &self,
+        _: &SchemaRequest,
+        _: &dyn openbindings::WorkControl,
+    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+        Ok(Arc::new(Undefined(self.0)))
+    }
+}
+impl PreparedSchema for Undefined {
+    fn validate(
+        &self,
+        _: &JsonValue,
+        _: openbindings::Detail,
+        _: &dyn openbindings::WorkControl,
+    ) -> ValueOutcome {
+        let mut detail = UndefinedResult::new("static-reference-defect", "undefined");
+        detail.location = Some(SchemaLocation::new(None, self.0.parse().unwrap()));
+        ValueOutcome::Undefined { detail }
+    }
+}
 #[tokio::test(flavor = "current_thread")]
 async fn undefined_withholds_values_and_retains_the_semantic_result() {
-    for (direction, mode) in [
-        (Direction::Input, Mode::Echo),
-        (Direction::Output, Mode::Outputs),
+    for (direction, mode, location) in [
+        (Direction::Input, Mode::Echo, "/operations/echo/input/$ref"),
+        (
+            Direction::Output,
+            Mode::Outputs,
+            "/operations/echo/output/$ref",
+        ),
     ] {
         let provider = Provider::new(mode);
         let operation = serde_json::json!({direction.as_str(): {"$id":"https://fixture.test/root", "$ref":"#missing"}}).to_string();
-        let invoker = checked(one(&operation), &provider);
+        let invoker = Invoker::new(
+            one(&operation)
+                .validate()
+                .unwrap()
+                .conformant()
+                .expect("conformant invocation document"),
+            &provider,
+        )
+        .with_evaluator(Arc::new(UndefinedResults(location)), ResourceSet::default());
         let mut call = invoker.invoke(Request::operation("echo"));
         if direction == Direction::Input {
             call.write(json("1")).await.unwrap();
@@ -970,10 +1007,7 @@ async fn undefined_withholds_values_and_retains_the_semantic_result() {
             panic!("undefined evidence lost")
         };
         assert_eq!(detail.code, "static-reference-defect");
-        assert_eq!(
-            detail.location.as_ref().unwrap().pointer,
-            format!("/operations/echo/{}/$ref", direction.as_str())
-        );
+        assert_eq!(detail.location.as_ref().unwrap().pointer, location);
         assert_eq!(provider.received.load(Ordering::SeqCst), 0);
         assert_eq!(provider.live.load(Ordering::SeqCst), 0);
         assert!(call.outcome().unwrap().unwrap_err().data().is_none());

@@ -173,3 +173,64 @@ fn a_refusal_takes_time_linear_in_the_resources() {
     let ratio = large.as_secs_f64() / small.as_secs_f64();
     assert!(ratio < 8.0, "{small:?} -> {large:?}: {ratio:.1}x");
 }
+
+// The forms the evaluator keeps for a contract's patterns are bounded together:
+// patterns each within the per-pattern limit refuse once their forms' total
+// passes the contract's, naming the keyword that passed it. These patterns'
+// forms are as long as they are.
+#[test]
+fn a_contract_s_patterns_are_bounded_together() {
+    let text = document(
+        &[],
+        r#"{"properties":{"a":{"pattern":"^aaaaaa$"},"b":{"patternProperties":{"^bbbbbb$":true}},"c":{"pattern":"^cccccc$"}}}"#,
+    );
+    let none = ResourceSet::default();
+    let limits = |total| Limits {
+        total_pattern_bytes: total,
+        ..Limits::default()
+    };
+    assert!(prepare_limited(&text, &none, limits(24)).is_ok());
+    let refused = prepare_limited(&text, &none, limits(23)).unwrap_err();
+    assert_eq!(refused.code, "pattern-total-byte-limit");
+    assert_eq!(refused.reason, NoVerdictReason::LimitExceeded);
+    let pointer = refused.location.expect("located").pointer.to_string();
+    assert!(
+        pointer.ends_with("/pattern") || pointer.ends_with("/patternProperties"),
+        "{pointer}"
+    );
+}
+
+// The total counts forms, not patterns: a set's form spells it out, so a
+// two-byte `\S` takes far more of the total than its source. A `pattern` kept
+// once for every schema holding it counts once; the library matches each
+// `patternProperties` name from its own copy of the form, so each counts.
+#[test]
+fn the_pattern_total_counts_the_forms_kept() {
+    let none = ResourceSet::default();
+    let limits = |total| Limits {
+        total_pattern_bytes: total,
+        ..Limits::default()
+    };
+    let spelled = document(&[], r#"{"pattern":"\\S"}"#);
+    assert_eq!(
+        prepare_limited(&spelled, &none, limits(64))
+            .unwrap_err()
+            .code,
+        "pattern-total-byte-limit"
+    );
+    assert!(prepare_limited(&spelled, &none, limits(1024)).is_ok());
+    let repeated = document(
+        &[],
+        r#"{"properties":{"a":{"pattern":"^aaaaaa$"},"b":{"pattern":"^aaaaaa$"},"c":{"pattern":"^aaaaaa$"}}}"#,
+    );
+    assert!(prepare_limited(&repeated, &none, limits(8)).is_ok());
+    let names = document(
+        &[],
+        r#"{"properties":{"a":{"patternProperties":{"^aaaaaa$":true}},"b":{"patternProperties":{"^aaaaaa$":true}}}}"#,
+    );
+    assert!(prepare_limited(&names, &none, limits(16)).is_ok());
+    assert_eq!(
+        prepare_limited(&names, &none, limits(15)).unwrap_err().code,
+        "pattern-total-byte-limit"
+    );
+}

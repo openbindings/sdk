@@ -1364,37 +1364,6 @@
       ]
     },
     {
-      "name": "openbindings-internal-jsonschema",
-      "version": "0.58.6-ob.1",
-      "declared_license": "MIT",
-      "repository": "https://github.com/Stranger6667/jsonschema",
-      "notices": [
-        {
-          "path": "LICENSE",
-          "sha256": "117829c3ca21efb132d81a44b55363d395ab8eea18526873bc828da4c0e5f038",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
-      "name": "openbindings-internal-regress",
-      "version": "0.12.0-ob.1",
-      "declared_license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/ridiculousfish/regress",
-      "notices": [
-        {
-          "path": "LICENSE-APACHE",
-          "sha256": "e36d55837170195cdf934aa6a48c0ad6efba1bde3f5b4a1b9259c171d5aeb647",
-          "retrieved_from": null
-        },
-        {
-          "path": "LICENSE-MIT",
-          "sha256": "3f8a05fc8617c5ce569fa5a4f2301cd847fe00fa011bdaa8f353fd55a2691a54",
-          "retrieved_from": null
-        }
-      ]
-    },
-    {
       "name": "outref",
       "version": "0.5.2",
       "declared_license": "MIT",

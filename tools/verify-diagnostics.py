@@ -9,17 +9,10 @@ env.setdefault("CARGO_TARGET_DIR", str(root / "target"))
 out = Path(env["CARGO_TARGET_DIR"]) / "document-diagnostics"
 out.mkdir(parents=True, exist_ok=True)
 # Compilation can return schema errors; the instance path must never request
-# library diagnostics or activate the fork's eager diagnostic admission scopes.
+# library diagnostics.
 for file in ["fixed_schema.rs", "fixed_locations.rs"]:
     source = (root / "crates/openbindings-internal-schema/src" / file).read_text(encoding='utf-8')
-    for forbidden in [".validate(", ".iter_errors(", ".evaluate(", "ob_work::diagnostics(", "ob_work::diagnostic_metadata("]:
-        assert forbidden not in source, (file, forbidden)
-# Diagnostic policy must not quietly regain a fork-owned error-construction layer.
-for file in (root / "vendor/openbindings-internal-jsonschema/src").rglob("*.rs"):
-    source = file.read_text(encoding="utf-8")
-    for forbidden in ["diagnostic_text", "diagnostic_admit", "diagnostic_copy",
-                      "diagnostic_metadata", "diagnostic_payload", "diagnostic_schema_details",
-                      "diagnostic_collection_item", "metadata_only", "push_diagnostic_name"]:
+    for forbidden in [".validate(", ".iter_errors(", ".evaluate("]:
         assert forbidden not in source, (file, forbidden)
 subprocess.run([sys.executable, str(root / "tools/diagnostic-memory-probe/generate_inputs.py")], cwd=root, env=env, check=True)
 with (out / "memory.jsonl").open("w") as log:

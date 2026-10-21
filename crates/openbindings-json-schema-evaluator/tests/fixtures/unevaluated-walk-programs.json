@@ -1,0 +1,195 @@
+{
+  "untransformed": {
+    "$defs": {
+      "n0": {
+        "$ref": "#/$defs/n8"
+      },
+      "n1": {
+        "$ref": "#/$defs/n4",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/n2"
+          }
+        ]
+      },
+      "n10": false,
+      "n11": {},
+      "n12": {
+        "$ref": "#/$defs/n13"
+      },
+      "n13": {
+        "$ref": "#/$defs/n1"
+      },
+      "n2": {
+        "$ref": "#/$defs/n3"
+      },
+      "n3": {
+        "allOf": [
+          {
+            "$ref": "#/$defs/n5"
+          }
+        ],
+        "properties": {
+          "a": {
+            "$ref": "#/$defs/n4"
+          }
+        }
+      },
+      "n4": {
+        "$ref": "#/$defs/n0"
+      },
+      "n5": {
+        "allOf": [
+          {
+            "$ref": "#/$defs/n6"
+          }
+        ]
+      },
+      "n6": {
+        "patternProperties": {
+          "^k": {
+            "$ref": "#/$defs/n7"
+          }
+        }
+      },
+      "n7": {
+        "$ref": "#/$defs/n11"
+      },
+      "n8": {
+        "properties": {
+          "b": {
+            "$ref": "#/$defs/n9"
+          }
+        }
+      },
+      "n9": {
+        "$ref": "#/$defs/n13",
+        "unevaluatedProperties": {
+          "$ref": "#/$defs/n10"
+        }
+      }
+    },
+    "$id": "https://sdk-bundle.openbindings.invalid/",
+    "$ref": "#/$defs/n12",
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  },
+  "transformed": {
+    "$defs": {
+      "n0": {
+        "$ref": "#/$defs/n8"
+      },
+      "n1": {
+        "$ref": "#/$defs/n4",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/n2"
+          }
+        ]
+      },
+      "n10": false,
+      "n11": {},
+      "n12": {
+        "$ref": "#/$defs/n13"
+      },
+      "n13": {
+        "$ref": "#/$defs/n1"
+      },
+      "n2": {
+        "$ref": "#/$defs/n3"
+      },
+      "n3": {
+        "allOf": [
+          {
+            "$ref": "#/$defs/n5"
+          }
+        ],
+        "properties": {
+          "a": {
+            "$ref": "#/$defs/n4"
+          }
+        }
+      },
+      "n4": {
+        "$ref": "#/$defs/n0"
+      },
+      "n5": {
+        "allOf": [
+          {
+            "$ref": "#/$defs/n6"
+          }
+        ]
+      },
+      "n6": {
+        "patternProperties": {
+          "^k": true
+        },
+        "allOf": [
+          {
+            "$ref": "#/$defs/n6-p14"
+          }
+        ]
+      },
+      "n7": {
+        "$ref": "#/$defs/n11"
+      },
+      "n8": {
+        "properties": {
+          "b": {
+            "$ref": "#/$defs/n9"
+          }
+        }
+      },
+      "n9": {
+        "$ref": "#/$defs/n13",
+        "unevaluatedProperties": {
+          "$ref": "#/$defs/n10"
+        }
+      },
+      "n6-p14": {
+        "not": {
+          "not": {
+            "patternProperties": {
+              "^k": {
+                "$ref": "#/$defs/n7"
+              }
+            }
+          }
+        }
+      }
+    },
+    "$id": "https://sdk-bundle.openbindings.invalid/",
+    "$ref": "#/$defs/n12",
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  },
+  "values": [
+    {
+      "k": true
+    },
+    {
+      "k": 1,
+      "a": {}
+    },
+    {
+      "a": {
+        "b": {
+          "k": 2
+        }
+      }
+    },
+    {
+      "a": {
+        "b": {
+          "z": 1
+        }
+      }
+    },
+    []
+  ],
+  "valid": [
+    true,
+    true,
+    true,
+    false,
+    true
+  ]
+}

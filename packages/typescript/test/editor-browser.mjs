@@ -81,7 +81,10 @@ export async function editorPage(browser, url) {
     await page.locator("#schema-details").check();
     const detailed = await readOutput();
     assert.match(detailed, /inclusive lower bound/);
-    assert.match(detailed, /Exact bound: 1/);
+    assert.match(
+      detailed,
+      /Instance "\/id"; schema "\/operations\/lookup\/input\/properties\/id\/minimum"/,
+    );
     await page.locator("#schema-details").uncheck();
     await readOutput();
     await input.fill("{");

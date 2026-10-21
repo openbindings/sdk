@@ -156,6 +156,8 @@ fn inspection_root_never_masks_missing_references_including_suffix_candidates() 
             let report = doc.references().unwrap();
             assert!(report.complete);
             assert!(report.references.iter().all(|r| matches!(&r.resolution, ReferenceResolution::Unresolved { detail } if detail.reason == ReferenceRefusalReason::ResourceUnavailable && detail.code == "resource-unavailable")), "{report:?}");
+            // A dominating branch decides without the missing resource; a
+            // value reaching it gives no verdict.
             let Ok(contract) = prepare_input(&doc, &ResourceSet::default()) else {
                 panic!("expected ready")
             };

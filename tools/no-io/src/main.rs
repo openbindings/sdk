@@ -20,23 +20,14 @@ fn main() {
     let args: Vec<_> = std::env::args().collect();
     let mode = &args[1];
     let uri = &args[2];
-    // Each library, with retrieval enabled, fetches a remote reference itself.
-    if mode == "positive-core" || mode == "positive-evaluator" {
+    // The library, with retrieval enabled, fetches a remote reference itself.
+    if mode == "positive" {
         let schema = json!({"$ref": uri});
-        let valid = if mode == "positive-core" {
-            jsonschema::options()
-                .with_draft(jsonschema::Draft::Draft202012)
-                .build(&schema)
-                .unwrap()
-                .is_valid(&json!(7))
-        } else {
-            evaluator_jsonschema::options()
-                .with_draft(evaluator_jsonschema::Draft::Draft202012)
-                .build(&schema)
-                .unwrap()
-                .is_valid(&json!(7))
-        };
-        assert!(!valid);
+        let validator = jsonschema::options()
+            .with_draft(jsonschema::Draft::Draft202012)
+            .build(&schema)
+            .unwrap();
+        assert!(!validator.is_valid(&json!(7)));
         println!(
             "{}",
             json!({"mode": mode, "retrievalControl": "false remote resource evaluated"})

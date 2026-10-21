@@ -1,4 +1,5 @@
-//! Keep literal values in the exact flat representation. Only the shallow
+//! The SDK's keywords and the library's copy of each projected resource.
+//! Literal values stay in the exact flat representation: only the shallow
 //! projected schema structure crosses the dependency's recursive serde boundary.
 use crate::{Limits, no_verdict};
 use jsonschema::json::{JsonNumber, Node};
@@ -14,7 +15,12 @@ pub(crate) struct Operands {
     // Each compiled `const` and `enum` keyword's literal, by the id it holds.
     literals: Vec<Literal>,
     numbers: numeric::Operands,
-    dynamic_anchors: bool,
+    // Each distinct `pattern` matcher; a `pattern` keyword holds its index.
+    patterns: Vec<Arc<Matcher>>,
+    // Each matcher's index by its form, or by the reason the evaluator does
+    // not match its pattern, while preparing. A form is kept once, shared with
+    // its matcher.
+    indices: std::collections::HashMap<Arc<str>, usize>,
 }
 // A `const` value, or an `enum` keyword's choices. Both are views of the
 // projection's separated literals.
@@ -52,7 +58,7 @@ impl<'i> Keyword<'i, FlatJson> for ExactBound {
             return true;
         };
         self.0.admits(&number.as_str()).unwrap_or_else(|| {
-            jsonschema::ob_work::arithmetic_limit();
+            crate::pass::arithmetic();
             false
         })
     }
@@ -64,6 +70,93 @@ impl<'i> Keyword<'i, FlatJson> for ExactBound {
                 "exact numeric {} constraint failed",
                 self.0.keyword()
             )))
+        }
+    }
+}
+/// The keyword a stand-in for a resource that was not supplied compiles to. A
+/// pass that reaches it gives no verdict.
+struct Missing(u32);
+impl<'i> Keyword<'i, FlatJson> for Missing {
+    fn is_valid(&self, _: View<'i>) -> bool {
+        crate::pass::missing(self.0);
+        true
+    }
+    fn validate(&self, _: View<'i>) -> Result<(), ValidationError<'i>> {
+        crate::pass::missing(self.0);
+        Ok(())
+    }
+}
+/// How the SDK's `pattern` keyword matches one pattern.
+enum Matcher {
+    Simple(crate::pattern::Simple),
+    // Compiled on first use, so preparation does not pay for patterns no
+    // value reaches; `None` when the form exceeds the engine's size limit.
+    Regex {
+        form: Arc<str>,
+        compiled: std::sync::OnceLock<Option<regex::Regex>>,
+    },
+    Unmatched(crate::pattern::Unsupported),
+}
+impl Matcher {
+    fn is_match(&self, text: &str) -> bool {
+        match self {
+            Matcher::Simple(simple) => simple.is_match(text),
+            Matcher::Regex { form, compiled } => {
+                match compiled.get_or_init(|| crate::pattern::compile(form)) {
+                    Some(regex) => regex.is_match(text),
+                    None => {
+                        crate::pass::unmatched(crate::pattern::Unsupported::Size);
+                        true
+                    }
+                }
+            }
+            Matcher::Unmatched(unsupported) => {
+                crate::pass::unmatched(*unsupported);
+                true
+            }
+        }
+    }
+}
+// The forms by which patterns the evaluator does not match share a matcher; no
+// linear form holds a control character.
+const BACKTRACKING: &str = "\u{1}backtracking";
+const PROPERTY_ESCAPE: &str = "\u{1}property-escape";
+const NON_WORD_BOUNDARY: &str = "\u{1}non-word-boundary";
+const SIZE: &str = "\u{1}size";
+/// The SDK's `pattern` keyword, which matches with ECMA-262 semantics through
+/// its pattern's reading. A string that reaches a pattern the evaluator does
+/// not match ends the pass with no verdict.
+struct Pattern(Arc<Matcher>);
+impl<'i> Keyword<'i, FlatJson> for Pattern {
+    fn is_valid(&self, instance: View<'i>) -> bool {
+        match instance.as_string() {
+            Some(text) => self.0.is_match(&text),
+            None => true,
+        }
+    }
+    fn validate(&self, instance: View<'i>) -> Result<(), ValidationError<'i>> {
+        if self.is_valid(instance) {
+            Ok(())
+        } else {
+            Err(ValidationError::custom(
+                "string does not match the schema pattern",
+            ))
+        }
+    }
+}
+/// The SDK's marker before each reference when evaluation work is capped:
+/// entering it charges a unit, and once the allowance is spent it fails, so
+/// the reference is not entered.
+struct Work;
+impl<'i> Keyword<'i, FlatJson> for Work {
+    fn is_valid(&self, _: View<'i>) -> bool {
+        openbindings_internal_json::work::charge(1)
+    }
+    fn validate(&self, instance: View<'i>) -> Result<(), ValidationError<'i>> {
+        if self.is_valid(instance) {
+            Ok(())
+        } else {
+            Err(ValidationError::custom("evaluation work limit reached"))
         }
     }
 }
@@ -134,10 +227,6 @@ impl Operands {
         limits: &Limits,
         control: &dyn WorkControl,
     ) -> Result<Value, NoVerdict> {
-        // Partial bounds include a private constant resource with no source map.
-        if let Some(value) = resource.view().as_bool() {
-            return Ok(Value::Bool(value));
-        }
         let mut root = Map::new();
         for member in resource
             .view()
@@ -186,10 +275,7 @@ impl Operands {
                                         Value::Array(vec![Value::from(id)])
                                     }
                                     Some(Role::Read) => read(field.value, limits)?,
-                                    Some(Role::DynamicAnchor) => {
-                                        self.dynamic_anchors = true;
-                                        read(field.value, limits)?
-                                    }
+                                    Some(Role::DynamicAnchor) => read(field.value, limits)?,
                                     // Annotations and unknown-keyword data do not affect this
                                     // validity-only API. Their original bytes stay in the SDK.
                                     None => continue,
@@ -208,16 +294,70 @@ impl Operands {
         }
         Ok(Value::Object(root))
     }
-    /// Whether a converted schema declares `$dynamicAnchor`. Every projected
-    /// schema is a definition of a 2020-12 resource, so without one no reference
-    /// resolves through the dynamic scope.
-    pub(crate) fn declares_dynamic_anchors(&self) -> bool {
-        self.dynamic_anchors
+    /// Whether a `pattern` keyword with this form already has a matcher, so
+    /// another adds nothing.
+    pub(crate) fn has_pattern(&self, form: &str) -> bool {
+        self.indices.contains_key(form)
+    }
+    /// The value a schema's `pattern` keyword holds for `reading`: the index
+    /// of its matcher, which the SDK's keyword finds by it. Patterns with the
+    /// same form share one matcher.
+    pub(crate) fn pattern(&mut self, reading: crate::pattern::Reading) -> String {
+        use crate::pattern::{Reading, Unsupported};
+        let key = match &reading {
+            Reading::Linear(linear) => linear.form.as_str(),
+            Reading::Unsupported(unsupported) => match unsupported {
+                Unsupported::Backtracking => BACKTRACKING,
+                Unsupported::PropertyEscape => PROPERTY_ESCAPE,
+                Unsupported::NonWordBoundary => NON_WORD_BOUNDARY,
+                Unsupported::Size => SIZE,
+            },
+        };
+        let index = match self.indices.get(key) {
+            Some(&index) => index,
+            None => {
+                let key: Arc<str> = Arc::from(key);
+                let matcher = match reading {
+                    Reading::Linear(linear) => match linear.simple {
+                        Some(simple) => Matcher::Simple(simple),
+                        None => Matcher::Regex {
+                            form: key.clone(),
+                            compiled: std::sync::OnceLock::new(),
+                        },
+                    },
+                    Reading::Unsupported(unsupported) => Matcher::Unmatched(unsupported),
+                };
+                let index = self.patterns.len();
+                self.patterns.push(Arc::new(matcher));
+                self.indices.insert(key, index);
+                index
+            }
+        };
+        index.to_string()
     }
     pub(crate) fn apply<R>(
         self,
         mut options: ValidationOptions<'_, R, FlatJson>,
     ) -> ValidationOptions<'_, R, FlatJson> {
+        options = options.with_keyword(crate::bundle::MARKER, |_, _, _| Ok(Box::new(Work)));
+        options = options.with_keyword(crate::missing::KEYWORD, |_, value, _| {
+            let at = value
+                .as_u64()
+                .and_then(|at| u32::try_from(at).ok())
+                .ok_or_else(|| ValidationError::custom("invalid internal stand-in index"))?;
+            Ok(Box::new(Missing(at)))
+        });
+        // Only the matchers outlive preparation; their index by form does not.
+        drop(self.indices);
+        let patterns = Arc::new(self.patterns);
+        options = options.with_keyword("pattern", move |_, value, _| {
+            let matcher = value
+                .as_str()
+                .and_then(|key| key.parse::<usize>().ok())
+                .and_then(|index| patterns.get(index))
+                .ok_or_else(|| ValidationError::custom("invalid internal pattern reference"))?;
+            Ok(Box::new(Pattern(matcher.clone())))
+        });
         let numbers = Arc::new(self.numbers);
         for keyword in numeric::KEYWORDS {
             let numbers = numbers.clone();
@@ -270,12 +410,15 @@ pub(crate) fn separated<'a>(
         })
 }
 fn read(value: JsonRef<'_>, limits: &Limits) -> Result<Value, NoVerdict> {
-    if backend::depth(&value.to_owned()) > limits.compile_json_depth {
+    if !backend::depth_at_most(&value.to_owned(), limits.compile_json_depth) {
         return Err(no_verdict(
             NoVerdictReason::LimitExceeded,
             "compile-json-depth",
             "projected schema structure exceeds the dependency compilation-depth admission limit",
         ));
+    }
+    if let Some(value) = direct(value) {
+        return Ok(value);
     }
     let mut decoder = serde_json::Deserializer::from_slice(value.text().as_bytes());
     decoder.disable_recursion_limit();
@@ -285,5 +428,23 @@ fn read(value: JsonRef<'_>, limits: &Limits) -> Result<Value, NoVerdict> {
             "program-decoding",
             "the projected schema could not be decoded",
         )
+    })
+}
+// The value read straight from the arena; `None` when it holds a number or a
+// string with an unpaired unit, which the text decoder reads instead.
+fn direct(value: JsonRef<'_>) -> Option<Value> {
+    Some(match value.kind() {
+        JsonKind::Null => Value::Null,
+        JsonKind::Boolean => Value::Bool(value.as_bool()?),
+        JsonKind::String => Value::String(value.as_str()?.to_owned()),
+        JsonKind::Number => return None,
+        JsonKind::Array => Value::Array(value.elements()?.map(direct).collect::<Option<_>>()?),
+        JsonKind::Object => {
+            let mut object = Map::new();
+            for member in value.members()? {
+                object.insert(member.name.as_str()?.to_owned(), direct(member.value)?);
+            }
+            Value::Object(object)
+        }
     })
 }

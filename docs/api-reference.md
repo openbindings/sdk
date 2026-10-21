@@ -505,14 +505,14 @@ false`. TypeScript's `validate` returns `message`, no problems and
 
 `explain` (and `explain_with_control`; TypeScript `explain`) returns the same
 verdict and, for a failure, the default evaluator's report of the library's own
-first error. Messages remain value-free; available paths map to original
-locations and optional schema facts may expose source operands. An explanation
-is **library-bounded**: building it can allocate in proportion to inputs and can
-overflow the stack on deep values. The SDK promises nothing stronger than the
-library, so keep `validate` on paths that check untrusted input. One first error
-does not establish diagnostic completeness, so the flag remains false.
-Work/regex limits and cancellation can omit detail after a verdict; missing
-detail never weakens failure and never counts as rule evidence.
+first error. Messages remain value-free, and paths map to original locations.
+An explanation is **library-bounded**: building it allocates in proportion to
+inputs, and the default evaluator explains only values within half its
+evaluation depth limit. The SDK promises nothing stronger than the library, so
+keep `validate` on paths that check untrusted input. One first error does not
+establish diagnostic completeness, so the flag remains false. A work cap and
+cancellation can omit detail after a verdict; missing detail never weakens
+failure and never counts as rule evidence.
 
 Each problem names its failure on both sides, by exact pointer. `instance` is the
 failing node's `Pointer` from the value passed to validation (the instance's root,

@@ -1,19 +1,21 @@
 # Internal dependency maintenance contract
 
-Core uses the unmodified jsonschema 0.58.6 library, with its default pattern
-engine (jsonschema-regex 0.58.6 and fancy-regex 0.19.2), for its fixed checks
-(OBI-02 and OBI-10) and for the resource identity and reference resolution of
-its reference inspection. The SDK still carries two renamed forks, jsonschema
-0.58.6 and regress 0.12.0, for the default evaluator alone, until that evaluator
-moves to the unmodified library too. Both are private implementation
-dependencies. jsonschema-value 0.58.6, referencing 0.58.6 and serde_json 1.0.151
-use their unmodified registry identities and serve both. `docs/dependency-isolation.json`
-records the six upstream archive checksums and complete Rust source digests.
-`tools/verify-dependency-isolation.py` checks those sources, the single-serde
-graph, absence of SDK-requested arbitrary precision, retained fork identities,
-that core's own graph holds neither fork, the separation below, and the
-cancellation/schema boundaries. Its optional `--upstream-dir` additionally checks
-the downloaded archives.
+Core and the default evaluator both use the unmodified jsonschema 0.58.6
+library from the registry, under its own name. Core keeps the library's default
+pattern engine (jsonschema-regex 0.58.6 and fancy-regex 0.19.2) for its fixed
+checks (OBI-02 and OBI-10) and uses the library for the resource identity and
+reference resolution of its reference inspection. The evaluator matches schema
+patterns with the regex crate (regex 1.13.1, regex-automata 0.4.18 and
+regex-syntax 0.8.11) directly. jsonschema-value 0.58.6, referencing 0.58.6 and
+serde_json 1.0.151 are unmodified too. The SDK carries no fork, vendored crate
+or patch of any dependency: every adaptation is SDK code, a transform of the
+schemas before they reach the library, or a documented extension point.
+`docs/dependency-isolation.json` records the nine upstream archive checksums
+and complete Rust source digests. `tools/verify-dependency-isolation.py` checks
+those sources, the single-serde graph, absence of SDK-requested arbitrary
+precision, that no package is vendored or renamed, the separation below, and the
+cancellation/schema boundaries. Its optional `--upstream-dir` additionally
+checks the downloaded archives.
 
 ## Core on the unmodified library
 
@@ -68,55 +70,155 @@ so an upgrade of any of them fails the isolation check until it is reviewed: run
 the three regressions above, the 440-case specification corpus, and the document
 validation differential against the previous release, then refresh the records.
 
-### Separation from the evaluator's fork
+## The default evaluator on the unmodified library
 
-The full workspace graph holds both `jsonschema` (registry) and
-`openbindings-internal-jsonschema` (the fork), which share the registry
-jsonschema-value, jsonschema-regex, fancy-regex, regex and referencing packages;
-only the library itself is compiled twice. That costs about 1.3 MB of the
-TypeScript package's Wasm module (250 KB compressed), and a process that
-prepares a value contract compiles each library's own 2020-12 meta-schema
-validator once (about 0.5 MB, held for the process). Both costs end when the
-evaluator moves to the unmodified library. Core's graph, built alone or by a
-consumer of core alone, holds neither fork. The two never exchange a value:
+The evaluator compiles each prepared contract with
+`jsonschema::options_for::<FlatJson>()`, format assertion off and retrieval
+denied. What it changes, it changes in the schemas before the library sees
+them or through the library's documented `with_keyword` and `PatternOptions`
+APIs:
 
-- `openbindings-internal-schema` names only the registry library and
-  `openbindings` names neither; the evaluator names only the fork, under the
-  dependency name `jsonschema`.
+- Core's schema space projects the contract after the meta-schema check of
+  every schema it reaches: each reached schema becomes a definition of its own,
+  `n<number>`, in one projected resource per original resource, and every
+  subschema position a `$ref` to its child's definition. A reference that
+  identifies no schema refuses preparation and names the schema holding it.
+- `missing.rs` stands in for resources the request does not supply. When the
+  projection fails for want of one, preparation adds an empty resource at each
+  missing URI and projects again, and every definition projected from a
+  stand-in compiles to the SDK's `$obMissing` keyword, which stops the pass
+  with no verdict naming the missing resource. A value whose evaluation never
+  reaches a stand-in keeps the library's verdict, which cannot depend on the
+  missing content where keywords decide by evaluating their subschemas. The
+  library's `unevaluatedProperties` and `unevaluatedItems` validators do not:
+  they read the structure of the schemas applying to the same instance to
+  collect annotations, and would read a stand-in as annotating nothing. So a
+  contract in which such a keyword's walk (through `$ref`, `$dynamicRef`,
+  `allOf`, `anyOf`, `oneOf`, `if`, `then`, `else` or `dependentSchemas`)
+  reaches a stand-in refuses preparation, whatever order the library
+  evaluates keywords in. A reference to a fragment of a missing resource has
+  no stand-in, and preparation refuses as before.
+- `bundle.rs` bundles the projected definitions into the `$defs` of one
+  resource (JSON Schema Core §9.3), so the library compiles each definition once,
+  whatever path reaches it. It resolves `$dynamicRef` itself: a definition is
+  specialized once for each dynamic context it is reached in, the context
+  recording, for each dynamically looked-up anchor name, the outermost resource
+  entered so far that declares it (§8.2.3.2). The bundle holds no
+  `$dynamicAnchor`, so the library never resolves through the dynamic scope.
+  Contexts hold only the names some `$dynamicRef` looks up, and only those
+  they assign. A contract whose dynamic references would specialize more than
+  100,000 definitions, add more than 16,777,216 units of JSON in specialized
+  copies (one per value and per byte of its strings and member names), or hold
+  more than 4,000,000 dynamic-scope entries across distinct contexts refuses
+  with `program-specialization-limit`. The SDK bounds its own output and does
+  not estimate the library's compiled memory.
+- `operands.rs` registers the SDK's keywords: exact numeric bounds and
+  `multipleOf`, `const` and `enum` as handles into the exact literal arena,
+  `pattern`, the `$obMissing` stand-in, and, only when the application sets an
+  evaluation work cap, the `$obWork` marker the bundle places before each
+  reference.
+- `pattern.rs` reads every pattern as an ECMA-262 11th edition `u`-mode pattern
+  and writes a form in the regex crate's syntax meant to have the same matches,
+  spelling each character set out as the positive class of the scalar values
+  it matches: the regex crate's negation of a class whose ranges meet across
+  the surrogate gap adds a range across it, so no form holds `[^`. The empty
+  set is two contradicting ASCII word-boundary assertions, since
+  jsonschema-regex escapes class set operations. A form longer than
+  `pattern_bytes` is not written out, and each compiles within a 32 MiB size
+  limit. A seeded differential against V8, with fixed rows across the
+  surrogate gap, checks both keywords. The `pattern` keyword
+  matches through that form, compiled on first use, or through a run matcher
+  for one anchored sequence of single-character runs. `patternProperties`
+  names are written in their forms, which the library compiles with
+  `PatternOptions::regex()` and jsonschema-regex's translation leaves unchanged.
+  The word boundary `\b` becomes the regex crate's ASCII word boundary, which
+  reads word characters as ECMA-262 does and never falls inside a multi-byte
+  character. Its complement does, and the regex crate's `is_match` then
+  answers no for a pattern another branch matches (`\x{E9}|(?-u:\B)` on
+  "aéa", where `find` matches), so `\B` is not matched. A pattern holding
+  `\B`, one that only a backtracking engine can match (lookaround or a
+  backreference) or one with a Unicode property escape has no form: a string
+  that reaches it in `pattern` gives no verdict, and as a `patternProperties`
+  name it refuses preparation. Each keeps its own reason.
+- `depth.rs` bounds the schema objects any evaluation path can hold at once,
+  from the bundle's reference graph, as the lesser of two linear bounds in
+  the value's depth. Before evaluating a value, the evaluator compares that
+  bound with `evaluation_depth` in constant time (from the value's node count
+  when that suffices, otherwise from its depth). The library's unevaluated
+  validators take frames the bound does not model, so a contract holding one
+  is also guarded as it evaluates: `openbindings-internal-json/src/work.rs`
+  checks, at every read of a child instance, the stack the pass has used
+  since it started, and fails every read once it is more than 128 bytes per
+  unit of `evaluation_depth`, so the library stops descending;
+  `tests/evaluation_stack.rs` checks 39 shapes on a 256 KiB thread, and a
+  library upgrade reruns it. A contract that could recurse without consuming
+  the instance refuses (`evaluation-cycle`), and one whose unevaluated
+  keyword's walk weighs more than the walk limit refuses
+  (`unevaluated-walk-limit`), since the library compiles the walk by
+  recursion: `bundle.rs` weighs each reference by the keywords on its path,
+  and `tests/walk_stack.rs` prepares the longest admitted walk of each kind
+  below enclosing schemas on a 256 KiB thread with a fifth of it already in
+  use, so a library whose compiled walk frames grow fails it.
+- `explain.rs` maps the library's first error back to its keyword's original
+  schema location.
+- `openbindings-internal-json/src/work.rs` holds the optional evaluation
+  allowance and the stack guard. `FlatJson` charges its reads only under that
+  crate's `evaluator-work` feature, which only the evaluator enables, and only
+  inside a pass that has an allowance or a guard.
+
+Core and the evaluator share one copy of the library and never exchange a value:
+
 - `openbindings-internal-schema` and `openbindings-internal-json` expose no
   library type. The evaluator reaches core's schema space, with its projections,
-  reference resolution and the meta-schema check of every reached schema,
-  through SDK types only, and builds its own registry and validators with the
-  fork. `FlatJson` implements the shared jsonschema-value traits once for both.
+  reference resolution and meta-schema checks, through SDK types only, and
+  builds its own validator from the bundle. `FlatJson` implements the shared
+  jsonschema-value traits once for both.
 - `openbindings-internal-json/src/numeric.rs` holds only exact arithmetic; each
-  library's adapter registers it: core's fixed checks the four comparisons, the
-  evaluator all five keywords (`operands.rs`).
-- `FlatJson` charges its reads to the fork's evaluation work scope only under
-  `openbindings-internal-json`'s `evaluator-work` feature, which only the
-  evaluator enables. Without it, as in core's own graph, a charge is free.
-  Within a workspace build the feature is on, but core opens no fork scope, so
-  its charges stop nothing.
+  side registers it: core's fixed checks the four comparisons, the evaluator
+  all five keywords.
+- Core opens no work scope, so within a workspace build, where the feature is
+  on, its reads still count nothing; core's own graph, built alone or by a
+  consumer of core alone, holds no evaluator.
 
-`tools/dependency-patches.py` compares every retained fork file with its exact
-upstream crate archive, emitting applicable patches and before/after hashes.
-Original manifests and Git identities remain `UPSTREAM-Cargo.toml` and
-`UPSTREAM-VCS.json`, and the jsonschema fork keeps its upstream lock as
-`UPSTREAM-Cargo.lock`, a name no Cargo command rewrites; the patch inventory
-records it as a rename of the archive's `Cargo.lock`, with a diff only if a byte
-differs. Licenses and publish guards remain. Retained upstream locks are
-provenance; the SDK workspace lock is the build authority.
-
-CI runs each fork's own regression tests, named in the sections below, with
-`python3 tools/test-dependency-forks.py --output <new-directory>`. Cargo tests a
-package outside the workspace only when it has no dev-dependencies, so the tool
-copies the forks into a workspace of their own and leaves the checkout untouched.
-It resolves that workspace from the SDK workspace lock and refuses a tested build
-in which a package of that lock changes version; only test-only dependencies, and
-those of features the SDK never selects, resolve afresh.
 Refresh both attribution inventories and notices offline with
-`python3 tools/attribution.py`; verify with `--check`. The upstream value crate's
-omitted license is retained as a hash-verified supplement from the same pinned
-upstream revision, not dropped when its fork disappears.
+`python3 tools/attribution.py`; verify with `--check`.
+
+## The unevaluated-walk transform
+
+`src/unevaluated_walk.rs` is a stopgap for an upstream bug in jsonschema
+0.58.6. To build an `unevaluatedProperties` keyword, the library walks the
+schemas that can evaluate the instance's members, following `allOf`, `anyOf`,
+`oneOf`, `if`, `then`, `else`, `dependentSchemas` and references. For each
+`patternProperties` it reaches, `compile_pattern_properties` in
+`keywords/unevaluated_properties.rs` compiles every subschema and then drops
+the compiled node, keeping only the pattern. A `$ref` target first compiled
+there can be one that a later compilation round still points at through a
+non-owning edge; validation then reaches the dropped target and panics with
+"pending schema target dropped", which aborts a WebAssembly host. As of release
+0.59.0 the walk still compiles and drops the subschemas.
+
+The transform keeps every subschema out of that walk. In each bundled
+definition the walk can reach, `patternProperties` keeps its patterns, each
+with the schema `true`, and the original subschemas apply from a definition of
+their own, `{"not": {"not": {"patternProperties": ...}}}`, which the
+definition's `allOf` references. The walk never enters `not`, so it compiles
+only `true`, and the subschemas are compiled once, owned by their `not`.
+Validity is unchanged (`not` twice is the schema itself), and so are the
+evaluated member names, which the walk still reads from the patterns left in
+place. An explanation whose first error lies in a moved subschema names the
+original `patternProperties` keyword, at the object holding the member.
+
+The transform depends on which keywords the library's walk follows. The
+evaluator's `unevaluated_walk` tests compile a bundled program without the
+transform and require the library to panic on it, and require the walk still to
+skip `not`. The reproducer's four placements run with the transform, natively
+and in the Wasm suite, and `reference_placement` compares 500 seeded random
+contracts, split across document, contained and supplied resources, with the
+same schemas in one resource. A library upgrade that fixes the bug fails the
+first test: remove the transform and its tests in that upgrade. One that makes
+the walk enter `not` fails the second: the transform must change before the
+upgrade lands. The benchmark's `unevaluated-patterns` workload guards the
+transform's retained heap.
 
 ## Advisory policy
 
@@ -163,11 +265,13 @@ The private FlatJson adapter redacts cold Node::to_value/JsonNumber::to_number
 payloads. These documented cold APIs cannot represent every exact JSON number.
 They are never the source of a verdict or a reported instance/schema fact:
 equality, uniqueness, integer classification and numeric keywords have exact
-implementations. The SDK does not expose library error Display/Debug or payloads.
-Explanation kind/path metadata still comes from the library's validate(); bounds
-and enum choices are read from original schema tokens. The cheap check never
-requests library errors. An explanation retains the library's documented
-allocation/stack exposure; this is not a new bounded diagnostic implementation.
+implementations. The SDK does not expose library error Display/Debug or payloads. An
+explanation reads only the library error's kind, instance path and keyword
+location, and words its message as fixed text for that kind. The cheap check
+never requests library errors. An explanation retains the library's documented
+allocation exposure; building the error takes about twice a check's stack per
+level, so the evaluator explains a value only within half its evaluation depth
+limit.
 
 Shared serde_json enables raw_value and unbounded_depth for exact RawValue
 interoperation and admitted schema decoding. Upstream jsonschema/value additionally
@@ -179,7 +283,7 @@ Ordinary Serde flatten/untagged behavior is covered by the external consumer tes
 Shared runtime version floors remain Serde 1.0.229, serde_json 1.0.151,
 itoa 1.0.18, fluent-uri 0.4.1, url 2.5.8, reqwest 0.13.5, Tokio 1.53.2 and
 bytes 1.12.1. The relocated arithmetic uses num-bigint 0.4.8 and num-traits
-0.2.19; both floors are included in consumer resolution checks. SDK packages, retained forks, jsonschema-value and wasm-bindgen
+0.2.19; both floors are included in consumer resolution checks. SDK packages, jsonschema, jsonschema-value and wasm-bindgen
 remain exact at their declared versions. The workspace lock fixes qualification.
 `tools/verify-consumer-compat.py` checks twelve configurations: baseline/AP,
 core/AP, evaluator/AP, portable discovery, all three interfaces, and native discovery/AP.
@@ -188,163 +292,54 @@ package counts. Run its `--resolution minimum` and `--resolution latest` modes f
 dependency updates, retaining `--output` receipts. Offline latest means newest
 cached resolvable graph, not a crates.io-head claim.
 
-## jsonschema
-
-Upstream revision: `55ac1664384793c5d3b20745d3f9c169dfe2c06f`.
-Applied package: `openbindings-internal-jsonschema 0.58.6-ob.1`, used by the
-default evaluator alone.
-The complete remaining Rust delta is **+581/-32 lines in fifteen files** against the
-0.58.6 archive (physical added/removed lines, including comments and blanks):
-
-| File under src/ | Added | Removed | Why retained |
-| --- | ---: | ---: | --- |
-| canonical/context.rs | 2 | 2 | Use the ECMA matcher without Rust-regex translation in canonical pattern compilation. |
-| compiler.rs | 96 | 18 | Cache and compile that same matcher, preserving authored pattern syntax. Charge each compiled node, with its location and dynamic scope, and each deferred target's placeholder copy to the compilation scope; meta-validation stays uncharged. In a build that reaches no dynamic anchor, compare and hash compiled-node cache keys without the dynamic scope, so a schema reached along many resource paths compiles once. Release a build that stops part way as a finished validator is released, its deferred targets last and in order, so a long `$ref` chain never drops recursively. |
-| keywords/additional_properties.rs | 2 | 2 | Route both specialized patternProperties/additionalProperties paths through ECMA matching. |
-| keywords/dependencies.rs | 2 | 0 | Charge each `dependentRequired` entry's node and name. |
-| keywords/pattern.rs | 2 | 0 | Charge the pattern bytes each compilation analyzes and copies. |
-| keywords/ref_.rs | 39 | 0 | Charge each reference resolved and each dynamic-scope entry searched for a dynamic anchor. Fail a static build when a reference resolves through a dynamic or recursive anchor, rather than compile it with caches that ignore the scope; the unevaluated walks share the check. |
-| keywords/required.rs | 16 | 0 | Charge the property names each `required` list copies. |
-| keywords/unevaluated_items.rs | 6 | 0 | Apply the static-build check to each reference the walk resolves itself, including `$dynamicRef` and `$recursiveRef` in drafts that do not compile them. |
-| keywords/unevaluated_properties.rs | 11 | 4 | Keep annotation matching on the same ECMA engine; build only the walk's `patternProperties` patterns (see compiled subschema ownership); apply the static-build check to each reference the walk resolves. |
-| lib.rs | 5 | 0 | Export private adapter work and regex controls. |
-| node.rs | 38 | 1 | Charge schema entries/depth and signal detected cycles; the outer adapter refuses any stopped result. |
-| ob_ecma.rs | 117 | 0 | Select regress ES2020 Unicode behavior, scoped regex work, and the qualified Unicode-property refusal. |
-| ob_work.rs | 240 | 0 | Scoped work/depth/cycle/arithmetic stop accounting, including nested scope restoration, and a separate compilation work scope that bounds a schema build, weighs each kind of compilation work, and carries the caller's statement that the build reaches no dynamic anchor. |
-| properties.rs | 1 | 1 | Use the same matcher type for property validators. |
-| regex.rs | 4 | 4 | Route the library's internal matcher/builder through regress. |
-
-These guards have no complete equivalent in documented upstream APIs. Apart from
-the ownership correction below, all ordinary resolution, compilation, applicators
-and error construction remain the library's implementation. Upstream code, tests and comments keep their own wording:
-the SDK's vocabulary governs its own sources, not retained upstream text. Numeric semantics use its public extension APIs instead
-of forked equality/type/size internals. Cargo changes only select the private
-package/regress identities and ordinary upstream value/registry/serde dependencies.
-
-The entire diagnostic patch is removed: admission/count/metadata/copy/payload and
-schema-detail scopes, the property-name copy hook, diagnostic_text, lazy custom
-error alterations, error-vector guards and validator-list coordinate alteration.
-Core's fixed checks, on the unmodified library, use is_valid and
-build_map/get/is_valid; the evaluator's value checks use is_valid, and validate()
-runs for its first error only when a caller explains a failing value. `tools/verify-diagnostics.py` continues to enforce the pinned allocation
-ceilings and value allocation checks. No construction-memory guarantee is made for
-an explanation's library diagnostics.
-
-### Compiled subschema ownership
-
-Upstream's `unevaluatedProperties` walk compiles each `patternProperties` subschema
-it reaches, then drops the node and keeps only the pattern. The walk compiles at
-its referrer's location, so that node, and any `$ref` target first compiled
-beneath it, has no owner but the build caches. The compiler links a later
-compilation round to an unsettled node of an earlier round by a non-owning edge,
-on the premise that the earlier round's tree owns that node. After the build such
-a target is freed, and validation panics with "pending schema target dropped"; a
-Wasm host aborts. Unmodified jsonschema 0.58.6 panics on a seven-resource program
-the SDK projects. Release 0.59.0 and upstream master still compile and drop.
-
-The fork's walk builds only the patterns. Marking needs nothing else: a 2020-12
-`patternProperties` annotation is the set of matched names, and nothing read the
-dropped node. The subschemas stay compiled, and owned, where `patternProperties`
-validates them. Every schema the walk visits is also compiled as a node, by its
-enclosing schema, by a `$ref` or `$dynamicRef` keyword (possibly in a later
-round), or as one of the walk's own `allOf`/`anyOf`/`oneOf`/`if` nodes; that node's
-`patternProperties` keyword, or the fused `additionalProperties` validator,
-compiles the same subschemas and raises the same errors. The walk's copy raised
-an error first only for a resource root reached through `$ref: ""`, which
-validation skips, or under a custom keyword replacing `patternProperties`; the SDK
-uses neither. Its cache entries only decided which compilation came first: the
-review corpora, step budgets and cancellation points are byte-identical to the
-unmodified walk. Prepared contracts hold exactly the heap they held before, and
-preparation requests less: 30 referrers reaching five recursive patterns request
-1,470,560 instead of 1,671,146 bytes in 10,776 instead of 13,177 allocations, and
-hold 178,183 bytes either way. Keeping the walk's unsettled nodes instead held
-about 940 bytes and 13 allocations more per pattern and referrer. The benchmark's
-`unevaluated-patterns` workload guards that retained heap.
-
-Three compile sites still drop a node, none with this hazard. The walk's boolean
-`allOf`/`anyOf`/`oneOf` branches are settled leaves, and a dropped settled node is
-safe: every held non-owning edge (a shared reuse, a deferred target's placeholder,
-a cycle's alias placeholder) points at an unsettled node, and reaching one makes
-every enclosing node unsettled. The regex fallback after a literal
-`patternProperties` attempt recompiles the same locations in the same round and
-owns the cached nodes. `additionalProperties: true` beside `patternProperties`
-compiles the pattern subschemas and returns no validator; the `patternProperties`
-keyword compiles the same locations in the same round and owns those nodes,
-unless a custom keyword replaces it, which the SDK never registers.
-
-The evaluator's `unevaluated_pattern_ownership` test (and its Wasm counterpart)
-runs the reduced reproducer in four placements; `reference_placement` compares
-500 seeded random contracts, split across document, contained and supplied
-resources, with the same schemas in one resource. Both fail on the unmodified walk.
-
-CI also runs two of upstream's integration tests on the fork, with the SDK's
-feature selection (none): `ref_chain` compiles and releases 1,000-reference chains
-on a 256 KiB stack, and `leak` releases validators built through reference
-cycles; both exercise the fork's release order. The rest of upstream's suite is
-not a CI gate. Some cases read test-suite data the published archive omits, and
-others assert the Rust `regex` and `fancy-regex` dialects that the fork replaces
-with ECMAScript `u`-mode matching, which rejects the identity escape `\-`, for
-example.
-
-## regress
-
-The upstream 0.12.0 archive contains the reversed `prohibit-unsafe` branch in
-`unicode.rs::uppercase`; it was not introduced by the SDK patch. Both case-table
-lookups now use checked indexing. `position.rs` uses checked non-null construction,
-provenance-preserving wrapping pointer arithmetic and byte-address subtraction.
-These produce the same positions/distances for valid input ranges without unsafe
-blocks, including empty inputs and one-past-end positions. Both modules forbid
-unsafe code at compile time. Tests cover every Unicode table entry and gap,
-case-insensitive matching, and position arithmetic. CI runs those library
-regressions with `--no-default-features --features std,utf16,prohibit-unsafe --lib`.
-
-- `Cargo.toml`, `src/lib.rs`: private identity and internal modules; the SDK explicitly selects the classical interpreter required by the work budget.
-- `src/api.rs`, `src/classicalbacktrack.rs`, `src/ob_budget.rs`: finite interpreter work and cancellation propagation; a failed/exhausted match must never become an ordinary non-match that supports a wrong validation verdict.
-- `src/parse.rs`, `src/ob_ecma11_properties.rs`: ECMAScript 11 property-name recognition and bounded pattern expansion/admission. Supported syntax and selected matching capability are distinct. Unicode property matching remains an explicitly qualified refusal only when selected by evaluation; irrelevant branches retain existing verdicts.
-- Empty quantifier semantics: `src/classicalbacktrack.rs` treats an unrepresentable single-character atom as matching zero characters only when its quantifier admits zero repetitions, including lazy extension. Lone-surrogate escapes still match no scalar code point. `tests/fixtures/lone-surrogate.mjs` computes the checked-in 470-row differential fixture using Node's `RegExp` with the `u` flag (Node v22.19.0, V8 12.4.254.21-node.29); `tests/tests.rs` asserts every row, and the evaluator's `pattern_correctness` integration test runs every row through `pattern` and `patternProperties`.
-- Backtrack budget restoration: both mid-interpreter budget exits truncate the backtrack stack to its exhaustion sentinel. The direct matcher regression uses `^(a+)+$` on 28 `a` characters plus `b`, without `catch_unwind`, at budgets 0–255 in debug tests; positive/negative lookaround variants and fresh-scope recovery are also checked. CI runs the fork's whole suite with `--no-default-features --features std`, the SDK's classical matcher configuration.
-
-`OPENBINDINGS-PATCH.md` identifies each retained fork and links this contract.
-
 ## Invariants and regression gates
 
-Keep exact input in the SDK's flat immutable arena. Do not convert values through f64 or serde_json::Value as an authoritative convenience path. The private compiler projection can strip annotations only because the declared evaluator is a validity evaluator with format assertion disabled; original SDK documents and diagnostics preserve original content. The adapter's const/enum and numeric keywords preserve exact values and charge work.
+Keep exact input in the SDK's flat immutable arena. Do not convert values through
+f64 or serde_json::Value as an authoritative convenience path. The private
+compiler projection can strip annotations only because the declared evaluator is
+a validity evaluator with format assertion disabled; original SDK documents and
+diagnostics preserve original content. The evaluator's const/enum and numeric
+keywords preserve exact values.
 
-Core resources are explicit. The evaluator denies retrieval; static inspection uses a recording retriever with inert resources that never supply a verdict, and the fixed checks retrieve only their own local resources. A host enabling dependency HTTP/file features on both schema libraries must still fail to produce any HTTP/FIFO trap hit through the SDK; direct positive controls on each library prove the traps work.
+Core resources are explicit. The evaluator denies retrieval; static inspection
+uses a recording retriever with inert resources that never supply a verdict, and
+the fixed checks retrieve only their own local resources. A host enabling
+dependency HTTP/file features on the schema library must still fail to produce
+any HTTP/FIFO trap hit through the SDK; direct positive controls on the library
+prove the traps work.
 
-Before adopting an upstream update:
+The recorded source digests make the isolation check fail on any dependency
+upgrade until it is reviewed. Before adopting one:
 
-1. Archive/checksum the new upstream sources and record its Git revision. Compare every old patch against the new API and behavior; never copy a Cargo registry cache over the production fork.
-2. Prefer an equivalent upstream hook and remove a patch when original-value, scope, work and diagnostic invariants remain provable. Keep unique private names until the unmodified upstream can satisfy them.
-3. Rebase the change in isolation. Re-run the full pinned 440-case OpenBindings corpus and the evaluator kit's 1,564 observations, with its exact-case refusal declarations, natively and in real Wasm (`python3 tools/verify.py --browser`). Run the affected upstream library tests, negative controls, no-I/O feature-unification traps, dynamic-scope/isolation, cancellation, deep literals, exact arithmetic and ownership probes.
-4. Repeat the frozen representative performance/memory series (`tools/evaluator-bench`) and packed consumer tests. A verdict becoming a refusal is a regression unless the governing authority intentionally changes; update scope only through an explicit separate decision.
-5. Refresh RustSec and license inventories. Retain missing upstream notices from exact source revisions. Document all intentional translations, APIs removed from the fork, failed attempts and new limits.
-6. Regenerate the full patch manifests, source archive and package hashes only after review; do not silently rewrite the pinned baseline.
+1. Read the upstream changes against what the SDK relies on: the documented
+   `with_keyword`, `PatternOptions` and build APIs, the walk the
+   unevaluated-walk transform depends on, jsonschema-regex's translation of the
+   evaluator's pattern forms, and the regex crate's syntax and Unicode
+   semantics.
+2. Run the unevaluated-walk tests and act on either failure as above.
+3. Re-run the full pinned 440-case OpenBindings corpus and the evaluator kit's
+   1,564 observations, with its exact-case refusal and capability declarations,
+   natively and in real Wasm (`python3 tools/verify.py --browser`), and the
+   pattern differentials: `pattern_correctness` checks seeded generated
+   patterns and lone-surrogate escapes against results recorded from V8 through
+   `pattern` and `patternProperties`, and the TypeScript suite derives the
+   generated rows' results from V8 again; core's fixed-pattern regressions are
+   above.
+   Run the no-I/O feature-unification traps, dynamic-scope, cancellation, deep
+   value, exact arithmetic and stack tests. The release stack test re-checks
+   the depth bound's frame model, the stack guard's headroom and the walk
+   limit that keeps preparation on a 256 KiB thread: a library whose frames
+   grow fails it, and the guard's budget or the walk limit changes with the
+   library. The missing-resource tests check stand-in verdicts against every
+   completion.
+4. Repeat the frozen representative performance and memory series
+   (`tools/evaluator-bench`, `tools/verify-diagnostics.py`) and the packed
+   consumer tests. A verdict becoming a refusal is a regression unless the
+   governing authority intentionally changes; update scope only through an
+   explicit separate decision.
+5. Refresh RustSec and license inventories, then the source digests in
+   `docs/dependency-isolation.json`, only after review.
 
-The complete diff inventory is in `docs/dependency-patches/`. Reproduce it with
-`python3 tools/dependency-patches.py --upstream-dir <original-crate-archives> --output <new-directory>`;
-verify the original archives against the manifest checksums first.
-
-For an isolated rehearsal of the current `jsonschema` fork, use a new output
-directory and the original crate archive directory:
-
-```sh
-python3 tools/rehearse-dependency.py --package jsonschema \
-  --upstream-dir /path/to/original-crate-archives \
-  --output target/dependency-rehearsal
-```
-
-This checks the upstream checksum, extracts pristine sources, applies the
-maintained patch with the standard `patch` executable, and compares every
-reconstructed file to the current fork. Keep `RECONSTRUCTION.json` and the patch
-log. Independently regenerate the patch inventory with `dependency-patches.py`
-into another fresh directory and compare it with `docs/dependency-patches`.
-Then run the applicable source, consumer compatibility, evaluator and packaged
-artifact gates described above on the same committed candidate. Exact source
-reconstruction is a maintenance rehearsal; it neither upgrades the dependency
-nor establishes that a future upstream rebase will be straightforward.
-
-The maintained SDK exact-operand, ECMA, resolver, diagnostic, corpus and kit tests
-govern this supported graph. Re-run upstream source suites when updating the
-corresponding library and investigate each changed result explicitly. Historical
-upstream-test dispositions are archived outside the product and are not skip filters.
+The maintained SDK exact-operand, ECMA, resolver, diagnostic, corpus and kit
+tests govern this supported graph. Re-run upstream source suites when updating
+the corresponding library and investigate each changed result explicitly.

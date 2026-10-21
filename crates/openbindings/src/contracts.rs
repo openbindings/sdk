@@ -17,11 +17,11 @@ pub enum NoVerdictReason {
     /// Sound preparation or evaluation could not be established, for example a potential non-progressing cycle. This does not prove semantic undefinedness.
     ConservativePreparation,
     /// A resource required by the evaluator's preparation or evaluation is absent;
-    /// no network retrieval is attempted. The default evaluator can prepare paired
-    /// bounds for qualified missing static references and return this cause during
-    /// validation when those bounds do not decide the instance. Other partial
-    /// schemas can refuse at preparation. This does not prove that missing content
-    /// is necessary to the instance's semantic verdict.
+    /// no network retrieval is attempted. The default evaluator prepares an empty
+    /// stand-in for a missing resource and returns this cause during validation
+    /// when an instance's evaluation reaches it; a reference to a fragment of a
+    /// missing resource refuses at preparation. This does not prove that missing
+    /// content is necessary to the instance's semantic verdict.
     /// Use [`Document::references`] to inspect document-wide reference spellings
     /// and original keyword locations, then prepare again with supplied resources.
     /// That inventory is not an exact per-value-contract missing-resource list.

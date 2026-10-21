@@ -14,7 +14,7 @@ copy.mkdir(exist_ok=True)
 ignore = shutil.ignore_patterns('.git', 'target', 'node_modules', '__pycache__')
 for name in ['Cargo.toml', 'Cargo.lock']:
     shutil.copy2(root / name, copy / name)
-for name in ['crates', 'vendor', 'tools/diagnostic-memory-probe']:
+for name in ['crates', 'tools/diagnostic-memory-probe']:
     shutil.copytree(root / name, copy / name, dirs_exist_ok=True, ignore=ignore)
 source = Path('crates/openbindings-json-schema-evaluator/src/lib.rs')
 original = (root / source).read_bytes()
@@ -24,13 +24,15 @@ env['CARGO_NET_OFFLINE'] = 'true'
 env['CARGO_TARGET_DIR'] = str(out / 'target')
 records = []
 try:
-    for path, selector in [('ordinary', 'self.validator'), ('partial-upper', 'self.upper.validator'), ('partial-lower', 'self.lower.validator')]:
-        needle = selector + '.is_valid(backend::view(value))'
-        replacement = selector + '.validate(backend::view(value)).is_ok()'
-        assert text.count(needle) == 1, (path, text.count(needle))
+    # The cheap check has one validity call; each failing path must catch its mutation.
+    needle = 'self.validator.is_valid(backend::view(value))'
+    replacement = 'self.validator.validate(backend::view(value)).is_ok()'
+    assert text.count(needle) == 1, text.count(needle)
+    for path in ['ordinary', 'referenced']:
+        # The probe stops at the first rejected sample, so each path runs alone.
         (copy / source).write_text(text.replace(needle, replacement), encoding='utf-8', newline='\n')
         command = ['cargo', 'run', '--offline', '--release', '--locked', '--manifest-path',
-                   str(copy / 'tools/diagnostic-memory-probe/Cargo.toml'), '--', '--values-only']
+                   str(copy / 'tools/diagnostic-memory-probe/Cargo.toml'), '--', '--values-only', '--path', path]
         run = subprocess.run(command, cwd=copy, env=env, capture_output=True, text=True)
         (out / (path + '.jsonl')).write_text(run.stdout, encoding='utf-8', newline='\n')
         (out / (path + '.log')).write_text(run.stderr, encoding='utf-8', newline='\n')

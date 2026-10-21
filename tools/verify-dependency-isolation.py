@@ -30,55 +30,36 @@ for record in records:
             original = {m.name.split('/', 1)[1]: hashlib.sha256(tar.extractfile(m).read()).hexdigest()
                         for m in tar.getmembers() if m.isfile() and m.name.endswith('.rs')}
         assert original == record['rust_files']
-removed = {'openbindings-internal-' + name for name in ['serde-json', 'referencing', 'jsonschema-value']}
+removed = {'openbindings-internal-' + name
+           for name in ['serde-json', 'referencing', 'jsonschema-value', 'jsonschema', 'regress']}
 assert not removed & {p['name'] for p in graph['packages']}
-assert {p.name for p in (root / 'vendor').iterdir() if p.is_dir()} == {
-    'openbindings-internal-jsonschema', 'openbindings-internal-regress'}
+assert not (root / 'vendor').exists(), 'the SDK carries no vendored dependency'
 tree = subprocess.check_output(['cargo', 'tree', '--offline', '--locked', '--workspace',
     '--edges', 'normal,build', '--no-dedupe', '--prefix', 'none', '--format', '{p}|{f}'], cwd=root, text=True)
 serde = {line for line in tree.splitlines() if line.startswith('serde_json v')}
 assert len(serde) == 1 and 'arbitrary_precision' not in next(iter(serde)), serde
 print('One registry serde_json identity; no SDK-requested arbitrary precision; '
-      f'{len(records)} upstream source/archives audited; two retained forks.')
+      f'{len(records)} upstream source/archives audited; no forked dependency.')
 
-# Core uses the unmodified library; the forks serve only the default evaluator
-# until it moves too. Core's own graph, resolved as Cargo builds core alone,
-# holds neither fork, and no library type crosses between the two.
-FORKS = {'openbindings-internal-jsonschema', 'openbindings-internal-regress'}
+# Core and the default evaluator use the unmodified library under its own name,
+# and no library type crosses the shared crates.
 CORE = ['openbindings', 'openbindings-internal-schema', 'openbindings-internal-json']
-for package in CORE:
-    core_tree = subprocess.check_output(['cargo', 'tree', '--offline', '--locked', '-p', package,
-        '--edges', 'normal,build', '--prefix', 'none', '--format', '{p}'], cwd=root, text=True)
-    names = {line.split(' v', 1)[0] for line in core_tree.splitlines() if line.strip()}
-    assert not FORKS & names, (package, FORKS & names)
-    if package != 'openbindings-internal-json':
-        assert 'jsonschema' in names, package
 manifests = {name: tomllib.loads((root / 'crates' / name / 'Cargo.toml').read_text(encoding='utf-8'))
              for name in [p.name for p in (root / 'crates').iterdir() if (p / 'Cargo.toml').is_file()]}
-workspace = tomllib.loads((root / 'Cargo.toml').read_text(encoding='utf-8'))['workspace']['dependencies']
-assert workspace['jsonschema'] == {'version': '=0.58.6', 'default-features': False}, workspace['jsonschema']
-def fork_users(name, manifest):
-    found = []
+workspace = tomllib.loads((root / 'Cargo.toml').read_text(encoding='utf-8'))['workspace']
+assert 'exclude' not in workspace, workspace.get('exclude')
+assert workspace['dependencies']['jsonschema'] == {'version': '=0.58.6', 'default-features': False}, workspace['dependencies']['jsonschema']
+for name, manifest in manifests.items():
     for kind in ['dependencies', 'dev-dependencies', 'build-dependencies']:
         for alias, spec in manifest.get(kind, {}).items():
-            if isinstance(spec, dict) and spec.get('package', alias) in FORKS:
-                found.append((kind, alias, spec))
-    return found
-users = {name: fork_users(name, manifest) for name, manifest in manifests.items()}
-users = {name: found for name, found in users.items() if found}
-assert set(users) == {'openbindings-json-schema-evaluator', 'openbindings-internal-json'}, users
-assert [(k, a) for k, a, _ in users['openbindings-json-schema-evaluator']] == [('dependencies', 'jsonschema')]
-assert [(k, a, s.get('optional')) for k, a, s in users['openbindings-internal-json']] == [
-    ('dependencies', 'evaluator-jsonschema', True)]
-assert manifests['openbindings-internal-json']['features'] == {'evaluator-work': ['dep:evaluator-jsonschema']}
-for name, manifest in manifests.items():
+            assert not (isinstance(spec, dict) and 'package' in spec), (name, kind, alias)
     json_dependency = manifest.get('dependencies', {}).get('openbindings-internal-json')
     enabled = isinstance(json_dependency, dict) and 'evaluator-work' in json_dependency.get('features', [])
     assert enabled == (name == 'openbindings-json-schema-evaluator'), name
-    if name in CORE:
-        assert manifest.get('dependencies', {}).get('jsonschema', {'workspace': True}) == {'workspace': True}, name
-# The shared crates expose no library type, so the evaluator's schema space and
-# the fork never receive one of core's library values, nor core one of theirs.
+    if 'jsonschema' in manifest.get('dependencies', {}):
+        assert manifest['dependencies']['jsonschema'] == {'workspace': True}, name
+assert manifests['openbindings-internal-json']['features'] == {'evaluator-work': []}
+assert manifests['openbindings-json-schema-evaluator']['dependencies']['jsonschema'] == {'workspace': True}
 for name in ['openbindings-internal-schema', 'openbindings-internal-json']:
     for path in (root / 'crates' / name / 'src').rglob('*.rs'):
         for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
@@ -86,12 +67,7 @@ for name in ['openbindings-internal-schema', 'openbindings-internal-json']:
             if code.startswith(('pub fn', 'pub use', 'pub type', 'pub struct', 'pub enum', 'pub trait')):
                 for library in ['jsonschema', 'referencing', 'Validator', 'ValidationOptions', 'Registry', 'Keyword<']:
                     assert library not in code, (path, number, code)
-    for path in (root / 'crates' / name / 'src').rglob('*.rs'):
-        text = path.read_text(encoding='utf-8')
-        assert 'ob_ecma' not in text, path
-        if name == 'openbindings-internal-schema':
-            assert 'ob_work' not in text and 'evaluator_jsonschema' not in text, path
-print('Core graph: unmodified jsonschema only; the forks reach only the default evaluator, and no library type crosses.')
+print('Core and the default evaluator: unmodified jsonschema only, and no library type crosses.')
 
 # Cancellation has one delivery identity, with no async dependency entering core.
 cancellation = 'openbindings-internal-cancellation'
@@ -111,7 +87,7 @@ for interface in ['http-discovery', 'invocation', 'source-inspection', 'interfac
     assert 'pub use openbindings_internal_cancellation::{Cancellation, CancellationToken};' in (package / 'src/lib.rs').read_text(encoding='utf-8')
 print('Cancellation: one shared identity, std-only implementation above synchronous core.')
 
-# Core's complete implementation closure must not compile the bounds planner.
+# Core's complete implementation closure holds no evaluator.
 graph = json.loads(subprocess.check_output(
     ['cargo', 'metadata', '--offline', '--locked', '--format-version', '1'], cwd=root))
 packages = {p['id']: p for p in graph['packages']}
@@ -126,13 +102,7 @@ while pending:
     pending.extend(d['pkg'] for d in nodes[node]['deps']
                    if any(k['kind'] is None for k in d['dep_kinds']))
 assert 'openbindings-json-schema-evaluator' not in {packages[p]['name'] for p in closure}
-for name in ['openbindings', 'openbindings-internal-schema']:
-    sources = root / 'crates' / name / 'src'
-    for path in sources.rglob('*.rs'):
-        assert path.name not in ('bounds.rs', 'oneof.rs'), path
-        text = path.read_text(encoding='utf-8')
-        assert 'struct EvaluationBounds' not in text and 'struct Plan' not in text, path
 internal = tomllib.loads((root / 'crates/openbindings-internal-schema/Cargo.toml').read_text(encoding='utf-8'))
 assert 'openbindings' not in internal['dependencies']
 assert 'openbindings-json-schema-evaluator' not in internal['dependencies']
-print('Schema boundary: core has no evaluator dependency or bounds/oneOf planner; the shared adapter has no reverse dependency.')
+print('Schema boundary: core has no evaluator dependency; the shared adapter has no reverse dependency.')

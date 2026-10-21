@@ -113,6 +113,39 @@ test("a resource cap refuses before preparing any resource", () => {
   assertRefused(preparation(text, undefined, 0, { patternBytes: 4 }));
 });
 
+test("a contract's patterns are bounded together", () => {
+  const text = document(
+    {},
+    {
+      properties: {
+        a: { pattern: "^aaaaaa$" },
+        b: { patternProperties: { "^bbbbbb$": true } },
+      },
+    },
+  );
+  const within = preparation(text, undefined, null, { totalPatternBytes: 16 });
+  assert.equal(within.status, "ready");
+  within.valueContract.dispose();
+  const over = preparation(text, undefined, null, { totalPatternBytes: 15 });
+  assert.equal(over.status, "no-verdict");
+  assert.equal(over.detail.reason, "limit-exceeded");
+  assert.equal(over.detail.code, "pattern-total-byte-limit");
+  assert.equal(sdk.evaluatorLimits().totalPatternBytes, 4 * 1024 * 1024);
+  // The total counts forms, which spell every set out: a two-byte `\S` passes
+  // a 64-byte total.
+  const spelled = document({}, { pattern: "\\S" });
+  const short = preparation(spelled, undefined, null, {
+    totalPatternBytes: 64,
+  });
+  assert.equal(short.status, "no-verdict");
+  assert.equal(short.detail.code, "pattern-total-byte-limit");
+  const ample = preparation(spelled, undefined, null, {
+    totalPatternBytes: 1024,
+  });
+  assert.equal(ample.status, "ready");
+  ample.valueContract.dispose();
+});
+
 test("a resource cap refusal takes time linear in the resources", () => {
   // Registering resources takes time quadratic in their number; a refusal
   // before registration grows with the projection, about fourfold here.

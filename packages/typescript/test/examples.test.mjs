@@ -85,17 +85,30 @@ test("source editor requires conformance and retains prepared partial snapshots"
     assert.equal(partial.result.outcome, "no-verdict");
     assert.equal(partial.result.detail.reason, "resource-unavailable");
     assert.match(formatEditorResult(partial), /resource-unavailable/);
+    const negatedText =
+      '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"not":{"$ref":"https://schema.example/missing"}}}}}';
+    const negated = editor.update(negatedText);
+    assert.equal(negated.status, "updated");
+    assert.equal(negated.result.outcome, "no-verdict");
+    assert.equal(
+      negated.result.detail.location.resource,
+      "https://schema.example/missing",
+    );
     const declined = editor.update(
-      '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"not":{"$ref":"https://schema.example/missing"}}}}}',
+      '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"$ref":"https://schema.example/missing#/$defs/name"}}}}',
     );
     assert.equal(declined.status, "resources-missing");
     assert.equal(
       declined.evidence.message,
       "static preparation requires a resource that was not supplied",
     );
+    assert.match(
+      formatEditorResult(declined),
+      /Previous prepared snapshot kept/,
+    );
     const current = editor.snapshot();
     try {
-      assert.equal(new TextDecoder().decode(current.toBytes()), partialText);
+      assert.equal(new TextDecoder().decode(current.toBytes()), negatedText);
     } finally {
       current.dispose();
     }

@@ -137,7 +137,10 @@ document.edit([
   { op: "set-operations", value: { run: { input: true } } },
   { op: "set-dependencies", value: { dep: { operation: "run" } } },
   { op: "set-sources", value: { local: { kind: "custom" } } },
-  { op: "set-bindings", value: { local: { operation: "run", source: "local" } } },
+  {
+    op: "set-bindings",
+    value: { local: { operation: "run", source: "local" } },
+  },
   { op: "set", pointer: "/name", value: "Example" },
 ]);
 ```
@@ -159,27 +162,52 @@ checks. Independently retained proofs and views keep their certified revision.
 ## Limits and diagnostics
 
 Schema resources are explicit and immutable. Pass `SchemaResources` to
-`prepare({ resources })`; the SDK never fetches a missing reference. Retain a
-prepared value contract for repeated validation. Ready does not promise a verdict for
-every value; missing resources, unsupported capabilities and exhausted work
-budgets can produce no-verdict. Replacing resources means preparing again.
-Preparation registers each schema resource a contract reaches in time quadratic
-in their number (a contract reaching 10,000 supplied resources takes about 2.5 s
-to prepare), and the SDK sets no cap by default. When preparing untrusted
-documents or resources, pass `limits: { schemaResources: n }`; a contract reaching more
-than `n` refuses with the `schema-resource-limit` no-verdict before registration.
+`prepare({ resources })`; the SDK never fetches a missing reference. A
+contract that reaches a resource that was not supplied still prepares, and a
+value whose evaluation reaches that resource gets a `resource-unavailable`
+no-verdict naming it. Preparation refuses a contract in which an
+`unevaluatedProperties` or `unevaluatedItems` keyword's annotation sources
+reach a missing resource, a reference to a fragment of a missing resource, or
+a reference that identifies no schema. Retain a prepared value contract for repeated validation. Ready
+does not promise a verdict for every value: a missing resource, a pattern that
+needs a backtracking engine, applies a Unicode property escape or holds the
+non-word boundary `\B`, and an exhausted limit can produce no-verdict.
+Patterns, the word boundary `\b` included, match in time linear in the
+string, so no limit bounds pattern work. Replacing resources
+means preparing again. No evaluation work cap applies by default, and
+evaluation time can grow exponentially with some schemas (nested `anyOf`
+holders of `unevaluatedProperties`); when validating untrusted contracts or
+values within a deadline, pass `limits: { evaluationSteps: n }`. Preparation time grows with the schema
+resources a contract reaches (10,000 supplied resources prepare in about 0.2 s
+natively), and the SDK sets no cap by default. When preparing untrusted
+documents or resources, pass `limits: { schemaResources: n }`; a contract
+reaching more than `n` refuses with the `schema-resource-limit` no-verdict
+before compiling.
+
+The evaluator bounds what the SDK itself reads, writes and recurses through, not
+the memory of the JSON Schema library's compiled program. On by default:
+document admission limits; `evaluationDepth` (1,024), which also guards the
+stack of a contract holding `unevaluatedProperties` or `unevaluatedItems` as it
+evaluates (128 KiB at the default); `patternBytes` (1 MiB), `patternDepth` (32)
+and `totalPatternBytes` (4 MiB of the forms kept for a contract's patterns); and
+fixed bounds on dynamic specialization and on an unevaluated keyword's walk.
+Within them, preparing a schema can still take more memory than a host may want:
+40 counted-repetition `patternProperties` names of the form `^.{1,10000}N$` peak
+at 1.1 GB. A host preparing schemas from untrusted parties should prepare them
+in a Worker or process with a memory limit. Values checked against trusted
+schemas stay bounded by depth and, when set, `evaluationSteps`.
 
 `validate` returns an established failure with no problem list and
 `problemsComplete: false`. Call `explain` on the same prepared value contract for the
-library's first error. An explanation can allocate in proportion to input and
-overflow the stack on deep values, so keep `validate` for untrusted input. Each
-problem's `instance` is the failing node's exact pointer from the value passed,
-and its `schema` names the failing keyword by `resource` and `pointer`.
-`value.locate(problem.instance)`, `ConformantDocument.locate(problem.schema)` and
-`SchemaResources.locate(problem.schema)` give coordinates when asked. Schema
-facts may disclose source operands. A prepared value contract keeps a compact copy of
-the keywords it compiled for explanations, never its document, resources or any
-position. Messages are advisory; use result tags, codes and rule evidence for
+library's first error. An explanation allocates in proportion to input and is
+made only for values within half the evaluation depth limit, so keep `validate`
+for untrusted input. The problem's `instance` is the failing node's exact
+pointer from the value passed, and its `schema` names the failing keyword by
+`resource` and `pointer`. `value.locate(problem.instance)`,
+`ConformantDocument.locate(problem.schema)` and
+`SchemaResources.locate(problem.schema)` give coordinates when asked. A
+prepared value contract keeps only the original locations of the schemas it
+compiled, never their text, its document, resources or any position. Messages are advisory; use result tags, codes and rule evidence for
 control flow. Result objects (reports, findings, outcomes, problems, locations,
 refusals and discovery results) may gain properties in later versions: read the
 properties you use rather than relying on an exact key set.
