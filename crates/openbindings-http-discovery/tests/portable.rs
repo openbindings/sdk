@@ -18,6 +18,13 @@ impl DiscoveryTimer for Timer {
     }
 }
 const DOCUMENT: &[u8] = br#" {"openbindings":"0.2.0","operations":{"run":{}}} "#;
+// Default options with a whole-attempt deadline the application chose.
+fn timeout_after(duration: Duration) -> ClientOptions {
+    ClientOptions {
+        timeout: Some(duration),
+        ..ClientOptions::default()
+    }
+}
 #[derive(Default)]
 struct Counts {
     read: usize,
@@ -593,15 +600,12 @@ fn alternate_loopback_hosts_are_normalized_before_admission() {
     }
 }
 
-// zero timeout remains a configuration refusal before I/O.
+// zero timeout remains a configuration refusal before I/O; the default sets no deadline.
 #[tokio::test(flavor = "current_thread")]
 async fn zero_timeout_refuses_before_io() {
     let error = discover::<Body, _, _, _>(
         "https://example.test",
-        &ClientOptions {
-            timeout: AttemptTimeout::After(Duration::ZERO),
-            ..Default::default()
-        },
+        &timeout_after(Duration::ZERO),
         &CancellationToken::new(),
         &Timer::new(),
         |_| async { panic!("dispatched with zero timeout") },
@@ -609,11 +613,7 @@ async fn zero_timeout_refuses_before_io() {
     .await
     .unwrap_err();
     assert_eq!(error.code, "invalid-timeout");
-    assert_eq!(
-        AttemptTimeout::Default.duration().unwrap(),
-        Some(Duration::from_secs(30))
-    );
-    assert_eq!(AttemptTimeout::Unbounded.duration().unwrap(), None);
+    assert_eq!(ClientOptions::default().timeout, None);
 }
 
 #[derive(Default)]
@@ -661,7 +661,7 @@ impl DiscoveryTimer for Clock {
     }
 }
 
-// the default host timer wakes never-ready headers/body, and cancellation wins a tie.
+// a configured host timer wakes never-ready headers/body, and cancellation wins a tie.
 #[tokio::test(flavor = "current_thread")]
 async fn whole_attempt_timer_wakes_pending_io_and_cancellation_wins_ties() {
     for body_phase in [false, true] {
@@ -669,7 +669,7 @@ async fn whole_attempt_timer_wakes_pending_io_and_cancellation_wins_ties() {
             let clock = Clock::default();
             let control = CancellationToken::new();
             let counts = Rc::new(RefCell::new(Counts::default()));
-            let options = ClientOptions::default();
+            let options = timeout_after(Duration::from_secs(30));
             let call = discover(
                 "https://example.test",
                 &options,
@@ -704,6 +704,47 @@ async fn whole_attempt_timer_wakes_pending_io_and_cancellation_wins_ties() {
             assert_eq!(clock.started.get(), 1);
             assert_eq!(clock.dropped.get(), 1);
         }
+    }
+}
+
+// Poll once and report whether the future is still waiting.
+async fn still_pending<F: std::future::Future>(mut future: std::pin::Pin<&mut F>) -> bool {
+    std::future::poll_fn(|cx| std::task::Poll::Ready(future.as_mut().poll(cx).is_pending())).await
+}
+
+// without a timeout the attempt starts no timer, outlasts any elapsed time on
+// never-ready headers or body, and ends only when the caller cancels it.
+#[tokio::test(flavor = "current_thread")]
+async fn no_timeout_waits_until_the_caller_cancels() {
+    for body_phase in [false, true] {
+        let clock = Clock::default();
+        let control = CancellationToken::new();
+        let counts = Rc::new(RefCell::new(Counts::default()));
+        let options = ClientOptions::default();
+        let mut call = std::pin::pin!(discover(
+            "https://example.test",
+            &options,
+            &control,
+            &clock,
+            |_| async {
+                if !body_phase {
+                    std::future::pending::<()>().await;
+                }
+                let mut r = response(200, DOCUMENT, counts.clone());
+                r.body.stall = true;
+                Ok(r)
+            },
+        ));
+        assert!(still_pending(call.as_mut()).await);
+        clock.advance(Duration::from_secs(365 * 24 * 60 * 60));
+        assert!(still_pending(call.as_mut()).await);
+        assert_eq!(clock.started.get(), 0);
+        control.cancel();
+        let r = call.await.unwrap();
+        assert!(matches!(r.outcome, DiscoveryOutcome::Cancelled));
+        assert_eq!(r.metadata.is_some(), body_phase);
+        assert!(r.body.is_none());
+        assert_eq!(counts.borrow().drops, usize::from(body_phase));
     }
 }
 
@@ -787,7 +828,7 @@ async fn portable_redirects_obey_statuses_relative_location_limit_and_total_time
         let calls = std::cell::Cell::new(0);
         let r = discover(
             "https://example.test",
-            &ClientOptions::default(),
+            &timeout_after(Duration::from_secs(30)),
             &CancellationToken::new(),
             &clock,
             |request| {
@@ -952,7 +993,7 @@ async fn status_cleanup_is_bounded_by_remaining_attempt_time() {
     }
     let clock = Clock::default();
     let dropped = Rc::new(std::cell::Cell::new(false));
-    let options = ClientOptions::default();
+    let options = timeout_after(Duration::from_secs(30));
     let control = CancellationToken::new();
     let call = discover(
         "https://example.test",
@@ -1010,7 +1051,7 @@ async fn validation_boundary_expiry_retains_complete_bytes_and_no_success() {
     let clock = BoundaryClock(std::cell::Cell::new(0));
     let result = discover(
         "https://example.test",
-        &ClientOptions::default(),
+        &timeout_after(Duration::from_secs(30)),
         &CancellationToken::new(),
         &clock,
         |_| async {
@@ -1070,7 +1111,7 @@ async fn eof_boundary_retains_complete_body_on_timeout_or_cancellation() {
             let control = CancellationToken::new();
             let r = discover(
                 "https://example.test",
-                &ClientOptions::default(),
+                &timeout_after(Duration::from_secs(30)),
                 &control,
                 &clock,
                 |_| async {

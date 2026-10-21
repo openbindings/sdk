@@ -148,40 +148,10 @@ pub struct DiscoveryRequest {
     pub accept: &'static str,
 }
 
-/// Whole-attempt deadline policy. Zero durations are configuration errors.
-#[derive(Clone, Copy, Debug, Default)]
-pub enum AttemptTimeout {
-    /// SDK default: thirty seconds.
-    #[default]
-    Default,
-    /// A positive finite duration, including synchronous validation boundaries.
-    After(std::time::Duration),
-    /// Explicitly omit the attempt deadline. Caller cancellation still applies.
-    Unbounded,
-}
-impl AttemptTimeout {
-    /// Resolve the default or override; reject zero rather than disabling the timer.
-    ///
-    /// # Errors
-    /// Returns a configuration error for a zero timeout duration.
-    pub fn duration(self) -> Result<Option<std::time::Duration>, ConfigurationError> {
-        match self {
-            Self::Default => Ok(Some(std::time::Duration::from_secs(
-                DEFAULT_TIMEOUT_SECONDS,
-            ))),
-            Self::After(duration) if !duration.is_zero() => Ok(Some(duration)),
-            Self::Unbounded => Ok(None),
-            Self::After(_) => Err(ConfigurationError {
-                code: "invalid-timeout",
-                message: "attempt timeout must be positive, or explicitly unbounded",
-            }),
-        }
-    }
-}
-
 /// Host-owned monotonic clock and wake-capable timer for portable discovery.
 /// `now` and `sleep_until` must use the same epoch. Polls must be cooperative;
 /// dropping the timer future must release it. Local futures are supported.
+/// Discovery consults the timer only when [`ClientOptions::timeout`] sets a deadline.
 pub trait DiscoveryTimer {
     /// Monotonic time elapsed since the host's clock epoch.
     fn now(&self) -> std::time::Duration;
@@ -190,18 +160,25 @@ pub trait DiscoveryTimer {
 }
 
 #[derive(Clone, Copy, Debug)]
-/// Portable discovery configuration. Defaults to 1 MiB and thirty seconds.
+/// Discovery configuration. By default the decoded body is bounded at 1 MiB,
+/// which protects the process, and an attempt has no deadline.
 pub struct ClientOptions {
     /// Positive bound on decoded bytes, with room for one over-limit sentinel.
     pub max_document_bytes: usize,
-    /// Whole-attempt deadline, never reset by redirects or successful reads.
-    pub timeout: AttemptTimeout,
+    /// Whole-attempt deadline. `None`, the default, sets none: an attempt runs
+    /// until it completes, a transport-owned timeout fires or the caller
+    /// cancels it. A deadline only bounds time, so it is the application's
+    /// choice; a host that needs a bound sets `Some(duration)`. Connect, TLS,
+    /// response headers, every redirect, body reads and validation boundaries
+    /// then share it, and redirects and successful reads never reset it. A zero
+    /// duration is the `invalid-timeout` configuration error.
+    pub timeout: Option<std::time::Duration>,
 }
 impl Default for ClientOptions {
     fn default() -> Self {
         Self {
             max_document_bytes: DEFAULT_MAX_DOCUMENT_BYTES,
-            timeout: AttemptTimeout::default(),
+            timeout: None,
         }
     }
 }
@@ -255,6 +232,19 @@ impl ClientOptions {
         }
     }
 
+    // The configured deadline, refusing zero rather than expiring before any I/O.
+    pub(crate) fn attempt_timeout(
+        &self,
+    ) -> Result<Option<std::time::Duration>, ConfigurationError> {
+        match self.timeout {
+            Some(duration) if duration.is_zero() => Err(ConfigurationError {
+                code: "invalid-timeout",
+                message: "attempt timeout must be a positive duration; None sets no deadline",
+            }),
+            timeout => Ok(timeout),
+        }
+    }
+
     pub(crate) async fn discover_using<B, F, T, C>(
         &self,
         origin: &str,
@@ -270,7 +260,7 @@ impl ClientOptions {
         C: DiscoveryTimer,
     {
         let limit = self.byte_limit()?;
-        let duration = self.timeout.duration()?;
+        let duration = self.attempt_timeout()?;
         let requested_url = endpoint(origin)?;
         let deadline = duration
             .map(|duration| {
@@ -280,7 +270,8 @@ impl ClientOptions {
                 })
             })
             .transpose()?;
-        // Exactly one timer per attempt, owned by the host facility and dropped on every exit.
+        // At most one timer per attempt, started only for a configured deadline,
+        // owned by the host facility and dropped on every exit.
         let expiry = async {
             if let Some(deadline) = deadline {
                 timer.sleep_until(deadline).await
@@ -397,7 +388,8 @@ impl ClientOptions {
                 401 | 403 => DiscoveryOutcome::Gated,
                 _ => DiscoveryOutcome::HttpStatus,
             };
-            // Status is committed. Cleanup has the remaining attempt time, never a fresh allowance.
+            // Status is committed. Cleanup has the remaining attempt time, never a fresh allowance;
+            // without a deadline the transport bounds its own cleanup.
             let _ = until_stopped(
                 control,
                 timer,

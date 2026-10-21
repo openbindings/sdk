@@ -55,8 +55,12 @@
   call's `Detail` (`Outcome` or `Explain`), and a reusable qualification suite
   that checks and explains every value, including explanations interrupted by
   cancellation.
-- HTTP discovery and publication with bounded bodies, attempt deadlines and
-  explicit host-policy responsibilities. Publication serves the well-known path
+- HTTP discovery and publication with bounded bodies and explicit host-policy
+  responsibilities. The decoded body limit protects the process and defaults to
+  1 MiB. An attempt has no deadline unless the application sets one, since a
+  deadline only bounds time: Rust `ClientOptions::timeout` takes
+  `Some(duration)` and TypeScript takes `timeoutMs`, and a zero duration is
+  refused with `invalid-timeout`. Publication serves the well-known path
   when a request spells an unreserved character percent-encoded, as in
   `/.well-known/%6Fpenbindings` (RFC 3986 section 2.3), and never decodes a
   reserved escape such as `%2F` into a path separator.

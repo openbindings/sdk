@@ -327,6 +327,14 @@ void observableDiscoveryFailure;
 void obsoleteDiscoveryTimeout;
 void inventedDiscoveryDecode;
 
+// an attempt deadline is a number of milliseconds, or omitted for none.
+type DiscoveryOptions = import("../dist/http-discovery.js").DiscoveryOptions;
+const boundedDiscovery: DiscoveryOptions = { timeoutMs: 30_000 };
+const openDiscovery: DiscoveryOptions = {};
+// @ts-expect-error Omit timeoutMs for no deadline; there is no "unbounded" spelling.
+const unboundedDiscovery: DiscoveryOptions = { timeoutMs: "unbounded" };
+void [boundedDiscovery, openDiscovery, unboundedDiscovery];
+
 const exactAllowOrigin: import("../dist/http-discovery.js").AllowOrigin = {
   origin: "https://client.example",
 };
