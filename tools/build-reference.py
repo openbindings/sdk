@@ -56,6 +56,17 @@ def repair_inherited_links(output):
     return repairs
 
 
+def clear_rust_docs():
+    """Empty the target's documentation directory before rustdoc writes the bundle.
+
+    Rustdoc adds to that directory and never removes a page, so pages left by an
+    earlier `cargo doc`, of another crate or of a removed item, would otherwise
+    ship in the bundle. Cargo removes only the documentation, keeping the build
+    cache, and regenerates every page on the next rustdoc run.
+    """
+    subprocess.run(["cargo", "clean", "--doc"], cwd=ROOT, check=True)
+
+
 def verify_local_links(output):
     """Check HTML anchor destinations, excluding external URLs and fragments."""
     class Links(HTMLParser):
@@ -134,6 +145,7 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     npm = "npm.cmd" if os.name == "nt" else "npm"
     subprocess.run([npm, "run", "build"], cwd=ROOT / "packages/typescript", check=True)
+    clear_rust_docs()
     subprocess.run([sys.executable, ROOT / "tools/verify-api-reference.py", output / "typescript"], cwd=ROOT, check=True)
     target = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target")).resolve()
     shutil.copytree(target / "doc", output / "rust")

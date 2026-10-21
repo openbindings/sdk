@@ -27,8 +27,10 @@ python3 tools/build-reference.py --output target/reference-candidate
 
 Use a new directory for each attempt; tools preserve earlier receipts. Set
 `CARGO_TARGET_DIR` to reuse a build cache and `--offline` on the packager only
-when intentionally qualifying the cached Cargo graph. Keep the environment and
-any offline limitation in the release evidence.
+when intentionally qualifying the cached Cargo graph. The reference builder
+empties that target's `doc` directory before generating Rustdoc, so the bundle
+holds only the pages of this build. Keep the environment and any offline
+limitation in the release evidence.
 
 The packager verifies original source bytes in every Cargo archive, rejects stale
 or dirty Wasm build identity, installs the npm tarball in a fresh project, and
