@@ -3,8 +3,8 @@
 use openbindings::{Document, JsonValue, Operation, Source};
 use openbindings_source_inspection::CancellationToken;
 use openbindings_source_inspection::{
-    BindableTarget, BindingFragment, InspectionError, InspectionErrorKind, InspectionLimitation,
-    Inspector, SourceInspection, SourceInspector,
+    BindableTarget, BindingValue, BoundaryError, InspectionError, InspectionErrorKind,
+    InspectionLimitation, Inspector, SourceInspection, SourceInspector,
 };
 use std::{
     collections::{BTreeMap, HashSet},
@@ -120,7 +120,7 @@ pub fn inspect_catalog(
             });
         let mut target = BindableTarget::new(
             id,
-            BindingFragment {
+            BindingValue {
                 content: entry.get("binding").map(|v| v.to_owned()),
                 idempotent,
                 ..Default::default()
@@ -163,6 +163,7 @@ pub enum AuthoringOutcome {
 #[derive(Debug)]
 pub enum AuthoringFailure {
     Inspection(InspectionError),
+    Binding(BoundaryError),
     Edit(openbindings::EditError),
     Version(openbindings::VersionRefusal),
 }
@@ -170,6 +171,7 @@ impl std::fmt::Display for AuthoringFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Inspection(error) => error.fmt(f),
+            Self::Binding(error) => error.fmt(f),
             Self::Edit(error) => error.fmt(f),
             Self::Version(error) => error.fmt(f),
         }
@@ -179,6 +181,7 @@ impl std::error::Error for AuthoringFailure {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(match self {
             Self::Inspection(error) => error,
+            Self::Binding(error) => error,
             Self::Edit(error) => error,
             Self::Version(error) => error,
         })
@@ -221,7 +224,7 @@ pub fn author_target(
             &target
                 .binding
                 .bind("chosen.operation", "chosen.source")
-                .map_err(AuthoringFailure::Inspection)?,
+                .map_err(AuthoringFailure::Binding)?,
         )
         .map_err(AuthoringFailure::Edit)?;
     let validation = document.validate().map_err(AuthoringFailure::Version)?;

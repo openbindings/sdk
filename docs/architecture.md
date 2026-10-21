@@ -50,7 +50,8 @@ is injected into document/schema interpretation.
 `openbindings-source-inspection` is a separate optional Rust interface companion. Kind
 providers implement an associated-future trait; callers use a checked `Inspector`.
 It reuses core authoring values while enforcing the interface's narrower carrier rules.
-Acquisition stays in providers. Binding fragments omit author-owned keys. It adds
+Acquisition stays in providers. A target's binding is the by-value `BindingValue`
+invocation also takes, without author-owned keys. It adds
 no dependency from core to interface behavior; its narrow Wasm probe does not extend the
 published TypeScript surface. See the [interface mapping](../crates/openbindings-source-inspection/README.md).
 
@@ -87,18 +88,20 @@ The invocation companion's
 points and the maintained lifecycle tests.
 
 The three kind-facing interfaces define `SupportedKind` and `KindSupportVerdict`
-identically, so the SDK defines them once, in the internal
-`openbindings-internal-interfaces` crate, and inspection, synthesis and invocation
-reexport them as all four async companions reexport cancellation. A provider
-serving several jobs builds one advisory list. Core stays free of interface
-records. Each companion still refuses an empty requested kind as `empty-kind` in
-its own code namespace and keeps a bounded JSON writer mapped to its own error
-type. Invocation's by-value `BindingValue` reads `preference` with its own exact
-parser, since core's document reader is private. Tests hold the remaining copies
-aligned: the published kind-support cases run through all three facades, each
-facade's empty-kind code is pinned, the writers share byte-limit tests, and a
-differential test compares the preference parser with core's document reading.
-Change the copies together.
+identically, and the source inspector and binding invoker share one by-value
+`Binding` schema. The SDK defines these records once, in the internal
+`openbindings-internal-interfaces` crate, with the by-value `BindingValue`'s
+structural `BoundaryError` and carrier readers; inspection, synthesis and
+invocation reexport them as all four async companions reexport cancellation. A
+provider serving several jobs builds one advisory list, and an inspected target's
+binding is the binding an invoker receives. Core stays free of interface records.
+Each companion still refuses an empty requested kind as `empty-kind` in its own
+code namespace and keeps a bounded JSON writer mapped to its own error type.
+`BindingValue` reads `preference` with its own exact parser, since core's document
+reader is private. Tests hold the remaining copies aligned: the published
+kind-support cases run through all three facades, each facade's empty-kind code
+is pinned, the writers share byte-limit tests, and a differential test compares
+the preference parser with core's document reading. Change the copies together.
 
 The SDK supplies the three interface contracts and checked caller APIs without
 kind-specific instances. Providers own source interpretation, kind soundness and

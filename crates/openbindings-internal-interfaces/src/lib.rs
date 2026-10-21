@@ -4,5 +4,9 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+mod binding;
+pub mod carrier;
 mod kinds;
+pub use binding::BindingValue;
+pub use carrier::BoundaryError;
 pub use kinds::{KindSupportVerdict, SupportedKind, kind_support_verdicts};

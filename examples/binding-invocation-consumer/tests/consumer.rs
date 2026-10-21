@@ -133,6 +133,41 @@ fn one_supported_kind_list_and_verdict_type_serve_every_job() {
 }
 
 #[tokio::test]
+async fn an_inspected_target_binding_invokes_without_author_keys() {
+    // Both interfaces carry the same by-value binding, so a target found by
+    // inspection is invoked as it is: no document, and no invented keys.
+    let source = source(r#"{"units":[{"id":"lookup"}]}"#);
+    let provider = Catalog::default();
+    let inspection = openbindings_source_inspection::Inspector::new(&provider)
+        .inspect(&source)
+        .await
+        .unwrap();
+    let target = &inspection.targets[0];
+    assert!(target.binding.operation.is_none() && target.binding.source.is_none());
+    let binding: &BindingValue = &target.binding;
+    let invoker = Invoker::new(&provider);
+    let mut call = invoker.invoke(BindingRequest {
+        source: &source,
+        binding,
+        context: None,
+    });
+    call.write(JsonValue::parse("9007199254740993").unwrap())
+        .await
+        .unwrap();
+    call.close();
+    assert_eq!(
+        call.next().await.unwrap().unwrap().text(),
+        "9007199254740993"
+    );
+    assert!(call.next().await.is_none());
+    assert!(call.outcome().unwrap().is_ok());
+    assert_eq!(
+        provider.last_target.lock().unwrap().as_deref(),
+        Some("lookup")
+    );
+}
+
+#[tokio::test]
 async fn handauthored_default_echo_is_bidi_and_new_modes_are_explicit() {
     let request = BindingInvocationInput::from_json(&JsonValue::parse(format!(r#"{{"source":{{"kind":"{KIND}","content":{{"units":[{{"id":"manual"}}]}}}},"binding":{{"content":"manual"}},"context":{{}}}}"#)).unwrap()).unwrap();
     let provider = Catalog::default();

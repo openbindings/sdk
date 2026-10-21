@@ -22,7 +22,7 @@ fn source() -> Source {
     }
 }
 fn target() -> BindableTarget {
-    BindableTarget::new("one", BindingFragment::default())
+    BindableTarget::new("one", BindingValue::default())
 }
 // A provider can still assign the public flag and return an incomplete
 // inventory without evidence; the facade refuses it.
@@ -191,6 +191,19 @@ async fn consumer_rejects_provider_author_keys_unknown_binding_fields_and_bad_fr
             InspectionErrorKind::InvalidResult
         );
     }
+    // The author assigns operation and source keys; a provider's target carries neither.
+    for author_key in [
+        |binding: &mut BindingValue| binding.operation = Some("provider".into()),
+        |binding: &mut BindingValue| binding.source = Some("provider-source".into()),
+    ] {
+        let mut item = target();
+        author_key(&mut item.binding);
+        let (inspector, _) = inspector(Some(SourceInspection::complete(vec![item])));
+        assert_eq!(
+            inspector.inspect(&source()).await.unwrap_err().kind(),
+            InspectionErrorKind::InvalidResult
+        );
+    }
     let mut item = target();
     item.operation = Some(Operation {
         additional_fields: BTreeMap::from([(
@@ -204,7 +217,7 @@ async fn consumer_rejects_provider_author_keys_unknown_binding_fields_and_bad_fr
         inspector.inspect(&source()).await.unwrap_err().kind(),
         InspectionErrorKind::InvalidResult
     );
-    let binding = BindingFragment {
+    let binding = BindingValue {
         extensions: BTreeMap::from([("x-provider".into(), JsonValue::null())]),
         ..Default::default()
     }
@@ -213,6 +226,18 @@ async fn consumer_rejects_provider_author_keys_unknown_binding_fields_and_bad_fr
     assert_eq!(binding.operation, "author");
     assert_eq!(binding.source, "author-source");
     assert!(binding.content.is_none());
+    // Binding replaces keys a by-value binding already carries.
+    let binding = BindingValue {
+        operation: Some("earlier".into()),
+        source: Some("earlier-source".into()),
+        ..Default::default()
+    }
+    .bind("author", "author-source")
+    .unwrap();
+    assert_eq!(
+        (binding.operation.as_str(), binding.source.as_str()),
+        ("author", "author-source")
+    );
 }
 
 #[tokio::test]
@@ -608,7 +633,7 @@ fn provider_constructors_fill_the_fields_they_name() {
         input: Some(JsonValue::parse("true").unwrap()),
         ..Default::default()
     };
-    let target = BindableTarget::new("one", BindingFragment::default())
+    let target = BindableTarget::new("one", BindingValue::default())
         .with_operation_key("get")
         .with_operation(operation);
     assert_eq!(target.source_ref, "one");

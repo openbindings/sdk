@@ -1,102 +1,11 @@
 use crate::{InspectionError, InspectionErrorKind};
-use openbindings::{Binding, JsonLimits, JsonValue, Operation, Preference};
+use openbindings::{JsonLimits, JsonValue, Operation};
+use openbindings_internal_interfaces::{BindingValue, carrier::BindingFields};
 use serde::{
     Serialize, Serializer,
     ser::{SerializeMap, SerializeSeq},
 };
 use std::collections::{BTreeMap, HashSet};
-
-/// Binding data returned before an author assigns operation and source keys.
-///
-/// Absent content and explicit JSON null remain distinct. Metadata is information,
-/// not execution policy. Only source-evidenced idempotency claims belong here.
-#[derive(Clone, Default)]
-pub struct BindingFragment {
-    /// Optional exact kind-owned target description.
-    pub content: Option<JsonValue>,
-    /// Idempotency stated by the observed source; do not infer a retry policy.
-    pub idempotent: Option<bool>,
-    /// Optional authoring preference.
-    pub preference: Option<Preference>,
-    /// Optional human-facing description.
-    pub description: Option<String>,
-    /// Optional deprecation annotation.
-    pub deprecated: Option<bool>,
-    /// Extension members. Keys must begin with `x-`; checked before use.
-    pub extensions: BTreeMap<String, JsonValue>,
-}
-impl std::fmt::Debug for BindingFragment {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BindingFragment")
-            .field("content", &self.content)
-            .field("idempotent", &self.idempotent)
-            .field("deprecated", &self.deprecated)
-            .finish_non_exhaustive()
-    }
-}
-
-impl BindingFragment {
-    pub(crate) fn validate(&self) -> Result<(), InspectionError> {
-        if let Some(key) = self.extensions.keys().find(|key| !key.starts_with("x-")) {
-            return Err(InspectionError::result(format!(
-                "binding fragment member {key:?} is not an x- extension"
-            )));
-        }
-        Ok(())
-    }
-
-    /// Assign the author's keys and consume this fragment into a core binding.
-    ///
-    /// Rejects illegal extension keys, including `operation` and `source`, even
-    /// when a fragment was constructed directly rather than returned by inspection.
-    /// The completed document still needs ordinary core conformance validation.
-    ///
-    /// # Errors
-    /// Returns an inspection error if an extension key does not start with `x-`.
-    pub fn bind(
-        self,
-        operation: impl Into<String>,
-        source: impl Into<String>,
-    ) -> Result<Binding, InspectionError> {
-        self.validate()?;
-        Ok(Binding {
-            operation: operation.into(),
-            source: source.into(),
-            content: self.content,
-            idempotent: self.idempotent,
-            preference: self.preference,
-            description: self.description,
-            deprecated: self.deprecated,
-            additional_fields: self.extensions,
-        })
-    }
-}
-
-impl Serialize for BindingFragment {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.validate().map_err(serde::ser::Error::custom)?;
-        let mut map = serializer.serialize_map(None)?;
-        if let Some(v) = &self.content {
-            map.serialize_entry("content", v)?;
-        }
-        if let Some(v) = &self.idempotent {
-            map.serialize_entry("idempotent", v)?;
-        }
-        if let Some(v) = &self.preference {
-            map.serialize_entry("preference", v)?;
-        }
-        if let Some(v) = &self.description {
-            map.serialize_entry("description", v)?;
-        }
-        if let Some(v) = &self.deprecated {
-            map.serialize_entry("deprecated", v)?;
-        }
-        for (key, value) in &self.extensions {
-            map.serialize_entry(key, value)?;
-        }
-        map.end()
-    }
-}
 
 /// One target admitted by the source's kind, with optional operation framing.
 ///
@@ -104,13 +13,13 @@ impl Serialize for BindingFragment {
 /// [`Self::with_operation`]. Later versions may add fields: read them by name
 /// and match with `..`.
 /// ```compile_fail,E0639
-/// use openbindings_source_inspection::{BindableTarget, BindingFragment};
-/// let _ = BindableTarget { source_ref: "value".into(), binding: BindingFragment::default(),
+/// use openbindings_source_inspection::{BindableTarget, BindingValue};
+/// let _ = BindableTarget { source_ref: "value".into(), binding: BindingValue::default(),
 ///     operation_key: None, operation: None };
 /// ```
 /// ```
-/// use openbindings_source_inspection::{BindableTarget, BindingFragment};
-/// let target = BindableTarget::new("value", BindingFragment::default()).with_operation_key("get");
+/// use openbindings_source_inspection::{BindableTarget, BindingValue};
+/// let target = BindableTarget::new("value", BindingValue::default()).with_operation_key("get");
 /// let BindableTarget { source_ref, binding, operation_key, operation, .. } = target;
 /// assert_eq!(operation_key.as_deref(), Some("get"));
 /// ```
@@ -121,8 +30,11 @@ pub struct BindableTarget {
     /// inspection by exact string equality. Cross-provider equality exists only if the
     /// kind defines it; synthesis in this same provider must use the same identity.
     pub source_ref: String,
-    /// Binding data without author-owned operation/source keys.
-    pub binding: BindingFragment,
+    /// The target's binding by value, without the author-owned `operation` and
+    /// `source` keys, which the author assigns with [`BindingValue::bind`]. A
+    /// binding invoker accepts it as it is. Only source-evidenced idempotency
+    /// claims belong here; do not infer a retry policy.
+    pub binding: BindingValue,
     /// Optional suggestion; the author owns the actual operation key.
     pub operation_key: Option<String>,
     /// Optional sound projection of this target. It must not carry `idempotent`.
@@ -350,7 +262,7 @@ impl SourceInspection {
 impl BindableTarget {
     /// A target with its source-local identity and binding data, without
     /// operation framing.
-    pub fn new(source_ref: impl Into<String>, binding: BindingFragment) -> Self {
+    pub fn new(source_ref: impl Into<String>, binding: BindingValue) -> Self {
         Self {
             source_ref: source_ref.into(),
             binding,
@@ -374,7 +286,21 @@ impl BindableTarget {
         if self.source_ref.is_empty() {
             return Err(InspectionError::result("requires a nonempty sourceRef"));
         }
-        self.binding.validate()?;
+        if self.binding.operation.is_some() || self.binding.source.is_some() {
+            return Err(InspectionError::result(
+                "binding carries an author-owned operation or source key",
+            ));
+        }
+        if let Some(key) = self
+            .binding
+            .extensions
+            .keys()
+            .find(|key| !key.starts_with("x-"))
+        {
+            return Err(InspectionError::result(format!(
+                "binding member {key:?} is not an x- extension"
+            )));
+        }
         if let Some(operation) = &self.operation {
             for key in operation.additional_fields.keys() {
                 if !key.starts_with("x-") {
@@ -423,7 +349,7 @@ impl Serialize for TargetFields<'_> {
         let target = self.0;
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("sourceRef", &target.source_ref)?;
-        map.serialize_entry("binding", &target.binding)?;
+        map.serialize_entry("binding", &BindingFields(&target.binding))?;
         if let Some(value) = &target.operation_key {
             map.serialize_entry("operationKey", value)?;
         }

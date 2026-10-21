@@ -379,7 +379,9 @@ dependencies = [
 name = "openbindings-internal-interfaces"
 version = "0.2.0-alpha.1"
 dependencies = [
+ "openbindings",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

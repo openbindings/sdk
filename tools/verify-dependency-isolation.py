@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import tarfile
 import tomllib
@@ -87,19 +88,22 @@ for interface in ['http-discovery', 'invocation', 'source-inspection', 'interfac
     assert 'pub use openbindings_internal_cancellation::{Cancellation, CancellationToken};' in (package / 'src/lib.rs').read_text(encoding='utf-8')
 print('Cancellation: one shared identity, std-only implementation above synchronous core.')
 
-# The interface records the kind-facing companions share have one definition,
-# outside core, reexported by each of them.
+# The records the interfaces define identically have one definition, outside
+# core, which the companions reexport instead of defining their own.
 interfaces = 'openbindings-internal-interfaces'
 assert interfaces not in core.get('dependencies', {})
+shared = {'SupportedKind', 'KindSupportVerdict', 'BindingValue', 'BoundaryError'}
 for interface in ['invocation', 'source-inspection', 'interface-synthesis']:
     package = root / 'crates' / ('openbindings-' + interface)
     manifest = tomllib.loads((package / 'Cargo.toml').read_text(encoding='utf-8'))
     assert manifest['dependencies'][interfaces] == {
         'version': '=0.2.0-alpha.1', 'path': '../' + interfaces,
     }
-    assert 'pub use openbindings_internal_interfaces::{KindSupportVerdict, SupportedKind};' in ''.join(
-        path.read_text(encoding='utf-8') for path in (package / 'src').rglob('*.rs'))
-print('Interface records: one shared definition of the kind support records, outside core.')
+    source = ''.join(path.read_text(encoding='utf-8') for path in (package / 'src').rglob('*.rs'))
+    for name in shared:
+        assert not re.search(r'pub (struct|enum) ' + name + r'\b', source), (interface, name)
+    assert 'pub use openbindings_internal_interfaces::' in source, interface
+print('Interface records: kind support and the by-value binding have one definition, outside core.')
 
 # Core's complete implementation closure holds no evaluator.
 graph = json.loads(subprocess.check_output(

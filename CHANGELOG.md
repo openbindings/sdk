@@ -100,7 +100,9 @@
 - Provisional Rust provider traits and checked callers for source inspection,
   interface synthesis, binding invocation and operation invocation. The three
   kind-facing companions share one `SupportedKind` and `KindSupportVerdict`, so a
-  provider serving several jobs builds one advisory list.
+  provider serving several jobs builds one advisory list. Inspection and
+  invocation share one by-value `BindingValue`: an inspected target's binding
+  invokes as it is, and `bind(operation, source)` gives the author's core binding.
 - A TypeScript API with bundled Wasm, exact-value editing, disposable owners and
   Fetch discovery for qualified browser, Node ESM and Worker hosts.
 - A bundled Wasm module whose bytes do not depend on where it was built. The

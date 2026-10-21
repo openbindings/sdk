@@ -1,44 +1,13 @@
 //! Portable failures and value-free local boundary diagnostics.
 
-use crate::value::{ContextChallenge, encode, object, string};
+use crate::value::ContextChallenge;
 use openbindings::{JsonLimits, JsonRef, JsonValue};
+use openbindings_internal_interfaces::{
+    BoundaryError,
+    carrier::{boundary_error, encode, object, string},
+};
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use std::fmt;
-
-/// A local structural diagnostic, never a portable invocation failure.
-///
-/// Codes and paths come from a fixed SDK vocabulary and contain no source
-/// values or caller-authored member names. A `*` path segment denotes any array
-/// element. This record carries neither native causes nor protocol evidence.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct BoundaryError {
-    code: &'static str,
-    path: &'static str,
-}
-
-impl BoundaryError {
-    pub(crate) const fn new(code: &'static str, path: &'static str) -> Self {
-        Self { code, path }
-    }
-
-    /// Stable structural diagnostic code.
-    pub fn code(&self) -> &'static str {
-        self.code
-    }
-
-    /// Safe structural location; empty denotes the root.
-    pub fn path(&self) -> &'static str {
-        self.path
-    }
-}
-
-impl fmt::Display for BoundaryError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} at {}", self.code, self.path)
-    }
-}
-
-impl std::error::Error for BoundaryError {}
 
 /// An immutable portable unsuccessful-completion record: code and optional data.
 ///
@@ -68,12 +37,12 @@ impl InvocationError {
     pub fn new(code: impl Into<String>, data: Option<JsonValue>) -> Result<Self, BoundaryError> {
         let code = code.into();
         if code.is_empty() {
-            return Err(BoundaryError::new("empty-string", "/code"));
+            return Err(boundary_error("empty-string", "/code"));
         }
         if code == "CONTEXT_REQUIRED" {
             let value = data
                 .as_ref()
-                .ok_or_else(|| BoundaryError::new("missing-member", "/data"))?;
+                .ok_or_else(|| boundary_error("missing-member", "/data"))?;
             ContextChallenge::validate(value.view())?;
         }
         Ok(Self { code, data })
@@ -95,7 +64,7 @@ impl InvocationError {
         object(value, &["code", "data"], false, "")?;
         let code = value
             .get("code")
-            .ok_or_else(|| BoundaryError::new("missing-member", "/code"))?;
+            .ok_or_else(|| boundary_error("missing-member", "/code"))?;
         Self::new(
             string(code, "/code")?,
             value.get("data").map(JsonRef::to_owned),
@@ -194,7 +163,7 @@ impl InvocationError {
                 | "ERR_OPERATION_VALIDATION_FAILED"
                 | "ERR_SCHEMA_UNRESOLVED"
         ) {
-            Err(BoundaryError::new("reserved-provider-code", "/error/code"))
+            Err(boundary_error("reserved-provider-code", "/error/code"))
         } else {
             Ok(self)
         }

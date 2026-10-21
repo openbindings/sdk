@@ -10,9 +10,12 @@ mod model;
 
 pub use error::{InspectionError, InspectionErrorKind};
 pub use inspector::{Inspector, SourceInspector};
-pub use model::{BindableTarget, BindingFragment, InspectionLimitation, SourceInspection};
-// One definition of the records every kind-facing interface shares.
-pub use openbindings_internal_interfaces::{KindSupportVerdict, SupportedKind};
+pub use model::{BindableTarget, InspectionLimitation, SourceInspection};
+// One definition of the records every kind-facing interface shares, and of the
+// by-value binding invocation also hands out.
+pub use openbindings_internal_interfaces::{
+    BindingValue, BoundaryError, KindSupportVerdict, SupportedKind,
+};
 
 /// Version of the published interface this crate implements, independent of the crate's own version.
 pub const INTERFACE_VERSION: &str = "0.1.0";

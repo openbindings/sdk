@@ -14,7 +14,7 @@ for a complete job; use the definitions for exact result, ownership and limit co
 | Rust interface synthesis interface | [`openbindings-interface-synthesis`](../crates/openbindings-interface-synthesis/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-interface-synthesis` |
 | Rust binding and operation invocation interfaces | [`openbindings-invocation`](../crates/openbindings-invocation/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-invocation` |
 | Shared Rust cancellation definitions | [`openbindings-internal-cancellation`](../crates/openbindings-internal-cancellation/src/lib.rs), reexported by all four async companions | `cargo doc --locked --no-deps -p openbindings-internal-cancellation` |
-| Shared Rust interface records | [`openbindings-internal-interfaces`](../crates/openbindings-internal-interfaces/src/lib.rs): `SupportedKind` and `KindSupportVerdict`, reexported by inspection, synthesis and invocation | `cargo doc --locked --no-deps -p openbindings-internal-interfaces` |
+| Shared Rust interface records | [`openbindings-internal-interfaces`](../crates/openbindings-internal-interfaces/src/lib.rs): `SupportedKind` and `KindSupportVerdict`, reexported by inspection, synthesis and invocation; `BindingValue` and `BoundaryError`, reexported by inspection and invocation | `cargo doc --locked --no-deps -p openbindings-internal-interfaces` |
 | TypeScript core and HTTP discovery | [`internal.ts`](../packages/typescript/src/internal.ts), as exported by the two entry points | Build the package, then run `node packages/typescript/scripts/check-api-reference.mjs target/api-reference` |
 | TypeScript testing | [`testing.ts`](../packages/typescript/src/testing.ts), exported by `@openbindings/sdk/testing` | Included in the TypeScript reference renderer |
 | Compiled Wasm asset import | [`wasm-module.d.ts`](../packages/typescript/src/wasm-module.d.ts) | Host import type documented alongside `initialize` |
@@ -67,11 +67,14 @@ for their required fields and `with_*` methods for optional ones:
 `SupportedKind` and `KindSupportVerdict` are one type in every companion that
 reexports them, so a provider serving inspection, synthesis and invocation can
 return the same advisory list from each trait. A verdict answers for the job of
-the checked caller that returned it.
+the checked caller that returned it. Likewise `BindingValue` is both a
+`BindableTarget`'s binding and the binding a `BindingRequest` carries: invoke an
+inspected target's binding as it is, or assign the author's keys with
+`BindingValue::bind` to get a core `Binding`.
 | Version checks | `VersionRefusal::new(declared)`, `Some` only for a well-formed version outside the supported line |
 
 Input records, which callers build and the SDK reads, keep struct-literal
-construction: typed authoring parts and `BindingFragment`, `SchemaResource`,
+construction: typed authoring parts and `BindingValue`, `SchemaResource`,
 `JsonLimits`, evaluator `Limits`, kit `Options`, discovery `ClientOptions`,
 `PublicationOptions`, `HttpResponse`, synthesis requests, invocation carriers and
 `InvocationLimits`. Add `..Default::default()` where a record implements
