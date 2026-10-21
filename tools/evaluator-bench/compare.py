@@ -189,6 +189,10 @@ def instrument_diff(baseline, candidate, names, same_requests=False):
         # Declared residuals change only which flags fail, never a measurement.
         if name == RESIDUALS and (mode_a == mode_b or not (left and right)):
             allowed = True
+        # The instrument's own integration tests are not built into the measured
+        # binary, whose sources are INSTRUMENT_SOURCES; they follow outcome changes.
+        if name.startswith('tests/') and (mode_a == mode_b or not (left and right)):
+            allowed = True
         if name == 'Cargo.lock' and left and right and mode_a == mode_b:
             try:
                 allowed = lock_without_sdk(a, names) == lock_without_sdk(b, names)

@@ -512,6 +512,21 @@ class InstrumentConfinement(unittest.TestCase):
         residuals.symlink_to(self.base/'accepted-residuals.json')
         self.assertFalse(self.audit()['confined'])
 
+    def test_instrument_tests_may_change_without_blocking_a_cross_api_pair(self):
+        (self.candidate/'src/sdk.rs').write_text('new SDK calls\n')
+        (self.base/'tests').mkdir()
+        (self.candidate/'tests').mkdir()
+        (self.base/'tests/observations.rs').write_text('old expectation\n')
+        observations = self.candidate/'tests/observations.rs'
+        observations.write_text('new expectation\n')
+        audit = self.audit()
+        self.assertTrue(audit['confined'])
+        self.assertEqual(audit['changed'], ['src/sdk.rs', 'tests/observations.rs'])
+        self.assertNotIn('tests', compare.INSTRUMENT_SOURCES)
+        observations.unlink()
+        observations.symlink_to(self.base/'tests/observations.rs')
+        self.assertFalse(self.audit()['confined'])
+
     def test_requests_are_fixture_rows_without_expectations(self):
         rows = {'w': {'value': '1', 'modes': ('eval',), 'expected': {'status': 'fails'}}}
         self.assertEqual(compare.requests(rows), {'w': {'value': '1', 'modes': ['eval']}})

@@ -45,7 +45,11 @@ allowed **only** when the entire instrument diff is confined to `src/sdk.rs`,
 expectations: an edit to `fixtures.py` is allowed only when both trees'
 generators produce identical requests (every row without its `expected`
 member), so it can only declare outcome changes, which the measuring step
-checks against each side's own expectation as below. Third-party lock entries,
+checks against each side's own expectation as below. Edits to the instrument's
+own integration tests under `tests/` are allowed too: they are not built into the
+measured binary, whose sources are `src`, `Cargo.toml`, `Cargo.lock` and
+`build.rs`, and they follow outcome changes like fixture expectations do.
+Third-party lock entries,
 lock metadata, fixture requests, timing, checks, manifests, allocation code and
 all other instrument edits prohibit that fallback. Each side then builds its
 own instrument and lockfile. The driver saves `instrument.diff`, its SHA-256,
