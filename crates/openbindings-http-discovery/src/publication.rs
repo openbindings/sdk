@@ -226,12 +226,10 @@ impl std::fmt::Debug for PublicationResponse {
     }
 }
 
-/// Validate a typed CORS choice, including an exact ASCII browser-serialized
-/// tuple origin. Opaque schemes, credentials and noncanonical spellings are refused.
-///
-/// # Errors
-/// Returns a configuration error if the supplied origin is not an allowed canonical origin; credentials, paths, queries, and fragments are refused.
-pub fn validate_allow_origin(origin: &AllowOrigin) -> Result<(), ConfigurationError> {
+// Validate a typed CORS choice, including an exact ASCII browser-serialized
+// tuple origin. Opaque schemes, credentials and noncanonical spellings are
+// refused. `Publication::new` and `from_bytes` apply it to their options.
+pub(crate) fn validate_allow_origin(origin: &AllowOrigin) -> Result<(), ConfigurationError> {
     let invalid = || ConfigurationError {
         code: "invalid-allow-origin",
         message: "exact allow_origin must be a canonical ASCII serialized tuple origin",
