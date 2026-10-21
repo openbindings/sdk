@@ -29,9 +29,9 @@ use std::{collections::HashMap, sync::Arc};
 pub struct Limits {
     /// Evaluation work units per verdict or explanation pass. `None`, the
     /// default, sets no cap: the time a pass takes then grows with the schema,
-    /// exponentially for some (nested `anyOf` holders of
-    /// `unevaluatedProperties`), and with the value, so an application that
-    /// evaluates untrusted contracts or values within a deadline sets one. `Some(n)` charges one unit for each
+    /// exponentially for some (an `anyOf` naming the next level twice), and
+    /// with the value, so an application that evaluates untrusted contracts
+    /// or values within a deadline sets one. `Some(n)` charges one unit for each
     /// schema a reference enters and for each element, member and literal
     /// comparison step, and gives `evaluation-work-limit` once a pass spends
     /// `n`; preparing with a cap compiles a slightly larger validator.
@@ -66,6 +66,31 @@ pub struct Limits {
     /// as it is written and refuses with `pattern-total-byte-limit` at the
     /// first that passes the limit.
     pub total_pattern_bytes: usize,
+    /// Bytes of linear-time engine memory one contract's compiled schema
+    /// regular expressions may use together; default 64 MiB (67,108,864
+    /// bytes). The contract compiles each distinct form of its `pattern`
+    /// values that the run matcher does not match, and the form of each
+    /// `patternProperties` name, through the regex crate's two documented size
+    /// settings. A quarter of the memory, at most 2 MiB for each pattern, is
+    /// their search caches (`dfa_size_limit`), in equal parts, which bound only
+    /// how fast a search runs. Each form first compiles within 48 KiB
+    /// (`size_limit`), so a contract compiling more patterns than the rest
+    /// holds at 48 KiB each (1,024 at the default) refuses with
+    /// `pattern-total-memory-limit` at the first past that count, before any
+    /// is compiled. The forms that need more share what is left equally;
+    /// those that need less than their part keep only what they need, to
+    /// within a sixteenth, and leave the rest to the others, at most 32 MiB
+    /// each. So small patterns elsewhere in a contract change a large one's
+    /// outcome only through their 48 KiB each, and no outcome depends on the
+    /// order strings reach the patterns. The first time a form is found that
+    /// does not fit its 48 KiB, the contract's compiled patterns not yet
+    /// compiled are compiled then. A `patternProperties` name that does not
+    /// fit what it is given refuses preparation, and a `pattern` value,
+    /// compiled the first time a string reaches it, gives that string no
+    /// verdict: with `pattern-total-memory-limit`, whose message states the
+    /// arithmetic, or `pattern-size-limit` when the form needs more than
+    /// 32 MiB.
+    pub total_pattern_memory: usize,
     /// Schema resources one contract may reach, counted as its projection
     /// holds them: the document resource holding the contract's schema and
     /// each embedded `$id` resource, supplied resource and packaged
@@ -85,6 +110,7 @@ impl Default for Limits {
             pattern_bytes: 1024 * 1024,
             pattern_depth: 32,
             total_pattern_bytes: 4 * 1024 * 1024,
+            total_pattern_memory: 64 * 1024 * 1024,
             schema_resources: None,
         }
     }
@@ -314,6 +340,10 @@ impl DefaultEvaluator {
                 )?;
             }
         }
+        // Each pattern the contract compiles holds its first allowance of the
+        // pattern memory, the library's `patternProperties` names and the
+        // SDK's `pattern` matchers alike.
+        let memory = pattern::Memory::new(self.limits.total_pattern_memory, kept.compiled);
         drop(kept);
         // The library's unevaluated validators recurse in ways the static
         // bound does not model, so a contract holding one is guarded: every
@@ -401,16 +431,28 @@ impl DefaultEvaluator {
             return Err(detail);
         }
         let document = bundle.document();
-        let validator = operands
-            .apply(jsonschema::options_for::<FlatJson>())
+        let first = memory.first();
+        let (options, patterns) = operands.apply(jsonschema::options_for::<FlatJson>(), memory);
+        let options = options
             .with_draft(jsonschema::Draft::Draft202012)
             .with_retriever(NoRetrieval)
             .should_validate_formats(false)
-            .with_pattern_options(
-                jsonschema::PatternOptions::regex().size_limit(pattern::COMPILED_SIZE),
-            )
-            .build(&document)
-            .map_err(|error| preparation_error(&error, &locations))?;
+            .with_pattern_options(pattern_options(first));
+        // The library takes one size setting for every `patternProperties`
+        // name, so the names first compile within their first allowances. When
+        // one does not fit, the SDK shares the pattern memory among the names
+        // and the `pattern` matchers itself, and the library compiles the
+        // names again within the largest compiled size any name was given:
+        // each name's form compiles to the same program within any size limit
+        // it fits.
+        let validator = match options.build(&document) {
+            Ok(validator) => validator,
+            Err(error) if exceeds_size(&error) => {
+                share_names(options, first, &document, &patterns, &locations, control)?
+            }
+            Err(error) => return Err(preparation_error(&error, &locations)),
+        };
+        drop(patterns);
         control.check()?;
         Ok(Compiled {
             validator,
@@ -451,22 +493,32 @@ fn patterns(
     let Value::Object(schema) = schema else {
         return Ok(());
     };
-    // Count each form the evaluator keeps as it is written, so preparation
-    // stops at the first that passes the total.
-    let mut count = |keyword: &'static str, form: &str| {
+    // Count each form the evaluator keeps as it is written, and each it
+    // compiles, so preparation stops at the first that passes either total.
+    let mut count = |keyword: &'static str, form: &str, compiled: bool| {
         kept.bytes = kept.bytes.saturating_add(form.len());
         if kept.bytes > limits.total_pattern_bytes {
-            Err((
+            return Err((
                 keyword,
                 no_verdict(
                     NoVerdictReason::LimitExceeded,
                     "pattern-total-byte-limit",
                     "the forms of the contract's patterns exceed the admitted total byte limit",
                 ),
-            ))
-        } else {
-            Ok(())
+            ));
         }
+        kept.compiled += usize::from(compiled);
+        let most = pattern::Memory::most_patterns(limits.total_pattern_memory);
+        if kept.compiled > most {
+            return Err((
+                keyword,
+                pattern_memory_limit(pattern::Shortfall::Count {
+                    most,
+                    total: limits.total_pattern_memory,
+                }),
+            ));
+        }
+        Ok(())
     };
     if let Some(Value::String(source)) = schema.get("pattern") {
         let key = match kept.read.get(source) {
@@ -475,11 +527,11 @@ fn patterns(
                 let reading = read_pattern(source, "pattern", limits)
                     .map_err(|detail| ("pattern", detail))?;
                 // Patterns with the same form share one matcher, which keeps
-                // the form.
+                // the form and compiles it unless the run matcher matches it.
                 if let pattern::Reading::Linear(linear) = &reading
                     && !operands.has_pattern(&linear.form)
                 {
-                    count("pattern", &linear.form)?;
+                    count("pattern", &linear.form, linear.simple.is_none())?;
                 }
                 operands.pattern(reading)
             }
@@ -506,7 +558,7 @@ fn patterns(
             while names.contains_key(&form) {
                 form.push_str("(?:)");
             }
-            count("patternProperties", &form)?;
+            count("patternProperties", &form, true)?;
             form.shrink_to_fit();
             names.insert(form, subschema);
         }
@@ -518,6 +570,9 @@ fn patterns(
 struct Kept {
     // The bytes of the forms kept.
     bytes: usize,
+    // The forms to be compiled: each distinct `pattern` form without a run
+    // matcher and each `patternProperties` name.
+    compiled: usize,
     // The value written for each `pattern` already read, so a repeated
     // pattern is read once.
     read: HashMap<String, String>,
@@ -576,33 +631,203 @@ fn unsupported_pattern(unsupported: pattern::Unsupported) -> NoVerdict {
             "pattern-size-limit",
             "a schema regular expression exceeds the engine's size limits",
         ),
+        pattern::Unsupported::Memory(shortfall) => pattern_memory_limit(shortfall),
     }
+}
+// The refusal states the arithmetic, so its message says why and what to raise.
+fn pattern_memory_limit(shortfall: pattern::Shortfall) -> NoVerdict {
+    const RAISE: &str = "raise total_pattern_memory (totalPatternMemory in TypeScript)";
+    let first = bytes(pattern::FIRST);
+    let message = match shortfall {
+        pattern::Shortfall::Count { most, total } => format!(
+            "this contract compiles more than {most} regular expressions, as many as its {} \
+             total_pattern_memory holds at {first} each once their search caches take a \
+             quarter; {RAISE}",
+            bytes(total),
+        ),
+        pattern::Shortfall::Pattern {
+            patterns,
+            total,
+            cache,
+            left,
+            kept,
+            sharing,
+            compiled,
+        } => {
+            let holding = if patterns == 1 {
+                format!(
+                    "this contract's one compiled regular expression holds {first} of its {} \
+                     total_pattern_memory and {} for its search cache",
+                    bytes(total),
+                    bytes(cache),
+                )
+            } else {
+                format!(
+                    "this contract's {patterns} compiled regular expressions hold {first} each \
+                     of its {} total_pattern_memory and {} each for their search caches",
+                    bytes(total),
+                    bytes(cache),
+                )
+            };
+            let sharing = match (sharing, kept) {
+                (1, 0) => "this one, which needs more, may take it all, but".to_owned(),
+                (1, kept) => format!(
+                    "those that need less than an equal part of it keep {}, and this one may \
+                     take the rest, but",
+                    bytes(kept),
+                ),
+                (sharing, 0) => {
+                    format!("the {sharing} that need more share it equally, but this one")
+                }
+                (sharing, kept) => format!(
+                    "those that need less than an equal part of it keep {}, and the {sharing} \
+                     that need more share the rest equally, but this one",
+                    bytes(kept),
+                ),
+            };
+            format!(
+                "{holding}, which leaves {}; {sharing} does not compile within the {} that \
+                 gives it; {RAISE}",
+                bytes(left),
+                bytes(compiled),
+            )
+        }
+    };
+    no_verdict(
+        NoVerdictReason::LimitExceeded,
+        "pattern-total-memory-limit",
+        message,
+    )
+}
+// A count of bytes as a message states it, rounded down: whole KiB below a
+// MiB, MiB to a tenth above.
+fn bytes(count: usize) -> String {
+    const KIB: usize = 1024;
+    const MIB: usize = 1024 * KIB;
+    if count >= MIB {
+        let tenths = count / (MIB / 10);
+        match tenths % 10 {
+            0 => format!("{} MiB", tenths / 10),
+            tenth => format!("{}.{tenth} MiB", tenths / 10),
+        }
+    } else if count >= KIB {
+        format!("{} KiB", count / KIB)
+    } else {
+        format!("{count} bytes")
+    }
+}
+// Whether the library refused a schema regular expression. Every pattern was
+// read first, so the engine refuses one only for its compiled size.
+fn exceeds_size(error: &jsonschema::ValidationError<'_>) -> bool {
+    use jsonschema::error::ValidationErrorKind;
+    let mut kind = error.kind();
+    for _ in 0..16 {
+        match kind {
+            ValidationErrorKind::Format { format } if format == "regex" => return true,
+            ValidationErrorKind::PropertyNames { error } => kind = error.kind(),
+            _ => break,
+        }
+    }
+    false
+}
+// Share the contract's pattern memory among the distinct `patternProperties`
+// name forms of the bundled `document` and its `pattern` matchers, because a
+// name does not fit its first allowance, and build the validator. A name that
+// does not fit what it is given refuses preparation at its keyword's original
+// location, the first in the bundle's order. The library takes one size
+// setting for every name: when the names first share it, its build is their
+// compilation, and otherwise it builds again within the largest compiled size
+// any name was given, so no name builds more than its own.
+fn share_names(
+    options: jsonschema::ValidationOptions<'_, Arc<dyn jsonschema::Retrieve>, FlatJson>,
+    first: pattern::Allowance,
+    document: &Value,
+    patterns: &operands::Patterns,
+    locations: &explain::Locations,
+    control: &dyn WorkControl,
+) -> Result<jsonschema::Validator<FlatJson>, NoVerdict> {
+    control.check()?;
+    let Some(Value::Object(definitions)) = document.get("$defs") else {
+        return Err(program_failure());
+    };
+    let mut seen = std::collections::HashSet::new();
+    let (mut forms, mut holders) = (Vec::new(), Vec::new());
+    for (definition, schema) in definitions {
+        if let Some(Value::Object(names)) = schema.get("patternProperties") {
+            for form in names.keys() {
+                if seen.insert(form.as_str()) {
+                    forms.push(form.as_str());
+                    holders.push(definition);
+                }
+            }
+        }
+    }
+    let mut options = Some(options);
+    let mut built = None;
+    let mut together = |allowance| {
+        let shared = options
+            .take()
+            .expect("the names are compiled together once")
+            .with_pattern_options(pattern_options(allowance));
+        built = Some((allowance, shared.build(document)));
+        let fits = built.as_ref().is_some_and(|(_, built)| built.is_ok());
+        options = Some(shared);
+        fits
+    };
+    let mut largest = 0;
+    for (given, definition) in patterns
+        .share_with(&forms, &mut together)
+        .into_iter()
+        .zip(holders)
+    {
+        match given {
+            Ok(compiled) => largest = largest.max(compiled),
+            Err(unsupported) => {
+                let mut detail = unsupported_pattern(unsupported);
+                detail.location = locations
+                    .locate(&format!(
+                        "{}#/$defs/{definition}/patternProperties",
+                        bundle::URI
+                    ))
+                    .map(|(location, _)| location);
+                return Err(detail);
+            }
+        }
+    }
+    control.check()?;
+    let options = options.expect("the options are returned");
+    let allowance = pattern::Allowance {
+        compiled: largest,
+        cache: first.cache,
+    };
+    // The first round's build is the validator when it gave every name what
+    // it is given; otherwise it is dropped before the library builds again.
+    match built {
+        Some((built, Ok(validator))) if built == allowance => return Ok(validator),
+        other => drop(other),
+    }
+    options
+        .with_pattern_options(pattern_options(allowance))
+        .build(document)
+        .map_err(|error| preparation_error(&error, locations))
+}
+fn pattern_options(allowance: pattern::Allowance) -> jsonschema::PatternOptions<jsonschema::Regex> {
+    jsonschema::PatternOptions::regex()
+        .size_limit(allowance.compiled)
+        .dfa_size_limit(allowance.cache)
 }
 fn preparation_error(
     error: &jsonschema::ValidationError<'_>,
     locations: &explain::Locations,
 ) -> NoVerdict {
-    use jsonschema::error::ValidationErrorKind;
     // Read only trusted kind metadata, never dependency Display text or schema
-    // values. Every pattern was read first, so the engine refuses one only
-    // for its compiled size.
-    let mut kind = error.kind();
-    for _ in 0..16 {
-        match kind {
-            ValidationErrorKind::Format { format } if format == "regex" => {
-                let mut detail = no_verdict(
-                    NoVerdictReason::LimitExceeded,
-                    "pattern-size-limit",
-                    "a schema regular expression exceeds the engine's size limits",
-                );
-                detail.location = locations
-                    .locate(&format!("{}#{}", bundle::URI, error.schema_path().as_str()))
-                    .map(|(location, _)| location);
-                return detail;
-            }
-            ValidationErrorKind::PropertyNames { error } => kind = error.kind(),
-            _ => break,
-        }
+    // values.
+    if exceeds_size(error) {
+        let mut detail = unsupported_pattern(pattern::Unsupported::Size);
+        detail.location = locations
+            .locate(&format!("{}#{}", bundle::URI, error.schema_path().as_str()))
+            .map(|(location, _)| location);
+        return detail;
     }
     no_verdict(
         NoVerdictReason::ConservativePreparation,

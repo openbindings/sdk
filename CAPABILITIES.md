@@ -74,20 +74,30 @@ guarded as it evaluates by the stack the pass has used (128 KiB at the default),
 so release builds prepare, check and explain the 39 recursive shapes the stack
 test covers on a 256 KiB thread; each pattern's bytes, form and nesting (1 MiB,
 32 groups) and the forms kept for all of a contract's patterns together (4 MiB,
-`totalPatternBytes` in TypeScript), each compiled within the regex crate's size
-limit, set to 32 MiB; the definitions, JSON and dynamic-scope entries dynamic
-specialization produces (`program-specialization-limit`); and an unevaluated
-keyword's annotation walk, which the library compiles by recursion, weighed by
-the kind of each reference (`unevaluated-walk-limit`: 26 `$ref`s, 8 levels of
-`allOf` inheritance, 7 through `then` or `dependentSchemas`). Off unless an
+`totalPatternBytes` in TypeScript); the regex crate's memory for all of a
+contract's compiled patterns together (`total_pattern_memory`, 64 MiB,
+`totalPatternMemory` in TypeScript, `pattern-total-memory-limit`, with a
+message that states the arithmetic), spent through the crate's lazy-DFA cache
+setting, a quarter of it in equal parts, and its compiled-size setting, within
+which each pattern first compiles in 48 KiB while those that need more share
+the rest, so small patterns beside a large one change its outcome only through
+their 48 KiB each: `^.{1,10000}$` compiles beside up to 743 small patterns and
+four such counted repetitions of about 13 MiB compile together, while 40
+refuse in about 0.2 s; the
+definitions, JSON and dynamic-scope entries dynamic specialization produces
+(`program-specialization-limit`); and an unevaluated keyword's annotation
+walk, which the library compiles by recursion, weighed by the kind of each
+reference (`unevaluated-walk-limit`: 26 `$ref`s, 8 levels of `allOf`
+inheritance, 7 through `then` or `dependentSchemas`). Off unless an
 application sets them, since they would only bound time: an evaluation work cap
 (`evaluation_steps`), without which time can grow exponentially with some
 schemas, and a cap on the schema resources one contract may reach
 (`schema_resources`, `schemaResources` in TypeScript). Within these bounds,
-preparing a schema can still take more memory than a host may want (40
-counted-repetition `patternProperties` names peak at 1.1 GB), as with any JSON
-Schema library; a host preparing schemas from untrusted parties should do so in
-an isolated worker or process with an operating-system memory limit. Values
+preparing a schema can still take more memory than a host may want (1,000
+holders of `unevaluatedProperties` that each inherit 4,000 properties peak at
+400 MB), as with any JSON Schema library; a host preparing schemas from
+untrusted parties should do so in an isolated worker or process with an
+operating-system memory limit. Values
 checked against trusted schemas stay bounded by depth and, when set,
 `evaluation_steps`. A prepared value contract can remain undecidable for a
 particular value.

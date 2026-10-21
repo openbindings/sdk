@@ -6,8 +6,9 @@ and measurement harness changes only. The host was macOS 26.6.2 arm64, Rust
 1.99.0. Wasm used wasm-bindgen 0.2.129. Timings are examples, not latency
 guarantees or CI thresholds. Prepared-contract measurements were updated on
 2026-10-15 and, with the preparation and pattern sections and the Wasm size, on
-2026-10-20 below. Use the locked dependencies and release profile to reproduce
-them.
+2026-10-20 below; the compiled-pattern memory and the exponential evaluation
+example were measured on 2026-10-21. Use the locked dependencies and release
+profile to reproduce them.
 
 ## Prepared value contracts
 
@@ -138,10 +139,15 @@ twice a check's stack per level, so explanations are built only within half
 the limit.
 
 Evaluation time has no default bound. It grows with the schema and the value,
-and for some schemas exponentially: 16 nested holders of
-`unevaluatedProperties` whose `anyOf` names the next holder twice take about
-40 s to check `{}`. `evaluation_steps` bounds it; a cap of 1,000,000 stops that
-check in about 4 s, since a unit of work in such walks can take microseconds.
+and for some schemas exponentially: 30 levels of `anyOf` that each name the
+next level twice, ending in `false` (under 2 KB), take about 2.5 s to check
+`{}`, 28 levels 1.1 s and 26 levels 0.29 s (measured 2026-10-21 on revision
+`2b45ce5`). `evaluation_steps` bounds it; a cap of 1,000,000 stops the
+30-level check with `evaluation-work-limit` in about 20 ms. The same nest of
+`unevaluatedProperties` holders no longer reaches evaluation: from 8 levels its
+annotation walk weighs more than the evaluator admits and preparation refuses
+it (`unevaluated-walk-limit`) in under 1 ms, and 7 levels prepare and check
+`{}` in about 4 ms.
 
 Patterns nested to the default depth of 32 prepare, and values are checked
 against them, within a 256 KiB thread stack in release builds. The regex
@@ -149,9 +155,10 @@ crate's parser and compiler recurse at each group level; a debug build needs up
 to about 1 MiB to compile 32 nested quantified groups, so the pattern stack test
 runs in release builds. A `pattern` keyword's expression is compiled the first
 time a string reaches it, so preparation compiles only `patternProperties`
-names. Each pattern's form compiles within a 32 MiB size limit, enough for
-counted repetitions of large sets (`^.{1,10000}$` compiles in about 40 ms with
-a 43 MB process peak), and a form longer than `pattern_bytes` is neither
+names. Each pattern's form compiles within what the contract's pattern memory
+gives it (below), at most 32 MiB, enough for counted repetitions of large sets
+(`^.{1,10000}$` compiles in about 40 ms with a 49 MB process peak), and a form
+longer than `pattern_bytes` is neither
 written out nor compiled: a 1 MiB pattern of 524,287 `\S`, whose form would
 be about 115 MB, gives `pattern-size-limit` with a 100 MB process peak.
 
@@ -388,8 +395,9 @@ only the patterns.
 The evaluator bounds what the SDK itself reads and writes: core's document
 admission limits and its 100,000 schema positions per contract; each pattern's
 bytes and translated form (`pattern_bytes`) and the forms kept for all of a
-contract's patterns together (`total_pattern_bytes`, 4 MiB); the regex crate's
-compiled size for each pattern, set to 32 MiB; and the definitions (100,000),
+contract's patterns together (`total_pattern_bytes`, 4 MiB); the memory the
+regex crate builds for all of a contract's compiled patterns together
+(`total_pattern_memory`, 64 MiB, below); and the definitions (100,000),
 JSON (16,777,216 units) and dynamic-scope entries (4,000,000) dynamic
 specialization produces. It does not estimate the memory of the library's
 compiled program, which grows with what the library compiles.
@@ -405,10 +413,9 @@ the same method:
 | A chain of 2,800 `$id` resources, each declaring and dynamically referencing its own anchor | prepared, 0.26 s, 105 MB |
 | The same with 8,000 resources | refused (`program-specialization-limit`, contexts), 0.8 s, 166 MB |
 | 13 levels of a two-way `anyOf` over dynamic anchors, with a 4,096-name `required` at the leaf | refused (`program-specialization-limit`, JSON), 0.6 s, 150 MB |
-| 40 `patternProperties` names of the form `^.{1,10000}N$` (about 600 bytes) | prepared, 1.6 s, 1.1 GB |
 | 1,000 holders of `unevaluatedProperties`, each inheriting a base of 4,000 properties | prepared, 0.34 s, 400 MB |
 
-The last two rows, and the 2,048-context row, are within every bound: the
+The last row, and the 2,048-context row, are within every bound: the
 memory is the library's compiled program.
 
 `total_pattern_bytes` counts the forms the evaluator keeps, not the patterns.
@@ -427,7 +434,76 @@ counting allocations:
 | 4 such patterns | 12.9 MB | 5.3 MB | 0.27 MB |
 | 5 such patterns | 16.1 MB, prepared | 6.1 MB, refused | 0.32 MB |
 | One such pattern 380 times | 501 MB, 2.1 s | 23.0 MB, 26 ms | 23.0 MB |
-| 5 such `patternProperties` names | 151 MB, prepared | 6.1 MB, refused | 0.75 MB | A host that prepares schemas from
+| 5 such `patternProperties` names | 151 MB, prepared | 6.1 MB, refused | 0.75 MB |
+
+`total_pattern_memory` (64 MiB) bounds what the regex crate builds for a
+contract's compiled patterns: each distinct `pattern` form the run matcher does
+not match, and each `patternProperties` name, through its two documented size
+settings. A quarter of it, at most 2 MiB each, is the patterns' search caches
+(`dfa_size_limit`), in equal parts; a cache bounds only how fast a search runs.
+Each form first compiles within 48 KiB (`size_limit`). Every compiled pattern
+also holds memory neither setting counts (about 7.7 KB for a small
+`patternProperties` name), so a contract compiling more than the rest holds at
+48 KiB each, 1,024 at the default, refuses at the next, before compiling any.
+The forms that need more share what is left: each is given an equal part,
+those that need less than their part keep only the least they need, to within
+a sixteenth, and the rest is shared again among the others, until all fit their
+parts, none does, or the parts grow by no more than a sixteenth; those that
+then do not fit are refused, and none is given more than 32 MiB. What a form is
+given depends only on the contract's forms, so no outcome depends on the order
+strings reach the patterns, and small patterns change a large one's outcome
+only through their 48 KiB each: a counted-repetition name such as
+`^.{1,10000}N$`, about 13.2 MiB, compiles beside up to 743 small patterns,
+four compile together and five do not fit.
+
+The memory is shared once per contract, the first time a form is found that
+does not fit its 48 KiB: at preparation for a `patternProperties` name, when the
+SDK compiles each name's form and every `pattern` form, or when a string first
+reaches a `pattern` form, when it compiles those not yet compiled. The library
+takes one size setting for every name, so it first compiles the names within
+48 KiB; when one does not fit, its build within the first round's parts is that
+round, and otherwise it builds again within the largest size any name is given.
+Refusing forms that together need more than is left takes about as much
+building as is left, since an attempt that does not fit stops once it passes
+its size: 40 such names refuse in about 0.2 s. Dividing the whole memory
+equally among all of a contract's patterns would refuse them in milliseconds,
+but would refuse `^.{1,10000}$` beside ten small patterns too.
+
+Each row ran in a fresh release process on macOS arm64 against revision
+`2b45ce5` (before) and with the shared memory (now), 2026-10-21; the time is
+preparation and, where it prepared, one check of a value reaching the patterns,
+and the peak is the process's maximum resident set, which includes parsing and
+validating the document:
+
+| Shape | Before | Now |
+| --- | --- | --- |
+| 40 `patternProperties` names `^.{1,10000}N$` (909 bytes) | prepared, 1.6 s, 1.13 GB | refused (`pattern-total-memory-limit`), 0.2 s, 12 MB |
+| 300 such names (6.8 KB) | not run here: about 28 MB per name, over 10 s in an earlier review | refused, 0.24 s, 11 MB |
+| 4 such names | prepared, 0.16 s, 136 MB | prepared, 0.16 s, 136 MB |
+| `^.{1,10000}$` alone | prepared, 0.04 s, 50 MB | prepared, 0.04 s, 49 MB |
+| `^.{1,10000}$` beside 100 small names `aN\|b` | prepared, 0.04 s, 51 MB | prepared, 0.05 s, 53 MB |
+| `^.{1,10000}$` beside 1,000 small names | prepared, 0.07 s, 62 MB | refused, 0.03 s, 16 MB |
+| A `pattern` `^.{1,10000}0$` beside 100 small `pattern` values, checking a value that reaches it | 0.04 s, 52 MB | 0.04 s, 52 MB |
+| Two names each compiling to about 29.7 MiB | prepared, 0.17 s, 170 MB | prepared, 0.18 s, 171 MB |
+| 40 properties whose `pattern` is `^.{1,10000}N$`, checking a value that reaches each | 2.3 s, 1.14 GB | no verdict (`pattern-total-memory-limit`), 0.2 s, 12 MB |
+| 100 names `[01]*1[01]{20}zN`, checking a 64 KiB key of random bits | 2.4 s, 341 MB | 1.0 s, 37 MB |
+| 20,000 names `xNy+` (309 KB) | prepared, 0.38 s, 259 MB | refused, 0.07 s, 78 MB |
+
+The 100-name row is the search cache: each name's automaton has a state for
+every recent run of 21 bits, so each search filled its 2 MiB cache, which the
+regex keeps; its part of the caches' quarter now holds it to 164 KiB. The
+diagnostic memory probe bounds the 40-, 300- and 4-name and 100-name shapes by
+counting allocations (the 40-name refusal adds 2.1 MB at its peak to the same
+document with property names, and the 300-name one 140 KB). The JSON Schema
+Test Suite, the specification's corpus, this repository's fixtures, the review
+corpora and the public OpenAPI descriptions the OpenAPI client's field study
+collected hold 5,389 distinct patterns the evaluator compiles (Stripe's
+description holds the most of any document, 75). All but one compile within
+48 KiB. The exception, `^[a-zA-Z0-9]{0,4096}$` from a peer library's tests, needs
+more as a name and compiles beside up to 1,013 other patterns; as a `pattern`
+value the run matcher matches it.
+
+A host that prepares schemas from
 untrusted parties should prepare them in an isolated worker or process with
 an operating-system memory limit, as it would with any JSON Schema library.
 Values checked against trusted schemas stay bounded by `evaluation_depth`

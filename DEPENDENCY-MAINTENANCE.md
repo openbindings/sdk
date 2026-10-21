@@ -124,8 +124,15 @@ APIs:
   the surrogate gap adds a range across it, so no form holds `[^`. The empty
   set is two contradicting ASCII word-boundary assertions, since
   jsonschema-regex escapes class set operations. A form longer than
-  `pattern_bytes` is not written out, and each compiles within a 32 MiB size
-  limit. A seeded differential against V8, with fixed rows across the
+  `pattern_bytes` is not written out, and each compiles within what the
+  contract's `total_pattern_memory` gives it, set through the regex crate's
+  documented `size_limit` (48 KiB first, at most 32 MiB) and `dfa_size_limit`
+  (at most 2 MiB), for the library's `patternProperties` names through
+  `PatternOptions::regex()`, which takes one setting for every name: when a
+  name needs more than 48 KiB, the SDK compiles each name's form itself to find
+  what it is given, and the library compiles them within the largest, relying
+  on a form compiling to the same program within any size limit it fits. A
+  seeded differential against V8, with fixed rows across the
   surrogate gap, checks both keywords. The `pattern` keyword
   matches through that form, compiled on first use, or through a run matcher
   for one anchored sequence of single-character runs. `patternProperties`
