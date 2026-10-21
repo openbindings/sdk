@@ -115,8 +115,6 @@ pub(crate) fn admit_redirect(previous: &url::Url, next: &url::Url) -> Result<(),
     admit_url(next)
 }
 
-/// Default whole-attempt duration in seconds, including acquisition and validation.
-pub const DEFAULT_TIMEOUT_SECONDS: u64 = 30;
 /// Maximum number of redirects followed by the checked native and portable paths.
 pub const MAX_REDIRECTS: usize = 10;
 

@@ -203,7 +203,8 @@ synthesis providers and custom evaluator callbacks are not provided.
 
 Import `discover` and `DiscoveryPublication` from
 `@openbindings/sdk/http-discovery`. Discovery uses Fetch with a default 1 MiB
-decoded body limit and thirty-second attempt deadline. Where the host exposes
+decoded body limit. An attempt has no deadline unless you pass `timeoutMs`; a
+host that needs a bound sets it. Where the host exposes
 redirect responses, as Node does, the SDK checks every hop before dispatching it
 and calls a supplied Fetch callback once per hop, so the callback scopes
 credentials to each URL's origin; browsers follow redirects under their own

@@ -240,8 +240,9 @@ Local futures and `Rc` providers are also supported.
 - Limits state their units and defaults in definitions. Cancellation is cooperative,
   not a deadline or preemptive interrupt. A same-thread `AbortSignal` cannot run while
   synchronous Wasm occupies that thread. HTTP discovery can interrupt asynchronous
-  acquisition and separately enforces a whole-attempt deadline. It retains observed
-  response metadata on later body failure and complete bounded bytes on a later stop.
+  acquisition and enforces a whole-attempt deadline when the application sets one.
+  It retains observed response metadata on later body failure and complete bounded
+  bytes on a later stop.
 - Findings and value problems retain original byte coordinates with exact
   pointers. JSON Pointer escaping and safe text presentation are separate
   operations. Byte columns require conversion for UTF-16 editors. A report's
@@ -272,14 +273,12 @@ Rust deadline and outcome items are defined in
 
 | Rust public item | Contract |
 | --- | --- |
-| `AttemptTimeout::{Default, After(Duration), Unbounded}` | Whole-attempt policy: thirty seconds, a positive finite duration, or explicitly no deadline. Zero duration is a configuration error. Connect, TLS, headers, redirects, body and validation share one deadline. |
-| `AttemptTimeout::duration()` | Returns `Result<Option<Duration>, ConfigurationError>`; `None` denotes unbounded and zero returns `invalid-timeout`. |
-| `ClientOptions::timeout` | Defaults to `AttemptTimeout::Default`; successful reads and redirects never reset it. `max_document_bytes: usize` defaults to 1 MiB; explicit zero and `usize::MAX` are refused. |
-| `DiscoveryTimer::{now, sleep_until}` | Host monotonic time and a wake-capable absolute timer in the same epoch, expressed as `Duration`. Dropping the timer releases it; local futures are supported. |
+| `ClientOptions::timeout: Option<Duration>` | Whole-attempt deadline. `None`, the default, sets none: the attempt runs until it completes or the caller cancels it. A deadline only bounds time, so a host that needs one sets `Some(duration)`. Zero returns `invalid-timeout`. Connect, TLS, headers, redirects, body and validation share one deadline; successful reads and redirects never reset it. |
+| `ClientOptions::max_document_bytes: usize` | Decoded-body bound protecting the process; defaults to 1 MiB. Explicit zero and `usize::MAX` are refused. |
+| `DiscoveryTimer::{now, sleep_until}` | Host monotonic time and a wake-capable absolute timer in the same epoch, expressed as `Duration`, consulted only when a deadline is set. Dropping the timer releases it; local futures are supported. |
 | `discover(origin, &options, &control, &timer, transport)` | Races one host timer and caller `CancellationToken` while invoking a repeatable one-hop callback. The callback must dispatch the normalized URL, expose redirects, deliver decoded bytes or a typed refusal, and release acquisition on drop. It is called again for each admitted redirect, including a cross-origin one, and scopes credentials to the URL it is given. Connection-time DNS, peer and proxy policy belongs to the host. `final_url` is the URL the SDK last dispatched. |
-| `DEFAULT_TIMEOUT_SECONDS` | Thirty-second SDK default. |
 | `MAX_REDIRECTS` | Ten followed redirects on native and portable checked paths, and in TypeScript where the host exposes redirects. Browser Fetch owns its hidden redirect limit. |
-| `native::Client::new(ClientBuilder, ClientOptions)` | Installs SDK redirect policy last and builds the client, retaining application TLS, resolver, proxy, credential and decoding choices. Refuses downgrade and credential-replay hops before dispatch. Owns one Tokio attempt timer, so it requires a Tokio runtime with timers enabled. Credential headers other than reqwest's four standard ones follow cross-origin hops. |
+| `native::Client::new(ClientBuilder, ClientOptions)` | Installs SDK redirect policy last and builds the client, retaining application TLS, resolver, proxy, credential and decoding choices. Refuses downgrade and credential-replay hops before dispatch. Creates Tokio timers (the attempt timer when a deadline is set, and the bounded drain of a small non-200 body), so it requires a Tokio runtime with timers enabled. Credential headers other than reqwest's four standard ones follow cross-origin hops. |
 | `native::Client::with_delegated_policy(Client, ClientOptions)` | Accepts an already-built client through explicit host policy delegation. The application owns per-hop admission, the ten-redirect limit and credential handling. SDK deadline and cancellation handling still apply. |
 | `DiscoveryOutcome::Timeout` | SDK or identified transport deadline expired; distinct from caller `Cancelled`. Caller cancellation wins when both are ready at the same poll. Observed metadata and complete bounded body, if available, remain in the receipt. |
 | `ErrorKind::RedirectPolicy` | Admission, downgrade, hop-limit, credential-replay or observable hidden/unfollowed redirect refusal; never document nonconformance or absence. |
@@ -298,7 +297,7 @@ TypeScript items are exported by
 
 | TypeScript public item | Contract |
 | --- | --- |
-| `DiscoveryOptions.timeoutMs` | Whole-attempt milliseconds, default 30,000; a positive finite number or `"unbounded"`. Zero is refused. The SDK owns its timer and AbortController, and checks elapsed monotonic time around synchronous validation. |
+| `DiscoveryOptions.timeoutMs` | Whole-attempt deadline in milliseconds. Omitted, the attempt has no deadline and runs until it completes or the caller's `signal` aborts it. When set it must be a positive finite number; zero is refused with `invalid-timeout`. The SDK then owns the timer, and checks elapsed monotonic time around synchronous validation. |
 | `DiscoveryResult.status: "timeout"` | SDK or identified host deadline expired. Caller abort remains `"cancelled"` with reason `"aborted"`; caller cancellation wins a simultaneous observation. Observed metadata and complete bounded bytes remain available. |
 | `DiscoveryResult.error.kind` | For `"transport-error"` and `"body-error"`, the produced kinds are `"network"`, `"redirect-policy"` and `"other"`. Timeouts have their own status and Fetch exposes no codec diagnosis. |
 

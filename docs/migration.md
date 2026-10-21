@@ -101,8 +101,9 @@ Kind implementations and application context policy remain separate from core.
 Legacy TypeScript resolution tries direct fetching, discovery and optional
 synthesis. The new discovery call performs the well-known-origin job only;
 compose direct fetching or synthesis explicitly when needed. Acquisition URLs
-never become schema base URIs. The default decoded body limit is 1 MiB and the
-whole-attempt deadline is thirty seconds. Match absence, gated discovery,
+never become schema base URIs. The default decoded body limit is 1 MiB. An
+attempt has no deadline unless the application sets one with Rust
+`ClientOptions::timeout` or TypeScript `timeoutMs`. Match absence, gated discovery,
 transport, HTTP and document outcomes separately. Publication defaults to CORS
 `*`; authentication and credentialed CORS remain application policy.
 Read [HTTP policy](http-discovery.md) before porting a custom transport.

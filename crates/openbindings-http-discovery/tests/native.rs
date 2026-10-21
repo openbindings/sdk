@@ -678,7 +678,7 @@ async fn sdk_deadline_covers_slow_headers_and_slow_body() {
                 .no_proxy()
                 .default_headers(headers),
             ClientOptions {
-                timeout: AttemptTimeout::After(Duration::from_millis(40)),
+                timeout: Some(Duration::from_millis(40)),
                 ..Default::default()
             },
         )
@@ -691,6 +691,46 @@ async fn sdk_deadline_covers_slow_headers_and_slow_body() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn native_attempt_without_timeout_waits_until_the_caller_cancels() {
+    // the default sets no deadline: on a server that never answers, an explicit
+    // timeout fires, while the default attempt keeps waiting until cancelled.
+    let server = Server::new();
+    let stalled = |timeout| {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert("x-case", "slow-headers".parse().unwrap());
+        native::Client::new(
+            reqwest::Client::builder()
+                .no_proxy()
+                .default_headers(headers),
+            ClientOptions {
+                timeout,
+                ..ClientOptions::default()
+            },
+        )
+        .unwrap()
+    };
+    let bounded = stalled(Some(Duration::from_millis(40)));
+    let waiting = stalled(ClientOptions::default().timeout);
+    let control = CancellationToken::new();
+    let start = Instant::now();
+    let (waited, timed) = tokio::join!(
+        waiting.discover_with_control(&server.origin, &control),
+        async {
+            let timed = bounded.discover(&server.origin).await.unwrap();
+            // Outlast the explicit deadline several times over before cancelling.
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            control.cancel();
+            timed
+        }
+    );
+    assert!(matches!(timed.outcome, DiscoveryOutcome::Timeout));
+    let waited = waited.unwrap();
+    assert!(matches!(waited.outcome, DiscoveryOutcome::Cancelled));
+    assert!(waited.metadata.is_none());
+    assert!(start.elapsed() >= Duration::from_millis(240));
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn native_pre_cancelled_attempt_has_no_dispatch_and_overrides_are_explicit() {
     // cancellation wins before dispatch, including an otherwise expiring attempt.
     let control = CancellationToken::new();
@@ -698,7 +738,7 @@ async fn native_pre_cancelled_attempt_has_no_dispatch_and_overrides_are_explicit
     let client = native::Client::new(
         reqwest::Client::builder().no_proxy(),
         ClientOptions {
-            timeout: AttemptTimeout::After(Duration::from_nanos(1)),
+            timeout: Some(Duration::from_nanos(1)),
             ..Default::default()
         },
     )
@@ -715,7 +755,7 @@ async fn native_pre_cancelled_attempt_has_no_dispatch_and_overrides_are_explicit
         native::Client::new(
             reqwest::Client::builder(),
             ClientOptions {
-                timeout: AttemptTimeout::After(Duration::ZERO),
+                timeout: Some(Duration::ZERO),
                 ..Default::default()
             }
         )
@@ -770,7 +810,7 @@ async fn native_cancellation_wins_when_timer_and_caller_are_ready_together() {
             .no_proxy()
             .dns_resolver(Arc::new(PendingResolver)),
         ClientOptions {
-            timeout: AttemptTimeout::After(Duration::from_millis(50)),
+            timeout: Some(Duration::from_millis(50)),
             ..Default::default()
         },
     )

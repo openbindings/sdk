@@ -23,10 +23,13 @@ a host transport and `DiscoveryTimer`.
 
 ## Limits and host responsibilities
 
-The default decoded body limit is 1 MiB and the whole-attempt deadline is thirty
-seconds. Only 404 means absence; 401 and 403 mean gated discovery. HTTP status,
-transport failure, cancellation, timeout and document validation remain distinct.
-Complete bounded response bytes and observed metadata survive validation refusal.
+The decoded body is bounded at 1 MiB by default, which protects the process. An
+attempt has no deadline unless `ClientOptions::timeout` sets one; without one it
+runs until it completes or the caller cancels it. A deadline only bounds time, so
+it is the application's choice: a host that needs a bound sets it. Only 404 means
+absence; 401 and 403 mean gated discovery. HTTP status, transport failure,
+cancellation, timeout and document validation remain distinct. Complete bounded
+response bytes and observed metadata survive validation refusal.
 
 Native discovery requires HTTPS except literal loopback, checks redirect policy
 before each hop and runs on a Tokio runtime with timers enabled. It keeps
