@@ -104,7 +104,10 @@
   invocation share one by-value `BindingValue`: an inspected target's binding
   invokes as it is, and `bind(operation, source)` gives the author's core binding.
 - A TypeScript API with bundled Wasm, exact-value editing, disposable owners and
-  Fetch discovery for qualified browser, Node ESM and Worker hosts.
+  Fetch discovery for qualified browser, Node ESM and Worker hosts. Its names
+  follow Rust's where the concept is the same: `Document.validate()` returns a
+  `DocumentValidation`, whose conformant branch carries the proof, and
+  `validateDocument` returns the plain `DocumentReport`.
 - A bundled Wasm module whose bytes do not depend on where it was built. The
   build gives the builder's Cargo home, toolchain, target directory and checkout
   fixed names in the module, and refuses a module that still embeds one; CI

@@ -123,7 +123,8 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 | `Document.create()` | Creates an empty OBI for construction through setters. |
 | `set`, `remove`, `edit(edits)` | Mutable pointer edits; a batch crosses the bridge once, including exact inputs, and preserves untouched bytes. Exact inputs are borrowed. A pointer may hold an unpaired UTF-16 unit, as a finding's can, and addresses that member. Failure leaves bytes and caches unchanged. |
 | Typed field and whole-part setters | Accept typed part values; map setters commit bulk construction once. |
-| `Document.validate()` | Returns a union whose `conformant` branch owns an independent `ConformantDocument` and a plain report. |
+| `Document.validate()` | Returns a `DocumentValidation`, the name Rust gives the same result: its `conformant` branch owns an independent `ConformantDocument` and a plain report; its other branches are a `DocumentReport`. |
+| `validateDocument(bytes)` | Assesses exact source directly, including text that is not JSON, and returns a `DocumentReport`: plain data with a `report` or `version-refused` branch and no handle to dispose. |
 | `ConformantDocument` | Nominal, privately constructed proof with infallible typed reads. `resolveOperation(name)` returns a `ConformantOperationView` or `undefined`. It has no setters and does not inherit `Document`. |
 | `ConformantOperationView` | `input()` and `output()` return a disposable `ValueContract` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. Both views have `retain()`. |
 | `ValueContract` | `schema()` acquires the exact schema; `prepare(options)` takes `resources`, `limits` and `signal` and returns `{ status: "ready", valueContract }` or `{ status: "no-verdict", detail }`. |

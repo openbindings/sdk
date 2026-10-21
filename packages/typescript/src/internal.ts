@@ -130,8 +130,8 @@ export interface ValidationReport {
   /** True when the 4096-finding or 8 MiB aggregate generated-pointer byte cap omitted findings. Omission never changes evidence or substitutes a shortened pointer. */
   findingsTruncated: boolean;
 }
-/** Normative assessment or a distinct unsupported-version refusal. An assessed report can be conformant, non-conformant or undetermined. This plain-data result owns no handles; use Document.validate() to obtain a retained proof. */
-export type DocumentValidation =
+/** Normative assessment or a distinct unsupported-version refusal, as plain data: the result of validateDocument(). An assessed report can be conformant, non-conformant or undetermined. It owns no handles; Document.validate() returns a DocumentValidation, which adds the retained proof. */
+export type DocumentReport =
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
       status: "report";
@@ -954,7 +954,7 @@ export function parseJson(input: ExactInput): ParseResult<ExactJson> {
   }
 }
 /** Assess all normative document rules directly from exact source, including invalid JSON. Unsupported declared versions return version-refused; parse/limit failures become truthful evidence. Returns plain data with no handle to dispose. Initialization, wrong input types and literal unpaired UTF-16 text throw; represent unpaired units with JSON escapes or exact UTF-8 bytes. */
-export function validateDocument(input: ExactInput): DocumentValidation {
+export function validateDocument(input: ExactInput): DocumentReport {
   requireReady();
   return decode(wasm.validateBytes(bytes(input)));
 }
@@ -1238,7 +1238,7 @@ export class Document extends DocumentReads {
     }
   }
   /** Assess all rules; the conformant branch owns a new ConformantDocument. The original owner stays editable. Other branches retain evidence or a version refusal. */
-  validate(): ValidationResult {
+  validate(): DocumentValidation {
     return assessDocument(this);
   }
   #commit(call: (raw: wasm.WasmDocument) => void): void {
@@ -1451,8 +1451,8 @@ function checkPartField(
     );
 }
 
-/** Document proof acquisition: conformant transfers an independent ConformantDocument owner and report. Otherwise the original DocumentValidation explains refusal, nonconformance or uncertainty; no proof owner is created. */
-export type ValidationResult =
+/** Document validation, as Rust's DocumentValidation is: the conformant branch transfers an independent ConformantDocument owner, the proof, with its report. Otherwise a DocumentReport branch explains refusal, nonconformance or uncertainty; no proof owner is created. */
+export type DocumentValidation =
   | {
       /** Result discriminant; narrow this before reading branch-specific fields. */
       status: "conformant";
@@ -1461,9 +1461,9 @@ export type ValidationResult =
       /** Plain normative report for the exact snapshot. */
       report: ValidationReport;
     }
-  | DocumentValidation;
+  | DocumentReport;
 const conformanceToken = Symbol("established conformance");
-let assessDocument: (document: DocumentReads) => ValidationResult;
+let assessDocument: (document: DocumentReads) => DocumentValidation;
 /** Retained proof for one immutable snapshot whose normative OBI rules were established. Obtain via Document.validate(); preparation remains evaluator-dependent. It shares read-only inspection and deterministic disposal, without inheriting Document or its setters. */
 export class ConformantDocument extends DocumentReads {
   declare private readonly conformantDocumentBrand: void;
@@ -1473,10 +1473,10 @@ export class ConformantDocument extends DocumentReads {
     super(raw);
   }
   static {
-    assessDocument = (document: DocumentReads): ValidationResult => {
+    assessDocument = (document: DocumentReads): DocumentValidation => {
       const transfer = documentRaw(document).validate();
       try {
-        const result = decode<DocumentValidation>(transfer.report());
+        const result = decode<DocumentReport>(transfer.report());
         const proof = transfer.takeConformant();
         if (!proof) return result;
         if (result.status !== "report") {
