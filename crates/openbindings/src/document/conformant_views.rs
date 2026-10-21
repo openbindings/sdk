@@ -16,7 +16,7 @@ fn texts<'a>(value: JsonRef<'a>, field: &str) -> Option<impl ExactSizeIterator<I
 }
 macro_rules! conformant_view {
     ($name:ident, $plain:ident) => {
-        #[doc = concat!("Retained ", stringify!($plain), " with document conformance proof. Field reads are infallible; OBI-01 establishes scalar text. Original tokens and locations remain available through value(). Clones and views survive parent drop.")]
+        #[doc = concat!("The conformant form of [`", stringify!($plain), "`]: the same declaration read from a [`Conformant<Document>`], whose proof it retains. Field reads are infallible; OBI-01 establishes scalar text. Original tokens and locations remain available through value(). Clones and views survive parent drop.")]
         #[derive(Clone, Debug)]
         pub struct $name {
             _document: Conformant<Document>,
