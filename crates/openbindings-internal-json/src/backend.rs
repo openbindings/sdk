@@ -1,6 +1,6 @@
 //! Shared internal adapter: the schema engine reads immutable flat JSON without re-parsing.
 use crate::decimal::Decimal;
-use crate::raw::{Arena, Id, Kind, Member};
+use crate::raw::{Arena, Id, Kind, NO_PARENT, Text};
 use jsonschema_value::types::JsonType;
 use jsonschema_value::{Array, Json, JsonNumber, Node, NodeIdentity, Object};
 use serde_json::Value;
@@ -27,18 +27,15 @@ fn charge(units: usize) -> bool {
 /// Borrow one object member by source position, without visiting preceding members.
 /// This internal bridge helper preserves duplicate names and exact name tokens.
 pub fn member_at(value: crate::JsonRef<'_>, index: usize) -> Option<crate::JsonMember<'_>> {
-    let Kind::Object(members) = &value.owner.nodes[value.id].kind else {
-        return None;
-    };
-    let member = members.get(index)?;
+    let name = *value.owner.member_names(value.id)?.get(index)? as usize;
     Some(crate::JsonMember {
         name: crate::JsonRef {
             owner: value.owner,
-            id: member.key,
+            id: name,
         },
         value: crate::JsonRef {
             owner: value.owner,
-            id: member.value,
+            id: name + 1,
         },
     })
 }
@@ -213,20 +210,14 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
     #[inline]
     fn as_object(&self) -> Option<ObjectView<'a>> {
         match self {
-            Self::Stored(a, id) => match &a.nodes[*id].kind {
-                Kind::Object(m) => Some(ObjectView(a, m)),
-                _ => None,
-            },
+            Self::Stored(a, id) => a.member_names(*id).map(|names| ObjectView(a, *id, names)),
             _ => None,
         }
     }
     #[inline]
     fn as_array(&self) -> Option<ArrayView<'a>> {
         match self {
-            Self::Stored(a, id) => match &a.nodes[*id].kind {
-                Kind::Array(m) => Some(ArrayView(a, m)),
-                _ => None,
-            },
+            Self::Stored(a, id) => a.elements(*id).map(|items| ArrayView(a, items)),
             _ => None,
         }
     }
@@ -269,14 +260,16 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
                 Kind::Bool(_) => JsonType::Boolean,
                 Kind::Number => JsonType::Number,
                 Kind::String { .. } => JsonType::String,
-                Kind::Array(_) => JsonType::Array,
-                Kind::Object(_) => JsonType::Object,
+                Kind::Array { .. } => JsonType::Array,
+                Kind::Object { .. } => JsonType::Object,
             },
         }
     }
     fn equals_value(&self, expected: &Value) -> bool {
-        let mut stack = vec![(*self, expected)];
-        while let Some((left, right)) = stack.pop() {
+        // Pairs still to compare; comparing scalars allocates nothing.
+        let mut stack = Vec::new();
+        let mut pair = Some((*self, expected));
+        while let Some((left, right)) = pair.take().or_else(|| stack.pop()) {
             if !charge(1) {
                 return false;
             }
@@ -311,6 +304,9 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
                     if items.len() != values.len() {
                         return false;
                     }
+                    // An element iterator may stop early when work runs out,
+                    // so it promises no length; the pairs are counted here.
+                    stack.reserve(items.len());
                     stack.extend(items.elements().zip(values));
                 }
                 Value::Object(members) => {
@@ -349,14 +345,15 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
         }
     }
 }
-pub struct ObjectView<'a>(&'a Arena, &'a [Member]);
+/// An object, its node and its member-name tokens.
+pub struct ObjectView<'a>(&'a Arena, Id, &'a [u32]);
 impl std::fmt::Debug for ObjectView<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ObjectView").finish_non_exhaustive()
     }
 }
 
-pub struct Members<'a>(&'a Arena, std::slice::Iter<'a, Member>);
+pub struct Members<'a>(&'a Arena, std::slice::Iter<'a, u32>);
 impl std::fmt::Debug for Members<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Members").finish_non_exhaustive()
@@ -398,19 +395,21 @@ impl<'a> Iterator for Members<'a> {
         if !charge(1) {
             return None;
         }
-        self.1.next().map(|m| {
+        self.1.next().map(|&name| {
+            let name = name as usize;
             (
                 MemberName {
                     text: if STRING_ACCESS.get().fixed {
-                        present_string(self.0, m.key).expect("member name is a string")
+                        present_string(self.0, name).expect("member name is a string")
                     } else {
-                        self.0.string(m.key).map(Cow::Borrowed).unwrap_or_else(|| {
-                            present_string(self.0, m.key).expect("member name is a string")
+                        self.0.string(name).map(Cow::Borrowed).unwrap_or_else(|| {
+                            present_string(self.0, name).expect("member name is a string")
                         })
                     },
-                    unpaired: self.0.string(m.key).is_none(),
+                    unpaired: self.0.string(name).is_none(),
                 },
-                View::Stored(self.0, m.value),
+                // A member's value is the node after its name.
+                View::Stored(self.0, name + 1),
             )
         })
     }
@@ -421,30 +420,32 @@ impl<'a> Object<'a, FlatJson> for ObjectView<'a> {
     type MembersIter = Members<'a>;
     #[inline]
     fn len(&self) -> usize {
-        self.1.len()
+        self.2.len()
     }
     #[inline]
     fn get(&self, key: &String) -> Option<View<'a>> {
-        // recover the containing object from its first key token, so the
-        // adapter shares the arena index and charges every collision candidate.
-        let (object, _) = self.0.nodes[self.1.first()?.key].parent?;
+        // Share the arena index and charge every collision candidate. An
+        // empty object answers without a charge.
+        if self.2.is_empty() {
+            return None;
+        }
         self.0
-            .get_with_probe(object, key, || charge(1))
+            .get_with_probe(self.1, key, || charge(1))
             .map(|id| View::Stored(self.0, id))
     }
     #[inline]
     fn members(&self) -> Members<'a> {
-        Members(self.0, self.1.iter())
+        Members(self.0, self.2.iter())
     }
 }
-pub struct ArrayView<'a>(&'a Arena, &'a [Id]);
+pub struct ArrayView<'a>(&'a Arena, &'a [u32]);
 impl std::fmt::Debug for ArrayView<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ArrayView").finish_non_exhaustive()
     }
 }
 
-pub struct Elements<'a>(&'a Arena, std::slice::Iter<'a, Id>);
+pub struct Elements<'a>(&'a Arena, std::slice::Iter<'a, u32>);
 impl std::fmt::Debug for Elements<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Elements").finish_non_exhaustive()
@@ -458,7 +459,7 @@ impl<'a> Iterator for Elements<'a> {
         if !charge(1) {
             return None;
         }
-        self.1.next().map(|id| View::Stored(self.0, *id))
+        self.1.next().map(|&id| View::Stored(self.0, id as usize))
     }
 }
 impl<'a> Array<'a, FlatJson> for ArrayView<'a> {
@@ -477,7 +478,8 @@ impl<'a> Array<'a, FlatJson> for ArrayView<'a> {
         let Some(&first) = self.1.first() else {
             return true;
         };
-        let last = *self.1.last().unwrap();
+        let first = first as usize;
+        let last = *self.1.last().unwrap() as usize;
         let end = self
             .0
             .nodes
@@ -488,23 +490,34 @@ impl<'a> Array<'a, FlatJson> for ArrayView<'a> {
             if !charge(1) {
                 return false;
             }
-            let hash = match &self.0.nodes[id].kind {
+            let hash = match self.0.nodes[id].kind {
                 Kind::Null => hasher.hash_one((0u8, 0u8)),
                 Kind::Bool(b) => hasher.hash_one((1u8, b)),
                 Kind::Number => hasher.hash_one((2u8, Decimal::parse(self.0.raw(id)))),
                 Kind::String {
-                    unpaired: Some(units),
+                    text: Text::UNPAIRED,
                     ..
-                } => hasher.hash_one((3u8, 1u8, units)),
+                } => hasher.hash_one((3u8, 1u8, self.0.units(id))),
                 Kind::String { .. } => hasher.hash_one((3u8, 0u8, self.0.string(id))),
-                Kind::Array(items) => hasher.hash_one((
+                Kind::Array { .. } => hasher.hash_one((
                     4u8,
-                    items.iter().map(|&i| hashes[i - first]).collect::<Vec<_>>(),
-                )),
-                Kind::Object(members) => {
-                    let mut pairs: Vec<_> = members
+                    self.0
+                        .elements(id)
+                        .expect("an array")
                         .iter()
-                        .map(|m| (hashes[m.key - first], hashes[m.value - first]))
+                        .map(|&i| hashes[i as usize - first])
+                        .collect::<Vec<_>>(),
+                )),
+                Kind::Object { .. } => {
+                    let mut pairs: Vec<_> = self
+                        .0
+                        .member_names(id)
+                        .expect("an object")
+                        .iter()
+                        .map(|&name| {
+                            let name = name as usize;
+                            (hashes[name - first], hashes[name + 1 - first])
+                        })
                         .collect();
                     pairs.sort_unstable();
                     hasher.hash_one((5u8, pairs))
@@ -516,38 +529,32 @@ impl<'a> Array<'a, FlatJson> for ArrayView<'a> {
     }
 }
 impl ArrayView<'_> {
-    // Hashes only select candidates. Keep the first ID inline, then retain every
-    // unequal collision and charge/verify exact equality exactly as before.
+    // Hashes only select candidates. An element whose hash an earlier one has
+    // is compared, in array order, with every earlier element of that hash,
+    // each comparison charged and verified exactly. Those earlier elements are
+    // pairwise unequal (an equal pair returns first), so they are all the
+    // candidates there are. Only the hashes seen are kept: the candidates are
+    // found again by scanning, which only an equal pair or a collision of
+    // keyed 64-bit hashes reaches. The table grows as usual while small, so
+    // an early repeat costs little; past that it grows once, to hold every
+    // element left, rather than keeping old and new tables while doubling.
     fn unique_by_hash(&self, first: Id, hashes: &[u64]) -> bool {
-        use std::collections::{HashMap, hash_map::Entry};
-        enum Bucket {
-            One(Id),
-            Many(Vec<Id>),
-        }
-        impl Bucket {
-            fn ids(&self) -> &[Id] {
-                match self {
-                    Self::One(id) => std::slice::from_ref(id),
-                    Self::Many(ids) => ids,
-                }
+        const DOUBLING: usize = 4096;
+        let mut seen = std::collections::HashSet::new();
+        for (at, &id) in self.1.iter().enumerate() {
+            let id = id as usize;
+            let hash = hashes[id - first];
+            if seen.len() == seen.capacity() && seen.len() >= DOUBLING {
+                seen.reserve(self.1.len() - at);
             }
-            fn push(&mut self, id: Id) {
-                match self {
-                    Self::One(prior) => *self = Self::Many(vec![*prior, id]),
-                    Self::Many(ids) => ids.push(id),
-                }
+            if seen.insert(hash) {
+                continue;
             }
-        }
-        let mut seen: HashMap<u64, Bucket> = HashMap::new();
-        for &id in self.1 {
-            let bucket = match seen.entry(hashes[id - first]) {
-                Entry::Vacant(entry) => {
-                    entry.insert(Bucket::One(id));
+            for &prior in &self.1[..at] {
+                let prior = prior as usize;
+                if hashes[prior - first] != hash {
                     continue;
                 }
-                Entry::Occupied(entry) => entry.into_mut(),
-            };
-            for &prior in bucket.ids() {
                 if !charge(1) {
                     return false;
                 }
@@ -555,7 +562,6 @@ impl ArrayView<'_> {
                     return false;
                 }
             }
-            bucket.push(id);
         }
         true
     }
@@ -616,19 +622,23 @@ pub fn same_source(value: crate::JsonRef<'_>, source: &crate::JsonValue) -> bool
 /// visits the existing flat nodes without parsing or allocating. `None` means the
 /// byte limit is exceeded or the subtree contains non-scalar UTF-16 strings.
 pub fn decoded_string_size(value: crate::JsonRef<'_>, limit: usize) -> Option<usize> {
-    let end = value.owner.nodes[value.id].span.end;
+    let arena = value.owner.as_ref();
+    let end = arena.nodes[value.id].span.end;
     let mut size = 0usize;
-    for node in value.owner.nodes[value.id..]
+    for (offset, node) in arena.nodes[value.id..]
         .iter()
         .take_while(|node| node.span.start < end)
+        .enumerate()
     {
-        if let Kind::String { decoded, unpaired } = &node.kind {
-            if unpaired.is_some() {
+        if let Kind::String { text, .. } = node.kind {
+            if text == Text::UNPAIRED {
                 return None;
             }
-            size = size.checked_add(decoded.as_ref().map_or(0, |s| s.len()))?;
-            if size > limit {
-                return None;
+            if text.decoded().is_some() {
+                size = size.checked_add(arena.decoded_len(value.id + offset))?;
+                if size > limit {
+                    return None;
+                }
             }
         }
     }
@@ -640,7 +650,7 @@ pub fn pointer_size(value: crate::JsonRef<'_>, limit: usize) -> Option<usize> {
     use crate::raw::Edge;
     let mut size = 0usize;
     let mut current = value.id;
-    while let Some((parent, edge)) = value.owner.nodes[current].parent {
+    while let Some((parent, edge)) = value.owner.edge(current) {
         let remaining = limit.checked_sub(size)?.checked_sub(1)?;
         let segment = match edge {
             Edge::Index(index) => {
@@ -677,35 +687,124 @@ pub fn location_pointer_size(value: crate::JsonRef<'_>, limit: usize) -> Option<
     // Distinguish a pointer through an unpaired name, held as units, from an
     // oversized one without allocating either. This second walk is needed only
     // after the ordinary bounded measure failed; normal locations take one walk.
+    // It too stops once the units exceed the budget, so that a document whose
+    // budget is spent pays nothing more for each further deep finding.
     let escaped = |unit: u16| unit == u16::from(b'~') || unit == u16::from(b'/');
+    let budget = limit / 2;
     let (mut units, mut unpaired) = (0usize, false);
     let mut current = value.id;
-    while let Some((parent, edge)) = value.owner.nodes[current].parent {
-        let segment = match edge {
-            crate::raw::Edge::Index(index) => index
-                .checked_ilog10()
-                .map_or(1, |digits| digits as usize + 1),
-            crate::raw::Edge::Key(key) => match &value.owner.nodes[key].kind {
-                Kind::String {
-                    unpaired: Some(name),
-                    ..
-                } => {
-                    unpaired = true;
-                    name.len() + name.iter().filter(|&&unit| escaped(unit)).count()
+    while let Some((parent, edge)) = value.owner.edge(current) {
+        units += 1;
+        if units > budget {
+            return None;
+        }
+        let within = match edge {
+            crate::raw::Edge::Index(index) => {
+                units += index
+                    .checked_ilog10()
+                    .map_or(1, |digits| digits as usize + 1);
+                units <= budget
+            }
+            crate::raw::Edge::Key(key) => {
+                let mut count = |unit: u16| {
+                    units += 1 + usize::from(escaped(unit));
+                    units <= budget
+                };
+                match value.owner.unpaired_units(key) {
+                    Some(mut name) => {
+                        unpaired = true;
+                        name.all(&mut count)
+                    }
+                    None => value.owner.string(key)?.encode_utf16().all(&mut count),
                 }
-                _ => value
-                    .owner
-                    .string(key)?
-                    .encode_utf16()
-                    .map(|unit| 1 + usize::from(escaped(unit)))
-                    .sum(),
-            },
+            }
         };
-        units = units.saturating_add(1).saturating_add(segment);
+        if !within {
+            return None;
+        }
         current = parent;
     }
-    let size = units.saturating_mul(2);
-    (unpaired && size <= limit).then_some(size)
+    unpaired.then_some(units * 2)
+}
+
+/// Every node's [`location_pointer_size`], for a caller that measures many
+/// locations of one source, measured in one pass over the source's nodes.
+#[derive(Debug)]
+pub struct LocationPointerSizes {
+    /// Pointer bytes, saturating at the cap; `u32::MAX` through an unpaired name.
+    scalar: Vec<u32>,
+    /// Escaped UTF-16 units, saturating at the cap; only when the source holds
+    /// an unpaired unit.
+    units: Option<Vec<u32>>,
+}
+impl LocationPointerSizes {
+    /// Measure every node of `value`'s source, up to `cap` bytes.
+    pub fn new(value: crate::JsonRef<'_>, cap: usize) -> Self {
+        let arena = value.owner.as_ref();
+        let cap = u32::try_from(cap).unwrap_or(u32::MAX - 1).min(u32::MAX - 1);
+        let add = |size: u32, segment: usize| {
+            u32::try_from(segment).map_or(cap, |segment| size.saturating_add(segment).min(cap))
+        };
+        let escaped =
+            |unit: u16| 1 + usize::from(unit == u16::from(b'~') || unit == u16::from(b'/'));
+        let count = arena.nodes.len();
+        let mut scalar = vec![0u32; count];
+        let mut units = (!arena.unpaired.is_empty()).then(|| vec![0u32; count]);
+        // Ids follow the source, so a container precedes its items.
+        for id in 0..count {
+            if let Some(elements) = arena.elements(id) {
+                for (index, &element) in elements.iter().enumerate() {
+                    let segment = 1 + index.checked_ilog10().map_or(1, |d| d as usize + 1);
+                    let element = element as usize;
+                    scalar[element] = match scalar[id] {
+                        u32::MAX => u32::MAX,
+                        size => add(size, segment),
+                    };
+                    if let Some(units) = &mut units {
+                        units[element] = add(units[id], segment);
+                    }
+                }
+            } else if let Some(names) = arena.member_names(id) {
+                for &name in names {
+                    let name = name as usize;
+                    let text = arena.string(name);
+                    let size = match (scalar[id], text) {
+                        (u32::MAX, _) | (_, None) => u32::MAX,
+                        (size, Some(text)) => add(size, 1 + crate::raw::escaped_len(text)),
+                    };
+                    // A member's value is the node after its name.
+                    scalar[name] = size;
+                    scalar[name + 1] = size;
+                    if let Some(units) = &mut units {
+                        let segment = 1 + match arena.unpaired_units(name) {
+                            Some(name) => name.map(escaped).sum::<usize>(),
+                            None => text
+                                .into_iter()
+                                .flat_map(str::encode_utf16)
+                                .map(escaped)
+                                .sum(),
+                        };
+                        let size = add(units[id], segment);
+                        units[name] = size;
+                        units[name + 1] = size;
+                    }
+                }
+            }
+        }
+        Self { scalar, units }
+    }
+    /// [`location_pointer_size`] of `value`, a node of the measured source,
+    /// for a `limit` below the cap.
+    pub fn size(&self, value: crate::JsonRef<'_>, limit: usize) -> Option<usize> {
+        match self.scalar[value.id] {
+            u32::MAX => {
+                let units = self.units.as_ref().expect("an unpaired name was measured")[value.id];
+                let size = 2 * units as usize;
+                (size <= limit).then_some(size)
+            }
+            size => (size as usize <= limit).then_some(size as usize),
+        }
+    }
 }
 
 /// The location of an admission failure in the bytes it refused: no pointer,
@@ -792,7 +891,7 @@ fn locations_with_work(values: &[crate::JsonRef<'_>]) -> (Vec<crate::SourceLocat
 // Node ids are assigned in source order and a subtree's ids are contiguous,
 // so the subtree's unpaired strings are one slice of the sorted id list,
 // found in logarithmic time in the number of unpaired strings.
-fn unpaired_within(value: &crate::JsonValue) -> &[Id] {
+fn unpaired_within(value: &crate::JsonValue) -> &[u32] {
     let (arena, start) = (value.owner.as_ref(), value.id);
     let end = arena.nodes[start].span.end;
     let probe = |within: bool| {
@@ -802,9 +901,12 @@ fn unpaired_within(value: &crate::JsonValue) -> &[Id] {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         within
     };
-    let first = arena.unpaired.partition_point(|&id| probe(id < start));
+    let first = arena
+        .unpaired
+        .partition_point(|&id| probe((id as usize) < start));
     let last = first
-        + arena.unpaired[first..].partition_point(|&id| probe(arena.nodes[id].span.start < end));
+        + arena.unpaired[first..]
+            .partition_point(|&id| probe(arena.nodes[id as usize].span.start < end));
     &arena.unpaired[first..last]
 }
 pub fn has_unpaired(value: &crate::JsonValue) -> bool {
@@ -817,50 +919,57 @@ pub fn has_unpaired(value: &crate::JsonValue) -> bool {
 pub fn unpaired_strings(value: &crate::JsonValue) -> impl Iterator<Item = crate::JsonRef<'_>> {
     unpaired_within(value).iter().map(|&id| crate::JsonRef {
         owner: &value.owner,
-        id,
+        id: id as usize,
     })
 }
 /// Stack-safe exact comparison, charged to the enclosing evaluator work scope.
 pub fn equals(left: View<'_>, right: View<'_>) -> bool {
-    let mut stack = vec![(left, right)];
-    while let Some((left, right)) = stack.pop() {
+    // Pairs still to compare; comparing scalars allocates nothing.
+    let mut stack = Vec::new();
+    let mut pair = Some((left, right));
+    while let Some((left, right)) = pair.take().or_else(|| stack.pop()) {
         if !charge(1) {
             return false;
         }
-        if left.json_type() != right.json_type() {
+        // One kind decides the comparison for both sides.
+        let kind = left.json_type();
+        if kind != right.json_type() {
             return false;
         }
-        if let Some(items) = left.as_array() {
-            let other = right.as_array().unwrap();
+        if kind == JsonType::Array {
+            let (items, other) = (left.as_array().unwrap(), right.as_array().unwrap());
             if items.len() != other.len() {
                 return false;
             }
+            stack.reserve(items.len());
             stack.extend(items.elements().zip(other.elements()));
-        } else if let Some(items) = left.as_object() {
-            let other = right.as_object().unwrap();
+        } else if kind == JsonType::Object {
+            let (items, other) = (left.as_object().unwrap(), right.as_object().unwrap());
             if items.len() != other.len() {
                 return false;
             }
             // Exact object equality does not round-trip names through the scalar
             // lookup API. In particular, an encoded surrogate cannot alias a
             // genuine scalar member name containing the presentation marker.
-            for member in items.1 {
+            for &name in items.2 {
+                let name = name as usize;
                 if !charge(1) {
                     return false;
                 }
                 // Names compare by their exact UTF-16 units (§5), so a name with
                 // an unpaired unit decides equality without interpretation.
-                let matched = if let Some(key) = items.0.string(member.key) {
+                let matched = if let Some(key) = items.0.string(name) {
                     other.get(&key.to_owned())
                 } else {
-                    let key = items.0.units(member.key).unwrap();
+                    let key = items.0.units(name).unwrap();
                     let mut matched = None;
-                    for candidate in other.1 {
+                    for &candidate in other.2 {
+                        let candidate = candidate as usize;
                         if !charge(1) {
                             return false;
                         }
-                        if other.0.units(candidate.key).as_deref() == Some(&key) {
-                            matched = Some(View::Stored(other.0, candidate.value));
+                        if other.0.units(candidate).as_deref() == Some(&key) {
+                            matched = Some(View::Stored(other.0, candidate + 1));
                             break;
                         }
                     }
@@ -869,10 +978,10 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
                 let Some(other) = matched else {
                     return false;
                 };
-                stack.push((View::Stored(items.0, member.value), other));
+                stack.push((View::Stored(items.0, name + 1), other));
             }
-        } else if let Some(n) = left.as_number() {
-            let other = right.as_number().unwrap().0;
+        } else if kind == JsonType::Number {
+            let (n, other) = (left.as_number().unwrap(), right.as_number().unwrap().0);
             // Parsing both tokens as i64 proves exact representability, including
             // -0 == 0. Mixed, fractional, exponent and wider pairs use Decimal.
             let same = match (n.0.parse::<i64>(), other.parse::<i64>()) {
@@ -882,19 +991,16 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
             if !same {
                 return false;
             }
-        } else if left.json_type() == JsonType::String {
+        } else if kind == JsonType::String {
             fn scalar(value: View<'_>) -> Option<&str> {
                 match value {
                     View::Stored(arena, id) => arena.string(id),
                     View::Text(text) => Some(text),
                 }
             }
-            fn unpaired(value: View<'_>) -> Option<&[u16]> {
+            fn unpaired(value: View<'_>) -> Option<crate::raw::Utf16<'_>> {
                 match value {
-                    View::Stored(arena, id) => match &arena.nodes[id].kind {
-                        Kind::String { unpaired, .. } => unpaired.as_deref(),
-                        _ => None,
-                    },
+                    View::Stored(arena, id) => arena.unpaired_units(id),
                     View::Text(_) => None,
                 }
             }
@@ -908,7 +1014,11 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
                     }
                 }
                 _ => {
-                    if unpaired(left) != unpaired(right) {
+                    let same = match (unpaired(left), unpaired(right)) {
+                        (Some(left), Some(right)) => left.eq(right),
+                        (left, right) => left.is_none() && right.is_none(),
+                    };
+                    if !same {
                         return false;
                     }
                 }
@@ -992,10 +1102,14 @@ pub fn standalone_list(values: &[crate::JsonRef<'_>]) -> Vec<crate::JsonValue> {
 pub fn duplicate_nodes(
     value: &crate::JsonValue,
 ) -> impl ExactSizeIterator<Item = crate::JsonRef<'_>> {
-    value.owner.duplicates.iter().map(|(id, _)| crate::JsonRef {
-        owner: &value.owner,
-        id: *id,
-    })
+    value
+        .owner
+        .duplicates
+        .iter()
+        .map(|&(id, _)| crate::JsonRef {
+            owner: &value.owner,
+            id: id as usize,
+        })
 }
 
 /// Borrow each offending repeated member-name token in parse order. Distinct
@@ -1008,9 +1122,9 @@ pub fn duplicate_member_names(
         .owner
         .duplicates
         .iter()
-        .map(|(_, key)| crate::JsonRef {
+        .map(|&(_, key)| crate::JsonRef {
             owner: &value.owner,
-            id: *key,
+            id: key as usize,
         })
 }
 
@@ -1051,7 +1165,7 @@ pub fn depth_at_most(value: &crate::JsonValue, limit: usize) -> bool {
             }
             open -= 1;
         }
-        if matches!(node.kind, Kind::Array(_) | Kind::Object(_)) {
+        if node.is_container() {
             if open == limit {
                 return false;
             }
@@ -1077,12 +1191,11 @@ pub fn depth(value: &crate::JsonValue) -> usize {
     let mut depths = vec![0; end - value.id];
     let mut maximum = 0;
     for (offset, node) in value.owner.nodes[value.id..end].iter().enumerate() {
-        let own = usize::from(matches!(node.kind, Kind::Array(_) | Kind::Object(_)));
-        let parent = if offset == 0 {
+        let own = usize::from(node.is_container());
+        let parent = if offset == 0 || node.parent == NO_PARENT {
             0
         } else {
-            node.parent
-                .map_or(0, |(parent, _)| depths[parent - value.id])
+            depths[node.parent as usize - value.id]
         };
         depths[offset] = parent + own;
         maximum = maximum.max(depths[offset]);
@@ -1103,6 +1216,38 @@ pub fn byte_range(value: crate::JsonRef<'_>) -> std::ops::Range<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn measured_location_sizes_agree_with_each_walk() {
+        // Escaped and multibyte names, multi-digit indices, nesting, and names
+        // with unpaired units, alone and inside scalar and unpaired paths.
+        let deep = format!("{}0{}", r#"{"~/":["#.repeat(40), "]}".repeat(40));
+        let wide = format!("[{}]", vec!["{\"é\":true}"; 120].join(","));
+        let sources = [
+            r#"{"":{"a/b~c":[0,1,2,3,4,5,6,7,8,9,{"é":[[true]],"~~//":null}]},"x":{"\ud800":{"y":[1,{"\udc00~":2}]},"ok":"A"}}"#.to_owned(),
+            r#"[[[[["leaf"]]]],{"é😀":{"k":[null]}}]"#.to_owned(),
+            deep,
+            wide,
+            "7".to_owned(),
+        ];
+        for source in sources {
+            let value = crate::JsonValue::parse(&source).unwrap();
+            let sizes = LocationPointerSizes::new(value.view(), 4096);
+            for id in 0..value.owner.nodes.len() {
+                let at = crate::JsonRef {
+                    owner: &value.owner,
+                    id,
+                };
+                for limit in [0, 1, 2, 3, 5, 8, 13, 40, 120, 250, 1000, 4095] {
+                    assert_eq!(
+                        sizes.size(at, limit),
+                        location_pointer_size(at, limit),
+                        "{source} node {id} limit {limit}"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn decoded_string_size_counts_owned_subtree_strings_without_ancestors_or_siblings() {
         let value = crate::JsonValue::parse(
@@ -1226,7 +1371,7 @@ mod tests {
                 let expected: Vec<_> = arena
                     .unpaired
                     .iter()
-                    .copied()
+                    .map(|&inner| inner as usize)
                     .filter(|&inner| {
                         let inner = &arena.nodes[inner].span;
                         span.start <= inner.start && inner.end <= span.end

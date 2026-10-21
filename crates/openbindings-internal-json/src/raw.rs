@@ -1,4 +1,12 @@
 //! Private flat exact-JSON storage; iterative parsing and destruction.
+//!
+//! Every node is one fixed-size record. Containers name a range of the shared
+//! `items` list (array elements, or object member-name tokens, each member's
+//! value being the node after its name), escaped scalar strings name a range
+//! of one shared decoded buffer, a string holding an unpaired UTF-16 unit is
+//! read from its source token, and parsing keeps no per-level frame: the open
+//! container's parent link is the way back. Ids are `u32` in storage because
+//! admission caps the node count at `u32::MAX`.
 use std::{
     collections::{HashMap, hash_map::RandomState},
     hash::{BuildHasher, Hasher},
@@ -9,30 +17,41 @@ use std::{
 pub type Id = usize;
 
 const INDEX_MIN_MEMBERS: usize = 16;
+/// The pending items a parse first makes room for, when its first container
+/// opens: a small document's containers then fit without growing the list, and
+/// a document without containers allocates none.
+const PENDING_START: usize = 64;
+/// The parent link of a root node.
+pub const NO_PARENT: u32 = u32::MAX;
 
-// One slot per distinct decoded key. Equal repeats reuse their first slot;
-// colliding distinct keys keep separate slots, in original member order.
-// Inline singletons avoid one heap allocation per ordinary key.
-#[derive(Debug)]
+// One slot per distinct decoded key: the member position of its first
+// occurrence. Equal repeats reuse that slot; distinct keys whose hashes collide
+// share a list, in original member order.
+#[derive(Debug, Clone, Copy)]
 enum KeyBucket {
-    One(usize),
-    Many(Vec<usize>),
+    One(u32),
+    Many(u32),
 }
-impl KeyBucket {
-    fn members(&self) -> &[usize] {
-        match self {
-            Self::One(index) => std::slice::from_ref(index),
-            Self::Many(indices) => indices,
+#[derive(Debug, Default)]
+struct MemberIndex {
+    slots: HashMap<u64, KeyBucket>,
+    collisions: Vec<Vec<u32>>,
+}
+impl MemberIndex {
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            slots: HashMap::with_capacity(capacity),
+            collisions: Vec::new(),
         }
     }
-    fn push(&mut self, index: usize) {
-        match self {
-            Self::One(first) => *self = Self::Many(vec![*first, index]),
-            Self::Many(indices) => indices.push(index),
+    fn members(&self, hash: u64) -> &[u32] {
+        match self.slots.get(&hash) {
+            None => &[],
+            Some(KeyBucket::One(slot)) => std::slice::from_ref(slot),
+            Some(&KeyBucket::Many(list)) => &self.collisions[list as usize],
         }
     }
 }
-type MemberIndex = HashMap<u64, KeyBucket>;
 
 #[derive(Debug, Default)]
 struct KeyHasher {
@@ -53,22 +72,44 @@ impl KeyHasher {
         hasher.finish()
     }
 }
-#[derive(Debug, Clone)]
+/// How a string token's decoded value is held: an index into the decoded
+/// strings, or one of two marks. Every node but a container root can be an
+/// escaped string, so an index stays below both marks. A plain number keeps
+/// [`Kind`] a 12-byte record whose tag is read directly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Text(u32);
+impl Text {
+    /// No escapes: the value is the source between the quotes.
+    pub const SOURCE: Self = Self(u32::MAX);
+    /// Escapes that leave an unpaired UTF-16 unit; the units are read from
+    /// the token whenever asked for.
+    pub const UNPAIRED: Self = Self(u32::MAX - 1);
+    /// Escaped scalar text: its index into the decoded strings.
+    pub fn decoded(self) -> Option<u32> {
+        (self.0 < u32::MAX - 1).then_some(self.0)
+    }
+}
+#[derive(Debug, Clone, Copy)]
+#[repr(u8)]
 pub enum Kind {
     Null,
     Bool(bool),
     Number,
+    /// `name` marks an object member-name token.
     String {
-        decoded: Option<Box<str>>,
-        unpaired: Option<Box<[u16]>>,
+        text: Text,
+        name: bool,
     },
-    Array(Vec<Id>),
-    Object(Vec<Member>),
-}
-#[derive(Debug, Clone, Copy)]
-pub struct Member {
-    pub key: Id,
-    pub value: Id,
+    /// `len` items starting at `first` in [`Arena::items`].
+    Array {
+        first: u32,
+        len: u32,
+    },
+    /// `len` member names starting at `first` in [`Arena::items`].
+    Object {
+        first: u32,
+        len: u32,
+    },
 }
 #[derive(Debug, Clone, Copy)]
 pub enum Edge {
@@ -78,8 +119,14 @@ pub enum Edge {
 #[derive(Debug, Clone)]
 pub struct Node {
     pub kind: Kind,
+    /// The containing array or object, or [`NO_PARENT`] for the root.
+    pub parent: u32,
     pub span: Range<usize>,
-    pub parent: Option<(Id, Edge)>,
+}
+impl Node {
+    pub fn is_container(&self) -> bool {
+        matches!(self.kind, Kind::Array { .. } | Kind::Object { .. })
+    }
 }
 #[derive(Debug, Clone)]
 pub struct Problem {
@@ -157,9 +204,11 @@ pub struct Arena {
     _lifetime: Lifetime,
     source: Arc<str>,
     positions: Mutex<PositionIndex>,
-    // Completed objects publish the parser's existing buckets. The immutable
-    // index is shared by retained views and threads, without lookup-time locks.
-    member_indexes: HashMap<Id, MemberIndex>,
+    // Completed objects of at least INDEX_MIN_MEMBERS members publish an
+    // index built once, at their exact size, when they close; listed by object
+    // once parsing ends. The immutable index is shared by retained views and
+    // threads, without lookup-time locks.
+    member_indexes: Vec<(u32, MemberIndex)>,
     key_hasher: KeyHasher,
     #[cfg(test)]
     key_comparisons: std::sync::atomic::AtomicUsize,
@@ -172,18 +221,26 @@ pub struct Arena {
     #[cfg(test)]
     pub unpaired_query_probes: std::sync::atomic::AtomicUsize,
     pub nodes: Vec<Node>,
-    pub duplicates: Vec<(Id, Id)>,
-    pub unpaired: Vec<Id>,
+    /// Every container's items, each container's contiguous and in source order.
+    items: Vec<u32>,
+    /// Escaped scalar strings' decoded text, back to back, and where each ends.
+    decoded: String,
+    decoded_ends: Vec<usize>,
+    /// (object, repeated member-name token) in source order of the tokens.
+    pub duplicates: Vec<(u32, u32)>,
+    /// String tokens holding an unpaired UTF-16 unit, in source order.
+    pub unpaired: Vec<u32>,
 }
 impl Arena {
-    pub fn parse(bytes: &[u8], limits: Limits) -> Result<Self, Problem> {
+    /// Parse into a shared owner, written where it will stay.
+    pub fn parse(bytes: &[u8], limits: Limits) -> Result<Arc<Self>, Problem> {
         Self::parse_with_hasher(bytes, limits, KeyHasher::default())
     }
     fn parse_with_hasher(
         bytes: &[u8],
         limits: Limits,
         key_hasher: KeyHasher,
-    ) -> Result<Self, Problem> {
+    ) -> Result<Arc<Self>, Problem> {
         if bytes.starts_with(&[0xef, 0xbb, 0xbf]) {
             return Err(Problem {
                 code: "bom",
@@ -194,48 +251,52 @@ impl Arena {
             code: "utf8",
             offset: e.valid_up_to(),
         })?;
+        let mut owner = Arc::new(Self {
+            _lifetime: Lifetime::new(),
+            source: Arc::from(text),
+            positions: Mutex::default(),
+            member_indexes: Vec::new(),
+            key_hasher,
+            #[cfg(test)]
+            key_comparisons: std::sync::atomic::AtomicUsize::new(0),
+            #[cfg(test)]
+            member_probes: std::sync::atomic::AtomicUsize::new(0),
+            #[cfg(test)]
+            position_scanned: std::sync::atomic::AtomicUsize::new(0),
+            #[cfg(test)]
+            duplicate_query_probes: std::sync::atomic::AtomicUsize::new(0),
+            #[cfg(test)]
+            unpaired_query_probes: std::sync::atomic::AtomicUsize::new(0),
+            nodes: Vec::new(),
+            items: Vec::new(),
+            decoded: String::new(),
+            decoded_ends: Vec::new(),
+            duplicates: Vec::new(),
+            unpaired: Vec::new(),
+        });
         let mut parser = Parser {
-            out: Self {
-                _lifetime: Lifetime::new(),
-                source: Arc::from(text),
-                positions: Mutex::default(),
-                member_indexes: HashMap::new(),
-                key_hasher,
-                #[cfg(test)]
-                key_comparisons: std::sync::atomic::AtomicUsize::new(0),
-                #[cfg(test)]
-                member_probes: std::sync::atomic::AtomicUsize::new(0),
-                #[cfg(test)]
-                position_scanned: std::sync::atomic::AtomicUsize::new(0),
-                #[cfg(test)]
-                duplicate_query_probes: std::sync::atomic::AtomicUsize::new(0),
-                #[cfg(test)]
-                unpaired_query_probes: std::sync::atomic::AtomicUsize::new(0),
-                nodes: Vec::new(),
-                duplicates: Vec::new(),
-                unpaired: Vec::new(),
-            },
+            out: Arc::get_mut(&mut owner).expect("a new owner"),
             pos: 0,
-            stack: Vec::new(),
+            open: NO_PARENT,
+            state: 0,
+            depth: 0,
+            pending: Vec::new(),
+            distinct: Vec::new(),
             limits,
         };
-        parser.value(None)?;
-        while let Some(frame) = parser.stack.last() {
-            let id = frame.id;
-            let state = frame.state;
-            let object = matches!(parser.out.nodes[id].kind, Kind::Object(_));
+        parser.value(NO_PARENT, false)?;
+        // `open` is the innermost unclosed container; its state is 0 just
+        // after it opens, 1 after an item and 2 after a separating comma.
+        while parser.open != NO_PARENT {
+            let id = parser.open as usize;
+            let state = parser.state;
+            let object = matches!(parser.out.nodes[id].kind, Kind::Object { .. });
             parser.space();
             let next = parser.peek();
             let close = if object { b'}' } else { b']' };
             if next == Some(close) && state != 2 {
                 parser.pos += 1;
-                parser.out.nodes[id].span.end = parser.pos;
-                let frame = parser.stack.pop().unwrap();
-                if let Kind::Object(members) = &parser.out.nodes[id].kind
-                    && members.len() >= INDEX_MIN_MEMBERS
-                {
-                    parser.out.member_indexes.insert(id, frame.keys);
-                }
+                parser.close(id);
                 continue;
             }
             if state == 1 {
@@ -243,73 +304,40 @@ impl Arena {
                     return Err(parser.error("comma-or-close"));
                 }
                 parser.pos += 1;
-                parser.stack.last_mut().unwrap().state = 2;
+                parser.state = 2;
                 continue;
             }
             if object {
                 if next != Some(b'"') {
                     return Err(parser.error("object-key"));
                 }
-                let key = parser.string(None)?;
-                let hash = parser.out.hash_key(key);
-                let Kind::Object(members) = &parser.out.nodes[id].kind else {
-                    unreachable!()
-                };
-                // compare only distinct names sharing this keyed hash.
-                // Expected work is linear in decoded key units plus matching
-                // repeats. A bucket of b adversarially colliding distinct names
-                // still takes up to b exact comparisons per insertion/lookup,
-                // each bounded by the compared key lengths. RandomState makes
-                // deliberate collisions difficult, not impossible. Input byte
-                // and node limits bound those lengths and b (at most half the
-                // admitted nodes for member-name/value pairs), not constant work.
-                match parser.stack.last_mut().unwrap().keys.entry(hash) {
-                    std::collections::hash_map::Entry::Vacant(entry) => {
-                        entry.insert(KeyBucket::One(members.len()));
-                    }
-                    std::collections::hash_map::Entry::Occupied(mut entry) => {
-                        if entry
-                            .get()
-                            .members()
-                            .iter()
-                            .any(|&index| parser.out.equal_keys(members[index].key, key))
-                        {
-                            parser.out.duplicates.push((id, key));
-                        } else {
-                            entry.get_mut().push(members.len());
-                        }
-                    }
-                }
-                parser.out.nodes[key].parent = Some((id, Edge::Key(key)));
+                let key = parser.string(id as u32, true)?;
+                parser.pending.push(key);
                 parser.space();
                 if parser.peek() != Some(b':') {
                     return Err(parser.error("colon"));
                 }
                 parser.pos += 1;
-                parser.stack.last_mut().unwrap().state = 1;
-                let value = parser.value(Some((id, Edge::Key(key))))?;
-                let Kind::Object(members) = &mut parser.out.nodes[id].kind else {
-                    unreachable!()
-                };
-                members.push(Member { key, value });
+                parser.state = 1;
+                parser.value(id as u32, false)?;
             } else {
-                let Kind::Array(children) = &parser.out.nodes[id].kind else {
-                    unreachable!()
-                };
-                let index = children.len();
-                parser.stack.last_mut().unwrap().state = 1;
-                let value = parser.value(Some((id, Edge::Index(index))))?;
-                let Kind::Array(children) = &mut parser.out.nodes[id].kind else {
-                    unreachable!()
-                };
-                children.push(value);
+                parser.state = 1;
+                parser.value(id as u32, true)?;
             }
         }
         parser.space();
         if parser.pos != parser.out.source.len() {
             return Err(parser.error("trailing-token"));
         }
-        Ok(parser.out)
+        // Objects record their repeated names and indexes as they close,
+        // innermost first; token ids follow the source, so this restores
+        // source order.
+        parser.out.duplicates.sort_unstable_by_key(|&(_, key)| key);
+        parser
+            .out
+            .member_indexes
+            .sort_unstable_by_key(|&(object, _)| object);
+        Ok(owner)
     }
     fn equal_keys(&self, left: Id, right: Id) -> bool {
         #[cfg(test)]
@@ -317,18 +345,15 @@ impl Arena {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         match (self.string(left), self.string(right)) {
             (Some(a), Some(b)) => a == b,
-            _ => self.units(left) == self.units(right),
+            (None, None) => self.utf16(left).eq(self.utf16(right)),
+            _ => false,
         }
     }
     fn hash_key(&self, id: Id) -> u64 {
         if let Some(s) = self.string(id) {
             self.key_hasher.hash(s.encode_utf16())
-        } else if let Kind::String {
-            unpaired: Some(units),
-            ..
-        } = &self.nodes[id].kind
-        {
-            self.key_hasher.hash(units.iter().copied())
+        } else if let Some(units) = self.unpaired_units(id) {
+            self.key_hasher.hash(units)
         } else {
             unreachable!("only string tokens are member names")
         }
@@ -339,46 +364,153 @@ impl Arena {
     pub fn raw(&self, id: Id) -> &str {
         &self.source[self.nodes[id].span.clone()]
     }
+    /// An array's elements, or `None` for any other node.
+    #[inline]
+    pub fn elements(&self, id: Id) -> Option<&[u32]> {
+        match self.nodes[id].kind {
+            Kind::Array { first, len } => {
+                Some(&self.items[first as usize..first as usize + len as usize])
+            }
+            _ => None,
+        }
+    }
+    /// An object's member-name tokens, or `None` for any other node. Each
+    /// member's value is the node after its name.
+    #[inline]
+    pub fn member_names(&self, id: Id) -> Option<&[u32]> {
+        match self.nodes[id].kind {
+            Kind::Object { first, len } => {
+                Some(&self.items[first as usize..first as usize + len as usize])
+            }
+            _ => None,
+        }
+    }
+    /// The parent container and the edge from it, or `None` for a root.
+    pub fn edge(&self, id: Id) -> Option<(Id, Edge)> {
+        let node = &self.nodes[id];
+        if node.parent == NO_PARENT {
+            return None;
+        }
+        let parent = node.parent as usize;
+        let edge = match self.nodes[parent].kind {
+            // A member's value is the node after its name.
+            Kind::Object { .. } => Edge::Key(match node.kind {
+                Kind::String { name: true, .. } => id,
+                _ => id - 1,
+            }),
+            Kind::Array { first, len } => Edge::Index(
+                self.items[first as usize..first as usize + len as usize]
+                    .binary_search(&(id as u32))
+                    .expect("an element of its parent"),
+            ),
+            _ => unreachable!("a parent is a container"),
+        };
+        Some((parent, edge))
+    }
     pub fn has_duplicate_names(&self, id: Id) -> bool {
         let node = &self.nodes[id];
-        if !matches!(node.kind, Kind::Array(_) | Kind::Object(_)) {
+        if !node.is_container() {
             return false;
         }
-        // Parsing records duplicate key tokens in source order. Object IDs are
-        // not ordered here: a nested duplicate can precede its parent's next
-        // duplicate. A key inside a container belongs to it or a descendant.
+        // Duplicate key tokens are in source order. Object IDs are not ordered
+        // here: a nested duplicate can precede its parent's next duplicate. A
+        // key inside a container belongs to it or a descendant.
         let first = self.duplicates.partition_point(|&(_, key)| {
             #[cfg(test)]
             self.duplicate_query_probes
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            self.nodes[key].span.start < node.span.start
+            self.nodes[key as usize].span.start < node.span.start
         });
         self.duplicates
             .get(first)
-            .is_some_and(|&(_, key)| self.nodes[key].span.start < node.span.end)
+            .is_some_and(|&(_, key)| self.nodes[key as usize].span.start < node.span.end)
     }
+    // Append source text to the decoded buffer.
+    fn decode(&mut self, range: Range<usize>) {
+        self.reserve_decoded(range.len());
+        let Self {
+            decoded, source, ..
+        } = self;
+        decoded.push_str(&source[range]);
+    }
+    // Grow the decoded buffer geometrically, but never past the source's
+    // length, which bounds all decoded text.
+    fn reserve_decoded(&mut self, additional: usize) {
+        let (len, capacity) = (self.decoded.len(), self.decoded.capacity());
+        if capacity - len >= additional {
+            return;
+        }
+        let target = (len + additional).max(capacity.saturating_mul(2).min(self.source.len()));
+        self.decoded.reserve_exact(target - len);
+    }
+    fn decoded_text(&self, index: u32) -> &str {
+        let index = index as usize;
+        let start = if index == 0 {
+            0
+        } else {
+            self.decoded_ends[index - 1]
+        };
+        &self.decoded[start..self.decoded_ends[index]]
+    }
+    /// A string's scalar text, or `None` for a non-string or one holding an
+    /// unpaired unit.
+    #[inline]
     pub fn string(&self, id: Id) -> Option<&str> {
-        match &self.nodes[id].kind {
-            Kind::String {
-                decoded: Some(s), ..
-            } => Some(s),
-            Kind::String {
-                decoded: None,
-                unpaired: None,
-            } => Some(&self.source[self.nodes[id].span.start + 1..self.nodes[id].span.end - 1]),
+        let node = &self.nodes[id];
+        match node.kind {
+            Kind::String { text, .. } => match text.decoded() {
+                Some(index) => Some(self.decoded_text(index)),
+                None if text == Text::SOURCE => {
+                    Some(&self.source[node.span.start + 1..node.span.end - 1])
+                }
+                None => None,
+            },
             _ => None,
         }
     }
-    pub fn units(&self, id: Id) -> Option<Vec<u16>> {
-        match &self.nodes[id].kind {
+    /// The units of a string holding an unpaired unit, or `None` otherwise.
+    pub fn unpaired_units(&self, id: Id) -> Option<Utf16<'_>> {
+        match self.nodes[id].kind {
             Kind::String {
-                unpaired: Some(s), ..
-            } => Some(s.to_vec()),
-            _ => self.string(id).map(|s| s.encode_utf16().collect()),
+                text: Text::UNPAIRED,
+                ..
+            } => Some(self.utf16(id)),
+            _ => None,
+        }
+    }
+    /// A string token's UTF-16 units, decoded from its source.
+    fn utf16(&self, id: Id) -> Utf16<'_> {
+        let span = &self.nodes[id].span;
+        Utf16 {
+            body: &self.source[span.start + 1..span.end - 1],
+            at: 0,
+            low: None,
+        }
+    }
+    /// Separately held decoded bytes of an escaped scalar string; zero for one
+    /// that borrows its source.
+    pub fn decoded_len(&self, id: Id) -> usize {
+        match self.nodes[id].kind {
+            Kind::String { text, .. } => text.decoded().map_or(0, |i| self.decoded_text(i).len()),
+            _ => 0,
+        }
+    }
+    pub fn units(&self, id: Id) -> Option<Vec<u16>> {
+        match self.unpaired_units(id) {
+            Some(units) => Some(units.collect()),
+            None => self.string(id).map(|s| s.encode_utf16().collect()),
         }
     }
     pub fn get(&self, id: Id, key: &str) -> Option<Id> {
         self.get_with_probe(id, key, || true)
+    }
+    fn member_index(&self, object: Id) -> Option<&MemberIndex> {
+        let object = object as u32;
+        let at = self
+            .member_indexes
+            .binary_search_by_key(&object, |&(id, _)| id)
+            .ok()?;
+        Some(&self.member_indexes[at].1)
     }
     pub(crate) fn get_with_probe(
         &self,
@@ -386,19 +518,17 @@ impl Arena {
         key: &str,
         mut probe: impl FnMut() -> bool,
     ) -> Option<Id> {
-        let Kind::Object(members) = &self.nodes[id].kind else {
-            return None;
-        };
-        let matches = |member: &Member, admitted: bool| {
+        let names = self.member_names(id)?;
+        let matches = |name: u32, admitted: bool| {
             if !admitted {
                 return None;
             }
             #[cfg(test)]
             self.member_probes
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            Some(self.string(member.key) == Some(key))
+            Some(self.string(name as usize) == Some(key))
         };
-        if let Some(index) = self.member_indexes.get(&id) {
+        if let Some(index) = self.member_index(id) {
             // hash the token once, then inspect only its exact-name bucket.
             // Charge the table lookup as well as each collision candidate when
             // called by the evaluator. Small objects scan at most 15 members.
@@ -406,15 +536,16 @@ impl Arena {
                 return None;
             }
             let hash = self.key_hasher.hash(key.encode_utf16());
-            for &slot in index.get(&hash)?.members() {
-                if matches(&members[slot], probe())? {
-                    return Some(members[slot].value);
+            for &slot in index.members(hash) {
+                let name = names[slot as usize];
+                if matches(name, probe())? {
+                    return Some(name as usize + 1);
                 }
             }
         } else {
-            for member in members {
-                if matches(member, probe())? {
-                    return Some(member.value);
+            for &name in names {
+                if matches(name, probe())? {
+                    return Some(name as usize + 1);
                 }
             }
         }
@@ -451,16 +582,16 @@ impl Arena {
             } else {
                 segment
             };
-            current = match &self.nodes[current].kind {
-                Kind::Object(_) => self.get(current, name)?,
-                Kind::Array(values) => {
+            current = match self.nodes[current].kind {
+                Kind::Object { .. } => self.get(current, name)?,
+                Kind::Array { .. } => {
                     if name.len() > 1 && name.starts_with('0') {
                         return None;
                     }
                     if name.is_empty() || !name.bytes().all(|b| b.is_ascii_digit()) {
                         return None;
                     }
-                    *values.get(name.parse::<usize>().ok()?)?
+                    *self.elements(current)?.get(name.parse::<usize>().ok()?)? as usize
                 }
                 _ => return None,
             };
@@ -492,10 +623,10 @@ impl Arena {
         true
     }
     // The edges from `id` up to its ancestor `root`, last segment first.
-    fn edges(&self, mut current: Id, root: Id) -> impl Iterator<Item = Edge> + '_ {
+    pub(crate) fn edges(&self, mut current: Id, root: Id) -> impl Iterator<Item = Edge> + '_ {
         std::iter::from_fn(move || {
             (current != root).then(|| {
-                let (parent, edge) = self.nodes[current].parent.expect("an ancestor of the node");
+                let (parent, edge) = self.edge(current).expect("an ancestor of the node");
                 current = parent;
                 edge
             })
@@ -567,16 +698,13 @@ impl Arena {
             return crate::Pointer::escaped(text);
         }
         // An ancestor's name holds an unpaired unit: write escaped units.
-        let mut segments = Vec::new();
-        let mut current = id;
-        while current != root {
-            let (parent, edge) = self.nodes[current].parent.expect("an ancestor of the node");
-            segments.push(match edge {
+        let segments: Vec<Vec<u16>> = self
+            .edges(id, root)
+            .map(|edge| match edge {
                 Edge::Index(index) => index.to_string().encode_utf16().collect(),
                 Edge::Key(key) => self.units(key).expect("member name is a string"),
-            });
-            current = parent;
-        }
+            })
+            .collect();
         let escaped: usize = segments
             .iter()
             .map(|segment| {
@@ -660,18 +788,21 @@ impl Arena {
         at
     }
 }
-struct Frame {
-    id: Id,
-    state: u8,
-    keys: MemberIndex,
-}
-struct Parser {
-    out: Arena,
+struct Parser<'a> {
+    out: &'a mut Arena,
     pos: usize,
-    stack: Vec<Frame>,
+    /// The innermost unclosed container, or `NO_PARENT`.
+    open: u32,
+    state: u8,
+    depth: usize,
+    /// Items of the unclosed containers, outermost first. While open, a
+    /// container's `first` is where its items begin here.
+    pending: Vec<u32>,
+    /// A small object's distinct names so far, with their hashes.
+    distinct: Vec<(u64, u32)>,
     limits: Limits,
 }
-impl Parser {
+impl Parser<'_> {
     fn error(&self, code: &'static str) -> Problem {
         Problem {
             code,
@@ -689,49 +820,137 @@ impl Parser {
             self.pos += 1;
         }
     }
-    fn push(
-        &mut self,
-        kind: Kind,
-        start: usize,
-        parent: Option<(Id, Edge)>,
-    ) -> Result<Id, Problem> {
+    fn push(&mut self, kind: Kind, start: usize, parent: u32) -> Result<u32, Problem> {
         if self.out.nodes.len() >= self.limits.max_nodes {
             return Err(self.error("node-limit"));
         }
-        let id = self.out.nodes.len();
+        let id = self.out.nodes.len() as u32;
         self.out.nodes.push(Node {
             kind,
-            span: start..self.pos,
             parent,
+            span: start..self.pos,
         });
         Ok(id)
     }
-    fn value(&mut self, parent: Option<(Id, Edge)>) -> Result<Id, Problem> {
+    /// Close the open container whose final byte was just consumed: move its
+    /// items to their final place, record repeated member names and index a
+    /// large object.
+    fn close(&mut self, id: Id) {
+        let node = &mut self.out.nodes[id];
+        node.span.end = self.pos;
+        let parent = node.parent;
+        let object = matches!(node.kind, Kind::Object { .. });
+        let (Kind::Array { first, len } | Kind::Object { first, len }) = &mut node.kind else {
+            unreachable!("an open node is a container")
+        };
+        let start = self.out.items.len();
+        let pending = *first as usize;
+        let count = self.pending.len() - pending;
+        *first = u32::try_from(start).expect("items are bounded by the node count");
+        *len = count as u32;
+        self.out.items.extend_from_slice(&self.pending[pending..]);
+        self.pending.truncate(pending);
+        if object {
+            self.members(id, start, count);
+        }
+        self.open = parent;
+        self.state = 1;
+        self.depth -= 1;
+    }
+    // Compare only distinct names sharing a keyed hash, in member order.
+    // Expected work is linear in decoded key units plus matching repeats. A
+    // bucket of b adversarially colliding distinct names still takes up to b
+    // exact comparisons per insertion/lookup, each bounded by the compared key
+    // lengths. RandomState makes deliberate collisions difficult, not
+    // impossible. Input byte and node limits bound those lengths and b (at
+    // most half the admitted nodes for member-name/value pairs), not constant
+    // work.
+    fn members(&mut self, object: Id, start: usize, count: usize) {
+        let out = &mut *self.out;
+        let names = &out.items[start..start + count];
+        if count < INDEX_MIN_MEMBERS {
+            self.distinct.clear();
+            for &name in names {
+                let hash = out.hash_key(name as usize);
+                let repeated = self.distinct.iter().any(|&(seen, first)| {
+                    seen == hash && out.equal_keys(first as usize, name as usize)
+                });
+                if repeated {
+                    out.duplicates.push((object as u32, name));
+                } else {
+                    self.distinct.push((hash, name));
+                }
+            }
+            return;
+        }
+        let mut index = MemberIndex::with_capacity(count);
+        for (slot, &name) in names.iter().enumerate() {
+            let slot = slot as u32;
+            let hash = out.hash_key(name as usize);
+            let Some(&bucket) = index.slots.get(&hash) else {
+                index.slots.insert(hash, KeyBucket::One(slot));
+                continue;
+            };
+            let first;
+            let candidates = match bucket {
+                KeyBucket::One(slot) => {
+                    first = slot;
+                    std::slice::from_ref(&first)
+                }
+                KeyBucket::Many(list) => index.collisions[list as usize].as_slice(),
+            };
+            if candidates
+                .iter()
+                .any(|&prior| out.equal_keys(names[prior as usize] as usize, name as usize))
+            {
+                out.duplicates.push((object as u32, name));
+                continue;
+            }
+            match bucket {
+                KeyBucket::One(first) => {
+                    let list = u32::try_from(index.collisions.len())
+                        .expect("collisions are bounded by the node count");
+                    index.collisions.push(vec![first, slot]);
+                    index.slots.insert(hash, KeyBucket::Many(list));
+                }
+                KeyBucket::Many(list) => index.collisions[list as usize].push(slot),
+            }
+        }
+        out.member_indexes.push((object as u32, index));
+    }
+    /// Parse one value; an `element` is listed as an item of its array parent.
+    /// A container is left open, its items to follow.
+    fn value(&mut self, parent: u32, element: bool) -> Result<(), Problem> {
         self.space();
         let start = self.pos;
-        match self.peek() {
-            Some(b'{') | Some(b'[') => {
-                if self.stack.len() >= self.limits.max_depth {
+        let id = match self.peek() {
+            Some(open @ (b'{' | b'[')) => {
+                if self.depth >= self.limits.max_depth {
                     return Err(self.error("depth-limit"));
                 }
-                let kind = if self.peek() == Some(b'{') {
-                    Kind::Object(Vec::new())
+                if self.pending.capacity() == 0 {
+                    self.pending.reserve(PENDING_START);
+                }
+                // While open, `first` is where its items begin in `pending`,
+                // after its own entry there as an element.
+                let first = u32::try_from(self.pending.len() + usize::from(element))
+                    .expect("pending items are bounded by the node count");
+                let kind = if open == b'{' {
+                    Kind::Object { first, len: 0 }
                 } else {
-                    Kind::Array(Vec::new())
+                    Kind::Array { first, len: 0 }
                 };
                 self.pos += 1;
                 let id = self.push(kind, start, parent)?;
-                self.stack.push(Frame {
-                    id,
-                    state: 0,
-                    keys: HashMap::new(),
-                });
-                Ok(id)
+                self.open = id;
+                self.state = 0;
+                self.depth += 1;
+                id
             }
-            Some(b'"') => self.string(parent),
-            Some(b'n') => self.literal("null", Kind::Null, parent),
-            Some(b't') => self.literal("true", Kind::Bool(true), parent),
-            Some(b'f') => self.literal("false", Kind::Bool(false), parent),
+            Some(b'"') => self.string(parent, false)?,
+            Some(b'n') => self.literal("null", Kind::Null, parent)?,
+            Some(b't') => self.literal("true", Kind::Bool(true), parent)?,
+            Some(b'f') => self.literal("false", Kind::Bool(false), parent)?,
             Some(b'-' | b'0'..=b'9') => {
                 if self.peek() == Some(b'-') {
                     self.pos += 1;
@@ -758,22 +977,21 @@ impl Parser {
                     }
                     self.digits();
                 }
-                self.push(Kind::Number, start, parent)
+                self.push(Kind::Number, start, parent)?
             }
-            _ => Err(self.error("value")),
+            _ => return Err(self.error("value")),
+        };
+        if element {
+            self.pending.push(id);
         }
+        Ok(())
     }
     fn digits(&mut self) {
         while self.peek().is_some_and(|c| c.is_ascii_digit()) {
             self.pos += 1;
         }
     }
-    fn literal(
-        &mut self,
-        text: &str,
-        kind: Kind,
-        parent: Option<(Id, Edge)>,
-    ) -> Result<Id, Problem> {
+    fn literal(&mut self, text: &str, kind: Kind, parent: u32) -> Result<u32, Problem> {
         let start = self.pos;
         if !self.out.source[self.pos..].starts_with(text) {
             return Err(self.error("literal"));
@@ -781,83 +999,193 @@ impl Parser {
         self.pos += text.len();
         self.push(kind, start, parent)
     }
-    fn string(&mut self, parent: Option<(Id, Edge)>) -> Result<Id, Problem> {
+    // Advance to the next quote, backslash or control byte, or the end.
+    fn plain(&mut self) {
+        let rest = &self.out.source.as_bytes()[self.pos..];
+        self.pos += rest
+            .iter()
+            .position(|&b| b == b'"' || b == b'\\' || b < 0x20)
+            .unwrap_or(rest.len());
+    }
+    fn hex4(&mut self) -> Result<u16, Problem> {
+        let mut n = 0u16;
+        for _ in 0..4 {
+            let Some(c) = self.peek() else {
+                return Err(self.error("unicode-escape"));
+            };
+            let value = match c {
+                b'0'..=b'9' => c - b'0',
+                b'a'..=b'f' => c - b'a' + 10,
+                b'A'..=b'F' => c - b'A' + 10,
+                _ => return Err(self.error("unicode-escape")),
+            };
+            n = (n << 4) | u16::from(value);
+            self.pos += 1;
+        }
+        Ok(n)
+    }
+    // A `\u` escape of a low surrogate starting at `at`, without consuming it.
+    fn low_surrogate_at(&self, at: usize) -> Option<u16> {
+        let escape = self.out.source.as_bytes().get(at..at + 6)?;
+        if escape[0] != b'\\' || escape[1] != b'u' {
+            return None;
+        }
+        let mut n = 0u16;
+        for &c in &escape[2..] {
+            n = (n << 4) | u16::from((c as char).to_digit(16)? as u8);
+        }
+        (0xdc00..0xe000).contains(&n).then_some(n)
+    }
+    fn string(&mut self, parent: u32, name: bool) -> Result<u32, Problem> {
         let start = self.pos;
         self.pos += 1;
-        let mut segment = self.pos;
-        let mut units: Option<Vec<u16>> = None;
+        self.plain();
+        match self.peek() {
+            None => return Err(self.error("unterminated-string")),
+            Some(b'"') => {
+                self.pos += 1;
+                return self.push(
+                    Kind::String {
+                        text: Text::SOURCE,
+                        name,
+                    },
+                    start,
+                    parent,
+                );
+            }
+            Some(b'\\') => {}
+            Some(_) => return Err(self.error("string-control")),
+        }
+        // Escaped: decode straight to UTF-8 in the shared buffer. A surrogate
+        // escape that does not pair with the next unit leaves the value no
+        // scalar form: nothing more is written, and its units are read from
+        // the token whenever asked for.
+        let decoded_start = self.out.decoded.len();
+        let mut segment = start + 1;
+        let mut unpaired = false;
         loop {
             match self.peek() {
                 None => return Err(self.error("unterminated-string")),
                 Some(0..=0x1f) => return Err(self.error("string-control")),
-                Some(b'"') => {
-                    if let Some(u) = units.as_mut() {
-                        u.extend(self.out.source[segment..self.pos].encode_utf16());
-                    }
-                    self.pos += 1;
-                    let (decoded, unpaired) = match units {
-                        None => (None, None),
-                        Some(u) => match String::from_utf16(&u) {
-                            Ok(s) => (Some(s.into_boxed_str()), None),
-                            Err(_) => (None, Some(u.into_boxed_slice())),
-                        },
-                    };
-                    let lone = unpaired.is_some();
-                    let id = self.push(Kind::String { decoded, unpaired }, start, parent)?;
-                    if lone {
-                        self.out.unpaired.push(id);
-                    }
-                    return Ok(id);
-                }
+                Some(b'"') => break,
                 Some(b'\\') => {
-                    let u = units.get_or_insert_with(Vec::new);
-                    u.extend(self.out.source[segment..self.pos].encode_utf16());
+                    if !unpaired {
+                        self.out.decode(segment..self.pos);
+                    }
                     self.pos += 1;
                     let Some(escape) = self.peek() else {
                         return Err(self.error("escape"));
                     };
                     self.pos += 1;
-                    let unit = match escape {
-                        b'"' => 34,
-                        b'\\' => 92,
-                        b'/' => 47,
-                        b'b' => 8,
-                        b'f' => 12,
-                        b'n' => 10,
-                        b'r' => 13,
-                        b't' => 9,
+                    let c = match escape {
+                        b'"' => '"',
+                        b'\\' => '\\',
+                        b'/' => '/',
+                        b'b' => '\u{8}',
+                        b'f' => '\u{c}',
+                        b'n' => '\n',
+                        b'r' => '\r',
+                        b't' => '\t',
                         b'u' => {
-                            let mut n = 0u16;
-                            for _ in 0..4 {
-                                let Some(c) = self.peek() else {
-                                    return Err(self.error("unicode-escape"));
-                                };
-                                let value = match c {
-                                    b'0'..=b'9' => c - b'0',
-                                    b'a'..=b'f' => c - b'a' + 10,
-                                    b'A'..=b'F' => c - b'A' + 10,
-                                    _ => return Err(self.error("unicode-escape")),
-                                };
-                                n = (n << 4) | u16::from(value);
-                                self.pos += 1;
+                            let unit = self.hex4()?;
+                            match unit {
+                                0xd800..0xdc00 => match self.low_surrogate_at(self.pos) {
+                                    Some(low) => {
+                                        self.pos += 6;
+                                        char::decode_utf16([unit, low])
+                                            .next()
+                                            .and_then(Result::ok)
+                                            .expect("a surrogate pair")
+                                    }
+                                    None => {
+                                        unpaired = true;
+                                        '\u{fffd}'
+                                    }
+                                },
+                                0xdc00..0xe000 => {
+                                    unpaired = true;
+                                    '\u{fffd}'
+                                }
+                                _ => char::from_u32(u32::from(unit)).expect("a scalar value"),
                             }
-                            n
                         }
                         _ => return Err(self.error("escape")),
                     };
-                    units.as_mut().unwrap().push(unit);
+                    if !unpaired {
+                        self.out.reserve_decoded(c.len_utf8());
+                        self.out.decoded.push(c);
+                    }
                     segment = self.pos;
                 }
-                Some(_) => {
-                    self.pos += 1;
-                }
+                Some(_) => self.plain(),
             }
         }
+        let end = self.pos;
+        self.pos += 1;
+        let text = if unpaired {
+            self.out.decoded.truncate(decoded_start);
+            Text::UNPAIRED
+        } else {
+            self.out.decode(segment..end);
+            self.out.decoded_ends.push(self.out.decoded.len());
+            Text(
+                u32::try_from(self.out.decoded_ends.len() - 1)
+                    .expect("strings are bounded by the node count"),
+            )
+        };
+        let id = self.push(Kind::String { text, name }, start, parent)?;
+        if unpaired {
+            self.out.unpaired.push(id);
+        }
+        Ok(id)
+    }
+}
+
+/// The UTF-16 units of an admitted string token's body, escapes decoded one
+/// unit each, so an unpaired surrogate escape stays one unit.
+#[derive(Clone, Debug)]
+pub struct Utf16<'a> {
+    body: &'a str,
+    at: usize,
+    low: Option<u16>,
+}
+impl Iterator for Utf16<'_> {
+    type Item = u16;
+    fn next(&mut self) -> Option<u16> {
+        if let Some(low) = self.low.take() {
+            return Some(low);
+        }
+        let rest = &self.body[self.at..];
+        let bytes = rest.as_bytes();
+        if bytes.first() == Some(&b'\\') {
+            let (unit, width) = match bytes[1] {
+                b'"' => (34, 2),
+                b'\\' => (92, 2),
+                b'/' => (47, 2),
+                b'b' => (8, 2),
+                b'f' => (12, 2),
+                b'n' => (10, 2),
+                b'r' => (13, 2),
+                b't' => (9, 2),
+                _ => (
+                    u16::from_str_radix(&rest[2..6], 16).expect("an admitted unicode escape"),
+                    6,
+                ),
+            };
+            self.at += width;
+            return Some(unit);
+        }
+        let c = rest.chars().next()?;
+        self.at += c.len_utf8();
+        let mut units = [0; 2];
+        let units = c.encode_utf16(&mut units);
+        self.low = units.get(1).copied();
+        Some(units[0])
     }
 }
 
 // A pointer segment's length once `~` and `/` are escaped.
-fn escaped_len(name: &str) -> usize {
+pub(crate) fn escaped_len(name: &str) -> usize {
     name.len() + name.bytes().filter(|&b| b == b'~' || b == b'/').count()
 }
 #[cfg(test)]
@@ -873,17 +1201,15 @@ mod tests {
     }
     fn with_hash(text: &str, hash: fn(&[u16]) -> u64) -> crate::JsonValue {
         crate::JsonValue {
-            owner: Arc::new(
-                Arena::parse_with_hasher(
-                    text.as_bytes(),
-                    Limits::default(),
-                    KeyHasher {
-                        injected: Some(hash),
-                        ..KeyHasher::default()
-                    },
-                )
-                .unwrap(),
-            ),
+            owner: Arena::parse_with_hasher(
+                text.as_bytes(),
+                Limits::default(),
+                KeyHasher {
+                    injected: Some(hash),
+                    ..KeyHasher::default()
+                },
+            )
+            .unwrap(),
             id: 0,
         }
     }
@@ -931,7 +1257,7 @@ mod tests {
                         value.owner.duplicates,
                         duplicate_keys
                             .into_iter()
-                            .map(|id| (0, id))
+                            .map(|id| (0, id as u32))
                             .collect::<Vec<_>>()
                     );
                 }
@@ -997,7 +1323,7 @@ mod tests {
         let offsets: Vec<_> = a
             .duplicates
             .iter()
-            .map(|&(_, id)| a.nodes[id].span.start)
+            .map(|&(_, id)| a.nodes[id as usize].span.start)
             .collect();
         assert_eq!(
             offsets,
@@ -1076,8 +1402,8 @@ mod tests {
         );
         // Small objects intentionally have no index.
         let small = retained.at("/a~1~0/0").unwrap();
-        assert!(!retained.owner.member_indexes.contains_key(&small.id));
-        assert!(retained.owner.member_indexes.contains_key(&retained.id));
+        assert!(retained.owner.member_index(small.id).is_none());
+        assert!(retained.owner.member_index(retained.id).is_some());
     }
 
     #[cfg(feature = "evaluator-work")]
@@ -1135,7 +1461,7 @@ mod tests {
             text.push('}');
             let value = with_hash(&text, distinct_hash);
             assert_eq!(
-                value.owner.member_indexes.contains_key(&0),
+                value.owner.member_index(0).is_some(),
                 n >= INDEX_MIN_MEMBERS
             );
             assert_eq!(value.get("a").unwrap().text(), "1");
@@ -1370,6 +1696,89 @@ mod tests {
     }
 
     #[test]
+    fn escaped_strings_decode_exactly_as_their_utf16_units() {
+        // Independent oracle: each piece's UTF-16 units, then the standard
+        // library's verdict on the whole sequence. A surrogate escape pairs only
+        // with the unit right after it, whatever spells either unit.
+        let pieces: [(&str, &[u16]); 18] = [
+            ("a", &[0x61]),
+            ("é", &[0xe9]),
+            ("😀", &[0xd83d, 0xde00]),
+            ("\\n", &[0x0a]),
+            ("\\\"", &[0x22]),
+            ("\\\\", &[0x5c]),
+            ("\\/", &[0x2f]),
+            ("\\b", &[0x08]),
+            ("\\u0041", &[0x41]),
+            ("\\u00E9", &[0xe9]),
+            ("\\uFFFF", &[0xffff]),
+            ("\\ud83d", &[0xd83d]),
+            ("\\uDE00", &[0xde00]),
+            ("\\udbff", &[0xdbff]),
+            ("\\udfff", &[0xdfff]),
+            ("\\ud800", &[0xd800]),
+            ("\\udc00", &[0xdc00]),
+            ("\\u0000", &[0x00]),
+        ];
+        let mut state = 0x2545_f491_u64;
+        for _ in 0..20_000 {
+            let mut body = String::new();
+            let mut units = Vec::new();
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            for _ in 0..state % 7 {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                let (text, piece) = pieces[state as usize % pieces.len()];
+                body.push_str(text);
+                units.extend_from_slice(piece);
+            }
+            let text = format!("[\"{body}\",{{\"{body}\":0}}]");
+            let arena = Arena::parse(text.as_bytes(), Limits::default()).unwrap();
+            let escaped = body.contains('\\');
+            for id in [1, 3] {
+                match String::from_utf16(&units) {
+                    Ok(scalar) => {
+                        assert_eq!(arena.string(id), Some(scalar.as_str()), "{body}");
+                        assert!(arena.unpaired_units(id).is_none(), "{body}");
+                        let held = if escaped { scalar.len() } else { 0 };
+                        assert_eq!(arena.decoded_len(id), held, "{body}");
+                    }
+                    Err(_) => {
+                        assert_eq!(arena.string(id), None, "{body}");
+                        assert_eq!(
+                            arena.unpaired_units(id).map(Iterator::collect::<Vec<_>>),
+                            Some(units.clone()),
+                            "{body}"
+                        );
+                        assert_eq!(arena.decoded_len(id), 0, "{body}");
+                    }
+                }
+                assert_eq!(arena.units(id).as_deref(), Some(units.as_slice()), "{body}");
+            }
+            let unpaired = String::from_utf16(&units).is_err();
+            assert_eq!(arena.unpaired, if unpaired { vec![1, 3] } else { vec![] });
+        }
+    }
+    #[test]
+    fn nodes_are_fixed_records_and_containers_own_no_allocation() {
+        // Small, deterministic representation check, not a peak-memory benchmark.
+        assert_eq!(std::mem::size_of::<Node>(), 32);
+        let depth = 1000;
+        let text = format!("{}0{}", "[{\"a\":".repeat(depth), "}]".repeat(depth));
+        let arena = Arena::parse(text.as_bytes(), Limits::default()).unwrap();
+        assert_eq!(arena.nodes.len(), 3 * depth + 1);
+        // One item per element and per member name, all in one list.
+        assert_eq!(arena.items.len(), 2 * depth);
+        assert!(arena.decoded.is_empty());
+        let leaf = arena.nodes.len() - 1;
+        let pointer = "/0/a".repeat(depth);
+        assert_eq!(arena.pointer(leaf).as_deref(), Some(pointer.as_str()));
+        assert_eq!(arena.at(&pointer), Some(leaf));
+    }
+    #[test]
     fn exact_and_duplicate() {
         let a = Arena::parse(
             br#"{"a":9007199254740993,"\u0061":-0.00e+004,"s":"\ud83d\ude00"}"#,
@@ -1431,7 +1840,7 @@ mod tests {
         let reference = |id: Id| -> Option<String> {
             let mut segments = Vec::new();
             let mut current = id;
-            while let Some((parent, edge)) = a.nodes[current].parent {
+            while let Some((parent, edge)) = a.edge(current) {
                 segments.push(match edge {
                     Edge::Index(i) => i.to_string(),
                     Edge::Key(k) => a.string(k)?.replace('~', "~0").replace('/', "~1"),
@@ -1445,7 +1854,7 @@ mod tests {
         let exact = |id: Id| -> Vec<u16> {
             let mut segments = Vec::new();
             let mut current = id;
-            while let Some((parent, edge)) = a.nodes[current].parent {
+            while let Some((parent, edge)) = a.edge(current) {
                 segments.push(match edge {
                     Edge::Index(i) => i.to_string().encode_utf16().collect(),
                     Edge::Key(k) => a
@@ -1502,10 +1911,8 @@ mod tests {
     fn source_locations() {
         let a = Arena::parse("{\n\"é/~\": [true]}".as_bytes(), Limits::default()).unwrap();
         let id = a.get(0, "é/~").unwrap();
-        let Kind::Array(v) = &a.nodes[id].kind else {
-            panic!()
-        };
-        assert_eq!(a.pointer(v[0]).as_deref(), Some("/é~1~0/0"));
-        assert_eq!(a.position(a.nodes[v[0]].span.start), Some((2, 10)));
+        let v = a.elements(id).unwrap();
+        assert_eq!(a.pointer(v[0] as usize).as_deref(), Some("/é~1~0/0"));
+        assert_eq!(a.position(a.nodes[v[0] as usize].span.start), Some((2, 10)));
     }
 }

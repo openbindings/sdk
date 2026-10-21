@@ -26,9 +26,15 @@ values and supplied schema resources still retain unpaired UTF-16 units exactly,
 and so do the JSON Pointers that locate their nodes.
 
 Default parsing admits 64 MiB, 10,000 container levels and 1,000,000 nodes.
-Ordinary Rust Serde conversion has a 128-container ceiling. Document reports
-retain at most 4,096 findings and 8 MiB of pointers. Truncation leaves rule evidence
-intact. See [performance and allocation boundaries](docs/performance-boundaries.md).
+`validate_document` admits the same bytes and nodes at any nesting. Ordinary
+Rust Serde conversion has a 128-container ceiling. Document reports retain at
+most 4,096 findings and 8 MiB of pointers. Truncation leaves rule evidence
+intact. Validating any document within those default limits allocates at most
+192 MiB beyond the caller's input, three times the byte limit: the document's
+copy of its text, the decoded text of its escaped strings and its tree and
+validation state. The diagnostic memory probe checks this on documents built
+to maximize each. See
+[performance and allocation boundaries](docs/performance-boundaries.md).
 OBI-02's whole-document check and each embedded schema's OBI-10 meta-schema
 check run on the unmodified jsonschema 0.58.6 library with its default pattern
 engine. Every fixed pattern is regular, so that engine matches it on a finite

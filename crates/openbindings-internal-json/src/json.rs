@@ -180,14 +180,11 @@ impl<'a> JsonStringRef<'a> {
     }
     /// Iterate decoded UTF-16 units without allocating, preserving unpaired units.
     pub fn utf16_units(self) -> impl Iterator<Item = u16> + 'a {
-        let unpaired = match &self.json.owner.nodes[self.json.id].kind {
-            Kind::String { unpaired, .. } => unpaired.as_deref(),
-            _ => unreachable!("known string"),
-        };
+        let unpaired = self.json.owner.unpaired_units(self.json.id);
         self.as_str()
             .into_iter()
             .flat_map(str::encode_utf16)
-            .chain(unpaired.into_iter().flatten().copied())
+            .chain(unpaired.into_iter().flatten())
     }
     /// Borrow the exact authored token and its original source location.
     pub fn json(self) -> JsonRef<'a> {
@@ -270,10 +267,7 @@ impl JsonValue {
             byte_offset: p.offset,
             code: p.code,
         })?;
-        Ok(Self {
-            owner: Arc::new(owner),
-            id: 0,
-        })
+        Ok(Self { owner, id: 0 })
     }
     /// Borrow this value without incrementing its storage owner count.
     pub fn view(&self) -> JsonRef<'_> {
@@ -411,8 +405,8 @@ impl<'a> JsonRef<'a> {
             Kind::Bool(_) => JsonKind::Boolean,
             Kind::Number => JsonKind::Number,
             Kind::String { .. } => JsonKind::String,
-            Kind::Array(_) => JsonKind::Array,
-            Kind::Object(_) => JsonKind::Object,
+            Kind::Array { .. } => JsonKind::Array,
+            Kind::Object { .. } => JsonKind::Object,
         }
     }
     /// Borrow decoded Unicode scalar text for a string; returns `None` for non-strings or unpaired UTF-16 units. Use [`Self::utf16_units`] for the latter.
@@ -455,9 +449,8 @@ impl<'a> JsonRef<'a> {
     }
     /// Return array element or object member count, including repeated object names; return `None` for scalars.
     pub fn len(self) -> Option<usize> {
-        match &self.owner.nodes[self.id].kind {
-            Kind::Array(v) => Some(v.len()),
-            Kind::Object(v) => Some(v.len()),
+        match self.owner.nodes[self.id].kind {
+            Kind::Array { len, .. } | Kind::Object { len, .. } => Some(len as usize),
             _ => None,
         }
     }
@@ -467,37 +460,31 @@ impl<'a> JsonRef<'a> {
     }
     /// Borrow a zero-based array element; return `None` for non-arrays or an out-of-range index.
     pub fn element(self, index: usize) -> Option<Self> {
-        let Kind::Array(items) = &self.owner.nodes[self.id].kind else {
-            return None;
-        };
-        items.get(index).map(|&id| Self {
+        self.owner.elements(self.id)?.get(index).map(|&id| Self {
             owner: self.owner,
-            id,
+            id: id as usize,
         })
     }
     /// Iterate borrowed array elements in order; return `None` for non-arrays. The iterator borrows the original arena.
     pub fn elements(self) -> Option<impl ExactSizeIterator<Item = Self> + 'a> {
-        let Kind::Array(items) = &self.owner.nodes[self.id].kind else {
-            return None;
-        };
+        let items = self.owner.elements(self.id)?;
         Some(items.iter().map(move |&id| Self {
             owner: self.owner,
-            id,
+            id: id as usize,
         }))
     }
     /// Iterate every borrowed object member in source order, including duplicates; return `None` for non-objects.
     pub fn members(self) -> Option<impl ExactSizeIterator<Item = JsonMember<'a>> + 'a> {
-        let Kind::Object(items) = &self.owner.nodes[self.id].kind else {
-            return None;
-        };
-        Some(items.iter().map(move |m| JsonMember {
+        let names = self.owner.member_names(self.id)?;
+        // A member's value is the node after its name.
+        Some(names.iter().map(move |&name| JsonMember {
             name: Self {
                 owner: self.owner,
-                id: m.key,
+                id: name as usize,
             },
             value: Self {
                 owner: self.owner,
-                id: m.value,
+                id: name as usize + 1,
             },
         }))
     }
@@ -574,20 +561,19 @@ impl<'a> JsonRef<'a> {
 #[derive(PartialEq, Eq, Hash)]
 enum Key<'a> {
     Scalar(&'a str),
-    Units(&'a [u16]),
+    Units(Vec<u16>),
 }
 fn key(value: JsonRef<'_>) -> Key<'_> {
     if let Some(s) = value.as_str() {
         Key::Scalar(s)
     } else {
-        let Kind::String {
-            unpaired: Some(units),
-            ..
-        } = &value.owner.nodes[value.id].kind
-        else {
-            unreachable!("member name is a string")
-        };
-        Key::Units(units)
+        Key::Units(
+            value
+                .owner
+                .unpaired_units(value.id)
+                .expect("member name is a string")
+                .collect(),
+        )
     }
 }
 pub(crate) fn equal(left: JsonRef<'_>, right: JsonRef<'_>) -> bool {
@@ -775,7 +761,8 @@ mod tests {
             let root = JsonValue::parse(source).unwrap();
             let arena = &root.owner;
             assert!(arena.duplicates.windows(2).all(|pair| {
-                arena.nodes[pair[0].1].span.start < arena.nodes[pair[1].1].span.start
+                arena.nodes[pair[0].1 as usize].span.start
+                    < arena.nodes[pair[1].1 as usize].span.start
             }));
             for id in 0..arena.nodes.len() {
                 let node = &arena.nodes[id];
@@ -783,7 +770,7 @@ mod tests {
                 // object must lie within this value. Includes member-name
                 // string nodes, which must never claim nested duplicates.
                 let expected = arena.duplicates.iter().any(|&(object, _)| {
-                    let inner = &arena.nodes[object].span;
+                    let inner = &arena.nodes[object as usize].span;
                     node.span.start <= inner.start && inner.end <= node.span.end
                 });
                 arena.duplicate_query_probes.store(0, Ordering::Relaxed);
@@ -793,7 +780,7 @@ mod tests {
                 };
                 assert_eq!(value.has_duplicate_names(), expected, "node {id}");
                 let probes = arena.duplicate_query_probes.load(Ordering::Relaxed);
-                if matches!(node.kind, Kind::Array(_) | Kind::Object(_)) {
+                if node.is_container() {
                     let bound = if arena.duplicates.is_empty() {
                         0
                     } else {

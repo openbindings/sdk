@@ -906,8 +906,8 @@ impl<'a> ValueContract<'a> {
         if !document
             .as_document()
             .schema_index()
-            .positions
-            .contains_key(&openbindings_internal_json::backend::node_id(&entry))
+            .position(openbindings_internal_json::backend::node_id(&entry))
+            .is_some()
         {
             return Err(NoVerdict::new(
                 NoVerdictReason::ConservativePreparation,

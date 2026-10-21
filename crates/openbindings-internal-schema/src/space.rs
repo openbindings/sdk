@@ -254,25 +254,23 @@ impl Layer {
         // Every indexed node becomes one space node with one position.
         self.nodes.reserve(index.nodes.len());
         let mut positions = HashMap::with_capacity(index.nodes.len());
-        for node in &index.nodes {
-            let resource = if let Some(&id) = resources.get(&node.resource) {
+        for (at, node) in index.nodes.iter().enumerate() {
+            let value = index.value(node);
+            let resource = if let Some(&id) = resources.get(&(node.resource as usize)) {
                 id
             } else {
-                let parent = *resources.get(&node.parent_resource).unwrap_or(&initial);
+                let parent = *resources
+                    .get(&(index.parent_resource(at) as usize))
+                    .unwrap_or(&initial);
                 let id = self.base + self.resources.len();
-                resources.insert(node.resource, id);
-                let dialect =
-                    declared_dialect(node.value.view(), self.resource(parent).dialect.as_deref());
-                let base = node
-                    .value
-                    .get("$id")
-                    .and_then(|v| v.as_str())
-                    .and_then(|id| {
-                        crate::input_policy::resolve_identifier(
-                            self.resource(parent).base.as_deref(),
-                            id,
-                        )
-                    });
+                resources.insert(node.resource as usize, id);
+                let dialect = declared_dialect(value, self.resource(parent).dialect.as_deref());
+                let base = value.get("$id").and_then(|v| v.as_str()).and_then(|id| {
+                    crate::input_policy::resolve_identifier(
+                        self.resource(parent).base.as_deref(),
+                        id,
+                    )
+                });
                 self.resources.push(Resource {
                     root: Some(self.base + self.nodes.len()),
                     base,
@@ -285,16 +283,15 @@ impl Layer {
                 id
             };
             let id = self.base + self.nodes.len();
-            positions.insert(node_id(&node.value), id);
+            positions.insert(node.id as usize, id);
             self.nodes.push(SpaceNode {
-                value: node.value.clone(),
+                value: value.to_owned(),
                 resource,
                 source,
-                depth: node.depth,
+                depth: node.depth as usize,
             });
             for keyword in ["$anchor", "$dynamicAnchor"] {
-                if let Some(name) = node
-                    .value
+                if let Some(name) = value
                     .get(keyword)
                     .and_then(|v| v.as_str())
                     .filter(|s| crate::schema_index::plain_name(s))

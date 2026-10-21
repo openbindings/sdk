@@ -86,6 +86,23 @@ pattern memory and peaking within twice it. One hundred names whose automata
 fill the lazy DFA's cache (`[01]*1[01]{20}zN`), checked against a 64 KiB key of
 random bits, must add no more than the pattern memory at their peak.
 
+## Default admission limits
+
+The limits phase (`src/limits.rs`) validates documents at the default
+admission limits (64 MiB, 1,000,000 nodes, any nesting) that maximize each
+structure document validation builds: a million nested arrays around a long
+string; half a million invalid operation names, alone and beside a string
+filling the byte limit; a million escaped strings; one escaped string and one
+string with an unpaired surrogate escape filling the limit; a million-element
+`allOf`, a million aliases, a half-million-member object, half a million
+schemas and a quarter million absolute `$id`s, each beside an escaped string
+filling the remaining bytes; 166,000 nested relative `$id`s, and 70,000 of them
+each declaring a repeated `$id`; and a malformed reference at every level of a
+120,000-level schema chain. Each `validate_document` call must add at most
+**192 MiB** (three times the byte limit) of live allocation above the caller's
+input, and must reach its expected conclusion. Run the phase alone with
+`--limits-only`.
+
 ## Recorded results
 
 The verifier writes fresh raw allocation and timing samples to

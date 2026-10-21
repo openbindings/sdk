@@ -537,6 +537,68 @@ produce work proportional to source/key size; deliberate collisions can require
 more exact comparisons. Caller byte and node limits still bound admission. These
 fixtures do not characterize arbitrary schema evaluation or cold compilation.
 
+### Memory at the default limits
+
+`validate_document` admits up to 64 MiB and 1,000,000 nodes, at any nesting.
+For any input it admits, its peak live allocation above the caller's own copy
+of the input is at most **192 MiB**, three times the byte limit:
+
+- The document's copy of its text, as long as the input.
+- The decoded text of its escaped strings, at most as long as the input, since
+  no escape decodes longer than it is written. A string holding an unpaired
+  surrogate escape keeps no decoded copy: its UTF-16 units are read from its
+  token when asked for.
+- The parsed tree: 32 bytes per node, 4 per array element or member name, 8 per
+  escaped string, and for an object of 16 or more members a name index of 17
+  bytes per slot, at most about 39 per member.
+- Validation state: 12 bytes per schema position and 8 per position still to
+  visit, plus 4 per position once a same-document pointer is resolved; about
+  70 bytes per `$id` declaration, since compared identifiers share pieces of the
+  `$id` texts rather than spelling each nested identifier out; for a
+  `uniqueItems` check, 8 bytes per node of the array and 9 per slot of its hash
+  table; 9 bytes per alias; and at most 4,096 findings and 8 MiB of their
+  pointers, with a table of 4 bytes per node (8 when an unpaired surrogate
+  occurs) once one finding's pointer has not fitted.
+
+These are requested bytes, counted as the
+[diagnostic memory probe](../tools/diagnostic-memory-probe/README.md) counts
+them, not resident memory, which adds allocator overhead and leaves out
+capacity never touched. The probe's limits phase validates documents built to
+maximize each of these structures, alone or beside an escaped string filling the
+bytes left, and fails if any call exceeds 192 MiB. On 2026-10-21 (macOS arm64,
+Rust 1.99.0, release build) the largest, a 999,980-element `allOf` beside a
+61 MiB escaped string, peaked at 184.8 MiB, and every shape validated within
+0.26 s. No admission limit changed.
+
+The operating system's maximum resident set size of a process that reads a file
+and validates it, including that process's own copy of the file, compared with
+revision `2b45ce5`:
+
+| Document | Bytes | Before | After |
+| --- | ---: | ---: | ---: |
+| 999,980 nested arrays around a string | 64 MiB | 379 MiB | 179 MiB |
+| 499,990 invalid operation names | 6.4 MB | 292 MiB | 76 MiB |
+| The same names beside a string | 64 MiB | 409 MiB | 191 MiB |
+| 250,000 invalid 200-byte operation names | 64 MiB | 582 MiB | 168 MiB |
+| One escaped string | 64 MiB | 328 MiB | 200 MiB |
+| One string with an unpaired surrogate escape | 64 MiB | 258 MiB | 130 MiB |
+| 999,990 escaped strings | 64 MiB | 301 MiB | 237 MiB |
+| 999,980-element `allOf` beside an escaped string | 64 MiB | 654 MiB | 256 MiB |
+| 999,980 aliases beside an escaped string | 64 MiB | 549 MiB | 257 MiB |
+| 499,985 schemas beside an escaped string | 64 MiB | 556 MiB | 253 MiB |
+| 249,990 absolute `$id`s beside an escaped string | 64 MiB | 533 MiB | 253 MiB |
+| 10,000 nested relative `$id`s | 270 KB | 241 MiB | 11 MiB |
+
+Before, each nested relative `$id` held its compared identifier spelled out,
+twice, and every schema below it a further copy, so memory grew with the
+square of the nesting: 166,000 nested `$id`s (4.5 MB) would have needed tens of
+gigabytes, where validating them now allocates at most 65 MiB. A malformed
+reference at each level of a 20,000-level schema chain (600 KB) took 5.9 s,
+because each finding after the pointer allowance was spent measured its pointer
+by walking to the root; it now takes 62 ms, and a 120,000-level chain 0.15 s. On
+the probe's frozen suite the largest complete-validation peak fell from
+17,949,677 to 8,738,243 bytes.
+
 ## Pattern matching
 
 Patterns match on the regex crate's finite automata, in time linear in the

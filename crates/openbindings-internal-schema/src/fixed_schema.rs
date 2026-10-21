@@ -334,10 +334,10 @@ pub fn check(
     is_meta: bool,
     max_problems: usize,
 ) -> Result<Problems<'_>, String> {
-    check_with_retained(value, is_meta, max_problems, |_, _| false)
+    check_with_retained(value.view(), is_meta, max_problems, |_, _| false)
 }
 pub fn check_with_retained<'a>(
-    value: &'a JsonValue,
+    value: JsonRef<'a>,
     is_meta: bool,
     max_problems: usize,
     already_retained: impl Fn(JsonRef<'a>, &str) -> bool,
@@ -347,7 +347,7 @@ pub fn check_with_retained<'a>(
         .map_err(Clone::clone)?;
     Ok(backend::fixed_strings(|| {
         let mut collector = ProblemCollector::new(max_problems);
-        if valid(validator, value.view()) {
+        if valid(validator, value) {
             return collector.finish();
         }
         collector.violated = true;
@@ -361,7 +361,7 @@ pub fn check_with_retained<'a>(
         };
         if let Some(map) = map {
             let mut offered = false;
-            let limited = map.locate(value.view(), |at| {
+            let limited = map.locate(value, |at| {
                 offered = true;
                 collector.offer(at, GENERIC_MESSAGE.into(), true, &already_retained)
                     && !collector.expansion_exhausted
@@ -371,12 +371,7 @@ pub fn check_with_retained<'a>(
                 return collector.finish();
             }
         }
-        collector.offer(
-            value.view(),
-            GENERIC_MESSAGE.into(),
-            false,
-            &already_retained,
-        );
+        collector.offer(value, GENERIC_MESSAGE.into(), false, &already_retained);
         collector.finish()
     }))
 }
@@ -723,7 +718,7 @@ mod tests {
             .map(|p| (occurrence(p.at), p.message.as_ref()))
             .collect();
         assert_eq!(identities.len(), all.entries.len());
-        let already = check_with_retained(&value, true, 0, |at, message| {
+        let already = check_with_retained(value.view(), true, 0, |at, message| {
             all.entries
                 .iter()
                 .any(|p| occurrence(p.at) == occurrence(at) && p.message == message)
