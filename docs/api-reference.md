@@ -478,9 +478,11 @@ Rust editors use the atomic `Document` methods described above. `EditError::code
 returns stable identifiers: `invalid-pointer`, `missing-parent`, `missing-value`,
 `not-container`, `duplicate-members`, `overlapping-edits`, `field-collision`,
 `serialization`, or parser/admission codes such as `byte-limit`, `node-limit` and
-`depth-limit`. `EditError::Authoring` retains a logical pointer into the typed
-part input; `InterpretationError::source_location` addresses current exact
-source bytes. These coordinates serve different purposes.
+`depth-limit`. Every editing method, pointer edit or typed part, returns this one
+error. `EditError::FieldCollision { part_pointer, .. }` carries a logical pointer
+into the typed part input, as TypeScript's `EditError.partPointer` does;
+`InterpretationError::source_location` addresses current exact source bytes.
+These coordinates serve different purposes.
 
 Document findings deduplicate explanations for the same source occurrence
 before presentation caps. Eliminating a repeat does not mark truncation; omitting

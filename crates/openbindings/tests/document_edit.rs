@@ -239,11 +239,12 @@ fn whole_parts_preserve_absence_null_exact_values_and_collision_paths() {
         additional_fields: BTreeMap::from([("kind".into(), exact("null"))]),
         ..Default::default()
     };
-    let EditError::Authoring(error) = doc.set_source("s~/", &bad).unwrap_err() else {
+    let EditError::FieldCollision { part_pointer, .. } = doc.set_source("s~/", &bad).unwrap_err()
+    else {
         panic!()
     };
     assert_eq!(
-        error.draft_pointer(),
+        part_pointer.as_deref(),
         Some("/sources/s~0~1/additional_fields/kind")
     );
     assert_eq!(doc.as_bytes(), before);

@@ -1,94 +1,14 @@
 //! Typed authoring of the normative vocabulary. Opaque fields retain exact JSON.
-use crate::{JsonRef, JsonValue};
+use crate::{EditError, JsonRef, JsonValue};
 use openbindings_internal_json::decimal::Decimal;
 use serde::{Serialize, Serializer, ser::SerializeMap};
-use std::{collections::BTreeMap, fmt};
+use std::collections::BTreeMap;
 
-/// Stable authoring failures, separate from document conformance findings.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum AuthoringErrorKind {
-    /// An additional field would shadow a typed normative member.
-    FieldCollision,
-    /// A field cannot be represented by the typed authoring model.
-    InvalidField,
-    /// Repeated object names prevent lossless typed authoring.
-    DuplicateMembers,
-    /// The draft could not be encoded as supported exact JSON.
-    Serialization,
-    /// Encoding or parsing exceeded an admission limit.
-    Limit,
-}
-
-#[derive(Clone, PartialEq, Eq)]
-/// Expected authoring failure. A native draft pointer and an original source location are distinct coordinates; inspect the available one. Messages explain failures, while `kind` supports branching.
-pub struct AuthoringError {
-    kind: AuthoringErrorKind,
-    draft_pointer: Option<String>,
-    source_location: Option<crate::SourceLocation>,
-    message: String,
-    path_omitted_for_limit: bool,
-}
-impl std::fmt::Debug for AuthoringError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AuthoringError")
-            .field("kind", &self.kind)
-            .field("source_location", &self.source_location)
-            .field("path_omitted_for_limit", &self.path_omitted_for_limit)
-            .finish_non_exhaustive()
-    }
-}
-impl AuthoringError {
-    /// Return the stable failure category; callers must allow future categories.
-    pub fn kind(&self) -> AuthoringErrorKind {
-        self.kind
-    }
-    /// Logical native draft path, including `additional_fields`; not a source location.
-    pub fn draft_pointer(&self) -> Option<&str> {
-        self.draft_pointer.as_deref()
-    }
-    /// Borrow the original parsed location when converting source JSON; native drafts have no invented byte coordinates.
-    pub fn source_location(&self) -> Option<&crate::SourceLocation> {
-        self.source_location.as_ref()
-    }
-    /// Borrow the explanatory message. Use `kind` for program logic and escape text for the presentation context.
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-    /// Whether a draft pointer was omitted because its escaped UTF-8 spelling would exceed 4096 bytes; an omitted path is not the root.
-    pub fn path_omitted_for_limit(&self) -> bool {
-        self.path_omitted_for_limit
-    }
-    pub(crate) fn plain(kind: AuthoringErrorKind, message: &str) -> Self {
-        Self {
-            kind,
-            draft_pointer: None,
-            source_location: None,
-            message: message.into(),
-            path_omitted_for_limit: false,
-        }
-    }
-}
-impl fmt::Display for AuthoringError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.message)
-    }
-}
-impl std::error::Error for AuthoringError {}
-fn error(at: JsonRef<'_>, message: impl Into<String>) -> AuthoringError {
-    AuthoringError {
-        kind: AuthoringErrorKind::InvalidField,
-        draft_pointer: None,
-        source_location: Some(at.location()),
-        message: message.into(),
-        path_omitted_for_limit: false,
-    }
-}
 fn check_fields(
     fields: &BTreeMap<String, JsonValue>,
     reserved: &[&str],
     path: &[&str],
-) -> Result<(), AuthoringError> {
+) -> Result<(), EditError> {
     for key in fields.keys() {
         if !reserved.contains(&key.as_str()) {
             continue;
@@ -119,12 +39,8 @@ fn check_fields(
                 pointer.push_str(text);
             }
         }
-        return Err(AuthoringError {
-            kind: AuthoringErrorKind::FieldCollision,
-            draft_pointer: (!omitted).then_some(pointer),
-            source_location: None,
-            message: "additional field shadows a typed member".into(),
-            path_omitted_for_limit: omitted,
+        return Err(EditError::FieldCollision {
+            part_pointer: (!omitted).then_some(pointer),
         });
     }
     Ok(())
@@ -145,11 +61,10 @@ impl Preference {
     pub fn get(self) -> i64 {
         self.0
     }
-    // Shared exact conversion for authoring and retained normative read views.
-    pub(crate) fn from_json_value(v: JsonRef<'_>) -> Result<Self, AuthoringError> {
-        let text = v
-            .number_text()
-            .ok_or_else(|| error(v, "expected a preference integer"))?;
+    // Exact conversion shared by the retained normative read views; `None` for a
+    // value that is not an integer in the interoperable range.
+    pub(crate) fn from_json_value(v: JsonRef<'_>) -> Option<Self> {
+        let text = v.number_text()?;
         let decimal = Decimal::parse(text);
         if !decimal.is_integer()
             || decimal
@@ -157,16 +72,10 @@ impl Preference {
                 .is_lt()
             || decimal.compare(&Decimal::parse("9007199254740991")).is_gt()
         {
-            return Err(error(
-                v,
-                "preference is outside the interoperable integer range",
-            ));
+            return None;
         }
         // A checked integer in the interoperable range converts exactly through binary64.
-        let n = text
-            .parse::<f64>()
-            .map_err(|_| error(v, "preference conversion failed"))? as i64;
-        Ok(Self(n))
+        Some(Self(text.parse::<f64>().ok()? as i64))
     }
 }
 
@@ -458,10 +367,10 @@ impl std::fmt::Debug for Dependency {
 
 // Parts are checked before serialization so native paths remain precise.
 pub(crate) trait Part: Serialize {
-    fn check(&self, path: &[&str]) -> Result<(), AuthoringError>;
+    fn check(&self, path: &[&str]) -> Result<(), EditError>;
 }
 impl<T: Part> Part for BTreeMap<String, T> {
-    fn check(&self, path: &[&str]) -> Result<(), AuthoringError> {
+    fn check(&self, path: &[&str]) -> Result<(), EditError> {
         // Reuse one diagnostic path for the entire namespace.
         let mut child = Vec::with_capacity(path.len() + 1);
         child.extend_from_slice(path);
@@ -474,7 +383,7 @@ impl<T: Part> Part for BTreeMap<String, T> {
     }
 }
 impl Part for Operation {
-    fn check(&self, path: &[&str]) -> Result<(), AuthoringError> {
+    fn check(&self, path: &[&str]) -> Result<(), EditError> {
         check_fields(
             &self.additional_fields,
             &[
@@ -497,7 +406,7 @@ impl Part for Operation {
     }
 }
 impl Part for Example {
-    fn check(&self, path: &[&str]) -> Result<(), AuthoringError> {
+    fn check(&self, path: &[&str]) -> Result<(), EditError> {
         check_fields(
             &self.additional_fields,
             &["description", "input", "output"],
@@ -506,7 +415,7 @@ impl Part for Example {
     }
 }
 impl Part for Binding {
-    fn check(&self, path: &[&str]) -> Result<(), AuthoringError> {
+    fn check(&self, path: &[&str]) -> Result<(), EditError> {
         check_fields(
             &self.additional_fields,
             &[
@@ -523,7 +432,7 @@ impl Part for Binding {
     }
 }
 impl Part for Source {
-    fn check(&self, path: &[&str]) -> Result<(), AuthoringError> {
+    fn check(&self, path: &[&str]) -> Result<(), EditError> {
         check_fields(
             &self.additional_fields,
             &["kind", "content", "description"],
@@ -532,7 +441,7 @@ impl Part for Source {
     }
 }
 impl Part for Dependency {
-    fn check(&self, path: &[&str]) -> Result<(), AuthoringError> {
+    fn check(&self, path: &[&str]) -> Result<(), EditError> {
         check_fields(
             &self.additional_fields,
             &["operation", "kinds", "description"],
@@ -544,7 +453,7 @@ impl Part for Dependency {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Document, EditError};
+    use crate::Document;
 
     #[test]
     fn absence_null_and_unknown_survive() {
@@ -578,7 +487,7 @@ mod tests {
         let mut model = Document::new();
         assert!(matches!(
             model.set_operation("go", &operation),
-            Err(EditError::Authoring(_))
+            Err(EditError::FieldCollision { .. })
         ));
         assert!(serde_json::to_string(&operation).is_err());
     }
@@ -591,7 +500,7 @@ mod tests {
             "-9.007199254740991e15",
         ] {
             assert!(
-                Preference::from_json_value(JsonValue::parse(n).unwrap().view()).is_ok(),
+                Preference::from_json_value(JsonValue::parse(n).unwrap().view()).is_some(),
                 "{n}"
             );
         }

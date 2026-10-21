@@ -14,7 +14,9 @@
 
 - One exact OpenBindings 0.2 `Document` for parsing, inspection and in-place
   editing: atomic batches of JSON Pointer edits and typed part maps, and typed
-  field and part setters, all keeping untouched bytes exact. Validation with original source locations, bounded
+  field and part setters, all keeping untouched bytes exact. Every edit refuses
+  with one `EditError`; a typed part's field collision carries a pointer into
+  that part (TypeScript `EditError.partPointer`). Validation with original source locations, bounded
   findings and per-rule evidence.
 - Document validation's fixed checks (OBI-02, OBI-10) and reference inspection use
   the unmodified jsonschema 0.58.6 library with its default pattern engine, which
