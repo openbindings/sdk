@@ -348,7 +348,7 @@ own dependency and client, with decoded-byte limits still enforced. See the
 ## Document validation
 
 Rust `validate_document(input)` validates exact JSON bytes using default admission
-limits of 64 MiB and 1,000,000 nodes, with no nesting cap.
+limits of 32 MiB and 1,000,000 nodes, with no nesting cap.
 `validate_document_with_limits(input, JsonLimits)` accepts caller-selected byte, node
 and nesting limits, matching the explicit-limits shape of `JsonValue::parse_with_limits`.
 Both return `Result<DocumentValidation, VersionRefusal>`; only a conformant
@@ -376,8 +376,8 @@ caller-selected, therefore gets an OBI-02 verdict, and the check's work is linea
 in those limits; it has no work budget of its own. Location guidance revalidates
 only beneath failing positions, a bounded number of times for each level of the
 derived schema's finite depth, and stops at its findings allowance. Linear work is not short work: the SemVer near miss,
-the worst case per byte, took about 0.6 seconds at 60 MB and 0.7 seconds at the
-default 64 MiB limit in a release build on an Apple M1 Max. Callers bound that
+the worst case per byte, took about 0.35 seconds at the default 32 MiB limit,
+0.6 seconds at 60 MB and 0.7 seconds at 64 MiB in a release build on an Apple M1 Max. Callers bound that
 time with the admission byte limit, `JsonLimits::max_bytes` through
 `validate_document_with_limits`.
 OBI-10 checks each embedded schema object against the meta-schema, its subschemas
@@ -400,7 +400,7 @@ code-based Display representation.
 
 | Code | Rule | Meaning |
 | --- | --- | --- |
-| `input-limit` | OBI-01 through OBI-13 | Byte, node or caller-selected depth admission limit prevented validation. |
+| `input-limit` | OBI-01 through OBI-13 | Byte, node or caller-selected depth admission limit prevented validation; the message names the `JsonLimits` setting that raises it. |
 | `bom` | OBI-01 | A leading UTF-8 byte-order mark is forbidden. |
 | `utf8` | OBI-01 | The input is not valid UTF-8. |
 | `comma-or-close` | OBI-01 | A container needed a comma or closing delimiter. |

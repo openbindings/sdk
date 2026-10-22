@@ -193,7 +193,8 @@ before compiling.
 
 The evaluator bounds what the SDK itself reads, writes and recurses through, not
 the memory of the JSON Schema library's compiled program. On by default:
-document admission limits; `stackBytes` (256 KiB), the stack the evaluator
+document admission limits (32 MiB and 1,000,000 nodes, which TypeScript has no
+setting to raise); `stackBytes` (256 KiB), the stack the evaluator
 sizes its bounds from: 256 bytes for each nested schema evaluation (1,024 at
 the default), half of it for a pass of a contract holding
 `unevaluatedProperties` or `unevaluatedItems` as it evaluates, and the

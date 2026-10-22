@@ -90,7 +90,7 @@ Document validation itself needs no caller-supplied evaluator. See
 [evaluator integration](schema-evaluators.md).
 
 A prepared value contract's `validate_json(text_or_bytes)` admits exact JSON under the
-default limits: 64 MiB, 10,000 container levels and 1,000,000 nodes. `Err` means
+default limits: 32 MiB, 10,000 container levels and 1,000,000 nodes. `Err` means
 admission failed. `Ok` contains `Satisfies`, `Fails`, `Undefined` or `NoVerdict`.
 Duplicate members are preserved during admission and yield `NoVerdict` during
 validation. Number tokens retain their exact meaning.

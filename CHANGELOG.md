@@ -24,13 +24,18 @@
   encoded as supported exact JSON refuses with `EditError::Serialization`
   (`serialization`). Validation with original source locations, bounded
   findings and per-rule evidence.
+- The default document byte limit is 32 MiB (33,554,432 bytes), down from 64 MiB,
+  because validation memory grows with the document and the protective default
+  should fit a typical container. A host that needs larger documents raises
+  `JsonLimits::max_bytes` through `validate_document_with_limits`, the setting an
+  `input-limit` finding now names; TypeScript applies the default limits.
 - Document validation's memory grows linearly with the document. Compared
   identifiers share runs of the `$id` texts, so long and nested `$id`s take
   memory and time linear in the document, as do repeated findings deep in a
   document, large maps, alias lists and `uniqueItems` arrays, and fixed checks
   read names holding U+E000 in place. Of the diagnostic memory probe's 34
-  documents at the default limits (64 MiB, 1,000,000 nodes, any nesting), the
-  largest allocates 412.2 MiB beyond the caller's input, counting each
+  documents at the default limits (32 MiB, 1,000,000 nodes, any nesting), the
+  largest allocates 272.2 MiB beyond the caller's input, counting each
   reallocation as holding its old and new blocks at once.
 - Document validation's fixed checks (OBI-02, OBI-10) and reference inspection use
   the unmodified jsonschema 0.58.6 library with its default pattern engine, which
