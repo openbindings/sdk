@@ -843,6 +843,7 @@ impl SchemaSpace {
         let mut definitions: BTreeMap<usize, BTreeMap<String, (String, usize)>> = BTreeMap::new();
         let mut locations = BTreeMap::new();
         let mut byte_count = 0usize;
+        let max_bytes = openbindings_internal_json::JsonLimits::default().max_bytes;
         // Separated literals, copied together once every node is admitted, and
         // the literal text the current node separates, counted with its own.
         let separating = literals.is_some();
@@ -948,12 +949,14 @@ impl SchemaSpace {
             byte_count = byte_count
                 .saturating_add(transformed.len())
                 .saturating_add(std::mem::take(&mut separated));
-            if byte_count > 64 * 1024 * 1024 {
+            // Each projected resource is parsed under the default admission
+            // limits below; the projection stops once it passes their bytes.
+            if byte_count > max_bytes {
                 return Err(self.failure(
                     id,
                     FailureReason::LimitExceeded,
                     "program-byte-limit",
-                    "schema projection exceeds 64 MiB",
+                    format!("schema projection exceeds the {max_bytes}-byte default JSON admission limit"),
                 ));
             }
             if mapped {
