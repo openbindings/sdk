@@ -205,9 +205,9 @@ Core's document admission limits bound the bytes and nodes of every document
 and resource, and its projection refuses a contract reaching more than 100,000
 schema positions (`schema-node-limit`); that bound is core's, shared with its
 own fixed checks. The projection also stops once its text, `const` and `enum`
-literals included, passes the default admission byte limit, 32 MiB
-(`program-byte-limit`), since each resource it writes is parsed under the
-default limits; a document admitted with a raised limit does not raise it.
+literals included, passes the byte limit the document was admitted under
+(`Document::limits`, 32 MiB by default; `program-byte-limit`), and it parses each
+resource it writes under those limits.
 The library compiles an unevaluated keyword's annotation
 sources by recursion, so preparation weighs the walk and refuses one weighing
 more than `stack_bytes` admits (`unevaluated-walk-limit`, at that keyword): a

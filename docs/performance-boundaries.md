@@ -686,8 +686,8 @@ The default byte limit was 64 MiB, at which the same shape peaked at
 shape's memory is held for each of its 333,320 declarations, whatever their
 length; the ceiling is therefore not a multiple of the byte limit. The default
 is 32 MiB so that validation at the defaults fits a typical container. A host
-that validates larger documents raises `JsonLimits::max_bytes` through
-`validate_document_with_limits` and gives its process the memory they take.
+that admits larger documents raises `JsonLimits::max_bytes` (`limits.maxBytes`
+in TypeScript) and gives its process the memory they take.
 
 The operating system's maximum resident set size of a process that reads a file
 and validates it three times, including that process's own copy of the file,

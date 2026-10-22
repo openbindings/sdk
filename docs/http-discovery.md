@@ -70,7 +70,10 @@ Portable transports may report their own decoding failures as `Decode`.
 A transport may buffer larger chunks internally. Only complete bounded 200 bodies
 enter validation; oversized or incomplete prefixes never become OBIs.
 
-The byte limit protects the process, so it is on by default. A deadline only
+The byte limit protects the process, so it is on by default. A body within it
+is validated under admission limits whose byte limit is the bound when that
+exceeds the default 32 MiB, with any nesting, so raising the bound admits larger
+documents, which keep those limits. A deadline only
 bounds time, so it is the application's choice: an attempt has no deadline
 unless `ClientOptions::timeout` sets one, and without one it runs until it
 completes or the caller cancels it. A host that needs a bound, such as an

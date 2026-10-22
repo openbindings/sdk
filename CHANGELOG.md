@@ -27,11 +27,18 @@
   encoded as supported exact JSON refuses with `EditError::Serialization`
   (`serialization`). Validation with original source locations, bounded
   findings and per-rule evidence.
-- The default document byte limit is 32 MiB (33,554,432 bytes), down from 64 MiB,
-  because validation memory grows with the document and the protective default
-  should fit a typical container. A host that needs larger documents raises
-  `JsonLimits::max_bytes` through `validate_document_with_limits`, the setting an
-  `input-limit` finding now names; TypeScript applies the default limits.
+- Admission limits are a setting wherever documents enter, and the default byte
+  limit is 32 MiB (33,554,432 bytes), down from 64 MiB, because validation memory
+  grows with the document and the protective default should fit a typical
+  container. A host that needs larger documents passes `JsonLimits` to
+  `validate_document_with_limits`, `Document::parse_with_limits` or
+  `JsonValue::parse_with_limits`, or `limits: { maxBytes, maxNodes, maxDepth }`
+  to TypeScript's `validateDocument`, `Document.parse` and `parseJson`, whose
+  unspecified entries keep the `JsonLimits` defaults. A document keeps the limits
+  it was admitted under (`Document::limits`): its edits, typed setters and
+  value-contract projection parse under them. Discovery validates a body under
+  limits that admit its configured body bound. Every limit refusal names the
+  setting that raises it in both languages.
 - Document validation's memory grows linearly with the document. Compared
   identifiers share runs of the `$id` texts, so long and nested `$id`s take
   memory and time linear in the document, as do repeated findings deep in a

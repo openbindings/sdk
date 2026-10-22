@@ -96,7 +96,10 @@ Duplicate members are preserved during admission and yield `NoVerdict` during
 validation. Number tokens retain their exact meaning.
 
 Use `JsonValue::parse_with_limits` for custom admission limits and
-`PreparedValueContract::validate` for retained exact values without reparsing. Use
+`PreparedValueContract::validate` for retained exact values without reparsing.
+Documents take the same `JsonLimits` through `validate_document_with_limits` and
+`Document::parse_with_limits`, and keep them for their edits and value-contract
+preparation. Use
 `JsonValue::from_serializable` for ordinary Rust data. The converter preserves
 integer digits but cannot recover a value already rounded by application code.
 It refuses exact wrappers; keep those on the parse/retain route.

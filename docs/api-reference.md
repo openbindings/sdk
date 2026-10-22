@@ -101,10 +101,11 @@ kind union.
 | Public item | Contract |
 | --- | --- |
 | `validate_document`, `validate_document_with_limits` | Judge bytes as they are, for reading: a JSON syntax or encoding error is an OBI-01 violation and an exceeded admission limit leaves every rule inconclusive, both in the report. Only an unsupported declared version is `Err`. |
-| `Document::parse`, `Document::from_json` | Admit exact JSON for editing, without a conformance claim, including documents with missing or mistyped fields. `parse` returns `InputError` for invalid UTF-8, a byte order mark, a JSON syntax error or an exceeded admission limit. |
+| `Document::parse`, `Document::parse_with_limits(input, JsonLimits)`, `Document::from_json` | Admit exact JSON for editing, without a conformance claim, including documents with missing or mistyped fields. `parse` and `parse_with_limits` return `InputError` for invalid UTF-8, a byte order mark, a JSON syntax error or an exceeded admission limit; `parse` and `from_json` use `JsonLimits::default()`. |
+| `Document::limits(&self) -> JsonLimits` | The admission limits the document was admitted under, which its edits, typed setters and value-contract projection apply: the caller's for `parse_with_limits` and `validate_document_with_limits`, no nesting cap for `validate_document`, and the defaults otherwise. Discovery's documents keep limits that admit the configured body bound. |
 | `is_valid_name` | Tests the specification's ASCII name grammar without normalizing the name. |
 | `Document::new` | Create an empty OBI declaring the authoring version. |
-| `Document::set`, `remove`, `edit(&[Edit])` | Require a mutable borrow. One atomic splice and parse per batch, exact untouched bytes, compact insertions, default JSON limits. A pointer is a `PointerRef`, converted from escaped text (`&str`, `&String`) or an exact `&Pointer`, so a finding's pointer through a member name with an unpaired UTF-16 unit addresses that member. |
+| `Document::set`, `remove`, `edit(&[Edit])` | Require a mutable borrow. One atomic splice and parse per batch, exact untouched bytes, compact insertions, the document's admission limits. A pointer is a `PointerRef`, converted from escaped text (`&str`, `&String`) or an exact `&Pointer`, so a finding's pointer through a member name with an unpaired UTF-16 unit addresses that member. |
 | Typed field and part setters | Edit descriptions, names, versions, operation schemas and typed operations, bindings, sources, dependencies and examples. Map setters support bulk construction. |
 | `DocumentValidation::document`, `conformant` | Borrow an admitted document or obtain proof only when every applicable rule is established. |
 | `Conformant<Document>` | Private proof, infallible reads, sole route to value contracts. No unchecked constructor, deserialization, dereference or mutable borrow. |
@@ -119,12 +120,13 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 
 | Public item | Contract |
 | --- | --- |
-| `Document.parse(bytes)` | Returns the existing parse-result union; admits exact JSON without a conformance claim, including documents with missing or mistyped fields, and returns `input-error` for an encoding or JSON syntax error or an exceeded admission limit. Typed reads may throw. |
+| `Document.parse(bytes, { limits })` | Returns the existing parse-result union; admits exact JSON without a conformance claim, including documents with missing or mistyped fields, and returns `input-error` for an encoding or JSON syntax error or an exceeded admission limit. `limits` is a `Partial<JsonLimits>` (`maxBytes`, `maxNodes`, `maxDepth`), Rust's `JsonLimits`, whose unspecified entries keep its defaults; the document keeps the limits for its edits, typed setters and value-contract preparation. Typed reads may throw. |
 | `Document.create()` | Creates an empty OBI for construction through setters. |
 | `set`, `remove`, `edit(edits)` | Mutable pointer edits; a batch crosses the bridge once, including exact inputs, and preserves untouched bytes. Exact inputs are borrowed. A pointer may hold an unpaired UTF-16 unit, as a finding's can, and addresses that member. Failure leaves bytes and caches unchanged. |
 | Typed field and whole-part setters | Accept typed part values; map setters commit bulk construction once. |
 | `Document.validate()` | Returns a `DocumentValidation`, the name Rust gives the same result: its `conformant` branch owns an independent `ConformantDocument` and a plain report; its other branches are a `DocumentReport`. |
-| `validateDocument(bytes)` | Assesses exact source directly, including text that is not JSON, and returns a `DocumentReport`: plain data with a `report` or `version-refused` branch and no handle to dispose. |
+| `validateDocument(bytes, { limits })` | Assesses exact source directly, including text that is not JSON, and returns a `DocumentReport`: plain data with a `report` or `version-refused` branch and no handle to dispose. Without `limits` it admits as Rust's `validate_document` does; with them, as `validate_document_with_limits` does. |
+| `parseJson(bytes, { limits })` | Rust's `JsonValue::parse_with_limits`: an `ExactJson` or `input-error`. A value past the default limits is checked by parsing it here with larger limits and passing the `ExactJson` to `validate` or `explain`. |
 | `ConformantDocument` | Nominal, privately constructed proof with infallible typed reads. `resolveOperation(name)` returns a `ConformantOperationView` or `undefined`. It has no setters and does not inherit `Document`. |
 | `ConformantOperationView` | `input()` and `output()` return a disposable `ValueContract` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. Both views have `retain()`. |
 | `ValueContract` | `schema()` acquires the exact schema; `prepare(options)` takes `resources`, `limits` and `signal` and returns `{ status: "ready", valueContract }` or `{ status: "no-verdict", detail }`. |
@@ -164,7 +166,8 @@ known bytes and stops before exceeding the budget. A refusal discards that buffe
 `PreparedValueContract` is `Clone + Send + Sync + 'static` and owns what it needs after
 the document, resources and evaluator are dropped. Core has no default evaluator
 dependency. Use `JsonValue::parse_with_limits` and `PreparedValueContract::validate`
-for custom admission limits or retained exact values; `validate_with_control`
+for custom admission limits or retained exact values (TypeScript: `parseJson` with
+`limits`, then `validate`); `validate_with_control`
 accepts cooperative cancellation. Each preparation still compiles independently.
 A `ResourceSet` indexes its resource identities once, and clones share it. A
 resolution space is assembled only when an evaluator requests the core projection,
@@ -285,7 +288,7 @@ Rust deadline and outcome items are defined in
 | Rust public item | Contract |
 | --- | --- |
 | `ClientOptions::timeout: Option<Duration>` | Whole-attempt deadline. `None`, the default, sets none: the attempt runs until it completes or the caller cancels it. A deadline only bounds time, so a host that needs one sets `Some(duration)`. Zero returns `invalid-timeout`. Connect, TLS, headers, redirects, body and validation share one deadline; successful reads and redirects never reset it. |
-| `ClientOptions::max_document_bytes: usize` | Decoded-body bound protecting the process; defaults to 1 MiB. Explicit zero and `usize::MAX` are refused. |
+| `ClientOptions::max_document_bytes: usize` | Decoded-body bound protecting the process; defaults to 1 MiB. Explicit zero and `usize::MAX` are refused. A body within it is validated under admission limits whose byte limit is this bound when it exceeds the default 32 MiB, with any nesting, and the found document keeps them; TypeScript's `maxDocumentBytes` does the same. |
 | `DiscoveryTimer::{now, sleep_until}` | Host monotonic time and a wake-capable absolute timer in the same epoch, expressed as `Duration`, consulted only when a deadline is set. Dropping the timer releases it; local futures are supported. |
 | `discover(origin, &options, &control, &timer, transport)` | Races one host timer and caller `CancellationToken` while invoking a repeatable one-hop callback. The callback must dispatch the normalized URL, expose redirects, deliver decoded bytes or a typed refusal, and release acquisition on drop. It is called again for each admitted redirect, including a cross-origin one, and scopes credentials to the URL it is given. Connection-time DNS, peer and proxy policy belongs to the host. `final_url` is the URL the SDK last dispatched. |
 | `MAX_REDIRECTS` | Ten followed redirects on native and portable checked paths, and in TypeScript where the host exposes redirects. Browser Fetch owns its hidden redirect limit. |
@@ -350,7 +353,12 @@ own dependency and client, with decoded-byte limits still enforced. See the
 Rust `validate_document(input)` validates exact JSON bytes using default admission
 limits of 32 MiB and 1,000,000 nodes, with no nesting cap.
 `validate_document_with_limits(input, JsonLimits)` accepts caller-selected byte, node
-and nesting limits, matching the explicit-limits shape of `JsonValue::parse_with_limits`.
+and nesting limits, matching the explicit-limits shape of `JsonValue::parse_with_limits`
+and `Document::parse_with_limits`. TypeScript's `validateDocument(input, { limits })`
+mirrors both: without `limits`, `validate_document`; with them,
+`validate_document_with_limits`, unspecified entries keeping the `JsonLimits`
+defaults, including the 10,000-level nesting cap. The validated document keeps
+the limits it was admitted under.
 Both return `Result<DocumentValidation, VersionRefusal>`; only a conformant
 validation provides a `Conformant<Document>` proof.
 
@@ -378,8 +386,8 @@ only beneath failing positions, a bounded number of times for each level of the
 derived schema's finite depth, and stops at its findings allowance. Linear work is not short work: the SemVer near miss,
 the worst case per byte, took about 0.35 seconds at the default 32 MiB limit,
 0.6 seconds at 60 MB and 0.7 seconds at 64 MiB in a release build on an Apple M1 Max. Callers bound that
-time with the admission byte limit, `JsonLimits::max_bytes` through
-`validate_document_with_limits`.
+time with the admission byte limit, `JsonLimits::max_bytes` (`limits.maxBytes` in
+TypeScript).
 OBI-10 checks each embedded schema object against the meta-schema, its subschemas
 separately, with recursive meta-schema edges cut to a type check, so one node
 meets each of the cut meta-schema's 129 positions at most once; its patterns are
@@ -400,8 +408,11 @@ no location. Input admission refusals are not violations. Outside whole-document
 validation, an `InputError` keeps its code and byte offset, and its `Display`
 writes what the parser expected or found and the byte where, such as
 `expected a colon after the member name at byte 5`, with the same wording as a
-syntax finding's message. An input-limit finding's message instead states the
-limit reached and names the `JsonLimits` setting that raises it.
+syntax finding's message; for an exceeded limit it adds the setting that raises
+it, as in `; raise JsonLimits::max_bytes (limits.maxBytes in TypeScript)`. An
+input-limit finding's message instead states the limit reached, as in
+`the document's 33554433 bytes exceed the 33554432-byte admission limit`, and
+names the same setting.
 
 | Code | Rule | Meaning |
 | --- | --- | --- |

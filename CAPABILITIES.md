@@ -26,9 +26,14 @@ values and supplied schema resources still retain unpaired UTF-16 units exactly,
 and so do the JSON Pointers that locate their nodes.
 
 Default parsing admits 32 MiB, 10,000 container levels and 1,000,000 nodes.
-`validate_document` admits the same bytes and nodes at any nesting; a host that
-validates larger documents raises `JsonLimits::max_bytes` through
-`validate_document_with_limits`, the setting an `input-limit` finding names.
+`validate_document` admits the same bytes and nodes at any nesting. These
+admission limits are a setting wherever documents enter: `JsonLimits` for
+`validate_document_with_limits`, `Document::parse_with_limits` and
+`JsonValue::parse_with_limits`, and `limits` for TypeScript's
+`validateDocument`, `Document.parse` and `parseJson`. A document keeps the
+limits it was admitted under, so its edits and value-contract projection parse
+under them, and discovery admits bodies up to its configured body bound. Each
+limit refusal names the setting that raises it.
 Ordinary Rust Serde conversion has a 128-container ceiling. Document reports retain at
 most 4,096 findings and 8 MiB of pointers. Truncation leaves rule evidence
 intact. Document validation's memory grows linearly with the document: its copy

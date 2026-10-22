@@ -25,7 +25,9 @@ check the CORS choice in their options.
 
 ## Limits and host responsibilities
 
-The decoded body is bounded at 1 MiB by default, which protects the process. An
+The decoded body is bounded at 1 MiB by default, which protects the process. A
+body within the bound is validated under admission limits that admit it: the
+bound, when it exceeds the default 32 MiB byte limit, with any nesting. An
 attempt has no deadline unless `ClientOptions::timeout` sets one; without one it
 runs until it completes or the caller cancels it. A deadline only bounds time, so
 it is the application's choice: a host that needs a bound sets it. Only 404 means
