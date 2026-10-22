@@ -90,9 +90,10 @@ random bits, must add no more than the pattern memory at their peak.
 
 ## Default admission limits
 
-The limits phase (`src/limits.rs`) validates documents at the default
-admission limits (64 MiB, 1,000,000 nodes, any nesting) that maximize each
-structure document validation builds: a million nested arrays around a long
+The limits phase (`src/limits.rs`) validates 34 documents at the default
+admission limits (64 MiB, 1,000,000 nodes, any nesting), most filling the byte
+or node limit, with structures document validation builds: a million nested
+arrays around a long
 string; half a million invalid operation names, alone and beside a string
 filling the byte limit; a million escaped strings; one escaped string and one
 string with an unpaired surrogate escape filling the limit; a million-element
@@ -102,7 +103,9 @@ filling the remaining bytes; half a million invalid operation names holding
 escapes, filling the limit; a third of a million `$id`s that each add
 directories, under a base or with authorities of their own, alone, in pairs and
 with a query and fragment, each beside an escaped string filling the remaining
-bytes; an operation name, an extension name and an alias of U+E000, the
+bytes; a third of a million escaped `$id`s, each with its own authority and a
+dot segment that makes its path a copy, alone and with a query and fragment;
+an operation name, an extension name and an alias of U+E000, the
 character fixed checks escape beside encoded unpaired units, filling the limit,
 and the operation name beside an unpaired unit; 166,000 nested relative `$id`s,
 and 70,000 of them
@@ -112,7 +115,7 @@ each declaring a repeated `$id`; one `$id` of 4 million segments (8 MiB) and of
 150,000 relative `$id`s; 2,399 relative `$id`s, each giving up a different
 number of a long `$id`'s 10 million segments; and a malformed reference at every
 level of a 120,000-level schema chain. Each `validate_document` call must add at
-most **320 MiB** (five times the byte limit) of live allocation above the
+most **448 MiB** (seven times the byte limit) of live allocation above the
 caller's input, and must reach its expected conclusion. This bounds these
 shapes, not every document. Run the phase alone with `--limits-only`.
 

@@ -42,11 +42,7 @@ pub fn member_at(value: crate::JsonRef<'_>, index: usize) -> Option<crate::JsonM
 
 // Fixed schemas only test ASCII patterns, ASCII constants and nonempty strings.
 // Escape the marker itself and encode unpaired units, retaining every UTF-16 unit.
-// This presentation is injective; it is not a Unicode replacement operation. In a
-// document holding no unpaired unit, no string is encoded, so every string is
-// presented as itself, which is injective already: doubling the marker there
-// changes no fixed schema's verdict, since none tests length beyond nonempty or
-// matches the marker except where any character matches.
+// This presentation is injective; it is not a Unicode replacement operation.
 const STRING_MARKER: char = '\u{e000}';
 #[derive(Clone, Copy, Default)]
 struct StringAccess {
@@ -96,7 +92,7 @@ fn interpreted_unpaired() {
 }
 fn present_string(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
     if let Some(text) = arena.string(id) {
-        if arena.unpaired.is_empty() || !text.contains(STRING_MARKER) {
+        if !text.contains(STRING_MARKER) {
             return Some(Cow::Borrowed(text));
         }
         let markers = text.matches(STRING_MARKER).count();
@@ -136,9 +132,22 @@ fn present_string(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
     }
     Some(Cow::Owned(text))
 }
+// How the fixed checks read a string. A value holding no unpaired unit encodes
+// none, so each string is read as itself, which is injective already; doubling
+// the marker there changes no fixed schema's verdict, since none tests length
+// beyond nonempty or matches the marker except where any character matches. A
+// fixed check compares one value's strings only with each other and with the
+// fixed schemas' ASCII text. The schema space keeps the presentation for every
+// value, since references name its members by it.
+fn fixed_presentation(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
+    match arena.string(id) {
+        Some(text) if arena.unpaired.is_empty() => Some(Cow::Borrowed(text)),
+        _ => present_string(arena, id),
+    }
+}
 fn read_string(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
     if STRING_ACCESS.get().fixed {
-        return present_string(arena, id);
+        return fixed_presentation(arena, id);
     }
     if let Some(text) = arena.string(id) {
         return Some(Cow::Borrowed(text));
@@ -148,7 +157,8 @@ fn read_string(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
     }
     present_string(arena, id)
 }
-/// The same fixed-schema spelling for locating errors back in the exact arena.
+/// The injective spelling of a string: the marker doubled and unpaired units
+/// encoded with it. The schema space names members by it.
 pub fn fixed_string(value: crate::JsonRef<'_>) -> Option<Cow<'_, str>> {
     present_string(value.owner, value.id)
 }
@@ -418,7 +428,7 @@ impl<'a> Iterator for Members<'a> {
             (
                 MemberName {
                     text: if STRING_ACCESS.get().fixed {
-                        present_string(self.0, name).expect("member name is a string")
+                        fixed_presentation(self.0, name).expect("member name is a string")
                     } else {
                         self.0.string(name).map(Cow::Borrowed).unwrap_or_else(|| {
                             present_string(self.0, name).expect("member name is a string")
@@ -1566,23 +1576,29 @@ mod tests {
     }
 
     #[test]
-    fn fixed_strings_hold_no_copy_unless_unpaired_units_need_the_escape() {
-        // Without an unpaired unit no string is encoded, so the marker needs no
-        // escape and every string is read in place; beside one, the marker is
-        // doubled so that no string reads like an encoded unit.
+    fn fixed_checks_read_strings_in_place_unless_unpaired_units_need_the_escape() {
+        // Without an unpaired unit no string is encoded, so the fixed checks
+        // need no escape for the marker and read every string in place; beside
+        // one, the marker is doubled so that no string reads like an encoded
+        // unit. The schema space's spelling always doubles it.
         let marker = '\u{e000}';
+        fn read(value: &crate::JsonValue, at: usize) -> Cow<'_, str> {
+            let element = value.view().element(at).unwrap();
+            fixed_strings(|| read_string(element.owner, element.id)).unwrap()
+        }
         let plain = crate::JsonValue::parse(format!(r#"["{marker}a{marker}","b"]"#)).unwrap();
-        let first = plain.view().element(0).unwrap();
         assert!(
-            matches!(fixed_string(first), Some(Cow::Borrowed(text)) if text == format!("{marker}a{marker}"))
+            matches!(read(&plain, 0), Cow::Borrowed(text) if text == format!("{marker}a{marker}"))
         );
         let unpaired =
             crate::JsonValue::parse(format!(r#"["{marker}a{marker}","\ud800"]"#)).unwrap();
-        let [first, second] = [0, 1].map(|at| unpaired.view().element(at).unwrap());
-        assert!(
-            matches!(fixed_string(first), Some(Cow::Owned(text)) if text == format!("{marker}{marker}a{marker}{marker}"))
+        let doubled = format!("{marker}{marker}a{marker}{marker}");
+        assert!(matches!(read(&unpaired, 0), Cow::Owned(text) if text == doubled));
+        assert_eq!(read(&unpaired, 1), format!("{marker}d800;"));
+        assert_eq!(
+            fixed_string(plain.view().element(0).unwrap()).unwrap(),
+            doubled
         );
-        assert_eq!(fixed_string(second).unwrap(), format!("{marker}d800;"));
     }
 
     #[test]

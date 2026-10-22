@@ -656,20 +656,23 @@ These are requested bytes, counted as the
 [diagnostic memory probe](../tools/diagnostic-memory-probe/README.md) counts
 them: every reallocation holds its old block and its new one at once, whether
 or not it moved. They are not resident memory, which adds allocator overhead
-and leaves out capacity never touched. The probe's limits phase validates 32
-documents built to maximize these terms, alone or beside an escaped string
-filling the bytes left. Among them are one `$id` of 4 million segments (8 MiB)
+and leaves out capacity never touched. The probe's limits phase validates 34
+documents, most filling the byte or node limit, with structures that grow these
+terms, alone or beside an escaped string filling the bytes left. Among them are
+one `$id` of 4 million segments (8 MiB)
 and of 33 million (64 MiB), alone and beside identifiers declared twice; one
 interrupted by dot segments; a 60 MiB authority read back by 150,000 relative
 identifiers; 2,399 relative identifiers, each giving up a different number of
 a long identifier's 10 million segments; a third of a million `$id`s that each
 add directories, under a base or with authorities of their own, alone, in pairs
-and with a query and fragment; and an operation name, an extension name and an
-alias of U+E000 filling the limit. The phase fails if a call exceeds 320 MiB,
-which bounds these shapes, not every document. On 2026-10-22 (macOS arm64,
-Rust 1.99.0, release build) the largest, 333,320 `$id`s that each add an
-authority, a directory, a query and a fragment beside an escaped string
-filling the bytes left, peaked at 281.5 MiB, and every shape validated within
+and with a query and fragment; a third of a million escaped `$id`s, each with
+its own authority and a dot segment that makes its path a copy; and an
+operation name, an extension name and an alias of U+E000 filling the limit.
+The phase fails if a call exceeds 448 MiB, seven times the byte limit, which
+bounds these documents, not every document. On 2026-10-22 (macOS arm64, Rust
+1.99.0, release build) the largest, 333,320 escaped `$id`s, each with its own
+authority, a query, a fragment and a dot segment that makes its path a copy,
+peaked at 412.2 MiB, 35.8 MiB below that, and every shape validated within
 0.8 s. No admission limit changed.
 
 The operating system's maximum resident set size of a process that reads a file
@@ -693,6 +696,8 @@ compared with revision `ac50faf`:
 | 333,320 `$id`s, each an authority and a directory, beside an escaped string | 64 MiB | 574 MiB | 318 MiB |
 | The same with a query and fragment | 64 MiB | 571 MiB | 340 MiB |
 | 333,320 relative directory `$id`s in pairs beside an escaped string | 64 MiB | 662 MiB | 340 MiB |
+| 333,320 escaped `$id`s, each an authority and a copied path | 64 MiB | 584 MiB | 417 MiB |
+| The same with a query and fragment | 64 MiB | 584 MiB | 455 MiB |
 | One operation name of U+E000 | 64 MiB | 2,526 MiB | 137 MiB |
 | One alias of U+E000 | 64 MiB | 2,484 MiB | 137 MiB |
 | One extension name of U+E000 | 64 MiB | 519 MiB | 135 MiB |

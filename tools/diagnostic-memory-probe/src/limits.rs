@@ -1,8 +1,10 @@
 //! Document validation at the default admission limits, on documents that
-//! maximize each structure it builds: its own copy of the text, the decoded
-//! text of escaped strings, and its tree and validation state, with the
-//! buffers they grow in. Each must stay within one allowance above the
-//! caller's input, five times the default byte limit.
+//! mostly fill the byte or node limit with structures it builds: its own copy
+//! of the text, the decoded text of escaped strings, and its tree and
+//! validation state, with the buffers they grow in. Each must stay within one
+//! allowance above the caller's input, seven times the default byte limit,
+//! which the largest, copied identifier paths with pieces, approaches within
+//! 36 MiB.
 use super::{ALLOCATIONS, measured};
 use serde_json::json;
 use std::fmt::Write;
@@ -11,7 +13,7 @@ use std::sync::atomic::Ordering::Relaxed;
 const MIB: usize = 1024 * 1024;
 const MAX_BYTES: usize = 64 * MIB;
 /// Peak live allocation above the caller's input, at the default limits.
-const ALLOWANCE: usize = 5 * MAX_BYTES;
+const ALLOWANCE: usize = 7 * MAX_BYTES;
 const HEAD: &str = r#"{"openbindings":"0.2.0""#;
 
 /// `prefix`, a member holding one string that fills the document to the byte
@@ -70,8 +72,9 @@ fn long_identifier(total: usize, before: &str, start: &str, segment: &str) -> St
 }
 const REPEATED_PAIRS: &str = r#""t1":{"$id":"https://x.test/1"},"t2":{"$id":"https://x.test/1"},"t3":{"$id":"https://x.test/2"},"t4":{"$id":"https://x.test/2"},"#;
 
-/// Each document maximizes one structure validation builds, or pairs one with
-/// a string that holds as much decoded text as the remaining bytes allow.
+/// Each document fills the limits with one structure validation builds, or
+/// pairs one with a string that holds as much decoded text as the remaining
+/// bytes allow.
 fn shapes() -> Vec<(&'static str, String, &'static str)> {
     let mut shapes = Vec::new();
     let levels = 999_980;
@@ -230,6 +233,25 @@ fn shapes() -> Vec<(&'static str, String, &'static str)> {
     ] {
         shapes.push(shape);
     }
+    // A third of a million escaped `$id`s, each with its own authority and a
+    // dot segment that makes its path a copy, filling the byte limit: the
+    // decoded identifiers, their copied paths and their directories at once.
+    let copied = |name: &'static str, pieces: &str, expected: &'static str| {
+        let element = |i: usize, length: usize| {
+            format!(
+                r#"{{"$id":"s:\/\/{i:x}/q/a/../b/{}/{pieces}"}}"#,
+                "c".repeat(length)
+            )
+        };
+        let prefix = format!(r#"{HEAD},"operations":{{}},"schemas":{{"s":{{"allOf":["#);
+        let suffix = "]}}}";
+        let base = prefix.len() + suffix.len() + (0..333_320).map(|i| element(i, 0).len() + 1).sum::<usize>();
+        let length = (MAX_BYTES - base) / 333_320;
+        let text = format!("{prefix}{}{suffix}", joined(333_320, |i| element(i, length)));
+        (name, text, expected)
+    };
+    shapes.push(copied("copied-identifier-paths", "", "conformant"));
+    shapes.push(copied("copied-identifier-paths-with-pieces", "?#f", "non-conformant"));
     // One name or alias of U+E000, the character fixed checks escape beside
     // encoded unpaired units, filling the byte limit; and the operation name
     // beside one unpaired unit, where each is presented doubled.

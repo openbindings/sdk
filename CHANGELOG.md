@@ -28,9 +28,9 @@
   identifiers share runs of the `$id` texts, so long and nested `$id`s take
   memory and time linear in the document, as do repeated findings deep in a
   document, large maps, alias lists and `uniqueItems` arrays, and fixed checks
-  read names holding U+E000 in place. Of the diagnostic memory probe's 32
+  read names holding U+E000 in place. Of the diagnostic memory probe's 34
   documents at the default limits (64 MiB, 1,000,000 nodes, any nesting), the
-  largest allocates 281.5 MiB beyond the caller's input, counting each
+  largest allocates 412.2 MiB beyond the caller's input, counting each
   reallocation as holding its old and new blocks at once.
 - Document validation's fixed checks (OBI-02, OBI-10) and reference inspection use
   the unmodified jsonschema 0.58.6 library with its default pattern engine, which

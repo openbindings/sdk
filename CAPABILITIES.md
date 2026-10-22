@@ -34,11 +34,12 @@ of the text, the decoded text of its escaped strings, its tree, and validation
 state per schema position, `$id` declaration and retained finding. Compared
 identifiers share runs of the `$id` texts, so a long or deeply nested `$id`
 costs memory and time linear in the document. At the default limits the
-diagnostic memory probe validates 32 documents built to maximize these terms,
-and fails if one allocates more than 320 MiB beyond the caller's input,
-counting every reallocation as holding its old and new blocks at once. The
-largest, a third of a million `$id`s with authorities, queries and fragments
-beside an escaped string filling the bytes left, allocates 281.5 MiB. See
+diagnostic memory probe validates 34 documents, most filling the byte or node
+limit, with structures that grow these terms, and fails if one allocates more
+than 448 MiB beyond the caller's input, counting every reallocation as holding
+its old and new blocks at once. The largest, a third of a million escaped
+`$id`s, each with its own authority, a query, a fragment and a dot segment that
+makes its path a copy, allocates 412.2 MiB. See
 [performance and allocation boundaries](docs/performance-boundaries.md).
 OBI-02's whole-document check and each embedded schema's OBI-10 meta-schema
 check run on the unmodified jsonschema 0.58.6 library with its default pattern
