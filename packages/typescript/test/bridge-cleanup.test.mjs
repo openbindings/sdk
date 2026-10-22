@@ -115,7 +115,8 @@ test("ordinary admission maps only known engine limits and preserves unexpected 
       error: {
         code: "input-limit",
         instancePointer: null,
-        message: "The ordinary value exceeds the admitted JSON limits.",
+        message:
+          "The ordinary value exceeds the admitted JSON limits; check a larger value as exact JSON from parseJson with larger limits.",
       },
     });
     const unexpected = new Error("unexpected engine error");

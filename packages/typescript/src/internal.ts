@@ -76,7 +76,7 @@ export interface InputFailure {
     kind?: string;
     /** Zero-based offset in original UTF-8 source when available. */
     byteOffset?: number;
-    /** Human-readable explanation of what the parser expected or found and the byte where, such as `expected a colon after the member name at byte 5`; use `code` and `byteOffset` for logic. */
+    /** Human-readable explanation of what the parser expected or found and the byte where, such as `expected a colon after the member name at byte 5`, and for an exceeded limit the `limits` entry that raises it; use `code` and `byteOffset` for logic. */
     message: string;
   };
 }
@@ -450,6 +450,54 @@ function encodedLimits(limits: Partial<EvaluatorLimits> = {}): string {
   }
   return JSON.stringify(encoded);
 }
+/** Admission limits for exact JSON and documents, Rust's `JsonLimits`; each a nonnegative integer no greater than 4294967295. Validation memory grows with the document, so raise them only where the process has the memory. */
+export interface JsonLimits {
+  /** Maximum admitted UTF-8 bytes; default 33,554,432 (32 MiB). */
+  maxBytes: number;
+  /** Maximum parsed nodes, including object member-name tokens; default 1,000,000. */
+  maxNodes: number;
+  /** Maximum nested arrays and objects, including a container root; default 10,000. validateDocument without limits sets no nesting cap. */
+  maxDepth: number;
+}
+// Rust's JsonLimits::default(), read once: bytes, nodes and nesting.
+let defaultLimits: Uint32Array | undefined;
+function jsonDefaults(): Uint32Array {
+  return (defaultLimits ??= wasm.jsonLimits());
+}
+// Complete admission limits for the bridge, unspecified entries from Rust's
+// JsonLimits::default(); undefined when the caller passed none.
+function admissionLimits(
+  limits: Partial<JsonLimits> | undefined,
+): Uint32Array | undefined {
+  if (limits === undefined) return undefined;
+  const [maxBytes, maxNodes, maxDepth] = jsonDefaults();
+  const complete: Record<string, number> = { maxBytes, maxNodes, maxDepth };
+  for (const [key, value] of ownEntries(limits)) {
+    if (
+      !Object.hasOwn(complete, key) ||
+      typeof value !== "number" ||
+      !Number.isSafeInteger(value) ||
+      value < 0 ||
+      value > 0xffffffff
+    )
+      throw new SdkError(
+        "invalid-json-limits",
+        "JSON limits must be maxBytes, maxNodes or maxDepth, each a nonnegative integer no greater than 4294967295.",
+      );
+    complete[key] = value;
+  }
+  return new Uint32Array([
+    complete.maxBytes!,
+    complete.maxNodes!,
+    complete.maxDepth!,
+  ]);
+}
+// The limits option of an entry that admits exact JSON.
+function limitsOption(options: { limits?: Partial<JsonLimits> }) {
+  if (!options || typeof options !== "object" || Array.isArray(options))
+    throw new SdkError("invalid-json-limits", "Options must be an object.");
+  return admissionLimits(options.limits);
+}
 /** Frozen metadata snapshot in lexical primary-key order. It contains no disposable owners and is not evidence of conformance, schema support or binding priority. */
 export interface OperationMetadata {
   /** Primary operation key, independent of the alias used to select it. */
@@ -707,7 +755,7 @@ function contractRaw(owner: ValueContract): wasm.WasmValueContract {
 }
 /** Ordinary JSON scalar types; runtime admission additionally requires finite numbers. JavaScript number precision already lost before admission cannot be reconstructed. */
 export type JsonPrimitive = null | boolean | number | string;
-/** Checked ordinary JSON input, including nested borrowed ExactJson owners for precise subtrees. Arrays must be dense; objects plain with enumerable data properties; cycles, accessors, symbols, bigint and undefined are refused. Admission never invokes toJSON or getters. Ordinary encoding admits at most 33,554,432 UTF-16 code units of serialized text, 1,000,000 visited values and depth 10,000; subsequent exact parsing also enforces 32 MiB UTF-8 and 1,000,000 total nodes, including member-name tokens. */
+/** Checked ordinary JSON input, including nested borrowed ExactJson owners for precise subtrees. Arrays must be dense; objects plain with enumerable data properties; cycles, accessors, symbols, bigint and undefined are refused. Admission never invokes toJSON or getters. Ordinary encoding admits at most 33,554,432 UTF-16 code units of serialized text, 1,000,000 visited values and depth 10,000; subsequent exact parsing also enforces 32 MiB UTF-8 and 1,000,000 total nodes, including member-name tokens. A document's edits and typed setters use the limits the document was admitted with instead. Check a larger value as exact JSON from parseJson with larger limits. */
 export type JsonInput =
   | JsonPrimitive
   | ExactJson
@@ -944,23 +992,37 @@ export class ExactJson extends Managed {
     return { status: "converted", value: value as JsonOutput };
   }
 }
-/** Parse exact JSON using default admission limits (32 MiB UTF-8, 10,000 container depth, 1,000,000 nodes). Returns a caller-owned ExactJson or input-error. Initialization, wrong input types and literal unpaired UTF-16 text throw; JSON escapes preserve such units. */
-export function parseJson(input: ExactInput): ParseResult<ExactJson> {
+/** Parse exact JSON under admission limits, by default 32 MiB UTF-8, 1,000,000 nodes and 10,000 container levels; `limits` overrides them, unspecified entries keeping those defaults, as Rust's `JsonValue::parse_with_limits` does. Returns a caller-owned ExactJson or input-error. Check a value larger than the defaults this way and pass the ExactJson to a prepared contract. Initialization, wrong input or option types and literal unpaired UTF-16 text throw; JSON escapes preserve such units. */
+export function parseJson(
+  input: ExactInput,
+  options: {
+    /** Admission limits; unspecified entries keep their defaults. */
+    limits?: Partial<JsonLimits>;
+  } = {},
+): ParseResult<ExactJson> {
   requireReady();
+  const limits = limitsOption(options);
   const data = bytes(input);
   try {
     return {
       status: "parsed",
-      value: new ExactJson(wasm.WasmJson.parseBytes(data)),
+      value: new ExactJson(wasm.WasmJson.parseBytes(data, limits)),
     };
   } catch (e) {
     return failure(e);
   }
 }
-/** Assess all normative document rules directly from exact source, including invalid JSON. Unsupported declared versions return version-refused; parse/limit failures become truthful evidence. Admits up to the default limits, 32 MiB UTF-8 and 1,000,000 nodes at any nesting, which TypeScript has no setting to raise; a larger document leaves every rule inconclusive with input-limit findings. Returns plain data with no handle to dispose. Initialization, wrong input types and literal unpaired UTF-16 text throw; represent unpaired units with JSON escapes or exact UTF-8 bytes. */
-export function validateDocument(input: ExactInput): DocumentReport {
+/** Assess all normative document rules directly from exact source, including invalid JSON. Unsupported declared versions return version-refused; parse/limit failures become truthful evidence. Without `limits`, admits 32 MiB UTF-8 and 1,000,000 nodes at any nesting, as Rust's `validate_document` does; with them, as `validate_document_with_limits` does, unspecified entries keeping the JsonLimits defaults, including the 10,000-level nesting cap. A document past a limit leaves every rule inconclusive with input-limit findings naming the limit. Returns plain data with no handle to dispose. Initialization, wrong input or option types and literal unpaired UTF-16 text throw; represent unpaired units with JSON escapes or exact UTF-8 bytes. */
+export function validateDocument(
+  input: ExactInput,
+  options: {
+    /** Admission limits; unspecified entries keep the JsonLimits defaults. */
+    limits?: Partial<JsonLimits>;
+  } = {},
+): DocumentReport {
   requireReady();
-  return decode(wasm.validateBytes(bytes(input)));
+  const limits = limitsOption(options);
+  return decode(sdkCall(() => wasm.validateBytes(bytes(input), limits)));
 }
 /** Return authoring default, supported specification line and exact applied specification revision. These identities are independent of the npm package version. */
 export function versionPolicy(): {
@@ -1190,14 +1252,21 @@ export class Document extends DocumentReads {
   static {
     adoptDocument = (raw) => new Document(raw, documentToken);
   }
-  /** Admit exact JSON, including broken documents, without conformance proof. Expected input refusal uses input-error; initialization and API misuse throw. */
-  static parse(input: ExactInput): ParseResult<Document> {
+  /** Admit exact JSON, including broken documents, without conformance proof, under admission limits: by default 32 MiB UTF-8, 1,000,000 nodes and 10,000 container levels, and `limits` overrides them, unspecified entries keeping those defaults, as Rust's `Document::parse_with_limits` does. The document keeps its limits: edits, typed setters and value-contract preparation parse what they write under them. Expected input refusal uses input-error; initialization and API misuse throw. */
+  static parse(
+    input: ExactInput,
+    options: {
+      /** Admission limits the document keeps; unspecified entries keep their defaults. */
+      limits?: Partial<JsonLimits>;
+    } = {},
+  ): ParseResult<Document> {
     requireReady();
+    const limits = limitsOption(options);
     const data = bytes(input);
     try {
       return {
         status: "parsed",
-        value: adoptDocument(wasm.WasmDocument.parseBytes(data)),
+        value: adoptDocument(wasm.WasmDocument.parseBytes(data, limits)),
       };
     } catch (error) {
       return failure(error);
@@ -1270,7 +1339,10 @@ export class Document extends DocumentReads {
       indices: [],
       seen: new Map(),
     };
-    const tail = encodeOrdinary(value, context, exact);
+    const tail = encodeOrdinary(value, context, exact, {
+      limits: handle<wasm.WasmDocument>(this).limits(),
+      raise: "parse the document with a larger",
+    });
     exact.chunks.push(tail + suffix);
     exact.chunks[0] = prefix + exact.chunks[0];
     const values = exact.owners.map(jsonRaw);
@@ -2048,7 +2120,8 @@ function checkValue(
         error: {
           code: "input-limit",
           instancePointer: null,
-          message: "The ordinary value exceeds the admitted JSON limits.",
+          message:
+            "The ordinary value exceeds the admitted JSON limits; check a larger value as exact JSON from parseJson with larger limits.",
         },
       };
     }
@@ -2506,7 +2579,9 @@ export async function discover(
     }
     if (check()) return { ...cancellation(), metadata, body };
     phase = "assessment";
-    const assessed = new wasm.WasmDiscovery(body);
+    // The body is validated under limits that admit the bound, as in Rust; a
+    // body within it cannot pass 4294967295 bytes of Wasm memory.
+    const assessed = new wasm.WasmDiscovery(body, Math.min(limit, 0xffffffff));
     try {
       const result = decode<DiscoveryBodyResult>(assessed.result()),
         raw = assessed.document();
@@ -2640,12 +2715,27 @@ interface EditEncoding {
   indices: number[];
   seen: Map<ExactJson, number>;
 }
+// The admission limits encoded text is parsed under, bytes, nodes and nesting,
+// with what a caller raises them through: a document's edits are parsed under
+// the limits it was admitted with, any other value under the defaults.
+interface EncodingLimits {
+  limits: ArrayLike<number>;
+  raise: string;
+}
+function valueEncoding(): EncodingLimits {
+  return {
+    limits: jsonDefaults(),
+    raise: "check a larger value as exact JSON from parseJson with larger",
+  };
+}
 /** Iterative, checked serialization. No getters, toJSON hooks, omission, or implicit coercion. */
 function encodeOrdinary(
   value: unknown,
   authoring?: AuthorContext,
   exact?: EditEncoding,
+  encoding: EncodingLimits = valueEncoding(),
 ): string {
+  const [maxBytes, maxNodes, maxDepth] = Array.from(encoding.limits);
   const childPath = (owner: object, name: string, parent: string) =>
     authoring
       ? (authoring.origins.get(owner)?.get(name) ?? pointerChild(parent, name))
@@ -2671,11 +2761,11 @@ function encodeOrdinary(
     nodes = 0;
   const add = (s: string, pointer: string) => {
     size += s.length;
-    if (size > 32 * 1024 * 1024)
+    if (size > maxBytes!)
       reject(
         "authoring-limit",
         pointer,
-        "Ordinary value exceeds the 32 MiB character limit.",
+        `Ordinary value exceeds the ${maxBytes}-character limit; ${encoding.raise} limits.maxBytes.`,
         true,
       );
     parts.push(s);
@@ -2695,11 +2785,11 @@ function encodeOrdinary(
       authoring?.editBatch && job.depth === 1
         ? normalizeEdit(job.value, authoring)
         : job.value;
-    if (++nodes > 1_000_000 || job.depth > 10_000)
+    if (++nodes > maxNodes! || job.depth > maxDepth!)
       reject(
         "authoring-limit",
         pointer,
-        "Ordinary value exceeds the JSON node or nesting limit.",
+        `Ordinary value exceeds the ${maxNodes}-node or ${maxDepth}-level nesting limit; ${encoding.raise} limits.maxNodes or limits.maxDepth.`,
         true,
       );
     if (isExact(value)) {

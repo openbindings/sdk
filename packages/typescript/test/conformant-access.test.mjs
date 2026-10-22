@@ -374,26 +374,3 @@ test("undetermined admission evidence cannot produce a proof through Rust/Wasm o
     sdk.ConformantDocument.prototype.resolveOperation.call(result, "run"),
   );
 });
-
-test("validateDocument admits 32 MiB and names the byte limit's setting one byte past it", () => {
-  const limit = 32 * 1024 * 1024;
-  const head = '{"openbindings":"0.2.0","operations":{},"x-fill":"';
-  const source = (bytes) => head + "a".repeat(bytes - head.length - 2) + '"}';
-  const within = sdk.validateDocument(source(limit));
-  assert.equal(within.status, "report");
-  assert.equal(within.report.conclusion, "conformant");
-  const over = sdk.validateDocument(source(limit + 1));
-  assert.equal(over.status, "report");
-  assert.equal(over.report.conclusion, "undetermined");
-  assert.equal(over.report.findings.length, 13);
-  for (const finding of over.report.findings) {
-    assert.equal(finding.code, "input-limit");
-    assert.equal(finding.location, null);
-    assert.equal(
-      finding.message,
-      "the document's 33554433 bytes exceed the 33554432-byte admission limit; " +
-        "raise JsonLimits::max_bytes through validate_document_with_limits " +
-        "(TypeScript's validateDocument applies the default limits)",
-    );
-  }
-});

@@ -63,6 +63,30 @@ fn input_error(e: InputError) -> JsValue {
         json!({"code":e.code,"kind":format!("{:?}",e.kind),"byte_offset":e.byte_offset,"message":e.to_string()}),
     ))
 }
+// Admission limits as the facade passes them: bytes, nodes and nesting, each a
+// checked 32-bit integer; the facade fills omitted entries from `jsonLimits`.
+fn admission(limits: &[u32]) -> Result<JsonLimits, JsValue> {
+    let invalid = || error("invalid-json-limits", "expected bytes, nodes and depth");
+    let &[max_bytes, max_nodes, max_depth] = limits else {
+        return Err(invalid());
+    };
+    let size = |value: u32| usize::try_from(value).map_err(|_| invalid());
+    Ok(JsonLimits {
+        max_bytes: size(max_bytes)?,
+        max_nodes: size(max_nodes)?,
+        max_depth: size(max_depth)?,
+    })
+}
+fn admission_or_default(limits: Option<Vec<u32>>) -> Result<JsonLimits, JsValue> {
+    limits.map_or(Ok(JsonLimits::default()), |limits| admission(&limits))
+}
+// A document's admission limits for the facade, which bounds ordinary encoding
+// for its edits by them.
+fn limit_values(limits: JsonLimits) -> Vec<u32> {
+    [limits.max_bytes, limits.max_nodes, limits.max_depth]
+        .map(|value| u32::try_from(value).unwrap_or(u32::MAX))
+        .to_vec()
+}
 fn interpretation_error(e: InterpretationError) -> JsValue {
     JsValue::from_str(&object!(
         "code": "interpretation",
@@ -97,14 +121,14 @@ impl std::fmt::Debug for WasmJson {
 #[wasm_bindgen]
 impl WasmJson {
     #[wasm_bindgen(js_name=parseBytes)]
-    pub fn parse_bytes(bytes: &[u8]) -> Result<WasmJson, JsValue> {
-        JsonValue::parse(bytes)
+    pub fn parse_bytes(bytes: &[u8], limits: Option<Vec<u32>>) -> Result<WasmJson, JsValue> {
+        JsonValue::parse_with_limits(bytes, admission_or_default(limits)?)
             .map(|value| Self { value })
             .map_err(input_error)
     }
     #[wasm_bindgen(js_name=parseText)]
     pub fn parse_text(text: &str) -> Result<WasmJson, JsValue> {
-        Self::parse_bytes(text.as_bytes())
+        Self::parse_bytes(text.as_bytes(), None)
     }
     #[must_use]
     pub fn retain(&self) -> WasmJson {
@@ -327,12 +351,16 @@ impl std::fmt::Debug for WasmDocument {
 #[wasm_bindgen]
 impl WasmDocument {
     #[wasm_bindgen(js_name=parseBytes)]
-    pub fn parse_bytes(bytes: &[u8]) -> Result<WasmDocument, JsValue> {
-        Document::parse(bytes)
+    pub fn parse_bytes(bytes: &[u8], limits: Option<Vec<u32>>) -> Result<WasmDocument, JsValue> {
+        Document::parse_with_limits(bytes, admission_or_default(limits)?)
             .map(|document| Self {
                 handle: DocumentHandle::new(document),
             })
             .map_err(input_error)
+    }
+    /// The admission limits this revision keeps: bytes, nodes and nesting.
+    pub fn limits(&self) -> Vec<u32> {
+        limit_values(self.handle.document().limits())
     }
     /// Create an editable empty OBI.
     pub fn create() -> WasmDocument {
@@ -357,7 +385,7 @@ impl WasmDocument {
             if chunks.len() != indices.len() + 1 {
                 return Err(error("invalid-edit", "invalid exact fragment layout"));
             }
-            let limit = JsonLimits::default().max_bytes;
+            let limit = self.handle.document().limits().max_bytes;
             let mut size = 0usize;
             for length in chunks
                 .iter()
@@ -395,8 +423,9 @@ impl WasmDocument {
     }
     /// Apply an atomic array of {op, pointer, value?} edits. Values stay exact JSON.
     pub fn edit(&mut self, edits: &str) -> Result<(), JsValue> {
-        self.handle.editable()?;
-        let input = JsonValue::parse(edits).map_err(input_error)?;
+        // The batch carries its values, so it is admitted as the document is.
+        let limits = self.handle.editable()?.limits();
+        let input = JsonValue::parse_with_limits(edits, limits).map_err(input_error)?;
         if input.has_duplicate_names() {
             return Err(edit_error(EditError::DuplicateMembers));
         }
@@ -875,7 +904,8 @@ impl WasmDocument {
         } else {
             (namespace.to_owned(), format!("{{{}:{text}}}", encoded(key)))
         };
-        let value = JsonValue::parse(text).map_err(input_error)?;
+        let limits = self.handle.editable()?.limits();
+        let value = JsonValue::parse_with_limits(text, limits).map_err(input_error)?;
         self.handle
             .editable()?
             .set(&pointer, &value)
@@ -1545,12 +1575,23 @@ impl WasmPrepared {
         }
     }
 }
+/// Without limits, as `validate_document` admits: the default bytes and nodes, any
+/// nesting. With them, as `validate_document_with_limits` does.
 #[wasm_bindgen(js_name=validateBytes)]
-pub fn validate_bytes(bytes: &[u8]) -> String {
-    match validate_document(bytes) {
+pub fn validate_bytes(bytes: &[u8], limits: Option<Vec<u32>>) -> Result<String, JsValue> {
+    let validation = match limits {
+        None => validate_document(bytes),
+        Some(limits) => validate_document_with_limits(bytes, admission(&limits)?),
+    };
+    Ok(match validation {
         Ok(a) => object!("report": a.report(), "status": "report"),
         Err(e) => encoded(json!({"status":"version-refused","refusal":e})),
-    }
+    })
+}
+/// The default admission limits: bytes, nodes and nesting.
+#[wasm_bindgen(js_name=jsonLimits)]
+pub fn json_limits() -> Vec<u32> {
+    limit_values(JsonLimits::default())
 }
 #[wasm_bindgen(js_name=versionPolicy)]
 pub fn version_policy() -> String {
@@ -1595,10 +1636,18 @@ impl std::fmt::Debug for WasmDiscovery {
 
 #[wasm_bindgen]
 impl WasmDiscovery {
+    /// Judge a complete body as Rust discovery does: under admission limits that
+    /// admit the body bound when it exceeds the default byte limit, any nesting.
     #[wasm_bindgen(constructor)]
-    pub fn new(bytes: &[u8]) -> WasmDiscovery {
+    pub fn new(bytes: &[u8], max_document_bytes: u32) -> WasmDiscovery {
+        let max_bytes = usize::try_from(max_document_bytes).unwrap_or(usize::MAX);
+        let limits = JsonLimits {
+            max_bytes: max_bytes.max(JsonLimits::default().max_bytes),
+            max_depth: usize::MAX,
+            ..JsonLimits::default()
+        };
         Self {
-            validation: openbindings::validate_document(bytes),
+            validation: openbindings::validate_document_with_limits(bytes, limits),
         }
     }
     pub fn result(&self) -> String {
@@ -1713,7 +1762,7 @@ mod location_transfer_tests {
         // A JSON tree cannot hold this finding's pointer; the bridge writes
         // its exact escape, which a JavaScript host parses back exactly.
         let text = r#"{"openbindings":"0.2.0","operations":{},"x":{"\ud800":{"k":0,"k":1}}}"#;
-        let report = validate_bytes(text.as_bytes());
+        let report = validate_bytes(text.as_bytes(), None).unwrap();
         assert!(report.starts_with(r#"{"report":{"#));
         assert!(report.contains(r#""pointer":"/x/\ud800/k""#), "{report}");
         let value = WasmJson::parse_text(text).unwrap();
