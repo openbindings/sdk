@@ -2,18 +2,20 @@
 //! mostly fill the byte or node limit with structures it builds: its own copy
 //! of the text, the decoded text of escaped strings, and its tree and
 //! validation state, with the buffers they grow in. Each must stay within one
-//! allowance above the caller's input, seven times the default byte limit,
-//! which the largest, copied identifier paths with pieces, approaches within
-//! 36 MiB.
+//! allowance above the caller's input, 300 MiB, which the largest, copied
+//! identifier paths with pieces, approaches within 27.8 MiB. The allowance is
+//! not a multiple of the byte limit: halving the limit from 64 MiB took that
+//! document from 412.2 to 272.2 MiB, since much of its memory is held for
+//! each of its 333,320 declarations, whatever their length.
 use super::{ALLOCATIONS, measured};
 use serde_json::json;
 use std::fmt::Write;
 use std::sync::atomic::Ordering::Relaxed;
 
 const MIB: usize = 1024 * 1024;
-const MAX_BYTES: usize = 64 * MIB;
+const MAX_BYTES: usize = 32 * MIB;
 /// Peak live allocation above the caller's input, at the default limits.
-const ALLOWANCE: usize = 7 * MAX_BYTES;
+const ALLOWANCE: usize = 300 * MIB;
 const HEAD: &str = r#"{"openbindings":"0.2.0""#;
 
 /// `prefix`, a member holding one string that fills the document to the byte
@@ -328,9 +330,9 @@ fn shapes() -> Vec<(&'static str, String, &'static str)> {
     // identifier's segments: each splits the run it lands in.
     let mut nested = format!(
         r#"{HEAD},"operations":{{}},"schemas":{{"s":{{"$id":"https://e.test/{}","$defs":{{"#,
-        "ab/".repeat(10_000_000)
+        "ab/".repeat(5_000_000)
     );
-    for up in 1..2_400 {
+    for up in 1..1_750 {
         if up > 1 {
             nested.push(',');
         }
@@ -354,6 +356,7 @@ fn shapes() -> Vec<(&'static str, String, &'static str)> {
 }
 
 pub fn run() {
+    assert_eq!(MAX_BYTES, openbindings::JsonLimits::default().max_bytes);
     for (shape, text, expected) in shapes() {
         let bytes = text.into_bytes();
         assert!(bytes.len() <= MAX_BYTES, "{shape} exceeds the byte limit");
