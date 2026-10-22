@@ -110,18 +110,34 @@ of each reference against what `stack_bytes` admits with a fifth of it left to
 the caller (`unevaluated-walk-limit`: at the default 26 `$ref`s, 8 levels of
 `allOf` inheritance, 7 through `then` or `dependentSchemas`). Each of these
 refusals states its arithmetic and names the setting to raise. Off unless an
-application sets them, since they would only bound time: an evaluation work cap
-(`evaluation_steps`), without which time can grow exponentially with some
-schemas, and a cap on the schema resources one contract may reach
-(`schema_resources`, `schemaResources` in TypeScript). Within these bounds,
-preparing a schema can still take more memory than a host may want (1,000
+application sets them: an evaluation work cap (`evaluation_steps`), which bounds
+only time and without which time can grow exponentially with some schemas, and a
+cap on the schema resources one contract may reach (`schema_resources`,
+`schemaResources` in TypeScript). That cap refuses a contract after core projects
+it and before the evaluator copies its resources and the library compiles them,
+so it bounds the time and memory of that compilation: a 7 MB document whose input
+reaches a chain of 99,990 `$id` resources prepared in 11.5 s at a 723 MB peak
+without it, and refused in 1.2 s at a 502 MB peak with it set to 1,000. Within
+these bounds, preparing a schema can still take more memory than a host may
+want, since the library's compiled program grows with what it compiles: 1,000
 holders of `unevaluatedProperties` that each inherit 4,000 properties peak at
-400 MB), as with any JSON Schema library; a host preparing schemas from
-untrusted parties should do so in an isolated worker or process with an
-operating-system memory limit. Values
+400 MB. A host preparing schemas from untrusted parties should do so in an
+isolated worker or process with an operating-system memory limit. Values
 checked against trusted schemas stay bounded by `stack_bytes` and, when set,
 `evaluation_steps`. A prepared value contract can remain undecidable for a
 particular value.
+
+Two further cases give no verdict whatever `Limits` sets. Exact `multipleOf` divides
+within a fixed arithmetic bound: when the value or the divisor has more than
+4,096 significant digits, or an exponent beyond ±20,000 once the trailing zeros
+of its digits are counted in it, a division the answer needs gives no verdict
+(`numeric-arithmetic-limit`); other numeric keywords compare exactly at any
+size. Caller values keep unpaired UTF-16 units: keywords that compare values
+exactly, such as `const`, `enum`, `required` and `uniqueItems`, decide them,
+while a keyword that reads a string or member name as Unicode text, such as
+`minLength`, `maxLength`, `pattern`, `properties`, `patternProperties` or
+`propertyNames`, gives no verdict (`lone-surrogate-instance`) when it reaches
+one.
 
 A contract that reaches a resource that was not supplied prepares with an
 empty stand-in for it: a pass that reaches the stand-in gives no verdict

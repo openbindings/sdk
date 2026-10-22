@@ -63,6 +63,7 @@ for their required fields and `with_*` methods for optional ones:
 | Source inspectors | `SourceInspection::complete(targets)` or `partial(targets, limitation)` and `with_limitation(..)`, `BindableTarget::new(source_ref, binding).with_operation_key(..).with_operation(..)`, `InspectionLimitation::new(code, message).with_details(..).with_additional_fields(..)`, `SupportedKind::new(kind).with_description(..)` |
 | Interface synthesizers | `SynthesisCandidate::new(document, coverage)`, `CoverageClaim::complete(entries)` or `partial(entries, limitation)`, `CoverageEntry::new(..)` then its assignable evidence fields, `CoverageLimitation::new(code, message)` with the same builders, `SupportedKind::new(kind)` |
 | Binding invokers and transports | `binding::SupportedKind::new(kind).with_description(..)`, HTTP discovery `RequestError::new(kind, message)` |
+| Version checks | `VersionRefusal::new(declared)`, `Some` only for a well-formed version outside the supported line |
 
 `SupportedKind` and `KindSupportVerdict` are one type in every companion that
 reexports them, so a provider serving inspection, synthesis and invocation can
@@ -71,7 +72,6 @@ the checked caller that returned it. Likewise `BindingValue` is both a
 `BindableTarget`'s binding and the binding a `BindingRequest` carries: invoke an
 inspected target's binding as it is, or assign the author's keys with
 `BindingValue::bind` to get a core `Binding`.
-| Version checks | `VersionRefusal::new(declared)`, `Some` only for a well-formed version outside the supported line |
 
 Input records, which callers build and the SDK reads, keep struct-literal
 construction: typed authoring parts and `BindingValue`, `SchemaResource`,
