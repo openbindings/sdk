@@ -25,6 +25,44 @@ pub const DOCUMENT_RULES: [&str; 13] = [
     "OBI-01", "OBI-02", "OBI-03", "OBI-04", "OBI-05", "OBI-06", "OBI-07", "OBI-08", "OBI-09",
     "OBI-10", "OBI-11", "OBI-12", "OBI-13",
 ];
+// The document rules, named by their identifiers and declared in
+// `DOCUMENT_RULES` order, so `Rule::Obi04 as usize` indexes OBI-04's evidence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Rule {
+    Obi01,
+    Obi02,
+    Obi03,
+    Obi04,
+    Obi05,
+    Obi06,
+    Obi07,
+    Obi08,
+    Obi09,
+    Obi10,
+    Obi11,
+    Obi12,
+    Obi13,
+}
+impl Rule {
+    const ALL: [Rule; 13] = [
+        Rule::Obi01,
+        Rule::Obi02,
+        Rule::Obi03,
+        Rule::Obi04,
+        Rule::Obi05,
+        Rule::Obi06,
+        Rule::Obi07,
+        Rule::Obi08,
+        Rule::Obi09,
+        Rule::Obi10,
+        Rule::Obi11,
+        Rule::Obi12,
+        Rule::Obi13,
+    ];
+    fn id(self) -> &'static str {
+        DOCUMENT_RULES[self as usize]
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 /// Evidence for one normative document rule. This closed partition may be exhaustively matched; it is separate from explanatory findings.
@@ -861,7 +899,7 @@ pub fn validate_document_with_limits(
             let mut checks = Checks::new();
             let limit = error.kind == InputErrorKind::Limit;
             if limit {
-                for rule in 0..13 {
+                for rule in Rule::ALL {
                     checks.mark(
                         rule,
                         Evidence::Inconclusive,
@@ -872,7 +910,7 @@ pub fn validate_document_with_limits(
                 }
             } else {
                 checks.mark(
-                    0,
+                    Rule::Obi01,
                     Evidence::Violated,
                     error.code,
                     Some(backend::input_location(bytes, error.byte_offset)),
@@ -946,7 +984,8 @@ impl<'a> Checks<'a> {
             truncated: false,
         }
     }
-    fn update_evidence(&mut self, rule: usize, status: Evidence) {
+    fn update_evidence(&mut self, rule: Rule, status: Evidence) {
+        let rule = rule as usize;
         if status == Evidence::Violated || self.evidence[rule] != Evidence::Violated {
             self.evidence[rule] = status;
         }
@@ -954,20 +993,20 @@ impl<'a> Checks<'a> {
     fn same_finding(
         &self,
         index: usize,
-        rule: usize,
+        rule: Rule,
         status: Evidence,
         code: &str,
         message: &str,
     ) -> bool {
         let finding = &self.findings[index];
-        finding.rule == DOCUMENT_RULES[rule]
+        finding.rule == rule.id()
             && finding.status == status
             && finding.code == code
             && finding.message == message
     }
     fn contains_at(
         &self,
-        rule: usize,
+        rule: Rule,
         status: Evidence,
         at: JsonRef<'_>,
         code: &str,
@@ -983,7 +1022,7 @@ impl<'a> Checks<'a> {
     }
     fn mark(
         &mut self,
-        rule: usize,
+        rule: Rule,
         status: Evidence,
         code: &'static str,
         location: Option<SourceLocation>,
@@ -1000,7 +1039,7 @@ impl<'a> Checks<'a> {
         if self.findings.len() < MAX_FINDINGS {
             self.retained_direct.push(self.findings.len());
             self.findings.push(Finding {
-                rule: DOCUMENT_RULES[rule],
+                rule: rule.id(),
                 status,
                 code,
                 location,
@@ -1013,7 +1052,7 @@ impl<'a> Checks<'a> {
     // A message becomes owned text only when its finding is retained.
     fn mark_at<M: AsRef<str> + Into<String>>(
         &mut self,
-        rule: usize,
+        rule: Rule,
         status: Evidence,
         at: JsonRef<'a>,
         code: &'static str,
@@ -1051,7 +1090,7 @@ impl<'a> Checks<'a> {
             .or_default()
             .push(index);
         self.findings.push(Finding {
-            rule: DOCUMENT_RULES[rule],
+            rule: rule.id(),
             status,
             code,
             location: None,
@@ -1060,7 +1099,7 @@ impl<'a> Checks<'a> {
     }
     fn violation<M: AsRef<str> + Into<String>>(
         &mut self,
-        rule: usize,
+        rule: Rule,
         at: JsonRef<'a>,
         code: &'static str,
         message: M,
@@ -1068,7 +1107,7 @@ impl<'a> Checks<'a> {
         self.mark_at(rule, Evidence::Violated, at, code, message);
     }
     fn not_applicable_after_json(&mut self) {
-        self.evidence[1..].fill(Evidence::NotApplicable);
+        self.evidence[Rule::Obi02 as usize..].fill(Evidence::NotApplicable);
     }
     fn finish(mut self) -> ValidationReport {
         let nodes: Vec<_> = self.pending_locations.iter().map(|(_, at)| *at).collect();
@@ -1095,7 +1134,7 @@ impl<'a> Checks<'a> {
             findings_truncated: self.truncated,
         }
     }
-    fn fixed(&mut self, value: JsonRef<'a>, rule: usize, is_meta: bool) {
+    fn fixed(&mut self, value: JsonRef<'a>, rule: Rule, is_meta: bool) {
         match fixed_schema::check_with_retained(
             value,
             is_meta,
@@ -1107,7 +1146,7 @@ impl<'a> Checks<'a> {
             Ok(problems) => {
                 self.truncated |= problems.truncated;
                 if problems.violated {
-                    self.evidence[rule] = Evidence::Violated;
+                    self.evidence[rule as usize] = Evidence::Violated;
                 }
                 for problem in problems.entries {
                     self.mark_at(
@@ -1147,7 +1186,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
     // line's OBI-01 exclusions. OBI-02 through OBI-13 require OBI-01 (§10).
     for at in backend::unpaired_strings(value).take(MAX_FINDINGS + 1) {
         c.violation(
-            0,
+            Rule::Obi01,
             at,
             "unpaired-surrogate",
             "member name or string value holds an unpaired surrogate escape",
@@ -1158,7 +1197,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
         c.truncated |= duplicates.len() > MAX_FINDINGS.saturating_sub(c.findings.len());
         for at in duplicates.take(MAX_FINDINGS) {
             c.mark_at(
-                0,
+                Rule::Obi01,
                 Evidence::Violated,
                 at,
                 "duplicate-member",
@@ -1166,7 +1205,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
             );
         }
     }
-    if c.evidence[0] == Evidence::Violated {
+    if c.evidence[Rule::Obi01 as usize] == Evidence::Violated {
         c.not_applicable_after_json();
         return Ok(c.finish());
     }
@@ -1174,15 +1213,20 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
         Some(v)
             if v.as_str()
                 .is_some_and(|s| check_version(s) != VersionDecision::Malformed) => {}
-        Some(v) => c.violation(2, v, "semver", "openbindings must be a SemVer 2.0.0 string"),
+        Some(v) => c.violation(
+            Rule::Obi03,
+            v,
+            "semver",
+            "openbindings must be a SemVer 2.0.0 string",
+        ),
         None => c.violation(
-            2,
+            Rule::Obi03,
             value.view(),
             "missing-version",
             "required openbindings member is absent",
         ),
     }
-    c.fixed(value.view(), 1, false);
+    c.fixed(value.view(), Rule::Obi02, false);
     let operations = value.get("operations");
     let sources = value.get("sources");
     for map in [
@@ -1195,7 +1239,12 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
         if let Some(entries) = value.get(map).and_then(|v| v.members()) {
             for entry in entries {
                 if !entry.name.as_str().is_some_and(is_valid_name) {
-                    c.violation(3, entry.name, "name-grammar", NAME_GRAMMAR_MESSAGE);
+                    c.violation(
+                        Rule::Obi04,
+                        entry.name,
+                        "name-grammar",
+                        NAME_GRAMMAR_MESSAGE,
+                    );
                 }
             }
         }
@@ -1237,14 +1286,14 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
                     let earlier = repeated[ordinal];
                     ordinal += 1;
                     if !alias.as_str().is_some_and(is_valid_name) {
-                        c.violation(3, alias, "name-grammar", NAME_GRAMMAR_MESSAGE);
+                        c.violation(Rule::Obi04, alias, "name-grammar", NAME_GRAMMAR_MESSAGE);
                     }
                     let Some(name) = alias.as_str() else {
                         continue;
                     };
                     if earlier || operations.get(name).is_some() {
                         c.violation(
-                            4,
+                            Rule::Obi05,
                             alias,
                             "duplicate-operation-name",
                             "operation keys and aliases must be distinct",
@@ -1255,7 +1304,12 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
             if let Some(examples) = entry.value.get("examples").and_then(|v| v.members()) {
                 for example in examples {
                     if !example.name.as_str().is_some_and(is_valid_name) {
-                        c.violation(3, example.name, "name-grammar", NAME_GRAMMAR_MESSAGE);
+                        c.violation(
+                            Rule::Obi04,
+                            example.name,
+                            "name-grammar",
+                            NAME_GRAMMAR_MESSAGE,
+                        );
                     }
                 }
             }
@@ -1265,9 +1319,9 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
     // independently malformed. A large map's lookup uses its member index, so
     // checking many references stays linear. Every string is scalar here.
     for (map, field, targets, rule) in [
-        ("bindings", "operation", operations, 5),
-        ("bindings", "source", sources, 6),
-        ("dependencies", "operation", operations, 7),
+        ("bindings", "operation", operations, Rule::Obi06),
+        ("bindings", "source", sources, Rule::Obi07),
+        ("dependencies", "operation", operations, Rule::Obi08),
     ] {
         if let Some(entries) = value.get(map).and_then(|v| v.members()) {
             for entry in entries {
@@ -1295,7 +1349,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
     // different positions must still be checked at each original location.
     for (index, node) in schemas.nodes.iter().enumerate() {
         let schema = schemas.value(node);
-        c.fixed(schema, 9, true);
+        c.fixed(schema, Rule::Obi10, true);
         if let Some(dialect) = schema.get("$schema")
             && !matches!(
                 dialect.as_str(),
@@ -1303,7 +1357,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
             )
         {
             c.violation(
-                8,
+                Rule::Obi09,
                 dialect,
                 "schema-dialect",
                 "contained schemas must name the 2020-12 dialect",
@@ -1313,7 +1367,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
             if let Some(id) = schema.get("$id") {
                 if !id.as_str().is_some_and(uri::absolute) {
                     c.violation(
-                        10,
+                        Rule::Obi11,
                         id,
                         "absolute-schema-id",
                         "a document-resource $id must be an absolute URI",
@@ -1325,7 +1379,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
                 if let Some(reference) = schema.get(keyword) {
                     let Some(text) = reference.as_str() else {
                         c.violation(
-                            10,
+                            Rule::Obi11,
                             reference,
                             "reference-type",
                             "schema reference must be a URI-reference string",
@@ -1336,7 +1390,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
                         || (!uri::absolute(text) && !text.is_empty() && !text.starts_with('#'))
                     {
                         c.violation(
-                            10,
+                            Rule::Obi11,
                             reference,
                             "reference-form",
                             "document-resource references must be absolute or same-document",
@@ -1347,7 +1401,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
                         && matches!(schemas.same_document(value, text), SameDocument::Missing)
                     {
                         c.violation(
-                            11,
+                            Rule::Obi12,
                             reference,
                             "reference-target",
                             "same-document reference identifies no schema at an OBI position",
@@ -1361,7 +1415,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
         if declarations[0].resource == 0 && declarations.len() > 1 {
             for anchor in declarations {
                 c.violation(
-                    12,
+                    Rule::Obi13,
                     schemas.anchor_token(anchor),
                     "duplicate-anchor",
                     "plain name is declared more than once in the document resource",
@@ -1372,7 +1426,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
     for declarations in schemas.repeated_identifiers() {
         for &(_, node) in declarations {
             c.violation(
-                12,
+                Rule::Obi13,
                 schemas
                     .value(&schemas.nodes[node as usize])
                     .get("$id")
@@ -1479,35 +1533,43 @@ mod name_index_storage_tests {
 mod finding_identity_tests {
     use super::*;
     #[test]
+    fn each_rule_names_the_identifier_it_indexes() {
+        for (index, rule) in Rule::ALL.into_iter().enumerate() {
+            assert_eq!(rule as usize, index);
+            let name = format!("{rule:?}").to_uppercase().replace("OBI", "OBI-");
+            assert_eq!(rule.id(), name);
+        }
+    }
+    #[test]
     fn final_dedup_precedes_count_and_pointer_caps_and_preserves_evidence() {
         let value = JsonValue::parse(r#"{"a":0,"b":0}"#).unwrap();
         let a = value.get("a").unwrap();
         let b = value.get("b").unwrap();
         let mut checks = Checks::new();
         checks.pointer_bytes = 2;
-        checks.violation(0, a, "test", "first");
-        checks.violation(0, a, "test", "first");
+        checks.violation(Rule::Obi01, a, "test", "first");
+        checks.violation(Rule::Obi01, a, "test", "first");
         assert_eq!(checks.pointer_bytes, 0);
         assert_eq!(checks.findings.len(), 1);
         assert!(!checks.truncated);
-        checks.violation(1, b, "test", "distinct");
+        checks.violation(Rule::Obi02, b, "test", "distinct");
         assert!(checks.truncated);
         assert_eq!(checks.retained_at.len(), 1);
         assert_eq!(checks.finish().evidence["OBI-02"], Evidence::Violated);
 
         let mut checks = Checks::new();
         for i in 0..MAX_FINDINGS {
-            checks.violation(0, a, "test", format!("message {i}"));
+            checks.violation(Rule::Obi01, a, "test", format!("message {i}"));
         }
-        checks.violation(0, a, "test", "message 0");
+        checks.violation(Rule::Obi01, a, "test", "message 0");
         assert!(!checks.truncated);
         assert_eq!(
             checks.retained_at.values().map(Vec::len).sum::<usize>(),
             MAX_FINDINGS
         );
-        checks.violation(1, a, "test", "message 0");
+        checks.violation(Rule::Obi02, a, "test", "message 0");
         assert!(checks.truncated);
-        assert_eq!(checks.evidence[1], Evidence::Violated);
+        assert_eq!(checks.evidence[Rule::Obi02 as usize], Evidence::Violated);
     }
 
     #[test]
@@ -1516,13 +1578,19 @@ mod finding_identity_tests {
         let nodes: Vec<_> = backend::duplicate_member_names(&value).collect();
         let mut checks = Checks::new();
         for node in &nodes {
-            checks.violation(0, *node, "test", "same");
+            checks.violation(Rule::Obi01, *node, "test", "same");
         }
-        checks.violation(1, nodes[0], "test", "same");
-        checks.mark_at(0, Evidence::Inconclusive, nodes[0], "test", "same");
-        checks.violation(0, nodes[0], "other", "same");
-        checks.violation(0, nodes[0], "test", "other");
-        checks.violation(0, nodes[0], "test", "same");
+        checks.violation(Rule::Obi02, nodes[0], "test", "same");
+        checks.mark_at(
+            Rule::Obi01,
+            Evidence::Inconclusive,
+            nodes[0],
+            "test",
+            "same",
+        );
+        checks.violation(Rule::Obi01, nodes[0], "other", "same");
+        checks.violation(Rule::Obi01, nodes[0], "test", "other");
+        checks.violation(Rule::Obi01, nodes[0], "test", "same");
         let report = checks.finish();
         assert_eq!(report.findings.len(), 6);
         assert_eq!(
@@ -1542,12 +1610,24 @@ mod finding_identity_tests {
         let value = JsonValue::parse(r#"{"a":0}"#).unwrap();
         let a = value.get("a").unwrap();
         let mut checks = Checks::new();
-        checks.violation(0, a, "test", "violated");
-        checks.mark_at(0, Evidence::Inconclusive, a, "test", "undecided");
-        checks.mark(0, Evidence::Inconclusive, "test", None, "undecided");
+        checks.violation(Rule::Obi01, a, "test", "violated");
+        checks.mark_at(Rule::Obi01, Evidence::Inconclusive, a, "test", "undecided");
+        checks.mark(
+            Rule::Obi01,
+            Evidence::Inconclusive,
+            "test",
+            None,
+            "undecided",
+        );
         // An inconclusive result before a violation does not hide it either.
-        checks.mark(1, Evidence::Inconclusive, "test", None, "undecided");
-        checks.violation(1, a, "test", "violated");
+        checks.mark(
+            Rule::Obi02,
+            Evidence::Inconclusive,
+            "test",
+            None,
+            "undecided",
+        );
+        checks.violation(Rule::Obi02, a, "test", "violated");
         let report = checks.finish();
         assert_eq!(report.evidence["OBI-01"], Evidence::Violated);
         assert_eq!(report.evidence["OBI-02"], Evidence::Violated);
@@ -1563,15 +1643,15 @@ mod finding_identity_tests {
         let mut checks = Checks::new();
         for location in [&first, &second, &first, &second] {
             checks.mark(
-                0,
+                Rule::Obi01,
                 Evidence::Violated,
                 "value",
                 Some(location.clone()),
                 "same",
             );
         }
-        checks.mark(0, Evidence::Violated, "value", None, "same");
-        checks.mark(0, Evidence::Violated, "value", None, "same");
+        checks.mark(Rule::Obi01, Evidence::Violated, "value", None, "same");
+        checks.mark(Rule::Obi01, Evidence::Violated, "value", None, "same");
         let report = checks.finish();
         let locations: Vec<_> = report.findings.iter().map(|f| f.location.clone()).collect();
         assert_eq!(locations, [Some(first), Some(second), None]);
@@ -1581,10 +1661,22 @@ mod finding_identity_tests {
     fn direct_findings_beyond_the_cap_are_counted_as_truncated() {
         let mut checks = Checks::new();
         for i in 0..MAX_FINDINGS {
-            checks.mark(0, Evidence::Violated, "test", None, format!("distinct {i}"));
+            checks.mark(
+                Rule::Obi01,
+                Evidence::Violated,
+                "test",
+                None,
+                format!("distinct {i}"),
+            );
         }
         assert!(!checks.truncated);
-        checks.mark(1, Evidence::Inconclusive, "test", None, "one more");
+        checks.mark(
+            Rule::Obi02,
+            Evidence::Inconclusive,
+            "test",
+            None,
+            "one more",
+        );
         assert!(checks.truncated);
         let report = checks.finish();
         assert_eq!(report.findings.len(), MAX_FINDINGS);
@@ -1597,21 +1689,21 @@ mod finding_identity_tests {
     fn fixed_stream_excludes_already_retained_findings_before_intermediate_cap() {
         let value = JsonValue::parse("null").unwrap();
         let mut checks = Checks::new();
-        checks.fixed(value.view(), 2, true);
+        checks.fixed(value.view(), Rule::Obi03, true);
         let fixed_count = checks.findings.len();
         for i in fixed_count..MAX_FINDINGS {
             checks.mark(
-                0,
+                Rule::Obi01,
                 Evidence::Violated,
                 "padding",
                 None,
                 format!("distinct {i}"),
             );
         }
-        checks.fixed(value.view(), 2, true);
+        checks.fixed(value.view(), Rule::Obi03, true);
         assert_eq!(checks.findings.len(), MAX_FINDINGS);
         assert!(!checks.truncated);
-        assert_eq!(checks.evidence[2], Evidence::Violated);
+        assert_eq!(checks.evidence[Rule::Obi03 as usize], Evidence::Violated);
     }
 }
 
