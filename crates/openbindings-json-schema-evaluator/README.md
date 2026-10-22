@@ -88,7 +88,11 @@ refuses preparation (`resource-unavailable`, naming the missing resource).
 Preparation also refuses a reference to a fragment of a resource that was not
 supplied, or a reference that identifies no schema (an absent pointer target or
 plain-name anchor, or a malformed fragment), with a `NoVerdict` that names the
-schema holding the reference. The default evaluator never returns
+schema holding the reference.
+As conservative preparation, it also refuses a contract that reaches a pattern
+invalid as an ECMA-262 regular expression with Unicode semantics
+(`schema-pattern-compilation`), or a schema that could apply again without
+consuming the instance, such as one whose `$ref` names itself (`in-place-cycle`). The default evaluator never returns
 `ValueOutcome::Undefined`, which custom evaluators may establish. A prepared
 value contract does not promise a verdict for every value. Handle no-verdict
 during both preparation and validation.
