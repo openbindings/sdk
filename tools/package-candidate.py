@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tarfile
 import tomllib
 
@@ -20,7 +21,7 @@ PUBLIC_CRATES = {
 
 INTERNAL_CRATES = {
     "openbindings-internal-json", "openbindings-internal-schema",
-    "openbindings-internal-cancellation",
+    "openbindings-internal-cancellation", "openbindings-internal-interfaces",
 }
 BUILD_ONLY_CRATES = {"openbindings-wasm"}
 
@@ -107,6 +108,8 @@ def main():
 
     require(not run("source-status", ["git", "status", "--porcelain"]).strip(), "Commit source changes before packaging.")
     commit = run("source-head", ["git", "rev-parse", "HEAD"]).strip()
+    # The candidate is packaged, never published: every package keeps its guard.
+    run("publication-guards", [sys.executable, ROOT / "tools/verify-publication-guards.py"])
     toolchain = run("rustc", ["rustc", "-vV"])
     node_version = run("node-version", ["node", "--version"]).strip()
     npm_version = run("npm-version", [npm, "--version"]).strip()

@@ -166,8 +166,11 @@ returned result; an already settled terminal stays authoritative.
 `BindingInvocationInput::from_json` checks the closed input envelope, strict
 source/binding carriers, duplicate interpreted names and context's object
 boundary. `BindingValue` permits omitted operation/source/content fields;
-`BindingValue::from(&core_binding)` explicitly preserves both core strings. Reuse
-these carriers across calls: there is no per-call source serialization or reparse.
+`BindingValue::from(&core_binding)` explicitly preserves both core strings. It is
+the same type as a source inspection target's binding, so an inspected target
+invokes as it is, and `bind(operation, source)` gives an author's core binding.
+Reuse these carriers across calls: there is no per-call source serialization or
+reparse.
 
 Content, extensions, context internals and application error data retain exact
 JSON: numbers beyond binary64, duplicate opaque names, spelling, and explicit

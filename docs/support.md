@@ -56,8 +56,14 @@ naming it. It refuses preparation for a contract in which an
 `unevaluatedProperties` or `unevaluatedItems` keyword's annotation sources
 reach a stand-in, a reference to a fragment of a missing resource, or a static
 reference defect (an absent pointer target or anchor, or a malformed
-fragment), and never produces Undefined. Missing resources, unsupported features and exhausted limits keep
-their distinct refusal reasons.
+fragment). As conservative preparation, it also refuses a contract that reaches
+a pattern invalid as an ECMA-262 regular expression with Unicode semantics
+(`schema-pattern-compilation`), or a schema that could apply again without
+consuming the instance, such as one whose `$ref` names itself
+(`in-place-cycle`). A preparation refusal withholds a verdict for every value,
+including one whose validity does not depend on the refused part. The default
+evaluator never produces Undefined. Missing resources, unsupported features and
+exhausted limits keep their distinct refusal reasons.
 
 Preparing a schema from an untrusted party can take more memory than a host
 may want, as with any JSON Schema library: the evaluator bounds what the SDK

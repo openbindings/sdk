@@ -10,6 +10,9 @@ import {
   type SourceLocation,
   type ValueOutcome,
   type ValueProblemDetails,
+  type DocumentReport,
+  type DocumentValidation,
+  validateDocument,
 } from "../dist/index.js";
 import { DiscoveryPublication, discover } from "../dist/http-discovery.js";
 
@@ -26,7 +29,12 @@ async function caller(
     },
   });
   created.setSource("local", { kind: "test", content: null });
-  const checked = created.validate();
+  // DocumentValidation names what Rust's does: the result that can carry proof.
+  const checked: DocumentValidation = created.validate();
+  // @ts-expect-error a DocumentReport has no conformant branch to carry a proof
+  const proofless: DocumentReport = checked;
+  void proofless;
+  validateDocument(bytes) satisfies DocumentReport;
   if (checked.status === "conformant") {
     using proof = checked.document;
     using publication = new DiscoveryPublication(proof, { allowOrigin: "any" });

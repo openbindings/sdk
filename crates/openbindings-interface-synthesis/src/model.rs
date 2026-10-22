@@ -41,58 +41,6 @@ impl std::fmt::Debug for SynthesisRequest<'_> {
     }
 }
 
-/// Advisory exact kind. An omitted kind has no implied support verdict.
-///
-/// Providers build one with [`Self::new`] and [`Self::with_description`]. Later
-/// versions may add fields: read them by name and match with `..`.
-#[derive(Clone, Serialize)]
-#[non_exhaustive]
-pub struct SupportedKind {
-    /// Exact opaque kind label.
-    pub kind: String,
-    /// Optional display text.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-}
-impl SupportedKind {
-    /// An exact kind without display text.
-    pub fn new(kind: impl Into<String>) -> Self {
-        Self {
-            kind: kind.into(),
-            description: None,
-        }
-    }
-    /// Attach display text.
-    #[must_use]
-    pub fn with_description(mut self, description: impl Into<String>) -> Self {
-        self.description = Some(description.into());
-        self
-    }
-}
-impl std::fmt::Debug for SupportedKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SupportedKind").finish_non_exhaustive()
-    }
-}
-
-/// Authoritative answer for this provider's synthesis job.
-/// Later versions may add fields: read them by name and match with `..`.
-#[derive(Clone, PartialEq, Eq, Serialize)]
-#[non_exhaustive]
-pub struct KindSupportVerdict {
-    /// Unchanged kind label.
-    pub kind: String,
-    /// Knowledge of the kind, not universal coverage of its artifacts.
-    pub supported: bool,
-}
-impl std::fmt::Debug for KindSupportVerdict {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("KindSupportVerdict")
-            .field("supported", &self.supported)
-            .finish_non_exhaustive()
-    }
-}
-
 /// What the source unit represents, independently of its disposition.
 ///
 /// This closed partition may be exhaustively matched:

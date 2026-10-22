@@ -4,7 +4,6 @@ use crate::{
 };
 use openbindings::Source;
 use std::{
-    collections::HashSet,
     future::{Future, poll_fn},
     pin::pin,
     task::Poll,
@@ -115,16 +114,10 @@ impl<P: SourceInspector> Inspector<P> {
                 "kind must be nonempty",
             ));
         }
-        let mut seen = HashSet::new();
-        Ok(kinds
-            .iter()
-            .map(AsRef::as_ref)
-            .filter(|kind| seen.insert(*kind))
-            .map(|kind| KindSupportVerdict {
-                kind: kind.into(),
-                supported: self.provider.supports_kind(kind),
-            })
-            .collect())
+        Ok(openbindings_internal_interfaces::kind_support_verdicts(
+            kinds.iter().map(AsRef::as_ref),
+            |kind| self.provider.supports_kind(kind),
+        ))
     }
 
     /// Validate and return the provider's advisory list. An empty list is valid

@@ -64,8 +64,10 @@ platform types that `DOM` declares, such as `Response`, `URL`, `AbortSignal` and
 `WebAssembly`. An older compiler minimum has not been qualified.
 
 `Document.parse` retains an inspectable, editable document. `validate()` returns a
-`conformant` branch carrying a `ConformantDocument`, or a version refusal or
-conformance report. Only a conformant document's operations hand out value
+`DocumentValidation`, as Rust's `validate()` does: a `conformant` branch carrying a
+`ConformantDocument`, or a version refusal or conformance report.
+`validateDocument(bytes)` returns only the plain `DocumentReport`, with no proof
+and nothing to dispose. Only a conformant document's operations hand out value
 contracts: `resolveOperation` returns `undefined` for a missing operation, and
 `input()` or `output()` returns `undefined` when no contract is declared.
 `prepare()` returns a ready `PreparedValueContract` or a no-verdict refusal. Handle

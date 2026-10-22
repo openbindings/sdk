@@ -202,15 +202,15 @@ async fn debug_redacts_caller_text_at_every_boundary() {
     operation
         .additional_fields
         .insert("description".into(), JsonValue::null());
-    let EditError::Authoring(authoring) = draft.set_operation(SECRET, &operation).unwrap_err()
-    else {
+    let collision = draft.set_operation(SECRET, &operation).unwrap_err();
+    let EditError::FieldCollision { part_pointer, .. } = &collision else {
         panic!()
     };
-    assert!(authoring.draft_pointer().unwrap().contains(SECRET));
+    assert!(part_pointer.as_deref().unwrap().contains(SECRET));
     let mut rows = synthesis_rows(&source, &parsed).await;
     rows.push(row(
         "SynthesisError::authoring",
-        &synthesis::SynthesisError::from(authoring),
+        &synthesis::SynthesisError::from(collision),
     ));
 
     check_rows(rows, 19);

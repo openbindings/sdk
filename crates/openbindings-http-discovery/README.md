@@ -19,7 +19,9 @@ assert_eq!(&*response.body, source);
 For native discovery, enable the `native` feature and create `native::Client`
 from your reqwest `ClientBuilder` and `ClientOptions`. Call `discover(origin)`
 and match `DiscoveryOutcome`. The portable `discover` function instead accepts
-a host transport and `DiscoveryTimer`.
+a host transport and `DiscoveryTimer`. Judge document bytes acquired some other
+way with `openbindings::validate_document`; `Publication::new` and `from_bytes`
+check the CORS choice in their options.
 
 ## Limits and host responsibilities
 

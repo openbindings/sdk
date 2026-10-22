@@ -243,3 +243,182 @@ fn every_embedded_schema_reaches_a_meta_schema_verdict_at_every_admitted_size() 
         assert_eq!(validation.report().conclusion, Conformance::Conformant);
     }
 }
+
+/// What the 0.2 line's rules make of a text, as specification §8.1 tabulates it.
+enum Under02 {
+    Conforms,
+    Violates(&'static [&'static str]),
+    /// The text declares this version of another line or a prerelease.
+    GovernedBy(&'static str),
+}
+
+#[test]
+fn version_declarations_follow_the_specification_examples() {
+    // Specification §8.1, "Version declaration examples": each text, what it
+    // declares and what follows under the 0.2 line's rules. "Repeated names
+    // elsewhere do not stop a declaration. The declared line's rules govern
+    // them": a 0.3.0 text with a repeated member is 0.3's to judge.
+    use Under02::*;
+    let bytes = |parts: &[&[u8]]| parts.concat();
+    let rows: Vec<(Vec<u8>, Under02)> = vec![
+        (
+            br#"{"openbindings":"0.2.0","operations":{}}"#.to_vec(),
+            Conforms,
+        ),
+        (
+            br#"{"openbindings":"0.2.7","operations":{}}"#.to_vec(),
+            Conforms,
+        ),
+        (
+            br#"{"openbindings":"0.2.0+build.5","operations":{}}"#.to_vec(),
+            Conforms,
+        ),
+        (
+            br#"{"openbindings":"0.3.0","operations":{}}"#.to_vec(),
+            GovernedBy("0.3.0"),
+        ),
+        (
+            br#"{"openbindings":"0.2.0-rc.1","operations":{}}"#.to_vec(),
+            GovernedBy("0.2.0-rc.1"),
+        ),
+        (
+            br#"{"openbindings":"0.3.0","operations":{},"operations":{}}"#.to_vec(),
+            GovernedBy("0.3.0"),
+        ),
+        (
+            br#"{"openbindings":"0.2.0","operations":{},"operations":{}}"#.to_vec(),
+            Violates(&["OBI-01"]),
+        ),
+        (
+            br#"{"openbindings":"0.2.0","description":"\ud800","operations":{}}"#.to_vec(),
+            Violates(&["OBI-01"]),
+        ),
+        (
+            bytes(&[
+                br#"{"openbindings":"0.3.0","description":"x"#,
+                b"\xff",
+                br#"","operations":{}}"#,
+            ]),
+            Violates(&["OBI-01"]),
+        ),
+        (
+            bytes(&[
+                b"\xef\xbb\xbf",
+                br#"{"openbindings":"0.3.0","operations":{}}"#,
+            ]),
+            Violates(&["OBI-01"]),
+        ),
+        (
+            br#"{"openbindings":"0.2.0","openbindings":"0.3.0","operations":{}}"#.to_vec(),
+            Violates(&["OBI-01"]),
+        ),
+        (
+            br#"{"openbindings":"0.3","operations":{}}"#.to_vec(),
+            Violates(&["OBI-02", "OBI-03"]),
+        ),
+        (
+            br#"{"openbindings":2,"operations":{}}"#.to_vec(),
+            Violates(&["OBI-02", "OBI-03"]),
+        ),
+        (
+            br#"{"operations":{}}"#.to_vec(),
+            Violates(&["OBI-02", "OBI-03"]),
+        ),
+        // Repeated names deeper in a 0.3.0 text do not stop its declaration either.
+        (
+            br#"{"openbindings":"0.3.0","x":{"a":1,"a":2}}"#.to_vec(),
+            GovernedBy("0.3.0"),
+        ),
+    ];
+    for (text, under) in rows {
+        let shown = String::from_utf8_lossy(&text).into_owned();
+        let result = validate_document(&text);
+        match under {
+            Conforms => assert_eq!(
+                result.unwrap().report().conclusion,
+                Conformance::Conformant,
+                "{shown}"
+            ),
+            Violates(rules) => {
+                let validation = result.unwrap();
+                let violated: Vec<_> = validation
+                    .report()
+                    .evidence
+                    .iter()
+                    .filter(|(_, evidence)| **evidence == Evidence::Violated)
+                    .map(|(rule, _)| *rule)
+                    .collect();
+                assert_eq!(violated, rules, "{shown}");
+            }
+            GovernedBy(version) => {
+                let refusal = result.unwrap_err();
+                assert_eq!(
+                    (refusal.declared.as_str(), refusal.supported),
+                    (version, "0.2.x")
+                );
+            }
+        }
+        // Wherever the text is admitted as JSON, a parsed document reaches the same answer.
+        if let Ok(document) = Document::parse(&text) {
+            assert_eq!(
+                document.validate().map(|v| v.report().clone()),
+                validate_document(&text).map(|v| v.report().clone()),
+                "{shown}"
+            );
+        }
+    }
+}
+
+#[test]
+fn x_prefixed_operation_keys_enter_the_identifier_namespace() {
+    // Specification §12: an `x-` key inside `operations` names an ordinary entry
+    // and enters the identifier namespace OBI-05 keeps unique. An `x-` field of
+    // the document or of an operation is an extension, never an identifier.
+    for (members, collides, selected) in [
+        (
+            r#""operations":{"x-a":{},"b":{"aliases":["x-a"]}}"#,
+            true,
+            None,
+        ),
+        (
+            r#""operations":{"x-a":{"aliases":["x-b"]},"c":{"aliases":["x-b"]}}"#,
+            true,
+            None,
+        ),
+        (
+            r#""operations":{"x-a":{},"b":{"aliases":["x-c"]}}"#,
+            false,
+            Some("x-a"),
+        ),
+        (
+            r#""x-a":{},"operations":{"b":{"aliases":["x-a"]}}"#,
+            false,
+            Some("b"),
+        ),
+        (
+            r#""operations":{"b":{"x-a":{},"aliases":["x-a"]}}"#,
+            false,
+            Some("b"),
+        ),
+    ] {
+        let text = format!(r#"{{"openbindings":"0.2.0",{members}}}"#);
+        let validation = checked(&text);
+        let report = validation.report();
+        if collides {
+            assert_eq!(report.conclusion, Conformance::NonConformant, "{text}");
+            assert_eq!(report.evidence["OBI-05"], Evidence::Violated, "{text}");
+            assert!(
+                report
+                    .evidence
+                    .iter()
+                    .all(|(rule, e)| *rule == "OBI-05" || *e == Evidence::Met),
+                "{text}"
+            );
+        } else {
+            assert_eq!(report.conclusion, Conformance::Conformant, "{text}");
+            let proof = validation.conformant().unwrap();
+            let key = proof.resolve_operation("x-a").map(|op| op.key().to_owned());
+            assert_eq!(key.as_deref(), selected, "{text}");
+        }
+    }
+}

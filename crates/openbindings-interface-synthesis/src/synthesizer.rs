@@ -2,7 +2,6 @@ use crate::CancellationToken;
 use crate::*;
 use openbindings::{Conformant, Document};
 use std::{
-    collections::HashSet,
     future::{Future, poll_fn},
     pin::pin,
     task::Poll,
@@ -67,16 +66,10 @@ impl<P: InterfaceSynthesizer> Synthesizer<P> {
                 "kind must be nonempty",
             ));
         }
-        let mut seen = HashSet::new();
-        Ok(kinds
-            .iter()
-            .map(AsRef::as_ref)
-            .filter(|k| seen.insert(*k))
-            .map(|k| KindSupportVerdict {
-                kind: k.into(),
-                supported: self.provider.supports_kind(k),
-            })
-            .collect())
+        Ok(openbindings_internal_interfaces::kind_support_verdicts(
+            kinds.iter().map(AsRef::as_ref),
+            |kind| self.provider.supports_kind(kind),
+        ))
     }
     /// Validate the advisory list; absence is not a negative support verdict.
     ///

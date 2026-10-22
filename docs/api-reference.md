@@ -14,6 +14,7 @@ for a complete job; use the definitions for exact result, ownership and limit co
 | Rust interface synthesis interface | [`openbindings-interface-synthesis`](../crates/openbindings-interface-synthesis/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-interface-synthesis` |
 | Rust binding and operation invocation interfaces | [`openbindings-invocation`](../crates/openbindings-invocation/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-invocation` |
 | Shared Rust cancellation definitions | [`openbindings-internal-cancellation`](../crates/openbindings-internal-cancellation/src/lib.rs), reexported by all four async companions | `cargo doc --locked --no-deps -p openbindings-internal-cancellation` |
+| Shared Rust interface records | [`openbindings-internal-interfaces`](../crates/openbindings-internal-interfaces/src/lib.rs): `SupportedKind` and `KindSupportVerdict`, reexported by inspection, synthesis and invocation; `BindingValue` and `BoundaryError`, reexported by inspection and invocation | `cargo doc --locked --no-deps -p openbindings-internal-interfaces` |
 | TypeScript core and HTTP discovery | [`internal.ts`](../packages/typescript/src/internal.ts), as exported by the two entry points | Build the package, then run `node packages/typescript/scripts/check-api-reference.mjs target/api-reference` |
 | TypeScript testing | [`testing.ts`](../packages/typescript/src/testing.ts), exported by `@openbindings/sdk/testing` | Included in the TypeScript reference renderer |
 | Compiled Wasm asset import | [`wasm-module.d.ts`](../packages/typescript/src/wasm-module.d.ts) | Host import type documented alongside `initialize` |
@@ -62,10 +63,18 @@ for their required fields and `with_*` methods for optional ones:
 | Source inspectors | `SourceInspection::complete(targets)` or `partial(targets, limitation)` and `with_limitation(..)`, `BindableTarget::new(source_ref, binding).with_operation_key(..).with_operation(..)`, `InspectionLimitation::new(code, message).with_details(..).with_additional_fields(..)`, `SupportedKind::new(kind).with_description(..)` |
 | Interface synthesizers | `SynthesisCandidate::new(document, coverage)`, `CoverageClaim::complete(entries)` or `partial(entries, limitation)`, `CoverageEntry::new(..)` then its assignable evidence fields, `CoverageLimitation::new(code, message)` with the same builders, `SupportedKind::new(kind)` |
 | Binding invokers and transports | `binding::SupportedKind::new(kind).with_description(..)`, HTTP discovery `RequestError::new(kind, message)` |
+
+`SupportedKind` and `KindSupportVerdict` are one type in every companion that
+reexports them, so a provider serving inspection, synthesis and invocation can
+return the same advisory list from each trait. A verdict answers for the job of
+the checked caller that returned it. Likewise `BindingValue` is both a
+`BindableTarget`'s binding and the binding a `BindingRequest` carries: invoke an
+inspected target's binding as it is, or assign the author's keys with
+`BindingValue::bind` to get a core `Binding`.
 | Version checks | `VersionRefusal::new(declared)`, `Some` only for a well-formed version outside the supported line |
 
 Input records, which callers build and the SDK reads, keep struct-literal
-construction: typed authoring parts and `BindingFragment`, `SchemaResource`,
+construction: typed authoring parts and `BindingValue`, `SchemaResource`,
 `JsonLimits`, evaluator `Limits`, kit `Options`, discovery `ClientOptions`,
 `PublicationOptions`, `HttpResponse`, synthesis requests, invocation carriers and
 `InvocationLimits`. Add `..Default::default()` where a record implements
@@ -91,7 +100,8 @@ kind union.
 
 | Public item | Contract |
 | --- | --- |
-| `Document::parse`, `Document::from_json` | Admit exact JSON without a conformance claim, including documents with missing or mistyped fields. `parse` returns `InputError` for invalid UTF-8, a byte order mark, a JSON syntax error or an exceeded admission limit. |
+| `validate_document`, `validate_document_with_limits` | Judge bytes as they are, for reading: a JSON syntax or encoding error is an OBI-01 violation and an exceeded admission limit leaves every rule inconclusive, both in the report. Only an unsupported declared version is `Err`. |
+| `Document::parse`, `Document::from_json` | Admit exact JSON for editing, without a conformance claim, including documents with missing or mistyped fields. `parse` returns `InputError` for invalid UTF-8, a byte order mark, a JSON syntax error or an exceeded admission limit. |
 | `is_valid_name` | Tests the specification's ASCII name grammar without normalizing the name. |
 | `Document::new` | Create an empty OBI declaring the authoring version. |
 | `Document::set`, `remove`, `edit(&[Edit])` | Require a mutable borrow. One atomic splice and parse per batch, exact untouched bytes, compact insertions, default JSON limits. A pointer is a `PointerRef`, converted from escaped text (`&str`, `&String`) or an exact `&Pointer`, so a finding's pointer through a member name with an unpaired UTF-16 unit addresses that member. |
@@ -113,7 +123,8 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 | `Document.create()` | Creates an empty OBI for construction through setters. |
 | `set`, `remove`, `edit(edits)` | Mutable pointer edits; a batch crosses the bridge once, including exact inputs, and preserves untouched bytes. Exact inputs are borrowed. A pointer may hold an unpaired UTF-16 unit, as a finding's can, and addresses that member. Failure leaves bytes and caches unchanged. |
 | Typed field and whole-part setters | Accept typed part values; map setters commit bulk construction once. |
-| `Document.validate()` | Returns a union whose `conformant` branch owns an independent `ConformantDocument` and a plain report. |
+| `Document.validate()` | Returns a `DocumentValidation`, the name Rust gives the same result: its `conformant` branch owns an independent `ConformantDocument` and a plain report; its other branches are a `DocumentReport`. |
+| `validateDocument(bytes)` | Assesses exact source directly, including text that is not JSON, and returns a `DocumentReport`: plain data with a `report` or `version-refused` branch and no handle to dispose. |
 | `ConformantDocument` | Nominal, privately constructed proof with infallible typed reads. `resolveOperation(name)` returns a `ConformantOperationView` or `undefined`. It has no setters and does not inherit `Document`. |
 | `ConformantOperationView` | `input()` and `output()` return a disposable `ValueContract` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. Both views have `retain()`. |
 | `ValueContract` | `schema()` acquires the exact schema; `prepare(options)` takes `resources`, `limits` and `signal` and returns `{ status: "ready", valueContract }` or `{ status: "no-verdict", detail }`. |
@@ -478,9 +489,11 @@ Rust editors use the atomic `Document` methods described above. `EditError::code
 returns stable identifiers: `invalid-pointer`, `missing-parent`, `missing-value`,
 `not-container`, `duplicate-members`, `overlapping-edits`, `field-collision`,
 `serialization`, or parser/admission codes such as `byte-limit`, `node-limit` and
-`depth-limit`. `EditError::Authoring` retains a logical pointer into the typed
-part input; `InterpretationError::source_location` addresses current exact
-source bytes. These coordinates serve different purposes.
+`depth-limit`. Every editing method, pointer edit or typed part, returns this one
+error. `EditError::FieldCollision { part_pointer, .. }` carries a logical pointer
+into the typed part input, as TypeScript's `EditError.partPointer` does;
+`InterpretationError::source_location` addresses current exact source bytes.
+These coordinates serve different purposes.
 
 Document findings deduplicate explanations for the same source occurrence
 before presentation caps. Eliminating a repeat does not mark truncation; omitting

@@ -1,5 +1,5 @@
 use crate::{Synthesis, SynthesisCandidate};
-use openbindings::{AuthoringError, DocumentValidation, EditError, VersionRefusal};
+use openbindings::{DocumentValidation, EditError, VersionRefusal};
 use std::fmt;
 /// Stable control-flow classifications; codes provide specific reasons.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,7 +57,6 @@ pub struct RejectedSynthesis {
 }
 #[derive(Clone, Debug)]
 enum Cause {
-    Authoring(AuthoringError),
     Editing(EditError),
     Version(VersionRefusal),
     Provider(Box<SynthesisError>),
@@ -189,27 +188,14 @@ impl SynthesisError {
         e
     }
 }
-impl From<AuthoringError> for SynthesisError {
-    fn from(cause: AuthoringError) -> Self {
-        let mut e = Self::simple(
-            SynthesisErrorKind::ProviderFailure,
-            "authoring",
-            cause.to_string(),
-        );
-        e.cause = Some(Box::new(Cause::Authoring(cause)));
-        e
-    }
-}
 impl From<EditError> for SynthesisError {
     fn from(cause: EditError) -> Self {
-        if let EditError::Authoring(cause) = cause {
-            return Self::from(cause);
-        }
-        let mut error = Self::simple(
-            SynthesisErrorKind::ProviderFailure,
-            cause.code(),
-            cause.to_string(),
-        );
+        let code = match cause {
+            // A typed part the provider authored could not be encoded.
+            EditError::FieldCollision { .. } | EditError::Serialization => "authoring",
+            _ => cause.code(),
+        };
+        let mut error = Self::simple(SynthesisErrorKind::ProviderFailure, code, cause.to_string());
         error.cause = Some(Box::new(Cause::Editing(cause)));
         error
     }
@@ -222,7 +208,6 @@ impl fmt::Display for SynthesisError {
 impl std::error::Error for SynthesisError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self.cause.as_deref() {
-            Some(Cause::Authoring(e)) => Some(e),
             Some(Cause::Editing(e)) => Some(e),
             Some(Cause::Version(e)) => Some(e),
             Some(Cause::Provider(e)) => Some(e.as_ref()),

@@ -1,0 +1,18 @@
+[package]
+name = "openbindings-internal-interfaces"
+description = "Internal records the OpenBindings interface companions share"
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+openbindings = { version = "=0.2.0-alpha.1", path = "../openbindings" }
+serde.workspace = true
+serde_json.workspace = true

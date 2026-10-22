@@ -94,6 +94,79 @@ async fn inspect_synthesize_choose_explicitly_and_invoke_preserved_values() {
     assert_eq!(retained.unwrap().text(), "9007199254740993");
 }
 
+#[test]
+fn one_supported_kind_list_and_verdict_type_serve_every_job() {
+    // The three interfaces define both records identically, so every companion
+    // hands out one type: these annotations compile only while that holds.
+    let provider = Catalog::default();
+    let inspector = openbindings_source_inspection::Inspector::new(&provider);
+    let synthesizer = Synthesizer::new(&provider);
+    let invoker = Invoker::new(&provider);
+    let lists: [Vec<openbindings_invocation::binding::SupportedKind>; 3] = [
+        inspector.list_supported_kinds().unwrap(),
+        synthesizer.list_supported_kinds().unwrap(),
+        invoker.list_supported_kinds().unwrap(),
+    ];
+    for list in &lists {
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].kind, KIND);
+        assert_eq!(
+            list[0].description.as_deref(),
+            Some("Example catalog of units")
+        );
+    }
+    let verdicts: [Vec<openbindings_source_inspection::KindSupportVerdict>; 3] = [
+        inspector.check_kind_support([KIND, "other", KIND]).unwrap(),
+        synthesizer
+            .check_kind_support([KIND, "other", KIND])
+            .unwrap(),
+        invoker.check_kind_support([KIND, "other", KIND]).unwrap(),
+    ];
+    for verdict in &verdicts {
+        // One verdict per unique kind, in first-occurrence order.
+        let answers: Vec<_> = verdict
+            .iter()
+            .map(|v| (v.kind.as_str(), v.supported))
+            .collect();
+        assert_eq!(answers, [(KIND, true), ("other", false)]);
+    }
+}
+
+#[tokio::test]
+async fn an_inspected_target_binding_invokes_without_author_keys() {
+    // Both interfaces carry the same by-value binding, so a target found by
+    // inspection is invoked as it is: no document, and no invented keys.
+    let source = source(r#"{"units":[{"id":"lookup"}]}"#);
+    let provider = Catalog::default();
+    let inspection = openbindings_source_inspection::Inspector::new(&provider)
+        .inspect(&source)
+        .await
+        .unwrap();
+    let target = &inspection.targets[0];
+    assert!(target.binding.operation.is_none() && target.binding.source.is_none());
+    let binding: &BindingValue = &target.binding;
+    let invoker = Invoker::new(&provider);
+    let mut call = invoker.invoke(BindingRequest {
+        source: &source,
+        binding,
+        context: None,
+    });
+    call.write(JsonValue::parse("9007199254740993").unwrap())
+        .await
+        .unwrap();
+    call.close();
+    assert_eq!(
+        call.next().await.unwrap().unwrap().text(),
+        "9007199254740993"
+    );
+    assert!(call.next().await.is_none());
+    assert!(call.outcome().unwrap().is_ok());
+    assert_eq!(
+        provider.last_target.lock().unwrap().as_deref(),
+        Some("lookup")
+    );
+}
+
 #[tokio::test]
 async fn handauthored_default_echo_is_bidi_and_new_modes_are_explicit() {
     let request = BindingInvocationInput::from_json(&JsonValue::parse(format!(r#"{{"source":{{"kind":"{KIND}","content":{{"units":[{{"id":"manual"}}]}}}},"binding":{{"content":"manual"}},"context":{{}}}}"#)).unwrap()).unwrap();

@@ -113,15 +113,15 @@ fn authoring_collision_has_native_draft_path_and_source_is_separate() {
     ex.additional_fields
         .insert("input".into(), JsonValue::null());
     op.examples = Some(BTreeMap::from([("a~/b".into(), ex)]));
-    let EditError::Authoring(e) = b.set_operation("x~/y", &op).unwrap_err() else {
+    let error = b.set_operation("x~/y", &op).unwrap_err();
+    assert_eq!(error.code(), "field-collision");
+    let EditError::FieldCollision { part_pointer, .. } = error else {
         panic!()
     };
-    assert_eq!(e.kind(), AuthoringErrorKind::FieldCollision);
     assert_eq!(
-        e.draft_pointer(),
+        part_pointer.as_deref(),
         Some("/operations/x~0~1y/examples/a~0~1b/additional_fields/input")
     );
-    assert!(e.source_location().is_none());
     let wrong =
         JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{"x":{"aliases":false}}}"#)
             .unwrap();
@@ -146,16 +146,18 @@ fn authoring_collision_has_native_draft_path_and_source_is_separate() {
         ..Default::default()
     };
     let mut b = Document::new();
-    let EditError::Authoring(e) = b.set_operation(&"x".repeat(5000), &op).unwrap_err() else {
+    // A pointer whose escaped spelling would exceed 4,096 bytes is omitted.
+    let EditError::FieldCollision { part_pointer, .. } =
+        b.set_operation(&"x".repeat(5000), &op).unwrap_err()
+    else {
         panic!()
     };
-    assert!(e.draft_pointer().is_none());
-    assert!(e.path_omitted_for_limit());
+    assert!(part_pointer.is_none());
 }
 #[test]
 fn errors_are_owned_send_sync_without_bounds_on_serialized_values() {
     fn bound<T: std::error::Error + Send + Sync + 'static>() {}
-    bound::<AuthoringError>();
+    bound::<EditError>();
     bound::<InterpretationError>();
     bound::<ValueConversionError>();
     let local = std::rc::Rc::new(std::cell::Cell::new(7));

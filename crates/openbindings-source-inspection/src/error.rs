@@ -1,3 +1,7 @@
+use openbindings_internal_interfaces::{
+    BoundaryError,
+    carrier::{BoundaryCode, boundary_code},
+};
 use std::fmt;
 
 /// Classification of a refused inspection or invalid provider response.
@@ -24,11 +28,19 @@ pub enum InspectionErrorKind {
 ///
 /// `code` is a stable provider- or companion-specific identifier; `message` is
 /// diagnostic prose. Neither should include credentials or entire source bodies.
+///
+/// A [`BoundaryError`] converts into one, so `?` carries a binding's structural
+/// refusal, such as one from [`BindingValue::bind`](crate::BindingValue::bind),
+/// beside inspection's own: an encoding limit becomes
+/// [`InspectionErrorKind::Encoding`] and every other code
+/// [`InspectionErrorKind::InvalidInput`]. The message names the boundary code
+/// and location, and [`std::error::Error::source`] returns the boundary error.
 #[derive(Clone, PartialEq, Eq)]
 pub struct InspectionError {
     kind: InspectionErrorKind,
     code: String,
     message: String,
+    boundary: Option<BoundaryError>,
 }
 impl std::fmt::Debug for InspectionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -49,6 +61,7 @@ impl InspectionError {
             kind,
             code: code.into(),
             message: message.into(),
+            boundary: None,
         }
     }
     /// Stable category for control flow.
@@ -92,4 +105,27 @@ impl fmt::Display for InspectionError {
         write!(f, "{}: {}", self.code, self.message)
     }
 }
-impl std::error::Error for InspectionError {}
+impl std::error::Error for InspectionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.boundary.as_ref().map(|error| error as _)
+    }
+}
+
+impl From<BoundaryError> for InspectionError {
+    fn from(error: BoundaryError) -> Self {
+        let (kind, code) = match boundary_code(&error) {
+            BoundaryCode::EncodingLimit => (
+                InspectionErrorKind::Encoding,
+                "openbindings.inspection.encoding",
+            ),
+            _ => (
+                InspectionErrorKind::InvalidInput,
+                "openbindings.inspection.invalid-input",
+            ),
+        };
+        Self {
+            boundary: Some(error),
+            ..Self::new(kind, code, error.to_string())
+        }
+    }
+}

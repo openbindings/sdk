@@ -27,8 +27,10 @@ python3 tools/build-reference.py --output target/reference-candidate
 
 Use a new directory for each attempt; tools preserve earlier receipts. Set
 `CARGO_TARGET_DIR` to reuse a build cache and `--offline` on the packager only
-when intentionally qualifying the cached Cargo graph. Keep the environment and
-any offline limitation in the release evidence.
+when intentionally qualifying the cached Cargo graph. The reference builder
+empties that target's `doc` directory before generating Rustdoc, so the bundle
+holds only the pages of this build. Keep the environment and any offline
+limitation in the release evidence.
 
 The packager verifies original source bytes in every Cargo archive, rejects stale
 or dirty Wasm build identity, installs the npm tarball in a fresh project, and
@@ -79,8 +81,10 @@ libraries need them; their implementation types are not new supported APIs.
 The source changes that deliberately enable publication, including corresponding
 publication-guard checks, must form part of the final qualified candidate. Do not
 edit manifests after recording release artifact hashes and pretend those hashes
-still identify the upload. SDK tooling currently checks that publication remains
-disabled; update that check narrowly during the authorized release change.
+still identify the upload. `tools/verify-publication-guards.py` checks that every
+Cargo package keeps `publish = false` and the npm package keeps `"private": true`;
+`tools/verify.py` and the packager run it. Update that check narrowly during the
+authorized release change.
 
 ## Execution and recovery
 
