@@ -119,6 +119,29 @@ def fixtures():
         'bad name': {'input': None, 'tags': 42},
         'other': {'aliases': ['same']}, 'third': {'aliases': ['same']}})),
         expected=dict(status='non-conformant', finding_count=6), modes=['document'])
+    # The complete report: each finding's rule, code, original location and
+    # message, so a changed message or location is a declared outcome change.
+    def finding(rule, code, pointer, offset, message):
+        return dict(rule=rule, status='violated', code=code, message=message,
+                    location=dict(pointer=pointer, byte_offset=offset, line=1, byte_column=offset + 1))
+    fixed = 'value violates the fixed normative schema'
+    rows['document-invalid']['expected']['report'] = dict(
+        release='0.2.0', revision='30416ef1ca626e58eb8c383a0c71422a68f9243f',
+        conclusion='non-conformant',
+        evidence={f'OBI-{rule:02d}': 'violated' if rule in (2, 4, 5, 10) else 'met' for rule in range(1, 14)},
+        findings=[
+            finding('OBI-02', 'schema-mismatch', '/operations/bad name', 38, fixed),
+            finding('OBI-02', 'schema-mismatch', '/operations/bad name/input', 58, fixed),
+            finding('OBI-02', 'schema-mismatch', '/operations/bad name/tags', 70, fixed),
+            finding('OBI-04', 'name-grammar', '/operations/bad name', 38,
+                    'a name must be a nonempty ASCII string: start with a letter, digit or underscore; '
+                    'then use letters, digits, underscores, dots or hyphens'),
+            finding('OBI-05', 'duplicate-operation-name', '/operations/third/aliases/0', 123,
+                    'operation keys and aliases must be distinct'),
+            finding('OBI-10', 'schema-mismatch', '/operations/bad name/input', 58,
+                    'a schema must be a JSON object or boolean'),
+        ],
+        findings_truncated=False)
     add('explain-one', {'type': 'array', 'items': {'type': 'integer'}}, '["bad"]',
         'fails', modes=('explain',))['expected'].update(problem_count=1, problems_complete=False,
         first_problem=dict(code='type', instance_pointer='/0',

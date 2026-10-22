@@ -865,6 +865,11 @@ impl LocationPointerSizes {
     }
 }
 
+/// The fixed phrase an [`crate::InputError`] code reports, which its `Display`
+/// writes with the byte; `None` for a code the parser never emits.
+pub fn input_error_description(code: &str) -> Option<&'static str> {
+    crate::json::input_error_description(code)
+}
 /// The location of an admission failure in the bytes it refused: no pointer,
 /// since no value was parsed, at `byte_offset` clamped to the input, with the
 /// line and UTF-8 byte column counted over the bytes before it. The bytes need

@@ -8,6 +8,9 @@
   starts from an empty `dist`.
 - Every package stays unpublished until an authorized release: Cargo `publish = false` and npm
   `"private": true`, checked by `tools/verify-publication-guards.py`.
+- The release candidate's `publicationOrder` puts each crate after every local crate it
+  depends on, development dependencies included, so Cargo can package and publish the
+  crates in that order; the packager refuses an order that breaks the rule.
 - Value contracts come from the operation. A conformant operation's `input()` and
   `output()` return a `ValueContract`; `prepare(&evaluator)`, `prepare_with(&evaluator,
   &resources)` and `prepare_with_control` borrow the evaluator and return
@@ -37,6 +40,15 @@
   documents at the default limits (32 MiB, 1,000,000 nodes, any nesting), the
   largest allocates 272.2 MiB beyond the caller's input, counting each
   reallocation as holding its old and new blocks at once.
+- Exact-input refusals say what the parser expected or found and the byte where:
+  `InputError`'s `Display` and TypeScript's `InputFailure.message` read, for
+  example, `expected a colon after the member name at byte 5`. Codes, kinds
+  and byte offsets are unchanged.
+- OBI-10 findings name the meta-schema keyword whose value fails and point at
+  that value (`the value of the type keyword does not satisfy the JSON Schema
+  2020-12 meta-schema`), one finding for each failing keyword; a schema that is
+  neither an object nor a boolean is reported at the schema (`a schema must be
+  a JSON object or boolean`). Rule evidence is unchanged.
 - Document validation's fixed checks (OBI-02, OBI-10) and reference inspection use
   the unmodified jsonschema 0.58.6 library with its default pattern engine, which
   matches every fixed pattern on a finite automaton, exactly as ECMAScript does.
@@ -107,12 +119,22 @@
   and names the setting to raise.
   Preparing a schema from an untrusted party can still take more memory than a
   host may want, so a host doing so should prepare in an isolated worker or
-  process with an operating-system memory limit. Limits that would only bound
-  time are the application's to set and are off by default:
-  `Limits::evaluation_steps` caps each pass's work, without which time can grow
+  process with an operating-system memory limit. Two limits are the
+  application's to set and are off by default: `Limits::evaluation_steps`,
+  which bounds only time, caps each pass's work, without which time can grow
   exponentially with some schemas, and `Limits::schema_resources` (TypeScript
   `schemaResources`) caps the schema resources one contract may reach, refusing
-  with `LimitExceeded` and `schema-resource-limit` before compiling. The default
+  with `LimitExceeded` and `schema-resource-limit` before the library compiles
+  the contract, which bounds that compilation's time and memory (a
+  99,990-resource `$id` chain: 11.5 s and 723 MB without a cap, 1.2 s and
+  502 MB refused at 1,000). Exact `multipleOf` divides within a fixed
+  arithmetic bound: past 4,096 significant digits or an exponent of ±20,000 in
+  the value or the divisor, a division the answer needs gives no verdict
+  (`numeric-arithmetic-limit`). A keyword that reads as text a string or
+  member name holding an unpaired UTF-16 unit, such as `maxLength`, `pattern`
+  or `propertyNames`, gives no verdict (`lone-surrogate-instance`). A string
+  that reaches a `pattern` the evaluator does not match gives a no-verdict
+  located at that keyword's original schema location. The default
   evaluator never returns `Undefined`. One schema transform keeps the library's
   `unevaluatedProperties` walk clear of an upstream bug that drops compiled
   pattern subschemas.

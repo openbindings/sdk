@@ -101,8 +101,11 @@ fn main() {
         );
         drop(map);
     }
+    // Compile the fixed checks and, through a failing document and a failing
+    // schema, the guidance each builds at its first failure.
     fixed_schema::check(&JsonValue::parse("{}").unwrap(), false, 1).unwrap();
     fixed_schema::check(&JsonValue::parse("{}").unwrap(), true, 1).unwrap();
+    fixed_schema::check(&JsonValue::parse(r#"{"type":0}"#).unwrap(), true, 1).unwrap();
     let location_map = fixed_schema::compile_locations().unwrap();
     let manifest = std::env::args().nth(1).expect("input manifest");
     let cases: Vec<Value> = serde_json::from_slice(&std::fs::read(manifest).unwrap()).unwrap();

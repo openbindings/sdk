@@ -927,24 +927,7 @@ pub fn validate_document_with_limits(
     }
 }
 fn parse_error_message(code: &str) -> &'static str {
-    match code {
-        "bom" => "JSON text must not begin with a byte-order mark",
-        "utf8" => "JSON text must use valid UTF-8",
-        "comma-or-close" => "expected a comma or the end of the container",
-        "object-key" => "expected a quoted object member name",
-        "colon" => "expected a colon after the member name",
-        "trailing-token" => "unexpected content after the JSON value",
-        "number" => "invalid JSON number",
-        "fraction" => "expected a digit after the decimal point",
-        "exponent" => "expected a digit in the number exponent",
-        "value" => "expected a JSON value",
-        "literal" => "expected true, false or null",
-        "unterminated-string" => "expected the closing quote of the string",
-        "string-control" => "control characters in strings must be escaped",
-        "escape" => "invalid JSON string escape",
-        "unicode-escape" => "expected four hexadecimal digits in the Unicode escape",
-        _ => "invalid JSON text",
-    }
+    backend::input_error_description(code).unwrap_or("invalid JSON text")
 }
 fn version_refusal(value: &JsonValue) -> Option<VersionRefusal> {
     let mut declarations = value

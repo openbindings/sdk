@@ -99,9 +99,11 @@ during both preparation and validation.
 
 The evaluator bounds what the SDK itself reads, writes and recurses through.
 It does not estimate the memory the JSON Schema library's compiled program
-takes. `Limits` holds the configurable bounds; a limit that protects the
-process has a default, and one that would only bound time is the
-application's to set, and is off unless it does:
+takes. `Limits` holds the configurable bounds. A limit that protects the
+process has a default; `evaluation_steps`, which bounds only time, is the
+application's to set and is off unless it does, and so is `schema_resources`,
+which bounds the time and memory of compiling a contract that reaches many
+resources:
 
 - `evaluation_steps` sets no cap by default, so a pass takes time that grows
   with the schema and the value, and can grow exponentially with the schema:
@@ -190,7 +192,14 @@ application's to set, and is off unless it does:
   with `LimitExceeded` and `schema-resource-limit` before compiling it
   (`limits: { schemaResources: n }` in TypeScript). Preparation time grows
   linearly with the resources a contract reaches: 10,000 supplied resources
-  take 0.22 s in the reference build.
+  take 0.22 s in the reference build. The refusal comes after core projects
+  the contract, which its admission limits and 100,000 schema positions bound,
+  and before the evaluator copies the resources and the library compiles them,
+  so it bounds the time and memory of that compilation: a 7 MB document whose
+  input reaches a chain of 99,990 `$id` resources prepared in 11.5 s at a
+  723 MB peak without a cap, and refused in 1.2 s at a 502 MB peak with a cap
+  of 1,000 (release build on macOS arm64, peak resident memory of the whole
+  process).
 
 Core's document admission limits bound the bytes and nodes of every document
 and resource, and its projection refuses a contract reaching more than 100,000
@@ -215,13 +224,25 @@ each kind with a fifth of a thread of each of those sizes already in use.
 
 Within those bounds, preparing a schema can still take more memory than a
 host may want, since the library's compiled program grows with what it
-compiles, as any JSON Schema library's does: 1,000 holders of
+compiles: 1,000 holders of
 `unevaluatedProperties` that each inherit a base schema of 4,000 properties
 peak at 400 MB, and a dynamically specialized contract whose 4,096 contexts
 take 44.8 MiB of the default `program_bytes` peaks at 158 MB. A host that prepares schemas from untrusted parties should
 prepare them in an isolated worker or process with an operating-system memory
 limit. Values checked against trusted schemas stay bounded by
 `stack_bytes` and, when the host sets one, by `evaluation_steps`.
+
+Two further cases give no verdict whatever `Limits` sets. Exact `multipleOf`
+divides within a fixed arithmetic bound: when the value or the divisor has
+more than 4,096 significant digits, or an exponent beyond ±20,000 once the
+trailing zeros of its digits are counted in it, a division the answer needs
+gives no verdict (`LimitExceeded`, `numeric-arithmetic-limit`). Other numeric
+keywords compare exactly at any size. And values keep unpaired UTF-16 units:
+keywords that compare values exactly, such as `const`, `enum`, `required` and
+`uniqueItems`, decide them, while a keyword that reads a string or member name
+as Unicode text, such as `minLength`, `maxLength`, `pattern`, `properties`,
+`patternProperties` or `propertyNames`, gives no verdict
+(`UnsupportedCapability`, `lone-surrogate-instance`) when it reaches one.
 
 Patterns are ECMA-262 patterns with Unicode semantics, matched by a linear-time
 engine, so a match takes time linear in the string. The word boundary `\b`
@@ -230,8 +251,9 @@ backtracking engine (lookaround or a backreference), has a Unicode property
 escape, or holds the non-word boundary `\B` (which the engine's `is_match` can
 answer wrongly beside multi-byte characters) is not matched: a string that
 reaches it in `pattern` gives no verdict (`pattern-backtracking`,
-`unicode-property-matching` or `pattern-non-word-boundary`), and as a
-`patternProperties` name it refuses preparation. A pattern whose form needs
+`unicode-property-matching` or `pattern-non-word-boundary`) located at that
+`pattern` keyword's original schema location, and as a `patternProperties` name
+it refuses preparation. A pattern whose form needs
 more of `total_pattern_memory` than it is given gives
 `pattern-total-memory-limit`, or `pattern-size-limit` past 32 MiB. The
 reading is meant to match as

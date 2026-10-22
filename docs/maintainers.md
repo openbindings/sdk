@@ -34,7 +34,8 @@ archive and source-identity checks and [API reference](api-reference.md) for ren
 On pull requests and pushes to `main`, the [CI workflow](../.github/workflows/ci.yml)
 also runs the workspace advisory check with all features and the locked graph.
 Vulnerabilities and yanked versions fail the `advisories` job, which is required
-by the aggregate `ci` check alongside native, browser and MSRV jobs.
+by the aggregate `ci` check alongside the `native`, `browser`,
+`wasm-reproducibility` and `msrv` jobs.
 See [advisory policy](../DEPENDENCY-MAINTENANCE.md#advisory-policy) for the local
 command and the required advisory ID and reason for every exception. This check
 needs network access; `tools/verify-advisory-policy.py --self-test` checks only
@@ -70,8 +71,12 @@ readiness API.
 Fixed document checks use validity decisions separately from location guidance.
 The location walk follows failing members and elements and retains independently
 failing containers. A findings-allowance or frame-depth stop preserves an
-established violation and marks findings truncated. OBI-10 locates the schema
-node checked. No optional value
+established violation and marks findings truncated. OBI-10 locates each keyword
+of a failing schema whose value fails that keyword's own meta-schema check, or
+the schema itself when it is neither an object nor a boolean. The localized
+meta-schemas constrain a schema only through its type and its keywords' values,
+so those per-keyword checks, built once at the first failure, locate exactly
+the keywords that make it fail. No optional value
 error tree participates in document rule evidence.
 
 [Allocation qualification](../tools/diagnostic-memory-probe/README.md) records

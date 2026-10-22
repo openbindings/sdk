@@ -479,8 +479,15 @@ regex crate builds for all of a contract's compiled patterns together
 (`total_pattern_memory`, 64 MiB, below); and the memory dynamic specialization
 adds to the program (`program_bytes`, 48 MiB). It does not estimate the memory
 of the library's compiled program, which grows with what the library compiles.
-`Limits::schema_resources` is a tighter cap an application can set. Measured by
-the same method:
+`Limits::schema_resources` is a tighter cap an application can set. It refuses
+a contract after core projects it and before the evaluator copies its resources
+and the library compiles them, so it bounds that compilation's memory as well
+as its time. Measured on 2026-10-22 by the same method, against `68a6bb9`, a
+7 MB document whose input reaches a chain of 99,990 `$id` resources prepared in
+11.5 s at a 723 MB peak without a cap, and refused (`schema-resource-limit`) in
+1.2 s at a 502 MB peak with a cap of 1,000; validating that document alone
+peaks at 61 MB, so the projection, which comes before the cap, takes most of
+the rest. The shapes below were measured by the same method:
 
 | Shape | Result |
 | --- | --- |

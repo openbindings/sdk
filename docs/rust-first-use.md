@@ -190,8 +190,11 @@ UTF-16 unit (`Pointer::as_str` is then `None`) and is absent only for a syntax
 error, which precedes any value. Quote pointers when displaying them. Truncation
 leaves rule evidence intact. Use codes and evidence for logic; messages are
 advisory. `validate` reports value failures without problems. `explain` is an
-explicit per-call choice with library allocation and stack limits, including
-possible stack overflow on deep values. An explained problem names the failing
+explicit per-call choice that allocates in proportion to the schema and value.
+The default evaluator explains only values within half the nesting
+`Limits::stack_bytes` admits and reports a deeper failure without its problem,
+so release builds explain on a thread with that much stack; debug builds need
+more (see [host support](support.md)). An explained problem names the failing
 node by its exact pointer from the value passed (`instance`) and the failing
 keyword by resource and exact pointer (`schema`). Line and column come from the
 text's holder when asked: `JsonValue::locate` for the value, `Conformant::locate`

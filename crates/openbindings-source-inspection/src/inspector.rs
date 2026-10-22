@@ -141,6 +141,16 @@ impl<P: SourceInspector> Inspector<P> {
 
     /// Inspect a source with a fresh, uncancelled control. Work begins when the
     /// returned future is polled.
+    ///
+    /// # Errors
+    /// Returns [`InspectionErrorKind::InvalidInput`] for an empty source kind or
+    /// a source member that is not an `x-` extension,
+    /// [`InspectionErrorKind::UnsupportedKind`] when the provider does not
+    /// support the exact kind, [`InspectionErrorKind::Cancelled`] once the
+    /// control is cancelled, the error the provider returns, such as
+    /// [`InspectionErrorKind::UnreadableSource`], and
+    /// [`InspectionErrorKind::InvalidResult`] when the provider's inventory fails
+    /// the SDK's structural checks.
     pub fn inspect<'a>(
         &'a self,
         source: &'a Source,
@@ -152,6 +162,16 @@ impl<P: SourceInspector> Inspector<P> {
     /// Carrier admission and support checks finish before the provider hook is
     /// called. All work begins when the future is polled. Results are structurally
     /// checked before delivery. Kind-specific semantic claims remain the provider's.
+    ///
+    /// # Errors
+    /// Returns [`InspectionErrorKind::InvalidInput`] for an empty source kind or
+    /// a source member that is not an `x-` extension,
+    /// [`InspectionErrorKind::UnsupportedKind`] when the provider does not
+    /// support the exact kind, [`InspectionErrorKind::Cancelled`] once the
+    /// control is cancelled, the error the provider returns, such as
+    /// [`InspectionErrorKind::UnreadableSource`], and
+    /// [`InspectionErrorKind::InvalidResult`] when the provider's inventory fails
+    /// the SDK's structural checks.
     pub fn inspect_with_control<'a>(
         &'a self,
         source: &'a Source,
