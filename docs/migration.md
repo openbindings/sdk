@@ -15,8 +15,8 @@ the legacy implementation; a registry install alone does not select this API.
 
 | Legacy job | Rust-backed SDK |
 | --- | --- |
-| Go `ParseDocument(data)`, `ValidateDocument(data)` and `doc.Validate()` | `Document::parse` preserves input; `validate()` returns document validation; `conformant()` yields an owner only when conformance is established. `validate_document` is the bytes-to-validation convenience function. |
-| TypeScript `parseDocument(input)` returning `OBInterface`, and `validateDocument` / `validateInterface` throwing on invalid data | Await `initialize()`, narrow `Document.parse(input)` to `status === "parsed"`, then call `document.validate()` and narrow to `status === "conformant"`. `validateDocument` returns a report outcome instead of an interface object. |
+| Go `ParseDocument(data)`, `ValidateDocument(data)` and `doc.Validate()` | `validate_document(data)` returns document validation, reporting text that is not JSON as an OBI-01 violation; `conformant()` yields an owner only when conformance is established. To edit, `Document::parse` preserves input and its `validate()` returns the same validation. |
+| TypeScript `parseDocument(input)` returning `OBInterface`, and `validateDocument` / `validateInterface` throwing on invalid data | Await `initialize()`, narrow `Document.parse(input)` to `status === "parsed"`, then call `document.validate()` and narrow to `status === "conformant"`. `validateDocument` returns a `DocumentReport` instead of an interface object. |
 
 Parsing here is not a conformance gate. Keep documents for editors; require
 a `Conformant<Document>` before creating value contracts or publishing a document.

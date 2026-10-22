@@ -930,6 +930,7 @@ version = "0.2.0-alpha.1"
 dependencies = [
  "openbindings",
  "openbindings-internal-cancellation",
+ "openbindings-internal-interfaces",
  "openbindings-json-schema-evaluator",
  "serde",
  "serde_json",
@@ -941,6 +942,15 @@ name = "openbindings-internal-cancellation"
 version = "0.2.0-alpha.1"
 dependencies = [
  "openbindings",
+]
+
+[[package]]
+name = "openbindings-internal-interfaces"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -974,6 +984,7 @@ dependencies = [
  "futures-core",
  "openbindings",
  "openbindings-internal-cancellation",
+ "openbindings-internal-interfaces",
  "openbindings-json-schema-evaluator",
  "serde",
  "serde_json",
@@ -1009,6 +1020,7 @@ version = "0.2.0-alpha.1"
 dependencies = [
  "openbindings",
  "openbindings-internal-cancellation",
+ "openbindings-internal-interfaces",
  "openbindings-json-schema-evaluator",
  "serde",
  "serde_json",

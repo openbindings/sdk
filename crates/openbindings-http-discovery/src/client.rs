@@ -637,8 +637,10 @@ impl std::fmt::Debug for DiscoveryResult {
             .finish()
     }
 }
-/// Classify a complete bounded body. Acquisition metadata is deliberately absent.
-pub fn validate_body(body: &[u8]) -> DiscoveryOutcome {
+// Classify a complete bounded body. Acquisition metadata is deliberately absent.
+// A caller holding bytes obtained elsewhere judges them with
+// `openbindings::validate_document`, which this wraps.
+pub(crate) fn validate_body(body: &[u8]) -> DiscoveryOutcome {
     match validate_document(body) {
         Err(refusal) => DiscoveryOutcome::VersionRefused { refusal },
         Ok(validation) => match validation.report().conclusion {

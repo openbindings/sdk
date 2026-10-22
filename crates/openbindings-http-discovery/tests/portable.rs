@@ -146,6 +146,23 @@ fn origins_normalize_hosts_and_reject_non_loopback_http() {
         assert!(endpoint(origin).is_err(), "{origin:?}");
     }
 }
+// Publication applies the CORS policy to its options; the bytes route agrees.
+fn validate_allow_origin(origin: &AllowOrigin) -> Result<(), ConfigurationError> {
+    let options = || PublicationOptions {
+        allow_origin: origin.clone(),
+    };
+    let proof = openbindings::validate_document(DOCUMENT)
+        .unwrap()
+        .conformant()
+        .unwrap();
+    let checked = Publication::new(&proof, options()).map(drop);
+    match Publication::from_bytes(DOCUMENT, options()) {
+        Ok(_) => assert!(checked.is_ok()),
+        Err(PublicationError::Configuration(error)) => assert_eq!(checked, Err(error)),
+        Err(other) => panic!("unexpected publication refusal: {other:?}"),
+    }
+    checked
+}
 #[test]
 fn fixed_cors_origin_matches_the_published_syntax_policy() {
     for origin in [AllowOrigin::Any, AllowOrigin::Omit, AllowOrigin::Null] {

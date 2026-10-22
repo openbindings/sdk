@@ -5,12 +5,11 @@ Exact JSON values preserve numeric tokens, source locations and the distinction
 between an absent field and JSON null.
 
 ```rust
-use openbindings::{Conformance, Document};
+use openbindings::{Conformance, validate_document};
 
-let document = Document::parse(
+let validation = validate_document(
     br#"{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"]}}}"#,
 )?;
-let validation = document.validate()?;
 assert_eq!(validation.report().conclusion, Conformance::Conformant);
 let conformant = validation.conformant().ok_or("document is not conformant")?;
 let operation = conformant.resolve_operation("find").ok_or("operation is missing")?;
@@ -18,14 +17,17 @@ assert_eq!(operation.key(), "lookup");
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-Parsing retains a snapshot for inspection, including invalid editor drafts.
-Validation checks all document rules and returns evidence as met, violated or
-inconclusive where applicable. Only established conformance produces a
-`Conformant<Document>`, with infallible typed field reads and operations that hand out value contracts.
-An unsupported specification version is a separate refusal.
+`validate_document` checks all document rules on the bytes as given and returns
+evidence as met, violated or inconclusive where applicable. Text that is not JSON
+is an OBI-01 violation in the report, with its location. Only established
+conformance produces a `Conformant<Document>`, with infallible typed field reads
+and operations that hand out value contracts. An unsupported specification
+version is a separate refusal.
 
-Create an OBI with `Document::new()` or parse exact JSON with `Document::parse`.
-Edit that same type through `&mut self`: use `set_description`, whole-part setters
+To author, create an OBI with `Document::new()` or parse exact JSON with
+`Document::parse`, which retains a snapshot for inspection, including invalid
+editor drafts, and refuses text that is not JSON as an `InputError`;
+`Document::validate` then returns the same validation. Edit that same type through `&mut self`: use `set_description`, whole-part setters
 such as `set_operation(key, &operation)`, or RFC 6901 `set` and `remove`.
 `edit(&[Edit])` commits one atomic batch with one splice and one parse. Sibling
 insertions coalesce in batch order; untouched bytes remain exact. The byte budget

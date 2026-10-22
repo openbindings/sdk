@@ -5,14 +5,13 @@ optional companion supports JSON Schema 2020-12, exact JSON numbers and explicit
 immutable schema resources. Use it alongside `openbindings`.
 
 ```rust
-use openbindings::{Document, ValueOutcome};
+use openbindings::{ValueOutcome, validate_document};
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let document = Document::parse(
+    let validation = validate_document(
         br#"{"openbindings":"0.2.0","operations":{"lookup":{"input":{"type":"string"}}}}"#,
     )?;
-    let validation = document.validate()?;
     if validation.conformant().is_none() {
         return Err(format!("document conformance: {:?}; findings: {:?}",
             validation.report().conclusion, validation.report().findings).into());

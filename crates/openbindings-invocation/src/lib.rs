@@ -10,12 +10,14 @@ mod lifecycle;
 pub mod operation;
 mod value;
 
-pub use error::{BoundaryError, InvocationError};
+pub use error::InvocationError;
 pub use lifecycle::{
     Control, Input, Invocation, InvocationLimits, LimitError, Outputs, ProviderInput, ProviderIo,
     ProviderOutput, WriteError,
 };
-pub use value::{BindingInvocationInput, BindingRequest, BindingValue, ContextChallenge};
+// One definition of the by-value binding source inspection also hands out.
+pub use openbindings_internal_interfaces::{BindingValue, BoundaryError};
+pub use value::{BindingInvocationInput, BindingRequest, ContextChallenge};
 
 /// Version of the published interface this crate implements, independent of the crate's own version.
 pub const INTERFACE_VERSION: &str = "0.1.0";

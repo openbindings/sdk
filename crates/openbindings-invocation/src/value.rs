@@ -1,179 +1,15 @@
 //! Exact by-value carriers and structural admission.
 
-use crate::BoundaryError;
-use openbindings::{Binding, JsonKind, JsonLimits, JsonRef, JsonValue, Preference, Source};
-use serde::{Serialize, Serializer, ser::SerializeMap};
-use std::{
-    collections::{BTreeMap, HashSet},
-    fmt,
+use openbindings::{JsonKind, JsonLimits, JsonRef, JsonValue, Source};
+use openbindings_internal_interfaces::{
+    BindingValue, BoundaryError,
+    carrier::{
+        BindingFields, BoundaryCode, admit_binding, boolean, boundary_error, encode,
+        nonempty_array, object, required, string, unique_object,
+    },
 };
-
-const BINDING_FIELDS: &[&str] = &[
-    "operation",
-    "source",
-    "content",
-    "idempotent",
-    "preference",
-    "description",
-    "deprecated",
-];
-
-/// A binding passed by value, with no document lookup or operation selection.
-///
-/// Unlike the core authoring binding, the empty carrier is valid. Absence of
-/// `operation`, `source`, or `content` is preserved; an empty string and JSON null
-/// remain present values. Metadata is information, not invocation policy.
-#[derive(Clone, Default)]
-pub struct BindingValue {
-    /// Optional author operation key, forwarded without interpretation.
-    pub operation: Option<String>,
-    /// Optional author source key, forwarded without interpretation.
-    pub source: Option<String>,
-    /// Exact kind-owned content; explicit null is distinct from absence.
-    pub content: Option<JsonValue>,
-    /// Optional author idempotency claim; does not authorize retries.
-    pub idempotent: Option<bool>,
-    /// Optional author preference, without ranking or selection behavior.
-    pub preference: Option<Preference>,
-    /// Optional human-facing description.
-    pub description: Option<String>,
-    /// Optional author deprecation annotation.
-    pub deprecated: Option<bool>,
-    /// Exact extension values. Names must start with `x-`; admission checks this.
-    pub extensions: BTreeMap<String, JsonValue>,
-}
-
-impl BindingValue {
-    /// Read a by-value binding without collapsing duplicate or unknown members.
-    ///
-    /// Opaque content and extension values retain exact snapshots, including
-    /// duplicate names, number spelling and escaped unpaired UTF-16 units.
-    ///
-    /// # Errors
-    /// Returns a boundary error for a malformed carrier: invalid field types, missing required fields, duplicate members, or unsupported fields. Opaque payloads are preserved.
-    pub fn from_json(value: &JsonValue) -> Result<Self, BoundaryError> {
-        Self::from_json_ref(value.view())
-    }
-
-    /// Read a borrowed by-value binding, retaining owners only for opaque values.
-    ///
-    /// # Errors
-    /// Returns a boundary error for a malformed carrier: invalid field types, missing required fields, duplicate members, or unsupported fields. Opaque payloads are preserved.
-    pub fn from_json_ref(value: JsonRef<'_>) -> Result<Self, BoundaryError> {
-        object(value, BINDING_FIELDS, true, "/binding")?;
-        let mut binding = Self::default();
-        for member in value.members().expect("checked object") {
-            let name = member.name.as_str().expect("checked carrier name");
-            let v = member.value;
-            match name {
-                "operation" => binding.operation = Some(string(v, "/binding/operation")?.into()),
-                "source" => binding.source = Some(string(v, "/binding/source")?.into()),
-                "content" => binding.content = Some(v.to_owned()),
-                "idempotent" => binding.idempotent = Some(boolean(v, "/binding/idempotent")?),
-                "preference" => binding.preference = Some(preference(v)?),
-                "description" => {
-                    binding.description = Some(string(v, "/binding/description")?.into())
-                }
-                "deprecated" => binding.deprecated = Some(boolean(v, "/binding/deprecated")?),
-                extension => {
-                    binding.extensions.insert(extension.into(), v.to_owned());
-                }
-            }
-        }
-        Ok(binding)
-    }
-
-    pub(crate) fn admit(&self) -> Result<(), BoundaryError> {
-        if self.extensions.keys().any(|name| !name.starts_with("x-")) {
-            return Err(BoundaryError::new("unexpected-member", "/binding"));
-        }
-        Ok(())
-    }
-
-    /// Encode this carrier under the default finite exact-JSON limits.
-    ///
-    /// # Errors
-    /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
-    pub fn to_json(&self) -> Result<JsonValue, BoundaryError> {
-        self.to_json_with_limits(JsonLimits::default())
-    }
-
-    /// Check extension names and encode with explicit exact-JSON limits.
-    ///
-    /// # Errors
-    /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
-    pub fn to_json_with_limits(&self, limits: JsonLimits) -> Result<JsonValue, BoundaryError> {
-        self.admit()?;
-        encode(&BindingFields(self), limits)
-    }
-}
-
-impl From<&Binding> for BindingValue {
-    fn from(binding: &Binding) -> Self {
-        Self {
-            operation: Some(binding.operation.clone()),
-            source: Some(binding.source.clone()),
-            content: binding.content.clone(),
-            idempotent: binding.idempotent,
-            preference: binding.preference,
-            description: binding.description.clone(),
-            deprecated: binding.deprecated,
-            extensions: binding.additional_fields.clone(),
-        }
-    }
-}
-
-impl fmt::Debug for BindingValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("BindingValue")
-            .field("operation_present", &self.operation.is_some())
-            .field("source_present", &self.source.is_some())
-            .field("content_present", &self.content.is_some())
-            .finish_non_exhaustive()
-    }
-}
-
-impl Serialize for BindingValue {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.to_json()
-            .map_err(serde::ser::Error::custom)?
-            .serialize(serializer)
-    }
-}
-
-struct BindingFields<'a>(&'a BindingValue);
-
-impl Serialize for BindingFields<'_> {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let b = self.0;
-        let mut map = serializer.serialize_map(None)?;
-        if let Some(v) = &b.operation {
-            map.serialize_entry("operation", v)?;
-        }
-        if let Some(v) = &b.source {
-            map.serialize_entry("source", v)?;
-        }
-        if let Some(v) = &b.content {
-            map.serialize_entry("content", v)?;
-        }
-        if let Some(v) = &b.idempotent {
-            map.serialize_entry("idempotent", v)?;
-        }
-        if let Some(v) = &b.preference {
-            map.serialize_entry("preference", v)?;
-        }
-        if let Some(v) = &b.description {
-            map.serialize_entry("description", v)?;
-        }
-        if let Some(v) = &b.deprecated {
-            map.serialize_entry("deprecated", v)?;
-        }
-        for (name, value) in &b.extensions {
-            map.serialize_entry(name, value)?;
-        }
-        map.end()
-    }
-}
+use serde::{Serialize, Serializer, ser::SerializeMap};
+use std::fmt;
 
 /// Immutable borrowed carriers for one invocation or advisory preflight.
 ///
@@ -192,7 +28,7 @@ pub struct BindingRequest<'a> {
 impl BindingRequest<'_> {
     pub(crate) fn admit(&self) -> Result<(), BoundaryError> {
         if self.source.kind.is_empty() {
-            return Err(BoundaryError::new("empty-string", "/source/kind"));
+            return Err(boundary_error(BoundaryCode::EmptyString, "/source/kind"));
         }
         if self
             .source
@@ -200,14 +36,14 @@ impl BindingRequest<'_> {
             .keys()
             .any(|name| !name.starts_with("x-"))
         {
-            return Err(BoundaryError::new("unexpected-member", "/source"));
+            return Err(boundary_error(BoundaryCode::UnexpectedMember, "/source"));
         }
-        self.binding.admit()?;
+        admit_binding(self.binding)?;
         if self
             .context
             .is_some_and(|value| value.kind() != JsonKind::Object)
         {
-            return Err(BoundaryError::new("expected-object", "/context"));
+            return Err(boundary_error(BoundaryCode::ExpectedObject, "/context"));
         }
         Ok(())
     }
@@ -324,7 +160,7 @@ pub(crate) fn source_from_json(value: JsonRef<'_>) -> Result<Source, BoundaryErr
     object(value, &["kind", "content", "description"], true, "/source")?;
     let kind = string(required(value, "kind", "/source/kind")?, "/source/kind")?;
     if kind.is_empty() {
-        return Err(BoundaryError::new("empty-string", "/source/kind"));
+        return Err(boundary_error(BoundaryCode::EmptyString, "/source/kind"));
     }
     let mut source = Source {
         kind: kind.into(),
@@ -431,7 +267,7 @@ impl ContextChallenge {
     /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
     pub fn to_json_with_limits(&self, limits: JsonLimits) -> Result<JsonValue, BoundaryError> {
         JsonValue::parse_with_limits(self.0.bytes(), limits)
-            .map_err(|_| BoundaryError::new("encoding-limit", ""))
+            .map_err(|_| boundary_error(BoundaryCode::EncodingLimit, ""))
     }
 
     /// Consume the wrapper and retain its complete exact value.
@@ -462,16 +298,16 @@ fn validate_requirement(value: JsonRef<'_>) -> Result<(), BoundaryError> {
         "/data/alternatives/*/requirements/*/type",
     )?;
     if family.is_empty() {
-        return Err(BoundaryError::new(
-            "empty-string",
+        return Err(boundary_error(
+            BoundaryCode::EmptyString,
             "/data/alternatives/*/requirements/*/type",
         ));
     }
     if let Some(name) = value.get("name")
         && string(name, "/data/alternatives/*/requirements/*/name")?.is_empty()
     {
-        return Err(BoundaryError::new(
-            "empty-string",
+        return Err(boundary_error(
+            BoundaryCode::EmptyString,
             "/data/alternatives/*/requirements/*/name",
         ));
     }
@@ -490,8 +326,8 @@ fn validate_requirement(value: JsonRef<'_>) -> Result<(), BoundaryError> {
     if let Some(path) = value.get("path") {
         let path = string(path, "/data/alternatives/*/requirements/*/path")?;
         if family == "config.value" && !valid_pointer(path) {
-            return Err(BoundaryError::new(
-                "invalid-pointer",
+            return Err(boundary_error(
+                BoundaryCode::InvalidPointer,
                 "/data/alternatives/*/requirements/*/path",
             ));
         }
@@ -499,8 +335,8 @@ fn validate_requirement(value: JsonRef<'_>) -> Result<(), BoundaryError> {
     if let Some(schema) = value.get("schema")
         && !matches!(schema.kind(), JsonKind::Object | JsonKind::Boolean)
     {
-        return Err(BoundaryError::new(
-            "expected-schema",
+        return Err(boundary_error(
+            BoundaryCode::ExpectedSchema,
             "/data/alternatives/*/requirements/*/schema",
         ));
     }
@@ -522,169 +358,4 @@ fn valid_pointer(pointer: &str) -> bool {
         }
     }
     true
-}
-
-fn required<'a>(
-    value: JsonRef<'a>,
-    field: &str,
-    path: &'static str,
-) -> Result<JsonRef<'a>, BoundaryError> {
-    value
-        .get(field)
-        .ok_or_else(|| BoundaryError::new("missing-member", path))
-}
-
-fn nonempty_array(value: JsonRef<'_>, path: &'static str) -> Result<(), BoundaryError> {
-    if value.kind() != JsonKind::Array {
-        return Err(BoundaryError::new("expected-array", path));
-    }
-    if value.is_empty() == Some(true) {
-        return Err(BoundaryError::new("empty-array", path));
-    }
-    Ok(())
-}
-
-pub(crate) fn string<'a>(value: JsonRef<'a>, path: &'static str) -> Result<&'a str, BoundaryError> {
-    value.as_str().ok_or_else(|| {
-        BoundaryError::new(
-            if value.kind() == JsonKind::String {
-                "unpaired-string"
-            } else {
-                "expected-string"
-            },
-            path,
-        )
-    })
-}
-
-fn boolean(value: JsonRef<'_>, path: &'static str) -> Result<bool, BoundaryError> {
-    value
-        .as_bool()
-        .ok_or_else(|| BoundaryError::new("expected-boolean", path))
-}
-
-pub(crate) fn object(
-    value: JsonRef<'_>,
-    known: &[&str],
-    extensions: bool,
-    path: &'static str,
-) -> Result<(), BoundaryError> {
-    unique_object(value, path)?;
-    for member in value.members().expect("checked object") {
-        let name = member
-            .name
-            .as_str()
-            .ok_or_else(|| BoundaryError::new("unexpected-member", path))?;
-        if !known.contains(&name) && !(extensions && name.starts_with("x-")) {
-            return Err(BoundaryError::new("unexpected-member", path));
-        }
-    }
-    Ok(())
-}
-
-fn unique_object(value: JsonRef<'_>, path: &'static str) -> Result<(), BoundaryError> {
-    let members = value
-        .members()
-        .ok_or_else(|| BoundaryError::new("expected-object", path))?;
-    let mut scalar_names = HashSet::new();
-    let mut unpaired_names = HashSet::new();
-    for member in members {
-        let unique = if let Some(name) = member.name.as_str() {
-            scalar_names.insert(name)
-        } else {
-            unpaired_names.insert(member.name.utf16_units().expect("member name"))
-        };
-        if !unique {
-            return Err(BoundaryError::new("duplicate-member", path));
-        }
-    }
-    Ok(())
-}
-
-// Reads a preference exactly as core's private document reader does; the
-// differential test in tests/values.rs holds the two aligned.
-fn preference(value: JsonRef<'_>) -> Result<Preference, BoundaryError> {
-    let invalid = || BoundaryError::new("invalid-preference", "/binding/preference");
-    let text = value.number_text().ok_or_else(invalid)?;
-    let negative = text.starts_with('-');
-    let unsigned = text.strip_prefix('-').unwrap_or(text);
-    let (mantissa, exponent) = unsigned.split_once(['e', 'E']).unwrap_or((unsigned, "0"));
-    // Saturation is safe: any exponent larger than the token's digit count plus
-    // the target integer width cannot bring a nonzero value into range.
-    let cap = i64::try_from(text.len())
-        .unwrap_or(i64::MAX - 32)
-        .saturating_add(32);
-    let exponent_negative = exponent.starts_with('-');
-    let exponent = exponent
-        .trim_start_matches(['+', '-'])
-        .bytes()
-        .fold(0_i64, |n, b| {
-            n.saturating_mul(10)
-                .saturating_add(i64::from(b - b'0'))
-                .min(cap)
-        });
-    let exponent = if exponent_negative {
-        -exponent
-    } else {
-        exponent
-    };
-    let fractional = mantissa
-        .split_once('.')
-        .map_or(0, |(_, fraction)| fraction.len());
-    let digits = || mantissa.bytes().filter(|b| *b != b'.');
-    let total = digits().count();
-    let leading = digits().take_while(|b| *b == b'0').count();
-    if leading == total {
-        return Ok(Preference::new(0).expect("zero preference"));
-    }
-    let trailing = digits().rev().take_while(|b| *b == b'0').count();
-    let power = exponent.saturating_sub(i64::try_from(fractional).map_err(|_| invalid())?);
-    let integer_digits = i64::try_from(total - leading)
-        .map_err(|_| invalid())?
-        .saturating_add(power);
-    if !(1..=16).contains(&integer_digits) || (power < 0 && power.unsigned_abs() > trailing as u64)
-    {
-        return Err(invalid());
-    }
-    let mut number = 0_i64;
-    for digit in digits()
-        .skip(leading)
-        .chain(std::iter::repeat(b'0'))
-        .take(integer_digits as usize)
-    {
-        number = number * 10 + i64::from(digit - b'0');
-    }
-    Preference::new(if negative { -number } else { number }).ok_or_else(invalid)
-}
-
-/// Serialize without building an unbounded output buffer or exposing error text.
-/// Inspection and synthesis keep the same bounded writer for their own errors.
-pub(crate) fn encode<T: Serialize>(
-    value: &T,
-    limits: JsonLimits,
-) -> Result<JsonValue, BoundaryError> {
-    struct Output {
-        bytes: Vec<u8>,
-        max: usize,
-    }
-    impl std::io::Write for Output {
-        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-            if bytes.len() > self.max.saturating_sub(self.bytes.len()) {
-                return Err(std::io::Error::other("invocation JSON byte limit"));
-            }
-            self.bytes.extend_from_slice(bytes);
-            Ok(bytes.len())
-        }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-    let mut output = Output {
-        bytes: Vec::new(),
-        max: limits.max_bytes,
-    };
-    serde_json::to_writer(&mut output, value)
-        .map_err(|_| BoundaryError::new("encoding-limit", ""))?;
-    JsonValue::parse_with_limits(output.bytes, limits)
-        .map_err(|_| BoundaryError::new("encoding-limit", ""))
 }

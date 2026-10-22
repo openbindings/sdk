@@ -20,7 +20,7 @@ fn inventories_validate_against_pinned_interface_output_contract() {
     };
     let target = BindableTarget::new(
         "空.🚲",
-        BindingFragment {
+        BindingValue {
             content: Some(JsonValue::parse("9007199254740993").unwrap()),
             idempotent: Some(false),
             ..Default::default()
@@ -76,7 +76,7 @@ fn duplicate_recovery_is_sdk_policy_not_an_interface_requirement() {
             ValueOutcome::Satisfies
         ));
     }
-    let target = BindableTarget::new("a", BindingFragment::default());
+    let target = BindableTarget::new("a", BindingValue::default());
     assert!(
         SourceInspection::complete(vec![target.clone(), target.clone()])
             .validate()
