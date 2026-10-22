@@ -64,6 +64,17 @@ impl std::fmt::Debug for Source {
 }
 
 const PROGRAM_NAMESPACE: &str = "https://sdk-program.openbindings.invalid/";
+// A projection is not a document: it holds the reached schemas of the document,
+// its supplied resources and the packaged meta-schemas, with its own references
+// and wrappers. It keeps fixed bounds, independent of any admission limits: its
+// text stops at 64 MiB, and each resource it writes is parsed within 64 MiB,
+// 1,000,000 nodes and 10,000 levels.
+const PROJECTION_LIMITS: openbindings_internal_json::JsonLimits =
+    openbindings_internal_json::JsonLimits {
+        max_bytes: 64 * 1024 * 1024,
+        max_depth: 10_000,
+        max_nodes: 1_000_000,
+    };
 /// A projection without its location map, with the node each definition of
 /// each projected resource came from, in `$defs` order.
 pub struct UnmappedProgram {
@@ -843,7 +854,6 @@ impl SchemaSpace {
         let mut definitions: BTreeMap<usize, BTreeMap<String, (String, usize)>> = BTreeMap::new();
         let mut locations = BTreeMap::new();
         let mut byte_count = 0usize;
-        let limits = self.document.limits();
         // Separated literals, copied together once every node is admitted, and
         // the literal text the current node separates, counted with its own.
         let separating = literals.is_some();
@@ -949,19 +959,12 @@ impl SchemaSpace {
             byte_count = byte_count
                 .saturating_add(transformed.len())
                 .saturating_add(std::mem::take(&mut separated));
-            // Each projected resource is parsed under the document's admission
-            // limits below; the projection stops once it passes their bytes.
-            if byte_count > limits.max_bytes {
+            if byte_count > PROJECTION_LIMITS.max_bytes {
                 return Err(self.failure(
                     id,
                     FailureReason::LimitExceeded,
                     "program-byte-limit",
-                    format!(
-                        "the schema projection exceeds the document's {}-byte admission \
-                         limit; raise JsonLimits::max_bytes (limits.maxBytes in \
-                         TypeScript) when admitting the document",
-                        limits.max_bytes
-                    ),
+                    "schema projection exceeds 64 MiB",
                 ));
             }
             if mapped {
@@ -999,13 +1002,17 @@ impl SchemaSpace {
                 if id == entry_resource {
                     fields.insert("$ref".into(), quoted(&address(entry)));
                 }
-                JsonValue::parse_with_limits(object(fields), limits)
+                JsonValue::parse_with_limits(object(fields), PROJECTION_LIMITS)
                     .map(|document| ProjectedResource { uri, document })
                     .map_err(|e| {
+                        // A fixed bound: no admission setting raises it.
+                        let what =
+                            openbindings_internal_json::backend::input_error_description(e.code)
+                                .unwrap_or(e.code);
                         Failure::new(
                             FailureReason::LimitExceeded,
                             "program-json-limit",
-                            e.to_string(),
+                            format!("{what} at byte {}", e.byte_offset),
                         )
                     })
             })

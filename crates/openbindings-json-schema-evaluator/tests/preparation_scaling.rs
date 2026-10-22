@@ -544,32 +544,64 @@ fn prepare_admitted(text: &str, limits: JsonLimits) -> Result<PreparedValueContr
 }
 
 #[test]
-fn a_projection_stops_at_the_limits_its_document_was_admitted_under() {
+fn a_projection_keeps_its_own_bounds_whatever_the_document_was_admitted_under() {
     // Each empty `allOf` member projects to a reference and a definition, so
-    // the projection is many times the document.
+    // the projection is many times the document; admitting the document at its
+    // own size or node count does not bound it.
     let text = document(
         &[],
         &format!(r#"{{"allOf":[{}]}}"#, vec!["{}"; 20_000].join(",")),
     );
-    let tight = JsonLimits {
-        max_bytes: text.len(),
+    // The root, three members and their values, `op`, `input`, `allOf` and the
+    // members: 20,013 nodes, the document's own count.
+    let nodes = 20_013;
+    let fewer = JsonLimits {
+        max_nodes: nodes - 1,
         ..JsonLimits::default()
     };
-    let refused = prepare_admitted(&text, tight).unwrap_err();
-    assert_eq!(
-        (refused.reason, refused.code.as_str()),
-        (NoVerdictReason::LimitExceeded, "program-byte-limit")
-    );
-    assert_eq!(
-        refused.message,
-        format!(
-            "the schema projection exceeds the document's {}-byte admission limit; \
-             raise JsonLimits::max_bytes (limits.maxBytes in TypeScript) when admitting \
-             the document",
-            text.len()
-        )
-    );
-    assert!(prepare_admitted(&text, JsonLimits::default()).is_ok());
+    assert!(JsonValue::parse_with_limits(&text, fewer).is_err());
+    for limits in [
+        JsonLimits {
+            max_bytes: text.len(),
+            ..JsonLimits::default()
+        },
+        JsonLimits {
+            max_nodes: nodes,
+            ..JsonLimits::default()
+        },
+        JsonLimits::default(),
+    ] {
+        assert!(
+            validate_document_with_limits(&text, limits)
+                .unwrap()
+                .conformant()
+                .is_some()
+        );
+        assert!(prepare_admitted(&text, limits).is_ok(), "{limits:?}");
+    }
+    // Supplied resources together past the document's byte limit prepare.
+    let pad = "a".repeat(17 << 20);
+    let resource = |uri: &str, body: &str| SchemaResource {
+        uri: uri.into(),
+        document: JsonValue::parse(format!(
+            r#"{{"$schema":"https://json-schema.org/draft/2020-12/schema",{body},"x-pad":"{pad}"}}"#
+        ))
+        .unwrap(),
+    };
+    let supplied = ResourceSet::new([
+        resource(
+            "https://e.test/a",
+            r#""allOf":[{"$ref":"https://e.test/b"}]"#,
+        ),
+        resource("https://e.test/b", r#""type":"string""#),
+    ])
+    .unwrap();
+    let small = document(&[], r#"{"$ref":"https://e.test/a"}"#);
+    let contract = prepare_with(&small, &supplied).unwrap();
+    assert!(matches!(
+        contract.validate_json(r#""x""#).unwrap(),
+        ValueOutcome::Satisfies
+    ));
     // A document admitted past the default byte limit prepares a contract whose
     // projection passes that limit, and decides a value.
     let default = JsonLimits::default().max_bytes;

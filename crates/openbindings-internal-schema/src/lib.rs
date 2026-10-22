@@ -39,9 +39,6 @@ pub struct ProjectedResource {
 pub struct RawDocument {
     value: JsonValue,
     index: Arc<schema_index::SchemaIndex>,
-    // The admission limits the document was admitted under; its projection
-    // stops at their bytes and parses what it writes under them.
-    limits: openbindings_internal_json::JsonLimits,
 }
 impl std::fmt::Debug for RawDocument {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -51,18 +48,8 @@ impl std::fmt::Debug for RawDocument {
 
 impl RawDocument {
     pub fn new(value: JsonValue) -> Self {
-        Self::with_limits(value, openbindings_internal_json::JsonLimits::default())
-    }
-    pub fn with_limits(value: JsonValue, limits: openbindings_internal_json::JsonLimits) -> Self {
         let index = Arc::new(schema_index::SchemaIndex::build(&value));
-        Self {
-            value,
-            index,
-            limits,
-        }
-    }
-    pub fn limits(&self) -> openbindings_internal_json::JsonLimits {
-        self.limits
+        Self { value, index }
     }
     pub fn parse(text: impl AsRef<str>) -> Result<Self, openbindings_internal_json::InputError> {
         Ok(Self::new(JsonValue::parse(text.as_ref())?))
