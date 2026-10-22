@@ -55,9 +55,15 @@
   escape or holds the non-word boundary `\B` gives no verdict. The evaluator
   bounds what the SDK itself reads, writes and recurses through, and does not
   estimate the library's compiled memory. Limits that protect the process have
-  defaults: evaluation depth, bounded from the contract before a value is
-  evaluated and, for a contract holding an unevaluated keyword, guarded as it
-  evaluates by measuring the stack the pass has used; each pattern's size, form
+  defaults, and those that encode an assumption about the host are expressed as
+  the host's resources: `Limits::stack_bytes` (TypeScript `stackBytes`,
+  256 KiB) is the stack preparation and evaluation may use, from which the
+  evaluator sizes evaluation depth (256 bytes for each nested schema
+  evaluation), bounded from the contract before a value is evaluated, the stack
+  a pass of a contract holding an unevaluated keyword may use as it evaluates
+  (half, measured as it goes) and the unevaluated walk limit below, so a host
+  that gives a larger thread admits deeper values and longer walks; each
+  pattern's size, form
   and nesting, and the forms kept for all of a contract's patterns together,
   counted as each is written, with each distinct `pattern` form kept once
   (`Limits::total_pattern_bytes`, TypeScript `totalPatternBytes`, 4 MiB,
@@ -74,14 +80,18 @@
   contract compiling more than 1,024 patterns refuses before compiling any, 40
   counted-repetition names that peaked at 1.1 GB refuse in about 0.2 s, and a
   `pattern` value compiled when a string first reaches it stays within what it
-  is given; the
-  definitions, JSON and dynamic-scope entries dynamic specialization produces
-  (`program-specialization-limit`); and
-  an unevaluated keyword's annotation walk, which the library compiles by
-  recursion, weighed by the kind of each reference so the longest admitted walk
-  of every kind prepares with a fifth of a 256 KiB thread already in use on
-  Linux, macOS and Windows (`unevaluated-walk-limit`: 26 `$ref`s, 8 levels of
-  `allOf` inheritance, 7 through `then`, `else` or `dependentSchemas`).
+  is given; the memory dynamic specialization adds to a contract's program,
+  estimated for the SDK's own copies and dynamic contexts
+  (`Limits::program_bytes`, TypeScript `programBytes`, 48 MiB,
+  `program-specialization-limit`); and an unevaluated keyword's annotation
+  walk, which the library compiles by recursion, weighed by the kind of each
+  reference against what `stack_bytes` admits (a fifth left to the caller,
+  99 KiB to the rest of preparation, 1 KiB per unit), so the longest admitted
+  walk of every kind prepares with a fifth of the thread already in use on
+  Linux, macOS and Windows from 192 KiB to 2 MiB (`unevaluated-walk-limit`: at
+  the default 26 `$ref`s, 8 levels of `allOf` inheritance, 7 through `then`,
+  `else` or `dependentSchemas`). Each of these refusals states its arithmetic
+  and names the setting to raise.
   Preparing a schema from an untrusted party can still take more memory than a
   host may want, so a host doing so should prepare in an isolated worker or
   process with an operating-system memory limit. Limits that would only bound

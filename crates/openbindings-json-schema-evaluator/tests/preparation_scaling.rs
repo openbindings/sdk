@@ -1,13 +1,20 @@
 //! Preparation bundles the schemas a contract reaches into one resource, so the
 //! library compiles each once, whatever reference paths through resources reach
 //! it. A dynamic reference is resolved before compilation: the schemas it can
-//! reach are specialized once per dynamic context, and a contract whose dynamic
-//! references would specialize more schemas than the projection admits nodes
-//! refuses.
+//! reach are specialized once per dynamic context, and a contract whose
+//! specialized copies and contexts would grow its program by more than
+//! `Limits::program_bytes` refuses.
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 
 fn prepare_with(text: &str, resources: &ResourceSet) -> Result<PreparedValueContract, NoVerdict> {
+    prepare_within(text, resources, Limits::default())
+}
+fn prepare_within(
+    text: &str,
+    resources: &ResourceSet,
+    limits: Limits,
+) -> Result<PreparedValueContract, NoVerdict> {
     let proof = Document::parse(text)
         .unwrap()
         .validate()
@@ -19,7 +26,7 @@ fn prepare_with(text: &str, resources: &ResourceSet) -> Result<PreparedValueCont
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare_with(&DefaultEvaluator::new(), resources)
+        .prepare_with(&DefaultEvaluator::with_limits(limits), resources)
 }
 fn prepare(text: &str) -> Result<PreparedValueContract, NoVerdict> {
     prepare_with(text, &ResourceSet::default())
@@ -214,12 +221,12 @@ fn reference_chains_prepare_and_release_on_a_small_stack() {
 }
 
 #[test]
-fn chains_within_the_evaluation_depth_decide() {
+fn chains_the_default_stack_holds_decide() {
     decides(&prepare(&chain(500)).unwrap());
     decides(&prepare(&chain(1_000)).unwrap());
     decides(&prepare(&resource_chain(100)).unwrap());
-    // Longer chains still prepare, though evaluation cannot follow them under
-    // the default evaluation limits: each link nests one evaluation deeper.
+    // Longer chains still prepare, though evaluation cannot follow them within
+    // the default stack: each link nests one evaluation deeper.
     let contract = prepare(&chain(1_500)).unwrap();
     let ValueOutcome::NoVerdict { detail } = contract.validate(&JsonValue::parse("7").unwrap())
     else {
@@ -369,6 +376,69 @@ fn dynamic_specialization_is_bounded() {
     assert_eq!(refused.reason, NoVerdictReason::LimitExceeded);
     assert_eq!(refused.code, "program-specialization-limit");
     assert!(refused.location.is_none());
+}
+
+#[test]
+fn the_program_budget_scales_dynamic_specialization() {
+    let within = |levels: usize, program_bytes: usize| {
+        prepare_within(
+            &dynamic_choices(levels),
+            &ResourceSet::default(),
+            Limits {
+                program_bytes,
+                ..Limits::default()
+            },
+        )
+    };
+    // 256 dynamic contexts reach the last level of 8, whose copies take about
+    // 6.8 MiB: a smaller budget refuses them, and says what to raise.
+    let refused = within(8, 4 << 20).unwrap_err();
+    assert_eq!(refused.reason, NoVerdictReason::LimitExceeded);
+    assert_eq!(refused.code, "program-specialization-limit");
+    assert!(
+        refused.message.ends_with(
+            "by more than its 4 MiB program_bytes; raise program_bytes (programBytes in TypeScript)"
+        ),
+        "{}",
+        refused.message
+    );
+    decides(&within(8, 8 << 20).unwrap());
+    // Twice the contexts need about twice the budget.
+    assert_eq!(
+        within(9, 8 << 20).unwrap_err().code,
+        "program-specialization-limit"
+    );
+    decides(&within(9, 16 << 20).unwrap());
+    // No budget refuses a contract that specializes nothing.
+    let unspecialized = prepare_within(
+        &chain(3),
+        &ResourceSet::default(),
+        Limits {
+            program_bytes: 0,
+            ..Limits::default()
+        },
+    );
+    decides(&unspecialized.unwrap());
+}
+
+#[test]
+fn a_specialization_refusal_states_its_arithmetic() {
+    let refused = prepare_within(
+        &dynamic_choices(8),
+        &ResourceSet::default(),
+        Limits {
+            program_bytes: 4 << 20,
+            ..Limits::default()
+        },
+    )
+    .unwrap_err();
+    assert_eq!(
+        refused.message,
+        "this contract's dynamic references specialize 3352 schemas, taking 4 MiB, and 304 \
+         dynamic contexts holding 1740 entries, taking 32 KiB, before preparation stops: \
+         together they pass its projected schemas' 76 KiB by more than its 4 MiB program_bytes; \
+         raise program_bytes (programBytes in TypeScript)"
+    );
 }
 
 #[test]
