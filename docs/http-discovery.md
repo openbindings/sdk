@@ -72,8 +72,11 @@ enter validation; oversized or incomplete prefixes never become OBIs.
 
 The byte limit protects the process, so it is on by default. A body within it
 is validated under admission limits whose byte limit is the bound when that
-exceeds the default 32 MiB, with any nesting, so raising the bound admits larger
-documents, which keep those limits. A deadline only
+exceeds the default 32 MiB, with the default 1,000,000 nodes and any nesting, so
+raising the bound admits larger documents, which keep those limits. A body past
+the nodes is undetermined, and its findings name validating the retained body
+with `validate_document_with_limits` (`validateDocument` with `limits` in
+TypeScript) and a larger node limit. A deadline only
 bounds time, so it is the application's choice: an attempt has no deadline
 unless `ClientOptions::timeout` sets one, and without one it runs until it
 completes or the caller cancels it. A host that needs a bound, such as an

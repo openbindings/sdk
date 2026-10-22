@@ -184,12 +184,16 @@ maxDepth } }` to admit larger or smaller input, as Rust's `JsonLimits` does:
 unspecified entries keep those defaults, so `validateDocument` with `limits`
 applies the 10,000-level cap unless `maxDepth` raises it. Validation memory
 grows with the document, so raise them only where the process has the memory.
-A document keeps the limits it was parsed with: its edits, typed setters and
-value-contract preparation parse what they write under them. `discover`
-validates a body under limits that admit `maxDocumentBytes`. Each limit refusal
-names the `limits` entry that raises it. To check a value past the defaults,
-parse it with `parseJson` and larger limits and pass the `ExactJson` to
-`validate`.
+Malformed limits or options throw `SdkError` with code `invalid-json-limits`.
+A document keeps the limits it was parsed with (`limits`): its edits and typed
+setters apply them to the edited document, as Rust's do, whatever route writes
+the value. `discover` raises only the byte limit, to `maxDocumentBytes`; a body
+past the default 1,000,000 nodes comes back undetermined, and `validateDocument`
+with a larger `maxNodes` admits it. `Document.create()`, `validateJson` and
+`ExactJson.from` use the defaults. Value-contract preparation keeps fixed bounds
+of its own. Each limit refusal names how to raise it. To check a value past the
+defaults, parse it with `parseJson` and larger limits and pass the `ExactJson`
+to `validate`.
 
 Schema resources are explicit and immutable. Pass `SchemaResources` to
 `prepare({ resources })`; the SDK never fetches a missing reference. A
@@ -235,7 +239,7 @@ resources prepared in 11.5 s at a 723 MB peak without a cap, and refused in
 
 The evaluator bounds what the SDK itself reads, writes and recurses through, not
 the memory of the JSON Schema library's compiled program. On by default:
-document admission limits (32 MiB and 1,000,000 nodes; see below); `stackBytes`
+document admission limits (32 MiB and 1,000,000 nodes; see above); `stackBytes`
 (256 KiB), the stack the evaluator
 sizes its bounds from: 256 bytes for each nested schema evaluation (1,024 at
 the default), half of it for a pass of a contract holding

@@ -27,18 +27,23 @@
   encoded as supported exact JSON refuses with `EditError::Serialization`
   (`serialization`). Validation with original source locations, bounded
   findings and per-rule evidence.
-- Admission limits are a setting wherever documents enter, and the default byte
-  limit is 32 MiB (33,554,432 bytes), down from 64 MiB, because validation memory
-  grows with the document and the protective default should fit a typical
-  container. A host that needs larger documents passes `JsonLimits` to
-  `validate_document_with_limits`, `Document::parse_with_limits` or
-  `JsonValue::parse_with_limits`, or `limits: { maxBytes, maxNodes, maxDepth }`
-  to TypeScript's `validateDocument`, `Document.parse` and `parseJson`, whose
-  unspecified entries keep the `JsonLimits` defaults. A document keeps the limits
-  it was admitted under (`Document::limits`): its edits, typed setters and
-  value-contract projection parse under them. Discovery validates a body under
-  limits that admit its configured body bound. Every limit refusal names the
-  setting that raises it in both languages.
+- The default document byte limit is 32 MiB (33,554,432 bytes), down from 64 MiB,
+  because validation memory grows with the document and the protective default
+  should fit a typical container, and the admission limits are a setting at the
+  calls that admit documents and values: `JsonLimits` for
+  `validate_document_with_limits`, `Document::parse_with_limits` and
+  `JsonValue::parse_with_limits`, and `limits: { maxBytes, maxNodes, maxDepth }`
+  for TypeScript's `validateDocument`, `Document.parse` and `parseJson`, whose
+  unspecified entries keep the `JsonLimits` defaults (malformed limits throw
+  `invalid-json-limits`). `Document::new`, `Document::from_json`,
+  `Document.create()`, `Publication::from_bytes`, `validate_json` and
+  `validateJson` use the defaults. A document keeps the limits it was admitted
+  under (`Document::limits`, TypeScript `limits`), and its edits and typed
+  setters apply them to the edited document, the same way in both languages.
+  Value-contract preparation keeps its own fixed bounds, as before. Discovery
+  validates a body with its byte limit raised to the configured body bound and
+  the default 1,000,000 nodes. Each limit refusal names how to raise it in both
+  languages.
 - Document validation's memory grows linearly with the document. Compared
   identifiers share runs of the `$id` texts, so long and nested `$id`s take
   memory and time linear in the document, as do repeated findings deep in a
