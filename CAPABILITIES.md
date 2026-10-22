@@ -76,6 +76,8 @@ of the path that reaches it, also through `$ref` cycles.
 The evaluator bounds what the SDK itself reads, writes and recurses through; it
 does not estimate the JSON Schema library's compiled memory. On by default:
 core's document admission limits and its 100,000 schema positions per contract;
+the projected JSON nesting compiled (`compile_json_depth`, 512,
+`compileJsonDepth` in TypeScript);
 the stack the host gives (`stack_bytes`, 256 KiB, `stackBytes` in TypeScript),
 from which the evaluator sizes evaluation depth (256 bytes for each nested
 schema evaluation, 1,024 at the default), bounded from the contract before a
@@ -123,7 +125,11 @@ empty stand-in for it: a pass that reaches the stand-in gives no verdict
 verdicts. Preparation refuses a contract in which an `unevaluatedProperties`
 or `unevaluatedItems` keyword's annotation sources reach a stand-in, since the
 library reads those sources rather than evaluating them, and a reference to a
-fragment of a missing resource or one that identifies no schema. An established
+fragment of a missing resource or one that identifies no schema.
+As conservative preparation, it also refuses a contract that reaches a pattern
+invalid as an ECMA-262 regular expression with Unicode semantics
+(`schema-pattern-compilation`), or a schema that could apply again without
+consuming the instance, such as one whose `$ref` names itself (`in-place-cycle`). An established
 undefined result has its own `Undefined` outcome, separate from no-verdict,
 which a custom evaluator may return; the default evaluator never does.
 Unsupported capabilities and exhausted limits produce no-verdict. Handle

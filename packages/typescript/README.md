@@ -170,7 +170,12 @@ value whose evaluation reaches that resource gets a `resource-unavailable`
 no-verdict naming it. Preparation refuses a contract in which an
 `unevaluatedProperties` or `unevaluatedItems` keyword's annotation sources
 reach a missing resource, a reference to a fragment of a missing resource, or
-a reference that identifies no schema. Retain a prepared value contract for repeated validation. Ready
+a reference that identifies no schema.
+As conservative preparation, it also refuses a contract that reaches a pattern
+invalid as an ECMA-262 regular expression with Unicode semantics
+(`schema-pattern-compilation`), or a schema that could apply again without
+consuming the instance, such as one whose `$ref` names itself (`in-place-cycle`).
+Retain a prepared value contract for repeated validation. Ready
 does not promise a verdict for every value: a missing resource, a pattern that
 needs a backtracking engine, applies a Unicode property escape or holds the
 non-word boundary `\B`, and an exhausted limit can produce no-verdict.
@@ -197,7 +202,8 @@ unevaluated walk limit below. In Wasm the guard measures the module's own
 module's calls go: Node 22 checked and explained the deepest admitted values
 of the shapes probed up to `stackBytes: 524288`, and at 1 MiB a guarded
 contract's deepest admitted value overflowed the engine's stack. Also on by
-default: `patternBytes` (1 MiB), `patternDepth` (32) and `totalPatternBytes`
+default: `compileJsonDepth` (512), the projected JSON nesting compiled;
+`patternBytes` (1 MiB), `patternDepth` (32) and `totalPatternBytes`
 (4 MiB of the forms kept for a contract's patterns);
 `totalPatternMemory` (64 MiB) for a contract's compiled patterns, a quarter of
 it for their search caches in equal parts and the rest for their compiled

@@ -795,26 +795,6 @@ impl SchemaSpace {
             literals,
         })
     }
-    /// [`Self::program`] with its literals separated as
-    /// [`Self::program_unmapped`] separates them, in the same order.
-    pub fn program_separating_literals(
-        &self,
-        entry: usize,
-        control: &dyn Control,
-    ) -> Result<(Program, Vec<JsonValue>), Failure> {
-        control.check()?;
-        let reach = self.reach(entry, control)?;
-        let mut literals = Vec::new();
-        let (program, _) = self.projection(
-            entry,
-            &reach,
-            control,
-            PROGRAM_NAMESPACE,
-            true,
-            Some(&mut literals),
-        )?;
-        Ok((program, literals))
-    }
     pub fn project(
         &self,
         entry: usize,
