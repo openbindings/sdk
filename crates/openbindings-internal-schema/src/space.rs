@@ -1066,9 +1066,10 @@ impl SchemaSpace {
                 "schema interpretation requires Unicode scalar strings",
             ));
         }
-        let checks = crate::fixed_schema::check(&node.value, true, 1)
+        // Only the verdict matters here, so no finding is located.
+        let valid = crate::fixed_schema::validity(&node.value, true)
             .map_err(|e| self.failure(id, FailureReason::LimitExceeded, "meta-schema-check", e))?;
-        if checks.violated {
+        if !valid {
             return Err(self.failure(
                 id,
                 FailureReason::ConservativePreparation,

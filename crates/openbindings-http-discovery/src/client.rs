@@ -108,6 +108,14 @@ impl std::error::Error for RequestError {}
 /// Futures need not be Send, permitting local browser/Worker transports.
 pub trait ResponseBody {
     /// Read at most `output.len()` decoded bytes and return their count; zero means EOF. Do not return more than the buffer length. Dropping the body must release/cancel acquisition; futures need not be `Send`.
+    ///
+    /// # Errors
+    /// Return a [`RequestError`] when the body cannot be read. Classify it with
+    /// [`ErrorKind::Timeout`] for a transport-owned deadline, which discovery
+    /// reports as its timeout outcome, [`ErrorKind::Decode`] for a body that
+    /// cannot be decoded, [`ErrorKind::Aborted`] for cancellation, and
+    /// [`ErrorKind::Network`] or [`ErrorKind::Other`] otherwise. Discovery reports
+    /// every kind but `Timeout` as a body error and keeps the response metadata.
     fn read(&mut self, output: &mut [u8]) -> impl Future<Output = Result<usize, RequestError>>;
     /// Optional bounded cleanup for connection reuse. The default closes on drop.
     /// Implementations must bound their own cleanup time and bytes; failures must

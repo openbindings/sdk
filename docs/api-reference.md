@@ -63,6 +63,7 @@ for their required fields and `with_*` methods for optional ones:
 | Source inspectors | `SourceInspection::complete(targets)` or `partial(targets, limitation)` and `with_limitation(..)`, `BindableTarget::new(source_ref, binding).with_operation_key(..).with_operation(..)`, `InspectionLimitation::new(code, message).with_details(..).with_additional_fields(..)`, `SupportedKind::new(kind).with_description(..)` |
 | Interface synthesizers | `SynthesisCandidate::new(document, coverage)`, `CoverageClaim::complete(entries)` or `partial(entries, limitation)`, `CoverageEntry::new(..)` then its assignable evidence fields, `CoverageLimitation::new(code, message)` with the same builders, `SupportedKind::new(kind)` |
 | Binding invokers and transports | `binding::SupportedKind::new(kind).with_description(..)`, HTTP discovery `RequestError::new(kind, message)` |
+| Version checks | `VersionRefusal::new(declared)`, `Some` only for a well-formed version outside the supported line |
 
 `SupportedKind` and `KindSupportVerdict` are one type in every companion that
 reexports them, so a provider serving inspection, synthesis and invocation can
@@ -71,7 +72,6 @@ the checked caller that returned it. Likewise `BindingValue` is both a
 `BindableTarget`'s binding and the binding a `BindingRequest` carries: invoke an
 inspected target's binding as it is, or assign the author's keys with
 `BindingValue::bind` to get a core `Binding`.
-| Version checks | `VersionRefusal::new(declared)`, `Some` only for a well-formed version outside the supported line |
 
 Input records, which callers build and the SDK reads, keep struct-literal
 construction: typed authoring parts and `BindingValue`, `SchemaResource`,
@@ -386,7 +386,8 @@ meets each of the cut meta-schema's 129 positions at most once; its patterns are
 regular too. Every schema the admission limits admit therefore gets a
 meta-schema verdict. A check reads its schema's own members and only the type of
 each subschema, so a node is read by at most two checks and their work together
-stays linear in the admission limits.
+stays linear in the admission limits. A failing schema's members are read once
+more to locate its findings at the keywords whose values fail.
 
 ### Finding-code catalog
 
@@ -395,8 +396,11 @@ explanations, not machine identifiers. Multiple rules can share a code. Parse
 locations use original byte coordinates. Pointers are exact, including a member
 name with an unpaired UTF-16 unit (Rust `Pointer::as_str` is then `None`), and are
 absent only for a syntax error, which precedes any value. Input-limit findings have
-no location. Input admission refusals are not violations. `InputError` outside whole-document validation retains its existing
-code-based Display representation.
+no location. Input admission refusals are not violations. Outside whole-document
+validation, an `InputError` keeps its code and byte offset, and its `Display`
+writes what the parser expected or found and the byte where, such as
+`expected a colon after the member name at byte 5`, with the same wording as a
+syntax finding's message. An input-limit finding's message is that `Display`.
 
 | Code | Rule | Meaning |
 | --- | --- | --- |
@@ -418,7 +422,7 @@ code-based Display representation.
 | `unicode-escape` | OBI-01 | A Unicode escape lacks four hexadecimal digits. |
 | `duplicate-member` | OBI-01 | An object repeats a decoded member name. |
 | `unpaired-surrogate` | OBI-01 | A member name or string value holds an escape denoting an unpaired surrogate. |
-| `schema-mismatch` | OBI-02, OBI-10 | A constraint in the derived schema or meta-schemas failed. The fixed message is `value violates the fixed normative schema`; locations identify deepest checked document positions or the checked schema node. |
+| `schema-mismatch` | OBI-02, OBI-10 | A constraint in the derived schema or meta-schemas failed. OBI-02's fixed message is `value violates the fixed normative schema`, at the deepest checked document positions. OBI-10 names the keyword, as in `the value of the type keyword does not satisfy the JSON Schema 2020-12 meta-schema`, at that keyword's value, or says `a schema must be a JSON object or boolean` at a schema that is neither. |
 | `fixed-schema-limit-or-failure` | OBI-02, OBI-10 | Fixed-schema checking could not complete. The pinned schemas compile and their checks have no work limit, so a report does not hold it today. |
 | `semver` | OBI-03 | The openbindings value is not a SemVer string. |
 | `missing-version` | OBI-03 | The openbindings member is absent. |

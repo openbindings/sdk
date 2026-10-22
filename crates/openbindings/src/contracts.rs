@@ -27,7 +27,9 @@ pub enum NoVerdictReason {
     /// That inventory is not an exact per-value-contract missing-resource list.
     /// Apply your disclosure policy before logging it.
     ResourceUnavailable,
-    /// A configured work or representation limit prevented a verdict.
+    /// A work or representation limit prevented a verdict: one the application
+    /// configured, or one fixed by the evaluator, such as the default
+    /// evaluator's exact `multipleOf` arithmetic bound.
     LimitExceeded,
     /// The caller's cooperative cancellation was observed.
     Cancelled,
@@ -993,12 +995,14 @@ impl PreparedValueContract {
     /// Explanation costs more than the cheap check, and its cost is bounded
     /// by the evaluator, not the SDK. The default evaluator reports the JSON
     /// Schema library's first error, with redacted messages and original schema
-    /// facts: building it can allocate in proportion to the schema and value and
-    /// can overflow the stack on deeply nested values. Explain values you trust,
-    /// or values that already passed size and depth limits, and keep
-    /// [`Self::validate`] on paths that check untrusted input. Failure
-    /// diagnostics can be incomplete; inspect `problems_complete` rather than
-    /// assuming every failed keyword is reported.
+    /// facts: building it allocates in proportion to the schema and value, so
+    /// keep [`Self::validate`] on paths that check untrusted input. The default
+    /// evaluator builds an explanation only for values within half the nesting
+    /// its `stack_bytes` limit admits and reports a deeper failure without its
+    /// problem, so release builds explain on a thread with that much stack;
+    /// debug builds need more.
+    /// Failure diagnostics can be incomplete; inspect `problems_complete` rather
+    /// than assuming every failed keyword is reported.
     pub fn explain(&self, value: &JsonValue) -> ValueOutcome {
         self.explain_with_control(value, &crate::work_control::NeverCancelled)
     }

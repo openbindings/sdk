@@ -590,3 +590,61 @@ fn undefined_result_redacts_text_and_locations_but_shows_the_fixed_code() {
         serde_json::Value::Null
     );
 }
+
+#[test]
+fn debug_and_display_write_their_structure() {
+    // Debug is structural, not empty: it names the type, the variant and the
+    // fixed fields it may show. Display writes the disclosed text.
+    let refusal = VersionRefusal::new("0.3.0").unwrap();
+    assert_eq!(format!("{refusal:?}"), "VersionRefusal { .. }");
+    assert_eq!(
+        refusal.to_string(),
+        "declared version 0.3.0 is outside 0.2.x"
+    );
+    let text = r#"{"openbindings":"0.2.0","operations":{}}"#;
+    let document = Document::parse(text).unwrap();
+    assert_eq!(
+        format!("{document:?}"),
+        format!(
+            "Document {{ value: JsonValue {{ kind: Object, bytes: {} }} }}",
+            text.len()
+        )
+    );
+    let field = InterpretationError::InvalidField {
+        code: "invalid-description",
+        location: probe_location(),
+    };
+    for (error, debug, display) in [
+        (
+            InterpretationError::Version(refusal),
+            "Version(VersionRefusal { .. })",
+            "unsupported-version",
+        ),
+        (
+            InterpretationError::MalformedVersion,
+            "MalformedVersion",
+            "malformed-version",
+        ),
+        (
+            InterpretationError::DuplicateMembers,
+            "DuplicateMembers",
+            "duplicate-members",
+        ),
+        (
+            InterpretationError::UnpairedString,
+            "UnpairedString",
+            "unpaired-string",
+        ),
+        (
+            field,
+            "InvalidField { location: SourceLocation { byte_offset: 42, line: 2, byte_column: 3, .. }, .. }",
+            "invalid-description",
+        ),
+    ] {
+        assert_eq!(format!("{error:?}"), debug);
+        assert_eq!(
+            error.to_string(),
+            format!("document cannot be interpreted: {display}")
+        );
+    }
+}

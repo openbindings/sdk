@@ -56,6 +56,8 @@ impl std::fmt::Debug for Problem<'_> {
     }
 }
 const GENERIC_MESSAGE: &str = "value violates the fixed normative schema";
+// OBI-10 for a schema that is neither an object nor a boolean.
+const SCHEMA_TYPE_MESSAGE: &str = "a schema must be a JSON object or boolean";
 // Source pointer retention shares the document findings allowance.
 const MAX_EXPANDED_POINTER_BYTES: usize = 8 * 1024 * 1024;
 type Compiled = Result<Validator<FlatJson>, String>;
@@ -227,27 +229,122 @@ pub(crate) const META_FILES: [&str; 8] = [
     include_str!("../schemas/draft2020-12/meta/format-annotation.json"),
     include_str!("../schemas/draft2020-12/meta/content.json"),
 ];
+// The localized meta-schema resources, by identifier. Each direct subschema is
+// checked separately by the normative-position walk. Substituting only
+// recursive meta edges with the object/boolean type check preserves all local
+// keyword constraints and avoids repeated ancestor work.
+fn meta_resources() -> Result<BTreeMap<String, Value>, String> {
+    let mut resources = BTreeMap::new();
+    for text in META_FILES {
+        let mut schema: Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+        localize(&mut schema);
+        let id = schema["$id"]
+            .as_str()
+            .ok_or("embedded meta-schema has no identifier")?
+            .to_owned();
+        resources.insert(id, schema);
+    }
+    Ok(resources)
+}
 fn meta() -> &'static Compiled {
     META.get_or_init(|| {
-        // Each direct subschema is checked separately by the normative-position walk.
-        // Substituting only recursive meta edges with the object/boolean type check
-        // preserves all local keyword constraints and avoids repeated ancestor work.
-        let mut resources = BTreeMap::new();
-        for text in META_FILES {
-            let mut schema: Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
-            localize(&mut schema);
-            let id = schema["$id"]
-                .as_str()
-                .ok_or("embedded meta-schema has no identifier")?
-                .to_owned();
-            resources.insert(id, schema);
-        }
+        let resources = meta_resources()?;
         let root = resources
             .get("https://openbindings.invalid/internal-meta/schema")
             .ok_or("embedded root meta-schema is missing")?
             .clone();
         compile(&root, resources)
     })
+}
+/// Each meta-schema keyword's own check, which locates an OBI-10 failure at the
+/// keywords whose values fail. Every localized meta-schema resource asserts only
+/// that a schema is an object or a boolean and, through `properties`, the value
+/// of each keyword it defines, so an object fails the meta-schemas exactly when
+/// one of its keywords fails its own check. As with the location map, a process
+/// whose schemas all conform never builds it; the first failure builds it once.
+struct MetaKeywords {
+    validators: jsonschema::ValidatorMap<FlatJson>,
+    // By keyword: its validator's key and the message of a finding at its value.
+    keywords: BTreeMap<String, (String, String)>,
+}
+fn meta_keywords() -> &'static Result<MetaKeywords, String> {
+    static KEYWORDS: OnceLock<Result<MetaKeywords, String>> = OnceLock::new();
+    KEYWORDS.get_or_init(|| {
+        let resources = meta_resources()?;
+        let mut definitions = serde_json::Map::new();
+        let mut keywords = BTreeMap::new();
+        for (id, schema) in &resources {
+            let Some(Value::Object(properties)) = schema.get("properties") else {
+                continue;
+            };
+            for keyword in properties.keys() {
+                // Meta-schema keywords hold no `~` or `/`, so each names itself
+                // as a pointer token.
+                if keyword.contains(['~', '/']) || definitions.contains_key(keyword) {
+                    return Err(format!("unsupported meta-schema keyword: {keyword}"));
+                }
+                definitions.insert(
+                    keyword.clone(),
+                    serde_json::json!({ "$ref": format!("{id}#/properties/{keyword}") }),
+                );
+                let message = format!(
+                    "the value of the {keyword} keyword does not satisfy the JSON Schema 2020-12 meta-schema"
+                );
+                keywords.insert(keyword.clone(), (format!("#/$defs/{keyword}"), message));
+            }
+        }
+        let validators = options(resources)
+            .build_map(&serde_json::json!({ "$defs": definitions }))
+            .map_err(|e| e.to_string())?;
+        if keywords.values().any(|(key, _)| validators.get(key).is_none()) {
+            return Err("unmapped meta-schema keyword".into());
+        }
+        Ok(MetaKeywords {
+            validators,
+            keywords,
+        })
+    })
+}
+// Offer an OBI-10 finding at each keyword of the failing schema `value` whose
+// value fails its own check, or at the schema itself when it is not an object;
+// return whether any was offered.
+fn locate_meta<'a>(
+    value: JsonRef<'a>,
+    meta: &'static MetaKeywords,
+    collector: &mut ProblemCollector<'a>,
+    already_retained: &impl Fn(JsonRef<'a>, &str) -> bool,
+) -> bool {
+    let Some(members) = value.members() else {
+        collector.offer(value, SCHEMA_TYPE_MESSAGE.into(), false, already_retained);
+        return true;
+    };
+    let mut offered = false;
+    for member in members {
+        let Some((key, message)) = member
+            .name
+            .as_str()
+            .and_then(|name| meta.keywords.get(name))
+        else {
+            continue;
+        };
+        let Some(validator) = meta.validators.get(key) else {
+            continue;
+        };
+        if valid(validator, member.value) {
+            continue;
+        }
+        offered = true;
+        if !collector.offer(
+            member.value,
+            Cow::Borrowed(message.as_str()),
+            true,
+            already_retained,
+        ) || collector.expansion_exhausted
+        {
+            break;
+        }
+    }
+    offered
 }
 // A token's source address identifies its original occurrence while the borrowed
 // arenas are live. Equal text/pointers at distinct spans remain distinct. No
@@ -351,15 +448,21 @@ pub fn check_with_retained<'a>(
             return collector.finish();
         }
         collector.violated = true;
-        // Only a failing document needs guidance. Its plan compiles a validator
-        // for every location of the derived schema, so a process whose documents
-        // all conform never builds it; the first failure builds it once.
-        let map = if is_meta {
-            None
-        } else {
-            locations().as_ref().ok()
-        };
-        if let Some(map) = map {
+        // Only a failing check needs guidance. A schema's guidance checks each
+        // of its keywords on its own; a document's plan compiles a validator for
+        // every location of the derived schema. A process whose schemas or
+        // documents all conform never builds either; the first failure builds
+        // it once.
+        if is_meta {
+            if let Ok(meta) = meta_keywords()
+                && locate_meta(value, meta, &mut collector, &already_retained)
+            {
+                return collector.finish();
+            }
+            collector.offer(value, GENERIC_MESSAGE.into(), false, &already_retained);
+            return collector.finish();
+        }
+        if let Ok(map) = locations().as_ref() {
             let mut offered = false;
             let limited = map.locate(value, |at| {
                 offered = true;
@@ -861,6 +964,93 @@ mod tests {
                     );
                 }
                 assert_eq!(actual, want, "{raw}");
+            }
+        }
+    }
+
+    #[test]
+    fn meta_failures_are_located_at_each_failing_keyword() {
+        let located = |text: &str| {
+            let value = JsonValue::parse(text).unwrap();
+            let problems = check(&value, true, 100).unwrap();
+            assert!(problems.violated, "{text}");
+            problems
+                .entries
+                .iter()
+                .map(|p| {
+                    let pointer = p.at.location().pointer.unwrap();
+                    (pointer.as_str().unwrap().to_owned(), p.message.to_string())
+                })
+                .collect::<Vec<_>>()
+        };
+        let keyword = |name: &str| {
+            format!(
+                "the value of the {name} keyword does not satisfy the JSON Schema 2020-12 meta-schema"
+            )
+        };
+        assert_eq!(
+            located(r#"{"items":5,"title":"ok","type":"bogus","x-extra":0}"#),
+            [
+                ("/items".to_owned(), keyword("items")),
+                ("/type".to_owned(), keyword("type")),
+            ]
+        );
+        assert_eq!(
+            located(r##"{"$id":"#x"}"##),
+            [("/$id".to_owned(), keyword("$id"))]
+        );
+        for text in ["null", "7", r#""schema""#, "[]"] {
+            assert_eq!(
+                located(text),
+                [(String::new(), SCHEMA_TYPE_MESSAGE.to_owned())]
+            );
+        }
+        // The guidance shares the findings allowance and its truncation.
+        let value = JsonValue::parse(r#"{"items":5,"type":"bogus"}"#).unwrap();
+        let bounded = check(&value, true, 1).unwrap();
+        assert!(bounded.violated && bounded.truncated);
+        assert_eq!(bounded.entries.len(), 1);
+    }
+
+    #[test]
+    fn each_keyword_check_decides_as_the_meta_schemas_do() {
+        // A one-keyword schema conforms exactly when its value passes that
+        // keyword's own check, so locating at the keywords never invents or
+        // misses a failure.
+        let meta = meta_keywords().as_ref().unwrap();
+        let validator = super::meta().as_ref().unwrap();
+        assert_eq!(meta.keywords.len(), 61);
+        let values = [
+            "null",
+            "true",
+            "0",
+            "-1",
+            "1.5",
+            r#""x""#,
+            r##""#x""##,
+            r#""https://e.example/s""#,
+            "[]",
+            "[1]",
+            r#"["a"]"#,
+            r#"["a","a"]"#,
+            "[{}]",
+            "{}",
+            r#"{"a":5}"#,
+            r#"{"a":true}"#,
+            r#"{"a":["b"]}"#,
+            r#"{"https://e.example/v":true}"#,
+        ];
+        for (keyword, (key, _)) in &meta.keywords {
+            let own = meta.validators.get(key).unwrap();
+            for text in values {
+                let raw = format!("{{{}:{text}}}", serde_json::to_string(keyword).unwrap());
+                let schema = JsonValue::parse(&raw).unwrap();
+                let member = JsonValue::parse(text).unwrap();
+                assert_eq!(
+                    backend::fixed_strings(|| valid(own, member.view())),
+                    backend::fixed_strings(|| valid(validator, schema.view())),
+                    "{raw}"
+                );
             }
         }
     }

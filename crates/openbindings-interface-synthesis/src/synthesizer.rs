@@ -92,6 +92,18 @@ impl<P: InterfaceSynthesizer> Synthesizer<P> {
     }
     /// Complete admitted coverage or a refusal retaining the checked partial result.
     /// Work begins only when the returned future is polled.
+    ///
+    /// # Errors
+    /// Returns [`SynthesisErrorKind::InvalidInput`] for a request the SDK does
+    /// not admit, such as an unsupported declared version or conflicting names,
+    /// [`SynthesisErrorKind::UnsupportedKind`] when the provider does not
+    /// support a source's exact kind, [`SynthesisErrorKind::Cancelled`] once the
+    /// control is cancelled, the error the provider returns, such as
+    /// [`SynthesisErrorKind::UnreadableSource`], and
+    /// [`SynthesisErrorKind::InvalidResult`] when the provider's candidate fails
+    /// the SDK's document, coverage or correspondence checks. Strict synthesis also
+    /// returns [`SynthesisErrorKind::Incomplete`], retaining the checked result,
+    /// when coverage is not complete.
     pub fn synthesize<'a>(
         &'a self,
         r: &'a SynthesisRequest<'a>,
@@ -99,6 +111,18 @@ impl<P: InterfaceSynthesizer> Synthesizer<P> {
         strict(self.with_control(r, CancellationToken::new()))
     }
     /// Strict synthesis with shared caller cancellation.
+    ///
+    /// # Errors
+    /// Returns [`SynthesisErrorKind::InvalidInput`] for a request the SDK does
+    /// not admit, such as an unsupported declared version or conflicting names,
+    /// [`SynthesisErrorKind::UnsupportedKind`] when the provider does not
+    /// support a source's exact kind, [`SynthesisErrorKind::Cancelled`] once the
+    /// control is cancelled, the error the provider returns, such as
+    /// [`SynthesisErrorKind::UnreadableSource`], and
+    /// [`SynthesisErrorKind::InvalidResult`] when the provider's candidate fails
+    /// the SDK's document, coverage or correspondence checks. Strict synthesis also
+    /// returns [`SynthesisErrorKind::Incomplete`], retaining the checked result,
+    /// when coverage is not complete.
     pub fn synthesize_with_control<'a>(
         &'a self,
         r: &'a SynthesisRequest<'a>,
@@ -107,6 +131,16 @@ impl<P: InterfaceSynthesizer> Synthesizer<P> {
         strict(self.with_control(r, c.clone()))
     }
     /// Sound document and durable checked coverage, potentially incomplete.
+    ///
+    /// # Errors
+    /// Returns [`SynthesisErrorKind::InvalidInput`] for a request the SDK does
+    /// not admit, such as an unsupported declared version or conflicting names,
+    /// [`SynthesisErrorKind::UnsupportedKind`] when the provider does not
+    /// support a source's exact kind, [`SynthesisErrorKind::Cancelled`] once the
+    /// control is cancelled, the error the provider returns, such as
+    /// [`SynthesisErrorKind::UnreadableSource`], and
+    /// [`SynthesisErrorKind::InvalidResult`] when the provider's candidate fails
+    /// the SDK's document, coverage or correspondence checks.
     pub fn synthesize_with_coverage<'a>(
         &'a self,
         r: &'a SynthesisRequest<'a>,
@@ -114,6 +148,16 @@ impl<P: InterfaceSynthesizer> Synthesizer<P> {
         self.with_control(r, CancellationToken::new())
     }
     /// Coverage synthesis with shared cancellation; does not borrow the control handle.
+    ///
+    /// # Errors
+    /// Returns [`SynthesisErrorKind::InvalidInput`] for a request the SDK does
+    /// not admit, such as an unsupported declared version or conflicting names,
+    /// [`SynthesisErrorKind::UnsupportedKind`] when the provider does not
+    /// support a source's exact kind, [`SynthesisErrorKind::Cancelled`] once the
+    /// control is cancelled, the error the provider returns, such as
+    /// [`SynthesisErrorKind::UnreadableSource`], and
+    /// [`SynthesisErrorKind::InvalidResult`] when the provider's candidate fails
+    /// the SDK's document, coverage or correspondence checks.
     pub fn synthesize_with_coverage_and_control<'a>(
         &'a self,
         r: &'a SynthesisRequest<'a>,

@@ -11,7 +11,20 @@ this TypeScript facade; the facade exposes document operations and HTTP discover
 ## First useful result
 
 This `0.2.0-alpha.1` package is unpublished. Install a locally built archive;
-registry releases use the legacy API. Run the packaged Node example:
+registry releases use the legacy API. Build the archive from a checkout of this
+repository with Rust 1.99.0 and its `wasm32-unknown-unknown` target,
+wasm-bindgen-cli 0.2.129 and Node 22 ([source replay](https://github.com/openbindings/sdk/blob/main/docs/REPLAY.md)
+lists the toolchain):
+
+```sh
+cd packages/typescript
+npm ci --ignore-scripts
+npm run build:wasm
+npm run build
+npm pack --ignore-scripts
+```
+
+In your project, install the archive and run the packaged Node example:
 
 ```sh
 npm install ./openbindings-sdk-0.2.0-alpha.1.tgz
@@ -178,18 +191,32 @@ consuming the instance, such as one whose `$ref` names itself (`in-place-cycle`)
 Retain a prepared value contract for repeated validation. Ready
 does not promise a verdict for every value: a missing resource, a pattern that
 needs a backtracking engine, applies a Unicode property escape or holds the
-non-word boundary `\B`, and an exhausted limit can produce no-verdict.
+non-word boundary `\B`, and an exhausted limit can produce no-verdict. Two
+further cases give no verdict whatever `limits` sets. Exact `multipleOf`
+divides within a fixed arithmetic bound: when the value or the divisor has more
+than 4,096 significant digits, or an exponent beyond ±20,000 once the trailing
+zeros of its digits are counted in it, a division the answer needs gives the
+`numeric-arithmetic-limit` no-verdict; other numeric keywords compare exactly at
+any size. And a value holding an unpaired UTF-16 unit (from a JSON `\u` escape)
+in a string or member name is decided by keywords that compare exactly, such as
+`const`, `enum`, `required` and `uniqueItems`, while one that reads the text,
+such as `minLength`, `maxLength`, `pattern`, `properties`, `patternProperties`
+or `propertyNames`, gives the `lone-surrogate-instance` no-verdict when it
+reaches it.
 Patterns, the word boundary `\b` included, match in time linear in the
 string, so no limit bounds pattern work. Replacing resources
 means preparing again. No evaluation work cap applies by default, and
 evaluation time can grow exponentially with some schemas (30 levels of `anyOf`
 that each name the next level twice take seconds); when validating untrusted contracts or
-values within a deadline, pass `limits: { evaluationSteps: n }`. Preparation time grows with the schema
+values within a deadline, pass `limits: { evaluationSteps: n }`. Preparation time and memory grow with the schema
 resources a contract reaches (10,000 supplied resources prepare in about 0.2 s
 natively), and the SDK sets no cap by default. When preparing untrusted
 documents or resources, pass `limits: { schemaResources: n }`; a contract
 reaching more than `n` refuses with the `schema-resource-limit` no-verdict
-before compiling.
+before the library compiles it, which bounds the time and memory of that
+compilation: natively, a 7 MB document reaching a chain of 99,990 `$id`
+resources prepared in 11.5 s at a 723 MB peak without a cap, and refused in
+1.2 s at a 502 MB peak with a cap of 1,000.
 
 The evaluator bounds what the SDK itself reads, writes and recurses through, not
 the memory of the JSON Schema library's compiled program. On by default:

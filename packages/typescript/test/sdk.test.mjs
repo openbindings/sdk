@@ -562,6 +562,18 @@ test("validateJson admits JSON text as parseJson does, then validates", () => {
   const duplicate = contract.validateJson('{"a":1,"a":2}');
   assert.equal(duplicate.outcome, "no-verdict");
   assert.equal(duplicate.detail.code, "duplicate-instance-members");
+  // A refusal's message says what was expected and where; code and offset
+  // stay the machine-readable fields.
+  assert.deepEqual(sdk.parseJson('{"a" ').error, {
+    byteOffset: 5,
+    code: "colon",
+    kind: "Syntax",
+    message: "expected a colon after the member name at byte 5",
+  });
+  assert.equal(
+    sdk.Document.parse("[1 2]").error.message,
+    "expected a comma or the end of the container at byte 3",
+  );
   const deep = "[".repeat(10_001) + "]".repeat(10_001);
   for (const input of [
     "7 x",

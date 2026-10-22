@@ -188,8 +188,9 @@ fn identical_invalid_schemas_at_distinct_locations_are_both_reported() {
                 .unwrap()
         })
         .collect();
-    assert!(pointers.contains("/operations/a/input"), "{schema:?}");
-    assert!(pointers.contains("/operations/b/input"), "{schema:?}");
+    // Each finding is at the failing keyword's value.
+    assert!(pointers.contains("/operations/a/input/type"), "{schema:?}");
+    assert!(pointers.contains("/operations/b/input/type"), "{schema:?}");
     let unique: std::collections::HashSet<_> = schema
         .iter()
         .map(|f| {

@@ -41,6 +41,9 @@ pub enum InputErrorKind {
 
 #[derive(Clone, PartialEq, Eq)]
 /// Exact JSON admission failure. It is separate from document conformance and schema-instance outcomes.
+/// `Display` writes what the parser expected or found and the byte where, such as
+/// `expected a colon after the member name at byte 5`; branch on `code` and
+/// `byte_offset`, which do not change with that wording.
 /// Later versions may add fields: read them by name and match with `..`.
 #[non_exhaustive]
 pub struct InputError {
@@ -82,9 +85,37 @@ impl std::fmt::Debug for InputError {
             .finish_non_exhaustive()
     }
 }
+/// What a parser or admission code reports, as a fixed phrase; `None` for a
+/// code the parser and admission never emit.
+pub(crate) fn input_error_description(code: &str) -> Option<&'static str> {
+    Some(match code {
+        "bom" => "JSON text must not begin with a byte-order mark",
+        "utf8" => "JSON text must use valid UTF-8",
+        "comma-or-close" => "expected a comma or the end of the container",
+        "object-key" => "expected a quoted object member name",
+        "colon" => "expected a colon after the member name",
+        "trailing-token" => "unexpected content after the JSON value",
+        "number" => "invalid JSON number",
+        "fraction" => "expected a digit after the decimal point",
+        "exponent" => "expected a digit in the number exponent",
+        "value" => "expected a JSON value",
+        "literal" => "expected true, false or null",
+        "unterminated-string" => "expected the closing quote of the string",
+        "string-control" => "control characters in strings must be escaped",
+        "escape" => "invalid JSON string escape",
+        "unicode-escape" => "expected four hexadecimal digits in the Unicode escape",
+        "byte-limit" => "the input exceeds the admitted byte limit",
+        "depth-limit" => "the input nests deeper than the admitted depth limit",
+        "node-limit" => "the input holds more nodes than the admitted node limit",
+        _ => return None,
+    })
+}
 impl fmt::Display for InputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} at byte {}", self.code, self.byte_offset)
+        match input_error_description(self.code) {
+            Some(description) => write!(f, "{description} at byte {}", self.byte_offset),
+            None => write!(f, "{} at byte {}", self.code, self.byte_offset),
+        }
     }
 }
 impl std::error::Error for InputError {}
@@ -719,6 +750,63 @@ mod tests {
                 }
             }
         }
+    }
+    #[test]
+    fn input_errors_display_what_was_expected_and_where() {
+        let error = JsonValue::parse(r#"{"a" "#).unwrap_err();
+        assert_eq!(
+            (error.code, error.byte_offset, error.to_string()),
+            (
+                "colon",
+                5,
+                "expected a colon after the member name at byte 5".to_owned()
+            )
+        );
+        // Every code the parser and admission emit, from real input.
+        let limited = |limits| JsonValue::parse_with_limits("[0]", limits).unwrap_err();
+        let errors = [
+            JsonValue::parse(b"\xff").unwrap_err(),
+            JsonValue::parse(b"\xef\xbb\xbf{}").unwrap_err(),
+            JsonValue::parse("[0 1]").unwrap_err(),
+            JsonValue::parse("{1:0}").unwrap_err(),
+            error,
+            JsonValue::parse("0 0").unwrap_err(),
+            JsonValue::parse("-x").unwrap_err(),
+            JsonValue::parse("1.").unwrap_err(),
+            JsonValue::parse("1e").unwrap_err(),
+            JsonValue::parse("]").unwrap_err(),
+            JsonValue::parse("nulx").unwrap_err(),
+            JsonValue::parse("\"").unwrap_err(),
+            JsonValue::parse("\"\u{0}\"").unwrap_err(),
+            JsonValue::parse(r#""\q""#).unwrap_err(),
+            JsonValue::parse(r#""\uGGGG""#).unwrap_err(),
+            limited(JsonLimits {
+                max_bytes: 0,
+                ..JsonLimits::default()
+            }),
+            limited(JsonLimits {
+                max_depth: 0,
+                ..JsonLimits::default()
+            }),
+            limited(JsonLimits {
+                max_nodes: 0,
+                ..JsonLimits::default()
+            }),
+        ];
+        let mut codes = std::collections::BTreeSet::new();
+        for error in errors {
+            let description = input_error_description(error.code).expect(error.code);
+            assert_eq!(
+                error.to_string(),
+                format!("{description} at byte {}", error.byte_offset)
+            );
+            codes.insert(error.code);
+        }
+        assert_eq!(codes.len(), 18);
+        // A code the parser does not emit is written as itself.
+        let mut renamed = JsonValue::parse("]").unwrap_err();
+        renamed.code = "application-code";
+        assert_eq!(renamed.to_string(), "application-code at byte 0");
     }
     #[test]
     fn locations_display_their_pointer_and_coordinates() {

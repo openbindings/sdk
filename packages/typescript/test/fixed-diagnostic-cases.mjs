@@ -164,19 +164,26 @@ export function fixedDiagnosticCases(sdk) {
             ["OBI-02", "/operations/run/aliases/1"],
             ["OBI-02", "/operations/run/aliases/2"],
             ["OBI-02", "/operations/run/description"],
-            ["OBI-10", "/operations/run/input"],
+            ["OBI-10", "/operations/run/input/type"],
           ]),
-        "multiple positions and localized meta node",
+        "multiple positions and localized meta keyword",
       );
+      // OBI-10 names the meta-schema keyword whose value fails.
       check(
-        fixed.every((f) => f.message === unexpectedMessage),
+        fixed.every(
+          (f) =>
+            f.message ===
+            (f.rule === "OBI-10"
+              ? "the value of the type keyword does not satisfy the JSON Schema 2020-12 meta-schema"
+              : unexpectedMessage),
+        ),
         "fixed messages in both rules",
       );
     } finally {
       parsed.value.dispose();
     }
     results.push({
-      name: "multiple positions and localized meta node",
+      name: "multiple positions and localized meta keyword",
       conclusion: "non-conformant",
     });
   }

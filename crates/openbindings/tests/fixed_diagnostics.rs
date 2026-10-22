@@ -1,5 +1,11 @@
 use openbindings::*;
 const MESSAGE: &str = "value violates the fixed normative schema";
+// OBI-10 names the meta-schema keyword whose value fails, at that value.
+fn meta_message(keyword: &str) -> String {
+    format!(
+        "the value of the {keyword} keyword does not satisfy the JSON Schema 2020-12 meta-schema"
+    )
+}
 
 #[test]
 fn fixed_message_preserves_rule_location_and_rejected_value_privacy() {
@@ -90,8 +96,9 @@ fn document_and_meta_failures_use_fixed_messages() {
             .and_then(openbindings::Pointer::as_str),
         Some("/operations/lookup/input")
     );
+    // A schema that is not an object or boolean is located at the schema.
     let meta = findings.iter().find(|f| f.rule == "OBI-10").unwrap();
-    assert_eq!(meta.message, MESSAGE);
+    assert_eq!(meta.message, "a schema must be a JSON object or boolean");
     assert_eq!(meta.location, normative.location);
     assert!(findings.iter().all(|f| f.message.len() <= 512));
     assert!(
@@ -231,7 +238,12 @@ fn localized_findings_preserve_all_rule_evidence_under_the_findings_cap() {
         assert_eq!(report.evidence["OBI-02"], Evidence::Met);
         assert_eq!(report.evidence["OBI-10"], Evidence::Violated);
         assert_eq!(report.evidence.len(), 13);
-        assert!(report.findings.iter().all(|f| f.message == MESSAGE));
+        assert!(
+            report
+                .findings
+                .iter()
+                .all(|f| f.message == meta_message("minLength"))
+        );
     }
 }
 
@@ -319,13 +331,22 @@ fn fixed_messages_are_value_free_and_property_names_locate_original_tokens() {
     // Findings use validity and original tokens, never library error payloads.
     let text = r#"{"openbindings":"0.2.0","operations":{"-secret":{},".private":{},"\ud83d\ude00":{}},"dependencies":{"d":{"operation":"-secret","kinds":[]}},"schemas":{"s":{"$anchor":"1private","minLength":-1}}}"#;
     let validation = validate_document(text).unwrap();
-    for (fragment, pointer) in [
+    for (fragment, pointer, message) in [
         (
             r#""dependencies":{"d":{"operation":"op","kinds":[]}}"#,
             "/dependencies/d/kinds",
+            MESSAGE.to_owned(),
         ),
-        (r#""schemas":{"s":{"$anchor":"1private"}}"#, "/schemas/s"),
-        (r#""schemas":{"s":{"minLength":-1}}"#, "/schemas/s"),
+        (
+            r#""schemas":{"s":{"$anchor":"1private"}}"#,
+            "/schemas/s/$anchor",
+            meta_message("$anchor"),
+        ),
+        (
+            r#""schemas":{"s":{"minLength":-1}}"#,
+            "/schemas/s/minLength",
+            meta_message("minLength"),
+        ),
     ] {
         let source = format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{}}}},{fragment}}}"#);
         let check = validate_document(source).unwrap();
@@ -342,7 +363,7 @@ fn fixed_messages_are_value_free_and_property_names_locate_original_tokens() {
                         .as_ref()
                         .and_then(openbindings::Pointer::as_str)
                         == Some(pointer)
-                    && f.message == MESSAGE),
+                    && f.message == message),
             "{pointer}"
         );
     }

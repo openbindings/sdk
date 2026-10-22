@@ -24,9 +24,10 @@ use std::{collections::HashMap, sync::Arc};
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]
 /// Default-evaluator limits. A limit that protects the process (its stack or
-/// its memory) has a default; one that would only bound time is the
-/// application's to set, and is off unless it does. Exceeding a limit yields
-/// no verdict.
+/// its memory) has a default. `evaluation_steps`, which bounds only time, is
+/// the application's to set and is off unless it does, and so is
+/// `schema_resources`, which bounds the time and memory of compiling a contract
+/// that reaches many resources. Exceeding a limit yields no verdict.
 pub struct Limits {
     /// Evaluation work units per verdict or explanation pass. `None`, the
     /// default, sets no cap: the time a pass takes then grows with the schema,
@@ -131,7 +132,13 @@ pub struct Limits {
     /// few. `None`, the default, sets no cap. `Some(n)` refuses a contract
     /// reaching more than `n` with `LimitExceeded` and `schema-resource-limit`
     /// before compiling it, so an application preparing untrusted documents or
-    /// resource sets can bound preparation at the size it chooses.
+    /// resource sets can bound preparation at the size it chooses. The refusal
+    /// comes after core projects the contract, which its admission limits and
+    /// 100,000 schema positions bound, and before the evaluator copies the
+    /// resources and the library compiles them, so it bounds the time and
+    /// memory of that compilation: a 7 MB document whose input reaches a chain
+    /// of 99,990 `$id` resources prepared in 11.5 s at a 723 MB peak without a
+    /// cap, and refused in 1.2 s at a 502 MB peak with a cap of 1,000.
     pub schema_resources: Option<usize>,
 }
 impl Default for Limits {
@@ -458,10 +465,10 @@ impl DefaultEvaluator {
             }
             Err(error) => return Err(preparation_error(&error, &locations)),
         };
-        drop(patterns);
         control.check()?;
         Ok(Compiled {
             validator,
+            patterns,
             locations,
             deepest: bound.deepest(host.evaluation_depth()),
             deepest_explained: bound.deepest(host.evaluation_depth() / 2),
@@ -865,6 +872,9 @@ fn preparation_error(
 
 struct Compiled {
     validator: jsonschema::Validator<FlatJson>,
+    // The `pattern` keywords' matchers, which the validator shares, and their
+    // sites, which name the keyword a pass stopped at.
+    patterns: Arc<operands::Patterns>,
     locations: explain::Locations,
     // The deepest value the depth bound admits within the limit, and within
     // half of it for explanations; `usize::MAX` when every value is.
@@ -970,8 +980,15 @@ impl Compiled {
                 "numeric-arithmetic-limit",
                 "numeric arithmetic exceeds the admitted evaluation limit",
             )),
-            Ok((_, Some(pass::Stop::Unmatched(unsupported)))) => {
-                Err(unsupported_pattern(unsupported))
+            Ok((_, Some(pass::Stop::Unmatched(unsupported, site)))) => {
+                // The `pattern` keyword that holds it, at its original location.
+                let mut detail = unsupported_pattern(unsupported);
+                detail.location = self.patterns.site(site).and_then(|at| {
+                    self.locations
+                        .locate(&format!("{}#{}", bundle::URI, at.as_str()))
+                        .map(|(location, _)| location)
+                });
+                Err(detail)
             }
             Ok((_, Some(pass::Stop::Missing(at)))) => {
                 let mut detail = no_verdict(
