@@ -21,8 +21,10 @@ Before a separately authorized release:
 4. Update workspace/npm/sibling versions together, locks and dependency notices.
    Retain upstream source/patch identities. Re-run native, actual browser, Node,
    workerd, fresh package, no-I/O and performance gates on the final source.
-5. Publish internal dependencies and companion crates in dependency order only
-   after destination/package ownership is approved. Remove `publish = false`
+5. Only after destination/package ownership is approved, publish internal
+   dependencies and companion crates in the `publicationOrder` the candidate
+   manifest records, which puts each crate after every local crate it depends
+   on, development dependencies included. Remove `publish = false`
    deliberately for the intended packages, and `"private": true` for the npm
    package, narrowing the guard check to match. Test registry consumers. Generate
    the npm Wasm asset from the same source and verify its recorded source identity.

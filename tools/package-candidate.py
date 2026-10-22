@@ -35,21 +35,31 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def publication_order(packages):
-    """Order the local dependency closure of supported libraries, excluding dev deps."""
-    by_name = {item["name"]: item for item in packages}
-    dependencies = {}
-    for item in packages:
-        manifest = tomllib.loads((Path(item["source"]) / "Cargo.toml").read_text(encoding='utf-8'))
-        sections = [manifest, *manifest.get("target", {}).values()]
-        names = set()
-        for section in sections:
-            for kind in ["dependencies", "build-dependencies"]:
-                for alias, spec in section.get(kind, {}).items():
-                    name = spec.get("package", alias) if isinstance(spec, dict) else alias
-                    if name in by_name:
-                        names.add(name)
-        dependencies[item["name"]] = names
+# The dependency tables of a packaged manifest. Cargo resolves every one of
+# them, top level and per target, when it packages, verifies or publishes a
+# crate; packaging has already dropped development dependencies that declare
+# no version, so every development dependency left must already be published.
+DEPENDENCY_TABLES = ("dependencies", "dev-dependencies", "build-dependencies")
+
+
+def local_dependencies(manifest, local):
+    """The `local` crates a packaged manifest names in any dependency table."""
+    names = set()
+    for section in [manifest, *manifest.get("target", {}).values()]:
+        unknown = sorted(key for key in section
+                         if key.endswith("dependencies") and key not in DEPENDENCY_TABLES)
+        require(not unknown, f"Unrecognized dependency table in a packaged manifest: {unknown}")
+        for table in DEPENDENCY_TABLES:
+            for alias, spec in section.get(table, {}).items():
+                name = spec.get("package", alias) if isinstance(spec, dict) else alias
+                if name in local:
+                    names.add(name)
+    return names
+
+
+def publication_order(dependencies):
+    """Order the supported libraries' local closure so that each crate follows
+    every local crate it depends on in any table Cargo resolves."""
     result, active = [], set()
 
     def visit(name):
@@ -66,7 +76,58 @@ def publication_order(packages):
         visit(name)
     require(set(result) == PUBLIC_CRATES | INTERNAL_CRATES,
             "Publication closure differs from the supported artifact inventory.")
+    require_dependencies_first(result, dependencies)
     return result
+
+
+def require_dependencies_first(order, dependencies):
+    """Fail unless each crate in `order` comes after every local crate it depends on."""
+    position = {name: index for index, name in enumerate(order)}
+    for name in order:
+        later = sorted(dependency for dependency in dependencies[name]
+                       if position.get(dependency, len(order)) >= position[name])
+        require(not later, f"Publication order puts {name} before {', '.join(later)}, "
+                           "which Cargo resolves when it packages or publishes it.")
+
+
+def self_test():
+    """The order counts every dependency table, and the check refuses an order that does not."""
+    local = PUBLIC_CRATES | INTERNAL_CRATES
+    dev_only = {
+        "package": {"name": "openbindings-http-discovery"},
+        "dependencies": {"openbindings": {"version": "=0.2.0"}},
+        "dev-dependencies": {"openbindings-invocation": {"version": "=0.2.0"}},
+        "target": {"cfg(unix)": {"dev-dependencies": {
+            "inspection": {"package": "openbindings-source-inspection", "version": "=0.2.0"}}}},
+    }
+    assert local_dependencies(dev_only, local) == {
+        "openbindings", "openbindings-invocation", "openbindings-source-inspection"}
+    try:
+        local_dependencies({"dev_dependencies": {}}, local)
+    except SystemExit:
+        pass
+    else:
+        raise AssertionError("Accepted an unrecognized dependency table")
+    # Every library builds on core and the internal crates; HTTP discovery
+    # depends on invocation only for its tests.
+    dependencies = {name: {"openbindings", "openbindings-internal-cancellation",
+                           "openbindings-internal-interfaces"} for name in PUBLIC_CRATES}
+    dependencies["openbindings"] = {"openbindings-internal-json", "openbindings-internal-schema"}
+    dependencies["openbindings-internal-json"] = set()
+    dependencies["openbindings-internal-schema"] = {"openbindings-internal-json"}
+    for name in ["openbindings-internal-cancellation", "openbindings-internal-interfaces"]:
+        dependencies[name] = {"openbindings"}
+    dependencies["openbindings-http-discovery"].add("openbindings-invocation")
+    order = publication_order(dependencies)
+    assert order.index("openbindings-invocation") < order.index("openbindings-http-discovery")
+    swapped = [name for name in order if name != "openbindings-invocation"]
+    swapped.insert(swapped.index("openbindings-http-discovery") + 1, "openbindings-invocation")
+    try:
+        require_dependencies_first(swapped, dependencies)
+    except SystemExit:
+        pass
+    else:
+        raise AssertionError("Accepted a crate published before its development dependency")
 
 
 def artifact_manifests():
@@ -80,9 +141,16 @@ def artifact_manifests():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--offline", action="store_true", help="Require cached Cargo dependencies")
+    parser.add_argument("--self-test", action="store_true",
+                        help="Check the publication-order rule and exit")
     args = parser.parse_args()
+    if args.self_test:
+        self_test()
+        print("Publication order self-test passed.")
+        return
+    require(args.output is not None, "--output is required.")
     manifests = artifact_manifests()
     out = args.output.resolve()
     require(not out.is_relative_to(ROOT) or out.is_relative_to(ROOT / "target"),
@@ -167,6 +235,10 @@ def main():
                     require(not isinstance(dependency, dict) or "path" not in dependency, f"Development dependency path remains: {name}")
         packages.append({"name": name, "version": package_version, "archive": archive_path.name,
                          "sha256": digest(archive_path), "source": str(source)})
+    # Order publication by what Cargo resolves: the packaged manifests.
+    local = {item["name"] for item in packages}
+    dependencies = {item["name"]: local_dependencies(tomllib.loads(
+        (Path(item["source"]) / "Cargo.toml").read_text(encoding='utf-8')), local) for item in packages}
     patches = "\n[patch.crates-io]\n" + "".join(f'{item["name"]}={{path={json.dumps(item["source"])}}}\n' for item in packages)
     consumer = out / "cargo-consumer"
     (consumer / "src/bin").mkdir(parents=True)
@@ -232,7 +304,7 @@ def main():
                "dependencyIdentitiesSha256": digest(ROOT / "docs/dependency-isolation.json"),
                "workspaceLockSha256": digest(ROOT / "Cargo.lock"),
                "npm": {"archive": npm_archive.name, "sha256": digest(npm_archive), "buildIdentity": identity},
-               "cargo": packages, "publicationOrder": publication_order(packages),
+               "cargo": packages, "publicationOrder": publication_order(dependencies),
                "cargoBuildOnly": sorted(BUILD_ONLY_CRATES), "archiveConsumers": "passed",
                "status": "local artifacts verified; publication not performed"}
     (out / "MANIFEST.json").write_text(json.dumps(receipt, indent=2) + "\n")

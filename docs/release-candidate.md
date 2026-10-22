@@ -38,9 +38,16 @@ runs Rust examples and the ordinary-Serde compatibility matrix exclusively from
 extracted Cargo archives. Local Cargo patches resolve unpublished siblings; they
 are temporary qualification infrastructure, not the eventual public quickstart.
 The explicit artifact inventory covers all seven supported Rust libraries, the
-internal JSON, schema and cancellation packages, and the build-only Wasm crate. Missing or unclassified packages fail the check.
-The JSON manifest records artifacts, hashes, source identity, and a topologically
-sorted publication order. CI runs this gate after building the npm package from
+internal JSON, schema, cancellation and interfaces packages, and the build-only
+Wasm crate. Missing or unclassified packages fail the check.
+The JSON manifest records artifacts, hashes, source identity, and the publication
+order (`publicationOrder`). That order puts each crate after every local crate its
+packaged manifest names in a normal, build or development dependency table, top
+level or target-specific: Cargo resolves all of them when it packages, verifies
+or publishes a crate, and packaging drops only development dependencies that
+declare no version. The packager fails if the recorded order breaks that rule,
+and `python3 tools/package-candidate.py --self-test`, which `tools/verify.py`
+runs, checks the rule itself. CI runs this gate after building the npm package from
 its clean candidate checkout. Packaging success is not a substitute for the full
 host, semantic, resource, and runtime qualification.
 
@@ -72,8 +79,8 @@ decision:
 - A real security contact, compatibility/support statement, and clear migration
   guidance. See `SECURITY.md`, `docs/migration.md`, and `docs/api-reference.md`.
 
-Publish the dependency closure of the supported Rust libraries in manifest
-order. `openbindings-wasm` is an internal build crate: retain its Cargo publication
+Publish the dependency closure of the supported Rust libraries in the
+manifest's `publicationOrder`. `openbindings-wasm` is an internal build crate: retain its Cargo publication
 guard unless a separate consumer need is accepted. Its compiled engine is shipped
 in npm. Internal dependency crates are published only because the supported Rust
 libraries need them; their implementation types are not new supported APIs.
