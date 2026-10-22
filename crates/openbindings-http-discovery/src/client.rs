@@ -174,7 +174,10 @@ pub trait DiscoveryTimer {
 pub struct ClientOptions {
     /// Positive bound on decoded bytes, with room for one over-limit sentinel.
     /// A body within it is validated under admission limits that admit its
-    /// bytes: this bound when it exceeds [`JsonLimits::default`]'s byte limit.
+    /// bytes: this bound when it exceeds [`JsonLimits::default`]'s byte limit,
+    /// with the default 1,000,000 nodes and any nesting. A body past the nodes is
+    /// undetermined; validate [`DiscoveryResult::body`] with
+    /// [`openbindings::validate_document_with_limits`] to admit it.
     pub max_document_bytes: usize,
     /// Whole-attempt deadline. `None`, the default, sets none: an attempt runs
     /// until it completes, a transport-owned timeout fires or the caller
@@ -651,8 +654,10 @@ impl std::fmt::Debug for DiscoveryResult {
 // Classify a complete bounded body. Acquisition metadata is deliberately absent.
 // A caller holding bytes obtained elsewhere judges them with
 // `openbindings::validate_document`, which this wraps when `max_bytes` is within
-// the default byte limit. A larger body bound raises the admitted bytes to it, so
-// every body within the bound is admitted, and the document keeps those limits.
+// the default byte limit. A larger body bound raises only the admitted bytes to
+// it: the nodes stay at the default 1,000,000, so a body past them is undetermined,
+// and its findings name validating the retained body with
+// `validate_document_with_limits`. A found document keeps these limits.
 pub(crate) fn validate_body(body: &[u8], max_bytes: usize) -> DiscoveryOutcome {
     let limits = JsonLimits {
         max_bytes: max_bytes.max(JsonLimits::default().max_bytes),

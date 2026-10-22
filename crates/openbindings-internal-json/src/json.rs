@@ -39,12 +39,13 @@ pub enum InputErrorKind {
     Limit,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone)]
 /// Exact JSON admission failure. It is separate from document conformance and schema-instance outcomes.
 /// `Display` writes what the parser expected or found and the byte where, such as
 /// `expected a colon after the member name at byte 5`, and for an exceeded limit
-/// the [`JsonLimits`] field that raises it; branch on `code` and `byte_offset`,
-/// which do not change with that wording.
+/// how to admit the input with the [`JsonLimits`] field that raises it; branch on
+/// `code` and `byte_offset`, which do not change with that wording. Equality
+/// compares those public fields.
 /// Later versions may add fields: read them by name and match with `..`.
 #[non_exhaustive]
 pub struct InputError {
@@ -54,7 +55,24 @@ pub struct InputError {
     pub byte_offset: usize,
     /// Stable detailed parse/admission code, suitable for branching.
     pub code: &'static str,
+    pub(crate) route: Route,
 }
+/// The call an exceeded limit is raised through, as its refusal names it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Route {
+    /// A call that takes [`JsonLimits`], or has a variant that does.
+    #[default]
+    Admission,
+    /// A value check that admits under the default limits only: the value is
+    /// parsed with limits first, then checked.
+    Value,
+}
+impl PartialEq for InputError {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind && self.byte_offset == other.byte_offset && self.code == other.code
+    }
+}
+impl Eq for InputError {}
 impl std::fmt::Debug for InputError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Only fixed parser/admission reasons are safe; the public code can be reassigned.
@@ -127,12 +145,18 @@ impl fmt::Display for InputError {
             Some(description) => write!(f, "{description} at byte {}", self.byte_offset)?,
             None => write!(f, "{} at byte {}", self.code, self.byte_offset)?,
         }
-        match limit_setting(self.code) {
-            Some((rust, typescript)) => write!(
+        match (limit_setting(self.code), self.route) {
+            (Some((rust, typescript)), Route::Admission) => write!(
                 f,
                 "; raise JsonLimits::{rust} (limits.{typescript} in TypeScript)"
             ),
-            None => Ok(()),
+            (Some((rust, typescript)), Route::Value) => write!(
+                f,
+                "; parse the value with JsonValue::parse_with_limits and a larger \
+                 JsonLimits::{rust}, then validate it (parseJson with a larger \
+                 limits.{typescript} in TypeScript)"
+            ),
+            (None, _) => Ok(()),
         }
     }
 }
@@ -297,6 +321,7 @@ impl JsonValue {
                 kind: InputErrorKind::Limit,
                 byte_offset: limits.max_bytes,
                 code: "byte-limit",
+                route: Route::Admission,
             });
         }
         let owner = Arena::parse(
@@ -315,6 +340,7 @@ impl JsonValue {
             },
             byte_offset: p.offset,
             code: p.code,
+            route: Route::Admission,
         })?;
         Ok(Self { owner, id: 0 })
     }
@@ -413,6 +439,7 @@ impl JsonValue {
             kind: InputErrorKind::Limit,
             byte_offset: limits.max_bytes,
             code: "byte-limit",
+            route: Route::Admission,
         })?;
         let mut bytes = Vec::with_capacity(size.bytes);
         serde_json::to_writer(&mut bytes, value).expect("a Rust string serializes as JSON");

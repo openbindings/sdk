@@ -901,6 +901,15 @@ pub fn input_error(
         kind,
         byte_offset,
         code,
+        route: crate::json::Route::Admission,
+    }
+}
+/// The same refusal from a value check that admits under the default limits
+/// only, so an exceeded limit names parsing with limits, then validating.
+pub fn value_check_refusal(error: crate::InputError) -> crate::InputError {
+    crate::InputError {
+        route: crate::json::Route::Value,
+        ..error
     }
 }
 

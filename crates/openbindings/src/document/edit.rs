@@ -166,6 +166,23 @@ impl fmt::Debug for EditError {
 }
 impl fmt::Display for EditError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // An exceeded limit is the document's: name the setting it was
+        // admitted with.
+        if let Self::Input(error) = self
+            && let Some((rust, typescript)) = backend::limit_setting(error.code)
+        {
+            let limit = match error.code {
+                "byte-limit" => "byte",
+                "node-limit" => "node",
+                _ => "nesting",
+            };
+            return write!(
+                f,
+                "document edit refused: the edited document exceeds its {limit} limit; \
+                 admit the document with a larger JsonLimits::{rust} (limits.{typescript} \
+                 in TypeScript)"
+            );
+        }
         write!(f, "document edit refused: {}", self.code())
     }
 }

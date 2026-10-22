@@ -187,7 +187,9 @@ fn the_default_byte_limit_admits_32_mib_and_names_its_setting_past_it() {
         assert_eq!(
             finding.message,
             "the document's 33554433 bytes exceed the 33554432-byte admission limit; \
-             raise JsonLimits::max_bytes (limits.maxBytes in TypeScript)"
+             validate it with validate_document_with_limits and a larger \
+             JsonLimits::max_bytes (validateDocument with a larger limits.maxBytes in \
+             TypeScript)"
         );
     }
     // Raising the named setting admits the same document.
@@ -232,8 +234,9 @@ fn a_raised_byte_limit_admits_documents_to_it_and_they_keep_it_for_edits() {
     assert_eq!(refused.report().conclusion, Conformance::Undetermined);
     assert!(refused.report().findings.iter().all(|f| f.message
         == format!(
-            "the document's {} bytes exceed the {}-byte admission limit; raise \
-             JsonLimits::max_bytes (limits.maxBytes in TypeScript)",
+            "the document's {} bytes exceed the {}-byte admission limit; validate it \
+             with validate_document_with_limits and a larger JsonLimits::max_bytes \
+             (validateDocument with a larger limits.maxBytes in TypeScript)",
             raised.max_bytes + 1,
             raised.max_bytes
         )));
@@ -268,6 +271,12 @@ fn a_raised_byte_limit_admits_documents_to_it_and_they_keep_it_for_edits() {
     let mut plain = Document::parse(empty).unwrap();
     let error = plain.set("/x-fill", &large).unwrap_err();
     assert_eq!(error.code(), "byte-limit");
+    // The refusal names the setting the document was admitted with.
+    assert_eq!(
+        error.to_string(),
+        "document edit refused: the edited document exceeds its byte limit; admit the \
+         document with a larger JsonLimits::max_bytes (limits.maxBytes in TypeScript)"
+    );
     // A proof's document keeps its limits for editing again: at the raised
     // limit it cannot grow, and once smaller it can.
     let mut again = proof.into_inner();
@@ -290,6 +299,74 @@ fn a_raised_byte_limit_admits_documents_to_it_and_they_keep_it_for_edits() {
             ..JsonLimits::default()
         }
     );
+}
+
+#[test]
+fn edit_limits_apply_to_the_edited_document() {
+    // These are the cases the TypeScript edit routes match.
+    let empty = r#"{"openbindings":"0.2.0","operations":{}}"#;
+    let refusal = |limit: &str, rust: &str, typescript: &str| {
+        format!(
+            "document edit refused: the edited document exceeds its {limit} limit; admit the \
+             document with a larger JsonLimits::{rust} (limits.{typescript} in TypeScript)"
+        )
+    };
+    // At 4 levels, a 3-level value fits a top-level member; 4 levels do not.
+    let mut shallow = Document::parse_with_limits(
+        empty,
+        JsonLimits {
+            max_depth: 4,
+            ..JsonLimits::default()
+        },
+    )
+    .unwrap();
+    let three = JsonValue::parse("[[[1]]]").unwrap();
+    shallow.set("/x-a", &three).unwrap();
+    shallow.remove("/x-a").unwrap();
+    shallow
+        .edit(&[Edit::Set {
+            pointer: "/x-a".into(),
+            value: &three,
+        }])
+        .unwrap();
+    let error = shallow
+        .set("/x-b", &JsonValue::parse("[[[[1]]]]").unwrap())
+        .unwrap_err();
+    assert_eq!(error.code(), "depth-limit");
+    assert_eq!(
+        error.to_string(),
+        refusal("nesting", "max_depth", "maxDepth")
+    );
+    // At 7 nodes, one more member and value fit.
+    let mut few = Document::parse_with_limits(
+        empty,
+        JsonLimits {
+            max_nodes: 7,
+            ..JsonLimits::default()
+        },
+    )
+    .unwrap();
+    few.set("/x-a", &JsonValue::integer(1)).unwrap();
+    let error = few.set("/x-b", &JsonValue::integer(1)).unwrap_err();
+    assert_eq!(error.code(), "node-limit");
+    assert_eq!(error.to_string(), refusal("node", "max_nodes", "maxNodes"));
+    // At its own size, a same-size replacement fits and a longer one does not.
+    let exact = r#"{"openbindings":"0.2.0","operations":{},"x-a":"abc"}"#;
+    let mut sized = Document::parse_with_limits(
+        exact,
+        JsonLimits {
+            max_bytes: exact.len(),
+            ..JsonLimits::default()
+        },
+    )
+    .unwrap();
+    sized
+        .set("/x-a", &JsonValue::string("xyz").unwrap())
+        .unwrap();
+    let error = sized
+        .set("/x-a", &JsonValue::string("wxyz").unwrap())
+        .unwrap_err();
+    assert_eq!(error.to_string(), refusal("byte", "max_bytes", "maxBytes"));
 }
 
 #[test]

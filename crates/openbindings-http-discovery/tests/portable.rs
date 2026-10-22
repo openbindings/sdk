@@ -398,6 +398,34 @@ async fn a_raised_body_limit_validates_bodies_past_the_default_byte_limit() {
             ..default
         }
     );
+    // Only the bytes follow the bound: a body past the default nodes is
+    // undetermined, and its findings name validating the retained body with
+    // larger limits, which admits it.
+    let nodes = format!(
+        r#"{{"openbindings":"0.2.0","operations":{{}},"x-a":[{}0]}}"#,
+        "0,".repeat(default.max_nodes)
+    );
+    let (r, _) = get(200, nodes.as_bytes(), 8 << 20).await;
+    let DiscoveryOutcome::Undetermined { validation } = r.outcome else {
+        panic!("expected an undetermined body, got {:?}", r.outcome)
+    };
+    assert!(validation.report().findings.iter().all(|f| {
+        f.message.ends_with(
+            "; validate it with validate_document_with_limits and a larger JsonLimits::max_nodes \
+         (validateDocument with a larger limits.maxNodes in TypeScript)",
+        )
+    }));
+    let body = r.body.expect("the body is retained");
+    let raised = openbindings::validate_document_with_limits(
+        &body,
+        openbindings::JsonLimits {
+            max_nodes: 2 * default.max_nodes,
+            max_depth: usize::MAX,
+            ..default
+        },
+    )
+    .unwrap();
+    assert_eq!(raised.report().conclusion, Conformance::Conformant);
 }
 #[tokio::test(flavor = "current_thread")]
 async fn cancellation_during_pending_io_wakes_without_transport_cooperation() {

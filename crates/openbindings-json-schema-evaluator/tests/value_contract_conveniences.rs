@@ -177,6 +177,14 @@ fn json_validation_returns_original_admission_errors() {
         assert_eq!(expected.kind, kind);
         assert_eq!(ready.validate_json(bytes).unwrap_err(), expected);
     }
+    // A limit names parsing with limits and then validating, since this call
+    // takes none.
+    assert_eq!(
+        ready.validate_json(&deep).unwrap_err().to_string(),
+        "the input nests deeper than the admitted depth limit at byte 10000; parse the value \
+         with JsonValue::parse_with_limits and a larger JsonLimits::max_depth, then validate \
+         it (parseJson with a larger limits.maxDepth in TypeScript)"
+    );
     assert!(matches!(
         ready.validate_json("null").unwrap(),
         ValueOutcome::Satisfies
