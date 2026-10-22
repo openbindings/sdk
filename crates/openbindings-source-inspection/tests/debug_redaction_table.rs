@@ -53,13 +53,13 @@ fn inspection_rows(context: &JsonValue, operation: &Operation) -> Vec<Row> {
     assert_eq!(error.code(), SECRET);
     assert!(error.to_string().contains(SECRET));
     assert!(format!("{error:?}").contains("ProviderFailure"));
-    let fragment = inspection::BindingFragment {
+    let binding = inspection::BindingValue {
         content: Some(context.clone()),
         description: Some(SECRET.into()),
         extensions: BTreeMap::from([(format!("x-{SECRET}"), context.clone())]),
         ..Default::default()
     };
-    let target = inspection::BindableTarget::new(SECRET, fragment.clone())
+    let target = inspection::BindableTarget::new(SECRET, binding.clone())
         .with_operation_key(SECRET)
         .with_operation(operation.clone());
     let limitation = inspection::InspectionLimitation::new(SECRET, SECRET)
@@ -78,7 +78,7 @@ fn inspection_rows(context: &JsonValue, operation: &Operation) -> Vec<Row> {
                 .check_kind_support([SECRET])
                 .unwrap()[0],
         ),
-        row("BindingFragment", &fragment),
+        row("BindingValue", &binding),
         row("BindableTarget", &target),
         row("InspectionLimitation", &limitation),
         row(

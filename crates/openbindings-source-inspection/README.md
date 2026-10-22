@@ -2,13 +2,13 @@
 
 Enumerate a source's bindable targets and optional operation framing. Implement
 `SourceInspector` in a kind implementation; call it through `Inspector` to check
-support, carrier shape, cancellation and returned binding fragments.
+support, carrier shape, cancellation and returned bindings.
 
 ```rust
 use openbindings_source_inspection::CancellationToken;
 use openbindings::Source;
 use openbindings_source_inspection::{
-    BindableTarget, BindingFragment, InspectionError, Inspector,
+    BindableTarget, BindingValue, InspectionError, Inspector,
     SourceInspection, SourceInspector,
 };
 use std::future::{Ready, ready};
@@ -24,7 +24,7 @@ impl SourceInspector for EchoInspector {
     {
         ready(Ok(SourceInspection::complete(vec![BindableTarget::new(
             "value",
-            BindingFragment {
+            BindingValue {
                 content: source.content.clone(),
                 ..Default::default()
             },
@@ -37,26 +37,35 @@ async fn select(source: Source) -> Result<openbindings::Binding, InspectionError
     let inspector = Inspector::new(&provider);
     let inventory = inspector.inspect(&source).await?;
     let target = inventory.targets.into_iter().next().expect("echo has one target");
-    target.binding.bind("my.operation", "my.source")
+    // A binding invoker takes `target.binding` as it is; a document needs keys.
+    Ok(target.binding.bind("my.operation", "my.source")?)
 }
 ```
 
-Applications choose targets and assign operation and source keys with
-`BindingFragment::bind`. Missing operation framing is permitted; the author can
-supply it before building and validating the final document.
+A target's binding is a `BindingValue`, the by-value binding a binding invoker
+receives, so an application can invoke a chosen target directly. To author a
+document, it assigns operation and source keys with `BindingValue::bind`, which
+returns a core `Binding`. Its structural `BoundaryError` converts into an
+`InspectionError` that keeps the boundary code and location, so one error type
+covers inspecting and authoring. Missing operation framing is permitted; the
+author can supply it before building and validating the final document.
 
 Providers build results with `SourceInspection::complete` or `partial`,
 `BindableTarget::new` (with `with_operation_key` and `with_operation`),
 `InspectionLimitation::new` and `SupportedKind::new`. These records may gain
-fields in later versions, so match them with `..`. A `BindingFragment` is
-authoring data like `openbindings::Binding` and keeps struct-literal construction.
+fields in later versions, so match them with `..`. `SupportedKind` and
+`KindSupportVerdict` are the same types interface synthesis and invocation
+reexport, so a provider serving several jobs builds one advisory list. A
+`BindingValue` is input data like `openbindings::Binding` and keeps struct-literal
+construction; a provider leaves its `operation` and `source` keys absent.
 
 ## Limits
 
 The provider owns acquisition and kind semantics. Structural checks cannot prove
 truthful support, complete enumeration or sound framing. Partial results carry
-explicit limitations. This SDK rejects duplicate `source_ref` rows and unknown
-non-extension carrier fields. These are SDK policies in addition to the published
+explicit limitations. This SDK rejects duplicate `source_ref` rows, a target
+binding that carries an operation or source key, and unknown non-extension
+carrier fields. These are SDK policies in addition to the published
 Source Inspector interface.
 
 Provider futures may borrow configuration and may be local. Cross-thread calls

@@ -331,7 +331,7 @@ impl inspect::SourceInspector for Catalog {
                 .map(|u| {
                     inspect::BindableTarget::new(
                         u.id.clone(),
-                        inspect::BindingFragment {
+                        inspect::BindingValue {
                             content: Some(JsonValue::string(&u.id).unwrap()),
                             ..Default::default()
                         },
