@@ -132,13 +132,11 @@ fn present_string(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
     }
     Some(Cow::Owned(text))
 }
-// How the fixed checks read a string. A value holding no unpaired unit encodes
-// none, so each string is read as itself, which is injective already; doubling
-// the marker there changes no fixed schema's verdict, since none tests length
-// beyond nonempty or matches the marker except where any character matches. A
-// fixed check compares one value's strings only with each other and with the
+// How the fixed checks read a string. An arena holding no unpaired unit encodes
+// none, so each of its strings is read as itself, which is injective already. A
+// fixed check compares one arena's strings only with each other and with the
 // fixed schemas' ASCII text. The schema space keeps the presentation for every
-// value, since references name its members by it.
+// arena, since references name its members by it.
 fn fixed_presentation(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
     match arena.string(id) {
         Some(text) if arena.unpaired.is_empty() => Some(Cow::Borrowed(text)),
