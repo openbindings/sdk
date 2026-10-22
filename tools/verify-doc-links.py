@@ -2,14 +2,9 @@
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 import re
-import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = 'https://github.com/openbindings/sdk/'
-# Packaged READMEs and rustdoc link into this repository at the release tag of
-# the version they ship with, so a released archive keeps naming the revision
-# it was built from rather than a moving branch.
-TAG = 'v' + tomllib.loads((ROOT / 'Cargo.toml').read_text(encoding='utf-8'))['workspace']['package']['version']
 
 
 def prose(text):
@@ -78,22 +73,19 @@ def check(paths):
             raw = next(group for group in match.groups() if group is not None).strip('<>')
             parsed = urlsplit(raw)
             local = None
-            location = f'{path.relative_to(ROOT)}:{text.count(chr(10), 0, match.start()) + 1}'
-            if raw.rstrip('/') + '/' == REPOSITORY or raw.startswith(REPOSITORY):
-                relative = parsed.path.removeprefix('/openbindings/sdk').removeprefix('/')
-                for prefix in (f'blob/{TAG}/', f'tree/{TAG}/', f'tree/{TAG}'):
-                    if relative == prefix or relative.startswith(prefix):
+            if raw.startswith(REPOSITORY):
+                relative = parsed.path.removeprefix('/openbindings/sdk/')
+                for prefix in ('blob/main/', 'tree/main/'):
+                    if relative.startswith(prefix):
                         local = ROOT / unquote(relative.removeprefix(prefix))
                         break
-                else:
-                    errors.append(f'{location}: link to this repository must name the {TAG} tag: {raw}')
-                    continue
             elif not parsed.scheme and not parsed.netloc:
                 local = path.parent / unquote(parsed.path) if parsed.path else path
             if local is None:
                 remote.add(raw)
                 continue
             checked += 1
+            location = f'{path.relative_to(ROOT)}:{text.count(chr(10), 0, match.start()) + 1}'
             if not local.exists():
                 errors.append(f'{location}: missing target {raw}')
             elif parsed.fragment and local.suffix == '.md' and unquote(parsed.fragment) not in anchors(local):

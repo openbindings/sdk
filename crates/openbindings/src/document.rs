@@ -422,7 +422,7 @@ impl InterpretationError {
 impl Document {
     /// Parse and retain exact bytes and source locations without establishing conformance.
     /// Use [`Self::validate`] before treating this as a conformant document. See the
-    /// [Rust first-use guide](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/rust-first-use.md)
+    /// [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
     /// for the progression from parsing to a prepared input contract.
     ///
     /// # Errors

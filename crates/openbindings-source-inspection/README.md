@@ -79,6 +79,6 @@ Public TypeScript inspection is not provided.
 ## Reference
 
 See `SourceInspector`, `Inspector`, `SourceInspection` and `InspectionError`,
-and the [complete consumer](https://github.com/openbindings/sdk/tree/v0.2.0-alpha.1/examples/source-inspection-consumer).
+and the [complete consumer](https://github.com/openbindings/sdk/tree/main/examples/source-inspection-consumer).
 The [published interface](https://github.com/openbindings/interfaces/blob/f158f4f345301668ccb8fd555586b04ca823e732/source-inspector/0.1.json)
 defines the shared operation meanings.

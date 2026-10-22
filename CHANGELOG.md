@@ -10,8 +10,7 @@
   `"private": true`, checked by `tools/verify-publication-guards.py`.
 - The release candidate's `publicationOrder` puts each crate after every local crate it
   depends on, development dependencies included, so Cargo can package and publish the
-  crates in that order; the packager refuses an order that breaks the rule. Packaged
-  READMEs and rustdoc link into the repository at the release tag, not `main`.
+  crates in that order; the packager refuses an order that breaks the rule.
 - Value contracts come from the operation. A conformant operation's `input()` and
   `output()` return a `ValueContract`; `prepare(&evaluator)`, `prepare_with(&evaluator,
   &resources)` and `prepare_with_control` borrow the evaluator and return

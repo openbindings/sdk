@@ -69,8 +69,8 @@ Use `JsonValue::parse_with_limits` for custom admission limits, or
 and call `PreparedValueContract::validate` to check them repeatedly without reparsing.
 
 Retain and clone the prepared value contract for repeated validation. Each `prepare`
-call compiles independently. The packaged [first-use example](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/crates/openbindings-json-schema-evaluator/examples/first_use.rs)
-adds aliases and exact wide integers; the [replacement example](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/crates/openbindings-json-schema-evaluator/examples/replacement.rs)
+call compiles independently. The packaged [first-use example](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/examples/first_use.rs)
+adds aliases and exact wide integers; the [replacement example](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/examples/replacement.rs)
 keeps old work usable while installing a new document and resource set.
 
 ## Limits
@@ -142,7 +142,7 @@ resources:
   `pattern_depth` (32 groups) bounds each pattern's nesting, and release builds
   prepare and check patterns at that depth on a 256 KiB thread (debug builds
   need more; see
-  [support](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/support.md)).
+  [support](https://github.com/openbindings/sdk/blob/main/docs/support.md)).
   `total_pattern_bytes` (4 MiB) bounds the forms the evaluator keeps for a
   contract's patterns together: each distinct `pattern` form once, and the form
   of each `patternProperties` name. A form spells every set out, so it can be
@@ -269,7 +269,7 @@ between two paths take about 6.8 MiB, and the 2,048 of 11 levels about
 reached schema once, in time and memory that grow with the contract, except
 that the library takes time quadratic in the length of a long same-document
 reference chain. See
-[measured behavior](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/performance-boundaries.md).
+[measured behavior](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md).
 
 Each call chooses its detail. `validate` is the cheap check: an established
 failure has a fixed message, an empty problem list and `problems_complete =
@@ -291,14 +291,14 @@ no prepared owner; cancelled validation leaves a prepared owner usable for a lat
 attempt. Use a fresh control for an independent retry.
 
 This unpublished package requires Rust 1.88. See
-[support](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/support.md) for stack
-qualifications and [custom evaluators](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/schema-evaluators.md)
+[support](https://github.com/openbindings/sdk/blob/main/docs/support.md) for stack
+qualifications and [custom evaluators](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md)
 for the integration contract.
 
 ## Reference
 
 The crate reference documents `DefaultEvaluator` and `Limits`.
-[Resolver and evaluation maintenance](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/maintainers.md)
+[Resolver and evaluation maintenance](https://github.com/openbindings/sdk/blob/main/docs/maintainers.md)
 links the resource-identity rules and the
-[dependency maintenance contract](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/DEPENDENCY-MAINTENANCE.md),
+[dependency maintenance contract](https://github.com/openbindings/sdk/blob/main/DEPENDENCY-MAINTENANCE.md),
 which describes how the evaluator composes the unmodified JSON Schema library.

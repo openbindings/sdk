@@ -76,7 +76,7 @@ failure never appears as clean end of input.
 The same input/output lifetime supports empty, unary and streaming interactions.
 For document calls, create `operation::Invoker` with a `Conformant<Document>` and
 provider, select an evaluator with `with_evaluator`, hold it in an `Arc`, then
-`prepare` an operation and invoke an `Attempt`. The [invocation guide](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/invocation.md)
+`prepare` an operation and invoke an `Attempt`. The [invocation guide](https://github.com/openbindings/sdk/blob/main/docs/invocation.md)
 shows the complete caller and describes selection, limits and cancellation.
 
 ## Limits
@@ -108,4 +108,4 @@ not provided.
 ## Reference
 
 See the `binding` and `operation` modules and the
-[complete consumer](https://github.com/openbindings/sdk/tree/v0.2.0-alpha.1/examples/binding-invocation-consumer).
+[complete consumer](https://github.com/openbindings/sdk/tree/main/examples/binding-invocation-consumer).

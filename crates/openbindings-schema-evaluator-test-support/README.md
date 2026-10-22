@@ -23,9 +23,9 @@ assert!(report.is_success());
 ```
 
 Replace the evaluator in this example with your implementation. Start with the
-[boolean evaluator example](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/crates/openbindings-schema-evaluator-test-support/examples/boolean_evaluator.rs)
+[boolean evaluator example](https://github.com/openbindings/sdk/blob/main/crates/openbindings-schema-evaluator-test-support/examples/boolean_evaluator.rs)
 for a small implementation that honestly refuses non-boolean schemas. See
-[custom evaluator integration](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/schema-evaluators.md)
+[custom evaluator integration](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md)
 for the original-document and resource contract.
 
 ## Limits
@@ -58,5 +58,5 @@ responsibility. This unpublished package requires Rust 1.88.
 
 Use `run`, `Options` and `Report` for the ordinary workflow. `suite`, `judge`,
 `judge_detail` and `judge_interruptions` support host-specific harnesses. The
-[maintainer guide](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/maintainers.md)
+[maintainer guide](https://github.com/openbindings/sdk/blob/main/docs/maintainers.md)
 links fixture provenance and implementation checks.

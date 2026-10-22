@@ -828,7 +828,7 @@ pub trait PreparedSchema: Send + Sync {
 /// prepares anew; retain the [`PreparedValueContract`] to validate repeatedly. The
 /// document's resolution space is assembled only when an evaluator requests the
 /// core projection, once per live revision and resource set. See the
-/// [Rust lifecycle guide](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/rust-first-use.md#resources-diagnostics-and-lifetime).
+/// [Rust lifecycle guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md#resources-diagnostics-and-lifetime).
 #[derive(Clone, Copy)]
 pub struct ValueContract<'a> {
     // Two words, like the exact schema reference it replaces in conformant reads.

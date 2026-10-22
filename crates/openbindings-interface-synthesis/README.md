@@ -81,5 +81,5 @@ Public TypeScript synthesis is not provided.
 ## Reference
 
 See `SynthesisRequest`, `Synthesis`, `SynthesisCoverage` and `SynthesisError`.
-The [complete consumer](https://github.com/openbindings/sdk/tree/v0.2.0-alpha.1/examples/interface-synthesis-consumer)
+The [complete consumer](https://github.com/openbindings/sdk/tree/main/examples/interface-synthesis-consumer)
 shows source accounting, caller-owned keys and strict-result recovery.

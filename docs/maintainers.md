@@ -25,10 +25,8 @@ examples. `python3 tools/verify.py --browser` adds browser checks.
 contracts. `tools/verify-rust-snippets.py` executes prose examples.
 `tools/verify-product-labels.py --self-test` checks product vocabulary boundaries.
 `tools/verify-doc-links.py` checks local Markdown targets and fragments without
-network access, including links into this repository. Those must name the release
-tag of the workspace version (`v0.2.0-alpha.1` now), so packaged READMEs and
-rustdoc keep pointing at the revision they ship with; it resolves them against
-this checkout. Remote URLs are reported as unchecked. `tools/verify-fixture-digests.py --self-test` checks
+network access, including repository URLs that name this checkout. Remote URLs
+are reported as unchecked. `tools/verify-fixture-digests.py --self-test` checks
 that each vendored interface fixture matches the SHA-256 row in its
 `tests/fixtures/README.md`; update a row only with the snapshot it describes. See [release preparation](release-candidate.md) for
 archive and source-identity checks and [API reference](api-reference.md) for rendering.
