@@ -41,11 +41,13 @@ unsafe impl GlobalAlloc for Counting {
         unsafe { System.dealloc(p, layout) };
         LIVE.fetch_sub(layout.size(), Relaxed);
     }
+    // A reallocation that moves holds the old block and the new one at once.
+    // Every one is counted so, moved or not: peaks are conservative.
     unsafe fn realloc(&self, p: *mut u8, layout: Layout, size: usize) -> *mut u8 {
         let next = unsafe { System.realloc(p, layout, size) };
         if !next.is_null() {
-            LIVE.fetch_sub(layout.size(), Relaxed);
             add(size);
+            LIVE.fetch_sub(layout.size(), Relaxed);
         }
         next
     }

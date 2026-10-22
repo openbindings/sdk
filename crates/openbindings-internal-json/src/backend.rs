@@ -525,42 +525,78 @@ impl<'a> Array<'a, FlatJson> for ArrayView<'a> {
             };
             hashes[id - first] = hash;
         }
-        self.unique_by_hash(first, &hashes)
+        self.unique_by_hash(&|at| hashes[self.1[at] as usize - first])
     }
 }
 impl ArrayView<'_> {
-    // Hashes only select candidates. An element whose hash an earlier one has
-    // is compared, in array order, with every earlier element of that hash,
-    // each comparison charged and verified exactly. Those earlier elements are
-    // pairwise unequal (an equal pair returns first), so they are all the
-    // candidates there are. Only the hashes seen are kept: the candidates are
-    // found again by scanning, which only an equal pair or a collision of
-    // keyed 64-bit hashes reaches. The table grows as usual while small, so
-    // an early repeat costs little; past that it grows once, to hold every
-    // element left, rather than keeping old and new tables while doubling.
-    fn unique_by_hash(&self, first: Id, hashes: &[u64]) -> bool {
+    // Hashes only select candidates: an element is compared, in array order,
+    // with every earlier element of its hash, each comparison charged and
+    // verified exactly. Equal elements hash alike, but unequal ones may too:
+    // objects holding one name twice, which equality reads by the name's first
+    // occurrence while the hash counts every member, and collisions of keyed
+    // 64-bit hashes. While no hash repeats, only the hashes seen are kept. The
+    // first repeat finds its candidates by one scan; unless it ends the check,
+    // the elements are then grouped by hash once, so that every later
+    // element's candidates are listed directly, for work linear in the
+    // comparisons charged. The table grows as usual while small, so an early
+    // repeat costs little; past that it grows once, to hold every element
+    // left, rather than keeping old and new tables while doubling.
+    // `hash_of` reads the hash of the element at a position.
+    fn unique_by_hash(&self, hash_of: &impl Fn(usize) -> u64) -> bool {
         const DOUBLING: usize = 4096;
         let mut seen = std::collections::HashSet::new();
-        for (at, &id) in self.1.iter().enumerate() {
-            let id = id as usize;
-            let hash = hashes[id - first];
+        for at in 0..self.1.len() {
+            let hash = hash_of(at);
             if seen.len() == seen.capacity() && seen.len() >= DOUBLING {
                 seen.reserve(self.1.len() - at);
             }
             if seen.insert(hash) {
                 continue;
             }
-            for &prior in &self.1[..at] {
-                let prior = prior as usize;
-                if hashes[prior - first] != hash {
-                    continue;
-                }
-                if !charge(1) {
-                    return false;
-                }
-                if equals(View::Stored(self.0, id), View::Stored(self.0, prior)) {
-                    return false;
-                }
+            drop(seen);
+            let earlier = (0..at).filter(|&prior| hash_of(prior) == hash);
+            return match self.repeats(at, earlier) {
+                Some(unique) => unique,
+                None => self.unique_by_groups(at + 1, hash_of),
+            };
+        }
+        true
+    }
+    // Compare the element at `at` with each of `earlier`, charging each: an
+    // answer when an equal pair or exhausted work ends the check.
+    fn repeats(&self, at: usize, earlier: impl Iterator<Item = usize>) -> Option<bool> {
+        let element = View::Stored(self.0, self.1[at] as usize);
+        for prior in earlier {
+            if !charge(1) {
+                return Some(false);
+            }
+            if equals(element, View::Stored(self.0, self.1[prior] as usize)) {
+                return Some(false);
+            }
+        }
+        None
+    }
+    // Every element from `from` on, compared with the earlier elements of its
+    // hash, which positions sorted by hash list in array order.
+    fn unique_by_groups(&self, from: usize, hash_of: &impl Fn(usize) -> u64) -> bool {
+        let count = self.1.len();
+        let mut order: Vec<u32> = (0..count as u32).collect();
+        order.sort_unstable_by_key(|&at| (hash_of(at as usize), at));
+        let mut rank = vec![0u32; count];
+        for (index, &at) in order.iter().enumerate() {
+            rank[at as usize] = index as u32;
+        }
+        for (at, &index) in rank.iter().enumerate().skip(from) {
+            let index = index as usize;
+            let hash = hash_of(at);
+            // The group's start is found by stepping over the candidates.
+            let start = order[..index]
+                .iter()
+                .rposition(|&prior| hash_of(prior as usize) != hash)
+                .map_or(0, |before| before + 1);
+            let earlier = order[start..index].iter().map(|&prior| prior as usize);
+            if let Some(unique) = self.repeats(at, earlier) {
+                return unique;
             }
         }
         true
@@ -1516,14 +1552,50 @@ mod tests {
         ] {
             let value = crate::JsonValue::parse(text).unwrap();
             let array = view(&value).as_array().unwrap();
-            // A constant hash forces One -> Many and hits both early and later
-            // candidates. Hash equality alone must never decide uniqueness.
-            assert_eq!(
-                array.unique_by_hash(0, &vec![0; value.owner.nodes.len()]),
-                expected,
-                "{text}"
-            );
+            // A constant hash makes every element a candidate for every later
+            // one. Hash equality alone must never decide uniqueness.
+            assert_eq!(array.unique_by_hash(&|_| 0), expected, "{text}");
         }
+    }
+
+    #[test]
+    fn uniqueness_work_stays_linear_when_unequal_elements_share_hashes() {
+        // Pairs of objects holding one name twice, in either order: the
+        // hash counts every member, equality reads the first, so each pair
+        // shares a hash without being equal. Every element is still compared
+        // only with the earlier ones of its hash, found without rescanning
+        // the array.
+        let pairs = 20_000;
+        let text = format!(
+            "[{}]",
+            (0..pairs)
+                .map(|i| format!(
+                    r#"{{"a":{0},"a":{1}}},{{"a":{1},"a":{0}}}"#,
+                    2 * i,
+                    2 * i + 1
+                ))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let value = crate::JsonValue::parse(&text).unwrap();
+        let array = view(&value).as_array().unwrap();
+        let reads = std::cell::Cell::new(0usize);
+        let hash_of = |at: usize| {
+            reads.set(reads.get() + 1);
+            (at / 2) as u64
+        };
+        assert!(array.unique_by_hash(&hash_of));
+        assert!(
+            reads.get() <= 64 * 2 * pairs,
+            "{} hash reads for {} elements",
+            reads.get(),
+            2 * pairs
+        );
+        // An equal pair after many repeats still ends the check.
+        let text = format!("{},{{\"a\":1}},{{\"a\":1}}]", &text[..text.len() - 1]);
+        let value = crate::JsonValue::parse(&text).unwrap();
+        let array = view(&value).as_array().unwrap();
+        assert!(!array.unique_by_hash(&|at| (at / 2) as u64));
     }
 
     #[test]

@@ -558,10 +558,35 @@ impl<'a> JsonRef<'a> {
         }
     }
 }
-#[derive(PartialEq, Eq, Hash)]
+/// A string's exact text: its scalar text, or, for one holding an unpaired
+/// unit, its UTF-16 units read from its token, compared and hashed as read.
 enum Key<'a> {
     Scalar(&'a str),
-    Units(Vec<u16>),
+    Units(crate::raw::Utf16<'a>),
+}
+impl PartialEq for Key<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Key::Scalar(a), Key::Scalar(b)) => a == b,
+            (Key::Units(a), Key::Units(b)) => a.clone().eq(b.clone()),
+            _ => false,
+        }
+    }
+}
+impl Eq for Key<'_> {}
+impl std::hash::Hash for Key<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Key::Scalar(text) => text.hash(state),
+            Key::Units(units) => {
+                for unit in units.clone() {
+                    state.write_u16(unit);
+                }
+                // Units end where no scalar text's hash does.
+                state.write_u8(0xff);
+            }
+        }
+    }
 }
 fn key(value: JsonRef<'_>) -> Key<'_> {
     if let Some(s) = value.as_str() {
@@ -571,8 +596,7 @@ fn key(value: JsonRef<'_>) -> Key<'_> {
             value
                 .owner
                 .unpaired_units(value.id)
-                .expect("member name is a string")
-                .collect(),
+                .expect("member name is a string"),
         )
     }
 }

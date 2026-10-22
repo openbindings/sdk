@@ -1,7 +1,8 @@
 //! Document validation at the default admission limits stays within one
 //! allowance above the caller's input, whatever the document's shape: its own
 //! copy of the text, the decoded text of escaped strings, and its tree and
-//! validation state, three times the default byte limit in all.
+//! validation state, with the buffers they grow in, four times the default byte
+//! limit in all.
 use super::{ALLOCATIONS, measured};
 use serde_json::json;
 use std::fmt::Write;
@@ -10,7 +11,7 @@ use std::sync::atomic::Ordering::Relaxed;
 const MIB: usize = 1024 * 1024;
 const MAX_BYTES: usize = 64 * MIB;
 /// Peak live allocation above the caller's input, at the default limits.
-const ALLOWANCE: usize = 3 * MAX_BYTES;
+const ALLOWANCE: usize = 4 * MAX_BYTES;
 const HEAD: &str = r#"{"openbindings":"0.2.0""#;
 
 /// `prefix`, a member holding one string that fills the document to the byte
@@ -56,6 +57,19 @@ fn identifier_chain(levels: usize, repeated: bool) -> String {
     text
 }
 
+// One `$id` of `segment` repeated to fill `total` bytes, after `before`.
+fn long_identifier(total: usize, before: &str, start: &str, segment: &str) -> String {
+    let prefix = format!(r#"{HEAD},"operations":{{}},"schemas":{{{before}"s":{{"$id":"{start}"#);
+    let suffix = r#""}}}"#;
+    let count = (total - prefix.len() - suffix.len()) / segment.len();
+    let mut text = String::with_capacity(total);
+    text.push_str(&prefix);
+    text.extend(std::iter::repeat_n(segment, count));
+    text.push_str(suffix);
+    text
+}
+const REPEATED_PAIRS: &str = r#""t1":{"$id":"https://x.test/1"},"t2":{"$id":"https://x.test/1"},"t3":{"$id":"https://x.test/2"},"t4":{"$id":"https://x.test/2"},"#;
+
 /// Each document maximizes one structure validation builds, or pairs one with
 /// a string that holds as much decoded text as the remaining bytes allow.
 fn shapes() -> Vec<(&'static str, String, &'static str)> {
@@ -81,6 +95,15 @@ fn shapes() -> Vec<(&'static str, String, &'static str)> {
         "non-conformant",
     ));
     drop(invalid);
+    // Invalid operation names that hold escapes, filling the byte limit: the
+    // decoded names beside the findings and their pointers.
+    let width = MAX_BYTES / 499_990 - 8;
+    let names = joined(499_990, |i| format!(r#""\n{i:07}{}":{{}}"#, "a".repeat(width - 10)));
+    let mut escaped_names = format!(r#"{HEAD},"operations":{{{names}}}}}"#);
+    drop(names);
+    assert!(escaped_names.len() <= MAX_BYTES, "{}", escaped_names.len());
+    escaped_names.shrink_to_fit();
+    shapes.push(("escaped-invalid-operation-names", escaped_names, "non-conformant"));
     let per = (MAX_BYTES - 64) / 999_990 - 1;
     let escaped = format!(r#""\n{}""#, "a".repeat(per - 4));
     shapes.push((
@@ -173,6 +196,48 @@ fn shapes() -> Vec<(&'static str, String, &'static str)> {
         identifier_chain(70_000, true),
         "non-conformant",
     ));
+    // One `$id` of many segments, alone and beside identifiers declared twice.
+    for (shape, total, before, expected) in [
+        ("long-identifier-8mib", 8 * MIB, "", "conformant"),
+        ("long-identifier", MAX_BYTES, "", "conformant"),
+        ("long-identifier-and-repeated-pairs-8mib", 8 * MIB, REPEATED_PAIRS, "non-conformant"),
+        ("long-identifier-and-repeated-pairs", MAX_BYTES, REPEATED_PAIRS, "non-conformant"),
+    ] {
+        shapes.push((shape, long_identifier(total, before, "https://e.test/", "a/"), expected));
+    }
+    // Dot segments throughout one long `$id`: its path is copied once.
+    shapes.push((
+        "long-identifier-with-dot-segments",
+        long_identifier(MAX_BYTES, "", "https://e.test/", "a/./"),
+        "conformant",
+    ));
+    // One long authority, read back by the relative identifiers below it.
+    let children = joined(150_000, |i| format!(r#""{i}":{{"$id":"x{i}"}}"#));
+    let mut authority = format!(
+        r#"{HEAD},"operations":{{}},"schemas":{{"s":{{"$defs":{{{children}}},"$id":"https://"#
+    );
+    let fill = MAX_BYTES - authority.len() - r#""}}}"#.len();
+    authority.extend(std::iter::repeat_n('a', fill));
+    authority.push_str(r#""}}}"#);
+    shapes.push((
+        "long-authority-and-relative-identifiers",
+        authority,
+        "conformant",
+    ));
+    // Relative identifiers that each give up a different number of a long
+    // identifier's segments: each splits the run it lands in.
+    let mut nested = format!(
+        r#"{HEAD},"operations":{{}},"schemas":{{"s":{{"$id":"https://e.test/{}","$defs":{{"#,
+        "ab/".repeat(10_000_000)
+    );
+    for up in 1..2_400 {
+        if up > 1 {
+            nested.push(',');
+        }
+        let _ = write!(nested, r#""{up}":{{"$id":"{}x/"}}"#, "../".repeat(up * 4));
+    }
+    nested.push_str("}}}}");
+    shapes.push(("relative-identifiers-inside-a-long-one", nested, "conformant"));
     // A malformed reference at every level of a deep schema chain: each
     // finding's pointer is longer than the last.
     let mut deep = format!(r#"{HEAD},"operations":{{}},"schemas":{{"s":{{"#);
